@@ -1,9 +1,13 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "workspace_name": "Sjors's Notion",
   "hub_page_id": "3bdd8ba0-c8bc-815b-ae49-cf2c9cdce14c",
   "financial_dashboard_page_id": "3bdd8ba0-c8bc-813d-ab04-d15fb2855cb1",
   "cashback_dashboard_page_id": "3bdd8ba0-c8bc-816e-b0a6-e3f0e338754e",
+  "dashboards_page_id": "3bdd8ba0-c8bc-81ac-bd91-c595434d46e1",
+  "accounts_dashboard_page_id": "3bdd8ba0-c8bc-8120-8288-c3c8435ea874",
+  "bills_dashboard_page_id": "3bdd8ba0-c8bc-81ab-8b64-d4d07628125e",
+  "budgets_dashboard_page_id": "3bdd8ba0-c8bc-814b-a88c-d0c94e6fc3cc",
   "financial_data_page_id": "3bdd8ba0-c8bc-8100-b02f-d965b82d2650",
   "administration_page_id": "3bdd8ba0-c8bc-8197-81db-c47b4a448b03",
   "shared_page_id": "3bdd8ba0-c8bc-8176-9f33-d0e060e98832",
@@ -35,6 +39,13 @@
     "month_close_reports": "236ee27b-6916-4049-a70c-8a8490357cdb",
     "tracker_state": "80287044-58c3-4dd1-8468-c3073da96bd3",
     "decision_log": "2ea348b7-e9aa-4cd1-9ca5-cc37fdd52fd1",
-    "tasks": "1e4eb668-01b8-44b8-b42b-5d812d15d0b5"
+    "tasks": "1e4eb668-01b8-44b8-b42b-5d812d15d0b5",
+    "accounts": "2ca5a872-829c-4909-8437-2dc4cb763c0e",
+    "bills_subscriptions": "0fad03fa-e266-4f9d-bd25-494a0173c788",
+    "savings_goals": "53ac9d5b-7594-40ce-89ef-abcf1b05c5d8",
+    "budgets": "6c3cf98a-9521-40f0-b871-6578fcf61380",
+    "modules": "609757d0-8ba7-4cfa-af87-36eedcb338bc",
+    "dashboard_blocks": "f30f36f3-fa48-42a7-b896-e2943141b1fe",
+    "product_backlog": "1a237fed-d22b-4cba-b36b-e91fa0c6bb87"
   }
 }
