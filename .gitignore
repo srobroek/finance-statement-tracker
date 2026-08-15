@@ -1,0 +1,31 @@
+# Runtime secrets and local configuration
+.env
+.env.*
+secrets.*
+credentials.*
+
+# Financial source data and generated review artifacts
+.tmp/
+.tools/
+outputs/
+Finance Evidence/
+data/private/
+data/staging/
+data/archive/
+*.pdf
+*.xlsx
+*.xls
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Editors and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+~$*
