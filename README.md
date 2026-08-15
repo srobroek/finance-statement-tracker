@@ -23,6 +23,8 @@ The POC intentionally has no SQLite dependency. It also has no mandatory third-p
 
 The POC includes `emirates_islamic_v1` and `adcb_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. PDF passwords are runtime-only inputs and must never be stored in Notion, Git, configuration, or logs.
 
+`finance_tracker.ingestion.stage_statement` converts the canonical statement into a Notion-ready staging batch using the card identifiers loaded from Notion configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
+
 ## Recreate locally
 
 ```powershell

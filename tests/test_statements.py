@@ -33,7 +33,8 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertEqual(statement.transactions[0].transaction_type, "PAYMENT")
         self.assertEqual(statement.transactions[2].transaction_type, "REFUND")
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("285.70"))
-        self.assertTrue(statement.reconciled)
+        self.assertTrue(statement.balance_tied)
+        self.assertEqual(statement.balance_difference_aed, Decimal("0.00"))
         self.assertEqual(statement.payment_due_date.isoformat(), "2026-08-25")
 
     def test_adcb_statement_parses_card_sections_and_foreign_currency(self) -> None:
@@ -58,7 +59,7 @@ Card No : XXXXXXXXXXXX6838 - TEST USER TWO
         self.assertEqual(statement.transactions[2].exchange_rate, Decimal("3.82500"))
         self.assertEqual(statement.transactions[3].transaction_type, "REWARD_CREDIT")
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("175.00"))
-        self.assertTrue(statement.reconciled)
+        self.assertTrue(statement.balance_tied)
 
     def test_registry_is_the_bank_extension_boundary(self) -> None:
         adapters = (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())

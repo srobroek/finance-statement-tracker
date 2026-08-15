@@ -93,15 +93,16 @@ class NormalizedStatement:
         return self.opening_balance_aed + self.debit_total_aed - self.credit_total_aed
 
     @property
-    def reconciliation_difference_aed(self) -> Decimal | None:
+    def balance_difference_aed(self) -> Decimal | None:
         calculated = self.calculated_closing_balance_aed
         if calculated is None or self.closing_balance_aed is None:
             return None
         return calculated - self.closing_balance_aed
 
     @property
-    def reconciled(self) -> bool:
-        difference = self.reconciliation_difference_aed
+    def balance_tied(self) -> bool:
+        """Whether statement arithmetic ties; this is not ledger reconciliation."""
+        difference = self.balance_difference_aed
         return difference is not None and abs(difference) <= Decimal("0.01")
 
     def to_dict(self) -> dict[str, object]:
@@ -122,8 +123,9 @@ class NormalizedStatement:
             "debit_total_aed": str(self.debit_total_aed),
             "credit_total_aed": str(self.credit_total_aed),
             "calculated_closing_balance_aed": None if self.calculated_closing_balance_aed is None else str(self.calculated_closing_balance_aed),
-            "reconciliation_difference_aed": None if self.reconciliation_difference_aed is None else str(self.reconciliation_difference_aed),
-            "reconciled": self.reconciled,
+            "balance_difference_aed": None if self.balance_difference_aed is None else str(self.balance_difference_aed),
+            "balance_tied": self.balance_tied,
+            "ledger_reconciled": False,
             "warnings": list(self.warnings),
             "transactions": [row.to_dict() for row in self.transactions],
         }
