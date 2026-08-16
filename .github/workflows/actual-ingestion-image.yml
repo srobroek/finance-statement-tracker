@@ -135,6 +135,13 @@ jobs:
             token="$(openssl rand -hex 32)"
             printf '\nFINANCE_INGEST_TOKEN=%s\n' "$token" | sudo tee -a "$stack/.env" >/dev/null
           fi
+          sudo install -m 0755 deploy/actual-poc/stack-watchdog.sh "$stack/stack-watchdog.sh"
+          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.service \
+            /etc/systemd/system/finance-stack-watchdog.service
+          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.timer \
+            /etc/systemd/system/finance-stack-watchdog.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now finance-stack-watchdog.timer
 
       - name: Authenticate and pull tested image
         shell: bash
@@ -157,7 +164,8 @@ jobs:
           # every pipeline-facing service up explicitly so ingestion-only
           # deploys cannot leave Cloudflare's port 5006 origin or the live
           # cashback companion unavailable.
-          sudo docker compose up -d --no-deps --pull never actual-proxy cashback-control actual-ingestion
+          sudo docker compose up -d --no-deps --pull never \
+            actual actual-proxy cashback-control actual-ingestion
           sudo podman logout --authfile "$auth_file" ghcr.io
           sudo rm -f "$auth_file"
 
@@ -168,7 +176,10 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"' && \
                curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"' && \
-               curl -fsS http://127.0.0.1:5006/ >/dev/null; then
+               curl -fsS http://127.0.0.1:5006/ >/dev/null && \
+               test "$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')" = healthy && \
+               test "$(sudo docker inspect finance-cashback-control --format '{{.State.Health.Status}}')" = healthy && \
+               test "$(sudo docker inspect finance-actual-ingestion --format '{{.State.Health.Status}}')" = healthy; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then

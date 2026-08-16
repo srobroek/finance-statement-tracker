@@ -24,6 +24,11 @@ pulls the most recent tested image. The workflow also publishes immutable
 `sha-<commit>` tags for rollback. Do not maintain a second generated Compose
 file; `docker compose config` is the reproducible rendered form.
 
+`finance-stack-watchdog.timer` checks the three user-facing/runtime health
+endpoints every minute. If any service is unavailable, it converges all four
+finance services together. This protects the stack from partial Compose
+deployments and starts it again after a host reboot.
+
 The GHCR package inherits the repository's visibility. If it is private, log
 the container host in to `ghcr.io` once with a token that has `read:packages`.
 
