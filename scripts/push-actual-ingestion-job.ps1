@@ -99,7 +99,7 @@ if ($AIResponsesPath) {
     $aiResponses = @($rawAIResponses | ConvertFrom-Json)
     $job.ai_responses = @($aiResponses)
 }
-$payload = $job | ConvertTo-Json -Compress
+$payload = $job | ConvertTo-Json -Depth 20 -Compress
 $remoteCommand = "sudo docker exec -i $containerName python3 /app/apps/actual-ingestion/submit_local.py"
 $payload | & ssh $target $remoteCommand
 if ($LASTEXITCODE -ne 0) {
