@@ -105,6 +105,31 @@ The command performs these gates:
 
 `imported_id` is stable and `reimportDeleted` is false, so repeats do not duplicate transactions. A commit always runs a complete Actual dry-run first.
 
+## Browser ingestion
+
+Browser acquisition is supported for banks that expose account history or statements only through an authenticated portal. It uses the same normalized transaction contract and Actual bridge as statement ingestion; it does not maintain a separate ledger.
+
+Validate every migrated recipe and configured account mapping:
+
+```powershell
+python -m finance_tracker.cli browser-adapters-status `
+  --sources .\config\browser-sources.json `
+  --adapters-root .\browser_adapters
+```
+
+After following the rendered provider/data recipe and downloading an official export, parse and stage it with a dry-run:
+
+```powershell
+.\scripts\ingest-browser-export.ps1 `
+  -Provider adcb `
+  -DataId credit-card-transactions `
+  -File 'C:\path\adcb-export.csv' `
+  -ActualAccount 'ADCB Credit Card · 8833 / 6838' `
+  -SyncId '<budget-sync-id>'
+```
+
+Add `-Commit` only after reviewing the generated manifest. Visible-row captures also require `-ApproveReviewedRows`. Official PDFs are routed into the existing statement parser and arithmetic-reconciliation gates. Account overview balances remain reviewable snapshots and never create synthetic transactions. Full operating details are in `docs/browser-ingestion.md`.
+
 ## Cashback snapshot
 
 Actual remains the only transaction ledger. The cashback engine consumes a read-only period snapshot:

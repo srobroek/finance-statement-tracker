@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "provider_id": "wio",
+  "display_name": "Wio Bank",
+  "mobile_only": false,
+  "recipe": "provider.recipe",
+  "migrated_from": "bank-statements 1.1.0"
+}

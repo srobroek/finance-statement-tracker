@@ -1,0 +1,6 @@
+1. CLICK selector: "Credit Cards"
+2. CLICK selector: "Credit Card Statement"
+3. SELECT field: statement, option: "<statement_period>"
+4. CLICK selector: "Download PDF"
+5. DOWNLOAD as: "adcb_statement.pdf", format: pdf
+6. NOTE If the requested cycle is unavailable, report the available statement periods and do not substitute a different period.

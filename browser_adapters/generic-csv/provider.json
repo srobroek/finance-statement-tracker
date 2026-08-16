@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "provider_id": "generic-csv",
+  "display_name": "Generic CSV import",
+  "mobile_only": true,
+  "recipe": "provider.recipe",
+  "migrated_from": "bank-statements 1.1.0"
+}

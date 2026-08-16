@@ -10,5 +10,13 @@
     "statement_pdfs": {
       "mode": "LATEST_PER_CARD_AND_EXPECTED_CYCLE"
     }
+  },
+  "browser": {
+    "sources": "config/browser-sources.json",
+    "adapters": "browser_adapters",
+    "capture_schema": "config/browser-capture-schema-v1.json",
+    "prefer_official_export": true,
+    "require_review_for_visible_rows": true,
+    "allow_direct_actual_write": false
   }
 }

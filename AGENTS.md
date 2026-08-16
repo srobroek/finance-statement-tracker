@@ -23,6 +23,8 @@ Maintain a portable Actual-first finance tracker with a dedicated live cashback 
 6. Search and link supporting email/documents when requested by evidence policy.
 7. Persist authoritative rows to Actual, live operational state to the companion, and evidence links to the OneDrive catalogue.
 
+Browser acquisition follows the versioned provider and data recipes under `browser_adapters/`. The authenticated browser may download an official export or capture explicit visible data, but it must never write directly to Actual. Convert the artifact to `browser-capture-schema-v1`, stage it, review any provisional rows, and only then use the standard Actual bridge. The user completes MFA/OTP. Never persist browser cookies, session state, passwords, full card numbers, PINs, or CVVs.
+
 Individual transactions are the live, provisional cashback source. Recalculate pace, bucket headroom, warnings, and routing recommendations without waiting for a statement, but never mark `Cashback Finalized` from live notifications alone.
 
 Statement and cashback close are scheduled independently per card. The current POC schedule is `TENTATIVE`: all card cycles end at month-end and their reconciliation jobs run on the following first day. A card closes only after statement evidence has been ingested and reconciliation has succeeded. The final reconciled ledger becomes the authoritative cashback source, then the next card period opens. Aggregate finance close is event-driven when the last required card period closes; the legacy daily gate remains paused. Payment due dates must come from the statement when available, while the configured 30-day offset is forecast-only.

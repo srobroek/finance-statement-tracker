@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "data_id": "holdings",
+  "kind": "holdings",
+  "acquire": "upload",
+  "inputs": [],
+  "parser": "sarwa_holdings_v1",
+  "recipe": "recipe",
+  "verified": true,
+  "verified_at": "2026-07-11"
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "data_id": "current-account-balance",
+  "kind": "balance",
+  "acquire": "read-onscreen",
+  "inputs": ["account_ref", "balance"],
+  "parser": null,
+  "recipe": "recipe",
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

@@ -1,0 +1,3 @@
+1. NOTE Sarwa exposes no clean web export. For each Invest account, capture positions, cash, activity, and the account summary from the authenticated dashboard.
+2. NOTE Store only an approved account label or last four digits. Values are USD, and the capture must include its as-of timestamp and any omitted history.
+3. UPLOAD as: "sarwa_holdings_capture.json"

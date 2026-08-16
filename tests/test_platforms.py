@@ -69,6 +69,31 @@ class ActualBudgetAdapterTests(TestCase):
         self.assertIn("#owner-sjors-van-der-meer", envelope.records[0]["notes"])
         self.assertIn("#cashback-online-spend", envelope.records[0]["notes"])
 
+    def test_tied_browser_statement_rows_are_cleared_but_portal_rows_are_not(self) -> None:
+        common = {
+            "transaction_at": datetime(2026, 8, 16),
+            "card": "WIO",
+            "account": "Wio Current",
+            "merchant_raw": "EXAMPLE",
+            "amount_aed": Decimal("5"),
+        }
+        statement = Transaction(
+            transaction_id="browser:statement",
+            source_type="browser_statement",
+            **common,
+        )
+        portal = Transaction(
+            transaction_id="browser:portal",
+            source_type="browser_portal",
+            **common,
+        )
+
+        statement_envelope = ActualBudgetAdapter().serialize_import([statement])[0]
+        portal_envelope = ActualBudgetAdapter().serialize_import([portal])[0]
+
+        self.assertTrue(statement_envelope.default_cleared)
+        self.assertFalse(portal_envelope.default_cleared)
+
     def test_requires_an_account_mapping(self) -> None:
         row = Transaction(
             transaction_id="bank:missing-account",

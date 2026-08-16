@@ -1,0 +1,6 @@
+1. CLICK selector: "CARDS summary widget on the dashboard"
+2. NOTE On /cards-detail, select the card matching <card_ref> if more than one card exists.
+3. CLICK selector: "RECENT TRANSACTIONS - View all"
+4. NOTE Optionally filter <from_date> through <to_date>. The date filter was not verified in the original live run, so record the actual exported range in the capture.
+5. CLICK selector: "Export transactions to Excel"
+6. DOWNLOAD as: "emirates-islamic_<card_ref>_<from_date>_<to_date>.xlsx", format: xlsx

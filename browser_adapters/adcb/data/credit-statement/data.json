@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "data_id": "credit-statement",
+  "kind": "statement",
+  "acquire": "download-pdf",
+  "inputs": ["statement_period"],
+  "parser": "adcb_v1",
+  "recipe": "recipe",
+  "fingerprint": {
+    "text_all": ["PREVIOUS BALANCE OUTSTANDING", "CARD NO"],
+    "filename_contains": [".pdf"]
+  },
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

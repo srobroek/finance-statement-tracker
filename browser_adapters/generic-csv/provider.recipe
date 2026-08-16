@@ -1,0 +1,1 @@
+1. NOTE This provider has no portal or login step. It is the account-agnostic fallback for a user-supplied CSV export.

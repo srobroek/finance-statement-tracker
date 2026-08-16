@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "data_id": "current-account-transactions",
+  "kind": "transactions",
+  "acquire": "download-csv",
+  "inputs": ["account_ref", "from_date", "to_date"],
+  "parser": "fab_csv_v1",
+  "recipe": "recipe",
+  "fingerprint": {
+    "text_all": ["Account Number", "Posting Date,Value date,Description,Debit Amount,Credit Amount,Running Balance"],
+    "filename_contains": ["accounthistory_"]
+  },
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

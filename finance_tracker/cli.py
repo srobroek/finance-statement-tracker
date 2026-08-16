@@ -13,6 +13,15 @@ from .ai_rules import AIEnrichmentEngine, load_ai_policies, load_ai_provider
 from .history import load_history_index
 from .notifications import parse_outlook_notifications
 from .actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
+from .browser_ingestion import export_browser_capture_for_actual
+from .browser_exports import build_capture_from_export
+from .browser_recipes import render_recipe
+from .browser_sources import (
+    account_source,
+    capture_account,
+    load_browser_sources,
+    validate_source_coverage,
+)
 from .cashback import PaymentIntent, poc_programs, recommend
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
@@ -103,6 +112,44 @@ def main(argv: list[str] | None = None) -> int:
     statement_export.add_argument("--adapter")
     statement_export.add_argument("--password-env", default="STATEMENT_PASSWORD")
     statement_export.add_argument("--allow-unbalanced", action="store_true")
+    browser_export = subparsers.add_parser(
+        "browser-capture-export",
+        help="Validate and stage a browser-acquired account, statement, or transaction capture",
+    )
+    browser_export.add_argument("--input", type=Path, required=True)
+    browser_export.add_argument("--config", type=Path, required=True)
+    browser_export.add_argument("--output", type=Path, required=True)
+    browser_export.add_argument("--rules", type=Path)
+    browser_export.add_argument("--history", type=Path)
+    browser_export.add_argument("--ai-policies", type=Path)
+    browser_export.add_argument("--ai-provider", type=Path)
+    browser_file = subparsers.add_parser(
+        "browser-export-file",
+        help="Parse an official browser export into the versioned browser capture contract",
+    )
+    browser_file.add_argument("--provider", required=True)
+    browser_file.add_argument("--data-id", required=True)
+    browser_file.add_argument("--file", type=Path, required=True)
+    browser_file.add_argument("--sources", type=Path, required=True)
+    browser_file.add_argument("--actual-account", required=True)
+    browser_file.add_argument("--output", type=Path, required=True)
+    browser_file.add_argument("--adapters-root", type=Path)
+    browser_status = subparsers.add_parser(
+        "browser-adapters-status",
+        help="Validate browser recipes and report account-source coverage",
+    )
+    browser_status.add_argument("--sources", type=Path, required=True)
+    browser_status.add_argument("--adapters-root", type=Path, required=True)
+    browser_status.add_argument("--output", type=Path)
+    browser_recipe = subparsers.add_parser(
+        "browser-render-recipe",
+        help="Render the exact provider and data acquisition recipes for a browser run",
+    )
+    browser_recipe.add_argument("--provider", required=True)
+    browser_recipe.add_argument("--data-id", required=True)
+    browser_recipe.add_argument("--params", type=Path)
+    browser_recipe.add_argument("--adapters-root", type=Path)
+    browser_recipe.add_argument("--output", type=Path, required=True)
     cashback_dashboard_parser = subparsers.add_parser(
         "cashback-dashboard",
         help="Calculate cashback pace, bucket headroom, and routing from an Actual snapshot",
@@ -152,6 +199,66 @@ def main(argv: list[str] | None = None) -> int:
             "balance_tied": run.statement["balance_tied"],
             "review_count": run.review_count,
         }, indent=2))
+        return 0
+    if args.command == "browser-capture-export":
+        run = export_browser_capture_for_actual(
+            args.input,
+            args.config,
+            args.output,
+            rules_path=args.rules,
+            history_path=args.history,
+            ai_policies_path=args.ai_policies,
+            ai_provider_path=args.ai_provider,
+        )
+        print(json.dumps({
+            "output": str(args.output),
+            "capture_id": run.capture_id,
+            "staging_status": run.staging_status,
+            "transactions": len(run.transactions),
+            "review_count": run.review_count,
+            "import_blockers": list(run.import_blockers),
+        }, indent=2))
+        return 0
+    if args.command == "browser-export-file":
+        sources = load_browser_sources(args.sources)
+        source = account_source(sources, args.actual_account)
+        allowed = (
+            str(source.get("provider_id") or "") == args.provider
+            and args.data_id in source.get("data_ids", [])
+        )
+        if not allowed:
+            raise ValueError(
+                f"Browser source {args.provider}/{args.data_id} is not configured for {args.actual_account}"
+            )
+        capture = build_capture_from_export(
+            args.provider,
+            args.data_id,
+            args.file,
+            capture_account(source),
+            adapters_root=args.adapters_root,
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(capture, indent=2), encoding="utf-8")
+        print(args.output)
+        return 0
+    if args.command == "browser-adapters-status":
+        status = validate_source_coverage(load_browser_sources(args.sources), args.adapters_root)
+        rendered = json.dumps(status, indent=2)
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+            print(args.output)
+        else:
+            print(rendered)
+        return 0 if status["status"] == "ok" else 2
+    if args.command == "browser-render-recipe":
+        parameters = json.loads(args.params.read_text(encoding="utf-8")) if args.params else {}
+        if not isinstance(parameters, dict):
+            raise ValueError("recipe params must be a JSON object")
+        recipe = render_recipe(args.provider, args.data_id, parameters, args.adapters_root)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
+        print(args.output)
         return 0
     if args.command == "cashback-dashboard":
         config = load_actual_config(args.config)

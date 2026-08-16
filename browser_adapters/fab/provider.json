@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "provider_id": "fab",
+  "display_name": "FAB Personal Online Banking",
+  "portal_url": "https://online.bankfab.com/PersonalBankingWeb/login",
+  "mobile_only": false,
+  "recipe": "provider.recipe",
+  "migrated_from": "bank-statements 1.1.0"
+}

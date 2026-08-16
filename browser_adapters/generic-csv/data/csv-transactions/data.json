@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "data_id": "csv-transactions",
+  "kind": "transactions",
+  "acquire": "upload",
+  "inputs": [],
+  "parser": "generic_csv_v1",
+  "recipe": "recipe",
+  "fingerprint": {"filename_contains": [".csv"]},
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

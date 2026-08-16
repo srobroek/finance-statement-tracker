@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "adapters_root": "browser_adapters",
+  "accounts": [
+    {
+      "actual_account": "ADCB Credit Card · 8833 / 6838",
+      "label": "ADCB Cashback credit cards",
+      "card_code": "ADCB_CASHBACK",
+      "account_last4": "8833",
+      "currency": "AED",
+      "required": true,
+      "provider_id": "adcb",
+      "data_ids": ["credit-card-transactions", "credit-statement"],
+      "preferred_acquisition": "browser-export"
+    },
+    {
+      "actual_account": "Emirates Islamic Amazon Credit Card · 0082",
+      "label": "Emirates Islamic Amazon credit card",
+      "card_code": "EI_AMAZON",
+      "account_last4": "0082",
+      "currency": "AED",
+      "required": true,
+      "provider_id": "emirates-islamic",
+      "data_ids": ["credit-card-transactions"],
+      "preferred_acquisition": "browser-export"
+    },
+    {
+      "actual_account": "FAB Credit Card · 6031",
+      "label": "FAB credit card",
+      "card_code": "FAB_6031",
+      "account_last4": "6031",
+      "currency": "AED",
+      "required": false,
+      "provider_id": "fab",
+      "data_ids": ["credit-card-transactions"],
+      "preferred_acquisition": "browser-export"
+    },
+    {
+      "actual_account": "Wio Current Account · 4113",
+      "label": "Wio current account",
+      "card_code": "WIO_4113",
+      "account_last4": "4113",
+      "currency": "AED",
+      "required": false,
+      "provider_id": "generic-csv",
+      "data_ids": ["csv-transactions"],
+      "preferred_acquisition": "mobile-export-upload"
+    },
+    {
+      "actual_account": "Wio Current Account · 5009",
+      "label": "Wio current account",
+      "card_code": "WIO_5009",
+      "account_last4": "5009",
+      "currency": "AED",
+      "required": false,
+      "provider_id": "generic-csv",
+      "data_ids": ["csv-transactions"],
+      "preferred_acquisition": "mobile-export-upload"
+    },
+    {
+      "actual_account": "RAKBANK World Credit Card",
+      "label": "RAKBANK World credit card",
+      "card_code": "RAK_WORLD",
+      "currency": "AED",
+      "required": true,
+      "provider_id": null,
+      "data_ids": [],
+      "preferred_acquisition": "email-statement",
+      "status": "ADAPTER_REQUIRED"
+    },
+    {
+      "actual_account": "Standard Chartered Platinum X Credit Card",
+      "label": "Standard Chartered Platinum X credit card",
+      "card_code": "SC_PLATINUM_X",
+      "currency": "AED",
+      "required": true,
+      "provider_id": null,
+      "data_ids": [],
+      "preferred_acquisition": "email-statement",
+      "status": "ADAPTER_REQUIRED"
+    }
+  ],
+  "supplemental_sources": [
+    {
+      "source_id": "fab-current-account",
+      "provider_id": "fab",
+      "data_ids": ["current-account-transactions", "current-account-balance"]
+    },
+    {
+      "source_id": "wio-credit-statement-email",
+      "provider_id": "wio",
+      "data_ids": ["credit-statement"]
+    },
+    {
+      "source_id": "sarwa-holdings",
+      "provider_id": "sarwa",
+      "data_ids": ["holdings"]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+1. GOTO url: "https://www.adcb.com/en/ib-prelogin.aspx?page=conventional"
+2. NOTE Stop and let the user log in and complete OTP/2FA. Never enter or capture credentials or OTP codes. Continue only after the user confirms authentication.
+3. ASSERT condition: "authenticated SPA landing screen visible (#_frmLanding)"
+4. NOTE The authenticated area is a single-page app with no deep-linking. Reach data screens with CLICK or SELECT, never GOTO, or the session may log out.

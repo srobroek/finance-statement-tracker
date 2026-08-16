@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "data_id": "credit-card-transactions",
+  "kind": "transactions",
+  "acquire": "download-csv",
+  "inputs": ["card_ref", "from_date", "to_date"],
+  "parser": "fab_csv_v1",
+  "recipe": "recipe",
+  "fingerprint": {
+    "text_all": ["Card Number", "Posting Date,Value date,Description,Debit Amount,Credit Amount"],
+    "filename_contains": ["cardhistory_"]
+  },
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

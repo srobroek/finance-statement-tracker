@@ -1,0 +1,1 @@
+1. FETCH_EMAIL subject: "Your Wio Credit statement for this month", attachment: "*.pdf", as: "wio_credit_statement.pdf"

@@ -1,0 +1,3 @@
+1. GOTO url: "https://online.bankfab.com/PersonalBankingWeb/login"
+2. NOTE Stop and let the user log in and complete OTP/2FA. Never enter or capture credentials or OTP codes. Continue only after the user confirms authentication.
+3. ASSERT condition: "authenticated FAB dashboard or home screen visible"

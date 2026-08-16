@@ -1,0 +1,10 @@
+1. CLICK selector: "Accounts"
+2. CLICK selector: "the account matching <account_ref>"
+3. CLICK selector: "filter icon"
+4. SELECT field: view, option: "Transactions"
+5. SELECT field: from_date, option: "<from_date>"
+6. SELECT field: to_date, option: "<to_date>"
+7. SELECT field: transaction_type, option: "All"
+8. NOTE The date-range picker is limited to a rolling recent window. Record the actual earliest available date in the capture limitations.
+9. CLICK selector: "DOWNLOAD TRANSACTIONS"
+10. DOWNLOAD as: "AccountHistory_<account_ref>.csv", format: csv

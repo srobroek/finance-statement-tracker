@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "data_id": "credit-card-transactions",
+  "kind": "transactions",
+  "acquire": "download-csv",
+  "inputs": ["card_ref", "from_date", "to_date"],
+  "parser": "adcb_csv_v1",
+  "recipe": "recipe",
+  "fingerprint": {
+    "text_any": ["365 Cashback Platinum"],
+    "text_all": ["Transaction Date,Description,Cr/Dr,Amount in AED", "Statement Period :"],
+    "filename_contains": []
+  },
+  "verified": true,
+  "verified_at": "2026-07-09"
+}

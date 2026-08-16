@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "data_id": "credit-statement",
+  "kind": "statement",
+  "acquire": "email",
+  "inputs": [],
+  "parser": "wio_credit_v1",
+  "recipe": "recipe",
+  "fingerprint": {"text_any": ["Wio Bank"], "text_all": ["CREDIT STATEMENT", "MONTHLY INTEREST RATE"]},
+  "verified": true,
+  "verified_at": "2026-07-11"
+}

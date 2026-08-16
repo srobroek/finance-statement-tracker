@@ -1,0 +1,12 @@
+1. CLICK selector: "Credit Cards"
+2. CLICK selector: "Credit Card Statement"
+3. SELECT field: card, option: "<card_ref>"
+4. SELECT field: "Transaction Type", option: "All Transactions"
+5. SELECT field: "Period Type", option: "Specified Period"
+6. NOTE The Start and End Date inputs remain disabled until the Specified Period radio is actually selected. If unavailable, use Current Period and record its 60-day limitation in the capture.
+7. SELECT field: "Start Date", option: "<from_date>"
+8. SELECT field: "End Date", option: "<to_date>"
+9. CLICK selector: "Submit"
+10. CLICK selector: "CSV DOWNLOAD"
+11. DOWNLOAD as: "adcb_<card_ref>_<from_date>_<to_date>.csv", format: csv
+12. NOTE Specified Period accepts at most a six-month range. Date fields use dd/mm/yyyy.

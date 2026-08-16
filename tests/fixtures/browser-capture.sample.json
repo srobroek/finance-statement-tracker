@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "capture_id": "sample-wio-4113-2026-08",
+  "source": {
+    "provider": "Wio",
+    "site": "Wio Business",
+    "url": "https://bank.example.test/accounts/4113/transactions",
+    "page_context": "Current-account transactions",
+    "captured_at": "2026-08-16T12:00:00Z",
+    "capture_method": "VISIBLE_ROWS",
+    "date_range": {"start": "2026-08-01", "end": "2026-08-16"},
+    "limitations": ["Pending transactions were not shown by the portal"]
+  },
+  "artifact": {"kind": "TRANSACTION_ROWS"},
+  "account": {
+    "label": "Wio Current Account ending 4113",
+    "actual_account": "Wio Current Account · 4113",
+    "account_last4": "4113",
+    "currency": "AED",
+    "balance": "9250.00",
+    "balance_as_of": "2026-08-16T12:00:00Z"
+  },
+  "rows": [
+    {
+      "source_id": "example-row-1",
+      "transaction_date": "2026-08-15",
+      "description": "Example Merchant",
+      "amount_aed": "25.50",
+      "direction": "DEBIT",
+      "channel": "ONLINE"
+    }
+  ]
+}

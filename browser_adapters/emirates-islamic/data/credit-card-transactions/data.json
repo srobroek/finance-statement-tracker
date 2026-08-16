@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "data_id": "credit-card-transactions",
+  "kind": "transactions",
+  "acquire": "download-xlsx",
+  "inputs": ["card_ref", "from_date", "to_date"],
+  "parser": "emirates_islamic_xlsx_v1",
+  "recipe": "recipe",
+  "fingerprint": {
+    "text_any": [],
+    "text_all": ["Card Number:", "Details", "Debit/Credit", "Currency", "Status"],
+    "filename_contains": []
+  },
+  "verified": true,
+  "verified_at": "2026-07-11"
+}

@@ -1,0 +1,10 @@
+1. CLICK selector: "Credit Cards"
+2. CLICK selector: "the card matching <card_ref>"
+3. CLICK selector: "Transactions tab"
+4. CLICK selector: "filter icon"
+5. SELECT field: view, option: "Transactions"
+6. SELECT field: from_date, option: "<from_date>"
+7. SELECT field: to_date, option: "<to_date>"
+8. SELECT field: transaction_type, option: "All"
+9. CLICK selector: "DOWNLOAD TRANSACTIONS"
+10. DOWNLOAD as: "CardHistory_<card_ref>.csv", format: csv

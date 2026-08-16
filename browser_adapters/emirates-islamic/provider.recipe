@@ -1,0 +1,4 @@
+1. GOTO url: "https://login.emiratesislamic.ae/"
+2. NOTE Stop and let the user log in and complete OTP/2FA. Never enter or capture credentials or OTP codes. Continue only after the user confirms authentication.
+3. ASSERT condition: "authenticated Emirates Islamic dashboard visible at /dashboard"
+4. NOTE Use the personal portal, not the business portal. Navigate the authenticated Angular app with CLICK rather than GOTO; continuous animations may require a direct single click.

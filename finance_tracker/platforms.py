@@ -149,7 +149,11 @@ class ActualBudgetAdapter:
                 "payee_name": transaction.vendor or transaction.merchant_raw,
                 "imported_payee": transaction.merchant_raw,
                 "imported_id": transaction.transaction_id,
-                "cleared": transaction.source_type.casefold() in {"statement", "statement_pdf"},
+                "cleared": transaction.source_type.casefold() in {
+                    "browser_statement",
+                    "statement",
+                    "statement_pdf",
+                },
             }
             if transaction.subcategory or transaction.category:
                 record["category_name"] = transaction.subcategory or transaction.category
