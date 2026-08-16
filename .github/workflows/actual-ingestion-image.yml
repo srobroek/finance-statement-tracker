@@ -152,7 +152,11 @@ jobs:
           sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
           sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
           cd /opt/stacks/finance-actual-poc
-          sudo docker compose up -d --no-deps --pull never actual-ingestion
+          # The external Podman Compose provider can leave an already-created
+          # sibling service in an exited state after one-off operations. Bring
+          # the public Actual proxy up explicitly so ingestion-only deploys
+          # cannot leave Cloudflare's port 5006 origin unavailable.
+          sudo docker compose up -d --no-deps --pull never actual-proxy actual-ingestion
           sudo podman logout --authfile "$auth_file" ghcr.io
           sudo rm -f "$auth_file"
 
@@ -161,11 +165,13 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"'; then
+            if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"' && \
+               curl -fsS http://127.0.0.1:5006/ >/dev/null; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
               sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-ingestion
+              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-proxy
               exit 1
             fi
             sleep 2
@@ -178,6 +184,13 @@ jobs:
           grep -q "\"actual_writes_enabled\": $expected_writes" <<<"$health"
           grep -q 'RAK_WORLD' <<<"$health"
           grep -q 'SC_PLATINUM_X' <<<"$health"
+          proxy_state="$(sudo docker inspect finance-actual-proxy --format '{{.State.Status}}')"
+          proxy_health="$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')"
+          test "$proxy_state" = running
+          test "$proxy_health" = healthy
+          headers="$(curl -fsSI http://127.0.0.1:5006/)"
+          grep -qi '^Cross-Origin-Embedder-Policy: require-corp' <<<"$headers"
+          grep -qi '^Cross-Origin-Opener-Policy: same-origin' <<<"$headers"
 
       - name: Exercise live statement and browser staging
         shell: bash
