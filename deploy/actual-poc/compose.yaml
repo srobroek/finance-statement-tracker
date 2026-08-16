@@ -81,7 +81,7 @@ services:
       TZ: Asia/Dubai
       ACTUAL_SERVER_URL: http://actual:5006
       ACTUAL_DATA_DIR: /var/lib/finance-ingestion/actual-cache
-      ALLOW_ACTUAL_WRITES: "false"
+      ALLOW_ACTUAL_WRITES: "${ALLOW_ACTUAL_WRITES:-false}"
     depends_on:
       actual:
         condition: service_healthy

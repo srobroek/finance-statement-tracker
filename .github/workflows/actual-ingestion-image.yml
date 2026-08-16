@@ -173,7 +173,9 @@ jobs:
           image="$(sudo docker inspect finance-actual-ingestion --format '{{.Config.Image}}')"
           test "$image" = "$IMAGE_NAME:main"
           health="$(curl -fsS http://127.0.0.1:5020/api/health)"
-          grep -q '"actual_writes_enabled": false' <<<"$health"
+          expected_writes="$(sudo awk -F= '$1 == "ALLOW_ACTUAL_WRITES" { print tolower($2) }' /opt/stacks/finance-actual-poc/.env | tail -n1)"
+          expected_writes="${expected_writes:-false}"
+          grep -q "\"actual_writes_enabled\": $expected_writes" <<<"$health"
           grep -q 'RAK_WORLD' <<<"$health"
           grep -q 'SC_PLATINUM_X' <<<"$health"
 
@@ -246,9 +248,6 @@ jobs:
           fi
           grep -qi 'placeholder' <<<"$placeholder_error"
 
-          commit_request='{"type":"STATEMENT_PDF","actual_mode":"COMMIT","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON","ai_handoff_complete":true}'
-          if commit_error="$(printf '%s' "$commit_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
-            echo 'Production Actual writes were unexpectedly enabled' >&2
-            exit 1
-          fi
-          grep -qi 'Actual writes are disabled' <<<"$commit_error"
+          # Deployment smoke tests never submit COMMIT jobs. Production write
+          # enablement is verified through health plus an authenticated,
+          # read-only Actual doctor check during the controlled promotion.

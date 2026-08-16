@@ -43,6 +43,17 @@ The bridge reads these process environment variables:
 
 Statement decryption uses `STATEMENT_PASSWORD` by default. Passwords are never command-line arguments, run-manifest fields, or Git configuration.
 
+The Docker host has 1Password CLI 2.34.1 and Bellwether uses a service account
+to render committed `op://` templates into a mode-600 runtime env file before
+`docker compose up -d`. The service account currently has access only to the
+`Bellwether` vault; it cannot read the existing Actual login in the owner's
+`Private` vault. Production therefore keeps the rendered Actual values in the
+host-only stack `.env` for now. To make future refreshes host-native, create a
+dedicated Finance vault, grant that service account access, and add a separate
+Finance `op inject` template. Do not reuse Bellwether's rendered `.env`, expose
+its bootstrap token to a container, or overwrite the Finance `.env` because it
+also holds unrelated companion secrets.
+
 ## Bootstrap
 
 `config/actual-bootstrap.json` is the declarative setup source for accounts, category groups, categories, tags, payees, native schedules, and monthly budget amounts. Native Actual rules are compiled from the marked subset of `config/static-rules.seed.json`; the same business rule is not manually maintained in a second list. Rules that require OR-of-AND groups, evidence actions, protected fields, AI, or cashback logic remain in the deterministic worker.
@@ -116,7 +127,7 @@ The command performs these gates:
 10. Contact Actual only for PREFLIGHT or COMMIT.
 11. Commit only when both caller and container write gates are explicitly enabled.
 
-`imported_id` and worker job IDs are stable and `reimportDeleted` is false, so repeats do not duplicate transactions. The deployed POC keeps `ALLOW_ACTUAL_WRITES=false`; STAGE jobs are live, while production writes remain intentionally disabled until Actual credentials and the target sync ID are configured.
+`imported_id` and worker job IDs are stable and `reimportDeleted` is false, so repeats do not duplicate transactions. Production enables writes through `ALLOW_ACTUAL_WRITES=true` in the host-only stack `.env`; the worker still requires explicit `COMMIT`, a review-free manifest, completed AI handoff, valid Actual credentials, and a target sync ID. CI fixtures remain staging-only and are never committed to the production budget.
 
 AI is an explicit second submission, not an implicit container action. Save a
 JSON array containing one object per answered request (`transaction_id`,
