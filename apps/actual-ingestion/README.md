@@ -19,4 +19,12 @@ The service is deliberately host-local on the Docker server. Scheduled Codex
 jobs upload one evidence file and submit one deterministic job through
 `scripts/push-actual-ingestion-job.ps1`; deployment details come from
 `config/deployment.json`, so automation does not hard-code SSH or container
-coordinates.
+coordinates. Email-statement jobs pass the exact Outlook message ID,
+attachment ID, and original attachment filename through that helper. The
+content-addressed inbox copy remains private to UID/GID 10002.
+
+Every statement, browser capture, and browser export first runs all canonical
+static-rule stages, then history matching, then emits constrained
+`ai_requests`. A scheduled Sol task may return `ai_responses` with
+`-AIResponsesPath`; the container's policy engine validates those proposals
+and rebuilds the manifest. The container never calls a model itself.

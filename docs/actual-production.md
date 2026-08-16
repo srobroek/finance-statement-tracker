@@ -92,12 +92,16 @@ Upload and stage through the container worker:
   -InputPath 'C:\path\statement.pdf' `
   -Type STATEMENT_PDF `
   -CardCode EI_AMAZON `
+  -SourceMessageId '<exact-outlook-message-id>' `
+  -SourceAttachmentId '<exact-outlook-attachment-id>' `
   -ActualMode STAGE
 ```
 
 The command performs these gates:
 
-1. Upload the content-addressed artifact to the host-local worker inbox.
+1. Upload the content-addressed artifact to the host-local worker inbox as a
+   private UID/GID 10002 file, while preserving the original attachment name
+   and exact Outlook message/attachment IDs in the manifest.
 2. Enforce the active/placeholder statement-source registry before parsing.
 3. Decrypt in memory.
 4. Detect the registered bank adapter.
@@ -105,10 +109,34 @@ The command performs these gates:
 6. Prove statement arithmetic ties.
 7. Map card suffixes to configured Actual accounts.
 8. Apply deterministic rules and write an evidence-linked manifest.
-9. Contact Actual only for PREFLIGHT or COMMIT.
-10. Commit only when both caller and container write gates are explicitly enabled.
+9. Return constrained `ai_requests` for unresolved derived fields. A Sol task
+   may submit proposal JSON using `-AIResponsesPath`; the policy engine rejects
+   protected fields, populated values, disallowed values/tags, and low
+   confidence proposals before rebuilding the envelopes.
+10. Contact Actual only for PREFLIGHT or COMMIT.
+11. Commit only when both caller and container write gates are explicitly enabled.
 
 `imported_id` and worker job IDs are stable and `reimportDeleted` is false, so repeats do not duplicate transactions. The deployed POC keeps `ALLOW_ACTUAL_WRITES=false`; STAGE jobs are live, while production writes remain intentionally disabled until Actual credentials and the target sync ID are configured.
+
+AI is an explicit second submission, not an implicit container action. Save a
+JSON array containing one object per answered request (`transaction_id`,
+`policy_id`, `provider`, `model`, and `proposals`), then rerun the same source:
+
+```powershell
+.\scripts\push-actual-ingestion-job.ps1 `
+  -InputPath 'C:\path\statement.pdf' `
+  -Type STATEMENT_PDF `
+  -CardCode EI_AMAZON `
+  -SourceMessageId '<exact-outlook-message-id>' `
+  -SourceAttachmentId '<exact-outlook-attachment-id>' `
+  -AIResponsesPath '.\runtime\statement-ai-responses.json' `
+  -AIHandoffComplete `
+  -ActualMode STAGE
+```
+
+Unknown transaction/policy pairs fail the job. Omitted responses leave their
+fields unresolved; accepted responses are recorded in `ai_trace` and flow into
+the Actual import envelopes.
 
 ## Browser ingestion
 

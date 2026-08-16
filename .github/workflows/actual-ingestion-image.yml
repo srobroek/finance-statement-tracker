@@ -188,10 +188,48 @@ jobs:
           sudo install -m 0644 tests/fixtures/browser-capture.sample.json \
             "$inbox/ci-browser-capture.json"
 
-          statement_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON"}'
+          statement_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON","source_message_id":"ci-outlook-message","source_attachment_id":"ci-outlook-attachment","source_filename":"EI statement July 2026.pdf"}'
           statement_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"status": "STAGED"' <<<"$statement_result"
           grep -q '"envelope_count": 1' <<<"$statement_result"
+          grep -q '"ai_request_count":' <<<"$statement_result"
+
+          ai_request="$(python3 -c '
+          import json, sys
+          result = json.load(sys.stdin)
+          request = next(
+              item for item in result["ai_requests"]
+              if item["policy_id"] == "classify-unresolved"
+              and "tags" in item["allowed_fields"]
+          )
+          print(json.dumps({
+              "type": "STATEMENT_PDF",
+              "actual_mode": "STAGE",
+              "source_path": "ci-synthetic-ei.pdf",
+              "card_code": "EI_AMAZON",
+              "source_message_id": "ci-outlook-message",
+              "source_attachment_id": "ci-outlook-attachment",
+              "source_filename": "EI statement July 2026.pdf",
+              "ai_handoff_complete": True,
+              "ai_responses": [{
+                  "transaction_id": request["transaction"]["transaction_id"],
+                  "policy_id": request["policy_id"],
+                  "provider": "github-actions-e2e",
+                  "model": "synthetic",
+                  "proposals": [{
+                      "field": "tags",
+                      "value": ["gift"],
+                      "confidence": 0.95,
+                      "rationale": "Synthetic policy handoff test",
+                      "source_refs": ["ci-outlook-message"],
+                  }],
+              }],
+          }))
+          ' <<<"$statement_result")"
+          ai_result="$(printf '%s' "$ai_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"ai_response_count": 1' <<<"$ai_result"
+          grep -q '"ai_accepted_count": 1' <<<"$ai_result"
+          grep -q '"ai_rejected_count": 0' <<<"$ai_result"
 
           replay_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"idempotent_replay": true' <<<"$replay_result"
@@ -208,7 +246,7 @@ jobs:
           fi
           grep -qi 'placeholder' <<<"$placeholder_error"
 
-          commit_request='{"type":"STATEMENT_PDF","actual_mode":"COMMIT","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON"}'
+          commit_request='{"type":"STATEMENT_PDF","actual_mode":"COMMIT","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON","ai_handoff_complete":true}'
           if commit_error="$(printf '%s' "$commit_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
             echo 'Production Actual writes were unexpectedly enabled' >&2
             exit 1

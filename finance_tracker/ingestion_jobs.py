@@ -86,6 +86,59 @@ class IngestionJobRunner:
         root = self.jobs / job_id
         return root, root / "request.json", root / "manifest.json", root / "actual-result.json"
 
+    @staticmethod
+    def _ai_handoff(
+        request: dict[str, Any],
+    ) -> tuple[
+        list[dict[str, Any]],
+        dict[tuple[str, str], dict[str, Any]],
+        Any,
+    ]:
+        raw_responses = request.get("ai_responses") or []
+        if not isinstance(raw_responses, list) or any(
+            not isinstance(response, dict) for response in raw_responses
+        ):
+            raise ValueError("ai_responses must be a list of response objects")
+        responses: dict[tuple[str, str], dict[str, Any]] = {}
+        for response in raw_responses:
+            transaction_id = str(response.get("transaction_id") or "").strip()
+            policy_id = str(response.get("policy_id") or "").strip()
+            proposals = response.get("proposals")
+            if not transaction_id or not policy_id or not isinstance(proposals, list):
+                raise ValueError(
+                    "Every AI response requires transaction_id, policy_id, and a proposals list"
+                )
+            key = (transaction_id, policy_id)
+            if key in responses:
+                raise ValueError(
+                    f"Duplicate AI response for transaction {transaction_id} policy {policy_id}"
+                )
+            responses[key] = {
+                "proposals": proposals,
+                "provider": str(response.get("provider") or "codex-scheduled-task"),
+                "model": str(response.get("model") or "gpt-5.6-sol"),
+            }
+
+        collected: list[dict[str, Any]] = []
+
+        def resolver(prompt: dict[str, Any]) -> dict[str, Any]:
+            collected.append(prompt)
+            transaction = prompt.get("transaction")
+            transaction_id = str(
+                transaction.get("transaction_id") if isinstance(transaction, dict) else ""
+            ).strip()
+            policy_id = str(prompt.get("policy_id") or "").strip()
+            response = responses.pop((transaction_id, policy_id), None)
+            if response is None:
+                return {
+                    "proposals": [],
+                    "provider": "codex-scheduled-task",
+                    "model": "pending",
+                }
+            return response
+
+        return collected, responses, resolver
+
     def _stage_statement(
         self, request: dict[str, Any], source: Path, manifest: Path
     ) -> dict[str, Any]:
@@ -95,33 +148,68 @@ class IngestionJobRunner:
             str(request.get("card_code") or ""),
             str(request.get("adapter") or "").strip() or None,
         )
+        ai_requests, unused_ai_responses, ai_resolver = self._ai_handoff(request)
         run = export_statement_for_actual(
             source,
             self.repository_root / "config" / "actual-bootstrap.json",
             manifest,
             password_env=str(request.get("password_env") or "STATEMENT_PASSWORD"),
             adapter_code=adapter,
+            source_message_id=str(request.get("source_message_id") or "") or None,
             rules_path=self.repository_root / "config" / "static-rules.seed.json",
+            ai_policies_path=self.repository_root / "config" / "ai-policies.json",
+            ai_resolver=ai_resolver,
         )
+        if unused_ai_responses:
+            unused = ", ".join(
+                f"{transaction_id}/{policy_id}"
+                for transaction_id, policy_id in sorted(unused_ai_responses)
+            )
+            raise ValueError(f"AI responses did not match generated requests: {unused}")
         payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["ai_requests"] = ai_requests
+        payload["ai_response_count"] = len(request.get("ai_responses") or [])
         payload["source_evidence"] = {
             "source_kind": str(request.get("source_kind") or "statement_pdf"),
             "source_message_id": str(request.get("source_message_id") or "") or None,
             "source_attachment_id": str(request.get("source_attachment_id") or "") or None,
-            "source_filename": source.name,
+            "source_filename": str(request.get("source_filename") or source.name),
             "document_sha256": self._sha256(source),
         }
         manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        return run.to_dict()
+        staged = run.to_dict()
+        staged["ai_requests"] = ai_requests
+        staged["ai_request_count"] = len(ai_requests)
+        staged["ai_response_count"] = len(request.get("ai_responses") or [])
+        return staged
 
-    def _stage_browser_capture(self, source: Path, manifest: Path) -> dict[str, Any]:
+    def _stage_browser_capture(
+        self, request: dict[str, Any], source: Path, manifest: Path
+    ) -> dict[str, Any]:
+        ai_requests, unused_ai_responses, ai_resolver = self._ai_handoff(request)
         run = export_browser_capture_for_actual(
             source,
             self.repository_root / "config" / "actual-bootstrap.json",
             manifest,
             rules_path=self.repository_root / "config" / "static-rules.seed.json",
+            ai_policies_path=self.repository_root / "config" / "ai-policies.json",
+            ai_resolver=ai_resolver,
         )
-        return run.to_dict()
+        if unused_ai_responses:
+            unused = ", ".join(
+                f"{transaction_id}/{policy_id}"
+                for transaction_id, policy_id in sorted(unused_ai_responses)
+            )
+            raise ValueError(f"AI responses did not match generated requests: {unused}")
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["ai_requests"] = ai_requests
+        payload["ai_response_count"] = len(request.get("ai_responses") or [])
+        manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        staged = run.to_dict()
+        staged["ai_requests"] = ai_requests
+        staged["ai_request_count"] = len(ai_requests)
+        staged["ai_response_count"] = len(request.get("ai_responses") or [])
+        return staged
 
     def _stage_browser_export(
         self, request: dict[str, Any], source: Path, job_root: Path, manifest: Path
@@ -141,7 +229,7 @@ class IngestionJobRunner:
         )
         capture_path = job_root / "browser-capture.json"
         capture_path.write_text(json.dumps(capture, indent=2), encoding="utf-8")
-        return self._stage_browser_capture(capture_path, manifest)
+        return self._stage_browser_capture(request, capture_path, manifest)
 
     def _actual(self, manifest: Path, result: Path, mode: str) -> dict[str, Any] | None:
         if mode == "STAGE":
@@ -201,10 +289,24 @@ class IngestionJobRunner:
         if job_type == "STATEMENT_PDF":
             staged = self._stage_statement(normalized_request, source, manifest)
         elif job_type == "BROWSER_CAPTURE":
-            staged = self._stage_browser_capture(source, manifest)
+            staged = self._stage_browser_capture(normalized_request, source, manifest)
         else:
             staged = self._stage_browser_export(normalized_request, source, job_root, manifest)
 
+        ai_request_count = int(staged.get("ai_request_count") or 0)
+        ai_handoff_complete = bool(normalized_request.get("ai_handoff_complete"))
+        if actual_mode != "STAGE":
+            if staged.get("staging_status") not in {
+                "READY_FOR_LEDGER_MATCH",
+                "READY_FOR_APPROVAL",
+            }:
+                raise ValueError(
+                    f"Actual {actual_mode} requires a review-free staging manifest"
+                )
+            if ai_request_count and not ai_handoff_complete:
+                raise ValueError(
+                    f"Actual {actual_mode} requires ai_handoff_complete=true"
+                )
         actual_payload = self._actual(manifest, actual_result, actual_mode)
         status = "STAGED" if actual_mode == "STAGE" else str(actual_payload.get("status")).upper()
         result = IngestionJobResult(
@@ -222,6 +324,18 @@ class IngestionJobRunner:
         result["review_count"] = staged.get("review_count", 0)
         result["envelope_count"] = len(staged.get("envelopes") or [])
         result["cashback_reconciliation_count"] = len(staged.get("cashback_reconciliation") or [])
+        result["ai_request_count"] = ai_request_count
+        result["ai_response_count"] = int(staged.get("ai_response_count") or 0)
+        ai_trace = list(staged.get("ai_trace") or [])
+        result["ai_trace_count"] = len(ai_trace)
+        result["ai_accepted_count"] = sum(
+            1 for trace in ai_trace if isinstance(trace, dict) and trace.get("accepted") is True
+        )
+        result["ai_rejected_count"] = sum(
+            1 for trace in ai_trace if isinstance(trace, dict) and trace.get("accepted") is False
+        )
+        result["ai_requests"] = list(staged.get("ai_requests") or [])
+        result["ai_handoff_complete"] = ai_handoff_complete
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
 

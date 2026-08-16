@@ -118,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     statement_export.add_argument("--ai-policies", type=Path)
     statement_export.add_argument("--ai-provider", type=Path)
     statement_export.add_argument("--adapter")
+    statement_export.add_argument("--source-message-id")
     statement_export.add_argument("--password-env", default="STATEMENT_PASSWORD")
     statement_export.add_argument("--allow-unbalanced", action="store_true")
     browser_export = subparsers.add_parser(
@@ -221,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output,
             password_env=args.password_env,
             adapter_code=args.adapter,
+            source_message_id=args.source_message_id,
             rules_path=args.rules,
             history_path=args.history,
             ai_policies_path=args.ai_policies,

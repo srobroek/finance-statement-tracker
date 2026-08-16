@@ -12,6 +12,11 @@ param(
     [string]$Provider,
     [string]$DataId,
     [string]$ActualAccount,
+    [string]$SourceMessageId,
+    [string]$SourceAttachmentId,
+    [string]$SourceKind,
+    [string]$AIResponsesPath,
+    [switch]$AIHandoffComplete,
     [string]$PasswordEnv = 'STATEMENT_PASSWORD',
     [string]$DeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.json'),
     [string]$DockerHost,
@@ -48,7 +53,7 @@ $remoteTemporary = "/tmp/finance-ingest-$remoteName"
 if ($LASTEXITCODE -ne 0) {
     throw "Artifact upload failed with exit code $LASTEXITCODE"
 }
-$installCommand = "sudo install -m 0600 '$remoteTemporary' '/opt/stacks/finance-actual-poc/ingestion-data/inbox/$remoteName' && rm -f '$remoteTemporary'"
+$installCommand = "sudo install -o 10002 -g 10002 -m 0600 '$remoteTemporary' '/opt/stacks/finance-actual-poc/ingestion-data/inbox/$remoteName' && rm -f '$remoteTemporary'"
 & ssh $target $installCommand
 if ($LASTEXITCODE -ne 0) {
     throw "Artifact installation failed with exit code $LASTEXITCODE"
@@ -58,6 +63,17 @@ $job = [ordered]@{
     type = $Type
     actual_mode = $ActualMode
     source_path = $remoteName
+    source_filename = [IO.Path]::GetFileName($resolvedInput)
+    ai_handoff_complete = $AIHandoffComplete.IsPresent
+}
+$resolvedSourceKind = if ($SourceKind) {
+    $SourceKind
+} elseif ($Type -eq 'STATEMENT_PDF') {
+    'outlook_attachment'
+} elseif ($Type -eq 'BROWSER_EXPORT') {
+    'browser_export'
+} else {
+    'browser_capture'
 }
 foreach ($property in @{
     card_code = $CardCode
@@ -65,11 +81,23 @@ foreach ($property in @{
     provider = $Provider
     data_id = $DataId
     actual_account = $ActualAccount
+    source_message_id = $SourceMessageId
+    source_attachment_id = $SourceAttachmentId
+    source_kind = $resolvedSourceKind
     password_env = $PasswordEnv
 }.GetEnumerator()) {
     if (-not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
         $job[$property.Key] = $property.Value
     }
+}
+if ($AIResponsesPath) {
+    $resolvedAIResponses = (Resolve-Path -LiteralPath $AIResponsesPath).Path
+    $rawAIResponses = Get-Content -Raw -LiteralPath $resolvedAIResponses
+    if (-not $rawAIResponses.TrimStart().StartsWith('[')) {
+        throw 'AIResponsesPath must contain one JSON array'
+    }
+    $aiResponses = @($rawAIResponses | ConvertFrom-Json)
+    $job.ai_responses = @($aiResponses)
 }
 $payload = $job | ConvertTo-Json -Compress
 $remoteCommand = "sudo docker exec -i $containerName python3 /app/apps/actual-ingestion/submit_local.py"

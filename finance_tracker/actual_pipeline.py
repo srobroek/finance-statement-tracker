@@ -131,13 +131,14 @@ def build_actual_statement_run(
     config: dict[str, Any],
     rules: Iterable[StaticRule] = (),
     *,
+    source_message_id: str | None = None,
     history_index: dict[str, HistoryDecision] | None = None,
     ai_engine: AIEnrichmentEngine | None = None,
     ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> ActualStatementRun:
     card_by_last4, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
-    staged = stage_statement(statement, card_by_last4)
+    staged = stage_statement(statement, card_by_last4, source_message_id=source_message_id)
     missing = sorted(
         {
             str(row.metadata.get("statement_card_last4") or "unknown")
@@ -166,6 +167,7 @@ def build_actual_statement_run(
                     "CLASSIFICATION",
                     "TAGGING",
                     "EVIDENCE",
+                    "CASHBACK",
                 ),
             )
         )
@@ -173,7 +175,6 @@ def build_actual_statement_run(
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
-        traces.extend(engine.apply_stages(transaction, ("CASHBACK",)))
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
     period_start = statement.period_start or min(
@@ -242,6 +243,12 @@ def build_actual_statement_run(
         }
         for card, rows in sorted(cashback_rows.items())
     )
+    final_review_count = staged.review_count
+    final_staging_status = (
+        "READY_FOR_LEDGER_MATCH"
+        if statement.balance_tied and final_review_count == 0
+        else "REVIEW_REQUIRED"
+    )
     return ActualStatementRun(
         schema_version=1,
         source_file=statement.source_file,
@@ -259,8 +266,8 @@ def build_actual_statement_run(
             "transaction_count": len(statement.transactions),
             "warnings": list(statement.warnings),
         },
-        staging_status=staged.status,
-        review_count=staged.review_count,
+        staging_status=final_staging_status,
+        review_count=final_review_count,
         rule_trace=tuple(asdict(trace) for trace in traces),
         history_trace=tuple(asdict(trace) for trace in history_traces),
         ai_trace=tuple({**asdict(trace), "decision_status": trace.decision_status} for trace in ai_traces),
@@ -276,10 +283,12 @@ def export_statement_for_actual(
     *,
     password_env: str = "STATEMENT_PASSWORD",
     adapter_code: str | None = None,
+    source_message_id: str | None = None,
     rules_path: str | Path | None = None,
     history_path: str | Path | None = None,
     ai_policies_path: str | Path | None = None,
     ai_provider_path: str | Path | None = None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     allow_unbalanced: bool = False,
 ) -> ActualStatementRun:
     """Create a durable run manifest without logging or persisting the PDF password."""
@@ -295,19 +304,24 @@ def export_statement_for_actual(
             + ("" if difference is None else f" (difference AED {difference})")
         )
     ai_engine = None
-    ai_resolver = None
-    if ai_policies_path or ai_provider_path:
+    resolved_ai_resolver = ai_resolver
+    if resolved_ai_resolver is not None:
+        if not ai_policies_path:
+            raise ValueError("An AI resolver requires an AI policies file")
+        ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
+    elif ai_policies_path or ai_provider_path:
         if not ai_policies_path or not ai_provider_path:
             raise ValueError("AI enrichment requires both a policies file and provider configuration")
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
-        ai_resolver = load_ai_provider(ai_provider_path)
+        resolved_ai_resolver = load_ai_provider(ai_provider_path)
     run = build_actual_statement_run(
         statement,
         load_actual_config(config_path),
         load_compiled_rules(rules_path),
+        source_message_id=source_message_id,
         history_index=load_history_index(history_path) if history_path else None,
         ai_engine=ai_engine,
-        ai_resolver=ai_resolver,
+        ai_resolver=resolved_ai_resolver,
     )
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)

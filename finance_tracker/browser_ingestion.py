@@ -474,13 +474,13 @@ def build_browser_ingestion_run(
                 "CLASSIFICATION",
                 "TAGGING",
                 "EVIDENCE",
+                "CASHBACK",
             ),
         ))
         if history_index and (history_trace := apply_history_match(transaction, history_index)):
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
-        rule_traces.extend(engine.apply_stages(transaction, ("CASHBACK",)))
 
     blockers = list(account_blockers)
     if kind == "STATEMENT_ROWS" and not authoritative_statement:
@@ -518,22 +518,27 @@ def export_browser_capture_for_actual(
     history_path: str | Path | None = None,
     ai_policies_path: str | Path | None = None,
     ai_provider_path: str | Path | None = None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> BrowserIngestionRun:
     capture = json.loads(Path(capture_path).read_text(encoding="utf-8"))
     ai_engine = None
-    ai_resolver = None
-    if ai_policies_path or ai_provider_path:
+    resolved_ai_resolver = ai_resolver
+    if resolved_ai_resolver is not None:
+        if not ai_policies_path:
+            raise ValueError("An AI resolver requires an AI policies file")
+        ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
+    elif ai_policies_path or ai_provider_path:
         if not ai_policies_path or not ai_provider_path:
             raise ValueError("AI enrichment requires both a policies file and provider configuration")
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
-        ai_resolver = load_ai_provider(ai_provider_path)
+        resolved_ai_resolver = load_ai_provider(ai_provider_path)
     run = build_browser_ingestion_run(
         capture,
         load_actual_config(config_path),
         load_compiled_rules(rules_path),
         history_index=load_history_index(history_path) if history_path else None,
         ai_engine=ai_engine,
-        ai_resolver=ai_resolver,
+        ai_resolver=resolved_ai_resolver,
     )
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
