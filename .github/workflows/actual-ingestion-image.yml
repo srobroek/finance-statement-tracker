@@ -153,10 +153,11 @@ jobs:
           sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
           cd /opt/stacks/finance-actual-poc
           # The external Podman Compose provider can leave an already-created
-          # sibling service in an exited state after one-off operations. Bring
-          # the public Actual proxy up explicitly so ingestion-only deploys
-          # cannot leave Cloudflare's port 5006 origin unavailable.
-          sudo docker compose up -d --no-deps --pull never actual-proxy actual-ingestion
+          # sibling services in an exited state after one-off operations. Bring
+          # every pipeline-facing service up explicitly so ingestion-only
+          # deploys cannot leave Cloudflare's port 5006 origin or the live
+          # cashback companion unavailable.
+          sudo docker compose up -d --no-deps --pull never actual-proxy cashback-control actual-ingestion
           sudo podman logout --authfile "$auth_file" ghcr.io
           sudo rm -f "$auth_file"
 
@@ -166,12 +167,14 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"' && \
+               curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"' && \
                curl -fsS http://127.0.0.1:5006/ >/dev/null; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
               sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-ingestion
               sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-proxy
+              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 cashback-control
               exit 1
             fi
             sleep 2
@@ -188,6 +191,10 @@ jobs:
           proxy_health="$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')"
           test "$proxy_state" = running
           test "$proxy_health" = healthy
+          cashback_state="$(sudo docker inspect finance-cashback-control --format '{{.State.Status}}')"
+          cashback_health="$(sudo docker inspect finance-cashback-control --format '{{.State.Health.Status}}')"
+          test "$cashback_state" = running
+          test "$cashback_health" = healthy
           headers="$(curl -fsSI http://127.0.0.1:5006/)"
           grep -qi '^Cross-Origin-Embedder-Policy: require-corp' <<<"$headers"
           grep -qi '^Cross-Origin-Opener-Policy: same-origin' <<<"$headers"
