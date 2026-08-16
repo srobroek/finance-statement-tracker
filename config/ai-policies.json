@@ -60,7 +60,7 @@
       "minimum_confidence": 0.95,
       "allowed_values": {
         "channel": ["ONLINE", "PHYSICAL_POS", "APPLE_PAY_POS", "UNKNOWN"],
-        "reward_bucket": ["RAK_GROCERY", "RAK_DINING", "RAK_TRAVEL", "RAK_EWALLET", "RAK_STANDARD", "SC_ONLINE", "SC_WALLET", "SC_FOREIGN", "EI_AMAZON"]
+        "reward_bucket": ["RAK_GROCERY", "RAK_DINING", "RAK_TRAVEL", "RAK_EWALLET", "RAK_STANDARD", "SC_ONLINE", "SC_WALLET", "SC_FOREIGN", "SC_FILLER", "EI_AMAZON"]
       }
     },
     {

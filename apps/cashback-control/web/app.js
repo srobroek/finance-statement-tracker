@@ -12,59 +12,177 @@ function cardLabel(code) {
   }[code] || code.replaceAll("_", " ");
 }
 
+function compactMoney(value) {
+  const amount = Number(value);
+  if (amount >= 1000) return `AED ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
+  return money.format(amount);
+}
+
+function tierLabel(tier) {
+  const percentage = tier.code.match(/^TIER_(\d+)$/)?.[1];
+  return percentage ? `${percentage}%` : tier.code.replaceAll("_", " ");
+}
+
+function renderTierPosition(card, actual) {
+  const tiers = (card.tiers || []).filter((tier) => Number(tier.minimum_spend_aed) > 0);
+  if (tiers.length < 2) return { next: card.safety_target_aed ? `/ ${compactMoney(card.safety_target_aed)}` : "this cycle", ladder: "" };
+  const lastThreshold = Number(tiers.at(-1).minimum_spend_aed);
+  const nextTier = tiers.find((tier) => !tier.met);
+  const markers = tiers.map((tier) => {
+    const position = Math.min(100, Number(tier.minimum_spend_aed) / lastThreshold * 100);
+    return `<span class="tier-marker${tier.met ? " met" : ""}" style="left:${position}%"><i></i><b>${tierLabel(tier)}</b><small>${compactMoney(tier.minimum_spend_aed)}</small></span>`;
+  }).join("");
+  return {
+    next: nextTier ? `Next ${tierLabel(nextTier)} at ${compactMoney(nextTier.minimum_spend_aed)}` : `${tierLabel(tiers.at(-1))} secured`,
+    ladder: `<div class="tier-ladder"><div class="track"><i style="width:${Math.min(100, actual / lastThreshold * 100)}%"></i></div>${markers}</div>`,
+  };
+}
+
 function typeLabel(item) {
-  const channel = item.channel === "APPLE_PAY_POS" ? " · Apple Pay" : "";
-  const currency = item.currency !== "AED" ? ` · ${item.currency}` : "";
-  return `${item.purchase_type.replaceAll("_", " ")}${channel}${currency}`;
+  if (item.label) return item.label;
+  if (item.purchase_type === "AMAZON") return "Amazon";
+  if (item.purchase_type === "FILLER") return "Filler";
+  if (item.purchase_type === "GROCERY") return "Groceries";
+  if (item.purchase_type === "DINING") return "Dining";
+  if (item.purchase_type === "TRAVEL") return "Travel";
+  if (item.currency !== "AED") return "Foreign";
+  if (item.channel === "APPLE_PAY_POS") return "Apple Pay";
+  if (item.channel === "ONLINE") return "Online";
+  if (item.channel === "PHYSICAL_POS") return "Physical";
+  return item.purchase_type.replaceAll("_", " ");
+}
+
+function compactReason(item) {
+  const preferred = item.ranked_cards?.[0];
+  if (preferred?.purpose === "THRESHOLD_FILLER" && Number(preferred.target_rate_percent) === 0) {
+    return `Tier filler · ${compactMoney(preferred.card_target_remaining_aed)} remaining · no direct cashback`;
+  }
+  if (preferred && preferred.tier_before !== preferred.tier_after) {
+    return `Tier unlock · ${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · ${compactMoney(preferred.estimated_net_value_aed)} cycle value`;
+  }
+  if (preferred && preferred.tier_before !== preferred.target_tier) {
+    return `Target-tier ${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% · building ${compactMoney(preferred.tier_threshold_aed)}`;
+  }
+  const rate = Number(item.estimated_net_return_percent);
+  if (Number.isFinite(rate)) return `Est. ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% return`;
+  return item.reason;
+}
+
+function paymentMethodLabel(channel) {
+  return {
+    APPLE_PAY_POS: "Apple Pay",
+    PHYSICAL_POS: "Physical card",
+    ONLINE: "Online",
+  }[channel] || channel?.replaceAll("_", " ").toLowerCase() || "";
+}
+
+function routeHeading(item, candidate) {
+  const card = cardLabel(item.use_card);
+  if (!candidate) return card;
+  return `${card} · ${paymentMethodLabel(candidate.payment_channel)} → ${bucketLabel(candidate.bucket)}`;
+}
+
+function candidateValueLabel(candidate) {
+  const bucketRate = Number(candidate.target_rate_percent);
+  if (candidate.purpose === "THRESHOLD_FILLER" && bucketRate === 0) {
+    return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} remaining · no direct cashback`;
+  }
+  if (candidate.tier_before !== candidate.tier_after) {
+    return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · unlocks ${compactMoney(candidate.estimated_net_value_aed)} cycle value`;
+  }
+  if (candidate.tier_before !== candidate.target_tier) {
+    return `Target-tier ${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+  }
+  const rate = Number(candidate.estimated_net_return_percent);
+  return `Est. ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% return`;
+}
+
+function bucketLabel(code) {
+  return code.replace(/^(RAK|SC|EI)_/, "").replaceAll("_", " ").toLowerCase();
+}
+
+function tierName(code) {
+  return code.replaceAll("_", " ").replace(/^TIER (\d+)$/, "$1% tier").toLowerCase();
+}
+
+function candidatePosition(candidate) {
+  if (!candidate) return "";
+  const bucketSpend = compactMoney(candidate.bucket_spend_aed);
+  const bucket = candidate.bucket_cap_aed == null
+    ? `${bucketLabel(candidate.bucket)} ${bucketSpend} · uncapped`
+    : `${bucketLabel(candidate.bucket)} ${bucketSpend}/${compactMoney(candidate.bucket_cap_aed)}`;
+  const threshold = Number(candidate.tier_threshold_aed) > 0
+    ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(candidate.tier_threshold_aed)}`
+    : `${tierName(candidate.target_tier)} · no minimum`;
+  const method = candidate.payment_channel ? candidate.payment_channel.replaceAll("_", " ").toLowerCase() : "";
+  return `${bucket} · ${threshold}${method ? ` · ${method}` : ""}`;
 }
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
   root.replaceChildren(
-    ...items.map((item) => {
+    ...items.filter((item) => item.active !== false).map((item) => {
       const node = document.createElement("article");
-      node.className = "recommendation";
+      node.className = "route-row";
+      const avoid = (item.avoid_cards || []).map(cardLabel);
+      const preferred = item.ranked_cards?.[0];
       node.innerHTML = `
-        <span class="recommendation-category">${typeLabel(item)}</span>
-        <strong>${cardLabel(item.use_card)}</strong>
-        <span class="route">Use this card</span>
-        <details><summary>Why</summary><p class="reason">${item.reason}</p></details>
+        <div class="route-main">
+          <span class="route-type">${typeLabel(item)}</span>
+          <span class="route-use"><span><strong>${routeHeading(item, preferred)}</strong><em title="${item.reason}">${compactReason(item)}</em></span><small>${candidatePosition(preferred)}</small></span>
+          <small title="${avoid.length ? avoid.join(", ") : "None"}">${avoid.length ? avoid.join(", ") : ""}</small>
+        </div>
       `;
       return node;
     }),
   );
 }
 
-function renderAvoid(items) {
-  const cards = new Map();
-  items.forEach((item) => {
-    (item.avoid_cards || []).forEach((card) => {
-      const categories = cards.get(card) || [];
-      categories.push(item.purchase_type.replaceAll("_", " ").toLowerCase());
-      cards.set(card, categories);
+function renderDecisionTree(items) {
+  const root = document.querySelector("#decision-tree");
+  const active = items.filter((item) => item.active !== false);
+  const key = (item) => item.code || `${item.purchase_type}:${item.channel}:${item.currency}`;
+  const previous = root.dataset.selectedKey;
+  root.innerHTML = `<label class="graph-selector"><span>Spend type</span><select aria-label="Decision-tree spend type">${active.map((item) => `<option value="${key(item)}">${typeLabel(item)}</option>`).join("")}</select></label><div class="spend-graph"></div>`;
+  const selector = root.querySelector("select");
+  if (active.some((item) => key(item) === previous)) selector.value = previous;
+
+  const show = () => {
+    const item = active.find((candidate) => key(candidate) === selector.value) || active[0];
+    if (!item) return;
+    root.dataset.selectedKey = key(item);
+    const candidates = (item.ranked_cards || []).map((candidate) => {
+      const cap = candidate.bucket_cap_aed == null ? null : Number(candidate.bucket_cap_aed);
+      const remaining = candidate.bucket_remaining_aed == null ? null : Number(candidate.bucket_remaining_aed);
+      const threshold = Number(candidate.tier_threshold_aed);
+      const method = candidate.payment_channel.replaceAll("_", " ").toLowerCase();
+      const bucketText = cap == null
+        ? `${method} → ${bucketLabel(candidate.bucket)} is uncapped; ${compactMoney(candidate.bucket_spend_aed)} recorded`
+        : `${method} → ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)} / ${compactMoney(cap)}; ${compactMoney(remaining)} headroom`;
+      const tierText = threshold > 0
+        ? `${tierName(candidate.target_tier)} at ${compactMoney(threshold)}; ${compactMoney(candidate.tier_remaining_aed)} remaining`
+        : `${tierName(candidate.target_tier)} has no minimum spend`;
+      const switchText = candidate.status === "PREFERRED"
+        ? candidate.condition
+        : `Then use: ${candidate.condition}`;
+      return `<li class="candidate-node ${candidate.status.toLowerCase()}"><div class="candidate-rank"><b>${candidate.order}</b><span>${candidate.status.toLowerCase()}</span></div><div class="candidate-card"><strong>${cardLabel(candidate.card)}</strong><span>${bucketText}</span></div><div class="candidate-logic"><b>${candidateValueLabel(candidate)}</b><span>${tierText}</span><small>${switchText}</small></div></li>`;
+    }).join("");
+    const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
+    root.querySelector(".spend-graph").innerHTML = `<header><span>${methods} · ${item.currency}</span><strong>${typeLabel(item)} routing order</strong><small>Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics.</small></header><ol>${candidates}</ol>`;
+  };
+  selector.addEventListener("change", show);
+  show();
+}
+
+function setupRoutingViews() {
+  document.querySelectorAll("[data-routing-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const view = button.dataset.routingView;
+      document.querySelector("#recommendations-view").hidden = view !== "list";
+      document.querySelector("#decision-tree").hidden = view !== "tree";
+      document.querySelectorAll("[data-routing-view]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
     });
   });
-  const section = document.querySelector("#avoid-section");
-  const root = document.querySelector("#avoid");
-  if (!cards.size) {
-    section.hidden = false;
-    root.innerHTML = `
-      <article class="empty-state">
-        <strong>No cards blocked</strong>
-        <span>All cards still have routing value in at least one spend type.</span>
-      </article>
-    `;
-    return;
-  }
-  section.hidden = false;
-  root.replaceChildren(
-    ...[...cards.entries()].map(([card, categories]) => {
-      const node = document.createElement("article");
-      node.className = "avoid-card";
-      node.innerHTML = `<strong>${cardLabel(card)}</strong><span>${[...new Set(categories)].join(", ")}</span>`;
-      return node;
-    }),
-  );
 }
 
 function renderCards(cards) {
@@ -74,9 +192,12 @@ function renderCards(cards) {
       const target = Number(card.safety_target_aed || card.total_spend_aed || 1);
       const actual = Number(card.total_spend_aed);
       const percentage = Math.max(0, Math.min(100, (actual / target) * 100));
+      const tierPosition = renderTierPosition(card, actual);
       const buckets = card.buckets
-        .filter((bucket) => bucket.spend_cap_aed)
         .map((bucket) => {
+          if (!bucket.spend_cap_aed) {
+            return `<div class="bucket-row uncapped"><div><span>${bucket.code.replaceAll("_", " ")}</span><b>${money.format(bucket.spend_aed)} · uncapped</b></div></div>`;
+          }
           const fill = Math.min(100, (Number(bucket.spend_aed) / Number(bucket.spend_cap_aed)) * 100);
           const full = bucket.status === "FULL" ? " full" : "";
           return `
@@ -91,14 +212,16 @@ function renderCards(cards) {
       const node = document.createElement("article");
       node.className = "position-card";
       node.innerHTML = `
-        <div class="card-title">
-          <div><span>${card.tier.replaceAll("_", " ")}</span><h3>${card.name}</h3></div>
-          <b class="pace ${(card.pace?.status || "OPEN").toLowerCase()}">${(card.pace?.status || "OPEN").replaceAll("_", " ")}</b>
+        <div class="position-card-header">
+          <div class="position-summary-copy">
+            <strong>${card.name}</strong>
+            <span>${card.tier.replaceAll("_", " ")} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}</span>
+          </div>
+          <div class="position-total"><strong>${money.format(actual)}</strong><span>${tierPosition.next}</span></div>
         </div>
-        <div class="total"><strong>${money.format(actual)}</strong><span>${card.safety_target_aed ? `of ${money.format(target)}` : "this cycle"}</span></div>
-        <div class="track primary"><i style="width:${percentage}%"></i></div>
+        ${tierPosition.ladder || `<div class="track primary"><i style="width:${percentage}%"></i></div>`}
+        <div class="bucket-list">${buckets}</div>
         <div class="source-state"><span>${card.provisional_event_count || 0} provisional</span><span>${card.confirmed_event_count || 0} confirmed</span>${Number(card.refund_effect_aed || 0) ? `<span>${money.format(card.refund_effect_aed)} refunded</span>` : ""}</div>
-        <div class="bucket-list">${buckets || '<p class="muted">No capped buckets</p>'}</div>
       `;
       return node;
     }),
@@ -243,13 +366,15 @@ async function loadDashboard() {
   if (!response.ok) throw new Error(payload.error || "Dashboard is unavailable.");
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
   renderStatus(payload.data_status);
-  renderRecommendations(payload.recommendations);
-  renderAvoid(payload.recommendations);
+  const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
+  renderRecommendations(routing);
+  renderDecisionTree(routing);
   renderAttention(payload);
   renderCards(payload.cards);
   renderPeriodHistory(periodsPayload.periods || []);
 }
 
+setupRoutingViews();
 loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");
   status.className = "as-of stale";

@@ -7,7 +7,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Iterable
 
-from .cashback import PaymentIntent, bucket_spend, pace_status, recommend, reward_total, total_spend
+from .cashback import PaymentIntent, bucket_spend, evaluate_card, pace_status, recommend, reward_total, total_spend
 from .models import Transaction
 from .actual_pipeline import account_maps, account_owner_map
 
@@ -63,6 +63,8 @@ def _reward_bucket(card: str, category: str, channel: str, currency: str, tags: 
             return "SC_WALLET"
         if channel == "ONLINE":
             return "SC_ONLINE"
+        if channel == "PHYSICAL_POS":
+            return "SC_FILLER"
     if card == "RAK_WORLD":
         if category == "GROCERY":
             return "RAK_GROCERY"
@@ -153,6 +155,7 @@ def cashback_dashboard(
     as_of: date,
     intents: Iterable[PaymentIntent],
     periods_by_card: dict[str, tuple[date, date]] | None = None,
+    routing_profiles: Iterable[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     rows = list(transactions)
     routing_programs = []
@@ -274,9 +277,48 @@ def cashback_dashboard(
             ),
             "buckets": bucket_rows,
         })
+    threshold_actionable = any(
+        program.safety_target is not None
+        and total_spend(rows, program.card) < program.safety_target
+        for program in routing_programs
+    )
     recommendations = []
     for intent in intents:
         item = recommend(routing_programs, rows, intent)
+        ranked_cards = []
+        for index, candidate in enumerate(item.ranked):
+            ranked_cards.append({
+                "order": index + 1,
+                "status": (
+                    "PREFERRED" if index == 0
+                    else "AVOID" if candidate.net_value_aed <= 0
+                    else "NEXT"
+                ),
+                "card": candidate.card,
+                "bucket": candidate.bucket,
+                "tier_before": candidate.tier_before,
+                "tier_after": candidate.tier_after,
+                "target_tier": candidate.target_tier,
+                "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
+                "estimated_net_value_aed": _plain(candidate.net_value_aed),
+                "estimated_net_return_percent": _plain(
+                    candidate.net_value_aed / intent.amount_aed * Decimal("100")
+                    if intent.amount_aed
+                    else Decimal("0")
+                ),
+                "card_spend_aed": _plain(candidate.card_spend_before_aed),
+                "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
+                "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
+                "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
+                "bucket_cap_aed": (
+                    None if candidate.bucket_spend_cap_aed is None
+                    else _plain(candidate.bucket_spend_cap_aed)
+                ),
+                "bucket_remaining_aed": (
+                    None if candidate.bucket_remaining_aed is None
+                    else _plain(candidate.bucket_remaining_aed)
+                ),
+            })
         recommendations.append({
             "purchase_type": intent.category,
             "channel": intent.channel,
@@ -285,12 +327,187 @@ def cashback_dashboard(
             "avoid_cards": list(item.avoid_cards),
             "guidance": item.guidance,
             "reason": item.reason,
+            "decision_amount_aed": _plain(intent.amount_aed),
+            "estimated_net_value_aed": _plain(item.net_value_aed),
+            "estimated_net_return_percent": _plain(
+                item.net_value_aed / intent.amount_aed * Decimal("100")
+                if intent.amount_aed
+                else Decimal("0")
+            ),
+            "conditional": intent.category == "FILLER",
+            "active": intent.category != "FILLER" or threshold_actionable,
+            "ranked_cards": ranked_cards,
+        })
+    routing_programs_by_card = {program.card: program for program in routing_programs}
+    routing_state_by_card = {str(row["card"]): row for row in program_rows}
+    purpose_rank = {
+        "CATEGORY_BUCKET": 0,
+        "REWARD_BUCKET": 1,
+        "SPECIALIST": 1,
+        "THRESHOLD_FILLER": 2,
+        "FALLBACK": 3,
+    }
+    pace_rank = {
+        "UNDER": 0,
+        "ON_PACE": 1,
+        "OVER": 2,
+        "SECURED": 3,
+    }
+    routing_graphs = []
+    for profile in routing_profiles or ():
+        amount = Decimal(str(profile.get("decision_amount_aed") or "100"))
+        category = str(profile["category"])
+        currency = str(profile.get("currency") or "AED")
+        route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
+        for route in profile.get("routes") or ():
+            card = str(route["card"])
+            program = routing_programs_by_card.get(card)
+            if program is None:
+                continue
+            channel = str(route["channel"])
+            intent = PaymentIntent(category, amount, currency, channel)
+            candidate = evaluate_card(
+                program,
+                rows,
+                intent,
+                bucket_code=str(route["bucket"]),
+            )
+            if candidate is None:
+                continue
+            purpose = str(route.get("purpose") or "REWARD_BUCKET")
+            bucket_open = candidate.bucket_remaining_aed is None or candidate.bucket_remaining_aed > 0
+            bucket_fits_purchase = (
+                candidate.bucket_remaining_aed is None
+                or candidate.bucket_remaining_aed >= amount
+            )
+            target_remaining = (
+                None if program.safety_target is None
+                else max(program.safety_target - candidate.card_spend_before_aed, Decimal("0"))
+            )
+            card_state = routing_state_by_card.get(card) or {}
+            pace = card_state.get("pace") or {}
+            pace_status_value = str(pace.get("status") or "OPEN")
+            active = False
+            condition = ""
+            if purpose == "CATEGORY_BUCKET":
+                active = bucket_open and bucket_fits_purchase and candidate.target_rate > 0
+                condition = "Category bucket has enough headroom for the whole purchase and its target-tier rate is active."
+            elif purpose == "REWARD_BUCKET":
+                active = bucket_open and bucket_fits_purchase and candidate.net_value_aed > 0
+                if target_remaining is not None and target_remaining > 0 and pace_status_value == "UNDER":
+                    condition = "Prioritize this card: its target is unmet, cycle pace is under, and this reward bucket has headroom."
+                elif target_remaining is not None and target_remaining > 0 and pace_status_value == "OVER":
+                    condition = "Keep as a fallback: this reward bucket has headroom, but the card is already over cycle pace."
+                else:
+                    condition = "Reward bucket has headroom and positive economic value."
+            elif purpose == "THRESHOLD_FILLER":
+                active = (
+                    target_remaining is not None
+                    and target_remaining > 0
+                    and bucket_open
+                    and bucket_fits_purchase
+                )
+                condition = (
+                    "Use as threshold filler because the card target is unmet and cycle pace is under."
+                    if pace_status_value == "UNDER"
+                    else "Keep as fallback filler: the card target is unmet, but higher-priority allocation needs are satisfied first."
+                )
+            elif purpose in {"SPECIALIST", "FALLBACK"}:
+                active = bucket_open and bucket_fits_purchase and candidate.net_value_aed > 0
+                condition = "Eligible positive-value fallback remains available."
+            else:
+                raise ValueError(f"Unsupported routing purpose: {purpose}")
+            if not active:
+                continue
+            row = {
+                "card": candidate.card,
+                "bucket": candidate.bucket,
+                "payment_channel": channel,
+                "purpose": purpose,
+                "policy_priority": int(route.get("priority") or 100),
+                "purpose_rank": purpose_rank[purpose],
+                "pace_status": pace_status_value,
+                "pace_rank": (
+                    0
+                    if purpose == "CATEGORY_BUCKET"
+                    else pace_rank.get(pace_status_value, 1)
+                ),
+                "strategy_rank": (
+                    0
+                    if purpose == "CATEGORY_BUCKET"
+                    else 1
+                    if purpose in {"REWARD_BUCKET", "SPECIALIST"} and pace_status_value == "UNDER"
+                    else 2
+                    if (
+                        purpose in {"REWARD_BUCKET", "SPECIALIST"} and pace_status_value == "ON_PACE"
+                    ) or (purpose == "THRESHOLD_FILLER" and pace_status_value == "UNDER")
+                    else 3
+                    if purpose in {"REWARD_BUCKET", "SPECIALIST"}
+                    else 4
+                    if purpose == "THRESHOLD_FILLER" and pace_status_value == "ON_PACE"
+                    else 5
+                    if purpose == "THRESHOLD_FILLER"
+                    else 6
+                ),
+                "condition": condition,
+                "tier_before": candidate.tier_before,
+                "tier_after": candidate.tier_after,
+                "target_tier": candidate.target_tier,
+                "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
+                "estimated_net_value_aed": _plain(candidate.net_value_aed),
+                "estimated_net_return_percent": _plain(
+                    candidate.net_value_aed / amount * Decimal("100") if amount else Decimal("0")
+                ),
+                "card_spend_aed": _plain(candidate.card_spend_before_aed),
+                "card_target_aed": None if program.safety_target is None else _plain(program.safety_target),
+                "card_target_remaining_aed": None if target_remaining is None else _plain(target_remaining),
+                "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
+                "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
+                "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
+                "bucket_cap_aed": None if candidate.bucket_spend_cap_aed is None else _plain(candidate.bucket_spend_cap_aed),
+                "bucket_remaining_aed": None if candidate.bucket_remaining_aed is None else _plain(candidate.bucket_remaining_aed),
+            }
+            identity = (card, candidate.bucket, channel)
+            existing = route_candidates.get(identity)
+            if existing is None or int(row["policy_priority"]) < int(existing["policy_priority"]):
+                route_candidates[identity] = row
+        ranked_routes = sorted(
+            route_candidates.values(),
+            key=lambda candidate: (
+                int(candidate["strategy_rank"]),
+                int(candidate["pace_rank"]),
+                int(candidate["policy_priority"]),
+                -Decimal(str(candidate["estimated_net_value_aed"])),
+                str(candidate["card"]),
+            ),
+        )
+        for index, candidate in enumerate(ranked_routes):
+            candidate["order"] = index + 1
+            candidate["status"] = "PREFERRED" if index == 0 else "NEXT"
+        routing_graphs.append({
+            "code": str(profile.get("code") or category),
+            "label": str(profile.get("label") or category.replace("_", " ").title()),
+            "purchase_type": category,
+            "currency": currency,
+            "conditional": bool(profile.get("conditional")),
+            "active": bool(ranked_routes),
+            "methods": list(dict.fromkeys(str(candidate["payment_channel"]) for candidate in ranked_routes)),
+            "use_card": None if not ranked_routes else ranked_routes[0]["card"],
+            "avoid_cards": list(dict.fromkeys(
+                str(candidate["card"])
+                for candidate in ranked_routes[1:]
+                if candidate["card"] != ranked_routes[0]["card"]
+            )),
+            "estimated_net_return_percent": None if not ranked_routes else ranked_routes[0]["estimated_net_return_percent"],
+            "reason": None if not ranked_routes else ranked_routes[0]["condition"],
+            "ranked_cards": ranked_routes,
         })
     return {
         "schema_version": 1,
         "as_of": as_of.isoformat(),
         "cards": program_rows,
         "recommendations": recommendations,
+        "routing_graphs": routing_graphs,
         "alerts": alerts,
         "review_count": sum(row.review_required for row in rows),
     }

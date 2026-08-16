@@ -1,5 +1,7 @@
 import json
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
 from unittest import TestCase
 
 from finance_tracker.actual_pipeline import (
@@ -9,11 +11,14 @@ from finance_tracker.actual_pipeline import (
 )
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
 from finance_tracker.cashback import PaymentIntent, poc_programs
-from finance_tracker.models import money
+from finance_tracker.models import Transaction, money
 from finance_tracker.statements import parse_statement_text
 
 
 class ActualStatementPipelineTests(TestCase):
+    def cashback_config(self) -> dict[str, object]:
+        return json.loads(Path("config/cashback-programs.json").read_text(encoding="utf-8"))
+
     def config(self) -> dict[str, object]:
         return {
             "schema_version": 1,
@@ -122,7 +127,170 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertEqual(rows[0].owner, "Owner A")
         self.assertEqual(dashboard["cards"][2]["total_spend_aed"], "100")
         self.assertEqual(dashboard["recommendations"][0]["use_card"], "EI_AMAZON")
+        self.assertEqual(dashboard["recommendations"][0]["decision_amount_aed"], "100")
+        self.assertEqual(dashboard["recommendations"][0]["estimated_net_return_percent"], "6.00")
+        preferred = dashboard["recommendations"][0]["ranked_cards"][0]
+        self.assertEqual(preferred["status"], "PREFERRED")
+        self.assertEqual(preferred["bucket"], "EI_AMAZON")
+        self.assertIsNone(preferred["bucket_cap_aed"])
+        self.assertEqual(preferred["target_rate_percent"], "6.00")
         self.assertEqual(dashboard["cards"][0]["routing_mode"], "CURRENT_TIER")
+
+    def test_filler_route_is_inactive_after_all_card_thresholds_are_met(self) -> None:
+        rows = [
+            Transaction("rak-target", datetime(2026, 8, 10), "RAK_WORLD", "Filler", "10300", category="FILLER", reward_bucket="RAK_STANDARD"),
+            Transaction("sc-target", datetime(2026, 8, 10), "SC_PLATINUM_X", "Filler", "15300", category="FILLER", reward_bucket="SC_ONLINE"),
+        ]
+
+        dashboard = cashback_dashboard(
+            poc_programs(),
+            rows,
+            date(2026, 8, 16),
+            [PaymentIntent("FILLER", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=self.cashback_config()["routing_profiles"],
+        )
+
+        self.assertFalse(dashboard["recommendations"][0]["active"])
+        filler = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "FILLER")
+        self.assertFalse(filler["active"])
+
+    def test_grocery_graph_considers_channels_and_reorders_after_rak_cap(self) -> None:
+        profiles = self.cashback_config()["routing_profiles"]
+        empty = cashback_dashboard(
+            poc_programs(),
+            [],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=profiles,
+        )
+        grocery = next(graph for graph in empty["routing_graphs"] if graph["code"] == "GROCERY")
+        self.assertEqual(grocery["ranked_cards"][0]["card"], "RAK_WORLD")
+        self.assertEqual(
+            {candidate["payment_channel"] for candidate in grocery["ranked_cards"]},
+            {"PHYSICAL_POS", "ONLINE", "APPLE_PAY_POS"},
+        )
+
+        capped = cashback_dashboard(
+            poc_programs(),
+            [Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY")],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=profiles,
+        )
+        grocery = next(graph for graph in capped["routing_graphs"] if graph["code"] == "GROCERY")
+        self.assertEqual(grocery["ranked_cards"][0]["card"], "SC_PLATINUM_X")
+        self.assertNotIn("RAK_GROCERY", {candidate["bucket"] for candidate in grocery["ranked_cards"]})
+        self.assertIn(
+            ("RAK_WORLD", "RAK_STANDARD", "THRESHOLD_FILLER"),
+            {(candidate["card"], candidate["bucket"], candidate["purpose"]) for candidate in grocery["ranked_cards"]},
+        )
+
+    def test_grocery_graph_prioritizes_under_pace_sc_over_rak_tier_unlock(self) -> None:
+        dashboard = cashback_dashboard(
+            poc_programs(),
+            [
+                Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
+                Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
+                Transaction("rak-travel-near-cap", datetime(2026, 8, 12), "RAK_WORLD", "Travel", "3950", category="TRAVEL", channel="PHYSICAL_POS", reward_bucket="RAK_TRAVEL"),
+            ],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=self.cashback_config()["routing_profiles"],
+        )
+
+        grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
+        preferred = grocery["ranked_cards"][0]
+        self.assertEqual((preferred["card"], preferred["bucket"]), ("SC_PLATINUM_X", "SC_ONLINE"))
+        self.assertEqual(preferred["pace_status"], "UNDER")
+        rak_unlock = next(
+            candidate
+            for candidate in grocery["ranked_cards"]
+            if (candidate["card"], candidate["bucket"]) == ("RAK_WORLD", "RAK_EWALLET")
+        )
+        self.assertEqual((rak_unlock["tier_before"], rak_unlock["tier_after"]), ("BASE", "ENHANCED"))
+        self.assertEqual(rak_unlock["pace_status"], "OVER")
+        self.assertGreater(
+            Decimal(rak_unlock["estimated_net_value_aed"]),
+            Decimal(preferred["estimated_net_value_aed"]),
+        )
+        self.assertEqual(grocery["avoid_cards"], ["RAK_WORLD"])
+        travel = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "TRAVEL")
+        self.assertEqual(travel["ranked_cards"][0]["card"], "SC_PLATINUM_X")
+        self.assertNotIn("RAK_TRAVEL", {candidate["bucket"] for candidate in travel["ranked_cards"]})
+        self.assertIn(
+            ("RAK_WORLD", "RAK_STANDARD", "THRESHOLD_FILLER"),
+            {(candidate["card"], candidate["bucket"], candidate["purpose"]) for candidate in travel["ranked_cards"]},
+        )
+        self.assertEqual(travel["avoid_cards"], ["RAK_WORLD"])
+
+    def test_grocery_graph_uses_sc_filler_when_reward_buckets_are_full(self) -> None:
+        dashboard = cashback_dashboard(
+            poc_programs(),
+            [
+                Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
+                Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
+                Transaction("rak-travel-near-cap", datetime(2026, 8, 12), "RAK_WORLD", "Travel", "3950", category="TRAVEL", channel="PHYSICAL_POS", reward_bucket="RAK_TRAVEL"),
+                Transaction("sc-online-cap", datetime(2026, 8, 13), "SC_PLATINUM_X", "Online", "4000", category="GENERAL", channel="ONLINE", reward_bucket="SC_ONLINE"),
+                Transaction("sc-wallet-cap", datetime(2026, 8, 14), "SC_PLATINUM_X", "Wallet", "2000", category="GENERAL", channel="APPLE_PAY_POS", reward_bucket="SC_WALLET"),
+            ],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=self.cashback_config()["routing_profiles"],
+        )
+
+        grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
+        preferred = grocery["ranked_cards"][0]
+        self.assertEqual((preferred["card"], preferred["bucket"]), ("SC_PLATINUM_X", "SC_FILLER"))
+        self.assertEqual(preferred["pace_status"], "UNDER")
+
+    def test_grocery_graph_returns_to_rak_after_sc_target_is_secured(self) -> None:
+        dashboard = cashback_dashboard(
+            poc_programs(),
+            [
+                Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
+                Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
+                Transaction("rak-travel-near-cap", datetime(2026, 8, 12), "RAK_WORLD", "Travel", "3950", category="TRAVEL", channel="PHYSICAL_POS", reward_bucket="RAK_TRAVEL"),
+                Transaction("sc-online-cap", datetime(2026, 8, 13), "SC_PLATINUM_X", "Online", "4000", category="GENERAL", channel="ONLINE", reward_bucket="SC_ONLINE"),
+                Transaction("sc-wallet-cap", datetime(2026, 8, 14), "SC_PLATINUM_X", "Wallet", "2000", category="GENERAL", channel="APPLE_PAY_POS", reward_bucket="SC_WALLET"),
+                Transaction("sc-filler", datetime(2026, 8, 15), "SC_PLATINUM_X", "Filler", "9300", category="FILLER", channel="PHYSICAL_POS", reward_bucket="SC_FILLER"),
+            ],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=self.cashback_config()["routing_profiles"],
+        )
+
+        grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
+        self.assertEqual(
+            (grocery["ranked_cards"][0]["card"], grocery["ranked_cards"][0]["bucket"]),
+            ("RAK_WORLD", "RAK_EWALLET"),
+        )
+        self.assertNotIn("SC_FILLER", {candidate["bucket"] for candidate in grocery["ranked_cards"]})
+
+    def test_sc_online_cap_routes_wallet_amazon_and_filler_to_open_buckets(self) -> None:
+        dashboard = cashback_dashboard(
+            poc_programs(),
+            [
+                Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
+                Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
+                Transaction("rak-travel-near-cap", datetime(2026, 8, 12), "RAK_WORLD", "Travel", "3950", category="TRAVEL", channel="PHYSICAL_POS", reward_bucket="RAK_TRAVEL"),
+                Transaction("sc-online-cap", datetime(2026, 8, 13), "SC_PLATINUM_X", "Online", "4000", category="GENERAL", channel="ONLINE", reward_bucket="SC_ONLINE"),
+            ],
+            date(2026, 8, 16),
+            [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            routing_profiles=self.cashback_config()["routing_profiles"],
+        )
+
+        graphs = {graph["code"]: graph for graph in dashboard["routing_graphs"]}
+        self.assertEqual(
+            (graphs["GROCERY"]["ranked_cards"][0]["card"], graphs["GROCERY"]["ranked_cards"][0]["bucket"]),
+            ("SC_PLATINUM_X", "SC_WALLET"),
+        )
+        self.assertNotIn("SC_ONLINE", {candidate["bucket"] for candidate in graphs["GROCERY"]["ranked_cards"]})
+        self.assertEqual(graphs["AMAZON"]["ranked_cards"][0]["card"], "EI_AMAZON")
+        self.assertEqual(
+            (graphs["FILLER"]["ranked_cards"][0]["card"], graphs["FILLER"]["ranked_cards"][0]["bucket"]),
+            ("SC_PLATINUM_X", "SC_WALLET"),
+        )
 
     def test_snapshot_treats_tagged_card_payment_as_transfer(self) -> None:
         snapshot = {

@@ -967,6 +967,8 @@ def _bucket(card: str, purchase_type: str, channel: str, currency: str) -> str |
             return "SC_WALLET"
         if channel == "ONLINE":
             return "SC_ONLINE"
+        if channel == "PHYSICAL_POS":
+            return "SC_FILLER"
     if card == "RAK_WORLD":
         if purchase_type == "GROCERY":
             return "RAK_GROCERY"
@@ -1052,6 +1054,7 @@ def build_live_dashboard(
         as_of,
         payment_intents_from_config(configuration),
         periods_by_card=periods,
+        routing_profiles=configuration.get("routing_profiles") or (),
     )
     stats = store.stats()
     last_ingest = stats.get("last_successful_ingest_at")

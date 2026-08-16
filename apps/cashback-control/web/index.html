@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#101713" />
     <title>Cashback Control</title>
-    <link rel="stylesheet" href="/styles.css?v=20260816-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260816-12" />
   </head>
   <body>
     <main class="shell">
@@ -17,20 +17,19 @@
         <div id="as-of" class="as-of loading">Loading…</div>
       </header>
 
-      <section class="priority-section" aria-labelledby="use-now-heading">
+      <section class="priority-section" aria-labelledby="routing-heading">
         <div class="section-heading">
-          <h2 id="use-now-heading">Use now</h2>
-          <span>Recommended payment method by spend type</span>
+          <h2 id="routing-heading">Card routing</h2>
+          <div class="routing-tabs" role="tablist" aria-label="Routing view">
+            <button type="button" data-routing-view="list" aria-selected="true">List</button>
+            <button type="button" data-routing-view="tree" aria-selected="false">Decision tree</button>
+          </div>
         </div>
-        <div id="recommendations" class="recommendation-grid"></div>
-      </section>
-
-      <section id="avoid-section" aria-labelledby="avoid-heading">
-        <div class="section-heading">
-          <h2 id="avoid-heading">Avoid now</h2>
-          <span>Cards with no current routing value</span>
+        <div id="recommendations-view" class="route-table" role="table" aria-label="Card routing recommendations">
+          <div class="route-table-head" role="row"><span role="columnheader">Spend</span><span role="columnheader">Use / position</span><span role="columnheader">Avoid</span></div>
+          <div id="recommendations"></div>
         </div>
-        <div id="avoid" class="avoid-grid"></div>
+        <div id="decision-tree" hidden></div>
       </section>
 
       <section id="attention-section" aria-labelledby="attention-heading">
@@ -60,6 +59,6 @@
         <div id="period-history"></div>
       </section>
     </main>
-    <script src="/app.js?v=20260816-1" defer></script>
+    <script src="/app.js?v=20260816-13" defer></script>
   </body>
 </html>

@@ -94,6 +94,14 @@ class CardValue:
     net_value_aed: Decimal
     tier_before: str
     tier_after: str
+    target_tier: str
+    target_rate: Decimal
+    card_spend_before_aed: Decimal
+    tier_threshold_aed: Decimal
+    tier_remaining_aed: Decimal
+    bucket_spend_before_aed: Decimal
+    bucket_spend_cap_aed: Decimal | None
+    bucket_remaining_aed: Decimal | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,11 +171,22 @@ def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decima
     return reward
 
 
-def evaluate_card(program: CardProgram, transactions: Iterable[Transaction], intent: PaymentIntent) -> CardValue | None:
+def evaluate_card(
+    program: CardProgram,
+    transactions: Iterable[Transaction],
+    intent: PaymentIntent,
+    *,
+    bucket_code: str | None = None,
+) -> CardValue | None:
     existing = list(transactions)
     current_total = total_spend(existing, program.card)
     current_buckets = bucket_spend(existing, program.card)
-    eligible = [bucket for bucket in program.buckets if bucket.eligible(intent.category, intent.channel, intent.currency)]
+    eligible = [
+        bucket
+        for bucket in program.buckets
+        if bucket.eligible(intent.category, intent.channel, intent.currency)
+        and (bucket_code is None or bucket.code == bucket_code)
+    ]
     if not eligible:
         return None
     before_reward = reward_total(program, current_total, current_buckets)
@@ -181,6 +200,7 @@ def evaluate_card(program: CardProgram, transactions: Iterable[Transaction], int
         target_tier = program.tier_for(target_total)
         target_rate = target_tier.rates.get(bucket.code, Decimal("0"))
         current_bucket_spend = max(current_buckets.get(bucket.code, Decimal("0")), Decimal("0"))
+        spend_capacity = None
         if bucket.spend_cap_aed is not None:
             spend_capacity = bucket.spend_cap_aed
             eligible_progress_spend = min(
@@ -195,6 +215,11 @@ def evaluate_card(program: CardProgram, transactions: Iterable[Transaction], int
             )
         else:
             eligible_progress_spend = money(intent.amount_aed)
+        bucket_remaining = (
+            None
+            if spend_capacity is None
+            else max(spend_capacity - current_bucket_spend, Decimal("0"))
+        )
         strategic_reward = eligible_progress_spend * target_rate
         actual_marginal_reward = after_reward - before_reward
         decision_reward = max(actual_marginal_reward, strategic_reward)
@@ -208,6 +233,14 @@ def evaluate_card(program: CardProgram, transactions: Iterable[Transaction], int
             net_value_aed=decision_reward - cost,
             tier_before=program.tier_for(current_total).code,
             tier_after=program.tier_for(after_total).code,
+            target_tier=target_tier.code,
+            target_rate=target_rate,
+            card_spend_before_aed=current_total,
+            tier_threshold_aed=target_tier.minimum_spend,
+            tier_remaining_aed=max(target_tier.minimum_spend - current_total, Decimal("0")),
+            bucket_spend_before_aed=current_bucket_spend,
+            bucket_spend_cap_aed=spend_capacity,
+            bucket_remaining_aed=bucket_remaining,
         )
         if best is None or value.net_value_aed > best.net_value_aed:
             best = value

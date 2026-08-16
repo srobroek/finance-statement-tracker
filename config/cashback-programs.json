@@ -59,7 +59,8 @@
       "buckets": [
         {"code": "SC_ONLINE", "cashback_cap_aed": "400", "channels": ["ONLINE"], "aed_only": true},
         {"code": "SC_WALLET", "cashback_cap_aed": "200", "channels": ["APPLE_PAY_POS"], "aed_only": true},
-        {"code": "SC_FOREIGN", "cashback_cap_aed": "400", "foreign_only": true}
+        {"code": "SC_FOREIGN", "cashback_cap_aed": "400", "foreign_only": true},
+        {"code": "SC_FILLER", "cashback_cap_aed": null, "aed_only": true}
       ]
     },
     {
@@ -95,5 +96,95 @@
     {"category": "TRAVEL", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
     {"category": "GENERAL", "channel": "ONLINE", "currency": "USD", "decision_amount_aed": "100"},
     {"category": "FILLER", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"}
+  ],
+  "routing_profiles": [
+    {
+      "code": "GROCERY", "label": "Groceries", "category": "GROCERY", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_GROCERY", "purpose": "CATEGORY_BUCKET", "priority": 10},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 30},
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_WALLET", "purpose": "REWARD_BUCKET", "priority": 40},
+        {"card": "SC_PLATINUM_X", "channel": "PHYSICAL_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 45},
+        {"card": "RAK_WORLD", "channel": "APPLE_PAY_POS", "bucket": "RAK_EWALLET", "purpose": "REWARD_BUCKET", "priority": 50},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 60}
+      ]
+    },
+    {
+      "code": "DINING", "label": "Dining", "category": "DINING", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_DINING", "purpose": "CATEGORY_BUCKET", "priority": 10},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 30},
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_WALLET", "purpose": "REWARD_BUCKET", "priority": 40},
+        {"card": "SC_PLATINUM_X", "channel": "PHYSICAL_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 45},
+        {"card": "RAK_WORLD", "channel": "APPLE_PAY_POS", "bucket": "RAK_EWALLET", "purpose": "REWARD_BUCKET", "priority": 50},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 60}
+      ]
+    },
+    {
+      "code": "TRAVEL", "label": "Travel", "category": "TRAVEL", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_TRAVEL", "purpose": "CATEGORY_BUCKET", "priority": 10},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 30},
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_WALLET", "purpose": "REWARD_BUCKET", "priority": 40},
+        {"card": "SC_PLATINUM_X", "channel": "PHYSICAL_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 45},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 60}
+      ]
+    },
+    {
+      "code": "AMAZON", "label": "Amazon", "category": "AMAZON", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 10},
+        {"card": "EI_AMAZON", "channel": "ONLINE", "bucket": "EI_AMAZON", "purpose": "SPECIALIST", "priority": 20},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 30},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 40}
+      ]
+    },
+    {
+      "code": "ONLINE", "label": "Online", "category": "GENERAL", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 10},
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 15},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 30}
+      ]
+    },
+    {
+      "code": "APPLE_PAY", "label": "Apple Pay", "category": "GENERAL", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_WALLET", "purpose": "REWARD_BUCKET", "priority": 10},
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 15},
+        {"card": "RAK_WORLD", "channel": "APPLE_PAY_POS", "bucket": "RAK_EWALLET", "purpose": "REWARD_BUCKET", "priority": 20},
+        {"card": "RAK_WORLD", "channel": "APPLE_PAY_POS", "bucket": "RAK_EWALLET", "purpose": "THRESHOLD_FILLER", "priority": 30}
+      ]
+    },
+    {
+      "code": "PHYSICAL", "label": "Physical", "category": "GENERAL", "currency": "AED", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "PHYSICAL_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 15},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 10},
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 20}
+      ]
+    },
+    {
+      "code": "FOREIGN", "label": "Foreign", "category": "GENERAL", "currency": "USD", "decision_amount_aed": "100",
+      "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_FOREIGN", "purpose": "REWARD_BUCKET", "priority": 10},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 30}
+      ]
+    },
+    {
+      "code": "FILLER", "label": "Filler / threshold", "category": "FILLER", "currency": "AED", "decision_amount_aed": "100", "conditional": true,
+      "routes": [
+        {"card": "RAK_WORLD", "channel": "PHYSICAL_POS", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 10},
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "THRESHOLD_FILLER", "priority": 20},
+        {"card": "SC_PLATINUM_X", "channel": "APPLE_PAY_POS", "bucket": "SC_WALLET", "purpose": "THRESHOLD_FILLER", "priority": 30},
+        {"card": "SC_PLATINUM_X", "channel": "PHYSICAL_POS", "bucket": "SC_FILLER", "purpose": "THRESHOLD_FILLER", "priority": 35},
+        {"card": "RAK_WORLD", "channel": "APPLE_PAY_POS", "bucket": "RAK_EWALLET", "purpose": "THRESHOLD_FILLER", "priority": 40}
+      ]
+    }
   ]
 }

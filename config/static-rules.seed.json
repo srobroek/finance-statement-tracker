@@ -1899,6 +1899,48 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "cashback-sc-filler",
+    "name": "SC tier filler bucket",
+    "stage": "CASHBACK",
+    "priority": 40,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "SC_PLATINUM_X"
+            },
+            {
+              "field": "channel",
+              "operator": "equals",
+              "value": "PHYSICAL_POS"
+            },
+            {
+              "field": "currency",
+              "operator": "equals",
+              "value": "AED"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "SC_FILLER"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "cashback-ei-amazon",
     "name": "EI Amazon bucket",
     "stage": "CASHBACK",

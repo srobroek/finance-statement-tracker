@@ -16,16 +16,23 @@ strong `CASHBACK_INGEST_TOKEN`. It is not tracked or included in backups. Store
 the Actual application password and ingest token in the approved password
 manager.
 
-The canonical file builds the cashback service from the repository root. For a
-remote Dockge checkout, set `FINANCE_APP_CONTEXT` to the absolute repository
-checkout path before invoking Compose. Do not maintain a second generated
-Compose file; `docker compose config` is the reproducible rendered form.
+The cashback service is published by `.github/workflows/cashback-image.yml` to
+`ghcr.io/srobroek/finance-statement-tracker-cashback-control`. The production
+stack follows the `main` image tag and uses `pull_policy: always`, so Dockge's
+Update action (or `docker compose pull` followed by `docker compose up -d`)
+pulls the most recent tested image. The workflow also publishes immutable
+`sha-<commit>` tags for rollback. Do not maintain a second generated Compose
+file; `docker compose config` is the reproducible rendered form.
+
+The GHCR package inherits the repository's visibility. If it is private, log
+the container host in to `ghcr.io` once with a token that has `read:packages`.
 
 Deploy and verify:
 
 ```bash
 cd /opt/stacks/finance-actual-poc
-sudo FINANCE_APP_CONTEXT=/opt/stacks/finance-actual-poc/appsrc docker compose up -d --build
+sudo docker compose pull cashback-control
+sudo docker compose up -d cashback-control
 sudo docker compose ps
 curl -fsSI http://127.0.0.1:5006/ | grep -E 'Cross-Origin-(Embedder|Opener)-Policy'
 curl -fsS http://127.0.0.1:5010/api/health

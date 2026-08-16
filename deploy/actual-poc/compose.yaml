@@ -49,9 +49,8 @@ services:
       start_period: 10s
 
   cashback-control:
-    build:
-      context: ${FINANCE_APP_CONTEXT:-../..}
-      dockerfile: apps/cashback-control/Dockerfile
+    image: ghcr.io/srobroek/finance-statement-tracker-cashback-control:main
+    pull_policy: always
     container_name: finance-cashback-control
     restart: unless-stopped
     env_file:

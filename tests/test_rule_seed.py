@@ -72,6 +72,14 @@ class RuleSeedTests(TestCase):
 
         self.assertEqual(transaction.reward_bucket, "SC_WALLET")
 
+    def test_sc_physical_spend_is_tracked_as_tier_filler(self) -> None:
+        transaction = self.transaction("LOCAL MERCHANT", card="SC_PLATINUM_X")
+        transaction.channel = "PHYSICAL_POS"
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.reward_bucket, "SC_FILLER")
+
     def test_manual_category_lock_survives_seed_rules(self) -> None:
         transaction = self.transaction("CARREFOUR MIRDIF")
         transaction.category = "Manual Household"
