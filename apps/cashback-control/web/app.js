@@ -68,24 +68,32 @@ function compactReason(item) {
   return item.reason;
 }
 
-function paymentMethodLabel(channel) {
+function routeHeading(item, candidate) {
+  return cardLabel(candidate?.card || item.use_card);
+}
+
+function shortPaymentMethod(channel) {
   return {
     APPLE_PAY_POS: "Apple Pay",
-    PHYSICAL_POS: "Physical card",
+    PHYSICAL_POS: "Physical",
     ONLINE: "Online",
   }[channel] || channel?.replaceAll("_", " ").toLowerCase() || "";
 }
 
-function routeHeading(item, candidate) {
-  const card = cardLabel(item.use_card);
-  if (!candidate) return card;
-  return `${card} · ${paymentMethodLabel(candidate.payment_channel)} → ${bucketLabel(candidate.bucket)}`;
+function treeSwitchReason(candidate) {
+  if (candidate.status === "PREFERRED") {
+    return "Use now · fits the purchase and ranks first by tier, pace and return.";
+  }
+  if (candidate.purpose === "THRESHOLD_FILLER") {
+    return "Use only after reward routes when this card still needs tier spend.";
+  }
+  return "Switch here when higher routes cap or lose their tier or pace priority.";
 }
 
 function candidateValueLabel(candidate) {
   const bucketRate = Number(candidate.target_rate_percent);
   if (candidate.purpose === "THRESHOLD_FILLER" && bucketRate === 0) {
-    return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} remaining · no direct cashback`;
+    return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} left · 0% direct`;
   }
   if (candidate.tier_before !== candidate.tier_after) {
     return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · unlocks ${compactMoney(candidate.estimated_net_value_aed)} cycle value`;
@@ -105,19 +113,6 @@ function tierName(code) {
   return code.replaceAll("_", " ").replace(/^TIER (\d+)$/, "$1% tier").toLowerCase();
 }
 
-function candidatePosition(candidate) {
-  if (!candidate) return "";
-  const bucketSpend = compactMoney(candidate.bucket_spend_aed);
-  const bucket = candidate.bucket_cap_aed == null
-    ? `${bucketLabel(candidate.bucket)} ${bucketSpend} · uncapped`
-    : `${bucketLabel(candidate.bucket)} ${bucketSpend}/${compactMoney(candidate.bucket_cap_aed)}`;
-  const threshold = Number(candidate.tier_threshold_aed) > 0
-    ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(candidate.tier_threshold_aed)}`
-    : `${tierName(candidate.target_tier)} · no minimum`;
-  const method = candidate.payment_channel ? candidate.payment_channel.replaceAll("_", " ").toLowerCase() : "";
-  return `${bucket} · ${threshold}${method ? ` · ${method}` : ""}`;
-}
-
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
   root.replaceChildren(
@@ -129,7 +124,7 @@ function renderRecommendations(items) {
       node.innerHTML = `
         <div class="route-main">
           <span class="route-type">${typeLabel(item)}</span>
-          <span class="route-use"><span><strong>${routeHeading(item, preferred)}</strong><em title="${item.reason}">${compactReason(item)}</em></span><small>${candidatePosition(preferred)}</small></span>
+          <span class="route-use"><strong>${routeHeading(item, preferred)}</strong><em title="${item.reason}">${compactReason(item)}</em></span>
           <small title="${avoid.length ? avoid.join(", ") : "None"}">${avoid.length ? avoid.join(", ") : ""}</small>
         </div>
       `;
@@ -155,16 +150,14 @@ function renderDecisionTree(items) {
       const cap = candidate.bucket_cap_aed == null ? null : Number(candidate.bucket_cap_aed);
       const remaining = candidate.bucket_remaining_aed == null ? null : Number(candidate.bucket_remaining_aed);
       const threshold = Number(candidate.tier_threshold_aed);
-      const method = candidate.payment_channel.replaceAll("_", " ").toLowerCase();
+      const method = shortPaymentMethod(candidate.payment_channel);
       const bucketText = cap == null
-        ? `${method} → ${bucketLabel(candidate.bucket)} is uncapped; ${compactMoney(candidate.bucket_spend_aed)} recorded`
-        : `${method} → ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)} / ${compactMoney(cap)}; ${compactMoney(remaining)} headroom`;
+        ? `${method} · ${bucketLabel(candidate.bucket)} · ${compactMoney(candidate.bucket_spend_aed)} · uncapped`
+        : `${method} · ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)}/${compactMoney(cap)} · ${compactMoney(remaining)} left`;
       const tierText = threshold > 0
-        ? `${tierName(candidate.target_tier)} at ${compactMoney(threshold)}; ${compactMoney(candidate.tier_remaining_aed)} remaining`
+        ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(threshold)} · ${compactMoney(candidate.tier_remaining_aed)} to tier`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
-      const switchText = candidate.status === "PREFERRED"
-        ? candidate.condition
-        : `Then use: ${candidate.condition}`;
+      const switchText = treeSwitchReason(candidate);
       return `<li class="candidate-node ${candidate.status.toLowerCase()}"><div class="candidate-rank"><b>${candidate.order}</b><span>${candidate.status.toLowerCase()}</span></div><div class="candidate-card"><strong>${cardLabel(candidate.card)}</strong><span>${bucketText}</span></div><div class="candidate-logic"><b>${candidateValueLabel(candidate)}</b><span>${tierText}</span><small>${switchText}</small></div></li>`;
     }).join("");
     const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
@@ -183,6 +176,27 @@ function setupRoutingViews() {
       document.querySelectorAll("[data-routing-view]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
     });
   });
+}
+
+function setupScreenViews() {
+  const mobile = window.matchMedia("(max-width: 599px)");
+  const buttons = [...document.querySelectorAll("[data-screen-view]")];
+  const title = document.querySelector("#screen-title");
+  const select = (screen) => {
+    if (!mobile.matches) {
+      document.body.removeAttribute("data-screen-active");
+      title.textContent = "Which card?";
+      return;
+    }
+    const selected = buttons.find((button) => button.dataset.screenView === screen) || buttons[0];
+    document.body.dataset.screenActive = selected.dataset.screenView;
+    title.textContent = selected.dataset.screenTitle;
+    buttons.forEach((button) => button.setAttribute("aria-selected", String(button === selected)));
+    window.scrollTo(0, 0);
+  };
+  buttons.forEach((button) => button.addEventListener("click", () => select(button.dataset.screenView)));
+  mobile.addEventListener("change", () => select(document.body.dataset.screenActive || "routing"));
+  select(document.body.dataset.screenActive || "routing");
 }
 
 function renderCards(cards) {
@@ -375,6 +389,7 @@ async function loadDashboard() {
 }
 
 setupRoutingViews();
+setupScreenViews();
 loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");
   status.className = "as-of stale";

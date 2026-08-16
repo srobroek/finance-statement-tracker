@@ -1,0 +1,216 @@
+name: Actual ingestion container
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/actual-ingestion-image.yml"
+      - ".dockerignore"
+      - "apps/actual-ingestion/**"
+      - "browser_adapters/**"
+      - "config/**"
+      - "deploy/actual-poc/compose.yaml"
+      - "finance_tracker/**"
+      - "integrations/actual/**"
+      - "pyproject.toml"
+      - "tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: actual-ingestion-container-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/finance-statement-tracker-actual-ingestion
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python package
+        run: python -m pip install ".[statements,test]"
+
+      - name: Run Python regression suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/actual/package-lock.json
+
+      - name: Install Actual bridge
+        working-directory: integrations/actual
+        run: npm ci
+
+      - name: Test Actual bridge
+        working-directory: integrations/actual
+        run: npm test
+
+      - name: Run offline Actual integration
+        working-directory: integrations/actual
+        run: npm run integration
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/actual-ingestion/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on:
+      - self-hosted
+      - finance-ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Prepare persistent state and Dockge configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          stack=/opt/stacks/finance-actual-poc
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          sudo cp "$stack/compose.yaml" "$stack/compose.yaml.pre-${stamp}"
+          sudo install -d -o 10002 -g 10002 \
+            "$stack/ingestion-data" \
+            "$stack/ingestion-data/inbox" \
+            "$stack/ingestion-data/jobs" \
+            "$stack/ingestion-data/actual-cache"
+          if ! sudo grep -q '^FINANCE_INGEST_TOKEN=' "$stack/.env"; then
+            token="$(openssl rand -hex 32)"
+            printf '\nFINANCE_INGEST_TOKEN=%s\n' "$token" | sudo tee -a "$stack/.env" >/dev/null
+          fi
+
+      - name: Authenticate and pull tested image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth_file=/root/.config/containers/finance-ghcr-auth.json
+          sudo mkdir -p "$(dirname "$auth_file")"
+          printf '%s' "$GHCR_TOKEN" | sudo podman login \
+            --authfile "$auth_file" \
+            ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+          sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
+          sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
+          cd /opt/stacks/finance-actual-poc
+          sudo docker compose up -d --no-deps --pull never actual-ingestion
+          sudo podman logout --authfile "$auth_file" ghcr.io
+          sudo rm -f "$auth_file"
+
+      - name: Verify live deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-ingestion
+              exit 1
+            fi
+            sleep 2
+          done
+          image="$(sudo docker inspect finance-actual-ingestion --format '{{.Config.Image}}')"
+          test "$image" = "$IMAGE_NAME:main"
+          health="$(curl -fsS http://127.0.0.1:5020/api/health)"
+          grep -q '"actual_writes_enabled": false' <<<"$health"
+          grep -q 'RAK_WORLD' <<<"$health"
+          grep -q 'SC_PLATINUM_X' <<<"$health"
+
+      - name: Exercise live statement and browser staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          stack=/opt/stacks/finance-actual-poc
+          inbox="$stack/ingestion-data/inbox"
+          base64 --decode tests/fixtures/synthetic-ei-statement.pdf.b64 | \
+            sudo tee "$inbox/ci-synthetic-ei.pdf" >/dev/null
+          sudo install -m 0644 tests/fixtures/browser-capture.sample.json \
+            "$inbox/ci-browser-capture.json"
+
+          statement_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON"}'
+          statement_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"status": "STAGED"' <<<"$statement_result"
+          grep -q '"envelope_count": 1' <<<"$statement_result"
+
+          replay_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"idempotent_replay": true' <<<"$replay_result"
+
+          browser_request='{"type":"BROWSER_CAPTURE","actual_mode":"STAGE","source_path":"ci-browser-capture.json"}'
+          browser_result="$(printf '%s' "$browser_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"status": "STAGED"' <<<"$browser_result"
+          grep -q '"envelope_count":' <<<"$browser_result"
+
+          placeholder_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"RAK_WORLD"}'
+          if placeholder_error="$(printf '%s' "$placeholder_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
+            echo 'Placeholder statement adapter unexpectedly accepted a statement' >&2
+            exit 1
+          fi
+          grep -qi 'placeholder' <<<"$placeholder_error"
+
+          commit_request='{"type":"STATEMENT_PDF","actual_mode":"COMMIT","source_path":"ci-synthetic-ei.pdf","card_code":"EI_AMAZON"}'
+          if commit_error="$(printf '%s' "$commit_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
+            echo 'Production Actual writes were unexpectedly enabled' >&2
+            exit 1
+          fi
+          grep -qi 'Actual writes are disabled' <<<"$commit_error"

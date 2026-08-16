@@ -11,7 +11,15 @@ from .actual_pipeline import account_maps, export_statement_for_actual
 from .actual_pipeline import load_actual_config, load_compiled_rules
 from .ai_rules import AIEnrichmentEngine, load_ai_policies, load_ai_provider
 from .history import load_history_index
+from .mail_ingestion import (
+    OutlookScanPlan,
+    build_ingest_commit_payload,
+    build_outlook_envelope,
+    plan_outlook_scan,
+)
 from .notifications import parse_outlook_notifications
+from .notifications import DEFAULT_NOTIFICATION_ADAPTERS
+from .notification_sources import load_notification_sources, validate_notification_adapter_coverage
 from .actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
 from .browser_ingestion import export_browser_capture_for_actual
 from .browser_exports import build_capture_from_export
@@ -165,10 +173,37 @@ def main(argv: list[str] | None = None) -> int:
     notification_parser.add_argument("--input", type=Path, required=True)
     notification_parser.add_argument("--config", type=Path, required=True)
     notification_parser.add_argument("--rules", type=Path, required=True)
+    notification_parser.add_argument(
+        "--notification-sources",
+        type=Path,
+        default=Path("config/transaction-email-sources.json"),
+    )
     notification_parser.add_argument("--output", type=Path, required=True)
     notification_parser.add_argument("--history", type=Path)
     notification_parser.add_argument("--ai-policies", type=Path)
     notification_parser.add_argument("--ai-provider", type=Path)
+    outlook_plan = subparsers.add_parser(
+        "outlook-scan-plan",
+        help="Calculate a frozen cursor-minus-overlap Outlook scan window",
+    )
+    outlook_plan.add_argument("--ingestion-config", type=Path, required=True)
+    outlook_plan.add_argument("--ingest-state", type=Path, required=True)
+    outlook_plan.add_argument("--run-upper-bound", type=datetime.fromisoformat, required=True)
+    outlook_plan.add_argument("--output", type=Path, required=True)
+    outlook_envelope = subparsers.add_parser(
+        "outlook-envelope",
+        help="Build a retryable exact-message envelope from a frozen scan plan",
+    )
+    outlook_envelope.add_argument("--plan", type=Path, required=True)
+    outlook_envelope.add_argument("--messages", type=Path, required=True)
+    outlook_envelope.add_argument("--output", type=Path, required=True)
+    outlook_commit = subparsers.add_parser(
+        "outlook-commit-payload",
+        help="Validate the companion response and build the only cursor-commit payload",
+    )
+    outlook_commit.add_argument("--envelope", type=Path, required=True)
+    outlook_commit.add_argument("--service-response", type=Path, required=True)
+    outlook_commit.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -280,6 +315,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "cashback-notification-events":
         config = load_actual_config(args.config)
+        notification_sources = load_notification_sources(args.notification_sources)
+        validate_notification_adapter_coverage(
+            notification_sources,
+            (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),
+        )
         payload = json.loads(args.input.read_text(encoding="utf-8"))
         messages = payload if isinstance(payload, list) else payload.get("messages", [])
         if not isinstance(messages, list) or any(not isinstance(row, dict) for row in messages):
@@ -302,6 +342,34 @@ def main(argv: list[str] | None = None) -> int:
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(batch.to_dict(), indent=2), encoding="utf-8")
+        print(args.output)
+        return 0
+    if args.command == "outlook-scan-plan":
+        config = json.loads(args.ingestion_config.read_text(encoding="utf-8"))
+        state = json.loads(args.ingest_state.read_text(encoding="utf-8"))
+        plan = plan_outlook_scan(config, state, args.run_upper_bound)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(plan.to_dict(), indent=2), encoding="utf-8")
+        print(args.output)
+        return 0
+    if args.command == "outlook-envelope":
+        plan_payload = json.loads(args.plan.read_text(encoding="utf-8"))
+        messages_payload = json.loads(args.messages.read_text(encoding="utf-8"))
+        messages = messages_payload.get("messages") if isinstance(messages_payload, dict) else messages_payload
+        if not isinstance(messages, list):
+            raise ValueError("messages input must be a list or an object with a messages list")
+        plan = OutlookScanPlan(**plan_payload)
+        envelope = build_outlook_envelope(plan, messages)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
+        print(args.output)
+        return 0
+    if args.command == "outlook-commit-payload":
+        envelope = json.loads(args.envelope.read_text(encoding="utf-8"))
+        response = json.loads(args.service_response.read_text(encoding="utf-8"))
+        payload = build_ingest_commit_payload(envelope, response)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(args.output)
         return 0
     year, month_number = (int(part) for part in args.month.split("-", 1))

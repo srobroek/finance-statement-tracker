@@ -53,6 +53,7 @@ h3 { margin-top: 4px; font-size: 1.05rem; }
 }
 .as-of.live { color: var(--green); border-color: #315d3e; background: #10251a; }
 .as-of.stale { color: var(--amber); border-color: #685333; background: #251e13; }
+.screen-tabs { display: none; }
 section { margin-top: 14px; }
 .section-heading { margin-bottom: 6px; }
 .section-heading span { display: none; font-size: .78rem; }
@@ -193,6 +194,170 @@ section { margin-top: 14px; }
 .error { color: var(--red); }
 [hidden] { display: none !important; }
 
+@media (max-width: 599px) {
+  .shell {
+    width: min(100% - 24px, 428px);
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: 0;
+  }
+  .topbar { min-height: 65px; margin-bottom: 7px; }
+  h1 { font-size: clamp(2.35rem, 11vw, 3rem); }
+  h2 { font-size: 1.05rem; }
+  .eyebrow { font-size: .7rem; }
+  .as-of { padding: 7px 10px; font-size: .76rem; }
+
+  .screen-tabs {
+    height: 38px;
+    margin-bottom: 7px;
+    padding: 3px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .screen-tabs button {
+    border: 0;
+    border-radius: 7px;
+    color: var(--muted);
+    background: transparent;
+    font-size: .76rem;
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .screen-tabs button[aria-selected="true"] { color: #07110b; background: var(--green); }
+  body[data-screen-active="routing"] [data-app-screen]:not([data-app-screen="routing"]),
+  body[data-screen-active="cards"] [data-app-screen]:not([data-app-screen="cards"]),
+  body[data-screen-active="history"] [data-app-screen]:not([data-app-screen="history"]) { display: none !important; }
+
+  .priority-section {
+    height: calc(100svh - 134px - env(safe-area-inset-top));
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    scroll-margin-top: env(safe-area-inset-top);
+  }
+  .priority-section .section-heading { min-height: 34px; }
+  .routing-tabs button { min-height: 32px; padding: 6px 10px; font-size: .72rem; }
+  .route-table { flex: 1 1 auto; display: flex; flex-direction: column; }
+  #recommendations { flex: 1 1 auto; display: grid; grid-auto-rows: minmax(43px, 1fr); }
+  .route-table-head, .route-main {
+    grid-template-columns: minmax(0, .72fr) minmax(0, 1.9fr) minmax(0, .7fr);
+    gap: 8px;
+  }
+  .route-table-head { min-height: 28px; padding: 5px 9px; font-size: .72rem; }
+  .route-row { display: flex; padding: 0 9px; }
+  .route-main { width: 100%; min-height: 43px; }
+  .route-main .route-type {
+    overflow: visible;
+    font-size: 1.25rem;
+    line-height: 1.05;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .route-use { gap: 1px; align-content: center; }
+  .route-use strong {
+    overflow: visible;
+    font-size: 1.25rem;
+    line-height: 1.05;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .route-use em { color: var(--amber); font-size: .95rem; line-height: 1.08; white-space: normal; }
+  .route-main > small {
+    overflow: visible;
+    font-size: .95rem;
+    line-height: 1.08;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  #decision-tree {
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  #decision-tree:not([hidden]) { display: flex; }
+  .graph-selector {
+    min-height: 42px;
+    padding: 6px 9px;
+    gap: 10px;
+  }
+  .graph-selector > span { font-size: .68rem; }
+  .graph-selector select { padding: 6px 8px; font-size: .82rem; }
+  .spend-graph {
+    min-height: 0;
+    padding: 10px;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .spend-graph header > span { display: none; }
+  .spend-graph header > strong { margin-top: 0; font-size: .95rem; }
+  .spend-graph header > small { display: none; }
+  .spend-graph ol {
+    min-height: 0;
+    margin: 9px 0 0 10px;
+    padding-left: 15px;
+    display: grid;
+    flex: 1 1 auto;
+    grid-auto-rows: minmax(78px, 1fr);
+    gap: 7px;
+  }
+  .candidate-node {
+    min-height: 0;
+    height: auto;
+    padding: 6px 9px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    gap: 4px 9px;
+    align-items: center;
+  }
+  .candidate-node + .candidate-node { margin-top: 0; }
+  .candidate-rank { grid-row: 1 / 3; }
+  .candidate-rank b { font-size: 1rem; }
+  .candidate-rank span { font-size: .55rem; }
+  .candidate-card { grid-column: 2; }
+  .candidate-card strong {
+    overflow: visible;
+    font-size: .95rem;
+    line-height: 1.12;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .candidate-card span { margin-top: 2px; font-size: .68rem; line-height: 1.18; }
+  .candidate-logic { grid-column: 2; }
+  .candidate-logic b { font-size: .8rem; line-height: 1.12; }
+  .candidate-logic span,
+  .candidate-logic small { margin-top: 2px; font-size: .67rem; line-height: 1.18; }
+  .candidate-logic small { color: #dce5df; }
+
+  .detail-section {
+    min-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .detail-section .section-heading,
+  #history-section > .section-heading { display: none; }
+  #attention-section { margin-top: 10px; }
+  .card-grid { gap: 10px; }
+  .position-card { padding: 12px 13px 11px; }
+  .position-card-header { min-height: 42px; }
+  .position-summary-copy strong { font-size: 1rem; }
+  .position-summary-copy span, .position-total span { font-size: .7rem; }
+  .position-total strong { font-size: .94rem; }
+  .position-card .track.primary { height: 6px; margin: 6px 0 10px; }
+  .tier-ladder { height: 29px; margin-top: 6px; }
+  .tier-marker b { font-size: .62rem; }
+  .tier-marker small { font-size: .57rem; }
+  .bucket-list { grid-template-columns: 1fr; gap: 8px; }
+  .bucket-row { gap: 5px; }
+  .bucket-row span, .bucket-row b { font-size: .72rem; line-height: 1.15; }
+  .bucket-row .track { height: 5px; }
+  .source-state { margin-top: 9px; font-size: .65rem; }
+}
+
 @media (min-width: 600px) {
   .shell { width: min(100% - 40px, 1180px); padding-top: 32px; }
   .topbar { margin-bottom: 22px; }
@@ -212,6 +377,6 @@ section { margin-top: 14px; }
   .shell { width: min(100% - 12px, 1180px); }
   .route-table-head, .route-main { grid-template-columns: minmax(0, .82fr) minmax(0, 1.55fr) minmax(0, .55fr); gap: 4px; }
   .route-row { padding-inline: 6px; }
-  .route-use strong { font-size: .61rem; }
-  .route-use em { font-size: .49rem; }
+  .route-use strong { font-size: .72rem; }
+  .route-use em { font-size: .58rem; }
 }

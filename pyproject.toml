@@ -9,6 +9,15 @@ description = "Platform-neutral deterministic statement, rule, evidence, and cas
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+statements = [
+    "pdfplumber==0.11.9",
+    "pypdf==6.10.0",
+]
+test = [
+    "reportlab==4.4.9",
+]
+
 [project.scripts]
 finance-worker = "finance_tracker.cli:main"
 

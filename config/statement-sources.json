@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "card_code": "ADCB_CASHBACK",
+      "institution": "ADCB",
+      "adapter_status": "ACTIVE",
+      "adapter": "adcb_v1",
+      "email_status": "PLACEHOLDER",
+      "email_senders": [],
+      "email_subjects": [],
+      "notes": "PDF parser and browser export are tested. Capture the real statement email sender and subject before activating mailbox acquisition."
+    },
+    {
+      "card_code": "EI_AMAZON",
+      "institution": "Emirates Islamic",
+      "adapter_status": "ACTIVE",
+      "adapter": "emirates_islamic_v1",
+      "email_status": "PLACEHOLDER",
+      "email_senders": [],
+      "email_subjects": [],
+      "notes": "PDF parser is tested. Capture and verify the production mailbox filter before activating email acquisition."
+    },
+    {
+      "card_code": "WIO_CREDIT",
+      "institution": "Wio",
+      "adapter_status": "ACTIVE",
+      "adapter": "wio_credit_v1",
+      "email_status": "PLACEHOLDER",
+      "email_senders": [],
+      "email_subjects": [],
+      "notes": "PDF parser is tested. Account mapping and mailbox filter remain deployment-specific."
+    },
+    {
+      "card_code": "RAK_WORLD",
+      "institution": "RAKBANK",
+      "adapter_status": "PLACEHOLDER",
+      "adapter": null,
+      "email_status": "PLACEHOLDER",
+      "email_senders": [],
+      "email_subjects": [],
+      "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+    },
+    {
+      "card_code": "SC_PLATINUM_X",
+      "institution": "Standard Chartered",
+      "adapter_status": "PLACEHOLDER",
+      "adapter": null,
+      "email_status": "PLACEHOLDER",
+      "email_senders": [],
+      "email_subjects": [],
+      "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+    }
+  ]
+}

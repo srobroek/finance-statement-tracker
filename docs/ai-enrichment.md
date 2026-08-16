@@ -16,4 +16,4 @@ AI cannot change transaction IDs, dates, amounts, currency, card/account identit
 
 Each proposal produces an `AITrace` recording the policy, field, value, confidence, acceptance decision, reason, rationale, and source references. The trace is appended to transaction metadata for auditability.
 
-The engine is provider-neutral. In the current deployment, the hourly `gpt-5.6-sol` Codex task implements the resolver after the companion's deterministic pass. Codex is not available inside the container, so the continuous service never assumes a local Codex runtime. A future OpenAI-compatible API worker could replace the Codex policy stage without changing the policy or validation layer.
+The engine is provider-neutral. In the current deployment, the end-of-day `gpt-5.6-sol` Codex task implements the resolver after the companion's deterministic pass. Codex is not available inside the container, so the continuous service never assumes a local Codex runtime. A future OpenAI-compatible API worker could replace the Codex policy stage without changing the policy or validation layer.

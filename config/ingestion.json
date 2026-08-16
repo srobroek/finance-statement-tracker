@@ -2,13 +2,21 @@
   "schema_version": 1,
   "outlook": {
     "cursor_source": "outlook",
+    "schedule": {
+      "cadence": "DAILY",
+      "timezone": "Asia/Dubai",
+      "end_of_day_local": "23:50"
+    },
     "scan_overlap_hours": 2,
     "initial_lookback_hours": 24,
     "transaction_notifications": {
-      "mode": "ALL_SINCE_CURSOR_WITH_OVERLAP"
+      "mode": "ALL_SINCE_CURSOR_WITH_OVERLAP",
+      "source_registry": "config/transaction-email-sources.json"
     },
     "statement_pdfs": {
-      "mode": "LATEST_PER_CARD_AND_EXPECTED_CYCLE"
+      "mode": "CARD_SPECIFIC_MONTHLY_JOB",
+      "source_registry": "config/statement-sources.json",
+      "selection": "LATEST_PER_CARD_AND_EXPECTED_CYCLE"
     }
   },
   "browser": {

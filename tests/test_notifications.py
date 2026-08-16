@@ -57,6 +57,20 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(payload["scanned_count"], 1)
         self.assertEqual(payload["accepted_count"], 1)
 
+    def test_unverified_placeholder_format_has_no_financial_effect(self):
+        placeholder = {
+            "id": "rak-placeholder-message",
+            "subject": "Possible RAKBANK card transaction",
+            "sender": {"emailAddress": {"address": "unverified@example.com"}},
+            "receivedDateTime": "2026-08-16T10:30:00Z",
+            "bodyPreview": "Unverified placeholder format with no trusted parser contract.",
+        }
+        result = parse_outlook_notifications(
+            [placeholder], {"0000": "RAK_WORLD"}, self.rules
+        )
+        self.assertEqual(result.accepted_count, 0)
+        self.assertEqual(result.skipped[0]["reason"], "UNSUPPORTED_NOTIFICATION")
+
 
 if __name__ == "__main__":
     unittest.main()

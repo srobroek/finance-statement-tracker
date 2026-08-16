@@ -8,6 +8,8 @@ Actual is the authoritative ledger, budget, native rule engine, schedules UI, re
 - Container port: `5006`
 - Image: `actualbudget/actual-server:26.8.1`
 - Persistent data: `/opt/stacks/finance-actual-poc/data`
+- Ingestion worker: `finance-actual-ingestion` on host-local port `5020`
+- Ingestion state: `/opt/stacks/finance-actual-poc/ingestion-data`
 - Compose source: `deploy/actual-poc/compose.yaml`
 - Local tunnel for administration: `http://127.0.0.1:15006`
 
@@ -83,27 +85,30 @@ These reports are native Actual objects and update as statement transactions are
 
 ## Statement ingestion
 
-Dry-run is the default:
+Upload and stage through the container worker:
 
 ```powershell
-.\scripts\ingest-statement-to-actual.ps1 `
-  -Pdf 'C:\path\statement.pdf' `
-  -SyncId '<budget-sync-id>'
+.\scripts\push-actual-ingestion-job.ps1 `
+  -InputPath 'C:\path\statement.pdf' `
+  -Type STATEMENT_PDF `
+  -CardCode EI_AMAZON `
+  -ActualMode STAGE
 ```
 
 The command performs these gates:
 
-1. Decrypt in memory.
-2. Detect the bank adapter.
-3. Parse to the bank-neutral statement model.
-4. Prove statement arithmetic ties.
-5. Map card suffixes to configured Actual accounts.
-6. Apply optional deterministic worker rules.
-7. Write a run manifest under `runtime/actual-runs/`.
-8. Ask Actual to dry-run its native rules and reconciliation.
-9. Commit only when `-Commit` is explicitly supplied.
+1. Upload the content-addressed artifact to the host-local worker inbox.
+2. Enforce the active/placeholder statement-source registry before parsing.
+3. Decrypt in memory.
+4. Detect the registered bank adapter.
+5. Parse to the bank-neutral statement model.
+6. Prove statement arithmetic ties.
+7. Map card suffixes to configured Actual accounts.
+8. Apply deterministic rules and write an evidence-linked manifest.
+9. Contact Actual only for PREFLIGHT or COMMIT.
+10. Commit only when both caller and container write gates are explicitly enabled.
 
-`imported_id` is stable and `reimportDeleted` is false, so repeats do not duplicate transactions. A commit always runs a complete Actual dry-run first.
+`imported_id` and worker job IDs are stable and `reimportDeleted` is false, so repeats do not duplicate transactions. The deployed POC keeps `ALLOW_ACTUAL_WRITES=false`; STAGE jobs are live, while production writes remain intentionally disabled until Actual credentials and the target sync ID are configured.
 
 ## Browser ingestion
 
@@ -146,7 +151,7 @@ python -m finance_tracker.cli cashback-dashboard `
   --output .\runtime\cashback-dashboard.json
 ```
 
-The Docker companion does not poll Actual for live routing. Hourly Codex or ChatGPT ingestion jobs submit minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives the authoritative statement transactions on the configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
+The Docker companion does not poll Actual for live routing. The end-of-day Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
 
 The output contains card pace, current tier, bucket spend and headroom, routing mode, current payment recommendations, and review count. Late in a cycle, a card that is materially under pace is valued at its current tier instead of pretending an unreachable target tier will be achieved.
 
@@ -162,7 +167,7 @@ The current tentative schedule remains month-end with processing on the first da
 
 ## Live Outlook notifications
 
-The hourly Sol automation writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
+The 23:50 Asia/Dubai Sol automation writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
 
 ```powershell
 .\scripts\push-outlook-messages.ps1 `
@@ -171,7 +176,7 @@ The hourly Sol automation writes exact fetched transaction-notification message 
 
 The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. Sol inspects only unresolved results and performs the evidence-aware AI policy stage through auditable correction calls. Codex is not installed in the container and no container-side AI is assumed. Only after those corrections and evidence writes succeed does the task commit the candidate cursor through the companion's ingest-run endpoint.
 
-The hourly path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing.
+The end-of-day path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. The schedule change does not change coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed days.
 
 Transaction notifications are retrieved in full from the durable cursor minus the configured overlap. Statement-PDF retrieval is different: each card-specific job selects only the latest statement message for that card/account and expected cycle, except for an explicit retry or backfill.
 

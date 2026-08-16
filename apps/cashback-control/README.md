@@ -1,6 +1,6 @@
 # Cashback Control companion
 
-This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. Hourly Outlook jobs submit exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
+This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The end-of-day Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
 
 Run from the repository root:
 

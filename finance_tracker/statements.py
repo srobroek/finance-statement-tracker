@@ -158,6 +158,10 @@ class StatementAdapterRegistry:
             raise ValueError(f"Statement adapter already registered: {adapter.code}")
         self._adapters[adapter.code] = adapter
 
+    @property
+    def codes(self) -> tuple[str, ...]:
+        return tuple(self._adapters)
+
     def adapter(self, code: str) -> BankStatementAdapter:
         try:
             return self._adapters[code]

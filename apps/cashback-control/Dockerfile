@@ -14,6 +14,7 @@ COPY finance_tracker ./finance_tracker
 COPY config/cashback-programs.json ./config/cashback-programs.json
 COPY config/actual-bootstrap.json ./config/actual-bootstrap.json
 COPY config/static-rules.seed.json ./config/static-rules.seed.json
+COPY config/transaction-email-sources.json ./config/transaction-email-sources.json
 RUN pip install --no-cache-dir .
 
 COPY apps/cashback-control ./apps/cashback-control

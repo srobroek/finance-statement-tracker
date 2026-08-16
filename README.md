@@ -27,7 +27,7 @@ The target is **Actual Budget as the primary ledger**, with a small continuous c
 - Two-phase statement-to-Actual ingestion with a durable run manifest and mandatory preflight.
 - Read-only Actual snapshots that drive cashback pace and routing without a duplicate ledger.
 - A compact read-only cashback companion in `apps/cashback-control`, refreshed by `scripts/refresh-cashback-control.ps1`.
-- A mobile-first cashback interface verified at a 390 px viewport without horizontal overflow.
+- A tabbed mobile-first cashback interface verified at the 428 x 926 iPhone 13 Pro Max viewport: Routing and its decision tree fill one screen, while Cards and History have dedicated screens without horizontal overflow.
 - Conservative Outlook notification adapters that emit traceable provisional events only when card, amount, currency, merchant, and a usable timestamp are evidenced.
 - Recipe-driven browser acquisition and deterministic official-export parsers migrated from the previous source app for ADCB, Emirates Islamic, FAB, Wio, generic CSV, and Sarwa capture.
 
@@ -37,7 +37,7 @@ Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schem
 
 `finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the Actual bridge consume only those normalized objects.
 
-The POC includes `emirates_islamic_v1` and `adcb_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
+The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered remain explicitly non-importing placeholders until real fixtures pass parser and arithmetic tests. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
 
 `finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
 
@@ -52,7 +52,7 @@ python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
 
-PDF extraction is an optional runtime concern. Install `pdfplumber` in the worker environment that performs statement ingestion; the deterministic normalization and calculation modules remain dependency-free.
+PDF extraction is isolated in the Actual ingestion container. Install the `statements` optional dependency only in an environment that parses statements; the deterministic normalization and calculation modules remain dependency-free.
 
 ## Run
 
@@ -66,11 +66,13 @@ python -m finance_tracker.cli browser-adapters-status --sources config\browser-s
 
 Browser acquisition is an alternate source, not a second ledger. Provider/data recipes describe the exact authenticated UI path; official CSV/XLSX/PDF artifacts are normalized into the same staging, rules, review, and Actual import pipeline as email statements. See `docs/browser-ingestion.md`.
 
+The continuously running `actual-ingestion` container accepts statement PDFs, normalized browser captures, and official browser exports through one authenticated job API. `scripts/push-actual-ingestion-job.ps1` reads its SSH target and container name from `config/deployment.json`, uploads one content-addressed artifact, and submits an idempotent STAGE, PREFLIGHT, or explicitly gated COMMIT job. The container is published privately to GHCR and deployed by `.github/workflows/actual-ingestion-image.yml`.
+
 ## Runtime model
 
 The target adapter writes ordinary finance records to Actual Budget through its official Node API. Outlook messages are retrieved by the scheduled Codex task. The companion SQLite store owns the durable mailbox cursor and provisional cashback state; OneDrive owns evidence originals and its JSON catalogue. Individual transactions drive provisional cashback pace, bucket headroom, warnings, and routing recommendations. Each card has an independent statement job that reconciles the live ledger, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
 
-Four Codex automations are active: one hourly live transaction/evidence ingest and three card-specific monthly statement reconciliation jobs. All current card cycles are tentatively month-end, with reconciliation on the following first day. The former daily aggregate gate is paused. Every job is idempotent and leaves cursors or close state unchanged when a required connector is unavailable. The hourly Sol job submits exact Outlook message objects through `push-outlook-messages.ps1`; the continuous companion performs deterministic parsing, static rules, deduplication, persistence, and dashboard refresh in one acknowledged call. Sol handles only unresolved classification and related-email evidence after that deterministic pass. Failed payloads remain under `runtime` for retry.
+Four Codex automations are active: one end-of-day live transaction/evidence ingest at 23:50 Asia/Dubai and three card-specific monthly statement reconciliation jobs. All current card cycles are tentatively month-end, with reconciliation on the following first day. The former daily aggregate gate is paused. Every job is idempotent and leaves cursors or close state unchanged when a required connector is unavailable. The daily Sol job scans the complete durable-cursor gap plus overlap and submits exact Outlook message objects through `push-outlook-messages.ps1`; the continuous companion performs deterministic parsing, static rules, deduplication, persistence, and dashboard refresh in one acknowledged call. Sol handles only unresolved classification and related-email evidence after that deterministic pass. Failed payloads remain under `runtime` for retry.
 
 Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.
 

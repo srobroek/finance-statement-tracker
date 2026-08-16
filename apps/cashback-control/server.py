@@ -22,7 +22,11 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from finance_tracker.actual_pipeline import account_maps, load_actual_config, load_compiled_rules
 from finance_tracker.cashback import load_program_configuration
 from finance_tracker.cashback_events import CashbackEventStore, build_live_dashboard, write_dashboard
-from finance_tracker.notifications import parse_outlook_notifications
+from finance_tracker.notification_sources import (
+    load_notification_sources,
+    validate_notification_adapter_coverage,
+)
+from finance_tracker.notifications import DEFAULT_NOTIFICATION_ADAPTERS, parse_outlook_notifications
 
 
 WEB_ROOT = APP_ROOT / "web"
@@ -60,6 +64,14 @@ STATIC_RULES_PATH = Path(
         str(REPOSITORY_ROOT / "config" / "static-rules.seed.json"),
     )
 ).resolve()
+NOTIFICATION_SOURCES_PATH = Path(
+    os.environ.get(
+        "TRANSACTION_EMAIL_SOURCES_PATH",
+        str(REPOSITORY_ROOT / "config" / "transaction-email-sources.json"),
+    )
+).resolve()
+
+
 def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
     messages = source.get("messages")
     if not isinstance(messages, list) or any(not isinstance(message, dict) for message in messages):
@@ -76,6 +88,11 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
     rules = [rule for rule in all_rules if live_rule_set in rule.rule_sets]
     if not rules:
         raise ValueError(f"No canonical rules belong to rule_set {live_rule_set}")
+    notification_sources = load_notification_sources(NOTIFICATION_SOURCES_PATH)
+    validate_notification_adapter_coverage(
+        notification_sources,
+        (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),
+    )
     batch = parse_outlook_notifications(
         messages,
         card_by_last4,

@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "purpose": "Evidence-backed transaction notification source registry for the end-of-day cashback scan",
+  "sources": [
+    {
+      "code": "ADCB_CARD_OTP",
+      "institution": "ADCB",
+      "card_code": "ADCB_CASHBACK",
+      "status": "ACTIVE",
+      "evidence_semantics": "AUTHORIZATION_ONLY",
+      "adapter": "adcb_card_otp_v1",
+      "senders": ["adcbalert@adcb.com"],
+      "subjects": ["ADCB Card Transaction OTP generated"],
+      "notes": "Amount-bearing OTP notification. Always provisional and review-required until statement reconciliation."
+    },
+    {
+      "code": "RAKBANK_CARD_TRANSACTION",
+      "institution": "RAKBANK",
+      "card_code": "RAK_WORLD",
+      "status": "PLACEHOLDER",
+      "evidence_semantics": "UNKNOWN",
+      "adapter": null,
+      "senders": [],
+      "subjects": [],
+      "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
+    },
+    {
+      "code": "STANDARD_CHARTERED_CARD_TRANSACTION",
+      "institution": "Standard Chartered",
+      "card_code": "SC_PLATINUM_X",
+      "status": "PLACEHOLDER",
+      "evidence_semantics": "UNKNOWN",
+      "adapter": null,
+      "senders": [],
+      "subjects": [],
+      "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
+    },
+    {
+      "code": "EMIRATES_ISLAMIC_CARD_TRANSACTION",
+      "institution": "Emirates Islamic",
+      "card_code": "EI_AMAZON",
+      "status": "PLACEHOLDER",
+      "evidence_semantics": "UNKNOWN",
+      "adapter": null,
+      "senders": [],
+      "subjects": [],
+      "notes": "Replace with captured sender, subject, body fixture and parser only after a real notification format is verified."
+    }
+  ]
+}

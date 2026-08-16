@@ -5,19 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#101713" />
     <title>Cashback Control</title>
-    <link rel="stylesheet" href="/styles.css?v=20260816-12" />
+    <link rel="stylesheet" href="/styles.css?v=20260817-1" />
   </head>
-  <body>
+  <body data-screen-active="routing">
     <main class="shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">Live card routing</p>
-          <h1>Which card?</h1>
+          <h1 id="screen-title">Which card?</h1>
         </div>
         <div id="as-of" class="as-of loading">Loading…</div>
       </header>
 
-      <section class="priority-section" aria-labelledby="routing-heading">
+      <nav class="screen-tabs" aria-label="Cashback dashboard screen">
+        <button type="button" data-screen-view="routing" data-screen-title="Which card?" aria-selected="true">Routing</button>
+        <button type="button" data-screen-view="cards" data-screen-title="Card position" aria-selected="false">Cards</button>
+        <button type="button" data-screen-view="history" data-screen-title="Previous cycles" aria-selected="false">History</button>
+      </nav>
+
+      <section class="priority-section" data-app-screen="routing" aria-labelledby="routing-heading">
         <div class="section-heading">
           <h2 id="routing-heading">Card routing</h2>
           <div class="routing-tabs" role="tablist" aria-label="Routing view">
@@ -32,15 +38,7 @@
         <div id="decision-tree" hidden></div>
       </section>
 
-      <section id="attention-section" aria-labelledby="attention-heading">
-        <div class="section-heading">
-          <h2 id="attention-heading">Needs attention</h2>
-          <span>Items that may affect routing accuracy</span>
-        </div>
-        <div id="attention" class="attention-list"></div>
-      </section>
-
-      <section class="detail-section" aria-labelledby="cards-heading">
+      <section class="detail-section" data-app-screen="cards" aria-labelledby="cards-heading">
         <div class="section-heading">
           <h2 id="cards-heading">Card position</h2>
           <span>Cycle pace and bucket headroom</span>
@@ -48,7 +46,15 @@
         <div id="cards" class="card-grid"></div>
       </section>
 
-      <section id="history-section" aria-labelledby="history-heading">
+      <section id="attention-section" data-app-screen="cards" aria-labelledby="attention-heading">
+        <div class="section-heading">
+          <h2 id="attention-heading">Needs attention</h2>
+          <span>Items that may affect routing accuracy</span>
+        </div>
+        <div id="attention" class="attention-list"></div>
+      </section>
+
+      <section id="history-section" data-app-screen="history" aria-labelledby="history-heading">
         <div class="section-heading history-heading">
           <div>
             <h2 id="history-heading">Previous cycles</h2>
@@ -59,6 +65,6 @@
         <div id="period-history"></div>
       </section>
     </main>
-    <script src="/app.js?v=20260816-13" defer></script>
+    <script src="/app.js?v=20260817-2" defer></script>
   </body>
 </html>
