@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Finance Statement Tracker backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Asia/Dubai
+Persistent=true
+RandomizedDelaySec=10m
+Unit=finance-backup.service
+
+[Install]
+WantedBy=timers.target

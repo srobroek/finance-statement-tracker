@@ -1,0 +1,16 @@
+{
+  "source_event_id": "validation-only:sample-1",
+  "occurred_at": "2026-08-16T12:30:00+04:00",
+  "card_code": "RAK_WORLD",
+  "amount_aed": "245.50",
+  "currency": "AED",
+  "purchase_type": "GROCERY",
+  "channel": "PHYSICAL_POS",
+  "merchant": "Sample Merchant",
+  "event_type": "PURCHASE",
+  "source": "validation-fixture",
+  "status": "PROVISIONAL",
+  "confidence": 0.95,
+  "review_required": false,
+  "reconciliation_status": "UNMATCHED"
+}

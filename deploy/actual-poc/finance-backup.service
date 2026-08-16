@@ -1,0 +1,12 @@
+[Unit]
+Description=Cold backup of Actual Budget and Cashback Control data
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/stacks/finance-actual-poc/backup.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

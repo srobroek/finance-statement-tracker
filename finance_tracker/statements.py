@@ -55,7 +55,7 @@ class NormalizedStatementTransaction:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedStatement:
-    """Canonical statement contract consumed by reconciliation and Notion I/O."""
+    """Canonical statement contract consumed by reconciliation and Actual import."""
 
     bank: str
     adapter: str
@@ -223,9 +223,9 @@ def _transaction_id(
 
 def _type(description: str, direction: str) -> str:
     normalized = description.upper()
-    if "PAYMENT RECEIVED" in normalized:
+    if any(token in normalized for token in ("PAYMENT RECEIVED", "CREDIT REPAYMENT", "CARD REPAYMENT")):
         return "PAYMENT"
-    if "CASHBACK" in normalized:
+    if "CASHBACK" in normalized and direction == "CREDIT":
         return "REWARD_CREDIT"
     if "FEE" in normalized or normalized.startswith("VAT ON"):
         return "FEE"
@@ -456,8 +456,80 @@ class AdcbStatementAdapter:
         )
 
 
+class WioCreditStatementAdapter:
+    code = "wio_credit_v1"
+    bank_name = "Wio"
+
+    def detect(self, text: str) -> int:
+        upper = text.upper()
+        return 100 if "CREDIT STATEMENT" in upper and "ACCOUNT NUMBER" in upper and "WIO" in upper else 0
+
+    def parse(self, text: str, source_file: str = "") -> NormalizedStatement:
+        period = re.search(
+            r"FROM\s+(\d{2}/\d{2}/\d{4})\s+TO\s+(\d{2}/\d{2}/\d{4})",
+            text,
+            re.I,
+        )
+        period_start = datetime.strptime(period.group(1), "%d/%m/%Y").date() if period else None
+        period_end = datetime.strptime(period.group(2), "%d/%m/%Y").date() if period else None
+        account_match = re.search(r"ACCOUNT NUMBER\s+\d*(\d{4})", text, re.I)
+        account_last4 = account_match.group(1) if account_match else None
+        due = re.search(
+            rf"PAYMENT DUE DATE MIN\. PAYMENT DUE TOTAL TO PAY\s+"
+            rf"(\d{{2}}/\d{{2}}/\d{{4}})\s+({_MONEY})\s+({_MONEY})",
+            text,
+            re.I,
+        )
+        opening = re.search(rf"Balance From Last Statement\s+({_MONEY})", text, re.I)
+        closing = re.search(rf"Closing balance \(Total to pay\)\s+({_MONEY})", text, re.I)
+        row_re = re.compile(
+            rf"^(\d{{2}}/\d{{2}}/\d{{4}})\s+([A-Z]\d+)\s+(.+?)(?:\s+\*{{4}}(\d{{4}}))?\s+([+-])({_MONEY})$",
+            re.I,
+        )
+        items: list[dict[str, object]] = []
+        card_last4s = [account_last4] if account_last4 else []
+        for line_number, line in enumerate((line.strip() for line in text.splitlines()), 1):
+            match = row_re.match(line)
+            if not match:
+                continue
+            when_raw, reference, description, card_last4, sign, amount = match.groups()
+            resolved_last4 = card_last4 or account_last4
+            if resolved_last4 and resolved_last4 not in card_last4s:
+                card_last4s.append(resolved_last4)
+            items.append(
+                {
+                    "transaction_date": datetime.strptime(when_raw, "%d/%m/%Y").date(),
+                    "post_date": None,
+                    "card_last4": resolved_last4,
+                    "description": f"{description.strip()} [{reference}]",
+                    "amount_aed": _decimal(amount),
+                    "direction": "CREDIT" if sign == "+" else "DEBIT",
+                    "source_line": line_number,
+                    "review_required": resolved_last4 is None,
+                }
+            )
+        transactions = _finalize("WIO", items)
+        warnings = () if transactions else ("No transaction rows were parsed",)
+        return NormalizedStatement(
+            bank=self.bank_name,
+            adapter=self.code,
+            source_file=source_file,
+            statement_date=period_end,
+            period_start=period_start,
+            period_end=period_end,
+            payment_due_date=datetime.strptime(due.group(1), "%d/%m/%Y").date() if due else None,
+            opening_balance_aed=_decimal(opening.group(1)) if opening else None,
+            closing_balance_aed=_decimal(closing.group(1)) if closing else None,
+            minimum_payment_aed=_decimal(due.group(2)) if due else None,
+            total_payment_due_aed=_decimal(due.group(3)) if due else None,
+            card_last4s=tuple(card_last4s),
+            transactions=transactions,
+            warnings=warnings,
+        )
+
+
 DEFAULT_STATEMENT_ADAPTERS = StatementAdapterRegistry(
-    (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())
+    (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter(), WioCreditStatementAdapter())
 )
 
 

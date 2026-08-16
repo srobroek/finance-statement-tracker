@@ -4,8 +4,10 @@ from unittest import TestCase
 from finance_tracker.statements import (
     AdcbStatementAdapter,
     BankStatementAdapter,
+    DEFAULT_STATEMENT_ADAPTERS,
     EmiratesIslamicStatementAdapter,
     StatementAdapterRegistry,
+    WioCreditStatementAdapter,
     parse_statement_text,
 )
 
@@ -68,3 +70,37 @@ Card No : XXXXXXXXXXXX6838 - TEST USER TWO
         self.assertEqual(registry.adapter("adcb_v1").bank_name, "ADCB")
         with self.assertRaises(ValueError):
             registry.parse("not a statement")
+
+    def test_wio_credit_statement_parses_signed_transactions_and_account_suffixes(self) -> None:
+        text = """CURRENCY MONTHLY INTEREST RATE ANNUAL INTEREST RATE
+CREDIT STATEMENT
+AED 3.25% 39.00%
+FROM 01/04/2026 TO 01/05/2026
+CREDIT LIMIT AVAILABLE CREDIT LIMIT TOT. INTEREST AND FEES
+10,000.00 50,000.00 0.00
+Wio Bank PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY
+01/05/2026 15.61 312.30
+ACCOUNT NUMBER 3342325009
+Account summary
+Balance From Last Statement 0.00
+Purchases +14,312.30
+Payments and credits -14,312.30
+Closing balance (Total to pay) 0.00
+Transactions
+Date Ref. Number Description Card Number Amount
+04/04/2026 P089884243 ADCB cashback payment -14,000.00
+04/04/2026 P965728346 Credit Repayment +14,000.00
+26/04/2026 P769104799 Kibsons ****4113 -312.30
+01/05/2026 P470244091 Credit Repayment Autopay +312.30
+© 2026 Wio, PJSC. All Rights Reserved.
+"""
+
+        statement = parse_statement_text(text, "wio.pdf")
+
+        self.assertIsInstance(DEFAULT_STATEMENT_ADAPTERS.adapter("wio_credit_v1"), WioCreditStatementAdapter)
+        self.assertEqual(statement.card_last4s, ("5009", "4113"))
+        self.assertEqual(len(statement.transactions), 4)
+        self.assertEqual(statement.transactions[0].transaction_type, "PURCHASE")
+        self.assertEqual(statement.transactions[1].transaction_type, "PAYMENT")
+        self.assertEqual(statement.transactions[2].card_last4, "4113")
+        self.assertTrue(statement.balance_tied)

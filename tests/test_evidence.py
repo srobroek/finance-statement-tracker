@@ -1,8 +1,19 @@
 import unittest
+import tempfile
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from finance_tracker.evidence import EvidenceCandidate, best_match, document_relative_path
+from pathlib import Path
+
+from finance_tracker.evidence import (
+    EvidenceCandidate,
+    archive_evidence,
+    best_match,
+    document_relative_path,
+    evidence_catalogue_record,
+    update_evidence_catalogue,
+    statement_catalogue_record,
+)
 from finance_tracker.models import Transaction
 
 
@@ -49,6 +60,89 @@ class EvidenceTests(unittest.TestCase):
             amount_aed=Decimal("999"),
         )
         self.assertIsNone(best_match(transaction, [candidate]))
+
+    def test_explicit_currency_mismatch_is_rejected(self):
+        transaction = Transaction(
+            "tx-fx",
+            datetime(2026, 8, 10, tzinfo=timezone.utc),
+            "SC_PLATINUM_X",
+            "EXAMPLE",
+            Decimal("100"),
+            currency="USD",
+        )
+        candidate = EvidenceCandidate(
+            "mail-fx",
+            datetime(2026, 8, 10, tzinfo=timezone.utc),
+            "Example receipt",
+            vendor="Example",
+            amount_aed=Decimal("100"),
+            currency="AED",
+        )
+
+        self.assertIsNone(best_match(transaction, [candidate], Decimal("0.01")))
+
+    def test_archive_is_structured_hashed_and_idempotent(self):
+        transaction = Transaction(
+            "tx-receipt",
+            datetime(2026, 8, 10, tzinfo=timezone.utc),
+            "EI_AMAZON",
+            "AMAZON.AE",
+            Decimal("99.95"),
+            vendor="Amazon",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "receipt.pdf"
+            source.write_bytes(b"synthetic receipt")
+
+            first = archive_evidence(
+                source,
+                root / "archive",
+                transaction,
+                "receipt",
+                "order 123",
+                message_id="mail-1",
+                attachment_id="attachment-1",
+            )
+            second = archive_evidence(
+                source,
+                root / "archive",
+                transaction,
+                "receipt",
+                "order 123",
+                message_id="mail-1",
+                attachment_id="attachment-1",
+            )
+
+            self.assertEqual(first, second)
+            self.assertTrue((root / "archive" / Path(first.relative_path)).is_file())
+            self.assertIn("Finance Evidence/2026/08/amazon/", first.relative_path)
+
+            record = evidence_catalogue_record(first, transaction, reference="order 123")
+            catalogue = root / "archive" / "catalogue.json"
+            self.assertEqual(update_evidence_catalogue(catalogue, record), {"inserted": 1, "updated": 0})
+            self.assertEqual(update_evidence_catalogue(catalogue, record), {"inserted": 0, "updated": 1})
+            self.assertEqual(len(__import__("json").loads(catalogue.read_text(encoding="utf-8"))), 1)
+
+    def test_statement_catalogue_uses_card_period_as_its_entity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            statement = Path(temporary) / "statement.pdf"
+            statement.write_bytes(b"statement evidence")
+            record = statement_catalogue_record(
+                statement,
+                bank="Example Bank",
+                card_code="CARD_1",
+                statement_date="2026-08-31",
+                period_start="2026-08-01",
+                period_end="2026-08-31",
+                reference="card-1-aug-2026",
+                closing_balance_aed="100.00",
+                payment_due_date="2026-09-25",
+            )
+            self.assertEqual(record["entity_type"], "CARD_PERIOD")
+            self.assertEqual(record["entity_id"], "CARD_1:2026-08-01:2026-08-31")
+            catalogue = Path(temporary) / "catalogue.json"
+            self.assertEqual(update_evidence_catalogue(catalogue, record)["inserted"], 1)
 
 
 if __name__ == "__main__":

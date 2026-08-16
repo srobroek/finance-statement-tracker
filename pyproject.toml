@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "notion-finance-worker"
+name = "finance-statement-worker"
 version = "0.1.0"
-description = "Notion-first deterministic finance rule and cashback worker"
+description = "Platform-neutral deterministic statement, rule, evidence, and cashback worker"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -17,4 +17,3 @@ include = ["finance_tracker*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

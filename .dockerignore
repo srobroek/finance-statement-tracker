@@ -1,0 +1,11 @@
+.git
+.actual-cache
+**/.actual-cache
+**/node_modules
+**/__pycache__
+runtime
+data/private
+Finance Evidence
+*.pdf
+*.xlsx
+*.csv

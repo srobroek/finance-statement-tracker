@@ -10,7 +10,7 @@ from .statements import NormalizedStatement
 
 @dataclass(frozen=True, slots=True)
 class StatementStageBatch:
-    """A Notion-ready staging batch; it never implies ledger reconciliation."""
+    """A portable staging batch; it never implies ledger reconciliation."""
 
     statement: NormalizedStatement
     transactions: tuple[Transaction, ...]
@@ -28,7 +28,7 @@ def stage_statement(
     card_by_last4: Mapping[str, str],
     source_message_id: str | None = None,
 ) -> StatementStageBatch:
-    """Map a normalized statement to staged transactions using Notion card config."""
+    """Map a normalized statement to staged transactions using repository account config."""
     staged: list[Transaction] = []
     for row in statement.transactions:
         configured_card = card_by_last4.get(row.card_last4 or "")
@@ -38,6 +38,8 @@ def stage_statement(
                 transaction_id=f"statement:{statement.adapter}:{row.transaction_id}",
                 transaction_at=datetime.combine(row.transaction_date, time.min),
                 card=configured_card or "UNMAPPED_CARD",
+                institution=statement.bank,
+                account_last4=row.card_last4,
                 merchant_raw=row.description,
                 amount_aed=row.amount_aed,
                 currency=row.currency_original,

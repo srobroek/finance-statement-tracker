@@ -1,0 +1,21 @@
+{
+  "name": "finance-tracker-actual-bridge",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "doctor": "node actualctl.mjs doctor",
+    "snapshot": "node actualctl.mjs snapshot",
+    "tag-report": "node actualctl.mjs tag-report",
+    "bootstrap": "node actualctl.mjs bootstrap",
+    "import": "node actualctl.mjs import",
+    "integration": "node offline-integration.mjs ../../config/actual-bootstrap.json",
+    "integration:statement": "node offline-integration.mjs ../../config/actual-bootstrap.json ../../runtime/real-statement-preflight/ei-preflight.json",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@actual-app/api": "26.8.1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "outlook": {
+    "cursor_source": "outlook",
+    "scan_overlap_hours": 2,
+    "initial_lookback_hours": 24,
+    "transaction_notifications": {
+      "mode": "ALL_SINCE_CURSOR_WITH_OVERLAP"
+    },
+    "statement_pdfs": {
+      "mode": "LATEST_PER_CARD_AND_EXPECTED_CYCLE"
+    }
+  }
+}

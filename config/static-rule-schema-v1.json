@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-static-rule-v1.json",
+  "title": "Finance Tracker Static Rule v1",
+  "description": "Canonical portable form of an AutoCat-style rule compiled for deterministic evaluation and compatible Actual rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rule_id", "name", "stage", "priority", "match", "actions", "stop_on_match"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "rule_id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "stage": {
+      "enum": ["TRANSACTION_NORMALIZATION", "VENDOR_NORMALIZATION", "CLASSIFICATION", "TAGGING", "EVIDENCE", "CASHBACK"]
+    },
+    "priority": { "type": "integer" },
+    "rule_sets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "default": ["FULL_LEDGER"]
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any"],
+      "properties": {
+        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/conditionGroup" } }
+      }
+    },
+    "actions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/action" } },
+    "stop_on_match": { "type": "boolean" }
+  },
+  "$defs": {
+    "conditionGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all"],
+      "properties": {
+        "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "operator"],
+      "properties": {
+        "field": {
+          "enum": ["transaction_at", "card", "account", "owner", "institution", "account_last4", "merchant_raw", "amount_aed", "spend_aed", "currency", "amount_original", "channel", "source_type", "vendor", "category", "subcategory", "transaction_type", "reward_bucket", "tags", "evidence_policy", "evidence_status", "review_required", "is_refund", "is_foreign", "is_subscription", "property_code", "rental_unit", "reference", "mcc", "history_count"]
+        },
+        "operator": {
+          "enum": ["equals", "not_equals", "contains", "contains_any", "not_contains", "starts_with", "ends_with", "regex", "in", "not_in", "numeric_equals", "gt", "gte", "lt", "lte", "between", "date_on", "date_before", "date_after", "date_between", "polarity", "is_empty", "not_empty", "is_true", "is_false", "has_tag"]
+        },
+        "value": {},
+        "second_value": {},
+        "group": { "type": "integer", "minimum": 1, "default": 1 },
+        "negate": { "type": "boolean", "default": false },
+        "case_sensitive": { "type": "boolean", "default": false }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "enum": ["set", "set_if_empty", "add_tag", "add_tags", "remove_tag", "request_evidence", "require_review"] },
+        "field": { "enum": ["vendor", "category", "subcategory", "transaction_type", "reward_bucket", "channel", "evidence_policy", "evidence_status", "review_required", "is_subscription", "owner", "property_code", "rental_unit", null] },
+        "value": {},
+        "sequence": { "type": "integer", "default": 10 }
+      }
+    }
+  }
+}

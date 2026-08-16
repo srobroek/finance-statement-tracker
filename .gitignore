@@ -8,6 +8,7 @@ credentials.*
 .tmp/
 .tools/
 outputs/
+runtime/
 Finance Evidence/
 data/private/
 data/staging/
@@ -22,6 +23,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Node / Actual API bridge
+node_modules/
+.actual-cache/
 
 # Editors and operating-system files
 .idea/

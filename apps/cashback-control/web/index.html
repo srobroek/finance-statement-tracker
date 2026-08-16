@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101713" />
+    <title>Cashback Control</title>
+    <link rel="stylesheet" href="/styles.css?v=20260816-1" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Live card routing</p>
+          <h1>Which card?</h1>
+        </div>
+        <div id="as-of" class="as-of loading">Loading…</div>
+      </header>
+
+      <section class="priority-section" aria-labelledby="use-now-heading">
+        <div class="section-heading">
+          <h2 id="use-now-heading">Use now</h2>
+          <span>Recommended payment method by spend type</span>
+        </div>
+        <div id="recommendations" class="recommendation-grid"></div>
+      </section>
+
+      <section id="avoid-section" aria-labelledby="avoid-heading">
+        <div class="section-heading">
+          <h2 id="avoid-heading">Avoid now</h2>
+          <span>Cards with no current routing value</span>
+        </div>
+        <div id="avoid" class="avoid-grid"></div>
+      </section>
+
+      <section id="attention-section" aria-labelledby="attention-heading">
+        <div class="section-heading">
+          <h2 id="attention-heading">Needs attention</h2>
+          <span>Items that may affect routing accuracy</span>
+        </div>
+        <div id="attention" class="attention-list"></div>
+      </section>
+
+      <section class="detail-section" aria-labelledby="cards-heading">
+        <div class="section-heading">
+          <h2 id="cards-heading">Card position</h2>
+          <span>Cycle pace and bucket headroom</span>
+        </div>
+        <div id="cards" class="card-grid"></div>
+      </section>
+
+      <section id="history-section" aria-labelledby="history-heading">
+        <div class="section-heading history-heading">
+          <div>
+            <h2 id="history-heading">Previous cycles</h2>
+            <span>Finalized statement periods and expected cashback</span>
+          </div>
+          <select id="period-selector" aria-label="Previous cashback period"></select>
+        </div>
+        <div id="period-history"></div>
+      </section>
+    </main>
+    <script src="/app.js?v=20260816-1" defer></script>
+  </body>
+</html>

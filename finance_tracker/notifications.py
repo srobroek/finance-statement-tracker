@@ -1,0 +1,222 @@
+from __future__ import annotations
+
+import re
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Callable, Iterable, Protocol
+
+from .ai_rules import AIEnrichmentEngine
+from .history import HistoryDecision, apply_history_match
+from .models import Transaction
+from .rules import RuleEngine, StaticRule
+
+
+_ADCB_OTP = re.compile(
+    r"OTP\s+for\s+transaction\s+at\s+(?P<merchant>.+?)\s+for\s+"
+    r"(?P<currency>[A-Z]{3})\s+(?P<amount>[0-9,]+(?:\.[0-9]{1,2})?)\s+"
+    r"on\s+your\s+ADCB\s+Credit\s+Card\s+XXX(?P<last4>[0-9]{4})",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationFact:
+    adapter: str
+    merchant: str
+    amount: Decimal
+    currency: str
+    card_last4: str
+    occurred_at: datetime
+    channel: str
+    confidence: float
+    requires_review: bool
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationBatch:
+    events: tuple[dict[str, Any], ...]
+    scanned_count: int
+    accepted_count: int
+    skipped: tuple[dict[str, str], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class NotificationAdapter(Protocol):
+    code: str
+
+    def detect(self, message: dict[str, Any]) -> bool: ...
+
+    def parse(self, message: dict[str, Any]) -> NotificationFact: ...
+
+
+def _sender_address(message: dict[str, Any]) -> str:
+    sender = message.get("sender") or {}
+    if isinstance(sender, dict):
+        email = sender.get("emailAddress") or {}
+        if isinstance(email, dict):
+            return str(email.get("address") or "").strip().casefold()
+    return ""
+
+
+def _message_text(message: dict[str, Any]) -> str:
+    parts = [str(message.get("bodyPreview") or "")]
+    body = message.get("body")
+    if isinstance(body, dict):
+        parts.append(str(body.get("content") or ""))
+    elif body:
+        parts.append(str(body))
+    return "\n".join(parts)
+
+
+class ADCBOTPNotificationAdapter:
+    """Parse amount-bearing ADCB authorization emails conservatively.
+
+    These messages prove an authorization attempt, not settlement. They are
+    therefore always provisional and reviewable until a statement confirms
+    them.
+    """
+
+    code = "adcb_card_otp_v1"
+    senders = frozenset({"adcbalert@adcb.com"})
+    subjects = frozenset({"adcb card transaction otp generated"})
+
+    def detect(self, message: dict[str, Any]) -> bool:
+        return (
+            _sender_address(message) in self.senders
+            and str(message.get("subject") or "").strip().casefold() in self.subjects
+        )
+
+    def parse(self, message: dict[str, Any]) -> NotificationFact:
+        match = _ADCB_OTP.search(_message_text(message))
+        if not match:
+            raise ValueError("ADCB authorization email does not expose merchant, amount, currency, and card suffix")
+        received = str(message.get("receivedDateTime") or "").strip()
+        if not received:
+            raise ValueError("Outlook receivedDateTime is required")
+        occurred = datetime.fromisoformat(received.replace("Z", "+00:00"))
+        return NotificationFact(
+            adapter=self.code,
+            merchant=match.group("merchant").strip(),
+            amount=Decimal(match.group("amount").replace(",", "")),
+            currency=match.group("currency").upper(),
+            card_last4=match.group("last4"),
+            occurred_at=occurred,
+            channel="ONLINE",
+            confidence=0.75,
+            requires_review=True,
+        )
+
+
+DEFAULT_NOTIFICATION_ADAPTERS: tuple[NotificationAdapter, ...] = (
+    ADCBOTPNotificationAdapter(),
+)
+
+
+def _purchase_type(transaction: Transaction) -> str:
+    category = str(transaction.category or "").casefold()
+    vendor = str(transaction.vendor or "").casefold()
+    if category == "groceries":
+        return "GROCERY"
+    if category in {"dining out", "food delivery", "coffee & snacks"}:
+        return "DINING"
+    if vendor == "amazon":
+        return "AMAZON"
+    if category in {"flights", "accommodation", "travel transport", "travel activities"}:
+        return "TRAVEL"
+    return "GENERAL"
+
+
+def parse_outlook_notifications(
+    messages: Iterable[dict[str, Any]],
+    card_by_last4: dict[str, str],
+    rules: Iterable[StaticRule] = (),
+    *,
+    adapters: Iterable[NotificationAdapter] = DEFAULT_NOTIFICATION_ADAPTERS,
+    history_index: dict[str, HistoryDecision] | None = None,
+    ai_engine: AIEnrichmentEngine | None = None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> NotificationBatch:
+    """Convert evidence-backed Outlook notifications into minimal cashback events."""
+    if (ai_engine is None) != (ai_resolver is None):
+        raise ValueError("ai_engine and ai_resolver must be supplied together")
+    engine = RuleEngine(rules)
+    adapter_list = tuple(adapters)
+    events: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    rows = list(messages)
+    for message in rows:
+        message_id = str(message.get("id") or "").strip()
+        if not message_id:
+            skipped.append({"message_id": "", "reason": "MISSING_MESSAGE_ID"})
+            continue
+        adapter = next((item for item in adapter_list if item.detect(message)), None)
+        if adapter is None:
+            skipped.append({"message_id": message_id, "reason": "UNSUPPORTED_NOTIFICATION"})
+            continue
+        try:
+            fact = adapter.parse(message)
+        except (ValueError, ArithmeticError) as error:
+            skipped.append({"message_id": message_id, "reason": f"PARSE_ERROR:{error}"})
+            continue
+        card_code = card_by_last4.get(fact.card_last4)
+        if not card_code:
+            skipped.append({"message_id": message_id, "reason": "UNMAPPED_CARD_SUFFIX"})
+            continue
+        if fact.currency != "AED":
+            skipped.append({"message_id": message_id, "reason": "MISSING_AED_EQUIVALENT"})
+            continue
+
+        transaction = Transaction(
+            transaction_id=f"{message_id}:0",
+            transaction_at=fact.occurred_at,
+            card=card_code,
+            account_last4=fact.card_last4,
+            institution="ADCB",
+            merchant_raw=fact.merchant,
+            amount_aed=fact.amount,
+            amount_original=fact.amount,
+            currency=fact.currency,
+            channel=fact.channel,
+            source_type="OUTLOOK_CARD_AUTHORIZATION",
+            source_message_id=message_id,
+            review_required=fact.requires_review,
+            tags={"authorization-notification"},
+            metadata={"notification_adapter": fact.adapter},
+        )
+        static_trace = engine.apply(transaction)
+        history_trace = apply_history_match(transaction, history_index or {})
+        ai_trace = []
+        if ai_engine and ai_resolver:
+            ai_trace = ai_engine.enrich(transaction, ai_resolver)
+        event = {
+            "source_event_id": transaction.transaction_id,
+            "occurred_at": fact.occurred_at.isoformat(),
+            "card_code": transaction.card,
+            "amount_aed": str(fact.amount),
+            "currency": fact.currency,
+            "purchase_type": _purchase_type(transaction),
+            "channel": transaction.channel,
+            "merchant": transaction.vendor or transaction.merchant_raw,
+            "bucket_code": transaction.reward_bucket,
+            "event_type": "PURCHASE",
+            "source": "outlook",
+            "status": "PROVISIONAL",
+            "tags": sorted(transaction.tags),
+            "confidence": fact.confidence,
+            "review_required": True,
+            "reconciliation_status": "UNMATCHED",
+            "email_reference": str(message.get("web_link") or message.get("display_url") or "") or None,
+            "decision_trace": [asdict(item) for item in static_trace]
+            + ([] if history_trace is None else [asdict(history_trace)]),
+            "ai_trace": [asdict(item) for item in ai_trace],
+        }
+        events.append(event)
+    return NotificationBatch(
+        events=tuple(events),
+        scanned_count=len(rows),
+        accepted_count=len(events),
+        skipped=tuple(skipped),
+    )

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "status": "TENTATIVE",
+  "currency": "AED",
+  "notes": "POC assumptions derived from the supplied card-routing brainstorm. Verify against issuer terms before production use.",
+  "live_ingestion": {
+    "canonical_rule_source": "static-rules.seed.json",
+    "rule_set": "LIVE_CASHBACK"
+  },
+  "programs": [
+    {
+      "card": "RAK_WORLD",
+      "name": "RAKBANK World",
+      "programme_version": "tentative-2026-08-v1",
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "CURRENCY_MINOR_UNIT",
+      "routing_priority": 20,
+      "exclusions": ["Issuer exclusions and eligible MCCs remain to be verified"],
+      "safety_target_aed": "10300",
+      "fx_cost_rate": "0",
+      "tiers": [
+        {"code": "BASE", "minimum_spend_aed": "0", "rates": {"RAK_STANDARD": "0.01"}},
+        {"code": "ENHANCED", "minimum_spend_aed": "10000", "rates": {"RAK_GROCERY": "0.10", "RAK_DINING": "0.10", "RAK_TRAVEL": "0.10", "RAK_STANDARD": "0.01", "RAK_EWALLET": "0.03"}}
+      ],
+      "buckets": [
+        {"code": "RAK_GROCERY", "cashback_cap_aed": "300", "categories": ["GROCERY"]},
+        {"code": "RAK_DINING", "cashback_cap_aed": "300", "categories": ["DINING"]},
+        {"code": "RAK_TRAVEL", "cashback_cap_aed": "400", "categories": ["TRAVEL", "HOTEL", "AIRLINE"]},
+        {"code": "RAK_EWALLET", "cashback_cap_aed": "150", "channels": ["APPLE_PAY_POS"]},
+        {"code": "RAK_STANDARD", "cashback_cap_aed": "100"}
+      ]
+    },
+    {
+      "card": "SC_PLATINUM_X",
+      "name": "Standard Chartered Platinum X",
+      "programme_version": "tentative-2026-08-v1",
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "CURRENCY_MINOR_UNIT",
+      "routing_priority": 10,
+      "exclusions": ["Issuer exclusions and eligible MCCs remain to be verified"],
+      "safety_target_aed": "15300",
+      "fx_cost_rate": "0.035",
+      "tiers": [
+        {"code": "BELOW_MIN", "minimum_spend_aed": "0", "rates": {}},
+        {"code": "TIER_3", "minimum_spend_aed": "2500", "rates": {"SC_ONLINE": "0.03", "SC_WALLET": "0.03", "SC_FOREIGN": "0.03"}},
+        {"code": "TIER_5", "minimum_spend_aed": "7500", "rates": {"SC_ONLINE": "0.05", "SC_WALLET": "0.05", "SC_FOREIGN": "0.05"}},
+        {"code": "TIER_10", "minimum_spend_aed": "15000", "rates": {"SC_ONLINE": "0.10", "SC_WALLET": "0.10", "SC_FOREIGN": "0.10"}}
+      ],
+      "buckets": [
+        {"code": "SC_ONLINE", "cashback_cap_aed": "400", "channels": ["ONLINE"], "aed_only": true},
+        {"code": "SC_WALLET", "cashback_cap_aed": "200", "channels": ["APPLE_PAY_POS"], "aed_only": true},
+        {"code": "SC_FOREIGN", "cashback_cap_aed": "400", "foreign_only": true}
+      ]
+    },
+    {
+      "card": "EI_AMAZON",
+      "name": "Emirates Islamic Amazon",
+      "programme_version": "tentative-2026-08-v1",
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "CURRENCY_MINOR_UNIT",
+      "routing_priority": 5,
+      "exclusions": ["Amazon eligibility and rate remain to be verified against issuer terms"],
+      "safety_target_aed": null,
+      "fx_cost_rate": "0",
+      "tiers": [
+        {"code": "STANDARD", "minimum_spend_aed": "0", "rates": {"EI_AMAZON": "0.06"}}
+      ],
+      "buckets": [
+        {"code": "EI_AMAZON", "cashback_cap_aed": null, "categories": ["AMAZON"], "channels": ["ONLINE"]}
+      ]
+    }
+  ],
+  "payment_intents": [
+    {"category": "GROCERY", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "DINING", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "AMAZON", "channel": "ONLINE", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "GENERAL", "channel": "ONLINE", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "GENERAL", "channel": "APPLE_PAY_POS", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "GENERAL", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "TRAVEL", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
+    {"category": "GENERAL", "channel": "ONLINE", "currency": "USD", "decision_amount_aed": "100"},
+    {"category": "FILLER", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"}
+  ]
+}

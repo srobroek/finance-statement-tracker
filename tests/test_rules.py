@@ -2,7 +2,7 @@ from datetime import datetime
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
-from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule
+from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule, validate_rule
 
 
 class RuleEngineTests(TestCase):
@@ -47,3 +47,105 @@ class RuleEngineTests(TestCase):
         RuleEngine([rule]).apply(transaction)
         self.assertEqual(transaction.category, "MANUAL")
 
+    def test_invalid_field_is_rejected_before_evaluation(self) -> None:
+        rule = StaticRule(
+            "r1",
+            "Typo",
+            "CLASSIFICATION",
+            10,
+            [RuleCondition("merhcant_raw", "contains", "Carrefour")],
+            [RuleAction("set", "category", "GROCERY")],
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported field"):
+            validate_rule(rule)
+
+    def test_between_requires_upper_bound(self) -> None:
+        rule = StaticRule(
+            "r1",
+            "Broken range",
+            "CLASSIFICATION",
+            10,
+            [RuleCondition("amount_aed", "between", "0")],
+            [RuleAction("set", "category", "GROCERY")],
+        )
+        with self.assertRaisesRegex(ValueError, "second_value"):
+            RuleEngine([rule])
+
+    def test_static_rule_cannot_overwrite_protected_amount(self) -> None:
+        rule = StaticRule(
+            "r1",
+            "Unsafe",
+            "CLASSIFICATION",
+            10,
+            [RuleCondition("merchant_raw", "contains", "Carrefour")],
+            [RuleAction("set", "amount_aed", "1")],
+        )
+        with self.assertRaisesRegex(ValueError, "cannot set field"):
+            validate_rule(rule)
+
+    def test_tiller_style_account_amount_and_institution_conditions(self) -> None:
+        rule = StaticRule(
+            "card-payment",
+            "ADCB card payment",
+            "TRANSACTION_NORMALIZATION",
+            10,
+            [
+                RuleCondition("institution", "equals", "ADCB"),
+                RuleCondition("account_last4", "equals", "8833"),
+                RuleCondition("amount_aed", "numeric_equals", "250.00"),
+                RuleCondition("spend_aed", "polarity", "positive"),
+            ],
+            [RuleAction("set", "transaction_type", "TRANSFER")],
+        )
+        transaction = self.transaction()
+        transaction.institution = "ADCB"
+        transaction.account_last4 = "8833"
+
+        RuleEngine([rule]).apply(transaction)
+
+        self.assertEqual(transaction.transaction_type, "TRANSFER")
+
+    def test_set_if_empty_and_multi_tag_actions_preserve_existing_classification(self) -> None:
+        rule = StaticRule(
+            "rental",
+            "Rental unit",
+            "TAGGING",
+            10,
+            [RuleCondition("merchant_raw", "contains", "Management Company")],
+            [
+                RuleAction("set_if_empty", "category", "Rental Income"),
+                RuleAction("set_if_empty", "property_code", "LT"),
+                RuleAction("add_tags", value=["rental", "income"]),
+            ],
+        )
+        transaction = self.transaction()
+        transaction.merchant_raw = "Management Company Rent Distribution"
+        transaction.category = "Manual Category"
+
+        trace = RuleEngine([rule]).apply(transaction)[0]
+
+        self.assertEqual(transaction.category, "Manual Category")
+        self.assertEqual(transaction.property_code, "LT")
+        self.assertEqual(transaction.tags, {"rental", "income"})
+        self.assertIn("skipped_populated:category", trace.actions_applied)
+
+    def test_date_range_operator(self) -> None:
+        condition = RuleCondition(
+            "transaction_at",
+            "date_between",
+            "2026-08-01",
+            "2026-08-31",
+        )
+        rule = StaticRule(
+            "august",
+            "August transactions",
+            "TAGGING",
+            10,
+            [condition],
+            [RuleAction("add_tag", value="august")],
+        )
+        transaction = self.transaction()
+
+        RuleEngine([rule]).apply(transaction)
+
+        self.assertIn("august", transaction.tags)

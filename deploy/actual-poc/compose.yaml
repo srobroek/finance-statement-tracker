@@ -1,0 +1,72 @@
+services:
+  actual:
+    image: actualbudget/actual-server:26.8.1@sha256:6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5
+    container_name: finance-actual-poc
+    user: "1000:1000"
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Dubai
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "5006"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "node src/scripts/health-check.js"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  actual-proxy:
+    image: ghcr.io/nginx/nginx-unprivileged:1.31.3-alpine@sha256:ecc08db2dde19b7bf63b3f4c55fcff2836bd280e1a33a2b20b765e1e2883ff68
+    container_name: finance-actual-proxy
+    user: "101:101"
+    restart: unless-stopped
+    depends_on:
+      actual:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    ports:
+      - "5006:8080"
+    volumes:
+      - ./nginx/actual.conf:/etc/nginx/conf.d/default.conf:ro
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    healthcheck:
+      # The pinned unprivileged image intentionally omits curl/wget. Actual has
+      # its own upstream health check; this probe verifies that the proxy
+      # process is alive and its mounted configuration is still valid.
+      test: ["CMD-SHELL", "nginx -t >/dev/null 2>&1 && kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cashback-control:
+    build:
+      context: ${FINANCE_APP_CONTEXT:-../..}
+      dockerfile: apps/cashback-control/Dockerfile
+    container_name: finance-cashback-control
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Dubai
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "5010:5010"
+    volumes:
+      - ./cashback-data:/var/lib/cashback-control
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=5)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

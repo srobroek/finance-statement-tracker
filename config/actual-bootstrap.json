@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "currency": "AED",
+  "accounts": [
+    {
+      "name": "ADCB Credit Card · 8833 / 6838",
+      "aliases": ["ADCB Credit Card · 8833"],
+      "type": "credit",
+      "offbudget": false,
+      "card_code": "ADCB_CASHBACK",
+      "card_last4": ["8833", "6838"]
+    },
+    {
+      "name": "Emirates Islamic Amazon Credit Card · 0082",
+      "type": "credit",
+      "offbudget": false,
+      "card_code": "EI_AMAZON",
+      "card_last4": ["0082"]
+    },
+    {
+      "name": "FAB Credit Card · 6031",
+      "type": "credit",
+      "offbudget": false,
+      "card_code": "FAB_6031",
+      "card_last4": ["6031"]
+    },
+    {
+      "name": "RAKBANK World Credit Card",
+      "type": "credit",
+      "offbudget": false,
+      "card_code": "RAK_WORLD",
+      "card_last4": []
+    },
+    {
+      "name": "Standard Chartered Platinum X Credit Card",
+      "type": "credit",
+      "offbudget": false,
+      "card_code": "SC_PLATINUM_X",
+      "card_last4": []
+    },
+    {
+      "name": "Wio Current Account · 4113",
+      "type": "checking",
+      "offbudget": false,
+      "card_code": "WIO_4113",
+      "card_last4": ["4113"]
+    },
+    {
+      "name": "Wio Current Account · 5009",
+      "type": "checking",
+      "offbudget": false,
+      "card_code": "WIO_5009",
+      "card_last4": ["5009"]
+    }
+  ],
+  "category_groups": [
+    {
+      "name": "Income",
+      "is_income": true,
+      "categories": [
+        "Salary",
+        "Rental Income",
+        "Cashback & Rewards",
+        "Interest & Dividends",
+        "Refunds & Reimbursements",
+        "Other Income"
+      ]
+    },
+    {
+      "name": "Home & Property",
+      "categories": [
+        "Rent & Mortgage",
+        "Electricity & Water",
+        "District Cooling",
+        "Service Charges",
+        "Maintenance & Repairs",
+        "Household Supplies",
+        "Furniture & Appliances"
+      ]
+    },
+    {
+      "name": "Food & Dining",
+      "categories": ["Groceries", "Dining Out", "Food Delivery", "Coffee & Snacks"]
+    },
+    {
+      "name": "Transport",
+      "categories": ["Fuel", "Ride Hailing", "Parking & Tolls", "Vehicle Maintenance", "Public Transport"]
+    },
+    {
+      "name": "Shopping",
+      "categories": ["Online Shopping", "Clothing", "Electronics", "General Retail", "Gifts"]
+    },
+    {
+      "name": "Digital & Subscriptions",
+      "categories": ["Software & App Subscriptions", "Media Subscriptions", "Mobile & Internet", "Cloud Services"]
+    },
+    {
+      "name": "Health & Personal",
+      "categories": ["Medical", "Pharmacy", "Fitness", "Personal Care", "Education"]
+    },
+    {
+      "name": "Travel",
+      "categories": ["Flights", "Accommodation", "Travel Transport", "Travel Activities", "Foreign Fees"]
+    },
+    {
+      "name": "Financial & Admin",
+      "categories": ["Bank Fees", "Insurance", "Taxes & Government", "Professional Services", "Card Payments"]
+    },
+    {
+      "name": "Goals & Giving",
+      "categories": ["Savings Goals", "Investments", "Charity", "Family Support"]
+    },
+    {
+      "name": "Review",
+      "categories": ["Needs Review"]
+    }
+  ],
+  "tags": [
+    {"tag": "shared", "description": "Shared household spending"},
+    {"tag": "subscription", "description": "Recurring non-utility subscription"},
+    {"tag": "utility", "description": "Utility or property service"},
+    {"tag": "rental", "description": "Rental property income or expense"},
+    {"tag": "business", "description": "Business-related transaction"},
+    {"tag": "receipt", "description": "Receipt evidence is linked"},
+    {"tag": "warranty", "description": "Purchase has warranty evidence"},
+    {"tag": "needs-review", "description": "Deterministic or manual review is required"}
+  ],
+  "payees": [
+    {"name": "Amazon"},
+    {"name": "Apple"},
+    {"name": "Carrefour"},
+    {"name": "DEWA"},
+    {"name": "Empower"},
+    {"name": "Food Delivery"},
+    {"name": "Ride Hailing"},
+    {"name": "Airline"},
+    {"name": "Hotel or Booking Platform"},
+    {"name": "Mobile Provider"},
+    {"name": "Spinneys"},
+    {"name": "Virgin Mobile"},
+    {"name": "Waitrose"}
+  ],
+  "canonical_rule_sources": [
+    {
+      "path": "static-rules.seed.json",
+      "only_marked": false,
+      "include_rule_ids": [
+        "vendor-dewa",
+        "vendor-empower",
+        "vendor-amazon",
+        "vendor-carrefour",
+        "vendor-spinneys",
+        "vendor-waitrose",
+        "class-utilities-dewa",
+        "class-utilities-empower",
+        "class-groceries",
+        "class-amazon",
+        "class-food-delivery",
+        "class-ride-hailing",
+        "class-flights",
+        "class-hotels",
+        "class-mobile"
+      ]
+    }
+  ],
+  "schedules": [],
+  "budget_months": [],
+  "legacy_rules_disabled": [
+    {
+      "name": "Normalize and classify DEWA",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "DEWA"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "DEWA"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Electricity & Water"}},
+        {"op": "append-notes", "value": " #utility"}
+      ]
+    },
+    {
+      "name": "Normalize and classify Empower",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "EMPOWER"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Empower"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "District Cooling"}},
+        {"op": "append-notes", "value": " #utility"}
+      ]
+    },
+    {
+      "name": "Normalize Amazon",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "AMAZON"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Amazon"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Online Shopping"}}
+      ]
+    },
+    {
+      "name": "Classify Carrefour groceries",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "CARREFOUR"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Carrefour"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Groceries"}}
+      ]
+    },
+    {
+      "name": "Classify Spinneys groceries",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "SPINNEYS"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Spinneys"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Groceries"}}
+      ]
+    },
+    {
+      "name": "Classify Waitrose groceries",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "WAITROSE"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Waitrose"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Groceries"}}
+      ]
+    },
+    {
+      "name": "Classify Apple subscriptions",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "APPLE.COM/BILL"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Apple"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Software & App Subscriptions"}},
+        {"op": "append-notes", "value": " #subscription"}
+      ]
+    },
+    {
+      "name": "Normalize Virgin Mobile",
+      "stage": "pre",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "VIRGIN MOBILE"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Virgin Mobile"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Mobile & Internet"}}
+      ]
+    }
+  ]
+}

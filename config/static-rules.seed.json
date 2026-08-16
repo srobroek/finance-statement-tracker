@@ -1,0 +1,1937 @@
+[
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-card-payment",
+    "name": "Card payment transfer",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "PAYMENT RECEIVED",
+                "CARD PAYMENT",
+                "AUTOPAY PAYMENT"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "transaction_type",
+        "value": "TRANSFER",
+        "sequence": 10
+      },
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Card Payments",
+        "sequence": 20
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "transfer",
+          "card-payment"
+        ],
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-cashback-credit",
+    "name": "Cashback and reward credit",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "CASHBACK",
+                "CASH BACK",
+                "REWARD CREDIT"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "transaction_type",
+        "value": "REWARD_CREDIT"
+      },
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Cashback & Rewards",
+        "sequence": 20
+      },
+      {
+        "action": "add_tag",
+        "value": "reward",
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-refund",
+    "name": "Explicit refund or reversal",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "\\b(REFUND|REVERSAL|REVERSED)\\b"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "transaction_type",
+        "value": "REFUND"
+      },
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Refunds & Reimbursements",
+        "sequence": 20
+      },
+      {
+        "action": "add_tag",
+        "value": "refund",
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-dewa",
+    "name": "Normalize DEWA",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "DEWA",
+                "DUBAI ELECTRICITY"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "DEWA"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-empower",
+    "name": "Normalize Empower",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "EMPOWER"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Empower"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-amazon",
+    "name": "Normalize Amazon",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Amazon"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-carrefour",
+    "name": "Normalize Carrefour",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 40,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "CARREFOUR"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Carrefour"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-spinneys",
+    "name": "Normalize Spinneys",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 50,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "SPINNEYS"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Spinneys"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-waitrose",
+    "name": "Normalize Waitrose",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 60,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "WAITROSE"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Waitrose"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-mobile",
+    "name": "Normalize mobile providers",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 70,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "VIRGIN MOBILE"
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "(^|[^A-Z])ETISALAT|(^|[^A-Z])E&([^A-Z]|$)"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "vendor",
+        "value": "Mobile Provider"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-food-delivery",
+    "name": "Normalize food delivery",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 80,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "TALABAT"
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "DELIVEROO"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "vendor",
+        "value": "Food Delivery"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-ride-hailing",
+    "name": "Normalize ride hailing",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 90,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains",
+              "value": "CAREEM"
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "\\bUBER\\b"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "vendor",
+        "value": "Ride Hailing"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-airlines",
+    "name": "Normalize UAE airlines",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 100,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "EMIRATES AIR",
+                "FLYDUBAI",
+                "ETIHAD AIR"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "vendor",
+        "value": "Airline"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-hotels",
+    "name": "Normalize hotels and booking platforms",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 110,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "BOOKING.COM",
+                "MARRIOTT",
+                "HILTON",
+                "HYATT",
+                "ACCOR"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "vendor",
+        "value": "Hotel or Booking Platform"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-apple",
+    "name": "Normalize Apple billing",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 120,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "APPLE.COM/BILL",
+                "ITUNES.COM"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "Apple"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-utilities-dewa",
+    "name": "DEWA electricity and water",
+    "stage": "CLASSIFICATION",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "DEWA"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Electricity & Water"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "utility",
+          "home"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-utilities-empower",
+    "name": "Empower district cooling",
+    "stage": "CLASSIFICATION",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Empower"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "District Cooling"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "utility",
+          "home"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-groceries",
+    "name": "Known supermarkets",
+    "stage": "CLASSIFICATION",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "in",
+              "value": [
+                "Carrefour",
+                "Spinneys",
+                "Waitrose"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Groceries"
+      },
+      {
+        "action": "add_tag",
+        "value": "grocery",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-amazon-grocery",
+    "name": "Amazon grocery orders",
+    "stage": "CLASSIFICATION",
+    "priority": 35,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Amazon"
+            },
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "AMAZON FRESH",
+                "AMAZON NOW",
+                "AMAZON GROCERY"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Groceries"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "grocery",
+          "online",
+          "amazon"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-amazon",
+    "name": "Amazon online shopping",
+    "stage": "CLASSIFICATION",
+    "priority": 40,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Amazon"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Online Shopping"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "online",
+          "amazon"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-food-delivery",
+    "name": "Food delivery",
+    "stage": "CLASSIFICATION",
+    "priority": 50,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Food Delivery"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Food Delivery"
+      },
+      {
+        "action": "add_tag",
+        "value": "dining",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-ride-hailing",
+    "name": "Ride hailing",
+    "stage": "CLASSIFICATION",
+    "priority": 60,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Ride Hailing"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Ride Hailing"
+      },
+      {
+        "action": "add_tag",
+        "value": "transport",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-flights",
+    "name": "Airline purchases",
+    "stage": "CLASSIFICATION",
+    "priority": 70,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Airline"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Flights"
+      },
+      {
+        "action": "add_tag",
+        "value": "travel",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-hotels",
+    "name": "Accommodation purchases",
+    "stage": "CLASSIFICATION",
+    "priority": 80,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Hotel or Booking Platform"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Accommodation"
+      },
+      {
+        "action": "add_tag",
+        "value": "travel",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-mobile",
+    "name": "Mobile and internet",
+    "stage": "CLASSIFICATION",
+    "priority": 90,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Mobile Provider"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Mobile & Internet"
+      },
+      {
+        "action": "add_tag",
+        "value": "telecom",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-apple-subscription",
+    "name": "Apple subscription billing",
+    "stage": "CLASSIFICATION",
+    "priority": 100,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Apple"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Software & App Subscriptions"
+      },
+      {
+        "action": "set",
+        "field": "is_subscription",
+        "value": true,
+        "sequence": 20
+      },
+      {
+        "action": "add_tag",
+        "value": "subscription",
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-service-charges",
+    "name": "Property service charges and Mollak",
+    "stage": "CLASSIFICATION",
+    "priority": 110,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "SERVICE CHARGE",
+                "OWNERS ASSOCIATION",
+                "HOMEOWNERS ASSOCIATION",
+                "MOLLAK"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Service Charges"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "property",
+          "service-charge"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-office-catering",
+    "name": "Office catering and group meals",
+    "stage": "CLASSIFICATION",
+    "priority": 115,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "OFFICE CATERING",
+                "CORPORATE CATERING",
+                "CATERING SERVICES"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Dining Out"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "dining",
+          "business"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-medical",
+    "name": "Medical and pharmacy",
+    "stage": "CLASSIFICATION",
+    "priority": 120,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "HOSPITAL",
+                "CLINIC",
+                "MEDICAL CENTRE",
+                "MEDICAL CENTER"
+              ]
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "PHARMACY",
+                "ASTER PHARMACY",
+                "LIFE PHARMACY"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Medical"
+      },
+      {
+        "action": "add_tag",
+        "value": "health",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-fuel",
+    "name": "Fuel stations",
+    "stage": "CLASSIFICATION",
+    "priority": 130,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "ENOC",
+                "EPPCO",
+                "ADNOC",
+                "EMARAT SERVICE"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Fuel"
+      },
+      {
+        "action": "add_tag",
+        "value": "transport",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-parking-tolls",
+    "name": "Parking and tolls",
+    "stage": "CLASSIFICATION",
+    "priority": 140,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "SALIK",
+                "PARKING",
+                "RTA PARKING"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Parking & Tolls"
+      },
+      {
+        "action": "add_tag",
+        "value": "transport",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-foreign-fees",
+    "name": "Foreign transaction fees",
+    "stage": "CLASSIFICATION",
+    "priority": 145,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "FOREIGN TRANSACTION FEE",
+                "FOREIGN CURRENCY FEE",
+                "INTERNATIONAL TRANSACTION FEE"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "transaction_type",
+        "value": "FEE"
+      },
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Foreign Fees",
+        "sequence": 20
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "fee",
+          "foreign"
+        ],
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-vat-fees",
+    "name": "VAT applied to bank fees",
+    "stage": "CLASSIFICATION",
+    "priority": 146,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "\\bVAT\\b.*\\b(FEE|CHARGE)\\b|\\b(FEE|CHARGE)\\b.*\\bVAT\\b"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "transaction_type",
+        "value": "FEE"
+      },
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Bank Fees",
+        "sequence": 20
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "fee",
+          "vat"
+        ],
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-bank-fees",
+    "name": "Bank fees",
+    "stage": "CLASSIFICATION",
+    "priority": 150,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "ANNUAL FEE",
+                "LATE PAYMENT FEE",
+                "FINANCE CHARGE",
+                "FOREIGN TRANSACTION FEE"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Bank Fees"
+      },
+      {
+        "action": "add_tag",
+        "value": "fee",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-rental-income",
+    "name": "Rental management income",
+    "stage": "CLASSIFICATION",
+    "priority": 160,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "RENT DISTRIBUTION",
+                "RENTAL INCOME",
+                "TENANT PAYMENT"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Rental Income"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "rental",
+          "income"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-furniture",
+    "name": "Furniture and appliances",
+    "stage": "CLASSIFICATION",
+    "priority": 170,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "IKEA",
+                "HOME CENTRE",
+                "HOME CENTER",
+                "PAN EMIRATES"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Furniture & Appliances"
+      },
+      {
+        "action": "add_tag",
+        "value": "home",
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-home-maintenance",
+    "name": "Home maintenance and repairs",
+    "stage": "CLASSIFICATION",
+    "priority": 180,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "MAINTENANCE SERVICES",
+                "PLUMBING",
+                "ELECTRICAL REPAIR",
+                "HANDYMAN"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Maintenance & Repairs"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "home",
+          "maintenance"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-general-subscriptions",
+    "name": "Common software and media subscriptions",
+    "stage": "CLASSIFICATION",
+    "priority": 190,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "NETFLIX",
+                "SPOTIFY",
+                "MICROSOFT 365",
+                "ADOBE",
+                "DROPBOX",
+                "OPENAI"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Software & App Subscriptions"
+      },
+      {
+        "action": "set",
+        "field": "is_subscription",
+        "value": true,
+        "sequence": 20
+      },
+      {
+        "action": "add_tag",
+        "value": "subscription",
+        "sequence": 30
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "tag-foreign",
+    "name": "Tag foreign currency",
+    "stage": "TAGGING",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "is_foreign",
+              "operator": "is_true"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "add_tag",
+        "value": "foreign"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "tag-subscription",
+    "name": "Tag known subscriptions",
+    "stage": "TAGGING",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "is_subscription",
+              "operator": "is_true"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "add_tag",
+        "value": "recurring"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "tag-property-unit",
+    "name": "Tag rental property unit",
+    "stage": "TAGGING",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "property_code",
+              "operator": "not_empty"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "add_tag",
+        "value": "property"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "tag-shared-expense",
+    "name": "Tag explicitly shared expenses",
+    "stage": "TAGGING",
+    "priority": 40,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "contains_any",
+              "value": [
+                "SPLITWISE",
+                "SHARED EXPENSE",
+                "COST SHARE"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "add_tag",
+        "value": "shared"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "evidence-utilities",
+    "name": "Find utility bill PDF",
+    "stage": "EVIDENCE",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "category",
+              "operator": "in",
+              "value": [
+                "Electricity & Water",
+                "District Cooling",
+                "Service Charges"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "request_evidence",
+        "value": "MATCH_AMOUNT_AND_PERIOD"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "evidence-purchases",
+    "name": "Find purchase receipt and warranty",
+    "stage": "EVIDENCE",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "category",
+              "operator": "in",
+              "value": [
+                "Online Shopping",
+                "Electronics",
+                "Furniture & Appliances"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "request_evidence",
+        "value": "SEARCH_RECEIPT_BILL_WARRANTY"
+      }
+    ],
+    "stop_on_match": false,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-rak-grocery",
+    "name": "RAK grocery bucket",
+    "stage": "CASHBACK",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "RAK_WORLD"
+            },
+            {
+              "field": "category",
+              "operator": "equals",
+              "value": "Groceries"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "RAK_GROCERY"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-rak-dining",
+    "name": "RAK dining bucket",
+    "stage": "CASHBACK",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "RAK_WORLD"
+            },
+            {
+              "field": "category",
+              "operator": "in",
+              "value": [
+                "Dining Out",
+                "Food Delivery",
+                "Coffee & Snacks"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "RAK_DINING"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-rak-travel",
+    "name": "RAK travel bucket",
+    "stage": "CASHBACK",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "RAK_WORLD"
+            },
+            {
+              "field": "category",
+              "operator": "in",
+              "value": [
+                "Flights",
+                "Accommodation",
+                "Travel Transport",
+                "Travel Activities"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "RAK_TRAVEL"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-sc-foreign",
+    "name": "SC foreign bucket",
+    "stage": "CASHBACK",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "SC_PLATINUM_X"
+            },
+            {
+              "field": "is_foreign",
+              "operator": "is_true"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "SC_FOREIGN"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-sc-wallet",
+    "name": "SC Apple Pay bucket",
+    "stage": "CASHBACK",
+    "priority": 20,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "SC_PLATINUM_X"
+            },
+            {
+              "field": "channel",
+              "operator": "equals",
+              "value": "APPLE_PAY_POS"
+            },
+            {
+              "field": "currency",
+              "operator": "equals",
+              "value": "AED"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "SC_WALLET"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-sc-online",
+    "name": "SC online bucket",
+    "stage": "CASHBACK",
+    "priority": 30,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "SC_PLATINUM_X"
+            },
+            {
+              "field": "channel",
+              "operator": "equals",
+              "value": "ONLINE"
+            },
+            {
+              "field": "currency",
+              "operator": "equals",
+              "value": "AED"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "SC_ONLINE"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "cashback-ei-amazon",
+    "name": "EI Amazon bucket",
+    "stage": "CASHBACK",
+    "priority": 10,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "card",
+              "operator": "equals",
+              "value": "EI_AMAZON"
+            },
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "Amazon"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "reward_bucket",
+        "value": "EI_AMAZON"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": [
+      "FULL_LEDGER",
+      "LIVE_CASHBACK"
+    ]
+  }
+]

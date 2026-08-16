@@ -21,6 +21,10 @@ class Transaction:
     card: str
     merchant_raw: str
     amount_aed: Decimal
+    account: str | None = None
+    owner: str | None = None
+    institution: str | None = None
+    account_last4: str | None = None
     currency: str = "AED"
     amount_original: Decimal | None = None
     channel: str = "UNKNOWN"
@@ -36,6 +40,9 @@ class Transaction:
     evidence_status: str = "NOT_REQUESTED"
     review_required: bool = False
     is_refund: bool = False
+    is_subscription: bool = False
+    property_code: str | None = None
+    rental_unit: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -82,6 +89,10 @@ class Transaction:
             "card": self.card,
             "merchant_raw": self.merchant_raw,
             "amount_aed": str(self.amount_aed),
+            "account": self.account,
+            "owner": self.owner,
+            "institution": self.institution,
+            "account_last4": self.account_last4,
             "currency": self.currency,
             "amount_original": None if self.amount_original is None else str(self.amount_original),
             "channel": self.channel,
@@ -97,6 +108,8 @@ class Transaction:
             "evidence_status": self.evidence_status,
             "review_required": self.review_required,
             "is_refund": self.is_refund,
+            "is_subscription": self.is_subscription,
+            "property_code": self.property_code,
+            "rental_unit": self.rental_unit,
             "metadata": self.metadata,
         }
-

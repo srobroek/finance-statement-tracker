@@ -2,13 +2,15 @@
 
 ## Objective
 
-Maintain a portable, Notion-first finance tracker. Notion owns business configuration and durable state; Python supplies deterministic execution that Notion cannot perform natively.
+Maintain a portable Actual-first finance tracker with a dedicated live cashback companion. Actual owns the authoritative ledger and budgeting model; the companion owns provisional routing state and deterministic calculations.
 
 ## Sources of truth
 
-- Transactions, categories, vendors, rules, AI policies, evidence metadata, card programmes, period summaries, recommendations, alerts, and cursors: Notion.
-- Receipts, bills, warranties, statements, and extracted documents: OneDrive, linked from Notion.
-- Python: behaviour only. Do not hard-code user categories, vendors, or classification rules.
+- Posted transactions, accounts, payees, categories, budgets, schedules, and ordinary reports: Actual Budget in the target POC.
+- Provisional cashback events, period state, recommendations, alerts, acknowledgements, and ingestion cursors: the cashback companion SQLite store.
+- Card programmes, live rule-set membership, ingestion settings, AI policies, and deployable schema: versioned repository configuration until a dedicated admin UI replaces it.
+- Receipts, bills, warranties, statements, and extracted documents: OneDrive, indexed by `Finance Evidence/catalogue.json`.
+- Python and TypeScript: deterministic behaviour and adapters only. Do not hard-code user categories, vendors, or classification rules in executable code.
 - Card programme seed data is a POC assumption and must be verified/versioned before production use.
 
 ## Execution order
@@ -19,7 +21,7 @@ Maintain a portable, Notion-first finance tracker. Notion owns business configur
 4. Run scoped AI policies only for unresolved fields.
 5. Calculate cashback and routing deterministically.
 6. Search and link supporting email/documents when requested by evidence policy.
-7. Persist results and a decision trace in Notion.
+7. Persist authoritative rows to Actual, live operational state to the companion, and evidence links to the OneDrive catalogue.
 
 Individual transactions are the live, provisional cashback source. Recalculate pace, bucket headroom, warnings, and routing recommendations without waiting for a statement, but never mark `Cashback Finalized` from live notifications alone.
 
@@ -34,7 +36,7 @@ Manual overrides always win. Never let an AI stage modify locked fields, transac
 - Blank condition groups are invalid.
 - `stop_on_match` stops later rules in the same stage only; later stages still run.
 - Rule priority is ascending: 10 runs before 20.
-- The Notion condition/action databases are the authoring UI. `finance_tracker.rules` is the canonical evaluator.
+- Canonical rule JSON is the portable authoring/compile contract and `finance_tracker.rules` is the evaluator. Actual receives only rules it can represent without semantic loss. `rule_sets` identify scoped subsets such as `LIVE_CASHBACK`.
 
 ## Documents
 
@@ -42,9 +44,7 @@ Archive under `Finance Evidence/YYYY/MM/vendor-slug/` with filenames:
 
 `YYYY-MM-DD__document-type__vendor__currency-amount__reference__hash8.ext`
 
-Keep the hierarchy shallow. Store property/unit, category, warranty expiry, message ID, and transaction relation as Notion metadata.
-
-`config/notion_manifest.json` contains workspace object IDs only; it contains no API secret. Update it when a database is replaced or the schema version changes.
+Keep the hierarchy shallow. Store property/unit, category, warranty expiry, message ID, transaction identity, and evidence links in the catalogue and relevant ledger/companion records.
 
 ## Verification
 
