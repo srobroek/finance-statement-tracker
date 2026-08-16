@@ -115,12 +115,19 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          printf '%s' "$GHCR_TOKEN" | sudo docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          auth_file=/root/.config/containers/finance-ghcr-auth.json
+          sudo mkdir -p "$(dirname "$auth_file")"
+          printf '%s' "$GHCR_TOKEN" | sudo podman login \
+            --authfile "$auth_file" \
+            ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+          sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
           sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
           cd /opt/stacks/finance-actual-poc
-          sudo docker compose pull cashback-control
-          sudo docker compose up -d --no-deps cashback-control
-          sudo docker logout ghcr.io
+          sudo docker compose up -d --no-deps --pull never cashback-control
+          sudo podman logout --authfile "$auth_file" ghcr.io
+          sudo rm -f "$auth_file"
 
       - name: Verify live deployment
         shell: bash
