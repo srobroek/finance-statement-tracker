@@ -34,10 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -88,3 +88,54 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on:
+      - self-hosted
+      - finance-ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Back up cashback state and Dockge configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          sudo docker exec finance-cashback-control python -c \
+            "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
+          sudo cp /opt/stacks/finance-actual-poc/compose.yaml \
+            "/opt/stacks/finance-actual-poc/compose.yaml.pre-${stamp}"
+
+      - name: Authenticate and pull tested image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | sudo docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
+          cd /opt/stacks/finance-actual-poc
+          sudo docker compose pull cashback-control
+          sudo docker compose up -d --no-deps cashback-control
+          sudo docker logout ghcr.io
+
+      - name: Verify live deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 cashback-control
+              exit 1
+            fi
+            sleep 2
+          done
+          image="$(sudo docker inspect finance-cashback-control --format '{{.Config.Image}}')"
+          test "$image" = "$IMAGE_NAME:main"
+          curl -fsS http://127.0.0.1:5010/api/dashboard >/dev/null

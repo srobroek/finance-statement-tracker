@@ -27,6 +27,13 @@ file; `docker compose config` is the reproducible rendered form.
 The GHCR package inherits the repository's visibility. If it is private, log
 the container host in to `ghcr.io` once with a token that has `read:packages`.
 
+Production deployment is performed by the `deploy` job on the dedicated
+`finance-ci` self-hosted runner after the test and publish jobs succeed. The job
+uses its short-lived GitHub workflow token, creates a consistent SQLite backup,
+updates the Dockge compose source, pulls the tested `main` image, recreates only
+the cashback service, logs out of GHCR, and verifies the live health and
+dashboard endpoints. No long-lived registry credential is stored on the host.
+
 Deploy and verify:
 
 ```bash
