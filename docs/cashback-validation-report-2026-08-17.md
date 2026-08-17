@@ -10,7 +10,8 @@ Overall result: **PASS**
 
 ## Executive result
 
-- Python regression suite: **165/165 passed** in the final run.
+- Python regression suite: **167/167 passed** in the final run.
+- Actual bridge JavaScript suite: **10/10 passed**, including the offline idempotency integration.
 - Focused routing matrix: **8/8 passed**.
 - Live isolated API and browser scenarios: **13/13 passed**.
 - JavaScript syntax, Python compilation, JSON parsing, whitespace, and live health checks: **8/8 passed**.
@@ -19,6 +20,9 @@ Overall result: **PASS**
 - Production UI labels render as `RAK World`, `SC Platinum X`, and `EI Amazon` without clipping at 430 px or 370 px widths.
 - The exact Outlook Emirates Islamic statements for the June and July periods passed parsing, balance checks, constrained Sol enrichment, Actual preflight, commit verification, and idempotent replay.
 - A quiesced production backup completed with a valid checksum and contained Actual, cashback, ingestion, and secret-free configuration payloads; all three application health endpoints returned HTTP 200 afterward.
+- The production dashboard rebuilds its time-sensitive state every 60 seconds without requiring an ingest event.
+- A production-equivalent stale-feed push reached both registered endpoints, and the host watchdog recovered a deliberately stopped cashback container without disturbing Actual or ingestion.
+- The 18:05 Dubai hourly run committed its cursor exactly to `2026-08-17T14:07:37.571291Z`, scanned 4 RAKBANK messages, accepted 3 provisional purchases, and inserted the new AED 6.00 GMG purchase.
 
 ## Production pipeline validation
 
@@ -35,6 +39,10 @@ Overall result: **PASS**
 | Older real statement | PASS | The June-period statement tied at AED 0.00; 15/15 scoped channel proposals were accepted; 18 transactions were committed and verified with 0 duplicates. Its already-past 2026-07-25 reminder was safely skipped. |
 | Placeholder fail-closed | PASS | Outlook contains no recurring RAKBANK or Standard Chartered monthly statement yet. RAKBANK has only a key-facts document, so both statement adapters remain non-importing placeholders. |
 | Production backup | PASS | Backup `20260817T131913Z` passed `sha256sum -c`; the archive includes `actual-data`, `cashback-data`, `ingestion-data`, and `configuration`. The timer is enabled and active. |
+| Container-side refresh | PASS | Production dashboard `generated_at` advanced by exactly 60 seconds with no ingest or user mutation, proving periodic pace, close-window, and stale-feed recalculation. |
+| Stale-feed push | PASS | An isolated copy of production state triggered the native stale-feed candidate and sent it to both registered production push endpoints; production state was not modified. |
+| Host watchdog recovery | PASS | The cashback container was deliberately stopped; the five-minute watchdog detected the failed health probe, restarted only that service, and verified recovery in 2 seconds. Actual and ingestion remained HTTP 200. |
+| Latest hourly ingestion | PASS | Durable production state records cursor `2026-08-17T14:07:37.571291+00:00`, 4 scanned messages, and 3 accepted provisional transactions. Actual was not written and no period was finalized. |
 
 ## Live isolated scenario results
 
@@ -89,7 +97,7 @@ Command:
 python -m unittest discover -s tests -v
 ```
 
-Result: **165 tests passed; 0 failed; 0 errors; 0 skipped.**
+Result: **167 tests passed; 0 failed; 0 errors; 0 skipped.**
 
 ### `test_actual_pipeline` — 13/13 PASS
 
@@ -292,6 +300,14 @@ Result: **165 tests passed; 0 failed; 0 errors; 0 skipped.**
 | Parse `config/static-rules.seed.json` | PASS |
 | Isolated `/api/health` | PASS (`ok`) |
 | Isolated dashboard rebuild after all scenarios | PASS |
+| Linux CI reproduction on the deployment host | PASS: 167 Python tests, 10 JavaScript tests, Actual offline integration, cashback image build, and four fictional programme profiles |
+| Production service watchdog | PASS: unhealthy cashback service recovered and verified without restarting Actual or ingestion |
+
+## Continuous delivery status
+
+Commit `5e0dc45` was pushed to `main`. Both GitHub Actions workflows started during a GitHub-wide incident affecting Actions, API requests, and webhooks and therefore did not publish their images. The exact commit was independently reproduced on the Linux deployment host, then deployed with `--pull never` from the locally built image. Production validation above is therefore tied to the committed source even though registry publication remains pending until GitHub recovers.
+
+This is an external CI availability issue, not a failed application test. Re-run both workflow-dispatch jobs after GitHub reports Actions operational.
 
 ## What is verified by this run
 
@@ -309,11 +325,11 @@ Result: **165 tests passed; 0 failed; 0 errors; 0 skipped.**
 1. Card-programme terms are still tentative POC configuration. Issuer terms must be verified and versioned before production routing is treated as financial advice.
 2. SC filler assumes eligible non-reward spend counts toward the monthly tier threshold. Confirm this with the card terms.
 3. RAK enhanced reward treatment and any retroactive tier behaviour must be confirmed against the live programme terms.
-4. The live scenario uses synthetic normalized events. Each real sender/subject/body format still needs a captured fixture and parser test.
+4. RAKBANK live notification parsing is now proven with real mailbox messages, including overlap replay and a new AED 6.00 GMG purchase. Other real sender/subject/body formats still require captured fixtures and parser tests.
 5. Notification totals can differ from statements because of reversals, FX settlement, tips, fees, and delayed postings. The UI correctly labels the live ledger provisional.
 6. Real EI statement ingestion and Actual verification are proven, but its July period predates the configured cashback programme's effective date. It was therefore not back-applied or used to invent companion history.
 7. The deployed public cashback hostname was visually verified at 430 px and 370 px widths with no routing-label clipping.
 
 ## Deployment recommendation
 
-The isolated POC passed user review. Promotion should use the tested GHCR image and preserve the existing cashback-data volume. Card-programme assumptions remain tentative until issuer terms are verified.
+The validated commit is already live and preserves the existing cashback-data volume. Once GitHub Actions recovers, re-run both image workflows and let the normal independent Compose deployments replace the locally reproduced image. Card-programme assumptions remain tentative until issuer terms are verified.
