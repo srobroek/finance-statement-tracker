@@ -90,7 +90,7 @@
     {
       "card": "RAK_WORLD",
       "name": "RAKBANK World",
-      "short_name": "RAK",
+      "short_name": "RAK World",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
@@ -118,7 +118,7 @@
     {
       "card": "SC_PLATINUM_X",
       "name": "Standard Chartered Platinum X",
-      "short_name": "SC",
+      "short_name": "SC Platinum X",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
@@ -147,7 +147,7 @@
     {
       "card": "EI_AMAZON",
       "name": "Emirates Islamic Amazon",
-      "short_name": "Amazon",
+      "short_name": "EI Amazon",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
