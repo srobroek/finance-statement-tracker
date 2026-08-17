@@ -6,7 +6,11 @@ from pathlib import Path
 
 from reportlab.pdfgen import canvas
 
-from finance_tracker.ingestion_jobs import IngestionJobRunner, compact_ai_handoff
+from finance_tracker.ingestion_jobs import (
+    IngestionJobRunner,
+    compact_ai_handoff,
+    normalize_evidence_links,
+)
 
 
 EI_LINES = (
@@ -176,7 +180,7 @@ class IngestionJobTests(unittest.TestCase):
         replay = self.runner.submit(request)
 
         self.assertTrue(replay["idempotent_replay"])
-        self.assertEqual(replay["result_schema_version"], 3)
+        self.assertEqual(replay["result_schema_version"], 4)
         self.assertEqual(
             len(replay["ai_handoff"]["requests"]), replay["ai_request_count"]
         )
@@ -204,8 +208,91 @@ class IngestionJobTests(unittest.TestCase):
         replay = self.runner.submit(request)
 
         self.assertTrue(replay["idempotent_replay"])
-        self.assertEqual(replay["result_schema_version"], 3)
+        self.assertEqual(replay["result_schema_version"], 4)
         self.assertEqual(replay["ai_handoff"]["schema_version"], 2)
+
+    def test_evidence_link_is_validated_and_written_to_actual_notes(self) -> None:
+        pdf = self.runner.inbox / "evidence-link-ei.pdf"
+        write_ei_pdf(pdf)
+        base_request = {
+            "type": "STATEMENT_PDF",
+            "source_path": pdf.name,
+            "card_code": "EI_AMAZON",
+            "actual_mode": "STAGE",
+            "source_message_id": "evidence-link-message",
+        }
+        staged = self.runner.submit(base_request)
+        staged_manifest = json.loads(
+            Path(staged["manifest_path"]).read_text(encoding="utf-8")
+        )
+        transaction_id = staged_manifest["envelopes"][0]["records"][0]["imported_id"]
+        relative_path = (
+            "Finance Evidence/2026/07/example/"
+            "2026-07-02__receipt__example__aed-100.00__ref__01234567.pdf"
+        )
+
+        linked = self.runner.submit(
+            {
+                **base_request,
+                "evidence_links": [
+                    {
+                        "transaction_id": transaction_id,
+                        "evidence_id": "sha256:" + "a" * 64,
+                        "relative_path": relative_path,
+                        "document_type": "receipt",
+                    }
+                ],
+            }
+        )
+
+        linked_manifest = json.loads(
+            Path(linked["manifest_path"]).read_text(encoding="utf-8")
+        )
+        record = next(
+            record
+            for envelope in linked_manifest["envelopes"]
+            for record in envelope["records"]
+            if record["imported_id"] == transaction_id
+        )
+        self.assertEqual(linked["evidence_link_count"], 1)
+        self.assertIn(f"evidence:{relative_path}", record["notes"])
+        self.assertEqual(linked_manifest["evidence_links"][0]["transaction_id"], transaction_id)
+
+    def test_evidence_link_cannot_target_an_unstaged_transaction(self) -> None:
+        pdf = self.runner.inbox / "bad-evidence-link-ei.pdf"
+        write_ei_pdf(pdf)
+        with self.assertRaisesRegex(ValueError, "does not match a staged transaction"):
+            self.runner.submit(
+                {
+                    "type": "STATEMENT_PDF",
+                    "source_path": pdf.name,
+                    "card_code": "EI_AMAZON",
+                    "actual_mode": "STAGE",
+                    "source_message_id": "bad-evidence-link-message",
+                    "evidence_links": [
+                        {
+                            "transaction_id": "not-in-the-statement",
+                            "evidence_id": "sha256:" + "b" * 64,
+                            "relative_path": (
+                                "Finance Evidence/2026/07/example/"
+                                "2026-07-02__receipt__example__aed-1.00__ref__89abcdef.pdf"
+                            ),
+                        }
+                    ],
+                }
+            )
+
+    def test_evidence_link_rejects_path_traversal(self) -> None:
+        with self.assertRaisesRegex(ValueError, "safe Finance Evidence path"):
+            normalize_evidence_links(
+                [
+                    {
+                        "transaction_id": "tx-1",
+                        "evidence_id": "sha256:" + "c" * 64,
+                        "relative_path": "Finance Evidence/2026/07/../secret.pdf",
+                    }
+                ]
+            )
 
     def test_compact_ai_handoff_deduplicates_policy_and_transaction_context(self) -> None:
         transaction_one = {"transaction_id": "tx-1", "merchant_raw": "Example"}
@@ -334,6 +421,45 @@ class IngestionJobTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "STAGED")
         self.assertGreaterEqual(result["envelope_count"], 1)
+
+    def test_browser_capture_evidence_link_updates_portable_transaction(self) -> None:
+        source = self.runner.inbox / "browser-capture-evidence.json"
+        shutil.copyfile(Path("tests/fixtures/browser-capture.sample.json"), source)
+        request = {
+            "type": "BROWSER_CAPTURE",
+            "source_path": source.name,
+            "actual_mode": "STAGE",
+        }
+        staged = self.runner.submit(request)
+        manifest = json.loads(Path(staged["manifest_path"]).read_text(encoding="utf-8"))
+        transaction_id = manifest["transactions"][0]["transaction_id"]
+
+        linked = self.runner.submit(
+            {
+                **request,
+                "evidence_links": [
+                    {
+                        "transaction_id": transaction_id,
+                        "evidence_id": "sha256:" + "d" * 64,
+                        "relative_path": (
+                            "Finance Evidence/2026/08/example/"
+                            "2026-08-10__warranty__example__aed-10.00__ref__deadbeef.pdf"
+                        ),
+                    }
+                ],
+            }
+        )
+
+        linked_manifest = json.loads(
+            Path(linked["manifest_path"]).read_text(encoding="utf-8")
+        )
+        transaction = next(
+            row
+            for row in linked_manifest["transactions"]
+            if row["transaction_id"] == transaction_id
+        )
+        self.assertEqual(transaction["evidence_status"], "LINKED")
+        self.assertEqual(len(transaction["metadata"]["evidence_links"]), 1)
 
     def test_source_path_cannot_escape_inbox(self) -> None:
         with self.assertRaisesRegex(ValueError, "escapes"):

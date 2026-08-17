@@ -16,6 +16,7 @@ param(
     [string]$SourceAttachmentId,
     [string]$SourceKind,
     [string]$AIResponsesPath,
+    [string]$EvidenceLinksPath,
     [switch]$AIHandoffComplete,
     [string]$PasswordEnv,
     [string]$DeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.json'),
@@ -109,6 +110,15 @@ if ($AIResponsesPath) {
     }
     $aiResponses = @($rawAIResponses | ConvertFrom-Json)
     $job.ai_responses = @($aiResponses)
+}
+if ($EvidenceLinksPath) {
+    $resolvedEvidenceLinks = (Resolve-Path -LiteralPath $EvidenceLinksPath).Path
+    $rawEvidenceLinks = Get-Content -Raw -LiteralPath $resolvedEvidenceLinks
+    if (-not $rawEvidenceLinks.TrimStart().StartsWith('[')) {
+        throw 'EvidenceLinksPath must contain one JSON array'
+    }
+    $evidenceLinks = @($rawEvidenceLinks | ConvertFrom-Json)
+    $job.evidence_links = @($evidenceLinks)
 }
 $payload = $job | ConvertTo-Json -Depth 20 -Compress
 $remoteCommand = "sudo docker exec -i $containerName python3 /app/apps/actual-ingestion/submit_local.py"

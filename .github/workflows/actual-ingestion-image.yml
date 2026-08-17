@@ -281,6 +281,33 @@ jobs:
           replay_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"idempotent_replay": true' <<<"$replay_result"
 
+          evidence_request="$(python3 -c '
+          import json, sys
+          result = json.load(sys.stdin)
+          transaction_id = result["ai_handoff"]["requests"][0]["transaction_id"]
+          print(json.dumps({
+              "type": "STATEMENT_PDF",
+              "actual_mode": "STAGE",
+              "source_path": "ci-synthetic-ei.pdf",
+              "card_code": "EI_AMAZON",
+              "source_message_id": "ci-outlook-message",
+              "source_attachment_id": "ci-outlook-attachment",
+              "source_filename": "EI statement July 2026.pdf",
+              "evidence_links": [{
+                  "transaction_id": transaction_id,
+                  "evidence_id": "sha256:" + "e" * 64,
+                  "relative_path": "Finance Evidence/2099/01/ci/ci-evidence.txt",
+                  "document_type": "receipt",
+              }],
+          }))
+          ' <<<"$statement_result")"
+          evidence_result="$(printf '%s' "$evidence_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"evidence_link_count": 1' <<<"$evidence_result"
+          grep -q '"result_schema_version": 4' <<<"$evidence_result"
+          evidence_manifest="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["manifest_path"])' <<<"$evidence_result")"
+          sudo docker exec finance-actual-ingestion \
+            grep -Fq 'evidence:Finance Evidence/2099/01/ci/ci-evidence.txt' "$evidence_manifest"
+
           browser_request='{"type":"BROWSER_CAPTURE","actual_mode":"STAGE","source_path":"ci-browser-capture.json"}'
           browser_result="$(printf '%s' "$browser_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"status": "STAGED"' <<<"$browser_result"

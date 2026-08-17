@@ -138,8 +138,9 @@ The command performs these gates:
 6. Prove statement arithmetic ties.
 7. Map card suffixes to configured Actual accounts.
 8. Apply deterministic rules and write an evidence-linked manifest.
-9. Return constrained `ai_requests` for unresolved derived fields. A Sol task
-   may submit proposal JSON using `-AIResponsesPath`; the policy engine rejects
+9. Return a compact, constrained `ai_handoff` for unresolved derived fields. A
+   Sol task resolves each request's `policy_id` and `transaction_ref`, then may
+   submit proposal JSON using `-AIResponsesPath`; the policy engine rejects
    protected fields, populated values, disallowed values/tags, and low
    confidence proposals before rebuilding the envelopes.
 10. Contact Actual only for PREFLIGHT or COMMIT.
@@ -168,6 +169,46 @@ Unknown transaction/policy pairs fail the job. A submission marked
 transaction/policy request; the response may deliberately contain an empty
 proposal list when evidence is insufficient. Accepted responses are recorded
 in `ai_trace` and flow into the Actual import envelopes.
+
+Matched receipts, bills, warranties, and other purchase documents are an
+explicit pre-commit handoff as well. `purchase-evidence-archive` returns the
+content hash, portable relative path, and linked transaction IDs. Convert each
+confirmed transaction/document pair into one array row:
+
+```json
+[
+  {
+    "transaction_id": "statement:adapter:stable-id",
+    "evidence_id": "sha256:<64-lowercase-hex-characters>",
+    "relative_path": "Finance Evidence/2026/07/vendor/document.pdf",
+    "document_type": "receipt",
+    "message_id": "<exact-outlook-message-id>"
+  }
+]
+```
+
+The worker rejects unsafe paths, malformed hashes, duplicate links, and links
+to transactions outside the staged batch. A valid link is retained in the
+manifest and added to the intended Actual transaction note. Submit the final
+STAGE, PREFLIGHT, and COMMIT with the same complete AI and evidence artifacts:
+
+```powershell
+.\scripts\push-actual-ingestion-job.ps1 `
+  -InputPath 'C:\path\statement.pdf' `
+  -Type STATEMENT_PDF `
+  -CardCode EI_AMAZON `
+  -SourceMessageId '<exact-outlook-message-id>' `
+  -SourceAttachmentId '<exact-outlook-attachment-id>' `
+  -AIResponsesPath '.\runtime\statement-ai-responses.json' `
+  -AIHandoffComplete `
+  -EvidenceLinksPath '.\runtime\statement-evidence-links.json' `
+  -ActualMode PREFLIGHT
+```
+
+Use the identical arguments with `-ActualMode COMMIT` only after PREFLIGHT and
+the owner-independent deterministic gates pass. Evidence must be linked before
+the first commit; replay deduplication deliberately prevents a later import from
+silently rewriting an existing transaction.
 
 ## Browser ingestion
 

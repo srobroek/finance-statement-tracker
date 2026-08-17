@@ -34,3 +34,9 @@ and rebuilds the manifest. The container never calls a model itself.
 Durable idempotent results are schema-upgraded from their retained audit
 manifest, so response-contract changes do not require changing source identity
 or weakening duplicate protection.
+
+`-EvidenceLinksPath` accepts the validated transaction-to-catalogue handoff
+created after selective Outlook evidence matching. Links must use a safe
+`Finance Evidence/...` relative path and a `sha256:` identity, must target a
+transaction in the staged batch, and are written into that transaction's Actual
+note before its first commit.

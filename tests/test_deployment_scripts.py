@@ -8,6 +8,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("install -o 10002 -g 10002 -m 0600", script)
         self.assertNotIn("install -m 0600 '$remoteTemporary'", script)
         self.assertIn("source_message_id = $SourceMessageId", script)
+        self.assertIn("[string]$EvidenceLinksPath", script)
+        self.assertIn("$job.evidence_links = @($evidenceLinks)", script)
         self.assertIn("source_attachment_id = $SourceAttachmentId", script)
         self.assertIn("source_filename = [IO.Path]::GetFileName($resolvedInput)", script)
         self.assertIn("$job.ai_responses = @($aiResponses)", script)

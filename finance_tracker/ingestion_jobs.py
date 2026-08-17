@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .actual_pipeline import export_statement_for_actual
@@ -19,7 +20,8 @@ from .statement_sources import load_statement_sources, require_active_statement_
 JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
 ACTUAL_MODES = frozenset({"STAGE", "PREFLIGHT", "COMMIT"})
 AI_HANDOFF_SCHEMA_VERSION = 2
-RESULT_SCHEMA_VERSION = 3
+RESULT_SCHEMA_VERSION = 4
+EVIDENCE_ID_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
@@ -99,6 +101,60 @@ def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def normalize_evidence_links(raw_links: Any) -> list[dict[str, Any]]:
+    """Validate and canonicalize portable catalogue links for Actual notes."""
+    if raw_links in (None, []):
+        return []
+    if not isinstance(raw_links, list) or any(
+        not isinstance(link, dict) for link in raw_links
+    ):
+        raise ValueError("evidence_links must be a list of objects")
+    normalized: list[dict[str, Any]] = []
+    identities: set[tuple[str, str]] = set()
+    for link in raw_links:
+        transaction_id = str(link.get("transaction_id") or "").strip()
+        evidence_id = str(link.get("evidence_id") or "").strip().casefold()
+        relative_path = str(link.get("relative_path") or "").strip()
+        if not transaction_id or not EVIDENCE_ID_PATTERN.fullmatch(evidence_id):
+            raise ValueError(
+                "Every evidence link requires transaction_id and sha256 evidence_id"
+            )
+        path = PurePosixPath(relative_path)
+        if (
+            path.is_absolute()
+            or not path.parts
+            or path.parts[0] != "Finance Evidence"
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or "|" in relative_path
+            or any(character in relative_path for character in "\r\n\t")
+        ):
+            raise ValueError(
+                "Evidence relative_path must be a safe Finance Evidence path"
+            )
+        identity = (transaction_id, evidence_id)
+        if identity in identities:
+            raise ValueError(
+                f"Duplicate evidence link for transaction {transaction_id}: {evidence_id}"
+            )
+        identities.add(identity)
+        item: dict[str, Any] = {
+            "transaction_id": transaction_id,
+            "evidence_id": evidence_id,
+            "relative_path": path.as_posix(),
+        }
+        for field in ("document_type", "reference", "message_id"):
+            value = str(link.get(field) or "").strip()
+            if value:
+                if len(value) > 500 or any(character in value for character in "\r\n\t"):
+                    raise ValueError(f"Evidence {field} is unsafe or too long")
+                item[field] = value
+        normalized.append(item)
+    return sorted(
+        normalized,
+        key=lambda item: (item["transaction_id"], item["evidence_id"]),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class IngestionJobResult:
     job_id: str
@@ -169,6 +225,18 @@ class IngestionJobRunner:
     def _upgrade_result(result: dict[str, Any], manifest: Path) -> dict[str, Any]:
         """Upgrade durable results without changing their idempotency identity."""
         upgraded = dict(result)
+        manifest_payload: dict[str, Any] | None = None
+
+        def read_manifest() -> dict[str, Any]:
+            nonlocal manifest_payload
+            if manifest_payload is None:
+                manifest_payload = (
+                    json.loads(manifest.read_text(encoding="utf-8"))
+                    if manifest.is_file()
+                    else {}
+                )
+            return manifest_payload
+
         handoff = upgraded.get("ai_handoff")
         if (
             not isinstance(handoff, dict)
@@ -177,8 +245,7 @@ class IngestionJobRunner:
             ai_request_count = int(upgraded.get("ai_request_count") or 0)
             ai_requests: list[dict[str, Any]] = []
             if manifest.is_file():
-                manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
-                raw_requests = manifest_payload.get("ai_requests") or []
+                raw_requests = read_manifest().get("ai_requests") or []
                 if not isinstance(raw_requests, list) or any(
                     not isinstance(request, dict) for request in raw_requests
                 ):
@@ -191,8 +258,52 @@ class IngestionJobRunner:
                 )
             upgraded["ai_handoff"] = compact_ai_handoff(ai_requests)
         upgraded.setdefault("ai_handoff_complete", False)
+        upgraded["evidence_link_count"] = len(read_manifest().get("evidence_links") or [])
         upgraded["result_schema_version"] = RESULT_SCHEMA_VERSION
         return upgraded
+
+    @staticmethod
+    def _attach_evidence_links(manifest: Path, links: list[dict[str, Any]]) -> int:
+        if not links:
+            return 0
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        records: dict[str, dict[str, Any]] = {}
+        for envelope in payload.get("envelopes") or []:
+            for record in envelope.get("records") or []:
+                transaction_id = str(record.get("imported_id") or "").strip()
+                if not transaction_id:
+                    continue
+                if transaction_id in records:
+                    raise ValueError(
+                        f"Manifest contains duplicate imported_id: {transaction_id}"
+                    )
+                records[transaction_id] = record
+        transaction_rows = {
+            str(row.get("transaction_id") or ""): row
+            for row in payload.get("transactions") or []
+            if isinstance(row, dict)
+        }
+        for link in links:
+            transaction_id = link["transaction_id"]
+            record = records.get(transaction_id)
+            if record is None:
+                raise ValueError(
+                    f"Evidence link does not match a staged transaction: {transaction_id}"
+                )
+            token = f"evidence:{link['relative_path']}"
+            notes = str(record.get("notes") or "")
+            note_parts = [part.strip() for part in notes.split("|") if part.strip()]
+            if token not in note_parts:
+                note_parts.append(token)
+            record["notes"] = " | ".join(note_parts)
+            transaction_row = transaction_rows.get(transaction_id)
+            if transaction_row is not None:
+                transaction_row["evidence_status"] = "LINKED"
+                metadata = transaction_row.setdefault("metadata", {})
+                metadata.setdefault("evidence_links", []).append(dict(link))
+        payload["evidence_links"] = links
+        manifest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return len(links)
 
     @staticmethod
     def _ai_handoff(
@@ -391,6 +502,10 @@ class IngestionJobRunner:
         normalized_request = dict(request)
         normalized_request["type"] = job_type
         normalized_request["actual_mode"] = actual_mode
+        if "evidence_links" in normalized_request:
+            normalized_request["evidence_links"] = normalize_evidence_links(
+                normalized_request.get("evidence_links")
+            )
         source = self._source(normalized_request.get("source_path"))
         source_sha256 = self._sha256(source)
         job_id = self._identity(normalized_request, source_sha256)
@@ -412,6 +527,11 @@ class IngestionJobRunner:
             staged = self._stage_browser_capture(normalized_request, source, manifest)
         else:
             staged = self._stage_browser_export(normalized_request, source, job_root, manifest)
+
+        evidence_link_count = self._attach_evidence_links(
+            manifest,
+            list(normalized_request.get("evidence_links") or []),
+        )
 
         ai_request_count = int(staged.get("ai_request_count") or 0)
         ai_handoff_complete = bool(normalized_request.get("ai_handoff_complete"))
@@ -462,6 +582,7 @@ class IngestionJobRunner:
         )
         result["ai_handoff"] = compact_ai_handoff(list(staged.get("ai_requests") or []))
         result["ai_handoff_complete"] = ai_handoff_complete
+        result["evidence_link_count"] = evidence_link_count
         result["result_schema_version"] = RESULT_SCHEMA_VERSION
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
