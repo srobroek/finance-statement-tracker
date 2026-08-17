@@ -7,6 +7,9 @@ Type=oneshot
 ExecStart=/opt/stacks/finance-actual-poc/backup.sh
 User=root
 Group=root
+# Podman may launch a replacement conmon while unpausing a container. That
+# monitor belongs to the independent application container, not this one-shot.
+KillMode=process
 TimeoutStopSec=30s
 
 [Install]

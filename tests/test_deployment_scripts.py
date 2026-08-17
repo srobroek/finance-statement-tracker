@@ -39,6 +39,9 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertNotIn('sha256sum "${working}/finance-data.tar.gz"', script)
         self.assertIn("sha256sum -c SHA256SUMS", script)
 
+        service = Path("deploy/actual-poc/finance-backup.service").read_text(encoding="utf-8")
+        self.assertIn("KillMode=process", service)
+
 
 if __name__ == "__main__":
     unittest.main()

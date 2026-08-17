@@ -21,7 +21,10 @@ tar -tzf finance-data.tar.gz | head
 Pause/unpause is intentional on the Podman-backed host: restarting a container
 from a one-shot systemd service can attach its `conmon` process to the backup
 unit's cgroup. Quiescing avoids that lifecycle coupling while preserving a
-stable, flushable snapshot boundary.
+stable, flushable snapshot boundary. Podman can still replace `conmon` while
+unpausing, so the systemd unit uses `KillMode=process`; systemd supervises the
+backup script but does not terminate the independent container monitor when the
+one-shot completes.
 
 ## Restore
 
