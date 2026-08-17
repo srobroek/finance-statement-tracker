@@ -247,6 +247,10 @@ def notification_candidates(
     previous_routing_json: str | None,
 ) -> tuple[list[PushCandidate], str]:
     cards = {str(card["card"]): card for card in dashboard.get("cards") or []}
+    card_names = {
+        code: str(card.get("short_name") or card.get("name") or code.replace("_", " ").title())
+        for code, card in cards.items()
+    }
     acknowledged = set((dashboard.get("data_status") or {}).get("acknowledged_alerts") or [])
     candidates: list[PushCandidate] = []
     for alert in dashboard.get("alerts") or []:
@@ -276,7 +280,7 @@ def notification_candidates(
     if previous_routing_json and previous_routing_json != routing_json:
         previous = json.loads(previous_routing_json)
         changes = [
-            f"{key.split('|', 1)[0]} → {card.replace('_', ' ').title()}"
+            f"{key.split('|', 1)[0]} → {card_names.get(card, card.replace('_', ' ').title())}"
             for key, card in routing.items()
             if previous.get(key) != card
         ]

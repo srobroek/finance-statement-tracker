@@ -165,8 +165,9 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             poc_programs(),
             rows,
             date(2026, 8, 16),
-            [PaymentIntent("FILLER", money("100"), "AED", "PHYSICAL_POS")],
+            [PaymentIntent("FILLER", money("100"), "AED", "PHYSICAL_POS", conditional=True)],
             routing_profiles=self.cashback_config()["routing_profiles"],
+            route_policies=self.cashback_config()["route_policies"],
         )
 
         self.assertFalse(dashboard["recommendations"][0]["active"])
@@ -181,6 +182,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=profiles,
+            route_policies=self.cashback_config()["route_policies"],
         )
         grocery = next(graph for graph in empty["routing_graphs"] if graph["code"] == "GROCERY")
         self.assertEqual(grocery["ranked_cards"][0]["card"], "RAK_WORLD")
@@ -195,6 +197,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=profiles,
+            route_policies=self.cashback_config()["route_policies"],
         )
         grocery = next(graph for graph in capped["routing_graphs"] if graph["code"] == "GROCERY")
         self.assertEqual(grocery["ranked_cards"][0]["card"], "SC_PLATINUM_X")
@@ -215,6 +218,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=self.cashback_config()["routing_profiles"],
+            route_policies=self.cashback_config()["route_policies"],
         )
 
         grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
@@ -255,6 +259,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=self.cashback_config()["routing_profiles"],
+            route_policies=self.cashback_config()["route_policies"],
         )
 
         grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
@@ -276,6 +281,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=self.cashback_config()["routing_profiles"],
+            route_policies=self.cashback_config()["route_policies"],
         )
 
         grocery = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "GROCERY")
@@ -297,6 +303,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=self.cashback_config()["routing_profiles"],
+            route_policies=self.cashback_config()["route_policies"],
         )
 
         graphs = {graph["code"]: graph for graph in dashboard["routing_graphs"]}

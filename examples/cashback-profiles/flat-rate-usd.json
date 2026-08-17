@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "currency": "USD",
+  "profile": {"name": "Fictional USD Wallet", "locale": "en-US"},
+  "defaults": {
+    "pace": {"basis": "WEEKLY", "routing_basis": "WEEKLY", "week_length_days": 7, "tolerance_percent": "0.05", "minimum_tolerance": "10"},
+    "alerts": {"bucket_near_full_ratio": "0.85", "minimum_risk_after_week": 2, "close_warning_days": 5, "close_critical_days": 2}
+  },
+  "normalization": {
+    "default_purchase_type": "GENERAL",
+    "default_channel": "UNKNOWN",
+    "actual_category_purchase_types": {"Travel": "TRAVEL"},
+    "merchant_purchase_types": [],
+    "merchant_channels": []
+  },
+  "route_policies": {
+    "VALUE": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true},
+      "ranking": {"groups_by_pace": {"*": 0}},
+      "reasons": {"*": "Use the eligible card with the highest configured value and available headroom."}
+    }
+  },
+  "programs": [
+    {
+      "card": "EVERYDAY_2",
+      "name": "Everyday Two",
+      "short_name": "Everyday",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25},
+      "routing_priority": 20,
+      "tiers": [{"code": "FLAT", "minimum_spend": "0", "rates": {"ALL": "0.02"}}],
+      "buckets": [{"code": "ALL", "cashback_cap": null, "assignment": {"fallback": true}}]
+    },
+    {
+      "card": "TRAVEL_4",
+      "name": "Travel Four",
+      "short_name": "Travel",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": 20, "ingest_delay_days": 2},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 21},
+      "routing_priority": 10,
+      "tiers": [{"code": "FLAT", "minimum_spend": "0", "rates": {"TRAVEL": "0.04"}}],
+      "buckets": [{"code": "TRAVEL", "cashback_cap": null, "categories": ["TRAVEL"], "assignment": {"categories": ["TRAVEL"]}}]
+    }
+  ],
+  "payment_intents": [
+    {"category": "GENERAL", "channel": "PHYSICAL_POS", "currency": "USD", "decision_amount": "50"},
+    {"category": "TRAVEL", "channel": "ONLINE", "currency": "USD", "decision_amount": "200"}
+  ],
+  "routing_profiles": [
+    {"code": "GENERAL", "label": "Everyday", "category": "GENERAL", "currency": "USD", "decision_amount": "50", "routes": [{"card": "EVERYDAY_2", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 10}]},
+    {"code": "TRAVEL", "label": "Travel", "category": "TRAVEL", "currency": "USD", "decision_amount": "200", "routes": [{"card": "TRAVEL_4", "channel": "ONLINE", "bucket": "TRAVEL", "purpose": "VALUE", "policy": "VALUE", "priority": 10}, {"card": "EVERYDAY_2", "channel": "ONLINE", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 20}]}
+  ]
+}

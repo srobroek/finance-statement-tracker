@@ -26,6 +26,7 @@ class CashbackRoutingMatrixTests(TestCase):
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
             routing_profiles=self.config["routing_profiles"],
+            route_policies=self.config["route_policies"],
         )
 
     @staticmethod

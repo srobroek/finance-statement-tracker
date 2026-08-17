@@ -30,7 +30,14 @@ from .browser_sources import (
     load_browser_sources,
     validate_source_coverage,
 )
-from .cashback import PaymentIntent, poc_programs, recommend
+from .cashback import (
+    PaymentIntent,
+    load_program_configuration,
+    payment_intents_from_config,
+    poc_programs,
+    programs_from_config,
+    recommend,
+)
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
 from .reports import evaluate_month_close, month_close_markdown
@@ -165,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     cashback_dashboard_parser.add_argument("--snapshot", type=Path, required=True)
     cashback_dashboard_parser.add_argument("--config", type=Path, required=True)
+    cashback_dashboard_parser.add_argument(
+        "--cashback-config",
+        type=Path,
+        default=Path("config/cashback-programs.json"),
+    )
     cashback_dashboard_parser.add_argument("--output", type=Path, required=True)
     cashback_dashboard_parser.add_argument("--as-of", type=date.fromisoformat, default=date.today())
     notification_parser = subparsers.add_parser(
@@ -173,6 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     notification_parser.add_argument("--input", type=Path, required=True)
     notification_parser.add_argument("--config", type=Path, required=True)
+    notification_parser.add_argument(
+        "--cashback-config",
+        type=Path,
+        default=Path("config/cashback-programs.json"),
+    )
     notification_parser.add_argument("--rules", type=Path, required=True)
     notification_parser.add_argument(
         "--notification-sources",
@@ -299,18 +316,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "cashback-dashboard":
         config = load_actual_config(args.config)
+        cashback_config = load_program_configuration(args.cashback_config)
         snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
-        transactions = transactions_from_actual_snapshot(snapshot, config)
-        intents = (
-            PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS"),
-            PaymentIntent("DINING", money("100"), "AED", "PHYSICAL_POS"),
-            PaymentIntent("AMAZON", money("100"), "AED", "ONLINE"),
-            PaymentIntent("GENERAL", money("100"), "AED", "ONLINE"),
-            PaymentIntent("GENERAL", money("100"), "AED", "APPLE_PAY_POS"),
-            PaymentIntent("TRAVEL", money("100"), "AED", "PHYSICAL_POS"),
-            PaymentIntent("GENERAL", money("100"), "USD", "ONLINE"),
+        transactions = transactions_from_actual_snapshot(snapshot, config, cashback_config)
+        result = cashback_dashboard(
+            programs_from_config(cashback_config, args.as_of),
+            transactions,
+            args.as_of,
+            payment_intents_from_config(cashback_config),
+            routing_profiles=cashback_config.get("routing_profiles") or (),
+            route_policies=cashback_config.get("route_policies") or None,
+            base_currency=str(cashback_config.get("currency") or "AED"),
         )
-        result = cashback_dashboard(poc_programs(), transactions, args.as_of, intents)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(args.output)
@@ -341,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
             history_index=(load_history_index(args.history) if args.history else None),
             ai_engine=ai_engine,
             ai_resolver=ai_resolver,
+            cashback_config=load_program_configuration(args.cashback_config),
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(batch.to_dict(), indent=2), encoding="utf-8")

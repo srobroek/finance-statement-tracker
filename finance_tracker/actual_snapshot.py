@@ -3,11 +3,24 @@ from __future__ import annotations
 import re
 import calendar
 from dataclasses import asdict, replace
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Iterable
 
-from .cashback import PaymentIntent, bucket_spend, evaluate_card, pace_status, recommend, reward_total, total_spend
+from .cashback import (
+    PaymentIntent,
+    bucket_spend,
+    channel_from_config,
+    configured_reward_bucket,
+    evaluate_card,
+    load_program_configuration,
+    pace_status,
+    programs_from_config,
+    purchase_type_from_config,
+    recommend,
+    reward_total,
+    total_spend,
+)
 from .models import Transaction
 from .actual_pipeline import account_maps, account_owner_map
 
@@ -24,64 +37,27 @@ def _plain(value: Decimal) -> str:
     return format(value, "f")
 
 
-def _category_code(category: str | None, merchant: str) -> str:
-    if "AMAZON" in merchant.upper():
-        return "AMAZON"
-    mapping = {
-        "Groceries": "GROCERY",
-        "Dining Out": "DINING",
-        "Food Delivery": "DINING",
-        "Flights": "AIRLINE",
-        "Accommodation": "HOTEL",
-        "Travel Transport": "TRAVEL",
-        "Travel Activities": "TRAVEL",
-        "Online Shopping": "GENERAL",
-    }
-    return mapping.get(category or "", "GENERAL")
-
-
-def _channel(tags: set[str], merchant: str) -> str:
-    for tag in tags:
-        if tag.casefold().startswith("channel-"):
-            return tag[8:].replace("-", "_").upper()
-    upper = merchant.upper()
-    if any(token in upper for token in ("AMAZON", "APPLE.COM/BILL", "DEWA", "EMPOWER")):
-        return "ONLINE"
-    return "UNKNOWN"
-
-
-def _reward_bucket(card: str, category: str, channel: str, currency: str, tags: set[str]) -> str | None:
+def _reward_bucket(
+    programs: Iterable[Any],
+    card: str,
+    category: str,
+    channel: str,
+    currency: str,
+    tags: set[str],
+) -> str | None:
     for tag in tags:
         if tag.casefold().startswith("cashback-"):
             return tag[9:].replace("-", "_").upper()
-    if card == "EI_AMAZON" and category == "AMAZON":
-        return "EI_AMAZON"
-    if card == "SC_PLATINUM_X":
-        if currency != "AED":
-            return "SC_FOREIGN"
-        if channel == "APPLE_PAY_POS":
-            return "SC_WALLET"
-        if channel == "ONLINE":
-            return "SC_ONLINE"
-        if channel == "PHYSICAL_POS":
-            return "SC_FILLER"
-    if card == "RAK_WORLD":
-        if category == "GROCERY":
-            return "RAK_GROCERY"
-        if category == "DINING":
-            return "RAK_DINING"
-        if category in {"TRAVEL", "HOTEL", "AIRLINE"}:
-            return "RAK_TRAVEL"
-        if channel == "APPLE_PAY_POS":
-            return "RAK_EWALLET"
-        return "RAK_STANDARD"
-    return None
+    return configured_reward_bucket(programs, card, category, channel, currency)
 
 
 def transactions_from_actual_snapshot(
     snapshot: dict[str, Any],
     config: dict[str, Any],
+    cashback_config: dict[str, Any] | None = None,
 ) -> list[Transaction]:
+    cashback_source = cashback_config or load_program_configuration()
+    programs = programs_from_config(cashback_source)
     _, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
     card_by_account = {name.casefold(): card for card, name in account_by_card.items()}
@@ -101,8 +77,8 @@ def transactions_from_actual_snapshot(
         merchant = str(row.get("imported_payee") or row.get("payee_name") or "Unknown")
         currency_match = _CURRENCY.search(notes)
         currency = currency_match.group(1).upper() if currency_match else "AED"
-        category = _category_code(row.get("category_name"), merchant)
-        channel = _channel(tags, merchant)
+        category = purchase_type_from_config(cashback_source, row.get("category_name"), merchant)
+        channel = channel_from_config(cashback_source, tags, merchant)
         amount_minor = int(row["amount"])
         transfer = bool(row.get("transfer_id"))
         card_payment = row.get("category_name") == "Card Payments" or any(
@@ -131,7 +107,7 @@ def transactions_from_actual_snapshot(
                 category=category,
                 subcategory=row.get("category_name"),
                 transaction_type=transaction_type,
-                reward_bucket=_reward_bucket(card, category, channel, currency, tags),
+                reward_bucket=_reward_bucket(programs, card, category, channel, currency, tags),
                 tags={
                     tag
                     for tag in tags
@@ -156,6 +132,8 @@ def cashback_dashboard(
     intents: Iterable[PaymentIntent],
     periods_by_card: dict[str, tuple[date, date]] | None = None,
     routing_profiles: Iterable[dict[str, object]] | None = None,
+    route_policies: dict[str, dict[str, object]] | None = None,
+    base_currency: str = "AED",
 ) -> dict[str, object]:
     rows = list(transactions)
     routing_programs = []
@@ -174,7 +152,7 @@ def cashback_dashboard(
         ]
         spend = total_spend(card_transactions, program.card)
         buckets = bucket_spend(card_transactions, program.card)
-        target_tier = program.tier_for(program.safety_target or spend)
+        target_tier = program.target_tier(program.safety_target or spend, buckets)
         bucket_rows = []
         for bucket in program.buckets:
             bucket_actual = buckets.get(bucket.code, Decimal("0"))
@@ -185,7 +163,10 @@ def cashback_dashboard(
             bucket_ratio = None if spend_cap in (None, Decimal("0")) else bucket_actual / spend_cap
             bucket_status = (
                 "FULL" if bucket_ratio is not None and bucket_ratio >= 1
-                else "NEAR_FULL" if bucket_ratio is not None and bucket_ratio >= Decimal("0.90")
+                else "NEAR_FULL" if (
+                    bucket_ratio is not None
+                    and bucket_ratio >= program.alert_policy.bucket_near_full_ratio
+                )
                 else "OPEN"
             )
             bucket_rows.append({
@@ -215,6 +196,22 @@ def cashback_dashboard(
             )
             elapsed_days = (as_of - period_start).days + 1
             cycle_days = (period_end - period_start).days + 1
+            week_index = (elapsed_days - 1) // program.pace_policy.week_length_days
+            current_week_start = period_start + timedelta(
+                days=week_index * program.pace_policy.week_length_days
+            )
+            current_week_end = min(
+                period_end,
+                current_week_start + timedelta(days=program.pace_policy.week_length_days - 1),
+            )
+            weekly_spend = total_spend(
+                [
+                    row
+                    for row in card_transactions
+                    if current_week_start <= row.transaction_at.date() <= current_week_end
+                ],
+                program.card,
+            )
             pace = asdict(
                 pace_status(
                     spend,
@@ -222,30 +219,57 @@ def cashback_dashboard(
                     as_of,
                     period_start,
                     period_end,
+                    weekly_actual=weekly_spend,
+                    policy=program.pace_policy,
                 )
             )
-            pace = {key: _plain(value) if isinstance(value, Decimal) else value for key, value in pace.items()}
+            pace = {
+                key: (
+                    _plain(value) if isinstance(value, Decimal)
+                    else value.isoformat() if isinstance(value, date)
+                    else value
+                )
+                for key, value in pace.items()
+            }
             projected = spend / Decimal(max(elapsed_days, 1)) * Decimal(cycle_days)
-            if elapsed_days < 21 or pace["status"] != "UNDER" or projected >= program.safety_target:
+            risk_after_days = (
+                program.pace_policy.week_length_days
+                * program.alert_policy.minimum_risk_after_week
+            )
+            if (
+                elapsed_days < risk_after_days
+                or pace["routing_status"] != "UNDER"
+                or projected >= program.safety_target
+            ):
                 routing_mode = "TARGET_TIER"
                 routing_programs.append(program)
             else:
                 routing_programs.append(replace(program, safety_target=None))
-            if elapsed_days >= 21 and spend < program.safety_target:
+            if elapsed_days >= risk_after_days and spend < program.safety_target:
                 alerts.append({
                     "key": f"minimum:{program.card}:{period_start}:{period_end}",
                     "severity": "warning",
                     "title": f"{program.name} minimum is at risk",
-                    "detail": f"AED {_plain(program.safety_target - spend)} remains after the third week of the cycle.",
+                    "detail": (
+                        f"{base_currency} {_plain(program.safety_target - spend)} remains after week "
+                        f"{program.alert_policy.minimum_risk_after_week} of the cycle."
+                    ),
                 })
             days_remaining = (period_end - as_of).days
-            if 0 <= days_remaining <= 7 and spend < program.safety_target:
+            if (
+                0 <= days_remaining <= program.alert_policy.close_warning_days
+                and spend < program.safety_target
+            ):
                 alerts.append({
                     "key": f"close:{program.card}:{period_start}:{period_end}",
-                    "severity": "critical" if days_remaining <= 3 else "warning",
+                    "severity": (
+                        "critical"
+                        if days_remaining <= program.alert_policy.close_critical_days
+                        else "warning"
+                    ),
                     "title": f"{program.name} target is not secured",
                     "detail": (
-                        f"AED {_plain(program.safety_target - spend)} remains with "
+                        f"{base_currency} {_plain(program.safety_target - spend)} remains with "
                         f"{days_remaining} day{'s' if days_remaining != 1 else ''} until cycle close."
                     ),
                 })
@@ -254,6 +278,7 @@ def cashback_dashboard(
         program_rows.append({
             "card": program.card,
             "name": program.name,
+            "short_name": program.short_name or program.name,
             "programme_version": program.programme_version,
             "effective_start": None if program.effective_start is None else program.effective_start.isoformat(),
             "effective_end": None if program.effective_end is None else program.effective_end.isoformat(),
@@ -264,14 +289,24 @@ def cashback_dashboard(
             "period_end": None if period is None else period[1].isoformat(),
             "total_spend_aed": _plain(spend),
             "safety_target_aed": None if program.safety_target is None else _plain(program.safety_target),
-            "tier": program.tier_for(spend).code,
+            "tier": program.tier_for(spend, buckets).code,
             "expected_cashback_aed": _plain(reward_total(program, spend, buckets)),
             "tiers": [
                 {
                     "code": tier.code,
                     "minimum_spend_aed": _plain(tier.minimum_spend),
-                    "met": spend >= tier.minimum_spend,
+                    "met": tier.qualifies(spend, buckets),
                     "remaining_aed": _plain(max(tier.minimum_spend - spend, Decimal("0"))),
+                    "requirements": [
+                        {
+                            "metric": requirement.metric,
+                            "operator": requirement.operator,
+                            "value": _plain(requirement.value),
+                            "bucket": requirement.bucket,
+                            "met": requirement.met(spend, buckets),
+                        }
+                        for requirement in tier.requirements
+                    ],
                 }
                 for tier in program.tiers
             ],
@@ -345,28 +380,18 @@ def cashback_dashboard(
                 if intent.amount_aed
                 else Decimal("0")
             ),
-            "conditional": intent.category == "FILLER",
-            "active": intent.category != "FILLER" or threshold_actionable,
+            "conditional": intent.conditional,
+            "active": not intent.conditional or threshold_actionable,
             "ranked_cards": ranked_cards,
         })
     routing_programs_by_card = {program.card: program for program in routing_programs}
     routing_state_by_card = {str(row["card"]): row for row in program_rows}
-    purpose_rank = {
-        "CATEGORY_BUCKET": 0,
-        "REWARD_BUCKET": 1,
-        "SPECIALIST": 1,
-        "THRESHOLD_FILLER": 2,
-        "FALLBACK": 3,
-    }
-    pace_rank = {
-        "UNDER": 0,
-        "ON_PACE": 1,
-        "OVER": 2,
-        "SECURED": 3,
-    }
+    active_route_policies = route_policies or {}
     routing_graphs = []
     for profile in routing_profiles or ():
-        amount = Decimal(str(profile.get("decision_amount_aed") or "100"))
+        amount = Decimal(
+            str(profile.get("decision_amount", profile.get("decision_amount_aed")) or "100")
+        )
         category = str(profile["category"])
         currency = str(profile.get("currency") or "AED")
         route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
@@ -385,7 +410,16 @@ def cashback_dashboard(
             )
             if candidate is None:
                 continue
-            purpose = str(route.get("purpose") or "REWARD_BUCKET")
+            purpose = str(route.get("purpose") or route.get("policy") or "")
+            policy_code = str(route.get("policy") or purpose)
+            policy = active_route_policies.get(policy_code)
+            if not isinstance(policy, dict):
+                raise ValueError(f"Unknown routing policy: {policy_code}")
+            when = policy.get("when") or {}
+            ranking = policy.get("ranking") or {}
+            reasons = policy.get("reasons") or {}
+            if not isinstance(when, dict) or not isinstance(ranking, dict) or not isinstance(reasons, dict):
+                raise ValueError(f"Routing policy {policy_code} must define object policies")
             bucket_open = candidate.bucket_remaining_aed is None or candidate.bucket_remaining_aed > 0
             bucket_fits_purchase = (
                 candidate.bucket_remaining_aed is None
@@ -397,69 +431,42 @@ def cashback_dashboard(
             )
             card_state = routing_state_by_card.get(card) or {}
             pace = card_state.get("pace") or {}
-            pace_status_value = str(pace.get("status") or "OPEN")
-            active = False
-            condition = ""
-            if purpose == "CATEGORY_BUCKET":
-                active = bucket_open and bucket_fits_purchase and candidate.target_rate > 0
-                condition = "Category bucket has enough headroom for the whole purchase and its target-tier rate is active."
-            elif purpose == "REWARD_BUCKET":
-                active = bucket_open and bucket_fits_purchase and candidate.net_value_aed > 0
-                if target_remaining is not None and target_remaining > 0 and pace_status_value == "UNDER":
-                    condition = "Prioritize this card: its target is unmet, cycle pace is under, and this reward bucket has headroom."
-                elif target_remaining is not None and target_remaining > 0 and pace_status_value == "OVER":
-                    condition = "Keep as a fallback: this reward bucket has headroom, but the card is already over cycle pace."
-                else:
-                    condition = "Reward bucket has headroom and positive economic value."
-            elif purpose == "THRESHOLD_FILLER":
-                active = (
-                    target_remaining is not None
-                    and target_remaining > 0
-                    and bucket_open
-                    and bucket_fits_purchase
+            pace_status_value = str(pace.get("routing_status") or pace.get("status") or "OPEN")
+            checks = {
+                "bucket_open": bucket_open,
+                "bucket_fits_purchase": bucket_fits_purchase,
+                "target_rate_positive": candidate.target_rate > 0,
+                "net_value_positive": candidate.net_value_aed > 0,
+                "target_unmet": target_remaining is not None and target_remaining > 0,
+                "target_met": target_remaining == 0,
+            }
+            unknown_checks = set(when) - set(checks) - {"pace_in", "pace_not_in"}
+            if unknown_checks:
+                raise ValueError(
+                    f"Routing policy {policy_code} uses unknown checks: "
+                    + ", ".join(sorted(unknown_checks))
                 )
-                condition = (
-                    "Use as threshold filler because the card target is unmet and cycle pace is under."
-                    if pace_status_value == "UNDER"
-                    else "Keep as fallback filler: the card target is unmet, but higher-priority allocation needs are satisfied first."
-                )
-            elif purpose in {"SPECIALIST", "FALLBACK"}:
-                active = bucket_open and bucket_fits_purchase and candidate.net_value_aed > 0
-                condition = "Eligible positive-value fallback remains available."
-            else:
-                raise ValueError(f"Unsupported routing purpose: {purpose}")
+            active = all(not required or checks[name] for name, required in when.items() if name in checks)
+            pace_in = {str(value).upper() for value in when.get("pace_in", [])}
+            pace_not_in = {str(value).upper() for value in when.get("pace_not_in", [])}
+            active = active and (not pace_in or pace_status_value in pace_in)
+            active = active and pace_status_value not in pace_not_in
+            condition = str(reasons.get(pace_status_value) or reasons.get("*") or route.get("reason") or policy_code.replace("_", " ").title())
             if not active:
                 continue
+            groups_by_pace = ranking.get("groups_by_pace") or {"*": 100}
+            if not isinstance(groups_by_pace, dict):
+                raise ValueError(f"Routing policy {policy_code} groups_by_pace must be an object")
+            strategy_rank = int(groups_by_pace.get(pace_status_value, groups_by_pace.get("*", 100)))
             row = {
                 "card": candidate.card,
                 "bucket": candidate.bucket,
                 "payment_channel": channel,
                 "purpose": purpose,
+                "policy": policy_code,
                 "policy_priority": int(route.get("priority") or 100),
-                "purpose_rank": purpose_rank[purpose],
                 "pace_status": pace_status_value,
-                "pace_rank": (
-                    0
-                    if purpose == "CATEGORY_BUCKET"
-                    else pace_rank.get(pace_status_value, 1)
-                ),
-                "strategy_rank": (
-                    0
-                    if purpose == "CATEGORY_BUCKET"
-                    else 1
-                    if purpose in {"REWARD_BUCKET", "SPECIALIST"} and pace_status_value == "UNDER"
-                    else 2
-                    if (
-                        purpose in {"REWARD_BUCKET", "SPECIALIST"} and pace_status_value == "ON_PACE"
-                    ) or (purpose == "THRESHOLD_FILLER" and pace_status_value == "UNDER")
-                    else 3
-                    if purpose in {"REWARD_BUCKET", "SPECIALIST"}
-                    else 4
-                    if purpose == "THRESHOLD_FILLER" and pace_status_value == "ON_PACE"
-                    else 5
-                    if purpose == "THRESHOLD_FILLER"
-                    else 6
-                ),
+                "strategy_rank": strategy_rank,
                 "condition": condition,
                 "tier_before": candidate.tier_before,
                 "tier_after": candidate.tier_after,
@@ -486,7 +493,6 @@ def cashback_dashboard(
             route_candidates.values(),
             key=lambda candidate: (
                 int(candidate["strategy_rank"]),
-                int(candidate["pace_rank"]),
                 int(candidate["policy_priority"]),
                 -Decimal(str(candidate["estimated_net_value_aed"])),
                 str(candidate["card"]),
@@ -516,6 +522,7 @@ def cashback_dashboard(
     return {
         "schema_version": 1,
         "as_of": as_of.isoformat(),
+        "currency": base_currency,
         "cards": program_rows,
         "recommendations": recommendations,
         "routing_graphs": routing_graphs,

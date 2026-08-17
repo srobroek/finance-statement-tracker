@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/srobroek/finance-statement-tracker/schemas/cashback-profile-v1.json",
+  "title": "Cashback Control profile",
+  "type": "object",
+  "required": ["schema_version", "currency", "route_policies", "programs", "payment_intents", "routing_profiles"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "status": {"type": "string"},
+    "notes": {"type": "string"},
+    "profile": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "locale": {"type": "string", "minLength": 2}
+      },
+      "additionalProperties": true
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "pace": {"$ref": "#/$defs/pace"},
+        "alerts": {"$ref": "#/$defs/alerts"}
+      },
+      "additionalProperties": false
+    },
+    "normalization": {
+      "type": "object",
+      "properties": {
+        "default_purchase_type": {"type": "string"},
+        "default_channel": {"type": "string"},
+        "actual_category_purchase_types": {"type": "object", "additionalProperties": {"type": "string"}},
+        "merchant_purchase_types": {"type": "array", "items": {"$ref": "#/$defs/merchantPurchaseType"}},
+        "merchant_channels": {"type": "array", "items": {"$ref": "#/$defs/merchantChannel"}}
+      },
+      "additionalProperties": false
+    },
+    "route_policies": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/routePolicy"}
+    },
+    "live_ingestion": {"type": "object"},
+    "programs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/program"}
+    },
+    "payment_intents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/paymentIntent"}
+    },
+    "routing_profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/routingProfile"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "money": {"oneOf": [{"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"}, {"type": "number"}]},
+    "nullableMoney": {"oneOf": [{"$ref": "#/$defs/money"}, {"type": "null"}]},
+    "pace": {
+      "type": "object",
+      "properties": {
+        "basis": {"enum": ["WEEKLY", "DAILY"]},
+        "routing_basis": {"enum": ["WEEKLY", "CYCLE"]},
+        "week_length_days": {"type": "integer", "minimum": 1, "maximum": 31},
+        "tolerance_percent": {"$ref": "#/$defs/money"},
+        "minimum_tolerance": {"$ref": "#/$defs/money"},
+        "minimum_tolerance_aed": {"$ref": "#/$defs/money"}
+      },
+      "additionalProperties": false
+    },
+    "alerts": {
+      "type": "object",
+      "properties": {
+        "bucket_near_full_ratio": {"$ref": "#/$defs/money"},
+        "minimum_risk_after_week": {"type": "integer", "minimum": 0},
+        "close_warning_days": {"type": "integer", "minimum": 0},
+        "close_critical_days": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "merchantPurchaseType": {
+      "type": "object",
+      "required": ["contains", "purchase_type"],
+      "properties": {"contains": {"type": "string"}, "purchase_type": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "merchantChannel": {
+      "type": "object",
+      "required": ["contains", "channel"],
+      "properties": {"contains": {"type": "string"}, "channel": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "routePolicy": {
+      "type": "object",
+      "required": ["when", "ranking", "reasons"],
+      "properties": {
+        "when": {
+          "type": "object",
+          "properties": {
+            "bucket_open": {"type": "boolean"},
+            "bucket_fits_purchase": {"type": "boolean"},
+            "target_rate_positive": {"type": "boolean"},
+            "net_value_positive": {"type": "boolean"},
+            "target_unmet": {"type": "boolean"},
+            "target_met": {"type": "boolean"},
+            "pace_in": {"type": "array", "items": {"type": "string"}},
+            "pace_not_in": {"type": "array", "items": {"type": "string"}}
+          },
+          "additionalProperties": false
+        },
+        "ranking": {
+          "type": "object",
+          "required": ["groups_by_pace"],
+          "properties": {"groups_by_pace": {"type": "object", "additionalProperties": {"type": "integer"}}},
+          "additionalProperties": false
+        },
+        "reasons": {"type": "object", "additionalProperties": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "assignment": {
+      "type": "object",
+      "properties": {
+        "categories": {"type": "array", "items": {"type": "string"}},
+        "channels": {"type": "array", "items": {"type": "string"}},
+        "currencies": {"type": "array", "items": {"type": "string"}},
+        "foreign_only": {"type": "boolean"},
+        "base_currency_only": {"type": "boolean"},
+        "fallback": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "bucket": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "cashback_cap": {"$ref": "#/$defs/nullableMoney"},
+        "cashback_cap_aed": {"$ref": "#/$defs/nullableMoney"},
+        "spend_cap": {"$ref": "#/$defs/nullableMoney"},
+        "spend_cap_aed": {"$ref": "#/$defs/nullableMoney"},
+        "categories": {"type": "array", "items": {"type": "string"}},
+        "channels": {"type": "array", "items": {"type": "string"}},
+        "currencies": {"type": "array", "items": {"type": "string"}},
+        "excluded_categories": {"type": "array", "items": {"type": "string"}},
+        "excluded_channels": {"type": "array", "items": {"type": "string"}},
+        "foreign_only": {"type": "boolean"},
+        "base_currency_only": {"type": "boolean"},
+        "assignment": {"$ref": "#/$defs/assignment"}
+      },
+      "additionalProperties": false
+    },
+    "tier": {
+      "type": "object",
+      "required": ["code", "rates"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "minimum_spend": {"$ref": "#/$defs/money"},
+        "minimum_spend_aed": {"$ref": "#/$defs/money"},
+        "rates": {"type": "object", "additionalProperties": {"$ref": "#/$defs/money"}},
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["metric", "value"],
+            "properties": {
+              "metric": {"enum": ["TOTAL_SPEND", "BUCKET_SPEND"]},
+              "operator": {"enum": ["GTE", "GT", "LTE", "LT", "EQ"]},
+              "value": {"$ref": "#/$defs/money"},
+              "bucket": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "anyOf": [{"required": ["minimum_spend"]}, {"required": ["minimum_spend_aed"]}],
+      "additionalProperties": false
+    },
+    "program": {
+      "type": "object",
+      "required": ["card", "name", "tiers", "buckets"],
+      "properties": {
+        "card": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "short_name": {"type": "string"},
+        "programme_version": {"type": "string"},
+        "effective_start": {"type": ["string", "null"], "format": "date"},
+        "effective_end": {"type": ["string", "null"], "format": "date"},
+        "statement_cycle": {"type": "object"},
+        "reward_cycle": {"type": "object"},
+        "payment_due": {"type": "object"},
+        "refund_behavior": {"type": "string"},
+        "rounding_behavior": {"type": "string"},
+        "routing_priority": {"type": "integer"},
+        "target_tier": {"type": "string"},
+        "exclusions": {"type": "array", "items": {"type": "string"}},
+        "safety_target": {"$ref": "#/$defs/nullableMoney"},
+        "safety_target_aed": {"$ref": "#/$defs/nullableMoney"},
+        "fx_cost_rate": {"$ref": "#/$defs/money"},
+        "pace": {"$ref": "#/$defs/pace"},
+        "alerts": {"$ref": "#/$defs/alerts"},
+        "tiers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/tier"}},
+        "buckets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bucket"}}
+      },
+      "additionalProperties": false
+    },
+    "paymentIntent": {
+      "type": "object",
+      "required": ["category", "channel", "currency"],
+      "properties": {
+        "category": {"type": "string"},
+        "channel": {"type": "string"},
+        "currency": {"type": "string"},
+        "conditional": {"type": "boolean"},
+        "decision_amount": {"$ref": "#/$defs/money"},
+        "decision_amount_aed": {"$ref": "#/$defs/money"}
+      },
+      "additionalProperties": false
+    },
+    "route": {
+      "type": "object",
+      "required": ["card", "channel", "bucket"],
+      "properties": {
+        "card": {"type": "string"},
+        "channel": {"type": "string"},
+        "bucket": {"type": "string"},
+        "purpose": {"type": "string"},
+        "policy": {"type": "string"},
+        "priority": {"type": "integer"},
+        "reason": {"type": "string"}
+      },
+      "anyOf": [{"required": ["purpose"]}, {"required": ["policy"]}],
+      "additionalProperties": false
+    },
+    "routingProfile": {
+      "type": "object",
+      "required": ["code", "category", "currency", "routes"],
+      "properties": {
+        "code": {"type": "string"},
+        "label": {"type": "string"},
+        "category": {"type": "string"},
+        "currency": {"type": "string"},
+        "decision_amount": {"$ref": "#/$defs/money"},
+        "decision_amount_aed": {"$ref": "#/$defs/money"},
+        "conditional": {"type": "boolean"},
+        "routes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/route"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

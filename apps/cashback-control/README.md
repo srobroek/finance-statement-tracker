@@ -1,6 +1,6 @@
 # Cashback Control companion
 
-This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The end-of-day Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
+This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The hourly Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
 
 Run from the repository root:
 
@@ -31,18 +31,18 @@ The live service deliberately does not run the full budgeting rulebook. `cashbac
 
 `POST /api/events` remains available for other normalized transaction sources.
 
-Submit one event or a list to `POST /api/events`. Use the configured bearer token. Every event needs a stable `source_event_id`, timestamp, card, and positive AED amount. Refunds use `event_type: REFUND`.
+Submit one event or a list to `POST /api/events`. Use the configured bearer token. Every event needs a stable `source_event_id`, timestamp, configured card code, positive base-currency amount, and currency. Refunds use `event_type: REFUND`.
 
 ```json
 {
   "source_event_id": "outlook-message-id:transaction-1",
   "occurred_at": "2026-08-16T12:34:00+04:00",
-  "card_code": "RAK_WORLD",
+  "card_code": "CARD_ALPHA",
   "amount_aed": "245.50",
-  "currency": "AED",
-  "purchase_type": "GROCERY",
-  "channel": "PHYSICAL_POS",
-  "merchant": "Carrefour",
+  "currency": "USD",
+  "purchase_type": "DINING",
+  "channel": "ONLINE",
+  "merchant": "Example Restaurant",
   "source": "outlook",
   "status": "PROVISIONAL"
 }

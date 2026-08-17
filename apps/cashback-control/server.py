@@ -106,6 +106,7 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
         messages,
         card_by_last4,
         rules,
+        cashback_config=cashback_config,
     )
     persistence = (
         STORE.upsert(list(batch.events))

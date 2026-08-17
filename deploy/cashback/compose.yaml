@@ -8,12 +8,20 @@ services:
       - /opt/stacks/finance-runtime/.env
     environment:
       TZ: Asia/Dubai
+      CASHBACK_PROGRAM_CONFIG_PATH: /etc/cashback/profile.json
+      ACTUAL_BOOTSTRAP_CONFIG_PATH: /etc/cashback/actual-bootstrap.json
+      STATIC_RULES_CONFIG_PATH: /etc/cashback/static-rules.json
+      TRANSACTION_EMAIL_SOURCES_PATH: /etc/cashback/transaction-email-sources.json
     security_opt:
       - no-new-privileges:true
     ports:
       - "5010:5010"
     volumes:
-      - /opt/stacks/finance-actual-poc/cashback-data:/var/lib/cashback-control
+      - ${CASHBACK_DATA_DIR:-./data}:/var/lib/cashback-control
+      - ./cashback-profile.json:/etc/cashback/profile.json:ro
+      - ./actual-bootstrap.json:/etc/cashback/actual-bootstrap.json:ro
+      - ./static-rules.json:/etc/cashback/static-rules.json:ro
+      - ./transaction-email-sources.json:/etc/cashback/transaction-email-sources.json:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=5)\""]
       interval: 60s

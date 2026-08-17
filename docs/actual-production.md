@@ -208,7 +208,7 @@ python -m finance_tracker.cli cashback-dashboard `
   --output .\runtime\cashback-dashboard.json
 ```
 
-The Docker companion does not poll Actual for live routing. The end-of-day Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
+The Docker companion does not poll Actual for live routing. The hourly Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
 
 The output contains card pace, current tier, bucket spend and headroom, routing mode, current payment recommendations, and review count. Late in a cycle, a card that is materially under pace is valued at its current tier instead of pretending an unreachable target tier will be achieved.
 
@@ -224,7 +224,7 @@ The current tentative schedule remains month-end with processing on the first da
 
 ## Live Outlook notifications
 
-The 23:50 Asia/Dubai Sol automation writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
+The hourly Sol automation, scheduled at minute 5 in Asia/Dubai, writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
 
 ```powershell
 .\scripts\push-outlook-messages.ps1 `
@@ -233,7 +233,7 @@ The 23:50 Asia/Dubai Sol automation writes exact fetched transaction-notificatio
 
 The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. Sol inspects only unresolved results and performs the evidence-aware AI policy stage through auditable correction calls. Codex is not installed in the container and no container-side AI is assumed. Only after those corrections and evidence writes succeed does the task commit the candidate cursor through the companion's ingest-run endpoint.
 
-The end-of-day path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. The schedule change does not change coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed days.
+The hourly path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
 
 Transaction notifications are retrieved in full from the durable cursor minus the configured overlap. Statement-PDF retrieval is different: each card-specific job selects only the latest statement message for that card/account and expected cycle, except for an explicit retry or backfill.
 

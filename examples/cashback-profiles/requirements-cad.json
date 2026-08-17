@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "currency": "CAD",
+  "profile": {"name": "Fictional Requirement Wallet", "locale": "en-CA"},
+  "defaults": {"pace": {"basis": "WEEKLY", "routing_basis": "CYCLE", "week_length_days": 7, "tolerance_percent": "0.05", "minimum_tolerance": "20"}, "alerts": {"bucket_near_full_ratio": "0.90", "minimum_risk_after_week": 3, "close_warning_days": 7, "close_critical_days": 3}},
+  "normalization": {"default_purchase_type": "GENERAL", "default_channel": "UNKNOWN", "actual_category_purchase_types": {}, "merchant_purchase_types": [], "merchant_channels": []},
+  "route_policies": {"VALUE": {"when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true}, "ranking": {"groups_by_pace": {"*": 0}}, "reasons": {"*": "Rank by the configured target-tier value after all eligibility requirements."}}},
+  "programs": [
+    {
+      "card": "HYBRID_REQUIREMENTS",
+      "name": "Hybrid Requirements",
+      "short_name": "Hybrid",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25},
+      "safety_target": "1050",
+      "target_tier": "PREMIUM",
+      "fx_cost_rate": "0.01",
+      "routing_priority": 10,
+      "tiers": [
+        {"code": "BASE", "minimum_spend": "0", "rates": {"DOMESTIC": "0.01", "FOREIGN": "0.01"}},
+        {"code": "PREMIUM", "minimum_spend": "1000", "requirements": [{"metric": "BUCKET_SPEND", "operator": "GTE", "bucket": "FOREIGN", "value": "200"}], "rates": {"DOMESTIC": "0.03", "FOREIGN": "0.05"}}
+      ],
+      "buckets": [
+        {"code": "FOREIGN", "cashback_cap": "100", "foreign_only": true, "assignment": {"foreign_only": true}},
+        {"code": "DOMESTIC", "cashback_cap": null, "base_currency_only": true, "assignment": {"fallback": true}}
+      ]
+    },
+    {
+      "card": "FLAT_BACKUP",
+      "name": "Flat Backup",
+      "short_name": "Flat",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25},
+      "routing_priority": 20,
+      "tiers": [{"code": "FLAT", "minimum_spend": "0", "rates": {"ALL": "0.02"}}],
+      "buckets": [{"code": "ALL", "cashback_cap": null, "assignment": {"fallback": true}}]
+    }
+  ],
+  "payment_intents": [{"category": "GENERAL", "channel": "PHYSICAL_POS", "currency": "CAD", "decision_amount": "100"}, {"category": "GENERAL", "channel": "ONLINE", "currency": "USD", "decision_amount": "100"}],
+  "routing_profiles": [
+    {"code": "DOMESTIC", "label": "Domestic", "category": "GENERAL", "currency": "CAD", "decision_amount": "100", "routes": [{"card": "HYBRID_REQUIREMENTS", "channel": "PHYSICAL_POS", "bucket": "DOMESTIC", "purpose": "VALUE", "policy": "VALUE", "priority": 10}, {"card": "FLAT_BACKUP", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 20}]},
+    {"code": "FOREIGN", "label": "Foreign", "category": "GENERAL", "currency": "USD", "decision_amount": "100", "routes": [{"card": "HYBRID_REQUIREMENTS", "channel": "ONLINE", "bucket": "FOREIGN", "purpose": "VALUE", "policy": "VALUE", "priority": 10}, {"card": "FLAT_BACKUP", "channel": "ONLINE", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 20}]}
+  ]
+}

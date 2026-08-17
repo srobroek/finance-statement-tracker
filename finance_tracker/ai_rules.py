@@ -310,8 +310,36 @@ class AIEnrichmentEngine:
         )
 
 
+def _configured_allowed_values(
+    source_name: str,
+    *,
+    policy_path: Path,
+) -> tuple[Any, ...]:
+    """Resolve reusable allowlists from the deployment's authoritative config."""
+    if source_name == "cashback.buckets":
+        configured = os.environ.get("CASHBACK_PROGRAM_CONFIG_PATH")
+        config_path = Path(configured) if configured else policy_path.parent / "cashback-programs.json"
+        source = json.loads(config_path.read_text(encoding="utf-8"))
+        return tuple(
+            str(bucket["code"])
+            for program in source.get("programs", [])
+            for bucket in program.get("buckets", [])
+        )
+    if source_name == "actual.categories":
+        configured = os.environ.get("ACTUAL_BOOTSTRAP_CONFIG_PATH")
+        config_path = Path(configured) if configured else policy_path.parent / "actual-bootstrap.json"
+        source = json.loads(config_path.read_text(encoding="utf-8"))
+        return tuple(
+            str(category)
+            for group in source.get("category_groups", [])
+            for category in group.get("categories", [])
+        )
+    raise ValueError(f"Unsupported AI allowed-value source: {source_name}")
+
+
 def load_ai_policies(path: str | Path) -> list[AIPolicy]:
-    source = json.loads(Path(path).read_text(encoding="utf-8"))
+    policy_path = Path(path)
+    source = json.loads(policy_path.read_text(encoding="utf-8"))
     if source.get("schema_version") != 1:
         raise ValueError("AI policy config schema_version must be 1")
     policies = []
@@ -328,9 +356,18 @@ def load_ai_policies(path: str | Path) -> list[AIPolicy]:
             )
             for condition in row.get("conditions", [])
         )
-        allowed_values = {
+        allowed_values: dict[str, tuple[Any, ...]] = {
             field: tuple(values) for field, values in row.get("allowed_values", {}).items()
         }
+        for field, source_name in row.get("allowed_value_sources", {}).items():
+            if field in allowed_values:
+                raise ValueError(
+                    f"AI policy {row.get('policy_id')} configures {field} as both values and a source"
+                )
+            allowed_values[str(field)] = _configured_allowed_values(
+                str(source_name),
+                policy_path=policy_path,
+            )
         policies.append(
             AIPolicy(
                 policy_id=str(row["policy_id"]),

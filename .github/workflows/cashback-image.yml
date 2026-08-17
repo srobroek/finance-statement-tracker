@@ -14,7 +14,10 @@ on:
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/cashback-programs.json"
+      - "config/cashback-profile-schema-v1.json"
       - "config/static-rules.seed.json"
+      - "config/transaction-email-sources.json"
+      - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "pyproject.toml"
       - "README.md"
@@ -49,6 +52,36 @@ jobs:
 
       - name: Run regression suite
         run: python -m unittest discover -s tests -v
+
+      - name: Deploy fictional profile matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f apps/cashback-control/Dockerfile -t cashback-profile-test .
+          cleanup() {
+            docker rm -f cashback-profile-test-run >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for profile in flat-rate-usd tiered-gbp rotating-eur requirements-cad; do
+            cleanup
+            docker run -d --name cashback-profile-test-run \
+              -e CASHBACK_PROGRAM_CONFIG_PATH=/etc/cashback/profile.json \
+              -v "$PWD/examples/cashback-profiles/${profile}.json:/etc/cashback/profile.json:ro" \
+              cashback-profile-test >/dev/null
+            for attempt in $(seq 1 30); do
+              if docker exec cashback-profile-test-run python -c \
+                "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=2)"; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                docker logs cashback-profile-test-run
+                exit 1
+              fi
+              sleep 1
+            done
+            docker exec cashback-profile-test-run python -c \
+              "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:5010/api/dashboard')); assert d['cards']; assert d['routing_graphs']; assert d['currency'] != 'AED'"
+          done
 
   publish:
     needs: test
@@ -111,9 +144,21 @@ jobs:
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
           sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
           sudo /opt/stacks/finance-runtime/render-env.sh
+          sudo install -m 0644 config/cashback-programs.json "$stack/cashback-profile.json"
+          sudo install -m 0644 config/actual-bootstrap.json "$stack/actual-bootstrap.json"
+          sudo install -m 0644 config/static-rules.seed.json "$stack/static-rules.json"
+          sudo install -m 0644 config/transaction-email-sources.json "$stack/transaction-email-sources.json"
+          printf '%s\n' 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data' | \
+            sudo tee "$stack/.env" >/dev/null
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          sudo docker exec finance-cashback-control python -c \
-            "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
+          if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
+            sudo docker exec finance-cashback-control python -c \
+              "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
+          elif sudo test -f /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3; then
+            sudo cp --preserve=mode,timestamps \
+              /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3 \
+              "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
+          fi
 
       - name: Authenticate and pull tested image
         shell: bash

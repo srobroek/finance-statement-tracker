@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from .actual_snapshot import cashback_dashboard
 from .cashback import (
     PaymentIntent,
+    configured_reward_bucket,
     load_program_configuration,
     payment_intents_from_config,
     programs_from_config,
@@ -957,32 +958,10 @@ class CashbackEventStore:
         return result
 
 
-def _bucket(card: str, purchase_type: str, channel: str, currency: str) -> str | None:
-    if card == "EI_AMAZON" and purchase_type == "AMAZON":
-        return "EI_AMAZON"
-    if card == "SC_PLATINUM_X":
-        if currency != "AED":
-            return "SC_FOREIGN"
-        if channel == "APPLE_PAY_POS":
-            return "SC_WALLET"
-        if channel == "ONLINE":
-            return "SC_ONLINE"
-        if channel == "PHYSICAL_POS":
-            return "SC_FILLER"
-    if card == "RAK_WORLD":
-        if purchase_type == "GROCERY":
-            return "RAK_GROCERY"
-        if purchase_type == "DINING":
-            return "RAK_DINING"
-        if purchase_type in {"TRAVEL", "HOTEL", "AIRLINE"}:
-            return "RAK_TRAVEL"
-        if channel == "APPLE_PAY_POS":
-            return "RAK_EWALLET"
-        return "RAK_STANDARD"
-    return None
-
-
-def events_to_transactions(rows: Iterable[dict[str, Any]]) -> list[Transaction]:
+def events_to_transactions(
+    rows: Iterable[dict[str, Any]],
+    programs: Iterable[Any],
+) -> list[Transaction]:
     transactions = []
     for row in rows:
         occurred_at = datetime.fromisoformat(str(row["occurred_at"]))
@@ -1006,7 +985,10 @@ def events_to_transactions(rows: Iterable[dict[str, Any]]) -> list[Transaction]:
                 source_type=str(row["source"]),
                 category=purchase_type,
                 transaction_type=transaction_type,
-                reward_bucket=row["bucket_code"] or _bucket(card, purchase_type, channel, currency),
+                reward_bucket=(
+                    row["bucket_code"]
+                    or configured_reward_bucket(programs, card, purchase_type, channel, currency)
+                ),
                 tags=set(json.loads(str(row["tags_json"]))),
                 review_required=bool(row["review_required"]) or purchase_type == "GENERAL" or channel == "UNKNOWN",
                 is_refund=event_type in {"REFUND", "REVERSAL"},
@@ -1047,7 +1029,7 @@ def build_live_dashboard(
             for row in store.rows(period_start, min(as_of, period_end))
             if row["card_code"] == card
         )
-    transactions = events_to_transactions(event_rows)
+    transactions = events_to_transactions(event_rows, programs)
     result = cashback_dashboard(
         programs,
         transactions,
@@ -1055,7 +1037,10 @@ def build_live_dashboard(
         payment_intents_from_config(configuration),
         periods_by_card=periods,
         routing_profiles=configuration.get("routing_profiles") or (),
+        route_policies=configuration.get("route_policies") or None,
+        base_currency=str(configuration.get("currency") or "AED"),
     )
+    result["profile"] = configuration.get("profile") or {}
     stats = store.stats()
     last_ingest = stats.get("last_successful_ingest_at")
     stale = True

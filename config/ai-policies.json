@@ -10,9 +10,7 @@
       "target_fields": ["vendor", "category", "subcategory", "tags"],
       "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
       "minimum_confidence": 0.82,
-      "allowed_values": {
-        "category": ["Rent & Mortgage", "Electricity & Water", "District Cooling", "Service Charges", "Maintenance & Repairs", "Household Supplies", "Furniture & Appliances", "Groceries", "Dining Out", "Food Delivery", "Coffee & Snacks", "Fuel", "Ride Hailing", "Parking & Tolls", "Vehicle Maintenance", "Public Transport", "Online Shopping", "Clothing", "Electronics", "General Retail", "Gifts", "Software & App Subscriptions", "Media Subscriptions", "Mobile & Internet", "Cloud Services", "Medical", "Pharmacy", "Fitness", "Personal Care", "Education", "Flights", "Accommodation", "Travel Transport", "Travel Activities", "Foreign Fees", "Bank Fees", "Insurance", "Taxes & Government", "Professional Services", "Charity", "Family Support", "Needs Review"]
-      },
+      "allowed_value_sources": {"category": "actual.categories"},
       "allowed_tags": ["home", "grocery", "dining", "transport", "travel", "online", "health", "education", "gift", "business", "shared", "review"]
     },
     {
@@ -59,9 +57,9 @@
       "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
       "minimum_confidence": 0.95,
       "allowed_values": {
-        "channel": ["ONLINE", "PHYSICAL_POS", "APPLE_PAY_POS", "UNKNOWN"],
-        "reward_bucket": ["RAK_GROCERY", "RAK_DINING", "RAK_TRAVEL", "RAK_EWALLET", "RAK_STANDARD", "SC_ONLINE", "SC_WALLET", "SC_FOREIGN", "SC_FILLER", "EI_AMAZON"]
-      }
+        "channel": ["ONLINE", "PHYSICAL_POS", "APPLE_PAY_POS", "UNKNOWN"]
+      },
+      "allowed_value_sources": {"reward_bucket": "cashback.buckets"}
     },
     {
       "policy_id": "recommend-static-rule",

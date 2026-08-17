@@ -1,28 +1,39 @@
-const money = new Intl.NumberFormat("en-AE", {
-  style: "currency",
-  currency: "AED",
-  maximumFractionDigits: 0,
-});
+let baseCurrency = "AED";
+let money = currencyFormatter(baseCurrency);
+const cardNames = new Map();
+const shortCardNames = new Map();
+
+function currencyFormatter(currency) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  });
+}
+
+function configureDisplay(payload) {
+  baseCurrency = payload.currency || "AED";
+  money = currencyFormatter(baseCurrency);
+  if (payload.profile?.name) document.title = payload.profile.name;
+  cardNames.clear();
+  shortCardNames.clear();
+  (payload.cards || []).forEach((card) => {
+    cardNames.set(card.card, card.name || card.card.replaceAll("_", " "));
+    shortCardNames.set(card.card, card.short_name || card.name || card.card.replaceAll("_", " "));
+  });
+}
 
 function cardLabel(code) {
-  return {
-    RAK_WORLD: "RAK World",
-    SC_PLATINUM_X: "SC Platinum X",
-    EI_AMAZON: "EI Amazon",
-  }[code] || code.replaceAll("_", " ");
+  return cardNames.get(code) || code.replaceAll("_", " ");
 }
 
 function compactCardLabel(code) {
-  return {
-    RAK_WORLD: "RAK",
-    SC_PLATINUM_X: "SC",
-    EI_AMAZON: "Amazon",
-  }[code] || cardLabel(code);
+  return shortCardNames.get(code) || cardLabel(code);
 }
 
 function compactMoney(value) {
   const amount = Number(value);
-  if (amount >= 1000) return `AED ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
+  if (amount >= 1000) return `${baseCurrency} ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
   return money.format(amount);
 }
 
@@ -48,16 +59,10 @@ function renderTierPosition(card, actual) {
 
 function typeLabel(item) {
   if (item.label) return item.label;
-  if (item.purchase_type === "AMAZON") return "Amazon";
-  if (item.purchase_type === "FILLER") return "Filler";
-  if (item.purchase_type === "GROCERY") return "Groceries";
-  if (item.purchase_type === "DINING") return "Dining";
-  if (item.purchase_type === "TRAVEL") return "Travel";
-  if (item.currency !== "AED") return "Foreign";
-  if (item.channel === "APPLE_PAY_POS") return "Apple Pay";
-  if (item.channel === "ONLINE") return "Online";
-  if (item.channel === "PHYSICAL_POS") return "Physical";
-  return item.purchase_type.replaceAll("_", " ");
+  return (item.purchase_type || item.channel || "Spend")
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function compactReason(item) {
@@ -481,6 +486,7 @@ async function loadDashboard() {
   const periodsPayload = await periodsResponse.json();
   if (!response.ok) throw new Error(payload.error || "Dashboard is unavailable.");
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
+  configureDisplay(payload);
   renderStatus(payload.data_status);
   const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
   renderRecommendations(routing);

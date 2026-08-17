@@ -10,6 +10,7 @@ from .ai_rules import AIEnrichmentEngine
 from .history import HistoryDecision, apply_history_match
 from .models import Transaction
 from .rules import RuleEngine, StaticRule
+from .cashback import load_program_configuration, purchase_type_from_config
 
 
 _ADCB_OTP = re.compile(
@@ -23,6 +24,7 @@ _ADCB_OTP = re.compile(
 @dataclass(frozen=True, slots=True)
 class NotificationFact:
     adapter: str
+    institution: str
     merchant: str
     amount: Decimal
     currency: str
@@ -99,6 +101,7 @@ class ADCBOTPNotificationAdapter:
         occurred = datetime.fromisoformat(received.replace("Z", "+00:00"))
         return NotificationFact(
             adapter=self.code,
+            institution="ADCB",
             merchant=match.group("merchant").strip(),
             amount=Decimal(match.group("amount").replace(",", "")),
             currency=match.group("currency").upper(),
@@ -115,20 +118,6 @@ DEFAULT_NOTIFICATION_ADAPTERS: tuple[NotificationAdapter, ...] = (
 )
 
 
-def _purchase_type(transaction: Transaction) -> str:
-    category = str(transaction.category or "").casefold()
-    vendor = str(transaction.vendor or "").casefold()
-    if category == "groceries":
-        return "GROCERY"
-    if category in {"dining out", "food delivery", "coffee & snacks"}:
-        return "DINING"
-    if vendor == "amazon":
-        return "AMAZON"
-    if category in {"flights", "accommodation", "travel transport", "travel activities"}:
-        return "TRAVEL"
-    return "GENERAL"
-
-
 def parse_outlook_notifications(
     messages: Iterable[dict[str, Any]],
     card_by_last4: dict[str, str],
@@ -138,11 +127,14 @@ def parse_outlook_notifications(
     history_index: dict[str, HistoryDecision] | None = None,
     ai_engine: AIEnrichmentEngine | None = None,
     ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    cashback_config: dict[str, Any] | None = None,
 ) -> NotificationBatch:
     """Convert evidence-backed Outlook notifications into minimal cashback events."""
     if (ai_engine is None) != (ai_resolver is None):
         raise ValueError("ai_engine and ai_resolver must be supplied together")
     engine = RuleEngine(rules)
+    cashback_source = cashback_config or load_program_configuration()
+    base_currency = str(cashback_source.get("currency") or "AED").upper()
     adapter_list = tuple(adapters)
     events: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
@@ -165,8 +157,11 @@ def parse_outlook_notifications(
         if not card_code:
             skipped.append({"message_id": message_id, "reason": "UNMAPPED_CARD_SUFFIX"})
             continue
-        if fact.currency != "AED":
-            skipped.append({"message_id": message_id, "reason": "MISSING_AED_EQUIVALENT"})
+        if fact.currency != base_currency:
+            skipped.append({
+                "message_id": message_id,
+                "reason": f"MISSING_{base_currency}_EQUIVALENT",
+            })
             continue
 
         transaction = Transaction(
@@ -174,7 +169,7 @@ def parse_outlook_notifications(
             transaction_at=fact.occurred_at,
             card=card_code,
             account_last4=fact.card_last4,
-            institution="ADCB",
+            institution=fact.institution,
             merchant_raw=fact.merchant,
             amount_aed=fact.amount,
             amount_original=fact.amount,
@@ -197,7 +192,11 @@ def parse_outlook_notifications(
             "card_code": transaction.card,
             "amount_aed": str(fact.amount),
             "currency": fact.currency,
-            "purchase_type": _purchase_type(transaction),
+            "purchase_type": purchase_type_from_config(
+                cashback_source,
+                transaction.category,
+                transaction.vendor or transaction.merchant_raw,
+            ),
             "channel": transaction.channel,
             "merchant": transaction.vendor or transaction.merchant_raw,
             "bucket_code": transaction.reward_bucket,

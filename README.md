@@ -26,11 +26,12 @@ The target is **Actual Budget as the primary ledger**, with a small continuous c
 - An idempotent Actual account/category/tag/payee/rule bootstrap.
 - Two-phase statement-to-Actual ingestion with a durable run manifest and mandatory preflight.
 - Read-only Actual snapshots that drive cashback pace and routing without a duplicate ledger.
-- A compact read-only cashback companion in `apps/cashback-control`, refreshed by `scripts/refresh-cashback-control.ps1`.
+- A compact live cashback companion in `apps/cashback-control`, recalculated immediately after each accepted event.
 - A tabbed mobile-first cashback interface verified at the 428 x 926 iPhone 13 Pro Max viewport: Routing and its decision tree fill one screen, while Cards and History have dedicated screens without horizontal overflow.
 - Installable iOS PWA support with declarative bucket-full, final-week target, and routing-change notifications; delivery state is deduplicated per device in the companion database.
 - Conservative Outlook notification adapters that emit traceable provisional events only when card, amount, currency, merchant, and a usable timestamp are evidenced.
 - Recipe-driven browser acquisition and deterministic official-export parsers migrated from the previous source app for ADCB, Emirates Islamic, FAB, Wio, generic CSV, and Sarwa capture.
+- A public, profile-driven cashback engine with external cards, currencies, tiers, compound requirements, buckets, caps, alert thresholds, weekly pace policies, and decision-tree routing; four unrelated fictional profiles are boot-tested in CI.
 
 Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schema-v1.json`. The worker validates and evaluates it deterministically, while compatible rules are compiled into Actual. `rule_sets` provide searchable scopes such as `LIVE_CASHBACK` without duplicating rules.
 
@@ -73,8 +74,12 @@ The continuously running `actual-ingestion` container accepts statement PDFs, no
 
 The target adapter writes ordinary finance records to Actual Budget through its official Node API. Outlook messages are retrieved by the scheduled Codex task. The companion SQLite store owns the durable mailbox cursor and provisional cashback state; OneDrive owns evidence originals and its JSON catalogue. Individual transactions drive provisional cashback pace, bucket headroom, warnings, and routing recommendations. Each card has an independent statement job that reconciles the live ledger, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
 
-Four Codex automations are active: one end-of-day live transaction/evidence ingest at 23:50 Asia/Dubai and three card-specific monthly statement reconciliation jobs. All current card cycles are tentatively month-end, with reconciliation on the following first day. The former daily aggregate gate is paused. Every job is idempotent and leaves cursors or close state unchanged when a required connector is unavailable. The daily Sol job scans the complete durable-cursor gap plus overlap and submits exact Outlook message objects through `push-outlook-messages.ps1`; the continuous companion performs deterministic parsing, static rules, deduplication, persistence, and dashboard refresh in one acknowledged call. Sol handles only unresolved classification and related-email evidence after that deterministic pass. Failed payloads remain under `runtime` for retry.
+Four Codex automations are active: one hourly live transaction/evidence ingest at minute 5 and three card-specific monthly statement reconciliation jobs. All current card cycles are tentatively month-end, with reconciliation on the following first day. The former daily aggregate gate is paused. Every job is idempotent and leaves cursors or close state unchanged when a required connector is unavailable. The hourly Sol job scans the complete durable-cursor gap plus overlap and submits exact Outlook message objects through `push-outlook-messages.ps1`; the continuous companion performs deterministic parsing, static rules, deduplication, persistence, and dashboard refresh in one acknowledged call. Sol handles only unresolved classification and related-email evidence after that deterministic pass. Failed payloads remain under `runtime` for retry.
 
 Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.
 
 See `AGENTS.md` for architecture and extension rules.
+
+## Reusable cashback deployment
+
+Cashback Control is not tied to the bundled cards. Supply a validated JSON profile through `CASHBACK_PROGRAM_CONFIG_PATH`; the container and UI derive card names, short labels, currency, tiers, caps, transaction bucket assignment, alerts, and routing trees from that profile. See `docs/cashback-profile.md`, `config/cashback-profile-schema-v1.json`, and `examples/cashback-profiles/`.

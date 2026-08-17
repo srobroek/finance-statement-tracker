@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "currency": "EUR",
+  "profile": {"name": "Fictional Rotating Wallet", "locale": "en-IE"},
+  "defaults": {"pace": {"basis": "WEEKLY", "routing_basis": "WEEKLY", "week_length_days": 7, "tolerance_percent": "0.05", "minimum_tolerance": "10"}, "alerts": {"bucket_near_full_ratio": "0.90", "minimum_risk_after_week": 3, "close_warning_days": 7, "close_critical_days": 3}},
+  "normalization": {"default_purchase_type": "GENERAL", "default_channel": "UNKNOWN", "actual_category_purchase_types": {"Fuel": "FUEL", "Dining": "DINING"}, "merchant_purchase_types": [], "merchant_channels": []},
+  "route_policies": {"VALUE": {"when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true}, "ranking": {"groups_by_pace": {"*": 0}}, "reasons": {"*": "Use the active seasonal reward before the baseline card."}}},
+  "programs": [
+    {"card": "SEASONAL", "name": "Seasonal Rewards", "short_name": "Seasonal", "programme_version": "H1-FUEL", "effective_start": "2026-01-01", "effective_end": "2026-06-30", "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1}, "reward_cycle": {"basis": "STATEMENT_CYCLE"}, "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25}, "routing_priority": 10, "tiers": [{"code": "BASE", "minimum_spend": "0", "rates": {"ROTATING": "0.05"}}], "buckets": [{"code": "ROTATING", "cashback_cap": "25", "categories": ["FUEL"], "assignment": {"categories": ["FUEL"]}}]},
+    {"card": "SEASONAL", "name": "Seasonal Rewards", "short_name": "Seasonal", "programme_version": "H2-DINING", "effective_start": "2026-07-01", "effective_end": "2026-12-31", "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1}, "reward_cycle": {"basis": "STATEMENT_CYCLE"}, "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25}, "routing_priority": 10, "tiers": [{"code": "BASE", "minimum_spend": "0", "rates": {"ROTATING": "0.05"}}], "buckets": [{"code": "ROTATING", "cashback_cap": "25", "categories": ["DINING"], "assignment": {"categories": ["DINING"]}}]},
+    {"card": "BASELINE", "name": "Baseline One", "short_name": "Base", "programme_version": "v1", "effective_start": "2026-01-01", "effective_end": "2026-12-31", "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1}, "reward_cycle": {"basis": "STATEMENT_CYCLE"}, "payment_due": {"source": "STATEMENT", "forecast_offset_days": 25}, "routing_priority": 20, "tiers": [{"code": "BASE", "minimum_spend": "0", "rates": {"ALL": "0.01"}}], "buckets": [{"code": "ALL", "cashback_cap": null, "assignment": {"fallback": true}}]}
+  ],
+  "payment_intents": [{"category": "FUEL", "channel": "PHYSICAL_POS", "currency": "EUR", "decision_amount": "50"}, {"category": "DINING", "channel": "PHYSICAL_POS", "currency": "EUR", "decision_amount": "50"}],
+  "routing_profiles": [
+    {"code": "FUEL", "label": "Fuel", "category": "FUEL", "currency": "EUR", "decision_amount": "50", "routes": [{"card": "SEASONAL", "channel": "PHYSICAL_POS", "bucket": "ROTATING", "purpose": "VALUE", "policy": "VALUE", "priority": 10}, {"card": "BASELINE", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 20}]},
+    {"code": "DINING", "label": "Dining", "category": "DINING", "currency": "EUR", "decision_amount": "50", "routes": [{"card": "SEASONAL", "channel": "PHYSICAL_POS", "bucket": "ROTATING", "purpose": "VALUE", "policy": "VALUE", "priority": 10}, {"card": "BASELINE", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "VALUE", "policy": "VALUE", "priority": 20}]}
+  ]
+}

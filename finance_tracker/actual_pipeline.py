@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .ingestion import stage_statement
-from .cashback import load_program_configuration, programs_from_config
+from .cashback import load_program_configuration, programs_from_config, purchase_type_from_config
 from .ai_rules import (
     AIEnrichmentEngine,
     AITrace,
@@ -184,26 +184,18 @@ def build_actual_statement_run(
         transaction.transaction_at.date() for transaction in staged.transactions
     )
     try:
+        cashback_config = load_program_configuration()
         supported_cashback_cards = {
             program.card
-            for program in programs_from_config(load_program_configuration(), period_end)
+            for program in programs_from_config(cashback_config, period_end)
         }
     except ValueError as error:
         if "no active programs" not in str(error):
             raise
         # Never back-apply a newer reward programme to an older statement.
+        cashback_config = load_program_configuration()
         supported_cashback_cards = set()
     cashback_rows: dict[str, list[dict[str, object]]] = {}
-    purchase_types = {
-        "Groceries": "GROCERY",
-        "Dining Out": "DINING",
-        "Food Delivery": "DINING",
-        "Flights": "AIRLINE",
-        "Accommodation": "HOTEL",
-        "Travel Transport": "TRAVEL",
-        "Travel Activities": "TRAVEL",
-        "Online Shopping": "GENERAL",
-    }
     for transaction in staged.transactions:
         if transaction.card not in supported_cashback_cards:
             continue
@@ -212,9 +204,11 @@ def build_actual_statement_run(
             continue
         purchase_type = str(
             transaction.metadata.get("purchase_type")
-            or purchase_types.get(transaction.category or "")
-            or transaction.category
-            or "GENERAL"
+            or purchase_type_from_config(
+                cashback_config,
+                transaction.category,
+                transaction.vendor or transaction.merchant_raw,
+            )
         ).upper().replace(" ", "_")
         cashback_rows.setdefault(transaction.card, []).append(
             {

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "currency": "GBP",
+  "profile": {"name": "Fictional Tiered Wallet", "locale": "en-GB"},
+  "defaults": {
+    "pace": {"basis": "WEEKLY", "routing_basis": "CYCLE", "week_length_days": 7, "tolerance_percent": "0.05", "minimum_tolerance": "25"},
+    "alerts": {"bucket_near_full_ratio": "0.90", "minimum_risk_after_week": 3, "close_warning_days": 7, "close_critical_days": 3}
+  },
+  "normalization": {"default_purchase_type": "GENERAL", "default_channel": "UNKNOWN", "actual_category_purchase_types": {"Groceries": "GROCERY"}, "merchant_purchase_types": [], "merchant_channels": []},
+  "route_policies": {
+    "CATEGORY": {"when": {"bucket_open": true, "bucket_fits_purchase": true, "target_rate_positive": true}, "ranking": {"groups_by_pace": {"*": 0}}, "reasons": {"*": "The category bonus is open and covers the whole purchase."}},
+    "TIER": {"when": {"bucket_open": true, "bucket_fits_purchase": true, "target_unmet": true}, "ranking": {"groups_by_pace": {"UNDER": 1, "ON_PACE": 2, "OVER": 3, "SECURED": 4, "*": 3}}, "reasons": {"UNDER": "Build the weekly tier target.", "*": "Use when further tier progress is useful."}},
+    "FALLBACK": {"when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true}, "ranking": {"groups_by_pace": {"*": 5}}, "reasons": {"*": "Positive-value fallback."}}
+  },
+  "programs": [
+    {
+      "card": "STEP_UP",
+      "name": "Step Up",
+      "short_name": "Step",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 28},
+      "safety_target": "1050",
+      "routing_priority": 20,
+      "tiers": [
+        {"code": "BASE", "minimum_spend": "0", "rates": {"ALL": "0.01"}},
+        {"code": "PLUS", "minimum_spend": "500", "rates": {"ALL": "0.02"}},
+        {"code": "MAX", "minimum_spend": "1000", "rates": {"ALL": "0.03"}}
+      ],
+      "buckets": [{"code": "ALL", "cashback_cap": null, "assignment": {"fallback": true}}]
+    },
+    {
+      "card": "GROCERY_5",
+      "name": "Grocery Five",
+      "short_name": "Grocery",
+      "programme_version": "v1",
+      "effective_start": "2026-01-01",
+      "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
+      "reward_cycle": {"basis": "STATEMENT_CYCLE"},
+      "payment_due": {"source": "STATEMENT", "forecast_offset_days": 28},
+      "routing_priority": 10,
+      "tiers": [{"code": "BASE", "minimum_spend": "0", "rates": {"GROCERY": "0.05"}}],
+      "buckets": [{"code": "GROCERY", "cashback_cap": "20", "categories": ["GROCERY"], "assignment": {"categories": ["GROCERY"]}}]
+    }
+  ],
+  "payment_intents": [{"category": "GROCERY", "channel": "PHYSICAL_POS", "currency": "GBP", "decision_amount": "40"}, {"category": "GENERAL", "channel": "PHYSICAL_POS", "currency": "GBP", "decision_amount": "40"}],
+  "routing_profiles": [
+    {"code": "GROCERY", "label": "Groceries", "category": "GROCERY", "currency": "GBP", "decision_amount": "40", "routes": [{"card": "GROCERY_5", "channel": "PHYSICAL_POS", "bucket": "GROCERY", "purpose": "CATEGORY", "policy": "CATEGORY", "priority": 10}, {"card": "STEP_UP", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "TIER", "policy": "TIER", "priority": 20}, {"card": "STEP_UP", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "FALLBACK", "policy": "FALLBACK", "priority": 30}]},
+    {"code": "GENERAL", "label": "General", "category": "GENERAL", "currency": "GBP", "decision_amount": "40", "routes": [{"card": "STEP_UP", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "TIER", "policy": "TIER", "priority": 10}, {"card": "STEP_UP", "channel": "PHYSICAL_POS", "bucket": "ALL", "purpose": "FALLBACK", "policy": "FALLBACK", "priority": 20}]}
+  ]
+}

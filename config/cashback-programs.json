@@ -2,7 +2,83 @@
   "schema_version": 1,
   "status": "TENTATIVE",
   "currency": "AED",
+  "profile": {
+    "name": "Cashback Control",
+    "locale": "en-AE"
+  },
   "notes": "POC assumptions derived from the supplied card-routing brainstorm. Verify against issuer terms before production use.",
+  "defaults": {
+    "pace": {
+      "basis": "WEEKLY",
+      "routing_basis": "CYCLE",
+      "week_length_days": 7,
+      "tolerance_percent": "0.05",
+      "minimum_tolerance": "250"
+    },
+    "alerts": {
+      "bucket_near_full_ratio": "0.90",
+      "minimum_risk_after_week": 3,
+      "close_warning_days": 7,
+      "close_critical_days": 3
+    }
+  },
+  "normalization": {
+    "default_purchase_type": "GENERAL",
+    "default_channel": "UNKNOWN",
+    "actual_category_purchase_types": {
+      "Groceries": "GROCERY",
+      "Dining Out": "DINING",
+      "Food Delivery": "DINING",
+      "Flights": "AIRLINE",
+      "Accommodation": "HOTEL",
+      "Travel Transport": "TRAVEL",
+      "Travel Activities": "TRAVEL",
+      "Online Shopping": "GENERAL"
+    },
+    "merchant_purchase_types": [
+      {"contains": "AMAZON", "purchase_type": "AMAZON"}
+    ],
+    "merchant_channels": [
+      {"contains": "AMAZON", "channel": "ONLINE"},
+      {"contains": "APPLE.COM/BILL", "channel": "ONLINE"},
+      {"contains": "DEWA", "channel": "ONLINE"},
+      {"contains": "EMPOWER", "channel": "ONLINE"}
+    ]
+  },
+  "route_policies": {
+    "CATEGORY_BUCKET": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "target_rate_positive": true},
+      "ranking": {"groups_by_pace": {"*": 0}},
+      "reasons": {"*": "Category bucket has enough headroom for the whole purchase and its target-tier rate is active."}
+    },
+    "REWARD_BUCKET": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true},
+      "ranking": {"groups_by_pace": {"UNDER": 1, "ON_PACE": 2, "OVER": 3, "SECURED": 3, "*": 2}},
+      "reasons": {
+        "UNDER": "Prioritize this card: its target is unmet, cycle pace is under, and this reward bucket has headroom.",
+        "OVER": "Keep as a fallback: this reward bucket has headroom, but the card is already over cycle pace.",
+        "*": "Reward bucket has headroom and positive economic value."
+      }
+    },
+    "SPECIALIST": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true},
+      "ranking": {"groups_by_pace": {"UNDER": 1, "ON_PACE": 2, "OVER": 3, "SECURED": 3, "OPEN": 3, "*": 3}},
+      "reasons": {"*": "Eligible positive-value specialist remains available."}
+    },
+    "THRESHOLD_FILLER": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "target_unmet": true},
+      "ranking": {"groups_by_pace": {"UNDER": 2, "ON_PACE": 4, "OVER": 5, "SECURED": 5, "*": 5}},
+      "reasons": {
+        "UNDER": "Use as threshold filler because the card target is unmet and cycle pace is under.",
+        "*": "Keep as fallback filler: the card target is unmet, but higher-priority allocation needs are satisfied first."
+      }
+    },
+    "FALLBACK": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "net_value_positive": true},
+      "ranking": {"groups_by_pace": {"*": 6}},
+      "reasons": {"*": "Eligible positive-value fallback remains available."}
+    }
+  },
   "live_ingestion": {
     "canonical_rule_source": "static-rules.seed.json",
     "rule_set": "LIVE_CASHBACK"
@@ -11,6 +87,7 @@
     {
       "card": "RAK_WORLD",
       "name": "RAKBANK World",
+      "short_name": "RAK",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
@@ -28,16 +105,17 @@
         {"code": "ENHANCED", "minimum_spend_aed": "10000", "rates": {"RAK_GROCERY": "0.10", "RAK_DINING": "0.10", "RAK_TRAVEL": "0.10", "RAK_STANDARD": "0.01", "RAK_EWALLET": "0.03"}}
       ],
       "buckets": [
-        {"code": "RAK_GROCERY", "cashback_cap_aed": "300", "categories": ["GROCERY"]},
-        {"code": "RAK_DINING", "cashback_cap_aed": "300", "categories": ["DINING"]},
-        {"code": "RAK_TRAVEL", "cashback_cap_aed": "400", "categories": ["TRAVEL", "HOTEL", "AIRLINE"]},
-        {"code": "RAK_EWALLET", "cashback_cap_aed": "150", "channels": ["APPLE_PAY_POS"]},
-        {"code": "RAK_STANDARD", "cashback_cap_aed": "100"}
+        {"code": "RAK_GROCERY", "cashback_cap_aed": "300", "categories": ["GROCERY"], "assignment": {"categories": ["GROCERY"]}},
+        {"code": "RAK_DINING", "cashback_cap_aed": "300", "categories": ["DINING"], "assignment": {"categories": ["DINING"]}},
+        {"code": "RAK_TRAVEL", "cashback_cap_aed": "400", "categories": ["TRAVEL", "HOTEL", "AIRLINE"], "assignment": {"categories": ["TRAVEL", "HOTEL", "AIRLINE"]}},
+        {"code": "RAK_EWALLET", "cashback_cap_aed": "150", "channels": ["APPLE_PAY_POS"], "assignment": {"channels": ["APPLE_PAY_POS"]}},
+        {"code": "RAK_STANDARD", "cashback_cap_aed": "100", "assignment": {"fallback": true}}
       ]
     },
     {
       "card": "SC_PLATINUM_X",
       "name": "Standard Chartered Platinum X",
+      "short_name": "SC",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
@@ -57,15 +135,16 @@
         {"code": "TIER_10", "minimum_spend_aed": "15000", "rates": {"SC_ONLINE": "0.10", "SC_WALLET": "0.10", "SC_FOREIGN": "0.10"}}
       ],
       "buckets": [
-        {"code": "SC_ONLINE", "cashback_cap_aed": "400", "channels": ["ONLINE"], "aed_only": true},
-        {"code": "SC_WALLET", "cashback_cap_aed": "200", "channels": ["APPLE_PAY_POS"], "aed_only": true},
-        {"code": "SC_FOREIGN", "cashback_cap_aed": "400", "foreign_only": true},
-        {"code": "SC_FILLER", "cashback_cap_aed": null, "aed_only": true}
+        {"code": "SC_ONLINE", "cashback_cap_aed": "400", "channels": ["ONLINE"], "base_currency_only": true, "assignment": {"channels": ["ONLINE"], "base_currency_only": true}},
+        {"code": "SC_WALLET", "cashback_cap_aed": "200", "channels": ["APPLE_PAY_POS"], "base_currency_only": true, "assignment": {"channels": ["APPLE_PAY_POS"], "base_currency_only": true}},
+        {"code": "SC_FOREIGN", "cashback_cap_aed": "400", "foreign_only": true, "assignment": {"foreign_only": true}},
+        {"code": "SC_FILLER", "cashback_cap_aed": null, "base_currency_only": true, "assignment": {"channels": ["PHYSICAL_POS"], "base_currency_only": true}}
       ]
     },
     {
       "card": "EI_AMAZON",
       "name": "Emirates Islamic Amazon",
+      "short_name": "Amazon",
       "programme_version": "tentative-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,
@@ -82,7 +161,7 @@
         {"code": "STANDARD", "minimum_spend_aed": "0", "rates": {"EI_AMAZON": "0.06"}}
       ],
       "buckets": [
-        {"code": "EI_AMAZON", "cashback_cap_aed": null, "categories": ["AMAZON"], "channels": ["ONLINE"]}
+        {"code": "EI_AMAZON", "cashback_cap_aed": null, "categories": ["AMAZON"], "channels": ["ONLINE"], "assignment": {"categories": ["AMAZON"], "channels": ["ONLINE"]}}
       ]
     }
   ],
@@ -95,7 +174,7 @@
     {"category": "GENERAL", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
     {"category": "TRAVEL", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"},
     {"category": "GENERAL", "channel": "ONLINE", "currency": "USD", "decision_amount_aed": "100"},
-    {"category": "FILLER", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100"}
+    {"category": "FILLER", "channel": "PHYSICAL_POS", "currency": "AED", "decision_amount_aed": "100", "conditional": true}
   ],
   "routing_profiles": [
     {
