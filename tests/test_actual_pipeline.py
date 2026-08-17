@@ -353,4 +353,4 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
 
         sc = next(card for card in dashboard["cards"] if card["card"] == "SC_PLATINUM_X")
         self.assertEqual(sc["routing_mode"], "CURRENT_TIER")
-        self.assertEqual(dashboard["recommendations"][0]["use_card"], "RAK_WORLD")
+        self.assertEqual(dashboard["recommendations"][0]["use_card"], "SC_PLATINUM_X")

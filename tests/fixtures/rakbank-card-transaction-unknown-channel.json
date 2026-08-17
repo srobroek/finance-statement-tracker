@@ -1,0 +1,8 @@
+{
+  "id": "rakbank-fixture-message-apple-pay-1",
+  "subject": "An update on your Card transaction",
+  "sender": {"emailAddress": {"address": "alerts@rakbank.ae", "name": "RAKBANK"}},
+  "receivedDateTime": "2026-08-17T12:04:47Z",
+  "bodyPreview": "Hello Customer,\r\n\r\nYou spent AED 16.00 at BEST OF VENDS FZC LLC on your Credit Card  559580******7210 on 17/08. Combined Available Balance: AED 442.51.\r\n\r\nDidn't make this request?",
+  "web_link": "https://outlook.office.example/rakbank-fixture-message-apple-pay-1"
+}

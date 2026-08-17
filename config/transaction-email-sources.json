@@ -22,7 +22,7 @@
       "adapter": "rakbank_card_transaction_v1",
       "senders": ["alerts@rakbank.ae"],
       "subjects": ["An update on your Card transaction"],
-      "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and the event remains provisional until statement reconciliation."
+      "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and the event remains provisional until statement reconciliation. A separately observed Apple Pay purchase used the identical template and exposed no wallet marker. Explicit merchant channel rules run first; unresolved RAK_WORLD transactions use the configurable APPLE_PAY_POS user default."
     },
     {
       "code": "STANDARD_CHARTERED_CARD_TRANSACTION",

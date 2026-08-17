@@ -25,6 +25,9 @@
   "normalization": {
     "default_purchase_type": "GENERAL",
     "default_channel": "UNKNOWN",
+    "card_default_channels": {
+      "RAK_WORLD": "APPLE_PAY_POS"
+    },
     "actual_category_purchase_types": {
       "Groceries": "GROCERY",
       "Dining Out": "DINING",
@@ -101,7 +104,7 @@
       "safety_target_aed": "10300",
       "fx_cost_rate": "0",
       "tiers": [
-        {"code": "BASE", "minimum_spend_aed": "0", "rates": {"RAK_STANDARD": "0.01"}},
+        {"code": "BASE", "minimum_spend_aed": "0", "rates": {}},
         {"code": "ENHANCED", "minimum_spend_aed": "10000", "rates": {"RAK_GROCERY": "0.10", "RAK_DINING": "0.10", "RAK_TRAVEL": "0.10", "RAK_STANDARD": "0.01", "RAK_EWALLET": "0.03"}}
       ],
       "buckets": [
@@ -130,9 +133,9 @@
       "fx_cost_rate": "0.035",
       "tiers": [
         {"code": "BELOW_MIN", "minimum_spend_aed": "0", "rates": {}},
-        {"code": "TIER_3", "minimum_spend_aed": "2500", "rates": {"SC_ONLINE": "0.03", "SC_WALLET": "0.03", "SC_FOREIGN": "0.03"}},
-        {"code": "TIER_5", "minimum_spend_aed": "7500", "rates": {"SC_ONLINE": "0.05", "SC_WALLET": "0.05", "SC_FOREIGN": "0.05"}},
-        {"code": "TIER_10", "minimum_spend_aed": "15000", "rates": {"SC_ONLINE": "0.10", "SC_WALLET": "0.10", "SC_FOREIGN": "0.10"}}
+        {"code": "TIER_3", "minimum_spend_aed": "2500", "rates": {"SC_ONLINE": "0.03", "SC_WALLET": "0.03", "SC_FOREIGN": "0.03"}, "cashback_caps_aed": {"SC_ONLINE": "100", "SC_WALLET": "100", "SC_FOREIGN": "100"}},
+        {"code": "TIER_5", "minimum_spend_aed": "7500", "rates": {"SC_ONLINE": "0.05", "SC_WALLET": "0.05", "SC_FOREIGN": "0.05"}, "cashback_caps_aed": {"SC_ONLINE": "200", "SC_WALLET": "200", "SC_FOREIGN": "200"}},
+        {"code": "TIER_10", "minimum_spend_aed": "15000", "rates": {"SC_ONLINE": "0.10", "SC_WALLET": "0.10", "SC_FOREIGN": "0.10"}, "cashback_caps_aed": {"SC_ONLINE": "400", "SC_WALLET": "200", "SC_FOREIGN": "400"}}
       ],
       "buckets": [
         {"code": "SC_ONLINE", "cashback_cap_aed": "400", "channels": ["ONLINE"], "base_currency_only": true, "assignment": {"channels": ["ONLINE"], "base_currency_only": true}},

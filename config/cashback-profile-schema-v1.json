@@ -30,6 +30,7 @@
       "properties": {
         "default_purchase_type": {"type": "string"},
         "default_channel": {"type": "string"},
+        "card_default_channels": {"type": "object", "additionalProperties": {"type": "string"}},
         "actual_category_purchase_types": {"type": "object", "additionalProperties": {"type": "string"}},
         "merchant_purchase_types": {"type": "array", "items": {"$ref": "#/$defs/merchantPurchaseType"}},
         "merchant_channels": {"type": "array", "items": {"$ref": "#/$defs/merchantChannel"}}
@@ -163,6 +164,7 @@
         "minimum_spend": {"$ref": "#/$defs/money"},
         "minimum_spend_aed": {"$ref": "#/$defs/money"},
         "rates": {"type": "object", "additionalProperties": {"$ref": "#/$defs/money"}},
+        "cashback_caps_aed": {"type": "object", "additionalProperties": {"$ref": "#/$defs/money"}},
         "requirements": {
           "type": "array",
           "items": {

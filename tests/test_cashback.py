@@ -62,6 +62,32 @@ class CashbackTests(TestCase):
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
 
+    def test_rak_cashback_is_zero_below_monthly_minimum(self) -> None:
+        program = next(program for program in poc_programs() if program.card == "RAK_WORLD")
+        self.assertEqual(
+            reward_total(program, Decimal("57.49"), {"RAK_STANDARD": Decimal("41.49")}),
+            Decimal("0.00"),
+        )
+
+    def test_sc_uses_tier_specific_bucket_caps(self) -> None:
+        program = next(program for program in poc_programs() if program.card == "SC_PLATINUM_X")
+        self.assertEqual(
+            reward_total(program, Decimal("5000"), {"SC_WALLET": Decimal("4000")}),
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            reward_total(program, Decimal("10000"), {"SC_WALLET": Decimal("4000")}),
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            reward_total(program, Decimal("15000"), {"SC_WALLET": Decimal("4000")}),
+            Decimal("200.00"),
+        )
+        self.assertEqual(
+            reward_total(program, Decimal("15000"), {"SC_ONLINE": Decimal("4000")}),
+            Decimal("400.00"),
+        )
+
     def test_amazon_overflow_returns_to_ei_after_sc_online_is_full(self) -> None:
         transactions = [
             Transaction("o", datetime(2026, 8, 1), "SC_PLATINUM_X", "Online", "4000", channel="ONLINE", category="GENERAL", reward_bucket="SC_ONLINE"),

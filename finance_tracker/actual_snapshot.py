@@ -79,7 +79,7 @@ def transactions_from_actual_snapshot(
         currency_match = _CURRENCY.search(notes)
         currency = currency_match.group(1).upper() if currency_match else base_currency
         category = purchase_type_from_config(cashback_source, row.get("category_name"), merchant)
-        channel = channel_from_config(cashback_source, tags, merchant)
+        channel = channel_from_config(cashback_source, tags, merchant, card)
         amount_minor = int(row["amount"])
         transfer = bool(row.get("transfer_id"))
         card_payment = row.get("category_name") == "Card Payments" or any(
@@ -160,7 +160,8 @@ def cashback_dashboard(
             rate = target_tier.rates.get(bucket.code, Decimal("0"))
             spend_cap = bucket.spend_cap_aed
             if spend_cap is None:
-                spend_cap = None if bucket.cap_aed is None or rate <= 0 else bucket.cap_aed / rate
+                cashback_cap = target_tier.cashback_cap(bucket.code, bucket.cap_aed)
+                spend_cap = None if cashback_cap is None or rate <= 0 else cashback_cap / rate
             bucket_ratio = None if spend_cap in (None, Decimal("0")) else bucket_actual / spend_cap
             bucket_status = (
                 "FULL" if bucket_ratio is not None and bucket_ratio >= 1

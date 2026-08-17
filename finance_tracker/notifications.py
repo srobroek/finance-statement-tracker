@@ -10,7 +10,13 @@ from .ai_rules import AIEnrichmentEngine
 from .history import HistoryDecision, apply_history_match
 from .models import Transaction
 from .rules import RuleEngine, StaticRule
-from .cashback import channel_from_config, load_program_configuration, purchase_type_from_config
+from .cashback import (
+    channel_from_config,
+    configured_reward_bucket,
+    load_program_configuration,
+    programs_from_config,
+    purchase_type_from_config,
+)
 
 
 _ADCB_OTP = re.compile(
@@ -175,7 +181,7 @@ class RakbankCardTransactionNotificationAdapter:
             occurred_at=occurred,
             channel="UNKNOWN",
             confidence=0.95,
-            requires_review=True,
+            requires_review=False,
         )
 
 DEFAULT_NOTIFICATION_ADAPTERS: tuple[NotificationAdapter, ...] = (
@@ -252,23 +258,39 @@ def parse_outlook_notifications(
                 cashback_source,
                 transaction.tags,
                 transaction.merchant_raw,
+                transaction.card,
             )
+            if transaction.channel != "UNKNOWN":
+                transaction.tags.add("channel-config-default")
         static_trace = engine.apply(transaction)
         history_trace = apply_history_match(transaction, history_index or {})
         ai_trace = []
         if ai_engine and ai_resolver:
             ai_trace = ai_engine.enrich(transaction, ai_resolver)
+        purchase_type = purchase_type_from_config(
+            cashback_source,
+            transaction.category,
+            transaction.vendor or transaction.merchant_raw,
+        )
+        if transaction.reward_bucket is None:
+            active_programs = programs_from_config(
+                cashback_source,
+                transaction.transaction_at.date(),
+            )
+            transaction.reward_bucket = configured_reward_bucket(
+                active_programs,
+                transaction.card,
+                purchase_type,
+                transaction.channel,
+                transaction.currency,
+            )
         event = {
             "source_event_id": transaction.transaction_id,
             "occurred_at": fact.occurred_at.isoformat(),
             "card_code": transaction.card,
             "amount_aed": str(fact.amount),
             "currency": fact.currency,
-            "purchase_type": purchase_type_from_config(
-                cashback_source,
-                transaction.category,
-                transaction.vendor or transaction.merchant_raw,
-            ),
+            "purchase_type": purchase_type,
             "channel": transaction.channel,
             "merchant": transaction.vendor or transaction.merchant_raw,
             "bucket_code": transaction.reward_bucket,
@@ -277,7 +299,7 @@ def parse_outlook_notifications(
             "status": "PROVISIONAL",
             "tags": sorted(transaction.tags),
             "confidence": fact.confidence,
-            "review_required": True,
+            "review_required": transaction.review_required or transaction.channel == "UNKNOWN",
             "reconciliation_status": "UNMATCHED",
             "email_reference": str(message.get("web_link") or message.get("display_url") or "") or None,
             "decision_trace": [asdict(item) for item in static_trace]

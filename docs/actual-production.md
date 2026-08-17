@@ -237,7 +237,7 @@ The hourly path uses only the `LIVE_CASHBACK` rule set configured under `cashbac
 
 Transaction notifications are retrieved in full from the durable cursor minus the configured overlap. Statement-PDF retrieval is different: each card-specific job selects only the latest statement message for that card/account and expected cycle, except for an explicit retry or backfill.
 
-The first production adapter supports amount-bearing ADCB card-authorization emails. An OTP/authorization email proves an attempted authorization, not settlement, so it is stored with confidence below 0.8, `review_required=true`, and `PROVISIONAL` status. Messages that omit an amount or foreign messages that omit an AED equivalent are not ingested. RAKBANK, Standard Chartered, and Emirates Islamic adapters remain unavailable until representative notification formats exist.
+Production notification adapters currently support amount-bearing ADCB card-authorization emails and verified RAKBANK World transaction emails. An ADCB OTP proves an attempted authorization, not settlement, so it is stored with confidence below 0.8, `review_required=true`, and `PROVISIONAL` status. The RAKBANK adapter requires the registered sender, exact transaction subject, amount, currency, merchant, card suffix, and transaction day/month; same-subject activation messages fail closed. RAKBANK notification emails do not expose Apple Pay usage, so unresolved RAK_WORLD channels use the explicit profile default after merchant-specific channel rules. All notification events remain provisional until statement reconciliation. Standard Chartered and Emirates Islamic transaction adapters remain unavailable until representative notification formats exist.
 
 ## Backup
 

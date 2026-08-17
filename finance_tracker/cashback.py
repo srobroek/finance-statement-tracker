@@ -38,12 +38,16 @@ class RewardTier:
     code: str
     minimum_spend: Decimal
     rates: dict[str, Decimal]
+    cashback_caps_aed: dict[str, Decimal] = field(default_factory=dict)
     requirements: tuple[TierRequirement, ...] = ()
 
     def qualifies(self, total_spend: Decimal, buckets: dict[str, Decimal]) -> bool:
         return total_spend >= self.minimum_spend and all(
             requirement.met(total_spend, buckets) for requirement in self.requirements
         )
+
+    def cashback_cap(self, bucket: str, fallback: Decimal | None) -> Decimal | None:
+        return self.cashback_caps_aed.get(bucket, fallback)
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,7 +265,8 @@ def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decima
     for code, spend in buckets.items():
         rate = tier.rates.get(code, Decimal("0"))
         earned = max(spend, Decimal("0")) * rate
-        cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
+        fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
+        cap = tier.cashback_cap(code, fallback_cap)
         reward += min(earned, cap) if cap is not None else earned
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
@@ -306,14 +311,21 @@ def evaluate_card(
                 money(intent.amount_aed),
                 max(spend_capacity - current_bucket_spend, Decimal("0")),
             )
-        elif bucket.cap_aed is not None and target_rate > 0:
-            spend_capacity = bucket.cap_aed / target_rate
-            eligible_progress_spend = min(
-                money(intent.amount_aed),
-                max(spend_capacity - current_bucket_spend, Decimal("0")),
-            )
         else:
-            eligible_progress_spend = money(intent.amount_aed)
+            target_cap = target_tier.cashback_cap(bucket.code, bucket.cap_aed)
+            spend_capacity = (
+                target_cap / target_rate
+                if target_cap is not None and target_rate > 0
+                else None
+            )
+            eligible_progress_spend = (
+                money(intent.amount_aed)
+                if spend_capacity is None
+                else min(
+                    money(intent.amount_aed),
+                    max(spend_capacity - current_bucket_spend, Decimal("0")),
+                )
+            )
         bucket_remaining = (
             None
             if spend_capacity is None
@@ -564,6 +576,12 @@ def validate_program_configuration(source: dict[str, object]) -> None:
                     f"Cashback program {card} tier {tier.get('code')} references unknown buckets: "
                     + ", ".join(sorted(unknown))
                 )
+            unknown_caps = set((tier.get("cashback_caps_aed") or {}).keys()) - set(bucket_codes)
+            if unknown_caps:
+                raise ValueError(
+                    f"Cashback program {card} tier {tier.get('code')} caps reference unknown buckets: "
+                    + ", ".join(sorted(unknown_caps))
+                )
             for requirement in tier.get("requirements") or []:
                 if not isinstance(requirement, dict):
                     raise ValueError(f"Cashback program {card} contains an invalid tier requirement")
@@ -684,6 +702,7 @@ def channel_from_config(
     source: dict[str, object],
     tags: Iterable[str],
     merchant: str = "",
+    card: str = "",
 ) -> str:
     for tag in tags:
         if str(tag).casefold().startswith("channel-"):
@@ -698,6 +717,11 @@ def channel_from_config(
         contains = str(rule.get("contains") or "").upper()
         if contains and contains in upper_merchant:
             return str(rule["channel"]).upper()
+    card_defaults = normalization.get("card_default_channels") or {}
+    if not isinstance(card_defaults, dict):
+        raise ValueError("cashback card_default_channels must be an object")
+    if card and str(card_defaults.get(card) or "").strip():
+        return str(card_defaults[card]).upper()
     return str(normalization.get("default_channel") or "UNKNOWN").upper()
 
 
@@ -749,6 +773,10 @@ def programs_from_config(
                     str(_configured_value(tier, "minimum_spend", "minimum_spend_aed") or "0")
                 ),
                 rates={code: Decimal(str(rate)) for code, rate in tier.get("rates", {}).items()},
+                cashback_caps_aed={
+                    code: Decimal(str(cap))
+                    for code, cap in (tier.get("cashback_caps_aed") or {}).items()
+                },
                 requirements=tuple(
                     TierRequirement(
                         metric=str(requirement["metric"]).upper(),

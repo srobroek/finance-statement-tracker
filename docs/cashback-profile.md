@@ -10,6 +10,7 @@ The machine-readable contract is `config/cashback-profile-schema-v1.json`. The r
 - card programme versions and effective dates;
 - statement close day and forecast payment offset per card;
 - flat or tiered reward rates;
+- optional tier-specific cashback caps when the issuer changes a bucket cap with the achieved tier;
 - total-spend and bucket-spend tier requirements;
 - reward caps or direct spend caps;
 - category, channel, currency, domestic, foreign, and fallback bucket assignment;
@@ -43,6 +44,8 @@ Every tier has a `minimum_spend` shortcut. Additional requirements are ANDed:
 }
 ```
 
+When a bucket cap changes by tier, define `cashback_caps_aed` on the tier. It overrides the bucket-level cap only for that tier; the bucket cap remains the fallback for simpler programmes.
+
 Supported metrics are `TOTAL_SPEND` and `BUCKET_SPEND`. Supported operators are `GTE`, `GT`, `LTE`, `LT`, and `EQ`. `target_tier` can name the tier whose rates should guide prospective routing before its requirements are secured.
 
 ## Bucket assignment and eligibility
@@ -62,7 +65,7 @@ Bucket eligibility controls whether a prospective purchase can earn from a bucke
 }
 ```
 
-An `assignment.fallback` bucket receives otherwise unmatched transactions only when the channel is known. Unknown-channel events remain reviewable rather than being silently forced into a bucket.
+An `assignment.fallback` bucket receives otherwise unmatched transactions only when the channel is known. Unknown-channel events normally remain reviewable. A deployment may deliberately set `normalization.card_default_channels` when a user has a stable per-card payment habit and accepts the bounded modelling error. Explicit channel tags and merchant rules take precedence over that default.
 
 ## Routing policies
 

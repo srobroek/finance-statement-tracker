@@ -62,8 +62,9 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(event["card_code"], "RAK_WORLD")
         self.assertEqual(event["purchase_type"], "AMAZON")
         self.assertEqual(event["channel"], "ONLINE")
+        self.assertEqual(event["bucket_code"], "RAK_STANDARD")
         self.assertEqual(event["status"], "PROVISIONAL")
-        self.assertTrue(event["review_required"])
+        self.assertFalse(event["review_required"])
 
     def test_rakbank_non_transaction_subject_is_not_accepted(self):
         message = json.loads(
@@ -77,6 +78,24 @@ class NotificationTests(unittest.TestCase):
         )
         self.assertEqual(result.accepted_count, 0)
         self.assertEqual(result.skipped[0]["reason"], "UNSUPPORTED_NOTIFICATION")
+
+    def test_rakbank_unresolved_retail_uses_configured_apple_pay_default(self):
+        message = json.loads(
+            Path("tests/fixtures/rakbank-card-transaction-unknown-channel.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        result = parse_outlook_notifications(
+            [message], {"7210": "RAK_WORLD"}, self.rules
+        )
+        self.assertEqual(result.accepted_count, 1)
+        event = result.events[0]
+        self.assertEqual(event["amount_aed"], "16.00")
+        self.assertEqual(event["merchant"], "BEST OF VENDS FZC LLC")
+        self.assertEqual(event["channel"], "APPLE_PAY_POS")
+        self.assertEqual(event["bucket_code"], "RAK_EWALLET")
+        self.assertIn("channel-config-default", event["tags"])
+        self.assertFalse(event["review_required"])
 
     def test_rakbank_matching_subject_with_incomplete_body_is_rejected(self):
         message = json.loads(
