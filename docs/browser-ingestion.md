@@ -70,20 +70,22 @@ Both paths parsed all 303 candidate rows and produced one account envelope
 with no import blocker. Static rules resolved eight cashback credits and three
 card-payment credits. A unique, exact merchant/amount refund pair then resolved
 the remaining generic credit deterministically; duplicate candidate purchases
-remain review-required. The release-`dfa697d` production STAGE job was
-`c278b3e939d3d1be6aa17eaa`; it did not contact or modify Actual. The subsequent
-local release-candidate replay reached `READY_FOR_APPROVAL` with zero review
-rows and preserved the same source hash.
+remain review-required. Release `b9774e7` production STAGE job
+`d969fd18106fa982d6ad4e47` reached `READY_FOR_APPROVAL` with zero review rows
+and preserved the same source hash. Replaying that exact request returned the
+same job ID and `idempotent_replay=true`. It did not contact or modify Actual.
 
 The scoped AI handoff emitted 287 requests rather than the previous 1,129:
 246 unresolved classifications, three subscription checks, six property
 enrichments, and 32 evidence decisions. Cashback enrichment was correctly
 omitted because ADCB is not part of the live cashback profile. A handoff marked
 complete must now return exactly one response for every emitted request, even
-when a response deliberately contains no proposal. The compact job response
-deduplicates policy and transaction context and is 67.6% smaller than the full
-audit request representation for this real batch; the manifest retains the full
-requests for traceability.
+when a response deliberately contains no proposal. The schema-2 compact job
+response stores 255 deduplicated policy-time transaction snapshots, references
+the exact snapshot from each request, and is 63.3% smaller than the full audit
+request representation for this real batch. The manifest retains the full
+requests for traceability. An incomplete production PREFLIGHT was rejected by
+the AI-handoff guard before the Actual bridge was contacted.
 
 ## Correctness gates
 
