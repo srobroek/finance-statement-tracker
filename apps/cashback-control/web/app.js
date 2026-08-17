@@ -1,4 +1,4 @@
-let baseCurrency = "AED";
+let baseCurrency = "XXX";
 let money = currencyFormatter(baseCurrency);
 const cardNames = new Map();
 const shortCardNames = new Map();
@@ -12,7 +12,7 @@ function currencyFormatter(currency) {
 }
 
 function configureDisplay(payload) {
-  baseCurrency = payload.currency || "AED";
+  baseCurrency = payload.currency || "XXX";
   money = currencyFormatter(baseCurrency);
   if (payload.profile?.name) document.title = payload.profile.name;
   cardNames.clear();

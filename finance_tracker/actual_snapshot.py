@@ -57,6 +57,7 @@ def transactions_from_actual_snapshot(
     cashback_config: dict[str, Any] | None = None,
 ) -> list[Transaction]:
     cashback_source = cashback_config or load_program_configuration()
+    base_currency = str(cashback_source.get("currency") or config.get("currency") or "XXX").upper()
     programs = programs_from_config(cashback_source)
     _, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
@@ -76,7 +77,7 @@ def transactions_from_actual_snapshot(
         tags = _tags(notes)
         merchant = str(row.get("imported_payee") or row.get("payee_name") or "Unknown")
         currency_match = _CURRENCY.search(notes)
-        currency = currency_match.group(1).upper() if currency_match else "AED"
+        currency = currency_match.group(1).upper() if currency_match else base_currency
         category = purchase_type_from_config(cashback_source, row.get("category_name"), merchant)
         channel = channel_from_config(cashback_source, tags, merchant)
         amount_minor = int(row["amount"])

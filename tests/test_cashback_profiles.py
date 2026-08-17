@@ -8,7 +8,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from finance_tracker.ai_rules import load_ai_policies
-from finance_tracker.actual_snapshot import cashback_dashboard
+from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
 from finance_tracker.cashback import (
     configured_reward_bucket,
     payment_intents_from_config,
@@ -167,6 +167,34 @@ class PublicCashbackProfileTests(TestCase):
             )
 
         self.assertEqual(set(policy.allowed_values["reward_bucket"]), {"ALL", "TRAVEL"})
+
+    def test_actual_snapshot_defaults_to_profile_currency_not_original_portfolio_currency(self) -> None:
+        cashback_profile = load_profile("flat-rate-usd.json")
+        rows = transactions_from_actual_snapshot(
+            {
+                "transactions": [{
+                    "id": "actual-fictional-1",
+                    "account_name": "Fictional Everyday",
+                    "date": "2026-05-12",
+                    "amount": -2500,
+                    "imported_payee": "Example Store",
+                    "category_name": "General",
+                    "notes": "",
+                    "cleared": True,
+                }],
+            },
+            {
+                "currency": "USD",
+                "accounts": [{
+                    "name": "Fictional Everyday",
+                    "card_code": "EVERYDAY_2",
+                    "card_last4": [],
+                }],
+            },
+            cashback_profile,
+        )
+
+        self.assertEqual(rows[0].currency, "USD")
 
 
 if __name__ == "__main__":

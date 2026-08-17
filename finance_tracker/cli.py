@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         "--statement-status",
         type=Path,
         required=True,
-        help='JSON object such as {"RAK_WORLD":"RECEIVED","SC_PLATINUM_X":"RECEIVED"}',
+        help='JSON object such as {"CARD_ALPHA":"RECEIVED","CARD_BETA":"RECEIVED"}',
     )
     close.add_argument("--as-of", type=date.fromisoformat, default=date.today())
     close.add_argument("--grace-days", type=int, default=5)
