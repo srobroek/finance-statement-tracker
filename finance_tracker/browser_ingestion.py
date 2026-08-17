@@ -33,6 +33,7 @@ CAPTURE_METHODS = {
     "STATEMENT_DOWNLOAD",
     "VISIBLE_ROWS",
 }
+REFUND_MATCH_WINDOW_DAYS = 60
 SENSITIVE_KEYS = {
     "access_token",
     "authorization",
@@ -248,6 +249,69 @@ def _statement_check(
         "period_end": str(raw.get("period_end") or "").strip() or None,
         "payment_due_date": str(raw.get("payment_due_date") or "").strip() or None,
     }
+
+
+def _match_exact_refunds(transactions: Iterable[Transaction]) -> int:
+    """Resolve a generic credit only when one exact prior purchase explains it."""
+    rows = list(transactions)
+    matched_purchase_ids: set[str] = set()
+    resolved = 0
+    for credit in rows:
+        reasons = list(credit.metadata.get("browser_review_reasons", []))
+        if (
+            "UNCLASSIFIED_CREDIT" not in reasons
+            or credit.transaction_type != "CREDIT"
+            or credit.metadata.get("browser_direction") != "CREDIT"
+        ):
+            continue
+        normalized_merchant = " ".join(credit.merchant_raw.upper().split())
+        candidates: list[tuple[Transaction, int]] = []
+        for purchase in rows:
+            age_days = (credit.transaction_at.date() - purchase.transaction_at.date()).days
+            same_amount = (
+                purchase.amount_aed == credit.amount_aed
+                if credit.currency == "AED"
+                else (
+                    purchase.amount_original is not None
+                    and credit.amount_original is not None
+                    and purchase.amount_original == credit.amount_original
+                )
+            )
+            if (
+                purchase.transaction_id not in matched_purchase_ids
+                and purchase.metadata.get("browser_direction") == "DEBIT"
+                and purchase.transaction_type == "PURCHASE"
+                and purchase.account == credit.account
+                and purchase.account_last4 == credit.account_last4
+                and purchase.currency == credit.currency
+                and same_amount
+                and " ".join(purchase.merchant_raw.upper().split()) == normalized_merchant
+                and 0 <= age_days <= REFUND_MATCH_WINDOW_DAYS
+            ):
+                candidates.append((purchase, age_days))
+        if len(candidates) != 1:
+            continue
+        purchase, age_days = candidates[0]
+        matched_purchase_ids.add(purchase.transaction_id)
+        credit.transaction_type = "REFUND"
+        credit.is_refund = True
+        credit.vendor = credit.vendor or purchase.vendor
+        credit.category = credit.category or purchase.category
+        credit.subcategory = credit.subcategory or purchase.subcategory
+        credit.tags.update({"refund", *purchase.tags})
+        reasons.remove("UNCLASSIFIED_CREDIT")
+        credit.metadata["browser_review_reasons"] = reasons
+        credit.metadata.setdefault("browser_review_resolutions", []).append(
+            "EXACT_UNIQUE_REFUND_PAIR"
+        )
+        credit.metadata["browser_refund_match"] = {
+            "purchase_transaction_id": purchase.transaction_id,
+            "age_days": age_days,
+            "window_days": REFUND_MATCH_WINDOW_DAYS,
+        }
+        credit.review_required = bool(reasons)
+        resolved += 1
+    return resolved
 
 
 def build_browser_ingestion_run(
@@ -498,6 +562,8 @@ def build_browser_ingestion_run(
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
+
+    _match_exact_refunds(transactions)
 
     blockers = list(account_blockers)
     if kind == "STATEMENT_ROWS" and not authoritative_statement:

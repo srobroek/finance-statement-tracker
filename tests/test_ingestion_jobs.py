@@ -6,7 +6,7 @@ from pathlib import Path
 
 from reportlab.pdfgen import canvas
 
-from finance_tracker.ingestion_jobs import IngestionJobRunner
+from finance_tracker.ingestion_jobs import IngestionJobRunner, compact_ai_handoff
 
 
 EI_LINES = (
@@ -84,10 +84,13 @@ class IngestionJobTests(unittest.TestCase):
             )
         )
         self.assertGreater(first["ai_request_count"], 0)
-        self.assertEqual(first["ai_request_count"], len(first["ai_requests"]))
+        self.assertNotIn("ai_requests", first)
+        self.assertEqual(
+            first["ai_request_count"], len(first["ai_handoff"]["requests"])
+        )
         ai_request = next(
             item
-            for item in manifest["ai_requests"]
+            for item in first["ai_handoff"]["requests"]
             if item["policy_id"] == "classify-unresolved"
             and "tags" in item["allowed_fields"]
         )
@@ -96,7 +99,7 @@ class IngestionJobTests(unittest.TestCase):
                 **request,
                 "ai_responses": [
                     {
-                        "transaction_id": ai_request["transaction"]["transaction_id"],
+                        "transaction_id": ai_request["transaction_id"],
                         "policy_id": ai_request["policy_id"],
                         "provider": "codex-scheduled-task",
                         "model": "gpt-5.6-sol",
@@ -133,7 +136,7 @@ class IngestionJobTests(unittest.TestCase):
                 **request,
                 "ai_responses": [
                     {
-                        "transaction_id": ai_request["transaction"]["transaction_id"],
+                        "transaction_id": ai_request["transaction_id"],
                         "policy_id": ai_request["policy_id"],
                         "proposals": [
                             {
@@ -151,6 +154,63 @@ class IngestionJobTests(unittest.TestCase):
         self.assertEqual(rejected["staging_status"], "REVIEW_REQUIRED")
         self.assertEqual(rejected["review_count"], 1)
         self.assertEqual(rejected["ai_rejected_count"], 1)
+
+    def test_compact_ai_handoff_deduplicates_policy_and_transaction_context(self) -> None:
+        transaction_one = {"transaction_id": "tx-1", "merchant_raw": "Example"}
+        transaction_two = {"transaction_id": "tx-2", "merchant_raw": "Other"}
+        classify = {
+            "schema_version": 1,
+            "policy_version": 1,
+            "instruction": "Classify",
+            "allowed_values": {"category": ["Groceries"]},
+            "allowed_tags": ["grocery"],
+            "response_contract": {"proposals": []},
+        }
+        evidence = {
+            **classify,
+            "instruction": "Decide whether evidence should be searched",
+            "allowed_values": {"evidence_policy": ["SEARCH_PURCHASE_EVIDENCE"]},
+        }
+
+        handoff = compact_ai_handoff([
+            {
+                **classify,
+                "policy_id": "classify",
+                "allowed_fields": ["category"],
+                "transaction": transaction_one,
+            },
+            {
+                **evidence,
+                "policy_id": "evidence",
+                "allowed_fields": ["evidence_policy"],
+                "transaction": transaction_one,
+            },
+            {
+                **classify,
+                "policy_id": "classify",
+                "allowed_fields": ["category"],
+                "transaction": transaction_two,
+            },
+        ])
+
+        self.assertEqual(list(handoff["policies"]), ["classify", "evidence"])
+        self.assertEqual(list(handoff["transactions"]), ["tx-1", "tx-2"])
+        self.assertEqual(len(handoff["requests"]), 3)
+
+    def test_compact_ai_handoff_rejects_duplicate_request_identity(self) -> None:
+        request = {
+            "policy_id": "classify",
+            "policy_version": 1,
+            "instruction": "Classify",
+            "allowed_values": {},
+            "allowed_tags": [],
+            "response_contract": {"proposals": []},
+            "allowed_fields": ["category"],
+            "transaction": {"transaction_id": "tx-1"},
+        }
+
+        with self.assertRaisesRegex(ValueError, "Duplicate AI request"):
+            compact_ai_handoff([request, request])
 
     def test_placeholder_statement_adapter_is_blocked_before_parsing(self) -> None:
         pdf = self.runner.inbox / "unknown-rak.pdf"

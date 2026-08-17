@@ -245,7 +245,7 @@ jobs:
           import json, sys
           result = json.load(sys.stdin)
           request = next(
-              item for item in result["ai_requests"]
+              item for item in result["ai_handoff"]["requests"]
               if item["policy_id"] == "classify-unresolved"
               and "tags" in item["allowed_fields"]
           )
@@ -259,7 +259,7 @@ jobs:
               "source_filename": "EI statement July 2026.pdf",
               "ai_handoff_complete": True,
               "ai_responses": [{
-                  "transaction_id": request["transaction"]["transaction_id"],
+                  "transaction_id": request["transaction_id"],
                   "policy_id": request["policy_id"],
                   "provider": "github-actions-e2e",
                   "model": "synthetic",

@@ -20,6 +20,55 @@ JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
 ACTUAL_MODES = frozenset({"STAGE", "PREFLIGHT", "COMMIT"})
 
 
+def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
+    """Deduplicate policy and transaction context without losing request identity."""
+    policies: dict[str, dict[str, Any]] = {}
+    transactions: dict[str, dict[str, Any]] = {}
+    compact_requests: list[dict[str, Any]] = []
+    request_keys: set[tuple[str, str]] = set()
+    for request in requests:
+        policy_id = str(request.get("policy_id") or "").strip()
+        transaction = request.get("transaction")
+        transaction_id = str(
+            transaction.get("transaction_id") if isinstance(transaction, dict) else ""
+        ).strip()
+        if not policy_id or not transaction_id:
+            raise ValueError("AI request requires policy_id and transaction.transaction_id")
+        request_key = (transaction_id, policy_id)
+        if request_key in request_keys:
+            raise ValueError(
+                "Duplicate AI request for transaction "
+                f"{transaction_id} policy {policy_id}"
+            )
+        request_keys.add(request_key)
+        policy = {
+            "policy_version": request.get("policy_version"),
+            "instruction": request.get("instruction"),
+            "allowed_values": request.get("allowed_values") or {},
+            "allowed_tags": request.get("allowed_tags") or [],
+            "response_contract": request.get("response_contract") or {},
+        }
+        if policy_id in policies and policies[policy_id] != policy:
+            raise ValueError(f"AI policy context changed within one handoff: {policy_id}")
+        policies[policy_id] = policy
+        if transaction_id in transactions and transactions[transaction_id] != transaction:
+            raise ValueError(
+                f"AI transaction context changed within one handoff: {transaction_id}"
+            )
+        transactions[transaction_id] = dict(transaction)
+        compact_requests.append({
+            "transaction_id": transaction_id,
+            "policy_id": policy_id,
+            "allowed_fields": list(request.get("allowed_fields") or []),
+        })
+    return {
+        "schema_version": 1,
+        "policies": policies,
+        "transactions": transactions,
+        "requests": compact_requests,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class IngestionJobResult:
     job_id: str
@@ -349,7 +398,7 @@ class IngestionJobRunner:
         result["ai_rejected_count"] = sum(
             1 for trace in ai_trace if isinstance(trace, dict) and trace.get("accepted") is False
         )
-        result["ai_requests"] = list(staged.get("ai_requests") or [])
+        result["ai_handoff"] = compact_ai_handoff(list(staged.get("ai_requests") or []))
         result["ai_handoff_complete"] = ai_handoff_complete
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result

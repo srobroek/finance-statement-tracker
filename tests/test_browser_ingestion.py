@@ -225,6 +225,75 @@ class BrowserIngestionTests(TestCase):
         self.assertTrue(run.transactions[1]["review_required"])
         self.assertEqual(run.review_count, 1)
 
+    def test_unique_exact_opposite_direction_pair_is_a_refund(self):
+        capture = self.capture()
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["rows"] = [
+            {
+                "transaction_date": "2026-08-01",
+                "description": "CARREFOUR MARKET",
+                "amount_aed": "153.29",
+                "direction": "DEBIT",
+            },
+            {
+                "transaction_date": "2026-08-09",
+                "description": "CARREFOUR MARKET",
+                "amount_aed": "153.29",
+                "direction": "CREDIT",
+            },
+        ]
+
+        run = build_browser_ingestion_run(
+            capture,
+            self.config(),
+            load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
+        )
+
+        refund = run.transactions[1]
+        self.assertEqual(refund["transaction_type"], "REFUND")
+        self.assertTrue(refund["is_refund"])
+        self.assertFalse(refund["review_required"])
+        self.assertEqual(refund["category"], "Groceries")
+        self.assertEqual(
+            refund["metadata"]["browser_review_resolutions"],
+            ["EXACT_UNIQUE_REFUND_PAIR"],
+        )
+
+    def test_ambiguous_duplicate_purchase_candidates_do_not_infer_a_refund(self):
+        capture = self.capture()
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["rows"] = [
+            {
+                "transaction_date": "2026-08-01",
+                "description": "CARREFOUR MARKET",
+                "amount_aed": "153.29",
+                "direction": "DEBIT",
+            },
+            {
+                "transaction_date": "2026-08-02",
+                "description": "CARREFOUR MARKET",
+                "amount_aed": "153.29",
+                "direction": "DEBIT",
+            },
+            {
+                "transaction_date": "2026-08-09",
+                "description": "CARREFOUR MARKET",
+                "amount_aed": "153.29",
+                "direction": "CREDIT",
+            },
+        ]
+
+        run = build_browser_ingestion_run(
+            capture,
+            self.config(),
+            load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
+        )
+
+        credit = run.transactions[2]
+        self.assertEqual(credit["transaction_type"], "CREDIT")
+        self.assertTrue(credit["review_required"])
+        self.assertEqual(run.review_count, 1)
+
     def test_export_writes_portable_actual_handoff(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

@@ -30,3 +30,9 @@ trigger remains unresolved; optional companion fields such as reporting tags
 may be included in that request but cannot trigger a model call by themselves.
 Conditions further restrict subscription, purchase-evidence, property, and
 cashback policies to relevant transactions and cards.
+
+The job API returns a compact `ai_handoff`: shared policy definitions live in
+`policies`, transaction facts live once in `transactions`, and `requests`
+contains only `transaction_id`, `policy_id`, and unresolved `allowed_fields`.
+This preserves every validation boundary while avoiding repeated instructions
+and allowlists in scheduled-task context.

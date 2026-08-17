@@ -68,16 +68,22 @@ container on 2026-08-17. The artifact hash was
 `32444d7848209c69842e83caeb89fbb273fa46b3064625444576517786a310dc`.
 Both paths parsed all 303 candidate rows and produced one account envelope
 with no import blocker. Static rules resolved eight cashback credits and three
-card-payment credits, while one ambiguous credit remained review-required.
-The release-`dfa697d` production STAGE job was
-`c278b3e939d3d1be6aa17eaa`; it did not contact or modify Actual.
+card-payment credits. A unique, exact merchant/amount refund pair then resolved
+the remaining generic credit deterministically; duplicate candidate purchases
+remain review-required. The release-`dfa697d` production STAGE job was
+`c278b3e939d3d1be6aa17eaa`; it did not contact or modify Actual. The subsequent
+local release-candidate replay reached `READY_FOR_APPROVAL` with zero review
+rows and preserved the same source hash.
 
 The scoped AI handoff emitted 287 requests rather than the previous 1,129:
 246 unresolved classifications, three subscription checks, six property
 enrichments, and 32 evidence decisions. Cashback enrichment was correctly
 omitted because ADCB is not part of the live cashback profile. A handoff marked
 complete must now return exactly one response for every emitted request, even
-when a response deliberately contains no proposal.
+when a response deliberately contains no proposal. The compact job response
+deduplicates policy and transaction context and is 67.6% smaller than the full
+audit request representation for this real batch; the manifest retains the full
+requests for traceability.
 
 ## Correctness gates
 
