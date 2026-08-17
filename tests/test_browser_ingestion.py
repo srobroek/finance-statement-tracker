@@ -8,6 +8,10 @@ from finance_tracker.browser_ingestion import (
     build_browser_ingestion_run,
     export_browser_capture_for_actual,
 )
+from finance_tracker.actual_pipeline import load_compiled_rules
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserIngestionTests(TestCase):
@@ -188,6 +192,38 @@ class BrowserIngestionTests(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Duplicate browser source_id"):
             build_browser_ingestion_run(capture, self.config())
+
+    def test_static_rules_clear_only_deterministically_classified_credit_reviews(self):
+        capture = self.capture()
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["rows"] = [
+            {
+                "transaction_date": "2026-08-15",
+                "description": "CASHBACK REWARD CREDIT",
+                "amount_aed": "25.00",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-16",
+                "description": "UNKNOWN CREDIT",
+                "amount_aed": "10.00",
+                "direction": "CREDIT",
+            },
+        ]
+
+        run = build_browser_ingestion_run(
+            capture,
+            self.config(),
+            load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
+        )
+
+        self.assertFalse(run.transactions[0]["review_required"])
+        self.assertIn(
+            "STATIC_RULE_CLASSIFIED_CREDIT",
+            run.transactions[0]["metadata"]["browser_review_resolutions"],
+        )
+        self.assertTrue(run.transactions[1]["review_required"])
+        self.assertEqual(run.review_count, 1)
 
     def test_export_writes_portable_actual_handoff(self):
         with TemporaryDirectory() as directory:

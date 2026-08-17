@@ -374,15 +374,19 @@ def build_browser_ingestion_run(
         currency = str(row.get("currency") or snapshot["currency"] or "AED").upper()
         amount_original = _optional_money(row.get("amount_original"))
         explicit_type = str(row.get("transaction_type") or "").strip().upper()
-        review_required = bool(row.get("review_required", False))
+        review_reasons: list[str] = []
+        if bool(row.get("review_required", False)):
+            review_reasons.append("SOURCE_REVIEW_REQUIRED")
         if not explicit_type and direction == "CREDIT":
             explicit_type = "CREDIT"
-            review_required = True
+            review_reasons.append("UNCLASSIFIED_CREDIT")
         transaction_type = explicit_type or "PURCHASE"
         if currency != "AED" and amount_original is None:
-            review_required = True
-        if method == "VISIBLE_ROWS" or resolved_account is None:
-            review_required = True
+            review_reasons.append("MISSING_AED_EQUIVALENT")
+        if method == "VISIBLE_ROWS":
+            review_reasons.append("VISIBLE_ROWS_REQUIRE_REVIEW")
+        if resolved_account is None:
+            review_reasons.append("UNMAPPED_ACCOUNT")
         transaction = Transaction(
             transaction_id=_stable_transaction_id(
                 provider,
@@ -406,7 +410,7 @@ def build_browser_ingestion_run(
             channel=str(row.get("channel") or "UNKNOWN"),
             source_type="browser_portal",
             transaction_type=transaction_type,
-            review_required=review_required,
+            review_required=bool(review_reasons),
             is_refund=transaction_type == "REFUND",
             tags={
                 "browser-import",
@@ -428,6 +432,7 @@ def build_browser_ingestion_run(
                 "browser_post_date": str(row.get("post_date") or "").strip() or None,
                 "browser_direction": direction,
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
+                "browser_review_reasons": review_reasons,
                 "browser_capture_limitations": sanitized_source["limitations"],
                 "ledger_reconciled": False,
                 "locked_fields": [
@@ -477,6 +482,18 @@ def build_browser_ingestion_run(
                 "CASHBACK",
             ),
         ))
+        review_reasons = list(transaction.metadata.get("browser_review_reasons", []))
+        if (
+            "UNCLASSIFIED_CREDIT" in review_reasons
+            and transaction.transaction_type in {"TRANSFER", "REWARD_CREDIT", "REFUND"}
+            and transaction.category
+        ):
+            review_reasons.remove("UNCLASSIFIED_CREDIT")
+            transaction.metadata["browser_review_reasons"] = review_reasons
+            transaction.metadata.setdefault("browser_review_resolutions", []).append(
+                "STATIC_RULE_CLASSIFIED_CREDIT"
+            )
+            transaction.review_required = bool(review_reasons)
         if history_index and (history_trace := apply_history_match(transaction, history_index)):
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:

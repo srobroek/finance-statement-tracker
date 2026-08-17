@@ -54,6 +54,7 @@ class AIPolicy:
     priority: int
     instruction: str
     target_fields: tuple[str, ...]
+    trigger_fields: tuple[str, ...] = ()
     conditions: tuple[RuleCondition, ...] = ()
     minimum_confidence: float = 0.82
     allowed_values: dict[str, tuple[Any, ...]] | None = None
@@ -114,6 +115,12 @@ def validate_policy(policy: AIPolicy) -> None:
         errors.append("unsupported target fields: " + ", ".join(sorted(invalid_targets)))
     if set(policy.target_fields) & PROTECTED_FIELDS:
         errors.append("protected fields cannot be AI targets")
+    invalid_triggers = set(policy.trigger_fields) - set(policy.target_fields)
+    if invalid_triggers:
+        errors.append(
+            "trigger fields must also be target fields: "
+            + ", ".join(sorted(invalid_triggers))
+        )
     if errors:
         raise ValueError(f"Invalid AI policy {policy.policy_id}: " + "; ".join(errors))
 
@@ -142,6 +149,9 @@ class AIEnrichmentEngine:
                 if field == "tags" or (field not in locked and _unresolved(transaction, field))
             ]
             if not unresolved:
+                continue
+            trigger_fields = policy.trigger_fields or policy.target_fields
+            if not any(field in unresolved for field in trigger_fields):
                 continue
             response = resolver(self._request(transaction, policy, unresolved))
             proposals = response.get("proposals", []) if isinstance(response, dict) else []
@@ -375,6 +385,7 @@ def load_ai_policies(path: str | Path) -> list[AIPolicy]:
                 priority=int(row.get("priority", 100)),
                 instruction=str(row["instruction"]),
                 target_fields=tuple(str(field) for field in row.get("target_fields", [])),
+                trigger_fields=tuple(str(field) for field in row.get("trigger_fields", [])),
                 conditions=conditions,
                 minimum_confidence=float(row.get("minimum_confidence", 0.82)),
                 allowed_values=allowed_values,

@@ -8,6 +8,7 @@
       "priority": 10,
       "instruction": "Using the merchant description and existing deterministic outputs, propose only a vendor, category, subcategory, or approved reporting tags. Do not infer source facts. Leave a field unresolved when evidence is weak.",
       "target_fields": ["vendor", "category", "subcategory", "tags"],
+      "trigger_fields": ["vendor", "category"],
       "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
       "minimum_confidence": 0.82,
       "allowed_value_sources": {"category": "actual.categories"},
@@ -20,7 +21,11 @@
       "priority": 20,
       "instruction": "Mark a transaction as a subscription only when the merchant or related evidence indicates a recurring service. Add only approved subscription tags.",
       "target_fields": ["is_subscription", "tags"],
-      "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
+      "trigger_fields": ["is_subscription"],
+      "conditions": [
+        {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 1},
+        {"field": "category", "operator": "in", "value": ["Software & App Subscriptions", "Media Subscriptions", "Mobile & Internet", "Cloud Services"], "group": 1}
+      ],
       "minimum_confidence": 0.9,
       "allowed_values": {"is_subscription": [true]},
       "allowed_tags": ["subscription", "recurring"]
@@ -43,7 +48,14 @@
       "priority": 40,
       "instruction": "Use config/evidence-search-policy.json and its store/do-not-store examples. Propose an evidence search for document-worthy categories or for a qualifying high-value transaction whose statement description lacks the product detail. The evidence worker searches vendor aliases plus amount/currency within the date buffer and uses matched email/order content to identify the product, model, order reference, serial number, warranty dates, or return deadline. Never propose a vendor-only match or evidence collection for a configured never-search category unless a manual evidence request exists.",
       "target_fields": ["evidence_policy"],
-      "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
+      "trigger_fields": ["evidence_policy"],
+      "conditions": [
+        {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 1},
+        {"field": "category", "operator": "in", "value": ["Electricity & Water", "District Cooling", "Service Charges", "Maintenance & Repairs", "Online Shopping", "Electronics", "Furniture & Appliances", "Flights", "Accommodation", "Travel Activities", "Insurance", "Medical", "Professional Services"], "group": 1},
+        {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 2},
+        {"field": "amount_aed", "operator": "gte", "value": "500", "group": 2},
+        {"field": "category", "operator": "in", "value": ["Groceries", "Dining Out", "Food Delivery", "Coffee & Snacks", "Fuel", "Parking & Tolls", "Public Transport", "Card Payments", "Bank Fees"], "group": 2, "negate": true}
+      ],
       "minimum_confidence": 0.8,
       "allowed_values": {"evidence_policy": ["SEARCH_RELATED_EMAIL", "SEARCH_RECEIPT_BILL_WARRANTY", "MATCH_AMOUNT_AND_PERIOD"]}
     },
@@ -54,7 +66,11 @@
       "priority": 50,
       "instruction": "Only when deterministic rules leave them unresolved, infer channel or propose a configured cashback bucket from explicit merchant, notification, wallet, currency, and card evidence. Do not calculate rewards or invent wallet usage.",
       "target_fields": ["channel", "reward_bucket"],
-      "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
+      "trigger_fields": ["channel", "reward_bucket"],
+      "conditions": [
+        {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 1},
+        {"field": "card", "operator": "in", "value": ["RAK_WORLD", "SC_PLATINUM_X"], "group": 1}
+      ],
       "minimum_confidence": 0.95,
       "allowed_values": {
         "channel": ["ONLINE", "PHYSICAL_POS", "APPLE_PAY_POS", "UNKNOWN"]

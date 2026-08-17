@@ -5,10 +5,12 @@ from pathlib import Path
 from unittest import TestCase
 
 from finance_tracker.ai_rules import (
+    AIPolicy,
     AIEnrichmentEngine,
     OpenAICompatibleResolver,
     load_ai_policies,
     record_ai_review,
+    validate_policy,
 )
 from finance_tracker.models import Transaction
 
@@ -103,6 +105,50 @@ class AIRuleTests(TestCase):
 
         self.assertEqual(self.transaction.channel, "ONLINE")
         self.assertEqual(self.transaction.reward_bucket, "SC_ONLINE")
+
+    def test_configured_policy_scopes_avoid_irrelevant_adcb_requests(self) -> None:
+        transaction = Transaction(
+            "ai-adcb",
+            datetime(2026, 8, 16),
+            "ADCB_CASHBACK",
+            "CARREFOUR",
+            "125",
+            vendor="Carrefour",
+            category="Groceries",
+        )
+        requests = []
+
+        self.engine.enrich(transaction, lambda request: requests.append(request) or {"proposals": []})
+
+        self.assertEqual([], requests)
+
+    def test_high_value_unresolved_purchase_requests_only_relevant_policies(self) -> None:
+        transaction = Transaction(
+            "ai-adcb-high-value",
+            datetime(2026, 8, 16),
+            "ADCB_CASHBACK",
+            "UNKNOWN DURABLE GOODS MERCHANT",
+            "1500",
+        )
+        requests = []
+
+        self.engine.enrich(transaction, lambda request: requests.append(request) or {"proposals": []})
+
+        self.assertEqual(
+            ["classify-unresolved", "find-purchase-evidence"],
+            [request["policy_id"] for request in requests],
+        )
+
+    def test_trigger_fields_must_be_policy_targets(self) -> None:
+        with self.assertRaisesRegex(ValueError, "trigger fields must also be target fields"):
+            validate_policy(AIPolicy(
+                policy_id="bad-trigger",
+                name="Bad trigger",
+                priority=1,
+                instruction="Do nothing",
+                target_fields=("category",),
+                trigger_fields=("vendor",),
+            ))
 
     def test_human_correction_is_recorded_and_locked(self) -> None:
         review = record_ai_review(

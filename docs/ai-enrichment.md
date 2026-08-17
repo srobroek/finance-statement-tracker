@@ -16,11 +16,17 @@ AI cannot change transaction IDs, dates, amounts, currency, card/account identit
 
 Each proposal produces an `AITrace` recording the policy, field, value, confidence, acceptance decision, reason, rationale, and source references. The trace is appended to transaction metadata for auditability.
 
-The engine is provider-neutral. In the current deployment, the end-of-day and
-card-specific `gpt-5.6-sol` Codex tasks implement the resolver after all static
-rule stages and history matching. The Actual ingestion worker returns
+The engine is provider-neutral. In the current deployment, the card-specific
+monthly `gpt-5.6-sol` Codex tasks implement the resolver after all static rule
+stages and history matching. The Actual ingestion worker returns
 constrained `ai_requests`; a task submits proposal JSON on a second idempotent
 stage call, and the container validates it before regenerating the manifest.
 Codex is not available inside the container, so neither continuous service
 assumes a local Codex runtime. A future OpenAI-compatible API worker could
 replace the Codex policy stage without changing the policy or validation layer.
+
+Policies also declare `trigger_fields`. A policy runs only when at least one
+trigger remains unresolved; optional companion fields such as reporting tags
+may be included in that request but cannot trigger a model call by themselves.
+Conditions further restrict subscription, purchase-evidence, property, and
+cashback policies to relevant transactions and cards.

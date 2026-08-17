@@ -3,7 +3,7 @@
   "data_id": "current-account-balance",
   "kind": "balance",
   "acquire": "read-onscreen",
-  "inputs": ["account_ref", "balance"],
+  "inputs": ["account_ref"],
   "parser": null,
   "recipe": "recipe",
   "verified": true,

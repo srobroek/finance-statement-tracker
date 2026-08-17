@@ -4,7 +4,7 @@
     "GOTO": {"where": "provider", "required": ["url"], "optional": [], "terminal": false},
     "CLICK": {"where": "both", "required": ["selector"], "optional": ["button"], "terminal": false},
     "SELECT": {"where": "both", "required": ["field", "option"], "optional": [], "terminal": false},
-    "READ": {"where": "both", "required": ["as"], "optional": [], "terminal": true},
+    "READ": {"where": "both", "required": ["selector", "as"], "optional": [], "terminal": true},
     "DOWNLOAD": {"where": "both", "required": ["as"], "optional": ["format"], "terminal": true},
     "EXPORT": {"where": "both", "required": ["as"], "optional": ["format"], "terminal": false},
     "UPLOAD": {"where": "both", "required": ["as"], "optional": [], "terminal": true},

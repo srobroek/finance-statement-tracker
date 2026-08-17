@@ -17,7 +17,7 @@ EI_LINES = (
     "OPENING BALANCE 100.00",
     "PRIMARY CARD NO:5424XXXXXXXX0082",
     "02 JUL 02 JUL TRANSFER PAYMENT RECEIVED THANK YOU 100.00CR",
-    "10 JUL 09 JUL AMAZON.AE DUBAI ARE 25.00",
+    "10 JUL 09 JUL UNKNOWN MARKETPLACE DUBAI ARE 25.00",
     "Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)",
     "50,000.00 49,975.00 25.00 25/08/26 25.00 0.00 25.00",
 )
@@ -232,6 +232,20 @@ class IngestionJobTests(unittest.TestCase):
                     "source_path": pdf.name,
                     "card_code": "EI_AMAZON",
                     "actual_mode": "PREFLIGHT",
+                }
+            )
+
+    def test_completed_ai_handoff_requires_one_response_per_request(self) -> None:
+        pdf = self.runner.inbox / "synthetic-ei-statement.pdf"
+        write_ei_pdf(pdf)
+        with self.assertRaisesRegex(ValueError, "did not answer every request"):
+            self.runner.submit(
+                {
+                    "type": "STATEMENT_PDF",
+                    "source_path": pdf.name,
+                    "card_code": "EI_AMAZON",
+                    "actual_mode": "STAGE",
+                    "ai_handoff_complete": True,
                 }
             )
 

@@ -163,9 +163,11 @@ JSON array containing one object per answered request (`transaction_id`,
   -ActualMode STAGE
 ```
 
-Unknown transaction/policy pairs fail the job. Omitted responses leave their
-fields unresolved; accepted responses are recorded in `ai_trace` and flow into
-the Actual import envelopes.
+Unknown transaction/policy pairs fail the job. A submission marked
+`-AIHandoffComplete` must contain exactly one response for every emitted
+transaction/policy request; the response may deliberately contain an empty
+proposal list when evidence is insufficient. Accepted responses are recorded
+in `ai_trace` and flow into the Actual import envelopes.
 
 ## Browser ingestion
 

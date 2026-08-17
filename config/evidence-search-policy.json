@@ -29,11 +29,11 @@
     "Coffee & Snacks",
     "Fuel",
     "Parking & Tolls",
-    "Taxi & Public Transport",
+    "Ride Hailing",
+    "Public Transport",
     "Cash Withdrawal",
-    "Transfers",
-    "Credit Card Payments",
-    "Bank Fees & Interest"
+    "Card Payments",
+    "Bank Fees"
   ],
   "store_examples": [
     "Laptop, phone, camera, television or other warranty-bearing electronics",

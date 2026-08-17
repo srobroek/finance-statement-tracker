@@ -1,3 +1,3 @@
 1. CLICK selector: "Accounts"
 2. CLICK selector: "the account matching <account_ref>"
-3. READ as: "<balance>"
+3. READ selector: "Balance", as: "balance"

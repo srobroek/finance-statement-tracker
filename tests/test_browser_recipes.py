@@ -62,6 +62,16 @@ class BrowserRecipeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly four"):
                 load_browser_sources(path)
 
+    def test_read_recipe_names_the_visible_value_and_output_field(self) -> None:
+        rendered = render_recipe(
+            "fab",
+            "current-account-balance",
+            {"account_ref": "Current 1234"},
+            ROOT / "browser_adapters",
+        )
+
+        self.assertIn('READ selector: "Balance", as: "balance"', rendered["data_recipe"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -304,6 +304,7 @@ class IngestionJobRunner:
 
         ai_request_count = int(staged.get("ai_request_count") or 0)
         ai_handoff_complete = bool(normalized_request.get("ai_handoff_complete"))
+        ai_response_count = len(normalized_request.get("ai_responses") or [])
         if actual_mode != "STAGE":
             if staged.get("staging_status") not in {
                 "READY_FOR_LEDGER_MATCH",
@@ -316,6 +317,11 @@ class IngestionJobRunner:
                 raise ValueError(
                     f"Actual {actual_mode} requires ai_handoff_complete=true"
                 )
+        if ai_handoff_complete and ai_response_count != ai_request_count:
+            raise ValueError(
+                "AI handoff marked complete but did not answer every request: "
+                f"expected {ai_request_count}, received {ai_response_count}"
+            )
         actual_payload = self._actual(manifest, actual_result, actual_mode)
         status = "STAGED" if actual_mode == "STAGE" else str(actual_payload.get("status")).upper()
         result = IngestionJobResult(

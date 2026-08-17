@@ -60,12 +60,32 @@ RAKBANK and Standard Chartered remain `ADAPTER_REQUIRED` because the previous ap
 
 5. Inspect `runtime/browser-runs/.../browser-run.json`. Re-run with `-Commit` only after review. A capture based on visible rows also requires `-ApproveReviewedRows`.
 
+## Real export validation
+
+The legacy application's original ADCB portal export, not its derived ledger
+CSV, was replayed through both the local worker and the deployed ingestion
+container on 2026-08-17. The artifact hash was
+`32444d7848209c69842e83caeb89fbb273fa46b3064625444576517786a310dc`.
+Both paths parsed all 303 candidate rows and produced one account envelope
+with no import blocker. Static rules resolved eight cashback credits and three
+card-payment credits, while one ambiguous credit remained review-required.
+The production STAGE job was `6f30c9019002819fe37227f5`; it did not contact or
+modify Actual.
+
+The scoped AI handoff emitted 287 requests rather than the previous 1,129:
+246 unresolved classifications, three subscription checks, six property
+enrichments, and 32 evidence decisions. Cashback enrichment was correctly
+omitted because ADCB is not part of the live cashback profile. A handoff marked
+complete must now return exactly one response for every emitted request, even
+when a response deliberately contains no proposal.
+
 ## Correctness gates
 
 - The raw artifact SHA-256 contributes to a stable capture identity.
 - Bank-specific parsers reject partial parsing when a candidate row cannot be normalized.
 - ADCB primary and supplementary card blocks preserve their individual last four digits and roles.
 - Pending Emirates Islamic rows remain review-required.
+- An implicit credit remains review-required unless a deterministic static rule resolves it to a categorized payment, reward credit, or refund.
 - A foreign-currency export without an evidenced AED equivalent is rejected rather than converted or mislabeled.
 - Query strings and fragments are removed from recorded portal URLs.
 - Browser-state secrets cause capture rejection.
