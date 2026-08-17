@@ -43,6 +43,7 @@ Overall result: **PASS**
 | Stale-feed push | PASS | An isolated copy of production state triggered the native stale-feed candidate and sent it to both registered production push endpoints; production state was not modified. |
 | Host watchdog recovery | PASS | The cashback container was deliberately stopped; the five-minute watchdog detected the failed health probe, restarted only that service, and verified recovery in 2 seconds. Actual and ingestion remained HTTP 200. |
 | Latest hourly ingestion | PASS | Durable production state records cursor `2026-08-17T14:07:37.571291+00:00`, 4 scanned messages, and 3 accepted provisional transactions. Actual was not written and no period was finalized. |
+| Live source identity | PASS | SHA-256 hashes for `app.js`, `styles.css`, `server.py`, and `web_push.py` match byte-for-byte between the repository and the running production container. |
 
 ## Live isolated scenario results
 
@@ -71,10 +72,12 @@ Overall result: **PASS**
 | Whole-purchase headroom | PASS | A capped route is considered preferred only when its remaining bucket headroom can fit the representative purchase. |
 | Alert acknowledgement | PASS | Hiding the RAK grocery alert moved it to “1 hidden alert.” Reloading preserved the acknowledgement. |
 | Alert restoration | PASS | Re-enabling the hidden alert restored it to the visible Needs attention list. |
+| Transaction review action | PASS | A review-required state renders a `Review` action and modal queue with one approval control per event. Approval clears only `review_required`; it does not change the provisional status or claim statement reconciliation. |
 | Card positions | PASS | RAK, SC, and EI cards showed totals, cycle/tier state, every bucket fill level, provisional/confirmed counts, and refunds. |
 | SC tier ladder | PASS | SC displayed 3% at AED 2.5k, 5% at AED 7.5k, and 10% at AED 15k instead of a single unexplained AED 15k target. |
 | Previous-period state | PASS | With no evidence-finalized cycles, the UI correctly showed no finalized cycles rather than inventing history. |
 | Mobile-first CSS structure | PASS | Base styles use a single-column card grid and compact routing table; wider multi-column layouts activate only at 600px and 980px breakpoints. The narrowest breakpoint further compresses routing columns. |
+| Narrow label fit | PASS | At a live 363 px viewport, `RAK World`, `SC Platinum X`, and `EI Amazon` all fit their routing cells; no label or page-level horizontal overflow was present. |
 
 ## Focused routing matrix
 
