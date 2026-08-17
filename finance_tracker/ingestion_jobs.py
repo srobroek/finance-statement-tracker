@@ -18,6 +18,7 @@ from .statement_sources import load_statement_sources, require_active_statement_
 
 JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
 ACTUAL_MODES = frozenset({"STAGE", "PREFLIGHT", "COMMIT"})
+RESULT_SCHEMA_VERSION = 2
 
 
 def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
@@ -134,6 +135,31 @@ class IngestionJobRunner:
     def _paths(self, job_id: str) -> tuple[Path, Path, Path, Path]:
         root = self.jobs / job_id
         return root, root / "request.json", root / "manifest.json", root / "actual-result.json"
+
+    @staticmethod
+    def _upgrade_result(result: dict[str, Any], manifest: Path) -> dict[str, Any]:
+        """Upgrade durable results without changing their idempotency identity."""
+        upgraded = dict(result)
+        if "ai_handoff" not in upgraded:
+            ai_request_count = int(upgraded.get("ai_request_count") or 0)
+            ai_requests: list[dict[str, Any]] = []
+            if manifest.is_file():
+                manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+                raw_requests = manifest_payload.get("ai_requests") or []
+                if not isinstance(raw_requests, list) or any(
+                    not isinstance(request, dict) for request in raw_requests
+                ):
+                    raise ValueError("Stored ingestion manifest has invalid ai_requests")
+                ai_requests = raw_requests
+            if ai_request_count and len(ai_requests) != ai_request_count:
+                raise ValueError(
+                    "Stored ingestion result cannot be upgraded safely: "
+                    f"expected {ai_request_count} AI requests, found {len(ai_requests)}"
+                )
+            upgraded["ai_handoff"] = compact_ai_handoff(ai_requests)
+        upgraded.setdefault("ai_handoff_complete", False)
+        upgraded["result_schema_version"] = RESULT_SCHEMA_VERSION
+        return upgraded
 
     @staticmethod
     def _ai_handoff(
@@ -338,7 +364,10 @@ class IngestionJobRunner:
         job_root, request_path, manifest, actual_result = self._paths(job_id)
         result_path = job_root / "result.json"
         if result_path.exists():
-            replay = json.loads(result_path.read_text(encoding="utf-8"))
+            stored = json.loads(result_path.read_text(encoding="utf-8"))
+            replay = self._upgrade_result(stored, manifest)
+            if replay != stored:
+                result_path.write_text(json.dumps(replay, indent=2), encoding="utf-8")
             replay["idempotent_replay"] = True
             return replay
         job_root.mkdir(parents=True, exist_ok=True)
@@ -400,6 +429,7 @@ class IngestionJobRunner:
         )
         result["ai_handoff"] = compact_ai_handoff(list(staged.get("ai_requests") or []))
         result["ai_handoff_complete"] = ai_handoff_complete
+        result["result_schema_version"] = RESULT_SCHEMA_VERSION
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
 

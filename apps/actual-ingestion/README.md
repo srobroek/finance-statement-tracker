@@ -30,3 +30,6 @@ static-rule stages, then history matching, then emits a constrained
 A scheduled Sol task may return `ai_responses` with
 `-AIResponsesPath`; the container's policy engine validates those proposals
 and rebuilds the manifest. The container never calls a model itself.
+Durable idempotent results are schema-upgraded from their retained audit
+manifest, so response-contract changes do not require changing source identity
+or weakening duplicate protection.

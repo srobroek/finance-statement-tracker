@@ -155,6 +155,35 @@ class IngestionJobTests(unittest.TestCase):
         self.assertEqual(rejected["review_count"], 1)
         self.assertEqual(rejected["ai_rejected_count"], 1)
 
+    def test_idempotent_replay_upgrades_legacy_result_from_audit_manifest(self) -> None:
+        pdf = self.runner.inbox / "legacy-result-ei.pdf"
+        write_ei_pdf(pdf)
+        request = {
+            "type": "STATEMENT_PDF",
+            "source_path": pdf.name,
+            "card_code": "EI_AMAZON",
+            "actual_mode": "STAGE",
+            "source_message_id": "legacy-result-message",
+        }
+        first = self.runner.submit(request)
+        result_path = self.runner.jobs / first["job_id"] / "result.json"
+        legacy = json.loads(result_path.read_text(encoding="utf-8"))
+        legacy.pop("ai_handoff")
+        legacy.pop("ai_handoff_complete")
+        legacy.pop("result_schema_version")
+        result_path.write_text(json.dumps(legacy, indent=2), encoding="utf-8")
+
+        replay = self.runner.submit(request)
+
+        self.assertTrue(replay["idempotent_replay"])
+        self.assertEqual(replay["result_schema_version"], 2)
+        self.assertEqual(
+            len(replay["ai_handoff"]["requests"]), replay["ai_request_count"]
+        )
+        persisted = json.loads(result_path.read_text(encoding="utf-8"))
+        self.assertFalse(persisted["idempotent_replay"])
+        self.assertIn("ai_handoff", persisted)
+
     def test_compact_ai_handoff_deduplicates_policy_and_transaction_context(self) -> None:
         transaction_one = {"transaction_id": "tx-1", "merchant_raw": "Example"}
         transaction_two = {"transaction_id": "tx-2", "merchant_raw": "Other"}
