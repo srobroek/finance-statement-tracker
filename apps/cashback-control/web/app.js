@@ -81,8 +81,9 @@ function compactReason(item) {
   return item.reason;
 }
 
-function routeHeading(item, candidate) {
-  return cardLabel(candidate?.card || item.use_card);
+function routeHeading(item, candidate, compact = false) {
+  const code = candidate?.card || item.use_card;
+  return compact ? compactCardLabel(code) : cardLabel(code);
 }
 
 function shortPaymentMethod(channel) {
@@ -143,7 +144,7 @@ function renderRecommendations(items) {
         <summary class="route-main" aria-label="${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.">
           <span class="route-type">${typeLabel(item)}</span>
           <span class="route-cards">
-            <strong class="card-choice use" data-short="${compactCardLabel(preferredCode)}">${routeHeading(item, preferred)}</strong>
+            <strong class="card-choice use" data-short="${compactCardLabel(preferredCode)}" title="Use ${routeHeading(item, preferred)}">${routeHeading(item, preferred, true)}</strong>
             <span class="avoid-list" title="Avoid ${avoid.length ? avoid.join(", ") : "none"}">${avoidMarkup}</span>
           </span>
         </summary>
@@ -179,7 +180,7 @@ function renderDecisionTree(items) {
         ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(threshold)} · ${compactMoney(candidate.tier_remaining_aed)} to tier`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
       const switchText = treeSwitchReason(candidate);
-      return `<li class="candidate-node ${candidate.status.toLowerCase()}"><div class="candidate-rank"><b>${candidate.order}</b></div><div class="candidate-card"><strong>${cardLabel(candidate.card)}</strong><span>${bucketText}</span></div><div class="candidate-logic"><b>${candidateValueLabel(candidate)}</b><span>${tierText}</span><small>${switchText}</small></div></li>`;
+      return `<li class="candidate-node ${candidate.status.toLowerCase()}"><div class="candidate-rank"><b>${candidate.order}</b></div><div class="candidate-card"><strong title="${cardLabel(candidate.card)}">${compactCardLabel(candidate.card)}</strong><span>${bucketText}</span></div><div class="candidate-logic"><b>${candidateValueLabel(candidate)}</b><span>${tierText}</span><small>${switchText}</small></div></li>`;
     }).join("");
     const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
     root.querySelector(".spend-graph").innerHTML = `<header><span>${methods} · ${item.currency}</span><strong>${typeLabel(item)} routing order</strong><small>Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics.</small></header><ol>${candidates}</ol>`;
@@ -335,7 +336,7 @@ function renderCards(cards) {
       node.innerHTML = `
         <div class="position-card-header">
           <div class="position-summary-copy">
-            <strong>${card.name}</strong>
+            <strong title="${card.name}">${card.short_name || card.name}</strong>
             <span>${card.tier.replaceAll("_", " ")} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}</span>
           </div>
           <div class="position-total"><strong>${money.format(actual)}</strong><span>${tierPosition.next}</span></div>
@@ -411,7 +412,7 @@ function renderAttention(payload) {
     alerts.push({ key: "feed:stale", title: "Live feed is stale", detail: `No successful ingest recorded within ${payload.data_status.stale_after_minutes} minutes. Recommendations may be incomplete.` });
   }
   if (payload.review_count) {
-    alerts.push({ key: "review:transactions", title: `${payload.review_count} transaction${payload.review_count === 1 ? "" : "s"} need review`, detail: "Classification or evidence is incomplete and may affect bucket totals." });
+    alerts.push({ key: "review:transactions", title: `${payload.review_count} transaction${payload.review_count === 1 ? " needs" : "s need"} review`, detail: "Classification or evidence is incomplete and may affect bucket totals." });
   }
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
@@ -430,8 +431,12 @@ function renderAttention(payload) {
       node.className = "alert-card";
       node.innerHTML = `
         <div class="alert-copy"><strong>${alert.title}</strong><span>${alert.detail}</span></div>
-        <label class="alert-toggle"><input type="checkbox" ${checked ? "checked" : ""}>${checked ? "Hidden" : "Hide"}</label>
+        <div class="alert-actions">
+          ${alert.key === "review:transactions" && !checked ? '<button class="review-open" type="button">Review</button>' : ""}
+          <label class="alert-toggle"><input type="checkbox" ${checked ? "checked" : ""}>${checked ? "Hidden" : "Hide"}</label>
+        </div>
       `;
+      node.querySelector(".review-open")?.addEventListener("click", openReviewQueue);
       node.querySelector("input").addEventListener("change", async (event) => {
         event.currentTarget.disabled = true;
         try {
@@ -452,6 +457,95 @@ function renderAttention(payload) {
     disclosure.append(...hidden.map((alert) => alertNode(alert, true)));
     root.append(disclosure);
   }
+}
+
+function reviewEventCard(event) {
+  const node = document.createElement("article");
+  node.className = "review-event";
+  const occurred = new Date(event.occurred_at).toLocaleDateString([], { day: "numeric", month: "short" });
+  node.innerHTML = `
+    <div class="review-event-copy">
+      <strong></strong>
+      <span></span>
+      <small></small>
+    </div>
+    <button type="button">Approve</button>
+  `;
+  node.querySelector("strong").textContent = event.merchant;
+  node.querySelector("span").textContent = `${event.currency} ${Number(event.amount_aed).toLocaleString(undefined, { maximumFractionDigits: 2 })} · ${compactCardLabel(event.card_code)}`;
+  node.querySelector("small").textContent = `${occurred} · ${typeLabel(event)} · ${shortPaymentMethod(event.channel) || "Channel unknown"}`;
+  const button = node.querySelector("button");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Saving…";
+    try {
+      const response = await fetch("/api/corrections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          correction_id: `live-review-approved-v1:${event.source_event_id}`,
+          source_event_id: event.source_event_id,
+          source: "dashboard-review",
+          reason: "Approved current live classification",
+          changes: { review_required: false },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not approve transaction.");
+      await loadReviewQueue();
+      await loadDashboard();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "Retry";
+      button.title = error.message;
+    }
+  });
+  return node;
+}
+
+async function loadReviewQueue() {
+  const root = document.querySelector("#review-events");
+  const response = await fetch("/api/review-queue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit: 50 }),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "Could not load transactions.");
+  root.replaceChildren(
+    ...(payload.events || []).map(reviewEventCard),
+  );
+  if (!payload.event_count) {
+    const empty = document.createElement("p");
+    empty.className = "review-empty";
+    empty.textContent = "Nothing needs review.";
+    root.append(empty);
+  }
+  return payload;
+}
+
+async function openReviewQueue() {
+  const dialog = document.querySelector("#review-dialog");
+  const root = document.querySelector("#review-events");
+  root.innerHTML = '<p class="review-empty">Loading…</p>';
+  dialog.showModal();
+  try {
+    await loadReviewQueue();
+  } catch (error) {
+    root.innerHTML = "";
+    const problem = document.createElement("p");
+    problem.className = "review-error";
+    problem.textContent = error.message;
+    root.append(problem);
+  }
+}
+
+function setupReviewDialog() {
+  const dialog = document.querySelector("#review-dialog");
+  dialog.querySelector(".review-close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
 }
 
 async function setAlertAcknowledgement(alertKey, acknowledged) {
@@ -498,6 +592,7 @@ async function loadDashboard() {
 
 setupRoutingViews();
 setupScreenViews();
+setupReviewDialog();
 setupPushNotifications();
 loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");

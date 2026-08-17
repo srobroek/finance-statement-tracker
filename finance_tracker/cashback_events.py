@@ -909,8 +909,7 @@ class CashbackEventStore:
                 """
                 SELECT * FROM cashback_events
                 WHERE status IN ('PROVISIONAL', 'CONFIRMED')
-                  AND (review_required = 1 OR purchase_type = 'GENERAL' OR channel = 'UNKNOWN')
-                  AND tags_json NOT LIKE '%"ai-reviewed"%'
+                  AND review_required = 1
                 ORDER BY occurred_at, source_event_id
                 LIMIT ?
                 """,
@@ -1006,7 +1005,7 @@ def events_to_transactions(
                     or configured_reward_bucket(programs, card, purchase_type, channel, currency)
                 ),
                 tags=set(json.loads(str(row["tags_json"]))),
-                review_required=bool(row["review_required"]) or purchase_type == "GENERAL" or channel == "UNKNOWN",
+                review_required=bool(row["review_required"]),
                 is_refund=event_type in {"REFUND", "REVERSAL"},
                 metadata={
                     "cashback_status": row["status"],

@@ -168,6 +168,36 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             self.assertEqual(dashboard["review_count"], 1)
 
+    def test_general_purchase_with_explicit_classification_does_not_require_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            store.upsert([{
+                "source_event_id": "configured-default",
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "16",
+                "purchase_type": "GENERAL",
+                "channel": "APPLE_PAY_POS",
+                "merchant": "Best of Vends",
+                "confidence": 0.95,
+                "review_required": False,
+            }])
+
+            dashboard = build_live_dashboard(store, date(2026, 8, 16))
+
+            self.assertEqual(dashboard["review_count"], 0)
+            self.assertEqual(store.review_queue(20), [])
+
+            store.correct_event({
+                "correction_id": "approve-live-classification",
+                "source_event_id": "configured-default",
+                "source": "dashboard-review",
+                "changes": {"review_required": False},
+            })
+            stored = store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]
+            self.assertEqual(stored["status"], "PROVISIONAL")
+            self.assertEqual(stored["reconciliation_status"], "UNMATCHED")
+
     def test_alert_acknowledgements_are_durable_and_reversible(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
