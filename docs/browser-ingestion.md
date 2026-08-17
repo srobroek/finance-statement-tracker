@@ -75,21 +75,21 @@ Both paths parsed all 303 candidate rows and produced one account envelope
 with no import blocker. Static rules resolved eight cashback credits and three
 card-payment credits. A unique, exact merchant/amount refund pair then resolved
 the remaining generic credit deterministically; duplicate candidate purchases
-remain review-required. Release `0d791f1d7a26b81a7701a3d15dd54089f4853892`
+remain review-required. Release `174bd885b38a9b3e865bff97a8ae87b490702346`
 corrected boundary-sensitive medical and fuel matches, normalized Emirates
 Central Cooling to Empower, and separated AWS cloud charges from Amazon retail.
 
 The fixed-point AI handoff expanded from 284 initial requests to 310 final
 requests after accepted classifications activated later subscription,
 property, and evidence policies. Production STAGE job
-`2d2eb75d39632d44c2817f98` answered all 310 requests, accepted 298 proposals,
+`3aafc581a7f823c0ec7e533f` answered all 310 requests, accepted 298 proposals,
 rejected none, retained ten exact evidence links, and reached
 `READY_FOR_APPROVAL` with zero review rows. Six linked Empower PDFs match exact
 account, property/unit, period, and amount. Four sanitized DEWA payment receipts
 match exact account, payment reference, date, and amount. Unmatched evidence
 candidates remain unlinked instead of being inferred.
 
-Production PREFLIGHT job `92dbe215c549ed6071b31a2d` dry-ran all 303 rows
+Production PREFLIGHT job `03e8f01870380e4c8bc7326c` dry-ran all 303 rows
 against `ADCB Credit Card · 8833 / 6838`: 303 additions, zero updates, and zero
 errors. It imported nothing. Cashback enrichment was correctly omitted because
 ADCB is not part of the live cashback profile. A handoff marked complete must
