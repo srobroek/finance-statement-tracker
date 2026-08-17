@@ -152,6 +152,17 @@ JSON array containing one object per answered request (`transaction_id`,
 `policy_id`, `provider`, `model`, and `proposals`), then rerun the same source:
 
 ```powershell
+.\scripts\get-actual-ingestion-job.ps1 `
+  -JobId '<24-character-job-id>' `
+  -AIHandoffOnly
+```
+
+The retrieval command reads the durable result through the token-bearing
+in-container client. It supports resuming a scheduled task after interruption
+without exposing the ingestion token, re-searching Outlook, or relying on the
+first submission's console output.
+
+```powershell
 .\scripts\push-actual-ingestion-job.ps1 `
   -InputPath 'C:\path\statement.pdf' `
   -Type STATEMENT_PDF `

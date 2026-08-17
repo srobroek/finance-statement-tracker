@@ -187,8 +187,11 @@
           "all": [
             {
               "field": "merchant_raw",
-              "operator": "contains",
-              "value": "EMPOWER"
+              "operator": "contains_any",
+              "value": [
+                "EMPOWER",
+                "EMIRATES CENTRAL COOLING"
+              ]
             }
           ]
         }
@@ -1074,13 +1077,8 @@
           "all": [
             {
               "field": "merchant_raw",
-              "operator": "contains_any",
-              "value": [
-                "HOSPITAL",
-                "CLINIC",
-                "MEDICAL CENTRE",
-                "MEDICAL CENTER"
-              ]
+              "operator": "regex",
+              "value": "\\b(?:HOSPITAL|CLINIC|MEDICAL CENT(?:RE|ER))\\b"
             }
           ]
         },
@@ -1126,13 +1124,8 @@
           "all": [
             {
               "field": "merchant_raw",
-              "operator": "contains_any",
-              "value": [
-                "ENOC",
-                "EPPCO",
-                "ADNOC",
-                "EMARAT SERVICE"
-              ]
+              "operator": "regex",
+              "value": "^(?:ENOC|EPPCO|ADNOC)(?:\\s|$)|^EMARAT SERVICE"
             }
           ]
         }

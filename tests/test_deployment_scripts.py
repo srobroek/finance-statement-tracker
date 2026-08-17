@@ -53,6 +53,17 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("FINANCE_PIPELINE_REVISION=${FINANCE_PIPELINE_REVISION}", dockerfile)
         self.assertIn("FINANCE_PIPELINE_REVISION=${{ github.sha }}", workflow)
 
+    def test_ingestion_job_can_be_resumed_without_exposing_the_token(self) -> None:
+        script = Path("scripts/get-actual-ingestion-job.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("^[0-9a-f]{24}$", script)
+        self.assertIn("submit_local.py --job-id $JobId", script)
+        self.assertIn("[switch]$AIHandoffOnly", script)
+        self.assertIn("$job.ai_handoff | ConvertTo-Json -Depth 30", script)
+        self.assertIn("deployment.local.json", script)
+        self.assertIn("FINANCE_DEPLOYMENT_CONFIG", script)
+        self.assertNotIn("FINANCE_INGEST_TOKEN", script)
+
     def test_deployment_helpers_support_ignored_local_and_environment_overrides(self) -> None:
         actual_script = Path("scripts/push-actual-ingestion-job.ps1").read_text(encoding="utf-8")
         cashback_script = Path("scripts/invoke-cashback-endpoint.ps1").read_text(encoding="utf-8")

@@ -54,6 +54,32 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.evidence_policy, "MATCH_AMOUNT_AND_PERIOD")
         self.assertEqual(transaction.evidence_status, "REQUESTED")
 
+    def test_empower_issuer_descriptor_is_normalized_as_district_cooling(self) -> None:
+        transaction = self.transaction("EMIRATES CENTRAL COOLING DUBAI")
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.vendor, "Empower")
+        self.assertEqual(transaction.category, "District Cooling")
+        self.assertTrue({"utility", "home"}.issubset(transaction.tags))
+        self.assertEqual(transaction.evidence_policy, "MATCH_AMOUNT_AND_PERIOD")
+
+    def test_hospitality_does_not_match_hospital(self) -> None:
+        transaction = self.transaction("CROISSANCE HOSPITALITY DUBAI")
+
+        self.engine.apply(transaction)
+
+        self.assertIsNone(transaction.category)
+        self.assertNotIn("health", transaction.tags)
+
+    def test_concession_at_fuel_site_is_not_classified_as_fuel(self) -> None:
+        transaction = self.transaction("KFC ENOC AL BARSHA DUBAI")
+
+        self.engine.apply(transaction)
+
+        self.assertIsNone(transaction.category)
+        self.assertNotIn("transport", transaction.tags)
+
     def test_wio_foreign_exchange_fee_is_categorized(self) -> None:
         transaction = Transaction(
             transaction_id="wio-fee",
