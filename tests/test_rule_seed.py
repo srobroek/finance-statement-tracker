@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from unittest import TestCase
 
@@ -51,6 +52,22 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.category, "Electricity & Water")
         self.assertIn("utility", transaction.tags)
         self.assertEqual(transaction.evidence_policy, "MATCH_AMOUNT_AND_PERIOD")
+
+    def test_wio_foreign_exchange_fee_is_categorized(self) -> None:
+        transaction = Transaction(
+            transaction_id="wio-fee",
+            transaction_at=datetime(2026, 7, 4),
+            card="WIO_CREDIT",
+            merchant_raw="Foreign Exchange Fee [P1106333977]",
+            amount_aed=Decimal("16.59"),
+            transaction_type="FEE",
+        )
+
+        RuleEngine(self.rules).apply_stages(transaction, ("CLASSIFICATION",))
+
+        self.assertEqual(transaction.category, "Foreign Fees")
+        self.assertEqual(transaction.transaction_type, "FEE")
+        self.assertTrue({"fee", "foreign"}.issubset(transaction.tags))
         self.assertEqual(transaction.evidence_status, "REQUESTED")
 
     def test_amazon_purchase_gets_ei_bucket_and_receipt_search(self) -> None:

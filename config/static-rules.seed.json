@@ -1207,6 +1207,7 @@
               "value": [
                 "FOREIGN TRANSACTION FEE",
                 "FOREIGN CURRENCY FEE",
+                "FOREIGN EXCHANGE FEE",
                 "INTERNATIONAL TRANSACTION FEE"
               ]
             }
