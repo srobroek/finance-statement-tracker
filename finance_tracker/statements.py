@@ -493,9 +493,17 @@ class WioCreditStatementAdapter:
             rf"^(\d{{2}}/\d{{2}}/\d{{4}})\s+([A-Z]\d+)\s+(.+?)(?:\s+\*{{4}}(\d{{4}}))?\s+([+-])({_MONEY})$",
             re.I,
         )
+        rate_re = re.compile(r"^Rate:\s*([0-9.]+)\s*\(AED/([A-Z]{3})\)$", re.I)
         items: list[dict[str, object]] = []
         card_last4s = [account_last4] if account_last4 else []
+        pending_foreign_index: int | None = None
         for line_number, line in enumerate((line.strip() for line in text.splitlines()), 1):
+            rate_match = rate_re.match(line)
+            if rate_match and pending_foreign_index is not None:
+                items[pending_foreign_index]["exchange_rate"] = Decimal(rate_match.group(1))
+                items[pending_foreign_index]["currency_original"] = rate_match.group(2).upper()
+                pending_foreign_index = None
+                continue
             match = row_re.match(line)
             if not match:
                 continue
@@ -514,6 +522,11 @@ class WioCreditStatementAdapter:
                     "source_line": line_number,
                     "review_required": resolved_last4 is None,
                 }
+            )
+            pending_foreign_index = (
+                len(items) - 1
+                if sign == "-" and _type(description.strip(), "DEBIT") == "PURCHASE"
+                else None
             )
         transactions = _finalize("WIO", items)
         warnings = () if transactions else ("No transaction rows were parsed",)

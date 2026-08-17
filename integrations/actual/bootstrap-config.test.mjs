@@ -43,4 +43,12 @@ test("validates schedule and budget contracts", () => {
     schedules: [],
     budget_months: [{ month: "2026-08", categories: [{ name: "Groceries", amount_minor: 10000 }] }],
   }));
+  assert.throws(
+    () => validateBootstrapConfig({ schema_version: 1, retired_accounts: [""] }),
+    /retired_accounts entries must be names/,
+  );
+  assert.doesNotThrow(() => validateBootstrapConfig({
+    schema_version: 1,
+    retired_accounts: ["Legacy empty account"],
+  }));
 });

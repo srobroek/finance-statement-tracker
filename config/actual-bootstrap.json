@@ -46,6 +46,10 @@
       "card_last4": ["4113", "5009"]
     }
   ],
+  "retired_accounts": [
+    "Wio Current Account · 4113",
+    "Wio Current Account · 5009"
+  ],
   "category_groups": [
     {
       "name": "Income",

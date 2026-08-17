@@ -6,12 +6,16 @@ from decimal import Decimal
 from pathlib import Path
 
 from finance_tracker.evidence import (
+    ArchivedEvidence,
     EvidenceCandidate,
     archive_evidence,
     archive_statement_evidence,
     best_match,
+    best_group_match,
     document_relative_path,
     evidence_catalogue_record,
+    evidence_group_catalogue_record,
+    render_outlook_evidence_snapshot,
     update_evidence_catalogue,
     statement_catalogue_record,
     statement_relative_path,
@@ -45,6 +49,33 @@ class EvidenceTests(unittest.TestCase):
         path = document_relative_path(transaction, "bill", "account 123")
         self.assertEqual(path.parts[:4], ("Finance Evidence", "2026", "08", "dewa"))
         self.assertTrue(str(path).endswith(".pdf"))
+
+    def test_archive_filename_and_catalogue_label_aed_equivalent_correctly(self):
+        transaction = Transaction(
+            "tx-foreign",
+            datetime(2026, 7, 4, tzinfo=timezone.utc),
+            "WIO_CREDIT",
+            "Smarthoteloslo",
+            Decimal("829.57"),
+            currency="NOK",
+            amount_original=Decimal("2211.37"),
+            vendor="SmartHotel Oslo",
+        )
+        path = document_relative_path(transaction, "receipt", "hotel-payment")
+        self.assertIn("__aed-829.57__", path.name)
+        archived = ArchivedEvidence(
+            transaction.transaction_id,
+            "receipt",
+            path.as_posix(),
+            "b" * 64,
+            10,
+        )
+        record = evidence_catalogue_record(archived, transaction, reference="hotel-payment")
+        self.assertEqual(record["entity_type"], "TRANSACTION")
+        self.assertEqual(record["entity_id"], "tx-foreign")
+        self.assertEqual(record["currency"], "AED")
+        self.assertEqual(record["original_currency"], "NOK")
+        self.assertEqual(record["amount_original"], "2211.37")
 
     def test_low_confidence_candidate_is_not_linked(self):
         transaction = Transaction(
@@ -82,6 +113,76 @@ class EvidenceTests(unittest.TestCase):
         )
 
         self.assertIsNone(best_match(transaction, [candidate], Decimal("0.01")))
+
+    def test_foreign_receipt_matches_on_vendor_date_and_card_when_original_amount_is_unavailable(self):
+        transaction = Transaction(
+            "tx-hotel",
+            datetime(2026, 7, 4, tzinfo=timezone.utc),
+            "WIO_CREDIT",
+            "Smarthoteloslo",
+            Decimal("829.57"),
+            vendor="SmartHotel Oslo",
+            account_last4="4113",
+            currency="NOK",
+            metadata={"statement_exchange_rate": "0.37", "statement_card_last4": "4113"},
+        )
+        candidate = EvidenceCandidate(
+            "mail-hotel",
+            datetime(2026, 7, 4, tzinfo=timezone.utc),
+            "Your receipt from Smarthotel Oslo",
+            vendor="SmartHotel Oslo",
+            amount_original=Decimal("2211.37"),
+            currency_original="NOK",
+            account_reference="4113",
+            document_type="receipt",
+        )
+
+        match = best_match(transaction, [candidate])
+
+        self.assertIsNotNone(match)
+        self.assertGreaterEqual(match.strong_fact_count, 3)
+        self.assertIn("account_exact", match.reasons)
+
+    def test_grouped_foreign_booking_matches_aggregate_statement_rows(self):
+        rows = [
+            Transaction(
+                f"sas-{index}",
+                datetime(2026, 7, 4, tzinfo=timezone.utc),
+                "WIO_CREDIT",
+                "Sas",
+                amount,
+                vendor="SAS",
+                account_last4="4113",
+                currency="EUR",
+                metadata={"statement_exchange_rate": rate, "statement_card_last4": "4113"},
+            )
+            for index, (amount, rate) in enumerate(
+                (
+                    (Decimal("29.70"), "4.24"),
+                    (Decimal("29.70"), "4.21"),
+                    (Decimal("29.70"), "4.21"),
+                    (Decimal("29.70"), "4.21"),
+                    (Decimal("2272.65"), "4.21"),
+                    (Decimal("2272.65"), "4.21"),
+                )
+            )
+        ]
+        candidate = EvidenceCandidate(
+            "mail-sas",
+            datetime(2026, 7, 4, tzinfo=timezone.utc),
+            "Your SAS booking is confirmed",
+            vendor="SAS",
+            amount_original=Decimal("1099.20"),
+            currency_original="EUR",
+            order_reference="YYM26Y",
+            document_type="booking-confirmation",
+        )
+
+        match = best_group_match(rows, [candidate])
+
+        self.assertIsNotNone(match)
+        self.assertIn("aggregate_original_amount_near", match.reasons)
+        self.assertGreaterEqual(match.strong_fact_count, 3)
 
     def test_archive_is_structured_hashed_and_idempotent(self):
         transaction = Transaction(
@@ -125,6 +226,54 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(update_evidence_catalogue(catalogue, record), {"inserted": 1, "updated": 0})
             self.assertEqual(update_evidence_catalogue(catalogue, record), {"inserted": 0, "updated": 1})
             self.assertEqual(len(__import__("json").loads(catalogue.read_text(encoding="utf-8"))), 1)
+
+    def test_outlook_snapshot_strips_urls_and_redacts_authentication_values(self):
+        message = {
+            "id": "mail-1",
+            "subject": "Booking confirmation",
+            "sender": {"emailAddress": {"address": "merchant@example.com"}},
+            "receivedDateTime": "2026-07-04T08:29:30Z",
+            "web_link": "https://outlook.example/item/1",
+            "body": {
+                "content": (
+                    "PIN code: 1745\nTotal price NOK 2,211.37\n"
+                    "[Manage booking](https://merchant.example/manage?auth_key=secret)"
+                )
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            output = render_outlook_evidence_snapshot(message, Path(temporary) / "snapshot.txt")
+            rendered = output.read_text(encoding="utf-8")
+        self.assertIn("Total price NOK 2,211.37", rendered)
+        self.assertIn("PIN code: [REDACTED]", rendered)
+        self.assertNotIn("1745", rendered)
+        self.assertNotIn("auth_key", rendered)
+
+    def test_group_catalogue_links_one_document_to_each_transaction(self):
+        rows = tuple(
+            Transaction(
+                f"tx-{index}",
+                datetime(2026, 7, 4, tzinfo=timezone.utc),
+                "WIO_CREDIT",
+                "Sas",
+                Decimal("100"),
+                account="Wio Credit",
+                vendor="SAS",
+            )
+            for index in range(2)
+        )
+        archived = ArchivedEvidence(
+            "transaction-group:YYM26Y",
+            "booking-confirmation",
+            "Finance Evidence/2026/07/sas/example.txt",
+            "a" * 64,
+            10,
+            message_id="mail-sas",
+        )
+        record = evidence_group_catalogue_record(archived, rows, reference="YYM26Y")
+        self.assertEqual(record["entity_type"], "TRANSACTION_GROUP")
+        self.assertEqual(record["transaction_ids"], ["tx-0", "tx-1"])
+        self.assertEqual(record["amount_aed"], "200")
 
     def test_statement_catalogue_uses_card_period_as_its_entity(self):
         with tempfile.TemporaryDirectory() as temporary:

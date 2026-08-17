@@ -67,3 +67,49 @@ class ActualExportCliTests(TestCase):
             self.assertEqual(rows[0]["entity_id"], "WIO_CREDIT:2026-07-01:2026-08-01")
             self.assertEqual(rows[0]["closing_balance_aed"], "-274.40")
             self.assertEqual(rows[0]["message_id"], "mail-1")
+
+    def test_purchase_evidence_archive_supports_transaction_groups(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "booking.txt"
+            source.write_text("sanitized booking confirmation", encoding="utf-8")
+            transactions = root / "transactions.json"
+            transactions.write_text(json.dumps([
+                {
+                    "transaction_id": "tx-1",
+                    "transaction_at": "2026-07-04T00:00:00",
+                    "card": "WIO_CREDIT",
+                    "account": "Wio Credit",
+                    "merchant_raw": "Sas",
+                    "vendor": "SAS",
+                    "amount_aed": "29.70",
+                },
+                {
+                    "transaction_id": "tx-2",
+                    "transaction_at": "2026-07-04T00:00:00",
+                    "card": "WIO_CREDIT",
+                    "account": "Wio Credit",
+                    "merchant_raw": "Sas",
+                    "vendor": "SAS",
+                    "amount_aed": "2272.65",
+                },
+            ]), encoding="utf-8")
+            catalogue = root / "catalogue.json"
+
+            result = main([
+                "purchase-evidence-archive",
+                "--source", str(source),
+                "--evidence-root", str(root),
+                "--catalogue", str(catalogue),
+                "--transactions", str(transactions),
+                "--transaction-id", "tx-1",
+                "--transaction-id", "tx-2",
+                "--document-type", "booking-confirmation",
+                "--reference", "YYM26Y",
+                "--message-id", "mail-sas",
+            ])
+
+            self.assertEqual(result, 0)
+            rows = json.loads(catalogue.read_text(encoding="utf-8"))
+            self.assertEqual(rows[0]["entity_id"], "transaction-group:YYM26Y")
+            self.assertEqual(rows[0]["transaction_ids"], ["tx-1", "tx-2"])

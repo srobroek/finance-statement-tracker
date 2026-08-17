@@ -39,7 +39,11 @@ from .cashback import (
     recommend,
 )
 from .evidence import (
+    archive_evidence,
     archive_statement_evidence,
+    evidence_catalogue_record,
+    evidence_group_catalogue_record,
+    render_outlook_evidence_snapshot,
     statement_catalogue_record,
     update_evidence_catalogue,
 )
@@ -59,6 +63,8 @@ def _load_transactions(path: Path) -> list[Transaction]:
             amount_aed=money(row["amount_aed"]),
             account=row.get("account"),
             owner=row.get("owner"),
+            institution=row.get("institution"),
+            account_last4=row.get("account_last4"),
             currency=str(row.get("currency", "AED")),
             amount_original=(
                 None if row.get("amount_original") is None else money(row["amount_original"])
@@ -77,6 +83,8 @@ def _load_transactions(path: Path) -> list[Transaction]:
             review_required=bool(row.get("review_required", False)),
             is_refund=bool(row.get("is_refund", False)),
             is_subscription=bool(row.get("is_subscription", False)),
+            property_code=row.get("property_code"),
+            rental_unit=row.get("rental_unit"),
             metadata=dict(row.get("metadata", {})),
         )
         for row in rows
@@ -245,6 +253,26 @@ def main(argv: list[str] | None = None) -> int:
     statement_archive.add_argument("--message-id")
     statement_archive.add_argument("--attachment-id")
     statement_archive.add_argument("--web-url")
+    outlook_snapshot = subparsers.add_parser(
+        "outlook-evidence-snapshot",
+        help="Render a sanitized exact-message snapshot for the evidence archive",
+    )
+    outlook_snapshot.add_argument("--input", type=Path, required=True)
+    outlook_snapshot.add_argument("--output", type=Path, required=True)
+    purchase_archive = subparsers.add_parser(
+        "purchase-evidence-archive",
+        help="Archive matched purchase evidence and update the portable catalogue",
+    )
+    purchase_archive.add_argument("--source", type=Path, required=True)
+    purchase_archive.add_argument("--evidence-root", type=Path, required=True)
+    purchase_archive.add_argument("--catalogue", type=Path, required=True)
+    purchase_archive.add_argument("--transactions", type=Path, required=True)
+    purchase_archive.add_argument("--transaction-id", action="append", required=True)
+    purchase_archive.add_argument("--document-type", required=True)
+    purchase_archive.add_argument("--reference", required=True)
+    purchase_archive.add_argument("--message-id")
+    purchase_archive.add_argument("--attachment-id")
+    purchase_archive.add_argument("--web-url")
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -446,6 +474,75 @@ def main(argv: list[str] | None = None) -> int:
             "size_bytes": archived.size_bytes,
             "catalogue": catalogue,
             "entity_id": record["entity_id"],
+        }, indent=2))
+        return 0
+    if args.command == "outlook-evidence-snapshot":
+        message = json.loads(args.input.read_text(encoding="utf-8"))
+        if not isinstance(message, dict):
+            raise ValueError("Outlook evidence input must be one message object")
+        output = render_outlook_evidence_snapshot(message, args.output)
+        print(output)
+        return 0
+    if args.command == "purchase-evidence-archive":
+        transactions = _load_transactions(args.transactions)
+        by_id = {row.transaction_id: row for row in transactions}
+        requested = tuple(dict.fromkeys(args.transaction_id))
+        missing = [transaction_id for transaction_id in requested if transaction_id not in by_id]
+        if missing:
+            raise ValueError("Unknown transaction ids: " + ", ".join(missing))
+        selected = tuple(by_id[transaction_id] for transaction_id in requested)
+        if len(selected) == 1:
+            archive_transaction = selected[0]
+        else:
+            vendors = {(row.vendor or row.merchant_raw).casefold() for row in selected}
+            if len(vendors) != 1:
+                raise ValueError("Grouped evidence transactions must have one normalized vendor")
+            first = min(selected, key=lambda row: (row.transaction_at, row.transaction_id))
+            archive_transaction = Transaction(
+                transaction_id=f"transaction-group:{args.reference}",
+                transaction_at=first.transaction_at,
+                card=first.card,
+                merchant_raw=first.merchant_raw,
+                amount_aed=sum((abs(row.amount_aed) for row in selected), money("0")),
+                account=first.account,
+                owner=first.owner,
+                institution=first.institution,
+                account_last4=first.account_last4,
+                vendor=first.vendor,
+                category=first.category,
+            )
+        archived = archive_evidence(
+            args.source,
+            args.evidence_root,
+            archive_transaction,
+            args.document_type,
+            args.reference,
+            message_id=args.message_id,
+            attachment_id=args.attachment_id,
+        )
+        record = (
+            evidence_catalogue_record(
+                archived,
+                selected[0],
+                reference=args.reference,
+                web_url=args.web_url,
+            )
+            if len(selected) == 1
+            else evidence_group_catalogue_record(
+                archived,
+                selected,
+                reference=args.reference,
+                web_url=args.web_url,
+            )
+        )
+        catalogue = update_evidence_catalogue(args.catalogue, record)
+        print(json.dumps({
+            "relative_path": archived.relative_path,
+            "sha256": archived.sha256,
+            "size_bytes": archived.size_bytes,
+            "catalogue": catalogue,
+            "entity_id": record.get("entity_id") or record.get("transaction_id"),
+            "transaction_ids": [row.transaction_id for row in selected],
         }, indent=2))
         return 0
     year, month_number = (int(part) for part in args.month.split("-", 1))

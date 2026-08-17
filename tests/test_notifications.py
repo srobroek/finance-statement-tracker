@@ -22,7 +22,7 @@ class NotificationTests(unittest.TestCase):
             "web_link": "https://outlook.office.example/message-1",
         }
 
-    def test_adcb_authorization_is_provisional_traceable_and_classified(self):
+    def test_adcb_authorization_is_live_traceable_and_classified(self):
         result = parse_outlook_notifications(
             [self.message], {"8833": "ADCB_CASHBACK"}, self.rules
         )
@@ -31,7 +31,7 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(event["source_event_id"], "outlook-message-1:0")
         self.assertEqual(event["merchant"], "Mollak")
         self.assertEqual(event["purchase_type"], "GENERAL")
-        self.assertEqual(event["status"], "PROVISIONAL")
+        self.assertEqual(event["status"], "ACTIVE")
         self.assertTrue(event["review_required"])
         self.assertLess(event["confidence"], 0.8)
         self.assertTrue(event["decision_trace"])
@@ -63,7 +63,7 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(event["purchase_type"], "AMAZON")
         self.assertEqual(event["channel"], "ONLINE")
         self.assertEqual(event["bucket_code"], "RAK_STANDARD")
-        self.assertEqual(event["status"], "PROVISIONAL")
+        self.assertEqual(event["status"], "ACTIVE")
         self.assertFalse(event["review_required"])
 
     def test_rakbank_non_transaction_subject_is_not_accepted(self):

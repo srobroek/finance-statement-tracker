@@ -2,12 +2,12 @@
 
 ## Objective
 
-Maintain a portable Actual-first finance tracker with a dedicated live cashback companion. Actual owns the authoritative ledger and budgeting model; the companion owns provisional routing state and deterministic calculations.
+Maintain a portable Actual-first finance tracker with a dedicated live cashback companion. Actual owns the authoritative ledger and budgeting model; the companion owns live notification-derived routing state and deterministic calculations.
 
 ## Sources of truth
 
 - Posted transactions, accounts, payees, categories, budgets, schedules, and ordinary reports: Actual Budget in the target POC.
-- Provisional cashback events, period state, recommendations, alerts, acknowledgements, and ingestion cursors: the cashback companion SQLite store.
+- Live cashback events, internal reconciliation state, period state, recommendations, alerts, and ingestion cursors: the cashback companion SQLite store.
 - Card programmes, live rule-set membership, ingestion settings, AI policies, and deployable schema: versioned repository configuration until a dedicated admin UI replaces it.
 - Receipts, bills, warranties, statements, and extracted documents: OneDrive, indexed by `Finance Evidence/catalogue.json`.
 - Python and TypeScript: deterministic behaviour and adapters only. Do not hard-code user categories, vendors, or classification rules in executable code.
@@ -25,9 +25,9 @@ Maintain a portable Actual-first finance tracker with a dedicated live cashback 
 
 Browser acquisition follows the versioned provider and data recipes under `browser_adapters/`. The authenticated browser may download an official export or capture explicit visible data, but it must never write directly to Actual. Convert the artifact to `browser-capture-schema-v1`, stage it, review any provisional rows, and only then use the standard Actual bridge. The user completes MFA/OTP. Never persist browser cookies, session state, passwords, full card numbers, PINs, or CVVs.
 
-Individual transactions are the live, provisional cashback source. Recalculate pace, bucket headroom, warnings, and routing recommendations without waiting for a statement, but never mark `Cashback Finalized` from live notifications alone.
+Valid notification transactions count in live cashback buckets immediately and require no user approval. Recalculate pace, bucket headroom, warnings, and routing recommendations without waiting for a statement, but never mark `Cashback Finalized` from live notifications alone. Source and reconciliation markers are internal bookkeeping only.
 
-Statement and cashback close are scheduled independently per card. The current POC schedule is `TENTATIVE`: all card cycles end at month-end and their reconciliation jobs run on the following first day. A card closes only after statement evidence has been ingested and reconciliation has succeeded. The final reconciled ledger becomes the authoritative cashback source, then the next card period opens. Aggregate finance close is event-driven when the last required card period closes; the legacy daily gate remains paused. Payment due dates must come from the statement when available, while the configured 30-day offset is forecast-only.
+Statement and cashback close are scheduled independently per card. RAKBANK World and Standard Chartered Platinum X close on day 5 and reconcile on day 6; Emirates Islamic Amazon closes at month-end and reconciles on day 1. Wio statement ingestion runs on day 3 because its statement normally arrives on day 1 or 2, and Wio is outside the live cashback programme. A card closes only after statement evidence has been ingested and reconciliation has succeeded. The final reconciled ledger becomes the authoritative cashback source, then the next card period opens. Aggregate finance close is event-driven when the last required card period closes; the legacy daily gate remains paused. Payment due dates must come from the statement when available, while the configured 30-day offset is forecast-only.
 
 Manual overrides always win. Never let an AI stage modify locked fields, transaction amounts, reward arithmetic, source IDs, reconciliation state, or deduplication keys.
 

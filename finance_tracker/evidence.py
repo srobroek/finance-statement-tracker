@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 import shutil
@@ -21,6 +22,8 @@ class EvidenceCandidate:
     vendor: str | None = None
     amount_aed: Decimal | None = None
     currency: str | None = None
+    amount_original: Decimal | None = None
+    currency_original: str | None = None
     reference: str | None = None
     order_reference: str | None = None
     account_reference: str | None = None
@@ -34,6 +37,24 @@ class EvidenceMatch:
     candidate: EvidenceCandidate
     score: Decimal
     reasons: tuple[str, ...]
+
+    @property
+    def strong_fact_count(self) -> int:
+        return sum(
+            reason
+            in {
+                "amount_exact",
+                "original_amount_exact",
+                "aggregate_original_amount_near",
+                "vendor_exact",
+                "reference_exact",
+                "account_exact",
+                "property_exact",
+                "date_buffer",
+                "message_id_exact",
+            }
+            for reason in self.reasons
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,17 +87,61 @@ def evidence_catalogue_record(
     return {
         "schema_version": 1,
         "evidence_id": f"sha256:{archived.sha256}",
+        "entity_type": "TRANSACTION",
+        "entity_id": transaction.transaction_id,
         "transaction_id": transaction.transaction_id,
         "document_type": archived.document_type,
         "vendor": transaction.vendor or transaction.merchant_raw,
         "transaction_date": transaction.transaction_at.date().isoformat(),
         "amount_aed": str(abs(transaction.amount_aed)),
-        "currency": transaction.currency,
+        "currency": "AED",
+        "original_currency": transaction.currency if transaction.currency != "AED" else None,
+        "amount_original": (
+            None if transaction.amount_original is None else str(abs(transaction.amount_original))
+        ),
         "reference": reference,
         "account": transaction.account,
         "property_code": transaction.property_code,
         "rental_unit": transaction.rental_unit,
         "warranty_expiry": warranty_expiry,
+        "message_id": archived.message_id,
+        "attachment_id": archived.attachment_id,
+        "relative_path": archived.relative_path,
+        "web_url": web_url,
+        "sha256": archived.sha256,
+        "size_bytes": archived.size_bytes,
+    }
+
+
+def evidence_group_catalogue_record(
+    archived: ArchivedEvidence,
+    transactions: Iterable[Transaction],
+    *,
+    reference: str,
+    web_url: str | None = None,
+) -> dict[str, object]:
+    """Build one catalogue row linking a document to a transaction group."""
+    rows = tuple(transactions)
+    if len(rows) < 2:
+        raise ValueError("Grouped evidence requires at least two transactions")
+    vendors = {_identity(row.vendor or row.merchant_raw) for row in rows}
+    if len(vendors) != 1:
+        raise ValueError("Grouped evidence transactions must have one normalized vendor")
+    return {
+        "schema_version": 1,
+        "evidence_id": f"sha256:{archived.sha256}",
+        "entity_type": "TRANSACTION_GROUP",
+        "entity_id": f"transaction-group:{reference}",
+        "transaction_id": None,
+        "transaction_ids": sorted(row.transaction_id for row in rows),
+        "document_type": archived.document_type,
+        "vendor": rows[0].vendor or rows[0].merchant_raw,
+        "transaction_date": min(row.transaction_at.date() for row in rows).isoformat(),
+        "amount_aed": str(sum((abs(row.amount_aed) for row in rows), Decimal("0"))),
+        "currency": "AED",
+        "reference": reference,
+        "accounts": sorted({row.account for row in rows if row.account}),
+        "cards": sorted({row.card for row in rows}),
         "message_id": archived.message_id,
         "attachment_id": archived.attachment_id,
         "relative_path": archived.relative_path,
@@ -246,7 +311,31 @@ def _tokens(value: str | None) -> set[str]:
     return {part for part in re.split(r"[^a-z0-9]+", (value or "").casefold()) if len(part) > 2}
 
 
-def score_candidate(transaction: Transaction, candidate: EvidenceCandidate) -> EvidenceMatch:
+def _identity(value: str | None) -> str:
+    return " ".join(sorted(_tokens(value)))
+
+
+def _account_references(transaction: Transaction) -> set[str]:
+    values = (
+        transaction.account_last4,
+        transaction.account,
+        transaction.metadata.get("statement_card_last4"),
+        transaction.metadata.get("account_reference"),
+    )
+    return {
+        token
+        for value in values
+        if value
+        for token in re.findall(r"[a-z0-9]+", str(value).casefold())
+    }
+
+
+def score_candidate(
+    transaction: Transaction,
+    candidate: EvidenceCandidate,
+    *,
+    date_buffer_days: int = 7,
+) -> EvidenceMatch:
     """Score an email/document without AI; AI may enrich only after a match."""
     score = Decimal("0")
     reasons: list[str] = []
@@ -264,8 +353,27 @@ def score_candidate(transaction: Transaction, candidate: EvidenceCandidate) -> E
             score += Decimal("0.25")
             reasons.append("amount_near")
 
+    if candidate.amount_original is not None:
+        candidate_currency = (candidate.currency_original or "").upper()
+        if candidate_currency and transaction.currency != candidate_currency:
+            return EvidenceMatch(candidate, Decimal("0"), ("original_currency_mismatch",))
+        if candidate_currency:
+            score += Decimal("0.05")
+            reasons.append("original_currency_exact")
+        if transaction.amount_original is not None:
+            original_delta = abs(abs(money(candidate.amount_original)) - abs(transaction.amount_original))
+            if original_delta <= Decimal("0.01"):
+                score += Decimal("0.45")
+                reasons.append("original_amount_exact")
+            elif original_delta <= max(Decimal("1"), abs(transaction.amount_original) * Decimal("0.01")):
+                score += Decimal("0.25")
+                reasons.append("original_amount_near")
+
     transaction_vendor = transaction.vendor or transaction.merchant_raw
-    if _tokens(transaction_vendor) & (_tokens(candidate.vendor) | _tokens(candidate.subject)):
+    if candidate.vendor and _identity(transaction_vendor) == _identity(candidate.vendor):
+        score += Decimal("0.25")
+        reasons.append("vendor_exact")
+    elif _tokens(transaction_vendor) & (_tokens(candidate.vendor) | _tokens(candidate.subject)):
         score += Decimal("0.20")
         reasons.append("vendor_token")
 
@@ -287,6 +395,11 @@ def score_candidate(transaction: Transaction, candidate: EvidenceCandidate) -> E
         score += Decimal("0.20")
         reasons.append("reference_exact")
 
+    candidate_account = set(re.findall(r"[a-z0-9]+", (candidate.account_reference or "").casefold()))
+    if candidate_account and _account_references(transaction) & candidate_account:
+        score += Decimal("0.20")
+        reasons.append("account_exact")
+
     transaction_property = (transaction.property_code or transaction.rental_unit or "").casefold()
     if transaction_property and transaction_property == (candidate.property_code or "").casefold():
         score += Decimal("0.15")
@@ -297,9 +410,9 @@ def score_candidate(transaction: Transaction, candidate: EvidenceCandidate) -> E
         reasons.append("message_id_exact")
 
     days = abs((candidate.sent_at.date() - transaction.transaction_at.date()).days)
-    if days <= 3:
+    if days <= date_buffer_days:
         score += Decimal("0.15")
-        reasons.append("date_3d")
+        reasons.append("date_buffer")
     elif days <= 14:
         score += Decimal("0.08")
         reasons.append("date_14d")
@@ -314,14 +427,110 @@ def score_candidate(transaction: Transaction, candidate: EvidenceCandidate) -> E
 def best_match(
     transaction: Transaction,
     candidates: Iterable[EvidenceCandidate],
-    minimum_score: Decimal = Decimal("0.80"),
+    minimum_score: Decimal = Decimal("0.50"),
+    minimum_strong_facts: int = 2,
+    date_buffer_days: int = 7,
 ) -> EvidenceMatch | None:
     ranked = sorted(
-        (score_candidate(transaction, candidate) for candidate in candidates),
+        (
+            score_candidate(transaction, candidate, date_buffer_days=date_buffer_days)
+            for candidate in candidates
+        ),
         key=lambda match: (match.score, match.candidate.sent_at, match.candidate.message_id),
         reverse=True,
     )
-    return ranked[0] if ranked and ranked[0].score >= minimum_score else None
+    return (
+        ranked[0]
+        if ranked
+        and ranked[0].score >= minimum_score
+        and ranked[0].strong_fact_count >= minimum_strong_facts
+        else None
+    )
+
+
+def score_group_candidate(
+    transactions: Iterable[Transaction],
+    candidate: EvidenceCandidate,
+    *,
+    date_buffer_days: int = 7,
+) -> EvidenceMatch:
+    """Score one document against several statement rows from the same purchase.
+
+    This supports issuer layouts that split a booking into passenger, segment,
+    or ancillary rows while the merchant email contains one aggregate total.
+    Approximate issuer exchange rates are used only as a corroborating fact.
+    """
+    rows = tuple(transactions)
+    if not rows:
+        return EvidenceMatch(candidate, Decimal("0"), ("empty_group",))
+    vendors = {_identity(row.vendor or row.merchant_raw) for row in rows}
+    if len(vendors) != 1 or not candidate.vendor or _identity(candidate.vendor) not in vendors:
+        return EvidenceMatch(candidate, Decimal("0"), ("vendor_mismatch",))
+    reasons = ["vendor_exact"]
+    score = Decimal("0.25")
+    if all(abs((candidate.sent_at.date() - row.transaction_at.date()).days) <= date_buffer_days for row in rows):
+        score += Decimal("0.15")
+        reasons.append("date_buffer")
+    else:
+        return EvidenceMatch(candidate, Decimal("0"), ("date_outside_buffer",))
+
+    currency = (candidate.currency_original or "").upper()
+    if candidate.amount_original is not None and currency:
+        if any(row.currency != currency for row in rows):
+            return EvidenceMatch(candidate, Decimal("0"), ("original_currency_mismatch",))
+        estimated = Decimal("0")
+        for row in rows:
+            if row.amount_original is not None:
+                estimated += abs(row.amount_original)
+                continue
+            raw_rate = row.metadata.get("statement_exchange_rate")
+            if not raw_rate or money(raw_rate) <= 0:
+                return EvidenceMatch(candidate, Decimal("0"), ("missing_exchange_rate",))
+            estimated += abs(row.amount_aed) / money(raw_rate)
+        delta = abs(estimated - abs(money(candidate.amount_original)))
+        # Issuer PDFs commonly round the displayed FX rate to two decimals and
+        # may split one booking across passengers or ancillary charges.  A 1%
+        # aggregate tolerance is narrow enough to corroborate the document
+        # without pretending the displayed rate can reproduce settlement to
+        # the cent.
+        tolerance = max(Decimal("1"), abs(money(candidate.amount_original)) * Decimal("0.01"))
+        if delta <= tolerance:
+            score += Decimal("0.45")
+            reasons.append("aggregate_original_amount_near")
+        else:
+            return EvidenceMatch(candidate, Decimal("0"), ("aggregate_amount_mismatch",))
+
+    candidate_account = set(re.findall(r"[a-z0-9]+", (candidate.account_reference or "").casefold()))
+    if candidate_account and all(_account_references(row) & candidate_account for row in rows):
+        score += Decimal("0.20")
+        reasons.append("account_exact")
+    return EvidenceMatch(candidate, min(score, Decimal("1")), tuple(reasons))
+
+
+def best_group_match(
+    transactions: Iterable[Transaction],
+    candidates: Iterable[EvidenceCandidate],
+    *,
+    minimum_score: Decimal = Decimal("0.50"),
+    minimum_strong_facts: int = 2,
+    date_buffer_days: int = 7,
+) -> EvidenceMatch | None:
+    rows = tuple(transactions)
+    ranked = sorted(
+        (
+            score_group_candidate(rows, candidate, date_buffer_days=date_buffer_days)
+            for candidate in candidates
+        ),
+        key=lambda match: (match.score, match.candidate.sent_at, match.candidate.message_id),
+        reverse=True,
+    )
+    return (
+        ranked[0]
+        if ranked
+        and ranked[0].score >= minimum_score
+        and ranked[0].strong_fact_count >= minimum_strong_facts
+        else None
+    )
 
 
 def _slug(value: str) -> str:
@@ -335,6 +544,67 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def render_outlook_evidence_snapshot(
+    message: dict[str, object],
+    destination: str | Path,
+) -> Path:
+    """Write a deterministic, human-readable email snapshot without secrets.
+
+    The Outlook web link and message ID are retained for traceability. Embedded
+    and external body URLs are removed because booking links commonly contain
+    bearer-like authentication keys. PINs, OTPs, verification codes, and
+    passwords are redacted from visible text.
+    """
+    message_id = str(message.get("id") or "").strip()
+    subject = str(message.get("subject") or "").strip()
+    if not message_id or not subject:
+        raise ValueError("Outlook evidence requires message id and subject")
+    sender_value = message.get("sender") or {}
+    if isinstance(sender_value, dict):
+        email_address = sender_value.get("emailAddress") or {}
+        if isinstance(email_address, dict):
+            sender = str(email_address.get("address") or email_address.get("name") or "").strip()
+        else:
+            sender = str(email_address).strip()
+    else:
+        sender = str(sender_value).strip()
+    body_value = message.get("body") or {}
+    body = str(body_value.get("content") or "") if isinstance(body_value, dict) else str(body_value)
+    body = re.sub(r"<\s*(script|style)\b.*?</\s*\1\s*>", " ", body, flags=re.I | re.S)
+    body = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", body)
+    body = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body)
+    body = re.sub(r"<[^>]+>", " ", body)
+    body = re.sub(r"https?://\S+", "[link removed]", body, flags=re.I)
+    body = html.unescape(body)
+    secret_label = r"(?:PIN(?:\s+code)?|OTP|one[- ]time(?:\s+password)?|verification\s+code|password)"
+    body = re.sub(
+        rf"(?i)\b({secret_label})\s*[:#=-]?\s*[A-Za-z0-9_-]+",
+        r"\1: [REDACTED]",
+        body,
+    )
+    body = re.sub(r"[ \t]+", " ", body)
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
+    rendered = "\n".join(
+        (
+            "OUTLOOK EVIDENCE SNAPSHOT (SANITIZED)",
+            f"Message ID: {message_id}",
+            f"Subject: {subject}",
+            f"From: {sender or 'unknown'}",
+            f"Received: {str(message.get('receivedDateTime') or '').strip()}",
+            f"Outlook link: {str(message.get('web_link') or message.get('webLink') or '').strip()}",
+            "",
+            body,
+            "",
+        )
+    )
+    output = Path(destination)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    temporary.write_text(rendered, encoding="utf-8")
+    temporary.replace(output)
+    return output
 
 
 def document_relative_path(
@@ -353,7 +623,7 @@ def document_relative_path(
     amount = abs(transaction.amount_aed).quantize(Decimal("0.01"))
     filename = (
         f"{transaction.transaction_at:%Y-%m-%d}__{_slug(document_type)}__{vendor}__"
-        f"{transaction.currency.lower()}-{amount}__{reference_slug}__{digest[:8]}.{extension.lstrip('.').lower()}"
+        f"aed-{amount}__{reference_slug}__{digest[:8]}.{extension.lstrip('.').lower()}"
     )
     return PurePosixPath(
         "Finance Evidence",

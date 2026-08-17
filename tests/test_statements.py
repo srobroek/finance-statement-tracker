@@ -91,6 +91,7 @@ Date Ref. Number Description Card Number Amount
 04/04/2026 P089884243 ADCB cashback payment -14,000.00
 04/04/2026 P965728346 Credit Repayment +14,000.00
 26/04/2026 P769104799 Kibsons ****4113 -312.30
+Rate: 3.67 (AED/USD)
 01/05/2026 P470244091 Credit Repayment Autopay +312.30
 © 2026 Wio, PJSC. All Rights Reserved.
 """
@@ -103,6 +104,9 @@ Date Ref. Number Description Card Number Amount
         self.assertEqual(statement.transactions[0].transaction_type, "PURCHASE")
         self.assertEqual(statement.transactions[1].transaction_type, "PAYMENT")
         self.assertEqual(statement.transactions[2].card_last4, "4113")
+        self.assertEqual(statement.transactions[2].currency_original, "USD")
+        self.assertEqual(statement.transactions[2].exchange_rate, Decimal("3.67"))
+        self.assertIsNone(statement.transactions[2].amount_original)
         self.assertTrue(statement.balance_tied)
 
     def test_wio_credit_statement_accepts_a_negative_overpaid_closing_balance(self) -> None:

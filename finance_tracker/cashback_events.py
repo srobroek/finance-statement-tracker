@@ -22,7 +22,7 @@ from .cashback import (
 from .models import Transaction, money
 
 
-ACTIVE_STATUSES = frozenset({"PROVISIONAL", "CONFIRMED"})
+ACTIVE_STATUSES = frozenset({"ACTIVE"})
 VALID_STATUSES = ACTIVE_STATUSES | {"IGNORED", "REVERSED"}
 VALID_EVENT_TYPES = frozenset({"PURCHASE", "REFUND", "REVERSAL"})
 VALID_RECONCILIATION_STATUSES = frozenset({"UNMATCHED", "MATCHED", "VARIANCE", "RECONCILED"})
@@ -143,7 +143,10 @@ def _normalize_event(source: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("source_event_id is required")
     if not card_code:
         raise ValueError("card_code is required")
-    status = str(source.get("status") or "PROVISIONAL").upper()
+    status = str(source.get("status") or "ACTIVE").upper()
+    # Accept legacy envelopes while storing one user-facing transaction state.
+    if status in {"PROVISIONAL", "CONFIRMED"}:
+        status = "ACTIVE"
     if status not in VALID_STATUSES:
         raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}")
     event_type = str(source.get("event_type") or "PURCHASE").upper()
@@ -314,6 +317,9 @@ class CashbackEventStore:
                     """
                 )
                 self._migrate_event_columns(connection)
+                connection.execute(
+                    "UPDATE cashback_events SET status='ACTIVE' WHERE status IN ('PROVISIONAL', 'CONFIRMED')"
+                )
                 connection.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_cashback_events_identity ON cashback_events(identity_key) WHERE identity_key IS NOT NULL"
                 )
@@ -540,7 +546,7 @@ class CashbackEventStore:
                 "source_event_id": f"statement:{statement_reference}:{transaction_id}",
                 "card_code": card_code,
                 "source": "statement",
-                "status": "CONFIRMED",
+                "status": "ACTIVE",
                 "confidence": 1,
                 "reconciliation_status": "RECONCILED",
                 "statement_reference": statement_reference,
@@ -577,7 +583,7 @@ class CashbackEventStore:
                     for row in connection.execute(
                         """
                         SELECT * FROM cashback_events
-                        WHERE card_code = ? AND status = 'PROVISIONAL'
+                        WHERE card_code = ? AND status = 'ACTIVE' AND source != 'statement'
                           AND substr(occurred_at, 1, 10) BETWEEN ? AND ?
                         ORDER BY occurred_at, source_event_id
                         """,
@@ -621,7 +627,7 @@ class CashbackEventStore:
                         connection.execute(
                             """
                             UPDATE cashback_events
-                            SET status='CONFIRMED', reconciliation_status='RECONCILED',
+                            SET status='ACTIVE', reconciliation_status='RECONCILED',
                                 statement_reference=?, updated_at=CURRENT_TIMESTAMP
                             WHERE source_event_id=?
                             """,
@@ -636,7 +642,7 @@ class CashbackEventStore:
                         ).fetchone()
                         if existing:
                             connection.execute(
-                                "UPDATE cashback_events SET status='CONFIRMED', reconciliation_status='RECONCILED', updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
+                                "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
                                 (existing["source_event_id"],),
                             )
                             matched += 1
@@ -893,7 +899,7 @@ class CashbackEventStore:
                 """
                 SELECT * FROM cashback_events
                 WHERE substr(occurred_at, 1, 10) BETWEEN ? AND ?
-                  AND status IN ('PROVISIONAL', 'CONFIRMED')
+                  AND status = 'ACTIVE'
                 ORDER BY occurred_at, source_event_id
                 """,
                 (start.isoformat(), end.isoformat()),
@@ -908,7 +914,7 @@ class CashbackEventStore:
             records = connection.execute(
                 """
                 SELECT * FROM cashback_events
-                WHERE status IN ('PROVISIONAL', 'CONFIRMED')
+                WHERE status = 'ACTIVE'
                   AND review_required = 1
                 ORDER BY occurred_at, source_event_id
                 LIMIT ?
@@ -943,7 +949,7 @@ class CashbackEventStore:
             row = connection.execute(
                 """
                 SELECT COUNT(*) AS event_count, MAX(occurred_at) AS last_event_at,
-                       SUM(CASE WHEN status IN ('PROVISIONAL', 'CONFIRMED') THEN 1 ELSE 0 END) AS live_event_count,
+                       SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS live_event_count,
                        SUM(CASE WHEN reconciliation_status = 'VARIANCE' THEN 1 ELSE 0 END) AS variance_count
                 FROM cashback_events
                 """

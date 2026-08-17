@@ -92,7 +92,7 @@ class ADCBOTPNotificationAdapter:
     """Parse amount-bearing ADCB authorization emails conservatively.
 
     These messages prove an authorization attempt, not settlement. They are
-    therefore always provisional and reviewable until a statement confirms
+    therefore live operational evidence until a statement reconciles
     them.
     """
 
@@ -144,7 +144,7 @@ def _resolve_notification_date(day: int, month: int, received: datetime) -> date
 
 
 class RakbankCardTransactionNotificationAdapter:
-    """Parse RAKBANK card-spend notifications as provisional evidence."""
+    """Parse RAKBANK card-spend notifications as live operational evidence."""
 
     code = "rakbank_card_transaction_v1"
     senders = frozenset({"alerts@rakbank.ae"})
@@ -297,7 +297,7 @@ def parse_outlook_notifications(
             "bucket_code": transaction.reward_bucket,
             "event_type": "PURCHASE",
             "source": "outlook",
-            "status": "PROVISIONAL",
+            "status": "ACTIVE",
             "tags": sorted(transaction.tags),
             "confidence": fact.confidence,
             "review_required": transaction.review_required or transaction.channel == "UNKNOWN",

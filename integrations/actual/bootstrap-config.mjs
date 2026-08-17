@@ -138,6 +138,7 @@ export function validateBootstrapConfig(config) {
   if (config.schema_version !== 1) throw new Error("Bootstrap schema_version must be 1");
   for (const property of [
     "accounts",
+    "retired_accounts",
     "category_groups",
     "tags",
     "payees",
@@ -149,6 +150,9 @@ export function validateBootstrapConfig(config) {
     if (config[property] !== undefined && !Array.isArray(config[property])) {
       throw new Error(`${property} must be an array`);
     }
+  }
+  for (const name of config.retired_accounts ?? []) {
+    if (!String(name ?? "").trim()) throw new Error("retired_accounts entries must be names")
   }
   for (const month of config.budget_months ?? []) {
     if (!/^\d{4}-\d{2}$/.test(String(month.month ?? ""))) {

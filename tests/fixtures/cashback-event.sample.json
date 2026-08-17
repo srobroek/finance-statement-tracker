@@ -9,7 +9,7 @@
   "merchant": "Sample Merchant",
   "event_type": "PURCHASE",
   "source": "validation-fixture",
-  "status": "PROVISIONAL",
+  "status": "ACTIVE",
   "confidence": 0.95,
   "review_required": false,
   "reconciliation_status": "UNMATCHED"

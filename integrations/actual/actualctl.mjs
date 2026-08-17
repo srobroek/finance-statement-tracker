@@ -226,6 +226,24 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
     }
   }
 
+  const desiredAccountNames = new Set(
+    (config.accounts ?? []).flatMap(desired => [desired.name, ...(desired.aliases ?? [])]).map(normalized),
+  );
+  for (const retiredName of config.retired_accounts ?? []) {
+    const retiredKey = normalized(retiredName);
+    if (desiredAccountNames.has(retiredKey)) {
+      throw new Error(`Account cannot be both active and retired: ${retiredName}`);
+    }
+    const found = accounts.find(account => normalized(account.name) === retiredKey);
+    if (!found || Boolean(found.closed)) continue;
+    const balance = await actual.getAccountBalance(found.id);
+    if (balance !== 0) {
+      throw new Error(`Refusing to close non-zero retired account ${found.name}: ${balance}`);
+    }
+    changes.push({ action: "close", type: "account", name: found.name });
+    if (apply) await actual.closeAccount(found.id);
+  }
+
   if (apply) accounts = await actual.getAccounts();
   const groupIndex = byName(groups);
   for (const desired of config.category_groups ?? []) {

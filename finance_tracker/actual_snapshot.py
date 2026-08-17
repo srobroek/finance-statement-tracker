@@ -318,12 +318,7 @@ def cashback_dashboard(
             ],
             "routing_mode": routing_mode,
             "pace": pace,
-            "notification_event_count": sum(
-                row.metadata.get("cashback_status") == "PROVISIONAL" for row in card_transactions
-            ),
-            "statement_matched_event_count": sum(
-                row.metadata.get("cashback_status") == "CONFIRMED" for row in card_transactions
-            ),
+            "transaction_count": len(card_transactions),
             "refund_effect_aed": _plain(
                 sum((-row.spend_aed for row in card_transactions if row.spend_aed < 0), Decimal("0"))
             ),

@@ -7,7 +7,7 @@
       "institution": "RAKBANK",
       "card_code": "RAK_WORLD",
       "status": "ACTIVE",
-      "evidence_semantics": "TRANSACTION_NOTIFICATION_PROVISIONAL",
+      "evidence_semantics": "LIVE_TRANSACTION_NOTIFICATION",
       "adapter": "rakbank_card_transaction_v1",
       "mail_folder": "Inbox/Rakbank",
       "senders": ["alerts@rakbank.ae"],

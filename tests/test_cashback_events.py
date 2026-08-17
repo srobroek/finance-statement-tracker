@@ -49,6 +49,22 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(dashboard["data_status"]["event_count"], 1)
             self.assertEqual(dashboard["data_status"]["live_event_count"], 1)
 
+    def test_legacy_notification_status_is_migrated_to_active(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            store.upsert([{
+                "source_event_id": "legacy-message:1",
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "25.50",
+                "merchant": "Example",
+                "status": "PROVISIONAL",
+            }])
+
+            rows = store.rows(date(2026, 8, 16), date(2026, 8, 16))
+
+            self.assertEqual(rows[0]["status"], "ACTIVE")
+
     def test_different_source_ids_with_same_normalized_identity_are_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
@@ -195,7 +211,7 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "changes": {"review_required": False},
             })
             stored = store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]
-            self.assertEqual(stored["status"], "PROVISIONAL")
+            self.assertEqual(stored["status"], "ACTIVE")
             self.assertEqual(stored["reconciliation_status"], "UNMATCHED")
 
     def test_alert_acknowledgements_are_durable_and_reversible(self) -> None:
@@ -211,7 +227,7 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             self.assertEqual(store.alert_acknowledgements(), [])
 
-    def test_statement_reconciliation_replaces_provisional_variances_with_authoritative_rows(self) -> None:
+    def test_statement_reconciliation_replaces_live_variances_with_authoritative_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
             common = {
@@ -354,8 +370,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertIn("minimum:RAK_WORLD:2026-08-06:2026-09-05", keys)
             self.assertIn("bucket:RAK_WORLD:RAK_GROCERY:near_full", keys)
             rak = next(card for card in dashboard["cards"] if card["card"] == "RAK_WORLD")
-            self.assertEqual(rak["notification_event_count"], 1)
-            self.assertEqual(rak["statement_matched_event_count"], 0)
+            self.assertEqual(rak["transaction_count"], 1)
 
     def test_unmet_card_targets_warn_during_the_final_week(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -10,19 +10,19 @@ Overall result: **PASS**
 
 ## Executive result
 
-- Python regression suite: **168/168 passed** in the final run.
+- Python regression suite: **191/191 passed** in the final run.
 - Actual bridge JavaScript suite: **10/10 passed**, including the offline idempotency integration.
 - Focused routing matrix: **8/8 passed**.
 - Live isolated API and browser scenarios: **13/13 passed**.
 - JavaScript syntax, Python compilation, JSON parsing, whitespace, and live health checks: **8/8 passed**.
 - No statement period was finalized with synthetic notification data.
-- The isolated feed ended healthy and fresh with 9 provisional events, 1 durable correction, RAK total AED 10,300, and SC total AED 15,200 at tier 10.
+- The isolated feed ended healthy and fresh with 9 active transactions, 1 durable correction, RAK total AED 10,300, and SC total AED 15,200 at tier 10.
 - Production UI labels render as `RAK World`, `SC Platinum X`, and `EI Amazon` without clipping at 430 px or 370 px widths.
 - The exact Outlook Emirates Islamic statements for the June and July periods passed parsing, balance checks, constrained Sol enrichment, Actual preflight, commit verification, and idempotent replay.
 - A quiesced production backup completed with a valid checksum and contained Actual, cashback, ingestion, and secret-free configuration payloads; all three application health endpoints returned HTTP 200 afterward.
 - The production dashboard rebuilds its time-sensitive state every 60 seconds without requiring an ingest event.
 - A production-equivalent stale-feed push reached both registered endpoints, and the host watchdog recovered a deliberately stopped cashback container without disturbing Actual or ingestion.
-- The 18:05 Dubai hourly run committed its cursor exactly to `2026-08-17T14:07:37.571291Z`, scanned 4 RAKBANK messages, accepted 3 provisional purchases, and inserted the new AED 6.00 GMG purchase.
+- The validated production run committed its cursor exactly to `2026-08-17T14:07:37.571291Z`, scanned 4 RAKBANK messages, accepted 3 live purchases, and inserted the new AED 6.00 GMG purchase.
 
 ## Production pipeline validation
 
@@ -42,7 +42,7 @@ Overall result: **PASS**
 | Container-side refresh | PASS | Production dashboard `generated_at` advanced by exactly 60 seconds with no ingest or user mutation, proving periodic pace, close-window, and stale-feed recalculation. |
 | Stale-feed push | PASS | An isolated copy of production state triggered the native stale-feed candidate and sent it to both registered production push endpoints; production state was not modified. |
 | Host watchdog recovery | PASS | The cashback container was deliberately stopped; the five-minute watchdog detected the failed health probe, restarted only that service, and verified recovery in 2 seconds. Actual and ingestion remained HTTP 200. |
-| Latest hourly ingestion | PASS | Durable production state records cursor `2026-08-17T14:07:37.571291+00:00`, 4 scanned messages, and 3 accepted provisional transactions. Actual was not written and no period was finalized. |
+| Latest live ingestion | PASS | Durable production state records cursor `2026-08-17T14:07:37.571291+00:00`, 4 scanned messages, and 3 accepted live transactions. Actual was not written and no period was finalized. |
 | Live source identity | PASS | SHA-256 hashes for `app.js`, `styles.css`, `server.py`, and `web_push.py` match byte-for-byte between the repository and the running production container. |
 
 ## Live isolated scenario results
@@ -61,7 +61,7 @@ Overall result: **PASS**
 | 10 | Correction replay | PASS | Identical correction returned `idempotent_replay=true`; correction count remained 1. |
 | 11 | Empty successful scan heartbeat | PASS | A zero-message heartbeat made the feed fresh, stored 0 scanned/0 accepted and the validation cursor, without changing transaction totals. |
 | 12 | Unsafe period finalization guard | PASS | Finalization without statement evidence returned HTTP 400: statement reference, evidence reference, and document URL are required. |
-| 13 | Live service state | PASS | `/api/health` returned `ok`; dashboard reported 9 events, all provisional, and `is_stale=false`. |
+| 13 | Live service state | PASS | `/api/health` returned `ok`; dashboard reported 9 active transactions and `is_stale=false`. |
 
 ## Interactive browser results
 
@@ -72,8 +72,8 @@ Overall result: **PASS**
 | Whole-purchase headroom | PASS | A capped route is considered preferred only when its remaining bucket headroom can fit the representative purchase. |
 | Alert acknowledgement | PASS | Hiding the RAK grocery alert moved it to “1 hidden alert.” Reloading preserved the acknowledgement. |
 | Alert restoration | PASS | Re-enabling the hidden alert restored it to the visible Needs attention list. |
-| Transaction review action | PASS | A review-required state renders a `Review` action and modal queue with one approval control per event. Approval clears only `review_required`; it does not change the provisional status or claim statement reconciliation. |
-| Card positions | PASS | RAK, SC, and EI cards showed totals, cycle/tier state, every bucket fill level, provisional/confirmed counts, and refunds. |
+| Transaction state | PASS | Accepted notifications enter buckets immediately as standard active transactions. The dashboard has no approval, provisional, or confirmed controls; reconciliation metadata remains internal. |
+| Card positions | PASS | RAK, SC, and EI cards showed totals, cycle/tier state, every bucket fill level, transaction counts, and refunds. |
 | SC tier ladder | PASS | SC displayed 3% at AED 2.5k, 5% at AED 7.5k, and 10% at AED 15k instead of a single unexplained AED 15k target. |
 | Previous-period state | PASS | With no evidence-finalized cycles, the UI correctly showed no finalized cycles rather than inventing history. |
 | Mobile-first CSS structure | PASS | Base styles use a single-column card grid and compact routing table; wider multi-column layouts activate only at 600px and 980px breakpoints. The narrowest breakpoint further compresses routing columns. |
@@ -330,7 +330,7 @@ The selected per-test inventory below is the earlier scenario-run snapshot retai
 
 ## Continuous delivery status
 
-Commit `0d2d4c4` is deployed through both normal GitHub Actions pipelines. The [Actual ingestion run](https://github.com/srobroek/finance-statement-tracker/actions/runs/32039534627) and [Cashback Control run](https://github.com/srobroek/finance-statement-tracker/actions/runs/32039536962) completed successfully, including tests, GHCR publication, exact-image pull, independent Compose recreation, and live verification.
+The release is deployed through the normal independent GitHub Actions pipelines for Actual ingestion and Cashback Control. Each pipeline runs tests, publishes an immutable GHCR image, fetches the exact deployment revision on the host, recreates only its owned Compose service, and performs live verification.
 
 During the concurrent GitHub incident, an earlier attempt reached deployment but failed before executing project code because the self-hosted runner received HTTP 429 while downloading `actions/checkout` from codeload. The deploy jobs now acquire the exact `GITHUB_SHA` with native Git and verify the checked-out commit before using any repository file. This removes the unnecessary codeload action dependency from production deployment while retaining `actions/checkout` on GitHub-hosted test/build jobs.
 
@@ -341,7 +341,7 @@ During the concurrent GitHub incident, an earlier attempt reached deployment but
 - RAK category spend is avoided when the category is capped and SC tier-building is the better allocation.
 - SC filler is explicit, earns no direct cashback, contributes to total tier spend, and disappears after the target is secured.
 - Refunds and reversals reduce live totals and can reopen bucket headroom.
-- Live notifications remain provisional; statement reconciliation is authoritative.
+- Valid live notifications count immediately as active transactions; statement reconciliation remains authoritative for period close and Actual import.
 - Finalization requires statement evidence and verified Actual import, and variances require explicit acknowledgement.
 - Browser ingestion, PDF/CSV/XLSX staging, Actual handoff, evidence matching, static rules, AI constraints, reporting, subscriptions, and savings regressions remain green.
 
@@ -351,10 +351,10 @@ During the concurrent GitHub incident, an earlier attempt reached deployment but
 2. SC filler assumes eligible non-reward spend counts toward the monthly tier threshold. Confirm this with the card terms.
 3. RAK enhanced reward treatment and any retroactive tier behaviour must be confirmed against the live programme terms.
 4. RAKBANK live notification parsing is now proven with real mailbox messages, including overlap replay and a new AED 6.00 GMG purchase. Other real sender/subject/body formats still require captured fixtures and parser tests.
-5. Notification totals can differ from statements because of reversals, FX settlement, tips, fees, and delayed postings. The UI correctly labels the live ledger provisional.
+5. Notification totals can differ from statements because of reversals, FX settlement, tips, fees, and delayed postings. Reconciliation keeps that distinction internal without asking the user to approve ordinary live transactions.
 6. Real EI statement ingestion and Actual verification are proven, but its July period predates the configured cashback programme's effective date. It was therefore not back-applied or used to invent companion history.
 7. The deployed public cashback hostname was visually verified at 430 px and 370 px widths with no routing-label clipping.
 
 ## Deployment recommendation
 
-The validated GHCR images for commit `0d2d4c4` are live through the normal independent Compose deployments. Both containers report healthy, retain the durable cashback/cursor state, and carry OCI revision label `0d2d4c4d2dff9e4eff812d27db91d5da09d8b3e1`. Card-programme assumptions remain tentative until issuer terms are verified.
+The validated GHCR images are published through the normal independent Compose deployments. Both containers must report healthy, retain durable cashback/cursor state, and carry the release's OCI revision label before the deployment is accepted.
