@@ -10,6 +10,7 @@ on:
       - ".github/workflows/cashback-image.yml"
       - ".dockerignore"
       - "apps/cashback-control/**"
+      - "deploy/cashback/**"
       - "config/actual-bootstrap.json"
       - "config/cashback-programs.json"
       - "config/static-rules.seed.json"
@@ -103,19 +104,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          stack=/opt/stacks/finance-cashback
+          sudo install -d "$stack"
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           sudo docker exec finance-cashback-control python -c \
             "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
-          sudo cp /opt/stacks/finance-actual-poc/compose.yaml \
-            "/opt/stacks/finance-actual-poc/compose.yaml.pre-${stamp}"
-          sudo install -m 0755 deploy/actual-poc/stack-watchdog.sh \
-            /opt/stacks/finance-actual-poc/stack-watchdog.sh
-          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.service \
-            /etc/systemd/system/finance-stack-watchdog.service
-          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.timer \
-            /etc/systemd/system/finance-stack-watchdog.timer
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now finance-stack-watchdog.timer
 
       - name: Authenticate and pull tested image
         shell: bash
@@ -131,13 +124,12 @@ jobs:
             --username "${{ github.actor }}" \
             --password-stdin
           sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
-          sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
-          cd /opt/stacks/finance-actual-poc
-          # The Podman Compose provider may leave sibling services exited when
-          # only one service is targeted. Always converge the complete finance
-          # stack so a cashback release cannot take Actual or its proxy down.
-          sudo docker compose up -d --no-deps --pull never \
-            actual actual-proxy cashback-control actual-ingestion
+          sudo install -m 0644 deploy/cashback/compose.yaml /opt/stacks/finance-cashback/compose.yaml
+          cd /opt/stacks/finance-cashback
+          # This project owns only cashback; it cannot touch Actual or its
+          # ingestion worker.
+          sudo podman rm -f finance-cashback-control 2>/dev/null || true
+          sudo docker compose -p finance-cashback up -d --pull never cashback-control
           sudo podman logout --authfile "$auth_file" ghcr.io
           sudo rm -f "$auth_file"
 
@@ -146,17 +138,12 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"' && \
-               curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"' && \
-               curl -fsS http://127.0.0.1:5006/ >/dev/null && \
-               test "$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')" = healthy && \
-               test "$(sudo docker inspect finance-cashback-control --format '{{.State.Health.Status}}')" = healthy && \
-               test "$(sudo docker inspect finance-actual-ingestion --format '{{.State.Health.Status}}')" = healthy; then
+            if curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"'; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 \
-                actual actual-proxy cashback-control actual-ingestion
+              sudo docker compose -p finance-cashback \
+                -f /opt/stacks/finance-cashback/compose.yaml logs --tail=100 cashback-control
               exit 1
             fi
             sleep 2

@@ -30,12 +30,11 @@ proxy_running="$(docker inspect -f '{{.State.Running}}' finance-actual-proxy 2>/
 cashback_running="$(docker inspect -f '{{.State.Running}}' finance-cashback-control 2>/dev/null || true)"
 
 restart_services() {
-  cd "${STACK_DIR}"
-  if [[ "${actual_running}" == "true" ]]; then docker compose up -d --no-deps actual >/dev/null; fi
-  if [[ "${cashback_running}" == "true" ]]; then docker compose up -d --no-deps cashback-control >/dev/null; fi
+  if [[ "${actual_running}" == "true" ]]; then docker start finance-actual-poc >/dev/null; fi
+  if [[ "${cashback_running}" == "true" ]]; then docker start finance-cashback-control >/dev/null; fi
   # Podman may assign Actual a new address after a stop/start. Restart Nginx
   # last so its startup DNS lookup never retains the pre-backup address.
-  if [[ "${proxy_running}" == "true" ]]; then docker compose up -d --no-deps actual-proxy >/dev/null; fi
+  if [[ "${proxy_running}" == "true" ]]; then docker start finance-actual-proxy >/dev/null; fi
 }
 trap restart_services EXIT
 

@@ -10,10 +10,16 @@ Actual is the authoritative ledger, budget, native rule engine, schedules UI, re
 - Persistent data: `/opt/stacks/finance-actual-poc/data`
 - Ingestion worker: `finance-actual-ingestion` on host-local port `5020`
 - Ingestion state: `/opt/stacks/finance-actual-poc/ingestion-data`
-- Compose source: `deploy/actual-poc/compose.yaml`
+- Actual/proxy Compose source: `deploy/actual-poc/compose.yaml`
+- Cashback Compose source: `deploy/cashback/compose.yaml`
+- Ingestion Compose source: `deploy/ingestion/compose.yaml`
 - Local tunnel for administration: `http://127.0.0.1:15006`
 
 The image is deliberately pinned. Review Actual release notes and export a budget backup before changing the tag.
+
+The three Compose projects have separate lifecycle ownership. Actual and its
+proxy share one project; cashback and ingestion each have their own project.
+Never deploy them from a combined Compose invocation.
 
 ## Cloudflare Tunnel
 

@@ -1,0 +1,31 @@
+services:
+  actual-ingestion:
+    image: ghcr.io/srobroek/finance-statement-tracker-actual-ingestion:main
+    pull_policy: always
+    container_name: finance-actual-ingestion
+    restart: unless-stopped
+    env_file:
+      - /opt/stacks/finance-actual-poc/.env
+    environment:
+      TZ: Asia/Dubai
+      ACTUAL_SERVER_URL: http://actual:5006
+      ACTUAL_DATA_DIR: /var/lib/finance-ingestion/actual-cache
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:5020:5020"
+    volumes:
+      - /opt/stacks/finance-actual-poc/ingestion-data:/var/lib/finance-ingestion
+    networks:
+      - actual-runtime
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5020/api/health', timeout=5)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  actual-runtime:
+    external: true
+    name: finance-actual-poc_default

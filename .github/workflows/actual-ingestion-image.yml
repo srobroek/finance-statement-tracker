@@ -12,7 +12,7 @@ on:
       - "apps/actual-ingestion/**"
       - "browser_adapters/**"
       - "config/**"
-      - "deploy/actual-poc/compose.yaml"
+      - "deploy/ingestion/**"
       - "finance_tracker/**"
       - "integrations/actual/**"
       - "pyproject.toml"
@@ -123,25 +123,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          stack=/opt/stacks/finance-actual-poc
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          sudo cp "$stack/compose.yaml" "$stack/compose.yaml.pre-${stamp}"
+          stack=/opt/stacks/finance-ingestion
+          state=/opt/stacks/finance-actual-poc/ingestion-data
+          sudo install -d "$stack"
           sudo install -d -o 10002 -g 10002 \
-            "$stack/ingestion-data" \
-            "$stack/ingestion-data/inbox" \
-            "$stack/ingestion-data/jobs" \
-            "$stack/ingestion-data/actual-cache"
-          if ! sudo grep -q '^FINANCE_INGEST_TOKEN=' "$stack/.env"; then
+            "$state" \
+            "$state/inbox" \
+            "$state/jobs" \
+            "$state/actual-cache"
+          if ! sudo grep -q '^FINANCE_INGEST_TOKEN=' /opt/stacks/finance-actual-poc/.env; then
             token="$(openssl rand -hex 32)"
-            printf '\nFINANCE_INGEST_TOKEN=%s\n' "$token" | sudo tee -a "$stack/.env" >/dev/null
+            printf '\nFINANCE_INGEST_TOKEN=%s\n' "$token" | sudo tee -a /opt/stacks/finance-actual-poc/.env >/dev/null
           fi
-          sudo install -m 0755 deploy/actual-poc/stack-watchdog.sh "$stack/stack-watchdog.sh"
-          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.service \
-            /etc/systemd/system/finance-stack-watchdog.service
-          sudo install -m 0644 deploy/actual-poc/finance-stack-watchdog.timer \
-            /etc/systemd/system/finance-stack-watchdog.timer
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now finance-stack-watchdog.timer
 
       - name: Authenticate and pull tested image
         shell: bash
@@ -157,15 +150,12 @@ jobs:
             --username "${{ github.actor }}" \
             --password-stdin
           sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
-          sudo install -m 0644 deploy/actual-poc/compose.yaml /opt/stacks/finance-actual-poc/compose.yaml
-          cd /opt/stacks/finance-actual-poc
-          # The external Podman Compose provider can leave an already-created
-          # sibling services in an exited state after one-off operations. Bring
-          # every pipeline-facing service up explicitly so ingestion-only
-          # deploys cannot leave Cloudflare's port 5006 origin or the live
-          # cashback companion unavailable.
-          sudo docker compose up -d --no-deps --pull never \
-            actual actual-proxy cashback-control actual-ingestion
+          sudo install -m 0644 deploy/ingestion/compose.yaml /opt/stacks/finance-ingestion/compose.yaml
+          cd /opt/stacks/finance-ingestion
+          # This project owns only the worker. It cannot recreate Actual,
+          # Nginx, or the independent cashback service.
+          sudo podman rm -f finance-actual-ingestion 2>/dev/null || true
+          sudo docker compose -p finance-ingestion up -d --pull never actual-ingestion
           sudo podman logout --authfile "$auth_file" ghcr.io
           sudo rm -f "$auth_file"
 
@@ -174,18 +164,12 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"' && \
-               curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"' && \
-               curl -fsS http://127.0.0.1:5006/ >/dev/null && \
-               test "$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')" = healthy && \
-               test "$(sudo docker inspect finance-cashback-control --format '{{.State.Health.Status}}')" = healthy && \
-               test "$(sudo docker inspect finance-actual-ingestion --format '{{.State.Health.Status}}')" = healthy; then
+            if curl -fsS http://127.0.0.1:5020/api/health | grep -q '"status": "ok"'; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-ingestion
-              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 actual-proxy
-              sudo docker compose -f /opt/stacks/finance-actual-poc/compose.yaml logs --tail=100 cashback-control
+              sudo docker compose -p finance-ingestion \
+                -f /opt/stacks/finance-ingestion/compose.yaml logs --tail=100 actual-ingestion
               exit 1
             fi
             sleep 2
@@ -198,14 +182,7 @@ jobs:
           grep -q "\"actual_writes_enabled\": $expected_writes" <<<"$health"
           grep -q 'RAK_WORLD' <<<"$health"
           grep -q 'SC_PLATINUM_X' <<<"$health"
-          proxy_state="$(sudo docker inspect finance-actual-proxy --format '{{.State.Status}}')"
-          proxy_health="$(sudo docker inspect finance-actual-proxy --format '{{.State.Health.Status}}')"
-          test "$proxy_state" = running
-          test "$proxy_health" = healthy
-          cashback_state="$(sudo docker inspect finance-cashback-control --format '{{.State.Status}}')"
-          cashback_health="$(sudo docker inspect finance-cashback-control --format '{{.State.Health.Status}}')"
-          test "$cashback_state" = running
-          test "$cashback_health" = healthy
+          # A worker deploy must leave Actual's public origin untouched.
           headers="$(curl -fsSI http://127.0.0.1:5006/)"
           grep -qi '^Cross-Origin-Embedder-Policy: require-corp' <<<"$headers"
           grep -qi '^Cross-Origin-Opener-Policy: same-origin' <<<"$headers"

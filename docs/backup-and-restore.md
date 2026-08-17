@@ -24,15 +24,14 @@ Restoration replaces live data. Confirm the exact timestamp first, then:
 
 ```bash
 cd /opt/stacks/finance-actual-poc
-sudo docker compose stop actual cashback-control
+sudo podman stop finance-actual-proxy finance-actual-poc finance-cashback-control
 sudo cp -a data "data.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
 sudo cp -a cashback-data "cashback-data.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
 cd /opt/backups/finance-actual-poc/<timestamp>
 sha256sum -c SHA256SUMS
 sudo tar -C /opt/stacks/finance-actual-poc -xzf finance-data.tar.gz
-cd /opt/stacks/finance-actual-poc
-sudo docker compose up -d
-sudo docker compose ps
+sudo podman start finance-actual-poc finance-cashback-control finance-actual-proxy
+sudo podman ps --filter name=finance-
 curl -fsS http://127.0.0.1:5006/ >/dev/null
 curl -fsS http://127.0.0.1:5010/api/health
 ```
