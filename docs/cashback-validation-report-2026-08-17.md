@@ -10,7 +10,7 @@ Overall result: **PASS**
 
 ## Executive result
 
-- Python regression suite: **167/167 passed** in the final run.
+- Python regression suite: **168/168 passed** in the final run.
 - Actual bridge JavaScript suite: **10/10 passed**, including the offline idempotency integration.
 - Focused routing matrix: **8/8 passed**.
 - Live isolated API and browser scenarios: **13/13 passed**.
@@ -100,7 +100,7 @@ Command:
 python -m unittest discover -s tests -v
 ```
 
-Result: **167 tests passed; 0 failed; 0 errors; 0 skipped.**
+Result: **168 tests passed; 0 failed; 0 errors; 0 skipped.**
 
 Final module totals:
 
@@ -112,7 +112,7 @@ Final module totals:
 | `test_cashback_events` | 17 | `test_cashback_profiles` | 10 |
 | `test_cashback_routing_matrix` | 8 | `test_cashback_server` | 1 |
 | `test_cashback` | 9 | `test_cli` | 1 |
-| `test_deployment_scripts` | 4 | `test_evidence` | 5 |
+| `test_deployment_scripts` | 5 | `test_evidence` | 5 |
 | `test_history` | 2 | `test_ingestion_jobs` | 7 |
 | `test_ingestion` | 2 | `test_mail_ingestion` | 4 |
 | `test_notification_sources` | 3 | `test_notifications` | 8 |
@@ -122,7 +122,7 @@ Final module totals:
 | `test_statement_sources` | 3 | `test_statements` | 4 |
 | `test_subscriptions` | 2 | `test_web_push` | 5 |
 
-The selected per-test inventory below is the earlier scenario-run snapshot retained for traceability. The final module table above is the authoritative inventory for the 167-test run and includes the newer profile, ingestion-job, mail, source-registry, deployment-monitor, and web-push coverage.
+The selected per-test inventory below is the earlier scenario-run snapshot retained for traceability. The final module table above is the authoritative inventory for the 168-test run and includes the newer profile, ingestion-job, mail, source-registry, deployment-monitor, workflow-hardening, and web-push coverage.
 
 ### `test_actual_pipeline` — 13/13 PASS
 
@@ -325,14 +325,14 @@ The selected per-test inventory below is the earlier scenario-run snapshot retai
 | Parse `config/static-rules.seed.json` | PASS |
 | Isolated `/api/health` | PASS (`ok`) |
 | Isolated dashboard rebuild after all scenarios | PASS |
-| Linux CI reproduction on the deployment host | PASS: 167 Python tests, 10 JavaScript tests, Actual offline integration, cashback image build, and four fictional programme profiles |
+| Linux CI reproduction on the deployment host | PASS: 168 Python tests, 10 JavaScript tests, Actual offline integration, cashback image build, and four fictional programme profiles |
 | Production service watchdog | PASS: unhealthy cashback service recovered and verified without restarting Actual or ingestion |
 
 ## Continuous delivery status
 
-Commit `5e0dc45` was pushed to `main`. Both GitHub Actions workflows started during a GitHub-wide incident affecting Actions, API requests, and webhooks and therefore did not publish their images. The exact commit was independently reproduced on the Linux deployment host, then deployed with `--pull never` from the locally built image. Production validation above is therefore tied to the committed source even though registry publication remains pending until GitHub recovers.
+Commit `0d2d4c4` is deployed through both normal GitHub Actions pipelines. The [Actual ingestion run](https://github.com/srobroek/finance-statement-tracker/actions/runs/32039534627) and [Cashback Control run](https://github.com/srobroek/finance-statement-tracker/actions/runs/32039536962) completed successfully, including tests, GHCR publication, exact-image pull, independent Compose recreation, and live verification.
 
-This is an external CI availability issue, not a failed application test. Re-run both workflow-dispatch jobs after GitHub reports Actions operational.
+During the concurrent GitHub incident, an earlier attempt reached deployment but failed before executing project code because the self-hosted runner received HTTP 429 while downloading `actions/checkout` from codeload. The deploy jobs now acquire the exact `GITHUB_SHA` with native Git and verify the checked-out commit before using any repository file. This removes the unnecessary codeload action dependency from production deployment while retaining `actions/checkout` on GitHub-hosted test/build jobs.
 
 ## What is verified by this run
 
@@ -357,4 +357,4 @@ This is an external CI availability issue, not a failed application test. Re-run
 
 ## Deployment recommendation
 
-The validated commit is already live and preserves the existing cashback-data volume. Once GitHub Actions recovers, re-run both image workflows and let the normal independent Compose deployments replace the locally reproduced image. Card-programme assumptions remain tentative until issuer terms are verified.
+The validated GHCR images for commit `0d2d4c4` are live through the normal independent Compose deployments. Both containers report healthy, retain the durable cashback/cursor state, and carry OCI revision label `0d2d4c4d2dff9e4eff812d27db91d5da09d8b3e1`. Card-programme assumptions remain tentative until issuer terms are verified.

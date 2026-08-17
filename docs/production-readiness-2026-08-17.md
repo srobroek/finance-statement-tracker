@@ -21,7 +21,7 @@ This audit distinguishes implemented behavior from behavior that can only be val
 | Evidence archive | Ready | Exact Outlook message/attachment identity, content hash, OneDrive archive path, and catalogue linkage are proven with real Emirates Islamic statements. |
 | Credentials | Ready | Runtime secrets are injected from the dedicated 1Password-backed environment; statement and application passwords are absent from source and logs. |
 | Backup and recovery | Ready | Daily quiesced backup checksum passed. Five-minute watchdog recovered a deliberately stopped cashback service without restarting Actual or ingestion. |
-| Reproducible deployment | Ready; registry rerun pending | Exact commit `5e0dc45` passed 167 Python tests, 10 Node tests, offline Actual integration, image build, and fictional profiles on the Linux host, then was deployed. GHCR workflow publication is pending recovery from the concurrent GitHub Actions incident. |
+| Reproducible deployment | Ready | Commit `0d2d4c4` passed 168 Python tests, 10 Node tests, offline Actual integration, image builds, and fictional profiles. Both GitHub Actions pipelines published GHCR images, fetched the exact deployment SHA with native Git, independently recreated their owned container, and completed live verification. Production containers carry the matching OCI revision label. |
 
 ## Evidence still required
 
@@ -29,6 +29,4 @@ This audit distinguishes implemented behavior from behavior that can only be val
 2. A real Standard Chartered statement fixture and, separately, a representative transaction-notification message if live SC ingestion is desired.
 3. A genuine raw portal CSV/XLSX/PDF export for a production browser-ingestion run. Derived output from the legacy application is not an acceptable substitute.
 4. Issuer terms for every configured cashback programme, including eligibility, tier thresholds, caps, exclusions, and reset dates. Current programme seed data remains `TENTATIVE`.
-5. GitHub Actions service recovery, followed by workflow-dispatch reruns for both container images.
-
-These items do not justify weakening validation. Until the corresponding evidence exists, the affected adapter, finalization, or deployment step must remain non-importing and retryable.
+These items do not justify weakening validation. Until the corresponding evidence exists, the affected adapter, browser import, or finalization step must remain non-importing and retryable.
