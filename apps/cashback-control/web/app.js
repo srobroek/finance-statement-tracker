@@ -117,16 +117,17 @@ function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
   root.replaceChildren(
     ...items.filter((item) => item.active !== false).map((item) => {
-      const node = document.createElement("article");
+      const node = document.createElement("details");
       node.className = "route-row";
       const avoid = (item.avoid_cards || []).map(cardLabel);
       const preferred = item.ranked_cards?.[0];
       node.innerHTML = `
-        <div class="route-main">
+        <summary class="route-main" aria-label="${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.">
           <span class="route-type">${typeLabel(item)}</span>
-          <span class="route-use"><strong>${routeHeading(item, preferred)}</strong><em title="${item.reason}">${compactReason(item)}</em></span>
+          <span class="route-use"><strong>${routeHeading(item, preferred)}</strong></span>
           <small title="${avoid.length ? avoid.join(", ") : "None"}">${avoid.length ? avoid.join(", ") : ""}</small>
-        </div>
+        </summary>
+        <div class="route-reason"><span>Why</span><p>${compactReason(item)}</p></div>
       `;
       return node;
     }),
