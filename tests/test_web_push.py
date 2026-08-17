@@ -109,6 +109,7 @@ class WebPushStoreTests(unittest.TestCase):
             self.assertEqual(payload["web_push"], 8030)
             self.assertEqual(payload["notification"]["navigate"], "https://cashback.example/?screen=cards")
             self.assertEqual(payload["notification"]["tag"], candidate.key)
+            self.assertEqual(calls[0]["headers"], {"Urgency": "high"})
 
     def test_first_dashboard_does_not_create_a_routing_change_notification(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

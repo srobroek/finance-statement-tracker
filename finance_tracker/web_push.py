@@ -384,5 +384,6 @@ class WebPushDispatcher:
             vapid_private_key=self.private_key,
             vapid_claims={"sub": self.subject},
             ttl=3600,
+            headers={"Urgency": "high"},
             timeout=15,
         )
