@@ -21,7 +21,7 @@ This audit distinguishes implemented behavior from behavior that can only be val
 | Evidence archive | Ready | Exact Outlook identity, redacted content snapshots, content hashes, OneDrive archive paths, and catalogue linkage are proven with real Emirates Islamic statements plus two SmartHotel receipts and one SAS booking linked to six exact Wio rows. Vendor-only candidates still fail closed. |
 | Credentials | Ready | Runtime secrets are injected from the dedicated 1Password-backed environment; statement and application passwords are absent from source and logs. |
 | Backup and recovery | Ready | Daily quiesced backup checksum passed. Five-minute watchdog recovered a deliberately stopped cashback service without restarting Actual or ingestion. |
-| Reproducible deployment | Ready | Release `dfa697d` passed 201 Python tests, 10 Node tests, offline Actual integration, image builds, and fictional profiles. Both GitHub Actions pipelines published immutable GHCR images, deployed successfully, and left both production containers running with the exact `dfa697d2ce7c79bbcfb953dd8421292cbf12fa97` OCI revision. |
+| Reproducible deployment | Ready | Release `dfa697d` passed 201 Python tests, 10 Node tests, offline Actual integration, image builds, and fictional profiles. The final ingestion-helper release `ec63f1f` repeated the Actual worker test, image, live health, statement-stage, and browser-stage gates. Production runs the Actual ingestion image at `ec63f1fe8bc6f17fcd8680e221bf7962a9e748cb` and Cashback Control at `dfa697d2ce7c79bbcfb953dd8421292cbf12fa97`; each matches its latest applicable workflow. |
 
 ## Evidence still required
 
