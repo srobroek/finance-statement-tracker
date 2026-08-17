@@ -16,7 +16,7 @@
       "prompt": "Run the live cashback scan for source RAKBANK_CARD_TRANSACTION with durable cursor outlook:rakbank. Follow agents/automations/live-cashback-scan.md exactly. If and only if the run succeeds completely, archive this task; never archive a failed or partial run."
     },
     {
-      "id": "standard-chartered-twice-daily-cashback-scan",
+      "id": "standard-chartered-morning-cashback-scan",
       "name": "Standard Chartered morning cashback scan",
       "kind": "cron",
       "status": "PAUSED",
