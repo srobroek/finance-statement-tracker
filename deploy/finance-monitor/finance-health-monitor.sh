@@ -131,6 +131,16 @@ else
     failed=1
   else
     log info backup_fresh finance-backup
+    latest_path="${latest_backup#* }"
+    verification_receipt="${latest_path}/verification.json"
+    if [[ ! -s "${verification_receipt}" ]] || ! python3 -c \
+      'import json,sys; data=json.load(open(sys.argv[1], encoding="utf-8")); raise SystemExit(0 if data.get("status") == "ok" and data.get("backup") == sys.argv[2] else 1)' \
+      "${verification_receipt}" "$(basename "${latest_path}")"; then
+      log error backup_unverified finance-backup >&2
+      failed=1
+    else
+      log info backup_verified finance-backup
+    fi
   fi
 fi
 

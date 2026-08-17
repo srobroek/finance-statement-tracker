@@ -52,6 +52,10 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("ARG FINANCE_PIPELINE_REVISION", dockerfile)
         self.assertIn("FINANCE_PIPELINE_REVISION=${FINANCE_PIPELINE_REVISION}", dockerfile)
         self.assertIn("FINANCE_PIPELINE_REVISION=${{ github.sha }}", workflow)
+        self.assertIn(
+            "deploy/actual-poc/verify-backup.py /opt/stacks/finance-actual-poc/verify-backup.py",
+            workflow,
+        )
 
     def test_ingestion_job_can_be_resumed_without_exposing_the_token(self) -> None:
         script = Path("scripts/get-actual-ingestion-job.ps1").read_text(encoding="utf-8")
@@ -88,6 +92,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("sha256sum finance-data.tar.gz > SHA256SUMS", script)
         self.assertNotIn('sha256sum "${working}/finance-data.tar.gz"', script)
         self.assertIn("sha256sum -c SHA256SUMS", script)
+        self.assertIn('python3 "${VERIFY_SCRIPT}"', script)
+        self.assertIn("--write-receipt", script)
 
         service = Path("deploy/actual-poc/finance-backup.service").read_text(encoding="utf-8")
         self.assertIn("KillMode=process", service)
@@ -104,6 +110,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertNotIn('docker compose pull', script)
         self.assertNotIn('rm -f', script)
         self.assertIn('backup_stale', script)
+        self.assertIn('backup_unverified', script)
+        self.assertIn('backup_verified', script)
 
         timer = Path("deploy/finance-monitor/finance-health-monitor.timer").read_text(encoding="utf-8")
         self.assertIn("OnUnitActiveSec=5m", timer)

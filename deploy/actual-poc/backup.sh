@@ -10,6 +10,7 @@ RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
 ACTUAL_DATA_DIR="${FINANCE_ACTUAL_DATA_DIR:-${ACTUAL_STACK_DIR}/data}"
 CASHBACK_DATA_DIR="${FINANCE_CASHBACK_DATA_DIR:-${ACTUAL_STACK_DIR}/cashback-data}"
 INGESTION_DATA_DIR="${FINANCE_INGESTION_DATA_DIR:-${ACTUAL_STACK_DIR}/ingestion-data}"
+VERIFY_SCRIPT="${FINANCE_BACKUP_VERIFY_SCRIPT:-${ACTUAL_STACK_DIR}/verify-backup.py}"
 
 fail() {
   printf '{"level":"error","event":"backup_refused","reason":"%s"}\n' "$1" >&2
@@ -29,6 +30,8 @@ backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
 [[ "$(resolved "${ACTUAL_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/data" ]] || fail "unexpected_actual_data_path"
 [[ "$(resolved "${CASHBACK_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/cashback-data" ]] || fail "unexpected_cashback_data_path"
 [[ "$(resolved "${INGESTION_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/ingestion-data" ]] || fail "unexpected_ingestion_data_path"
+[[ "$(resolved "${VERIFY_SCRIPT}")" == "${ACTUAL_STACK_DIR}/verify-backup.py" ]] || fail "unexpected_verify_script_path"
+[[ -f "${VERIFY_SCRIPT}" ]] || fail "missing_verify_script"
 for required_dir in "${ACTUAL_DATA_DIR}" "${CASHBACK_DATA_DIR}" "${INGESTION_DATA_DIR}"; do
   [[ -d "${required_dir}" ]] || fail "missing_data_directory"
 done
@@ -122,6 +125,10 @@ if [[ "${ingestion_running}" == "running" ]]; then
 fi
 trap - EXIT
 mv -- "${working}" "${destination}"
+python3 "${VERIFY_SCRIPT}" \
+  --backup-root "${BACKUP_ROOT}" \
+  --backup-path "${destination}" \
+  --write-receipt
 
 if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && (( RETENTION_DAYS > 0 )); then
   find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +

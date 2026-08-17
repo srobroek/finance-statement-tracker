@@ -7,8 +7,18 @@ Backups are stored outside the stack at `/opt/backups/finance-actual-poc/<UTC ti
 - `finance-data.tar.gz` with `actual-data/`, `cashback-data/`, `ingestion-data/`, and a secret-free `configuration/` snapshot of all three Compose projects and mounted cashback configuration.
 - `SHA256SUMS` for integrity verification.
 - `manifest.json` with schema, scope, and container metadata.
+- `verification.json` with the archive digest, extraction count, parsed JSON
+  count, and every SQLite database that passed `PRAGMA integrity_check`.
 
 The stack `.env` is deliberately excluded. Back up its secret values separately in the approved password manager. The default retention is 30 days and can be changed with `FINANCE_BACKUP_RETENTION_DAYS` in a systemd override.
+
+Every scheduled backup is restored into a disposable temporary directory before
+the backup job succeeds. `verify-backup.py` rejects checksum drift, path
+traversal, links and special files, a missing state store, malformed JSON, an
+included `.env`, or any SQLite integrity failure. It never writes to the live
+Actual, cashback, or ingestion directories. The five-minute health monitor
+requires a matching successful verification receipt on the newest backup, so a
+fresh archive without proven readable contents is unhealthy.
 
 ## Verify a backup
 
@@ -16,6 +26,11 @@ The stack `.env` is deliberately excluded. Back up its secret values separately 
 cd /opt/backups/finance-actual-poc/<timestamp>
 sha256sum -c SHA256SUMS
 tar -tzf finance-data.tar.gz | head
+cat verification.json
+
+sudo /opt/stacks/finance-actual-poc/verify-backup.py \
+  --backup-root /opt/backups/finance-actual-poc \
+  --backup-path /opt/backups/finance-actual-poc/<timestamp>
 ```
 
 Pause/unpause is intentional on the Podman-backed host: restarting a container

@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""Verify that a finance backup is safe, complete, and restorable.
+
+The verifier never touches live data. It validates the archive checksum and
+manifest, extracts regular files into a temporary directory without following
+links, opens the authoritative SQLite databases read-only, and parses the JSON
+state that would be needed after a restore.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import sqlite3
+import sys
+import tarfile
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+
+STAMP_PATTERN = re.compile(r"^20\d{6}T\d{6}Z$")
+SHA256_PATTERN = re.compile(r"^(?P<digest>[0-9a-f]{64})\s+\*?(?P<name>[^\r\n]+)$")
+REQUIRED_ARCHIVE_PATHS = (
+    "actual-data/server-files/account.sqlite",
+    "cashback-data/cashback-events.sqlite3",
+    "configuration/actual-compose.yaml",
+    "configuration/cashback-compose.yaml",
+    "configuration/ingestion-compose.yaml",
+)
+
+
+class VerificationError(RuntimeError):
+    """Raised when a backup cannot safely be restored."""
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _resolve_backup(backup_root: Path, requested: Path | None) -> Path:
+    root = backup_root.resolve(strict=True)
+    if requested is None:
+        candidates = sorted(
+            (path for path in root.iterdir() if path.is_dir() and STAMP_PATTERN.fullmatch(path.name)),
+            reverse=True,
+        )
+        if not candidates:
+            raise VerificationError("no timestamped backup exists")
+        backup = candidates[0].resolve(strict=True)
+    else:
+        backup = requested.resolve(strict=True)
+    if not _inside(backup, root) or backup.parent != root:
+        raise VerificationError("backup path is outside the configured backup root")
+    if not STAMP_PATTERN.fullmatch(backup.name):
+        raise VerificationError("backup directory name is not a UTC timestamp")
+    return backup
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise VerificationError(f"invalid JSON: {path}") from exc
+
+
+def _verify_manifest(backup: Path) -> dict[str, Any]:
+    manifest = _load_json(backup / "manifest.json")
+    if not isinstance(manifest, dict):
+        raise VerificationError("backup manifest must be an object")
+    if manifest.get("schema_version") != 2:
+        raise VerificationError("unsupported backup manifest schema")
+    if manifest.get("secrets_included") is not False:
+        raise VerificationError("backup manifest does not assert secret exclusion")
+    includes = manifest.get("includes")
+    if not isinstance(includes, list) or set(includes) != {
+        "actual-data",
+        "cashback-data",
+        "ingestion-data",
+        "configuration",
+    }:
+        raise VerificationError("backup manifest has incomplete scope")
+    return manifest
+
+
+def _verify_checksums(backup: Path) -> tuple[str, int]:
+    checksum_path = backup / "SHA256SUMS"
+    try:
+        lines = checksum_path.read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise VerificationError("missing or unreadable SHA256SUMS") from exc
+    if len(lines) != 1:
+        raise VerificationError("SHA256SUMS must contain exactly one archive entry")
+    match = SHA256_PATTERN.fullmatch(lines[0])
+    if match is None or match.group("name") != "finance-data.tar.gz":
+        raise VerificationError("SHA256SUMS does not identify the finance archive")
+    archive = backup / match.group("name")
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with archive.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                size += len(chunk)
+                digest.update(chunk)
+    except OSError as exc:
+        raise VerificationError("finance archive is unreadable") from exc
+    actual = digest.hexdigest()
+    if actual != match.group("digest"):
+        raise VerificationError("finance archive checksum mismatch")
+    return actual, size
+
+
+def _safe_member_path(name: str) -> Path:
+    normalized = name[2:] if name.startswith("./") else name
+    posix = PurePosixPath(normalized)
+    if not normalized or posix.is_absolute() or ".." in posix.parts:
+        raise VerificationError(f"unsafe archive member: {name}")
+    return Path(*posix.parts)
+
+
+def _extract_regular_files(archive: Path, destination: Path) -> int:
+    extracted = 0
+    try:
+        with tarfile.open(archive, mode="r:gz") as bundle:
+            for member in bundle:
+                relative = _safe_member_path(member.name)
+                target = destination / relative
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                if not member.isfile():
+                    raise VerificationError(f"archive contains a link or special file: {member.name}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                source = bundle.extractfile(member)
+                if source is None:
+                    raise VerificationError(f"archive member cannot be read: {member.name}")
+                with source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                extracted += 1
+    except (OSError, tarfile.TarError) as exc:
+        raise VerificationError("finance archive cannot be extracted") from exc
+    return extracted
+
+
+def _sqlite_integrity(path: Path) -> None:
+    uri = f"file:{path.as_posix()}?mode=ro"
+    try:
+        connection = sqlite3.connect(uri, uri=True)
+        try:
+            rows = connection.execute("PRAGMA integrity_check").fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise VerificationError(f"SQLite database cannot be opened: {path}") from exc
+    if rows != [("ok",)]:
+        raise VerificationError(f"SQLite integrity check failed: {path}")
+
+
+def _verify_extracted(root: Path) -> tuple[list[str], int]:
+    for relative in REQUIRED_ARCHIVE_PATHS:
+        if not (root / relative).is_file():
+            raise VerificationError(f"required backup path is missing: {relative}")
+
+    user_databases = sorted((root / "actual-data/user-files").glob("*.sqlite"))
+    if not user_databases:
+        raise VerificationError("Actual budget database is missing")
+    databases = [
+        root / "actual-data/server-files/account.sqlite",
+        root / "cashback-data/cashback-events.sqlite3",
+        *user_databases,
+    ]
+    databases.extend(sorted((root / "ingestion-data/actual-cache").glob("*/*.sqlite")))
+    for database in databases:
+        _sqlite_integrity(database)
+
+    json_paths = sorted((root / "configuration").glob("*.json"))
+    json_paths.extend(sorted((root / "ingestion-data/jobs").glob("*/*.json")))
+    dashboard = root / "cashback-data/cashback-dashboard.json"
+    if dashboard.is_file():
+        json_paths.append(dashboard)
+    for path in json_paths:
+        _load_json(path)
+
+    secret_paths = [path for path in root.rglob("*") if path.is_file() and path.name == ".env"]
+    if secret_paths:
+        raise VerificationError("backup unexpectedly contains an .env file")
+    return [str(path.relative_to(root)).replace("\\", "/") for path in databases], len(json_paths)
+
+
+def verify_backup(backup_root: Path, backup_path: Path | None, work_root: Path | None) -> dict[str, Any]:
+    backup = _resolve_backup(backup_root, backup_path)
+    manifest = _verify_manifest(backup)
+    digest, archive_bytes = _verify_checksums(backup)
+    temporary_parent = None if work_root is None else str(work_root.resolve(strict=True))
+    with tempfile.TemporaryDirectory(prefix="finance-restore-verify-", dir=temporary_parent) as temporary:
+        extracted_root = Path(temporary)
+        extracted_files = _extract_regular_files(backup / "finance-data.tar.gz", extracted_root)
+        databases, json_documents = _verify_extracted(extracted_root)
+    return {
+        "status": "ok",
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "backup": backup.name,
+        "created_at": manifest.get("created_at"),
+        "archive_sha256": digest,
+        "archive_bytes": archive_bytes,
+        "extracted_files": extracted_files,
+        "sqlite_databases": databases,
+        "json_documents": json_documents,
+    }
+
+
+def _write_receipt(backup: Path, result: dict[str, Any]) -> None:
+    temporary = backup / ".verification.json.tmp"
+    final = backup / "verification.json"
+    temporary.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(final)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backup-root", type=Path, default=Path("/opt/backups/finance-actual-poc"))
+    parser.add_argument("--backup-path", type=Path)
+    parser.add_argument("--work-root", type=Path)
+    parser.add_argument("--write-receipt", action="store_true")
+    arguments = parser.parse_args(argv)
+    try:
+        result = verify_backup(arguments.backup_root, arguments.backup_path, arguments.work_root)
+        if arguments.write_receipt:
+            backup = _resolve_backup(arguments.backup_root, arguments.backup_path)
+            _write_receipt(backup, result)
+    except (OSError, VerificationError) as exc:
+        print(json.dumps({"status": "error", "reason": str(exc)}, sort_keys=True), file=sys.stderr)
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
