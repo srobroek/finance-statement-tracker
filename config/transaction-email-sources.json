@@ -49,6 +49,18 @@
       "senders": [],
       "subjects": [],
       "notes": "Replace with captured sender, subject, body fixture and parser only after a real notification format is verified."
+    },
+    {
+      "code": "WIO_CARD_TRANSACTION",
+      "institution": "Wio",
+      "card_code": "WIO_CREDIT",
+      "status": "PLACEHOLDER",
+      "evidence_semantics": "UNKNOWN",
+      "adapter": null,
+      "mail_folder": null,
+      "senders": [],
+      "subjects": [],
+      "notes": "Dormant twice-daily source recipe. Capture and test a real Wio transaction notification before supplying its folder, sender, subject, body contract, and adapter."
     }
   ]
 }

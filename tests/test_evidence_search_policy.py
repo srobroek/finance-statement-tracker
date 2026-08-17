@@ -21,3 +21,9 @@ class EvidenceSearchPolicyTests(TestCase):
         self.assertNotIn("Dining Out", policy["always_search_categories"])
         self.assertGreaterEqual(policy["matching"]["minimum_strong_facts"], 2)
         self.assertFalse(policy["matching"]["vendor_only_match_allowed"])
+        self.assertTrue(any("Laptop" in item for item in policy["store_examples"]))
+        self.assertTrue(any("Supermarket" in item for item in policy["do_not_store_examples"]))
+        self.assertIn(
+            "product_or_service_description",
+            policy["search_strategy"]["extract_from_matched_evidence"],
+        )

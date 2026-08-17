@@ -35,6 +35,20 @@
     "Credit Card Payments",
     "Bank Fees & Interest"
   ],
+  "store_examples": [
+    "Laptop, phone, camera, television or other warranty-bearing electronics",
+    "Refrigerator, washing machine, air conditioner, furniture or other durable household item",
+    "Home repair, maintenance, contractor, utility, district-cooling or service-charge invoice",
+    "Flight, hotel, vehicle rental, insurance policy, medical procedure or professional-service document",
+    "High-value online order with an invoice, order confirmation, serial number or return/warranty terms"
+  ],
+  "do_not_store_examples": [
+    "Supermarket basket or low-value convenience-store purchase",
+    "Cafe, restaurant or food-delivery charge",
+    "Petrol, parking, toll, taxi or public-transport charge",
+    "Cash withdrawal, bank transfer, credit-card payment, interest or bank fee",
+    "Low-value general retail purchase with no warranty, contract, tax or ownership value"
+  ],
   "document_types": [
     "RECEIPT",
     "TAX_INVOICE",
@@ -57,5 +71,17 @@
     "date_buffer_days": 7,
     "vendor_only_match_allowed": false
   },
-  "notes": "Do not search or archive routine consumables. A high-value general purchase is eligible only when it is not in a never-search category. Manual evidence requests always win."
+  "search_strategy": {
+    "statement_description_missing_product": "For each qualifying transaction, search vendor aliases plus amount/currency inside the date buffer. Use matching email/order content to identify the product only after the email is tied by the configured strong facts.",
+    "extract_from_matched_evidence": [
+      "product_or_service_description",
+      "order_or_reference_number",
+      "model",
+      "serial_number",
+      "warranty_start",
+      "warranty_expiry",
+      "return_deadline"
+    ]
+  },
+  "notes": "A high-value general purchase is eligible only when it is not in a never-search category. Manual evidence requests always win."
 }

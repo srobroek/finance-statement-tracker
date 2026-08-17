@@ -26,7 +26,8 @@ class NotificationSourceTests(unittest.TestCase):
         )
         self.assertEqual([source.code for source in disabled], ["ADCB_CARD_OTP"])
         self.assertEqual(active[0].mail_folder, "Inbox/Rakbank")
-        self.assertEqual(len(placeholders), 2)
+        self.assertEqual(len(placeholders), 3)
+        self.assertIn("WIO_CARD_TRANSACTION", {source.code for source in placeholders})
         for source in placeholders:
             with self.subTest(source=source.code):
                 self.assertIsNone(source.adapter)
