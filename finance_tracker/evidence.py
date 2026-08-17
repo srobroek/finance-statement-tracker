@@ -47,6 +47,13 @@ class ArchivedEvidence:
     attachment_id: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ArchivedStatementEvidence:
+    relative_path: str
+    sha256: str
+    size_bytes: int
+
+
 def evidence_catalogue_record(
     archived: ArchivedEvidence,
     transaction: Transaction,
@@ -126,6 +133,71 @@ def statement_catalogue_record(
         "sha256": digest,
         "size_bytes": source.stat().st_size,
     }
+
+
+def statement_relative_path(
+    *,
+    statement_date: str,
+    bank: str,
+    closing_balance_aed: str | Decimal,
+    reference: str,
+    content_digest: str,
+    extension: str = "pdf",
+) -> PurePosixPath:
+    """Return the canonical content-addressed path for a statement original."""
+    parsed_date = datetime.strptime(statement_date, "%Y-%m-%d")
+    bank_slug = _slug(bank)
+    reference_slug = _slug(reference)[:48]
+    amount = abs(money(closing_balance_aed)).quantize(Decimal("0.01"))
+    filename = (
+        f"{statement_date}__statement__{bank_slug}__aed-{amount}__"
+        f"{reference_slug}__{content_digest[:8]}.{extension.lstrip('.').lower()}"
+    )
+    return PurePosixPath(
+        "Finance Evidence",
+        f"{parsed_date:%Y}",
+        f"{parsed_date:%m}",
+        bank_slug,
+        filename,
+    )
+
+
+def archive_statement_evidence(
+    source_path: str | Path,
+    evidence_root: str | Path,
+    *,
+    statement_date: str,
+    bank: str,
+    closing_balance_aed: str | Decimal,
+    reference: str,
+) -> ArchivedStatementEvidence:
+    """Archive a statement original idempotently without modifying its bytes."""
+    source = Path(source_path)
+    if not source.is_file():
+        raise ValueError(f"Statement evidence source does not exist: {source}")
+    sha256 = _sha256_file(source)
+    relative = statement_relative_path(
+        statement_date=statement_date,
+        bank=bank,
+        closing_balance_aed=closing_balance_aed,
+        reference=reference,
+        content_digest=sha256,
+        extension=source.suffix or ".bin",
+    )
+    destination = Path(evidence_root).joinpath(*relative.parts)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if _sha256_file(destination) != sha256:
+            raise ValueError(f"Statement evidence filename collision at {destination}")
+    else:
+        temporary = destination.with_suffix(destination.suffix + ".tmp")
+        shutil.copyfile(source, temporary)
+        temporary.replace(destination)
+    return ArchivedStatementEvidence(
+        relative_path=relative.as_posix(),
+        sha256=sha256,
+        size_bytes=destination.stat().st_size,
+    )
 
 
 def update_evidence_catalogue(

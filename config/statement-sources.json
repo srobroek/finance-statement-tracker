@@ -30,9 +30,12 @@
       "adapter": "wio_credit_v1",
       "password_env": null,
       "email_status": "ACTIVE",
-      "email_senders": ["communications@email.wio.io"],
+      "email_senders": [
+        "communications@email.wio.io",
+        "communications@mail.wio.io"
+      ],
       "email_subjects": ["Your Wio Credit statement for this month"],
-      "notes": "PDF parser and recurring production mailbox contract are verified. Account mapping remains deployment-specific."
+      "notes": "PDF parser and recurring production mailbox contract are verified. The sender migrated from communications@email.wio.io to communications@mail.wio.io in July 2026; both exact senders remain allowlisted for historical backfills. Statements arrive on day 1 or 2 and the scheduled job runs on day 3. Account mapping remains deployment-specific."
     },
     {
       "card_code": "RAK_WORLD",

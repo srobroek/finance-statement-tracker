@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -15,6 +16,7 @@ class StatementSource:
     institution: str
     adapter_status: str
     adapter: str | None
+    password_env: str | None
     email_status: str
     email_senders: tuple[str, ...]
     email_subjects: tuple[str, ...]
@@ -52,6 +54,12 @@ def load_statement_sources(path: Path) -> tuple[StatementSource, ...]:
         if adapter_status not in STATUSES or email_status not in STATUSES:
             raise ValueError(f"Statement source {card} has an invalid status")
         adapter = str(row.get("adapter") or "").strip() or None
+        raw_password_env = row.get("password_env")
+        password_env = None if raw_password_env is None else str(raw_password_env).strip() or None
+        if password_env and not re.fullmatch(r"[A-Z][A-Z0-9_]*", password_env):
+            raise ValueError(
+                f"Statement source {card} password_env must be an uppercase environment name"
+            )
         senders = _list(row.get("email_senders"), "email_senders", card)
         subjects = _list(row.get("email_subjects"), "email_subjects", card)
         if adapter_status == "ACTIVE" and not adapter:
@@ -68,6 +76,7 @@ def load_statement_sources(path: Path) -> tuple[StatementSource, ...]:
                 institution=str(row.get("institution") or "").strip(),
                 adapter_status=adapter_status,
                 adapter=adapter,
+                password_env=password_env,
                 email_status=email_status,
                 email_senders=senders,
                 email_subjects=subjects,
@@ -104,3 +113,15 @@ def require_active_statement_adapter(
             f"Statement adapter {requested_adapter} does not match configured adapter {source.adapter} for {card}"
         )
     return source.adapter
+
+
+def require_active_statement_source(
+    sources: Iterable[StatementSource], card_code: str, requested_adapter: str | None
+) -> StatementSource:
+    materialized = tuple(sources)
+    adapter = require_active_statement_adapter(materialized, card_code, requested_adapter)
+    card = str(card_code or "").strip().upper()
+    source = next(item for item in materialized if item.card_code == card)
+    if source.adapter != adapter:  # Defensive: require_active_statement_adapter already enforces this.
+        raise ValueError(f"Statement adapter resolution failed for {card}")
+    return source

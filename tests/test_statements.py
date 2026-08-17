@@ -104,3 +104,21 @@ Date Ref. Number Description Card Number Amount
         self.assertEqual(statement.transactions[1].transaction_type, "PAYMENT")
         self.assertEqual(statement.transactions[2].card_last4, "4113")
         self.assertTrue(statement.balance_tied)
+
+    def test_wio_credit_statement_accepts_a_negative_overpaid_closing_balance(self) -> None:
+        text = """CREDIT STATEMENT
+FROM 01/07/2026 TO 01/08/2026
+Wio Bank PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY
+01/08/2026 0.00 0.00
+ACCOUNT NUMBER 3342325009
+Balance From Last Statement 0.00
+Closing balance (Total to pay) -274.40
+01/07/2026 P100000001 Example Merchant ****4113 -100.00
+01/08/2026 P100000002 Credit Repayment +374.40
+"""
+
+        statement = parse_statement_text(text, "wio-overpaid.pdf", "wio_credit_v1")
+
+        self.assertEqual(statement.closing_balance_aed, Decimal("-274.40"))
+        self.assertEqual(statement.calculated_closing_balance_aed, Decimal("-274.40"))
+        self.assertTrue(statement.balance_tied)

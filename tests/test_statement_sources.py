@@ -4,6 +4,7 @@ from pathlib import Path
 from finance_tracker.statement_sources import (
     load_statement_sources,
     require_active_statement_adapter,
+    require_active_statement_source,
     validate_statement_adapter_coverage,
 )
 from finance_tracker.statements import DEFAULT_STATEMENT_ADAPTERS
@@ -32,6 +33,20 @@ class StatementSourceTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "does not match"):
             require_active_statement_adapter(self.sources, "EI_AMAZON", "adcb_v1")
+
+        source = require_active_statement_source(self.sources, "EI_AMAZON", None)
+        self.assertEqual(source.password_env, "EI_STATEMENT_PASSWORD")
+
+    def test_unencrypted_source_has_no_password_environment(self) -> None:
+        source = require_active_statement_source(self.sources, "WIO_CREDIT", None)
+        self.assertIsNone(source.password_env)
+        self.assertEqual(
+            source.email_senders,
+            (
+                "communications@email.wio.io",
+                "communications@mail.wio.io",
+            ),
+        )
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from .actual_pipeline import export_statement_for_actual
 from .browser_exports import build_capture_from_export
 from .browser_ingestion import export_browser_capture_for_actual
 from .browser_sources import account_source, capture_account, load_browser_sources
-from .statement_sources import load_statement_sources, require_active_statement_adapter
+from .statement_sources import load_statement_sources, require_active_statement_source
 
 
 JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
@@ -143,18 +143,27 @@ class IngestionJobRunner:
         self, request: dict[str, Any], source: Path, manifest: Path
     ) -> dict[str, Any]:
         sources = load_statement_sources(self.repository_root / "config" / "statement-sources.json")
-        adapter = require_active_statement_adapter(
+        statement_source = require_active_statement_source(
             sources,
             str(request.get("card_code") or ""),
             str(request.get("adapter") or "").strip() or None,
         )
+        requested_password_env = (
+            str(request.get("password_env") or "").strip() or None
+            if "password_env" in request
+            else statement_source.password_env
+        )
+        if requested_password_env != statement_source.password_env:
+            raise ValueError(
+                "Statement password_env must match the configured source registry"
+            )
         ai_requests, unused_ai_responses, ai_resolver = self._ai_handoff(request)
         run = export_statement_for_actual(
             source,
             self.repository_root / "config" / "actual-bootstrap.json",
             manifest,
-            password_env=str(request.get("password_env") or "STATEMENT_PASSWORD"),
-            adapter_code=adapter,
+            password_env=statement_source.password_env,
+            adapter_code=statement_source.adapter,
             source_message_id=str(request.get("source_message_id") or "") or None,
             rules_path=self.repository_root / "config" / "static-rules.seed.json",
             ai_policies_path=self.repository_root / "config" / "ai-policies.json",

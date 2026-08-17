@@ -10,6 +10,7 @@ from typing import Iterable, Protocol, runtime_checkable
 
 
 _MONEY = r"(?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2}"
+_SIGNED_MONEY = rf"[+-]?{_MONEY}"
 
 
 def _decimal(value: str | None) -> Decimal | None:
@@ -484,8 +485,10 @@ class WioCreditStatementAdapter:
             text,
             re.I,
         )
-        opening = re.search(rf"Balance From Last Statement\s+({_MONEY})", text, re.I)
-        closing = re.search(rf"Closing balance \(Total to pay\)\s+({_MONEY})", text, re.I)
+        opening = re.search(rf"Balance From Last Statement\s+({_SIGNED_MONEY})", text, re.I)
+        closing = re.search(
+            rf"Closing balance \(Total to pay\)\s+({_SIGNED_MONEY})", text, re.I
+        )
         row_re = re.compile(
             rf"^(\d{{2}}/\d{{2}}/\d{{4}})\s+([A-Z]\d+)\s+(.+?)(?:\s+\*{{4}}(\d{{4}}))?\s+([+-])({_MONEY})$",
             re.I,

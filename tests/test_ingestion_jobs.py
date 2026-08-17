@@ -165,6 +165,20 @@ class IngestionJobTests(unittest.TestCase):
                 }
             )
 
+    def test_statement_request_cannot_select_another_secret(self) -> None:
+        pdf = self.runner.inbox / "synthetic-ei-statement.pdf"
+        write_ei_pdf(pdf)
+        with self.assertRaisesRegex(ValueError, "must match the configured source registry"):
+            self.runner.submit(
+                {
+                    "type": "STATEMENT_PDF",
+                    "source_path": pdf.name,
+                    "card_code": "EI_AMAZON",
+                    "actual_mode": "STAGE",
+                    "password_env": "ADCB_STATEMENT_PASSWORD",
+                }
+            )
+
     def test_browser_capture_stages_without_a_second_ledger(self) -> None:
         source = self.runner.inbox / "browser-capture.json"
         shutil.copyfile(Path("tests/fixtures/browser-capture.sample.json"), source)

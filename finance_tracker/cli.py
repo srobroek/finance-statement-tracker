@@ -38,6 +38,11 @@ from .cashback import (
     programs_from_config,
     recommend,
 )
+from .evidence import (
+    archive_statement_evidence,
+    statement_catalogue_record,
+    update_evidence_catalogue,
+)
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
 from .reports import evaluate_month_close, month_close_markdown
@@ -222,6 +227,24 @@ def main(argv: list[str] | None = None) -> int:
     outlook_commit.add_argument("--envelope", type=Path, required=True)
     outlook_commit.add_argument("--service-response", type=Path, required=True)
     outlook_commit.add_argument("--output", type=Path, required=True)
+    statement_archive = subparsers.add_parser(
+        "statement-evidence-archive",
+        help="Archive an original statement and idempotently update the evidence catalogue",
+    )
+    statement_archive.add_argument("--source", type=Path, required=True)
+    statement_archive.add_argument("--evidence-root", type=Path, required=True)
+    statement_archive.add_argument("--catalogue", type=Path, required=True)
+    statement_archive.add_argument("--bank", required=True)
+    statement_archive.add_argument("--card-code", required=True)
+    statement_archive.add_argument("--statement-date", required=True)
+    statement_archive.add_argument("--period-start", required=True)
+    statement_archive.add_argument("--period-end", required=True)
+    statement_archive.add_argument("--closing-balance-aed", required=True)
+    statement_archive.add_argument("--reference", required=True)
+    statement_archive.add_argument("--payment-due-date")
+    statement_archive.add_argument("--message-id")
+    statement_archive.add_argument("--attachment-id")
+    statement_archive.add_argument("--web-url")
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -391,6 +414,39 @@ def main(argv: list[str] | None = None) -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(args.output)
+        return 0
+    if args.command == "statement-evidence-archive":
+        archived = archive_statement_evidence(
+            args.source,
+            args.evidence_root,
+            statement_date=args.statement_date,
+            bank=args.bank,
+            closing_balance_aed=args.closing_balance_aed,
+            reference=args.reference,
+        )
+        archived_path = args.evidence_root.joinpath(*Path(archived.relative_path).parts)
+        record = statement_catalogue_record(
+            archived_path,
+            bank=args.bank,
+            card_code=args.card_code,
+            statement_date=args.statement_date,
+            period_start=args.period_start,
+            period_end=args.period_end,
+            reference=args.reference,
+            closing_balance_aed=args.closing_balance_aed,
+            payment_due_date=args.payment_due_date,
+            message_id=args.message_id,
+            attachment_id=args.attachment_id,
+            web_url=args.web_url,
+        )
+        catalogue = update_evidence_catalogue(args.catalogue, record)
+        print(json.dumps({
+            "relative_path": archived.relative_path,
+            "sha256": archived.sha256,
+            "size_bytes": archived.size_bytes,
+            "catalogue": catalogue,
+            "entity_id": record["entity_id"],
+        }, indent=2))
         return 0
     year, month_number = (int(part) for part in args.month.split("-", 1))
     period_end = date(year, month_number, calendar.monthrange(year, month_number)[1])

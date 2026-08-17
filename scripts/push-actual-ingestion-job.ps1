@@ -17,7 +17,7 @@ param(
     [string]$SourceKind,
     [string]$AIResponsesPath,
     [switch]$AIHandoffComplete,
-    [string]$PasswordEnv = 'STATEMENT_PASSWORD',
+    [string]$PasswordEnv,
     [string]$DeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.json'),
     [string]$DockerHost,
     [string]$Container

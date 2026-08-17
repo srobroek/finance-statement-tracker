@@ -8,11 +8,13 @@ from pathlib import Path
 from finance_tracker.evidence import (
     EvidenceCandidate,
     archive_evidence,
+    archive_statement_evidence,
     best_match,
     document_relative_path,
     evidence_catalogue_record,
     update_evidence_catalogue,
     statement_catalogue_record,
+    statement_relative_path,
 )
 from finance_tracker.models import Transaction
 
@@ -143,6 +145,31 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(record["entity_id"], "CARD_1:2026-08-01:2026-08-31")
             catalogue = Path(temporary) / "catalogue.json"
             self.assertEqual(update_evidence_catalogue(catalogue, record)["inserted"], 1)
+
+    def test_statement_archive_is_hashed_structured_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "original.pdf"
+            source.write_bytes(b"real statement bytes")
+            kwargs = {
+                "statement_date": "2026-08-01",
+                "bank": "Wio",
+                "closing_balance_aed": "-274.40",
+                "reference": "account 5009 jul 2026",
+            }
+
+            first = archive_statement_evidence(source, root / "archive", **kwargs)
+            second = archive_statement_evidence(source, root / "archive", **kwargs)
+
+            self.assertEqual(first, second)
+            self.assertEqual(len(first.sha256), 64)
+            self.assertTrue((root / "archive" / Path(first.relative_path)).is_file())
+            self.assertIn(
+                "Finance Evidence/2026/08/wio/2026-08-01__statement__wio__aed-274.40__",
+                first.relative_path,
+            )
+            expected = statement_relative_path(content_digest=first.sha256, **kwargs)
+            self.assertEqual(first.relative_path, expected.as_posix())
 
 
 if __name__ == "__main__":

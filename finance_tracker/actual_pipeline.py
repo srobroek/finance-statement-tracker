@@ -294,7 +294,7 @@ def export_statement_for_actual(
     config_path: str | Path,
     output_path: str | Path,
     *,
-    password_env: str = "STATEMENT_PASSWORD",
+    password_env: str | None = "STATEMENT_PASSWORD",
     adapter_code: str | None = None,
     source_message_id: str | None = None,
     rules_path: str | Path | None = None,
@@ -307,7 +307,7 @@ def export_statement_for_actual(
     """Create a durable run manifest without logging or persisting the PDF password."""
     statement = parse_statement_pdf(
         pdf_path,
-        password=runtime_secret(password_env),
+        password=runtime_secret(password_env) if password_env else None,
         adapter_code=adapter_code,
     )
     if not statement.balance_tied and not allow_unbalanced:
