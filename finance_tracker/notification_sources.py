@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-SOURCE_STATUSES = frozenset({"ACTIVE", "PLACEHOLDER"})
+SOURCE_STATUSES = frozenset({"ACTIVE", "DISABLED", "PLACEHOLDER"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +17,7 @@ class NotificationSource:
     status: str
     evidence_semantics: str
     adapter: str | None
+    mail_folder: str | None
     senders: tuple[str, ...]
     subjects: tuple[str, ...]
     notes: str
@@ -59,13 +60,16 @@ def load_notification_sources(path: Path) -> tuple[NotificationSource, ...]:
         card_code = str(row.get("card_code") or "").strip().upper()
         semantics = str(row.get("evidence_semantics") or "").strip().upper()
         adapter = str(row.get("adapter") or "").strip() or None
+        mail_folder = str(row.get("mail_folder") or "").strip() or None
         senders = _strings(row.get("senders"), "senders", code)
         subjects = _strings(row.get("subjects"), "subjects", code)
         if not institution or not card_code or not semantics:
             raise ValueError(f"Notification source {code} requires institution, card_code, and evidence_semantics")
-        if status == "ACTIVE" and (not adapter or not senders or not subjects):
-            raise ValueError(f"Active notification source {code} requires an adapter, sender, and subject")
-        if status == "PLACEHOLDER" and (adapter or senders or subjects):
+        if status == "ACTIVE" and (not adapter or not mail_folder or not senders or not subjects):
+            raise ValueError(
+                f"Active notification source {code} requires an adapter, mail folder, sender, and subject"
+            )
+        if status == "PLACEHOLDER" and (adapter or mail_folder or senders or subjects):
             raise ValueError(
                 f"Placeholder notification source {code} must remain unmatchable until verified"
             )
@@ -77,6 +81,7 @@ def load_notification_sources(path: Path) -> tuple[NotificationSource, ...]:
                 status=status,
                 evidence_semantics=semantics,
                 adapter=adapter,
+                mail_folder=mail_folder,
                 senders=senders,
                 subjects=subjects,
                 notes=str(row.get("notes") or "").strip(),
@@ -91,8 +96,5 @@ def validate_notification_adapter_coverage(
     configured = {source.adapter for source in sources if source.active and source.adapter}
     implemented = {str(code).strip() for code in adapter_codes if str(code).strip()}
     missing = configured - implemented
-    undeclared = implemented - configured
     if missing:
         raise ValueError(f"Configured notification adapters are not implemented: {sorted(missing)}")
-    if undeclared:
-        raise ValueError(f"Implemented notification adapters are not declared active: {sorted(undeclared)}")

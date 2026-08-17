@@ -1,17 +1,18 @@
 {
   "schema_version": 1,
-  "purpose": "Evidence-backed transaction notification source registry for the hourly cashback scan",
+  "purpose": "Explicit transaction-notification contracts for the twice-daily live cashback scan",
   "sources": [
     {
       "code": "ADCB_CARD_OTP",
       "institution": "ADCB",
       "card_code": "ADCB_CASHBACK",
-      "status": "ACTIVE",
+      "status": "DISABLED",
       "evidence_semantics": "AUTHORIZATION_ONLY",
       "adapter": "adcb_card_otp_v1",
+      "mail_folder": "Inbox",
       "senders": ["adcbalert@adcb.com"],
       "subjects": ["ADCB Card Transaction OTP generated"],
-      "notes": "Amount-bearing OTP notification. Always provisional and review-required until statement reconciliation."
+      "notes": "Verified authorization-only format retained for future reuse, but excluded from the live transaction scan because an OTP is not a regular transaction notification."
     },
     {
       "code": "RAKBANK_CARD_TRANSACTION",
@@ -20,6 +21,7 @@
       "status": "ACTIVE",
       "evidence_semantics": "TRANSACTION_NOTIFICATION_PROVISIONAL",
       "adapter": "rakbank_card_transaction_v1",
+      "mail_folder": "Inbox/Rakbank",
       "senders": ["alerts@rakbank.ae"],
       "subjects": ["An update on your Card transaction"],
       "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and the event remains provisional until statement reconciliation. A separately observed Apple Pay purchase used the identical template and exposed no wallet marker. Explicit merchant channel rules run first; unresolved RAK_WORLD transactions use the configurable APPLE_PAY_POS user default."
@@ -31,6 +33,7 @@
       "status": "PLACEHOLDER",
       "evidence_semantics": "UNKNOWN",
       "adapter": null,
+      "mail_folder": null,
       "senders": [],
       "subjects": [],
       "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
@@ -42,6 +45,7 @@
       "status": "PLACEHOLDER",
       "evidence_semantics": "UNKNOWN",
       "adapter": null,
+      "mail_folder": null,
       "senders": [],
       "subjects": [],
       "notes": "Replace with captured sender, subject, body fixture and parser only after a real notification format is verified."

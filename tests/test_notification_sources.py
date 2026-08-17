@@ -18,11 +18,14 @@ class NotificationSourceTests(unittest.TestCase):
             (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),
         )
         active = [source for source in sources if source.active]
-        placeholders = [source for source in sources if not source.active]
+        disabled = [source for source in sources if source.status == "DISABLED"]
+        placeholders = [source for source in sources if source.status == "PLACEHOLDER"]
         self.assertEqual(
             [source.code for source in active],
-            ["ADCB_CARD_OTP", "RAKBANK_CARD_TRANSACTION"],
+            ["RAKBANK_CARD_TRANSACTION"],
         )
+        self.assertEqual([source.code for source in disabled], ["ADCB_CARD_OTP"])
+        self.assertEqual(active[0].mail_folder, "Inbox/Rakbank")
         self.assertEqual(len(placeholders), 2)
         for source in placeholders:
             with self.subTest(source=source.code):
@@ -41,6 +44,7 @@ class NotificationSourceTests(unittest.TestCase):
                     "status": "PLACEHOLDER",
                     "evidence_semantics": "UNKNOWN",
                     "adapter": None,
+                    "mail_folder": None,
                     "senders": ["guess@example.com"],
                     "subjects": [],
                 }
@@ -56,6 +60,17 @@ class NotificationSourceTests(unittest.TestCase):
         sources = load_notification_sources(Path("config/transaction-email-sources.json"))
         with self.assertRaisesRegex(ValueError, "not implemented"):
             validate_notification_adapter_coverage(sources, ())
+
+    def test_disabled_verified_adapter_does_not_participate_in_live_scan(self) -> None:
+        sources = load_notification_sources(Path("config/transaction-email-sources.json"))
+        adcb = next(source for source in sources if source.code == "ADCB_CARD_OTP")
+
+        self.assertFalse(adcb.active)
+        self.assertEqual(adcb.adapter, "adcb_card_otp_v1")
+        validate_notification_adapter_coverage(
+            sources,
+            (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),
+        )
 
 
 if __name__ == "__main__":

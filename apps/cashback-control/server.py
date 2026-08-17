@@ -106,10 +106,17 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
         notification_sources,
         (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),
     )
+    enabled_adapter_codes = {
+        source.adapter for source in notification_sources if source.active and source.adapter
+    }
+    enabled_adapters = tuple(
+        adapter for adapter in DEFAULT_NOTIFICATION_ADAPTERS if adapter.code in enabled_adapter_codes
+    )
     batch = parse_outlook_notifications(
         messages,
         card_by_last4,
         rules,
+        adapters=enabled_adapters,
         cashback_config=cashback_config,
     )
     persistence = (

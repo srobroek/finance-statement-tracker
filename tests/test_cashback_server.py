@@ -71,6 +71,7 @@ class CashbackServerTests(unittest.TestCase):
                     "card_code": "RAK_WORLD",
                     "amount": "10",
                     "merchant": "Test Merchant",
+                    "review_required": True,
                 }).encode("utf-8")
                 request = urllib.request.Request(
                     f"http://127.0.0.1:{port}/api/events",
@@ -169,12 +170,12 @@ class CashbackServerTests(unittest.TestCase):
                     "messages": [
                         {
                             "id": "outlook-api-test-1",
-                            "subject": "ADCB Card Transaction OTP generated",
-                            "sender": {"emailAddress": {"address": "adcbalert@adcb.com"}},
-                            "receivedDateTime": "2026-08-16T10:30:00Z",
+                            "subject": "An update on your Card transaction",
+                            "sender": {"emailAddress": {"address": "alerts@rakbank.ae"}},
+                            "receivedDateTime": "2026-08-17T10:30:00Z",
                             "bodyPreview": (
-                                "OTP for transaction at Mollak for AED 3057.92 on your ADCB "
-                                "Credit Card XXX8833 sent to your registered mobile number."
+                                "You spent AED 6.00 at GMG on your Credit Card "
+                                "559580******7210 on 17/08."
                             ),
                             "web_link": "https://outlook.office.example/outlook-api-test-1",
                         }
@@ -190,7 +191,7 @@ class CashbackServerTests(unittest.TestCase):
                 )
                 review_queue = post("review-queue", {"limit": 20})
                 self.assertIn(
-                    "outlook-api-test-1:0",
+                    "api-test:1",
                     {event["source_event_id"] for event in review_queue["events"]},
                 )
 
@@ -223,7 +224,7 @@ class CashbackServerTests(unittest.TestCase):
                     public_post(
                         "review-approvals",
                         {
-                            "source_event_id": "outlook-api-test-1:0",
+                            "source_event_id": "api-test:1",
                             "changes": {"amount_aed": "0"},
                         },
                         public_origin,
@@ -232,13 +233,13 @@ class CashbackServerTests(unittest.TestCase):
 
                 with public_post(
                     "review-approvals",
-                    {"source_event_id": "outlook-api-test-1:0"},
+                    {"source_event_id": "api-test:1"},
                     public_origin,
                 ) as response:
                     approval = json.loads(response.read())
                 self.assertEqual(
                     approval["approval"]["source_event_id"],
-                    "outlook-api-test-1:0",
+                    "api-test:1",
                 )
                 with public_post("review-queue", {"limit": 20}, public_origin) as response:
                     empty_queue = json.loads(response.read())

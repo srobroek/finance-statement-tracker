@@ -1,6 +1,6 @@
 # Cashback Control companion
 
-This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The twice-daily Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
+This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The twice-daily Outlook job submits exact regular-transaction messages from explicitly configured folders, senders, and subjects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
 
 Run from the repository root:
 
@@ -26,6 +26,8 @@ The normal Outlook entry point is `POST /api/outlook/messages` with one envelope
 ```
 
 The response includes the deterministic parse result and idempotent event upsert result, but does not commit the mailbox cursor. After any required Codex evidence/classification corrections succeed, the task commits the same cursor through `POST /api/ingest-runs`. This two-phase acknowledgement ensures a partial AI/evidence failure cannot skip messages on the next run. `POST /api/ingest-state` returns the last committed cursor from SQLite.
+
+Only sources marked `ACTIVE` in `config/transaction-email-sources.json` participate. Each active source declares its mailbox folder, sender, subject, adapter, and evidence semantics. A verified but intentionally unused parser can remain `DISABLED`; placeholders must remain unmatchable. The current live scan is RAKBANK-only. OTP/authorization messages, statements, refunds, card payments, receipts, bills, warranties, purchase evidence, and reminders are excluded from this scan.
 
 The live service deliberately does not run the full budgeting rulebook. `cashback-programs.json` selects the `LIVE_CASHBACK` rule set from the canonical static-rule source: only the normalization, vendor/category, and bucket rules needed for routing. Full statement ingestion into Actual runs the complete staged rule pipeline. Rule-set membership is searchable metadata, while rule IDs remain stable audit keys.
 

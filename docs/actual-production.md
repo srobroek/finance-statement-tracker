@@ -224,11 +224,11 @@ The confirmed card cycles are RAKBANK World and Standard Chartered Platinum X cl
 
 | Time (Asia/Dubai) | Task | Behaviour |
 |---|---|---|
-| 08:05 and 20:05 daily | Transaction and evidence ingestion | Full durable-cursor gap plus overlap; provisional cashback only. |
+| 08:05 and 20:05 daily | RAKBANK transaction notification scan | Exact `Inbox/Rakbank` sender/subject contract; full durable-cursor gap plus overlap; provisional cashback only. |
 | 20:00 on day 6 | RAKBANK World statement | Leaves the period open while its statement source/adapter remains a placeholder. |
 | 20:20 on day 6 | Standard Chartered Platinum X statement | Leaves the period open while its statement source/adapter remains a placeholder. |
 | 20:40 on day 1 | Emirates Islamic Amazon statement | Stage, AI handoff when requested, Actual preflight/commit, cashback reconciliation, and guarded finalization. |
-| 21:20 on day 1 | Wio statement | Preserve multi-account suffix mapping, then stage and commit only when every row maps cleanly; no companion close unless Wio is added to a versioned cashback profile. |
+| 21:20 on day 1 | Wio statement | Preserve multi-account suffix mapping, then stage and commit only when every row maps cleanly. Wio's generic 2% reward is intentionally excluded from live routing. |
 
 The legacy daily aggregate month-close task remains paused. The attachment-retrieval step is performed by the card/source-specific Codex task; the deterministic command begins only after the exact PDF attachment and Outlook evidence IDs have been captured.
 
@@ -236,7 +236,7 @@ Successful scheduled runs archive their own Codex task after all verification co
 
 ## Live Outlook notifications
 
-The twice-daily Sol automation, scheduled at 08:05 and 20:05 in Asia/Dubai, writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
+The twice-daily Luna xhigh automation, scheduled at 08:05 and 20:05 in Asia/Dubai, searches only the explicit `ACTIVE` transaction contract. Currently that is `Inbox/Rakbank`, sender `alerts@rakbank.ae`, subject `An update on your Card transaction`. It writes exact matching message objects into one envelope and submits it to the continuous companion:
 
 ```powershell
 .\scripts\push-outlook-messages.ps1 `
@@ -245,9 +245,11 @@ The twice-daily Sol automation, scheduled at 08:05 and 20:05 in Asia/Dubai, writ
 
 The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. Sol inspects only unresolved results and performs the evidence-aware AI policy stage through auditable correction calls. Codex is not installed in the container and no container-side AI is assumed. Only after those corrections and evidence writes succeed does the task commit the candidate cursor through the companion's ingest-run endpoint.
 
-The live path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
+The live path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Refunds, reversals, card payments, receipts, bills, warranties, purchase evidence, reminders, and statements remain in the card-specific reconciliation/evidence pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
 
 Transaction notifications are retrieved in full from the durable cursor minus the configured overlap. Statement-PDF retrieval is different: each card-specific job selects only the latest statement message for that card/account and expected cycle, except for an explicit retry or backfill.
+
+After statement normalization, every card-specific job performs a separate evidence pass over the closed period. It searches purchase-related Outlook mail using vendor, amount/currency, date buffer, card/account identity, and order/reference facts. Confirmed original attachments are preferred; a confirmed evidence email without a relevant attachment is rendered to a PDF or image snapshot. The result is hash-deduplicated under `Finance Evidence/YYYY/MM/vendor-slug/`, recorded in `Finance Evidence/catalogue.json`, and linked through the transaction evidence metadata. Ambiguous candidates remain unmatched and review-required.
 
 Production notification adapters currently support amount-bearing ADCB card-authorization emails and verified RAKBANK World transaction emails. An ADCB OTP proves an attempted authorization, not settlement, so it is stored with confidence below 0.8, `review_required=true`, and `PROVISIONAL` status. The RAKBANK adapter requires the registered sender, exact transaction subject, amount, currency, merchant, card suffix, and transaction day/month; same-subject activation messages fail closed. RAKBANK notification emails do not expose Apple Pay usage, so unresolved RAK_WORLD channels use the explicit profile default after merchant-specific channel rules. All notification events remain provisional until statement reconciliation. Standard Chartered and Emirates Islamic transaction adapters remain unavailable until representative notification formats exist.
 
