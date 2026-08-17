@@ -115,9 +115,8 @@ section { margin-top: 14px; }
 .candidate-node::before { content: ""; position: absolute; top: 50%; left: -14px; width: 13px; border-top: 1px solid #536158; }
 .candidate-node.preferred { border-color: #82703e; background: #1b1b13; }
 .candidate-node.avoid { opacity: .7; }
-.candidate-rank b, .candidate-rank span, .candidate-card strong, .candidate-card span, .candidate-logic b, .candidate-logic span, .candidate-logic small { display: block; }
+.candidate-rank b, .candidate-card strong, .candidate-card span, .candidate-logic b, .candidate-logic span, .candidate-logic small { display: block; }
 .candidate-rank b { color: var(--amber); font-size: .78rem; }
-.candidate-rank span { margin-top: 2px; color: var(--muted); font-size: .46rem; text-transform: uppercase; }
 .candidate-card, .candidate-logic { min-width: 0; }
 .candidate-card strong { overflow: hidden; color: #f7faf8; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
 .candidate-card span, .candidate-logic span, .candidate-logic small { margin-top: 3px; color: var(--muted); font-size: .5rem; line-height: 1.2; }
@@ -340,7 +339,6 @@ section { margin-top: 14px; }
   .candidate-node + .candidate-node { margin-top: 0; }
   .candidate-rank { grid-row: 1 / 3; }
   .candidate-rank b { font-size: 1rem; }
-  .candidate-rank span { font-size: .55rem; }
   .candidate-card { grid-column: 2; }
   .candidate-card strong {
     overflow: visible;
