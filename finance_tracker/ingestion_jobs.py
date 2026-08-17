@@ -18,14 +18,15 @@ from .statement_sources import load_statement_sources, require_active_statement_
 
 JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
 ACTUAL_MODES = frozenset({"STAGE", "PREFLIGHT", "COMMIT"})
-RESULT_SCHEMA_VERSION = 2
+AI_HANDOFF_SCHEMA_VERSION = 2
+RESULT_SCHEMA_VERSION = 3
 
 
 def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
     """Deduplicate policy and transaction context without losing request identity."""
     policies: dict[str, dict[str, Any]] = {}
-    transactions: dict[str, dict[str, Any]] = {}
-    compact_requests: list[dict[str, Any]] = []
+    variants: dict[str, dict[str, dict[str, Any]]] = {}
+    pending_requests: list[tuple[str, str, str, list[str]]] = []
     request_keys: set[tuple[str, str]] = set()
     for request in requests:
         policy_id = str(request.get("policy_id") or "").strip()
@@ -52,18 +53,46 @@ def compact_ai_handoff(requests: list[dict[str, Any]]) -> dict[str, Any]:
         if policy_id in policies and policies[policy_id] != policy:
             raise ValueError(f"AI policy context changed within one handoff: {policy_id}")
         policies[policy_id] = policy
-        if transaction_id in transactions and transactions[transaction_id] != transaction:
-            raise ValueError(
-                f"AI transaction context changed within one handoff: {transaction_id}"
+        canonical_transaction = json.dumps(
+            transaction,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        context_hash = hashlib.sha256(canonical_transaction.encode("utf-8")).hexdigest()
+        variants.setdefault(transaction_id, {})[context_hash] = dict(transaction)
+        pending_requests.append((
+            transaction_id,
+            policy_id,
+            context_hash,
+            list(request.get("allowed_fields") or []),
+        ))
+
+    transactions: dict[str, dict[str, Any]] = {}
+    transaction_refs: dict[tuple[str, str], str] = {}
+    for transaction_id, contexts in variants.items():
+        multiple_contexts = len(contexts) > 1
+        for context_hash, transaction in sorted(contexts.items()):
+            reference = (
+                f"{transaction_id}@{context_hash[:12]}"
+                if multiple_contexts
+                else transaction_id
             )
-        transactions[transaction_id] = dict(transaction)
-        compact_requests.append({
+            if reference in transactions and transactions[reference] != transaction:
+                raise ValueError(f"AI transaction context reference collision: {reference}")
+            transactions[reference] = transaction
+            transaction_refs[(transaction_id, context_hash)] = reference
+
+    compact_requests = [
+        {
             "transaction_id": transaction_id,
+            "transaction_ref": transaction_refs[(transaction_id, context_hash)],
             "policy_id": policy_id,
-            "allowed_fields": list(request.get("allowed_fields") or []),
-        })
+            "allowed_fields": allowed_fields,
+        }
+        for transaction_id, policy_id, context_hash, allowed_fields in pending_requests
+    ]
     return {
-        "schema_version": 1,
+        "schema_version": AI_HANDOFF_SCHEMA_VERSION,
         "policies": policies,
         "transactions": transactions,
         "requests": compact_requests,
@@ -140,7 +169,11 @@ class IngestionJobRunner:
     def _upgrade_result(result: dict[str, Any], manifest: Path) -> dict[str, Any]:
         """Upgrade durable results without changing their idempotency identity."""
         upgraded = dict(result)
-        if "ai_handoff" not in upgraded:
+        handoff = upgraded.get("ai_handoff")
+        if (
+            not isinstance(handoff, dict)
+            or handoff.get("schema_version") != AI_HANDOFF_SCHEMA_VERSION
+        ):
             ai_request_count = int(upgraded.get("ai_request_count") or 0)
             ai_requests: list[dict[str, Any]] = []
             if manifest.is_file():

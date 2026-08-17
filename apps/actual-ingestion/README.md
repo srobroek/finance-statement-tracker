@@ -25,8 +25,9 @@ content-addressed inbox copy remains private to UID/GID 10002.
 
 Every statement, browser capture, and browser export first runs all canonical
 static-rule stages, then history matching, then emits a constrained
-`ai_handoff`. Policy definitions and transaction context are deduplicated;
-`ai_handoff.requests` contains the exact transaction/policy pairs to answer.
+`ai_handoff`. Policy definitions and transaction snapshots are deduplicated;
+`ai_handoff.requests` contains the exact transaction/policy pairs to answer and
+uses `transaction_ref` when one transaction has evolving policy-time context.
 A scheduled Sol task may return `ai_responses` with
 `-AIResponsesPath`; the container's policy engine validates those proposals
 and rebuilds the manifest. The container never calls a model itself.

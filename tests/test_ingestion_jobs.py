@@ -176,13 +176,36 @@ class IngestionJobTests(unittest.TestCase):
         replay = self.runner.submit(request)
 
         self.assertTrue(replay["idempotent_replay"])
-        self.assertEqual(replay["result_schema_version"], 2)
+        self.assertEqual(replay["result_schema_version"], 3)
         self.assertEqual(
             len(replay["ai_handoff"]["requests"]), replay["ai_request_count"]
         )
         persisted = json.loads(result_path.read_text(encoding="utf-8"))
         self.assertFalse(persisted["idempotent_replay"])
         self.assertIn("ai_handoff", persisted)
+
+    def test_idempotent_replay_rebuilds_outdated_compact_handoff(self) -> None:
+        pdf = self.runner.inbox / "old-handoff-ei.pdf"
+        write_ei_pdf(pdf)
+        request = {
+            "type": "STATEMENT_PDF",
+            "source_path": pdf.name,
+            "card_code": "EI_AMAZON",
+            "actual_mode": "STAGE",
+            "source_message_id": "old-handoff-message",
+        }
+        first = self.runner.submit(request)
+        result_path = self.runner.jobs / first["job_id"] / "result.json"
+        old_result = json.loads(result_path.read_text(encoding="utf-8"))
+        old_result["ai_handoff"]["schema_version"] = 1
+        old_result["result_schema_version"] = 2
+        result_path.write_text(json.dumps(old_result, indent=2), encoding="utf-8")
+
+        replay = self.runner.submit(request)
+
+        self.assertTrue(replay["idempotent_replay"])
+        self.assertEqual(replay["result_schema_version"], 3)
+        self.assertEqual(replay["ai_handoff"]["schema_version"], 2)
 
     def test_compact_ai_handoff_deduplicates_policy_and_transaction_context(self) -> None:
         transaction_one = {"transaction_id": "tx-1", "merchant_raw": "Example"}
@@ -225,6 +248,37 @@ class IngestionJobTests(unittest.TestCase):
         self.assertEqual(list(handoff["policies"]), ["classify", "evidence"])
         self.assertEqual(list(handoff["transactions"]), ["tx-1", "tx-2"])
         self.assertEqual(len(handoff["requests"]), 3)
+        self.assertTrue(all(item["transaction_ref"] for item in handoff["requests"]))
+
+    def test_compact_ai_handoff_preserves_evolving_transaction_context(self) -> None:
+        shared = {
+            "policy_version": 1,
+            "allowed_values": {},
+            "allowed_tags": ["gift"],
+            "response_contract": {"proposals": []},
+        }
+        handoff = compact_ai_handoff([
+            {
+                **shared,
+                "policy_id": "classify",
+                "instruction": "Classify",
+                "allowed_fields": ["tags"],
+                "transaction": {"transaction_id": "tx-1", "tags": []},
+            },
+            {
+                **shared,
+                "policy_id": "evidence",
+                "instruction": "Decide evidence",
+                "allowed_fields": ["evidence_policy"],
+                "transaction": {"transaction_id": "tx-1", "tags": ["gift"]},
+            },
+        ])
+
+        self.assertEqual(handoff["schema_version"], 2)
+        self.assertEqual(len(handoff["transactions"]), 2)
+        references = [item["transaction_ref"] for item in handoff["requests"]]
+        self.assertEqual(len(set(references)), 2)
+        self.assertTrue(all(reference.startswith("tx-1@") for reference in references))
 
     def test_compact_ai_handoff_rejects_duplicate_request_identity(self) -> None:
         request = {

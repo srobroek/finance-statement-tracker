@@ -32,7 +32,9 @@ Conditions further restrict subscription, purchase-evidence, property, and
 cashback policies to relevant transactions and cards.
 
 The job API returns a compact `ai_handoff`: shared policy definitions live in
-`policies`, transaction facts live once in `transactions`, and `requests`
-contains only `transaction_id`, `policy_id`, and unresolved `allowed_fields`.
-This preserves every validation boundary while avoiding repeated instructions
-and allowlists in scheduled-task context.
+`policies`, deduplicated transaction snapshots live in `transactions`, and each
+request identifies its exact snapshot with `transaction_ref` alongside
+`transaction_id`, `policy_id`, and unresolved `allowed_fields`. If an accepted
+proposal changes the context seen by a later policy, both context variants are
+retained rather than collapsed. This preserves every validation boundary while
+avoiding repeated instructions and allowlists in scheduled-task context.
