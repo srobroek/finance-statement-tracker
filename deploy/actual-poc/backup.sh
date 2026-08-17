@@ -47,18 +47,17 @@ payload="${working}/payload"
 [[ ! -e "${working}" && ! -e "${destination}" ]] || fail "backup_destination_exists"
 mkdir -p "${payload}/actual-data" "${payload}/cashback-data" "${payload}/ingestion-data" "${payload}/configuration"
 
-actual_running="$(docker inspect -f '{{.State.Running}}' finance-actual-poc 2>/dev/null || true)"
-proxy_running="$(docker inspect -f '{{.State.Running}}' finance-actual-proxy 2>/dev/null || true)"
-cashback_running="$(docker inspect -f '{{.State.Running}}' finance-cashback-control 2>/dev/null || true)"
-ingestion_running="$(docker inspect -f '{{.State.Running}}' finance-actual-ingestion 2>/dev/null || true)"
+actual_running="$(docker inspect -f '{{.State.Status}}' finance-actual-poc 2>/dev/null || true)"
+proxy_running="$(docker inspect -f '{{.State.Status}}' finance-actual-proxy 2>/dev/null || true)"
+cashback_running="$(docker inspect -f '{{.State.Status}}' finance-cashback-control 2>/dev/null || true)"
+ingestion_running="$(docker inspect -f '{{.State.Status}}' finance-actual-ingestion 2>/dev/null || true)"
 
-restart_services() {
+resume_services() {
   local failed=0
-  if [[ "${actual_running}" == "true" ]]; then docker start finance-actual-poc >/dev/null || failed=1; fi
-  if [[ "${cashback_running}" == "true" ]]; then docker start finance-cashback-control >/dev/null || failed=1; fi
-  if [[ "${ingestion_running}" == "true" ]]; then docker start finance-actual-ingestion >/dev/null || failed=1; fi
-  # Start the proxy last so its startup DNS lookup sees the running Actual container.
-  if [[ "${proxy_running}" == "true" ]]; then docker start finance-actual-proxy >/dev/null || failed=1; fi
+  if [[ "${actual_running}" == "running" ]]; then docker unpause finance-actual-poc >/dev/null || failed=1; fi
+  if [[ "${cashback_running}" == "running" ]]; then docker unpause finance-cashback-control >/dev/null || failed=1; fi
+  if [[ "${ingestion_running}" == "running" ]]; then docker unpause finance-actual-ingestion >/dev/null || failed=1; fi
+  if [[ "${proxy_running}" == "running" ]]; then docker unpause finance-actual-proxy >/dev/null || failed=1; fi
   return "${failed}"
 }
 
@@ -69,19 +68,20 @@ wait_for_url() {
     if curl -fsS "${url}" >/dev/null 2>&1; then return 0; fi
     sleep 1
   done
-  printf '{"level":"error","event":"backup_restart_unhealthy","service":"%s"}\n' "${label}" >&2
+  printf '{"level":"error","event":"backup_resume_unhealthy","service":"%s"}\n' "${label}" >&2
   return 1
 }
 
-emergency_restart() {
-  restart_services || true
+emergency_resume() {
+  resume_services || true
 }
-trap emergency_restart EXIT
+trap emergency_resume EXIT
 
-if [[ "${proxy_running}" == "true" ]]; then docker stop finance-actual-proxy >/dev/null; fi
-if [[ "${ingestion_running}" == "true" ]]; then docker stop finance-actual-ingestion >/dev/null; fi
-if [[ "${actual_running}" == "true" ]]; then docker stop finance-actual-poc >/dev/null; fi
-if [[ "${cashback_running}" == "true" ]]; then docker stop finance-cashback-control >/dev/null; fi
+if [[ "${proxy_running}" == "running" ]]; then docker pause finance-actual-proxy >/dev/null; fi
+if [[ "${ingestion_running}" == "running" ]]; then docker pause finance-actual-ingestion >/dev/null; fi
+if [[ "${actual_running}" == "running" ]]; then docker pause finance-actual-poc >/dev/null; fi
+if [[ "${cashback_running}" == "running" ]]; then docker pause finance-cashback-control >/dev/null; fi
+sync
 
 cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"
 cp -a "${CASHBACK_DATA_DIR}/." "${payload}/cashback-data/"
@@ -110,14 +110,14 @@ cat > "${working}/manifest.json" <<EOF
 {"schema_version":2,"created_at":"${stamp}","includes":["actual-data","cashback-data","ingestion-data","configuration"],"secrets_included":false,"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control","ingestion":"finance-actual-ingestion"}}
 EOF
 
-restart_services
-if [[ "${actual_running}" == "true" && "${proxy_running}" == "true" ]]; then
+resume_services
+if [[ "${actual_running}" == "running" && "${proxy_running}" == "running" ]]; then
   wait_for_url "actual" "http://127.0.0.1:5006/"
 fi
-if [[ "${cashback_running}" == "true" ]]; then
+if [[ "${cashback_running}" == "running" ]]; then
   wait_for_url "cashback" "http://127.0.0.1:5010/api/health"
 fi
-if [[ "${ingestion_running}" == "true" ]]; then
+if [[ "${ingestion_running}" == "running" ]]; then
   wait_for_url "ingestion" "http://127.0.0.1:5020/api/health"
 fi
 trap - EXIT

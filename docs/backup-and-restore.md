@@ -1,6 +1,6 @@
 # Backup and restore
 
-The CI host runs a cold filesystem backup at approximately 03:15 Asia/Dubai. Actual, Cashback Control, and the ingestion worker stop briefly so the Actual files, cashback SQLite database, and durable ingestion jobs are captured consistently. The stateless Nginx proxy stops first and starts last. The backup restarts the existing containers by exact name; it never invokes Compose or pulls an image, so a registry login cannot strand services after a successful archive. Only services that were running before the backup are restarted.
+The CI host runs a quiesced filesystem backup at approximately 03:15 Asia/Dubai. Actual, Cashback Control, and the ingestion worker are paused briefly, then the host flushes pending filesystem writes before copying the Actual files, cashback SQLite database, and durable ingestion jobs. The same containers are unpaused after the snapshot. The backup never stops, recreates, or pulls a container, so a registry login or runtime monitor cannot strand services after a successful archive. Only services that were running before the backup are paused.
 
 Backups are stored outside the stack at `/opt/backups/finance-actual-poc/<UTC timestamp>/` and contain:
 
@@ -18,10 +18,10 @@ sha256sum -c SHA256SUMS
 tar -tzf finance-data.tar.gz | head
 ```
 
-The systemd unit uses `KillMode=process` because the host's Podman-backed Docker
-runtime can leave `conmon` processes in the backup unit's cgroup after the
-containers restart. Those monitors belong to the independently managed
-application containers and must survive completion of the one-shot backup.
+Pause/unpause is intentional on the Podman-backed host: restarting a container
+from a one-shot systemd service can attach its `conmon` process to the backup
+unit's cgroup. Quiescing avoids that lifecycle coupling while preserving a
+stable, flushable snapshot boundary.
 
 ## Restore
 

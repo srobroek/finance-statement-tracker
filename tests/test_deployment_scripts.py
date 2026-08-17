@@ -23,21 +23,21 @@ class DeploymentScriptTests(unittest.TestCase):
         tracked = Path("config/deployment.json").read_text(encoding="utf-8")
         self.assertNotIn("172.20.10.20", tracked)
 
-    def test_backup_restarts_existing_independent_containers_without_compose_pull(self) -> None:
+    def test_backup_quiesces_existing_independent_containers_without_recreation(self) -> None:
         script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
         self.assertNotIn("docker compose", script)
         self.assertNotIn("docker-compose", script)
-        self.assertIn("docker start finance-actual-poc", script)
-        self.assertIn("docker start finance-cashback-control", script)
-        self.assertIn("docker start finance-actual-ingestion", script)
+        self.assertNotIn("docker start", script)
+        self.assertNotIn("docker stop", script)
+        self.assertIn("docker pause finance-actual-poc", script)
+        self.assertIn("docker pause finance-cashback-control", script)
+        self.assertIn("docker pause finance-actual-ingestion", script)
+        self.assertIn("docker unpause finance-actual-poc", script)
         self.assertIn('"${payload}/ingestion-data/"', script)
         self.assertIn('"${CASHBACK_STACK_DIR}/compose.yaml"', script)
         self.assertIn("sha256sum finance-data.tar.gz > SHA256SUMS", script)
         self.assertNotIn('sha256sum "${working}/finance-data.tar.gz"', script)
         self.assertIn("sha256sum -c SHA256SUMS", script)
-
-        service = Path("deploy/actual-poc/finance-backup.service").read_text(encoding="utf-8")
-        self.assertIn("KillMode=process", service)
 
 
 if __name__ == "__main__":
