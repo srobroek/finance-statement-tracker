@@ -41,7 +41,7 @@
       "version": 1,
       "name": "Find receipt bill or warranty evidence",
       "priority": 40,
-      "instruction": "When the transaction is a purchase, propose an evidence search policy if matching email, receipt, invoice, bill, or warranty material may exist. The evidence worker performs the search and attachment handling.",
+      "instruction": "Use config/evidence-search-policy.json. Propose an evidence search only for durable or operationally useful documents such as utility/property bills, warranty-bearing goods, significant online orders, travel bookings, contracts, or qualifying high-value purchases. Never request evidence for routine consumables such as groceries, restaurant meals, food delivery, coffee, fuel, parking, tolls, or ordinary transport unless a manual evidence request exists. The evidence worker performs the search and attachment handling.",
       "target_fields": ["evidence_policy"],
       "conditions": [{"field": "transaction_type", "operator": "equals", "value": "PURCHASE"}],
       "minimum_confidence": 0.8,

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "currency": "AED",
+  "minimum_general_purchase_amount": "500",
+  "search_when_evidence_policy_is": [
+    "SEARCH_RELATED_EMAIL",
+    "SEARCH_RECEIPT_BILL_WARRANTY",
+    "MATCH_AMOUNT_AND_PERIOD"
+  ],
+  "always_search_categories": [
+    "Electricity & Water",
+    "District Cooling",
+    "Service Charges",
+    "Maintenance & Repairs",
+    "Online Shopping",
+    "Electronics",
+    "Furniture & Appliances",
+    "Flights",
+    "Accommodation",
+    "Travel Activities",
+    "Insurance",
+    "Medical",
+    "Professional Services"
+  ],
+  "never_search_categories": [
+    "Groceries",
+    "Dining Out",
+    "Food Delivery",
+    "Coffee & Snacks",
+    "Fuel",
+    "Parking & Tolls",
+    "Taxi & Public Transport",
+    "Cash Withdrawal",
+    "Transfers",
+    "Credit Card Payments",
+    "Bank Fees & Interest"
+  ],
+  "document_types": [
+    "RECEIPT",
+    "TAX_INVOICE",
+    "BILL",
+    "WARRANTY",
+    "ORDER_CONFIRMATION",
+    "PROOF_OF_PURCHASE",
+    "BOOKING_CONFIRMATION",
+    "SERVICE_CONTRACT"
+  ],
+  "matching": {
+    "minimum_strong_facts": 2,
+    "strong_facts": [
+      "exact_amount_and_currency",
+      "order_or_reference_number",
+      "exact_normalized_vendor",
+      "transaction_or_posting_date_within_buffer",
+      "card_or_account_identity"
+    ],
+    "date_buffer_days": 7,
+    "vendor_only_match_allowed": false
+  },
+  "notes": "Do not search or archive routine consumables. A high-value general purchase is eligible only when it is not in a never-search category. Manual evidence requests always win."
+}
