@@ -21,6 +21,7 @@ from .notifications import parse_outlook_notifications
 from .notifications import DEFAULT_NOTIFICATION_ADAPTERS
 from .notification_sources import load_notification_sources, validate_notification_adapter_coverage
 from .actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
+from .automation_manifest import audit_automations, load_automation_manifest
 from .browser_ingestion import export_browser_capture_for_actual
 from .browser_exports import build_capture_from_export
 from .browser_recipes import render_recipe
@@ -273,6 +274,14 @@ def main(argv: list[str] | None = None) -> int:
     purchase_archive.add_argument("--message-id")
     purchase_archive.add_argument("--attachment-id")
     purchase_archive.add_argument("--web-url")
+    automation_audit = subparsers.add_parser(
+        "automation-audit",
+        help="Compare installed Codex schedules and prompts with the versioned manifest",
+    )
+    automation_audit.add_argument("--manifest", type=Path, required=True)
+    automation_audit.add_argument("--automation-root", type=Path, required=True)
+    automation_audit.add_argument("--project-root", type=Path)
+    automation_audit.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -545,6 +554,17 @@ def main(argv: list[str] | None = None) -> int:
             "transaction_ids": [row.transaction_id for row in selected],
         }, indent=2))
         return 0
+    if args.command == "automation-audit":
+        manifest = load_automation_manifest(args.manifest, args.project_root)
+        result = audit_automations(manifest, args.automation_root)
+        rendered = json.dumps(result.to_dict(), indent=2)
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+            print(args.output)
+        else:
+            print(rendered)
+        return 0 if result.status == "ok" else 2
     year, month_number = (int(part) for part in args.month.split("-", 1))
     period_end = date(year, month_number, calendar.monthrange(year, month_number)[1])
     statuses = json.loads(args.statement_status.read_text(encoding="utf-8"))

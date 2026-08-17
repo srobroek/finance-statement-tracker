@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Dubai",
+  "allow_extra_automations": false,
+  "automations": [
+    {
+      "id": "rakbank-morning-cashback-scan",
+      "name": "RAKBANK morning cashback scan",
+      "kind": "cron",
+      "status": "ACTIVE",
+      "rrule": "FREQ=DAILY;BYHOUR=8;BYMINUTE=5",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/live-cashback-scan.md",
+      "prompt": "Run the live cashback scan for source RAKBANK_CARD_TRANSACTION with durable cursor outlook:rakbank. Follow agents/automations/live-cashback-scan.md exactly. If and only if the run succeeds completely, archive this task; never archive a failed or partial run."
+    },
+    {
+      "id": "standard-chartered-twice-daily-cashback-scan",
+      "name": "Standard Chartered morning cashback scan",
+      "kind": "cron",
+      "status": "PAUSED",
+      "rrule": "FREQ=DAILY;BYHOUR=8;BYMINUTE=25",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/live-cashback-scan.md",
+      "prompt": "Run the live cashback scan for source STANDARD_CHARTERED_CARD_TRANSACTION with durable cursor outlook:standard-chartered. Follow agents/automations/live-cashback-scan.md exactly. This task stays paused until that source is ACTIVE and its real message fixture and parser pass tests."
+    },
+    {
+      "id": "rakbank-world-monthly-statement-reconciliation",
+      "name": "RAKBANK World monthly statement reconciliation",
+      "kind": "cron",
+      "status": "ACTIVE",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=6;BYHOUR=20;BYMINUTE=0",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/statement-cycle.md",
+      "prompt": "Run the authoritative monthly statement cycle for RAK_WORLD on day 6 after its day-5 close. Follow agents/automations/statement-cycle.md exactly. The placeholder source must remain non-importing until a real statement and mailbox contract are verified."
+    },
+    {
+      "id": "standard-chartered-platinum-x-monthly-statement-reconciliation",
+      "name": "Standard Chartered Platinum X monthly statement reconciliation",
+      "kind": "cron",
+      "status": "PAUSED",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=6;BYHOUR=20;BYMINUTE=20",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/statement-cycle.md",
+      "prompt": "Run the authoritative monthly statement cycle for SC_PLATINUM_X on day 6 after its day-5 close. Follow agents/automations/statement-cycle.md exactly. This task stays paused until a real statement, mailbox contract, and parser are verified."
+    },
+    {
+      "id": "emirates-islamic-amazon-monthly-statement-reconciliation",
+      "name": "Emirates Islamic Amazon monthly statement reconciliation",
+      "kind": "cron",
+      "status": "ACTIVE",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=20;BYMINUTE=40",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/statement-cycle.md",
+      "prompt": "Run the authoritative monthly statement cycle for EI_AMAZON on day 1 after its month-end close. Follow agents/automations/statement-cycle.md exactly. EI is statement-only for live totals and uses its statement for cashback close."
+    },
+    {
+      "id": "wio-monthly-statement-ingestion",
+      "name": "Wio monthly statement ingestion",
+      "kind": "cron",
+      "status": "ACTIVE",
+      "rrule": "FREQ=MONTHLY;BYMONTHDAY=3;BYHOUR=20;BYMINUTE=40",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "notification_policy": "failed_runs_only",
+      "runbook": "agents/automations/statement-cycle.md",
+      "prompt": "Run the authoritative monthly statement cycle for WIO_CREDIT on day 3 because statements arrive on day 1 or 2. Follow agents/automations/statement-cycle.md exactly. Map card suffix 4113 and account suffix 5009 to the single Actual account Wio Credit Card · 4113 / 5009; never split this credit product into separate accounts. Wio is outside the live cashback companion."
+    }
+  ]
+}

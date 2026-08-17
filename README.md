@@ -77,6 +77,15 @@ The target adapter writes ordinary finance records to Actual Budget through its 
 
 Four Codex automations are active: a daily RAKBANK live scan at 08:05 plus monthly statement jobs for RAKBANK, Emirates Islamic, and Wio. A separate Standard Chartered live job at 08:25 and its monthly job retain complete activation prompts but are paused until their source contracts are verified. Emirates Islamic, ADCB, and Wio are absent from live scanning; EI is represented as unlimited 6% Amazon cashback with statement-only totals. The ADCB statement task was removed and the former daily aggregate gate is paused. The RAKBANK job resumes from its durable source cursor, so a missed morning run is recovered on the next successful run rather than creating a data gap. Evidence search and full-budget classification run only in monthly statement jobs.
 
+The expected schedules, models, statuses, and exact launcher prompts are versioned in `config/codex-automations.json`. The launcher prompts delegate to reusable runbooks under `agents/automations/`, so operational logic is reviewed in Git rather than copied between six local tasks. Audit a Codex installation with:
+
+```powershell
+python -m finance_tracker.cli automation-audit `
+  --manifest .\config\codex-automations.json `
+  --project-root . `
+  --automation-root "$env:USERPROFILE\.codex\automations"
+```
+
 The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual, Cashback Control, and the ingestion worker, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails.
 
 Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.

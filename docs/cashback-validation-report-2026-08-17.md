@@ -10,7 +10,7 @@ Overall result: **PASS**
 
 ## Executive result
 
-- Python regression suite: **191/191 passed** in the final run.
+- Python regression suite: **195/195 passed** in the final run.
 - Actual bridge JavaScript suite: **10/10 passed**, including the offline idempotency integration.
 - Focused routing matrix: **8/8 passed**.
 - Live isolated API and browser scenarios: **13/13 passed**.

@@ -235,6 +235,17 @@ The legacy daily aggregate month-close task remains paused. The attachment-retri
 
 Successful scheduled runs archive their own Codex task after all verification completes. Failed, partial, blocked, or review-required runs remain visible for attention.
 
+Schedule definitions are portable repository configuration rather than undocumented UI state. `config/codex-automations.json` contains each expected task ID, cadence, model, reasoning effort, status, notification policy, runbook, and exact launcher prompt. Shared procedures live in `agents/automations/live-cashback-scan.md` and `agents/automations/statement-cycle.md`. After creating or editing tasks, verify the installed local definitions:
+
+```powershell
+python -m finance_tracker.cli automation-audit `
+  --manifest .\config\codex-automations.json `
+  --project-root . `
+  --automation-root "$env:USERPROFILE\.codex\automations"
+```
+
+The command exits with code 2 and identifies missing, extra, or drifted fields. It never changes schedules; apply reviewed changes through the Codex automation API, then rerun the audit.
+
 ## Live Outlook notifications
 
 The active live automation runs with Luna/max. RAKBANK uses `Inbox/Rakbank`, sender `alerts@rakbank.ae`, and exact subject `An update on your Card transaction`. Standard Chartered retains a separate, fully specified but paused placeholder task. Emirates Islamic, ADCB, and Wio have no live source recipes. EI is shown as unlimited 6% Amazon cashback without live totals, minimums, caps, or bucket fill; its spend is refreshed only from the monthly statement. The active RAKBANK task writes exact bounded Outlook objects into its own envelope and submits them to the continuous companion:
