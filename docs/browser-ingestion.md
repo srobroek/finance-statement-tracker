@@ -75,22 +75,26 @@ Both paths parsed all 303 candidate rows and produced one account envelope
 with no import blocker. Static rules resolved eight cashback credits and three
 card-payment credits. A unique, exact merchant/amount refund pair then resolved
 the remaining generic credit deterministically; duplicate candidate purchases
-remain review-required. Release `b9774e7` production STAGE job
-`d969fd18106fa982d6ad4e47` reached `READY_FOR_APPROVAL` with zero review rows
-and preserved the same source hash. Replaying that exact request returned the
-same job ID and `idempotent_replay=true`. It did not contact or modify Actual.
+remain review-required. Release `0d791f1d7a26b81a7701a3d15dd54089f4853892`
+corrected boundary-sensitive medical and fuel matches, normalized Emirates
+Central Cooling to Empower, and separated AWS cloud charges from Amazon retail.
 
-The scoped AI handoff emitted 287 requests rather than the previous 1,129:
-246 unresolved classifications, three subscription checks, six property
-enrichments, and 32 evidence decisions. Cashback enrichment was correctly
-omitted because ADCB is not part of the live cashback profile. A handoff marked
-complete must now return exactly one response for every emitted request, even
-when a response deliberately contains no proposal. The schema-2 compact job
-response stores 255 deduplicated policy-time transaction snapshots, references
-the exact snapshot from each request, and is 63.3% smaller than the full audit
-request representation for this real batch. The manifest retains the full
-requests for traceability. An incomplete production PREFLIGHT was rejected by
-the AI-handoff guard before the Actual bridge was contacted.
+The fixed-point AI handoff expanded from 284 initial requests to 310 final
+requests after accepted classifications activated later subscription,
+property, and evidence policies. Production STAGE job
+`2d2eb75d39632d44c2817f98` answered all 310 requests, accepted 298 proposals,
+rejected none, retained ten exact evidence links, and reached
+`READY_FOR_APPROVAL` with zero review rows. Six linked Empower PDFs match exact
+account, property/unit, period, and amount. Four sanitized DEWA payment receipts
+match exact account, payment reference, date, and amount. Unmatched evidence
+candidates remain unlinked instead of being inferred.
+
+Production PREFLIGHT job `92dbe215c549ed6071b31a2d` dry-ran all 303 rows
+against `ADCB Credit Card · 8833 / 6838`: 303 additions, zero updates, and zero
+errors. It imported nothing. Cashback enrichment was correctly omitted because
+ADCB is not part of the live cashback profile. A handoff marked complete must
+answer every emitted request, including empty responses when evidence is weak;
+an incomplete PREFLIGHT is rejected before the Actual bridge is contacted.
 
 ## Correctness gates
 
