@@ -213,6 +213,10 @@ async function browserPushManager() {
   return window.pushManager || null;
 }
 
+function isInstalledApp() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
 async function updatePushButton(button, config, manager) {
   const subscription = manager ? await manager.getSubscription() : null;
   button.dataset.subscribed = String(Boolean(subscription));
@@ -230,6 +234,13 @@ async function setupPushNotifications() {
     const response = await fetch("/api/push/config", { cache: "no-store" });
     const config = await response.json();
     if (!response.ok || !config.enabled || !("Notification" in window)) return;
+    if (!isInstalledApp()) {
+      button.hidden = false;
+      button.disabled = true;
+      button.textContent = "Install app for alerts";
+      button.title = "Add Cashback to the Home Screen, then enable alerts from the installed app.";
+      return;
+    }
     const manager = await browserPushManager();
     if (!manager) return;
     await updatePushButton(button, config, manager);
