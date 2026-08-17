@@ -69,8 +69,8 @@ container on 2026-08-17. The artifact hash was
 Both paths parsed all 303 candidate rows and produced one account envelope
 with no import blocker. Static rules resolved eight cashback credits and three
 card-payment credits, while one ambiguous credit remained review-required.
-The production STAGE job was `6f30c9019002819fe37227f5`; it did not contact or
-modify Actual.
+The release-`dfa697d` production STAGE job was
+`c278b3e939d3d1be6aa17eaa`; it did not contact or modify Actual.
 
 The scoped AI handoff emitted 287 requests rather than the previous 1,129:
 246 unresolved classifications, three subscription checks, six property
