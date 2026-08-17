@@ -32,7 +32,12 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("docker start finance-actual-ingestion", script)
         self.assertIn('"${payload}/ingestion-data/"', script)
         self.assertIn('"${CASHBACK_STACK_DIR}/compose.yaml"', script)
+        self.assertIn("sha256sum finance-data.tar.gz > SHA256SUMS", script)
+        self.assertNotIn('sha256sum "${working}/finance-data.tar.gz"', script)
         self.assertIn("sha256sum -c SHA256SUMS", script)
+
+        service = Path("deploy/actual-poc/finance-backup.service").read_text(encoding="utf-8")
+        self.assertIn("KillMode=process", service)
 
 
 if __name__ == "__main__":

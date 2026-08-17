@@ -18,6 +18,11 @@ sha256sum -c SHA256SUMS
 tar -tzf finance-data.tar.gz | head
 ```
 
+The systemd unit uses `KillMode=process` because the host's Podman-backed Docker
+runtime can leave `conmon` processes in the backup unit's cgroup after the
+containers restart. Those monitors belong to the independently managed
+application containers and must survive completion of the one-shot backup.
+
 ## Restore
 
 Restoration replaces live data. Confirm the exact timestamp first, then:

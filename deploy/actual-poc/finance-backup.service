@@ -7,6 +7,10 @@ Type=oneshot
 ExecStart=/opt/stacks/finance-actual-poc/backup.sh
 User=root
 Group=root
+# Podman's conmon processes may remain in this unit's cgroup after `docker start`.
+# Supervise only the backup process; application containers are independent.
+KillMode=process
+TimeoutStopSec=30s
 
 [Install]
 WantedBy=multi-user.target

@@ -101,9 +101,9 @@ done
 
 tar -C "${payload}" -czf "${working}/finance-data.tar.gz" .
 rm -rf -- "${payload}"
-sha256sum "${working}/finance-data.tar.gz" > "${working}/SHA256SUMS"
 (
   cd "${working}"
+  sha256sum finance-data.tar.gz > SHA256SUMS
   sha256sum -c SHA256SUMS >/dev/null
 )
 cat > "${working}/manifest.json" <<EOF
