@@ -28,6 +28,19 @@ class MailIngestionTests(unittest.TestCase):
         self.assertEqual(plan.window_end, "2026-08-17T19:50:00+00:00")
         self.assertFalse(plan.initial_scan)
 
+    def test_per_bank_ingest_state_selects_an_independent_cursor_source(self):
+        plan = plan_outlook_scan(
+            self.config(),
+            {
+                "ingest_state": {
+                    "source": "outlook:rakbank",
+                    "cursor": "2026-08-14T23:50:00+04:00",
+                }
+            },
+            datetime.fromisoformat("2026-08-16T23:50:00+04:00"),
+        )
+        self.assertEqual(plan.source, "outlook:rakbank")
+
     def test_initial_scan_uses_configured_lookback(self):
         plan = plan_outlook_scan(
             self.config(),

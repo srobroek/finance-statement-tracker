@@ -208,13 +208,13 @@ python -m finance_tracker.cli cashback-dashboard `
   --output .\runtime\cashback-dashboard.json
 ```
 
-The Docker companion does not poll Actual for live routing. The twice-daily Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
+The Docker companion does not poll Actual for live routing. Each active bank has an independent morning Codex task and durable cursor. Valid notification events update the companion's buckets immediately; there is no browser approval step. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the notification-derived live state.
 
-The output contains card pace, current tier, bucket spend and headroom, routing mode, current payment recommendations, and review count. Late in a cycle, a card that is materially under pace is valued at its current tier instead of pretending an unreachable target tier will be achieved.
+The output contains card pace, current tier, bucket spend and headroom, routing mode, and current payment recommendations. Late in a cycle, a card that is materially under pace is valued at its current tier instead of pretending an unreachable target tier will be achieved.
 
 ## Scheduling
 
-- Live transaction notifications: ingest when available; these drive provisional cashback.
+- Live transaction notifications: ingest when available; these update current cashback buckets immediately.
 - Statement jobs: one schedule per card, based on that card's configured statement date.
 - Reconciliation: run only after the relevant statement arrives.
 - Cashback close: finalize only after that card statement is ingested and reconciled.
@@ -224,7 +224,8 @@ The confirmed card cycles are RAKBANK World and Standard Chartered Platinum X cl
 
 | Time (Asia/Dubai) | Task | Behaviour |
 |---|---|---|
-| 08:05 and 20:05 daily | RAKBANK transaction notification scan | Exact `Inbox/Rakbank` sender/subject contract; full durable-cursor gap plus overlap; provisional cashback only. |
+| 08:05 daily | RAKBANK notification scan | Exact `Inbox/Rakbank` sender/subject contract; independent `outlook:rakbank` cursor; updates live spend buckets before the day's routing decisions. |
+| 08:25 daily | Standard Chartered notification scan | Full placeholder prompt retained but task paused until its message contract and parser are verified. |
 | 20:00 on day 6 | RAKBANK World statement | Leaves the period open while its statement source/adapter remains a placeholder. |
 | 20:20 on day 6 | Standard Chartered Platinum X statement | Leaves the period open while its statement source/adapter remains a placeholder. |
 | 20:40 on day 1 | Emirates Islamic Amazon statement | Stage, AI handoff when requested, Actual preflight/commit, cashback reconciliation, and guarded finalization. |
@@ -236,14 +237,14 @@ Successful scheduled runs archive their own Codex task after all verification co
 
 ## Live Outlook notifications
 
-The twice-daily Luna max automation, scheduled at 08:05 and 20:05 in Asia/Dubai, searches only the explicit `ACTIVE` transaction contract. Currently that is `Inbox/Rakbank`, sender `alerts@rakbank.ae`, subject `An update on your Card transaction`. SC, EI, and Wio have dormant `PLACEHOLDER` recipes in the same configuration; ADCB OTP mail is `DISABLED`. A dormant recipe is not searched and cannot emit an event until a real message fixture, folder, sender, subject, parser, and tests allow it to be changed to `ACTIVE`. The task writes exact matching RAKBANK message objects into one envelope and submits it to the continuous companion:
+The active live automation runs with Luna/max. RAKBANK uses `Inbox/Rakbank`, sender `alerts@rakbank.ae`, and exact subject `An update on your Card transaction`. Standard Chartered retains a separate, fully specified but paused placeholder task. Emirates Islamic, ADCB, and Wio have no live source recipes. EI is shown as unlimited 6% Amazon cashback without live totals, minimums, caps, or bucket fill; its spend is refreshed only from the monthly statement. The active RAKBANK task writes exact bounded Outlook objects into its own envelope and submits them to the continuous companion:
 
 ```powershell
 .\scripts\push-outlook-messages.ps1 `
   -InputPath .\runtime\outlook-message-batch.json
 ```
 
-The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. This live task does not perform evidence discovery, the full budgeting classifier, or Actual import. Codex is not installed in the container and no container-side AI is assumed. Only after acknowledged persistence does the task commit the candidate cursor through the companion's ingest-run endpoint.
+The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. Valid notification events count immediately. Internal source/reconciliation markers remain solely to let a later statement replace or exclude notification rows safely; they are not an approval workflow and are not shown in the dashboard. Live tasks do not perform evidence discovery, the full budgeting classifier, or Actual import. Only after acknowledged persistence does each task commit its own candidate cursor through the companion's ingest-run endpoint.
 
 The live path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Refunds, reversals, card payments, receipts, bills, warranties, purchase evidence, reminders, and statements remain in the card-specific reconciliation/evidence pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
 
@@ -253,7 +254,7 @@ After statement normalization, every card-specific job performs a selective evid
 
 Because a statement may identify only the vendor, the job searches vendor aliases together with exact amount/currency and the posting date inside the configured buffer, adding card/account identity or an order/reference when available. It requires at least two strong facts and never accepts vendor similarity alone. A confirmed email is then used to extract the product or service description, order reference, model, serial number, warranty dates, and return deadline when present. Original attachments are preferred; a confirmed eligible email without one is rendered to a PDF or image snapshot. The result is hash-deduplicated under `Finance Evidence/YYYY/MM/vendor-slug/`, recorded in `Finance Evidence/catalogue.json`, and linked through the transaction evidence metadata. Ambiguous candidates remain unmatched and review-required.
 
-Production notification adapters currently support amount-bearing ADCB card-authorization emails and verified RAKBANK World transaction emails. An ADCB OTP proves an attempted authorization, not settlement, so it is stored with confidence below 0.8, `review_required=true`, and `PROVISIONAL` status. The RAKBANK adapter requires the registered sender, exact transaction subject, amount, currency, merchant, card suffix, and transaction day/month; same-subject activation messages fail closed. RAKBANK notification emails do not expose Apple Pay usage, so unresolved RAK_WORLD channels use the explicit profile default after merchant-specific channel rules. All notification events remain provisional until statement reconciliation. Standard Chartered and Emirates Islamic transaction adapters remain unavailable until representative notification formats exist.
+Production live notification parsing currently supports verified RAKBANK World purchase notifications only. The adapter requires the registered sender, exact transaction subject, amount, currency, merchant, card suffix, and transaction day/month; same-subject activation messages fail closed. RAKBANK notifications do not expose Apple Pay usage, so unresolved channels use the explicit profile default after merchant-specific rules. Emirates Islamic does not supply a usable purchase feed and is statement-only. Standard Chartered remains unavailable and paused until representative notification formats exist.
 
 ## Backup
 
@@ -268,7 +269,7 @@ systemctl status finance-health-monitor.timer finance-health-monitor.service
 journalctl -u finance-health-monitor.service --since today
 ```
 
-Cashback Control independently rebuilds the dashboard every minute. This makes weekly pace, close-window warnings, and feed age advance even when no purchase arrives. When the mailbox cursor is older than the configured stale threshold, the installed PWA receives one deduplicated `Cashback feed is stale` notification for that ingestion episode; a later successful cursor commit arms the next episode. Production should set the stale threshold above the normal twice-daily interval so expected quiet time does not alert.
+Cashback Control independently rebuilds the dashboard every minute. This makes weekly pace, close-window warnings, and feed age advance even when no purchase arrives. When the mailbox cursor is older than the configured stale threshold, the installed PWA receives one deduplicated `Cashback feed is stale` notification for that ingestion episode; a later successful cursor commit arms the next episode. Production uses a 26-hour stale threshold so the expected overnight interval and a modest scheduling delay do not create false alerts.
 
 ## Cloudflare Tunnel and SharedArrayBuffer
 

@@ -154,6 +154,12 @@
       "card": "EI_AMAZON",
       "name": "Emirates Islamic Amazon",
       "short_name": "EI Amazon",
+      "tracking": {
+        "mode": "STATEMENT_ONLY",
+        "position_mode": "UNLIMITED",
+        "headline": "Unlimited",
+        "detail": "6% Amazon cashback · statement only"
+      },
       "programme_version": "confirmed-2026-08-v1",
       "effective_start": "2026-08-01",
       "effective_end": null,

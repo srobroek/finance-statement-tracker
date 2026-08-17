@@ -7,6 +7,7 @@ from typing import Iterable
 
 
 SOURCE_STATUSES = frozenset({"ACTIVE", "DISABLED", "PLACEHOLDER"})
+SUBJECT_MATCH_MODES = frozenset({"EXACT", "PREFIX"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +21,7 @@ class NotificationSource:
     mail_folder: str | None
     senders: tuple[str, ...]
     subjects: tuple[str, ...]
+    subject_match: str
     notes: str
 
     @property
@@ -63,6 +65,11 @@ def load_notification_sources(path: Path) -> tuple[NotificationSource, ...]:
         mail_folder = str(row.get("mail_folder") or "").strip() or None
         senders = _strings(row.get("senders"), "senders", code)
         subjects = _strings(row.get("subjects"), "subjects", code)
+        subject_match = str(row.get("subject_match") or "EXACT").strip().upper()
+        if subject_match not in SUBJECT_MATCH_MODES:
+            raise ValueError(
+                f"Notification source {code} subject_match must be one of {sorted(SUBJECT_MATCH_MODES)}"
+            )
         if not institution or not card_code or not semantics:
             raise ValueError(f"Notification source {code} requires institution, card_code, and evidence_semantics")
         if status == "ACTIVE" and (not adapter or not mail_folder or not senders or not subjects):
@@ -84,6 +91,7 @@ def load_notification_sources(path: Path) -> tuple[NotificationSource, ...]:
                 mail_folder=mail_folder,
                 senders=senders,
                 subjects=subjects,
+                subject_match=subject_match,
                 notes=str(row.get("notes") or "").strip(),
             )
         )

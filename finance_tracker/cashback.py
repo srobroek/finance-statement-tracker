@@ -144,6 +144,10 @@ class CardProgram:
     routing_priority: int = 100
     exclusions: tuple[str, ...] = ()
     short_name: str | None = None
+    tracking_mode: str = "LIVE"
+    position_mode: str = "SPEND"
+    position_headline: str | None = None
+    position_detail: str | None = None
     pace_policy: PacePolicy = PacePolicy()
     alert_policy: AlertPolicy = AlertPolicy()
     base_currency: str = "AED"
@@ -847,6 +851,15 @@ def programs_from_config(
             raise ValueError(f"Cashback program {item.get('card')} must define tiers and buckets")
         pace = _merged_policy(source, item, "pace")
         alerts = _merged_policy(source, item, "alerts")
+        tracking = item.get("tracking") or {}
+        if not isinstance(tracking, dict):
+            raise ValueError(f"Cashback program {item.get('card')} tracking must be an object")
+        tracking_mode = str(tracking.get("mode") or "LIVE").upper()
+        position_mode = str(tracking.get("position_mode") or "SPEND").upper()
+        if tracking_mode not in {"LIVE", "STATEMENT_ONLY"}:
+            raise ValueError(f"Cashback program {item.get('card')} has invalid tracking mode")
+        if position_mode not in {"SPEND", "UNLIMITED"}:
+            raise ValueError(f"Cashback program {item.get('card')} has invalid position mode")
         programs.append(
             CardProgram(
                 card=str(item["card"]),
@@ -875,6 +888,10 @@ def programs_from_config(
                 routing_priority=int(item.get("routing_priority", 100)),
                 exclusions=tuple(str(value) for value in item.get("exclusions", [])),
                 short_name=str(item.get("short_name") or item["name"]),
+                tracking_mode=tracking_mode,
+                position_mode=position_mode,
+                position_headline=str(tracking.get("headline") or "") or None,
+                position_detail=str(tracking.get("detail") or "") or None,
                 pace_policy=PacePolicy(
                     basis=str(pace.get("basis") or "WEEKLY").upper(),
                     routing_basis=str(pace.get("routing_basis") or "CYCLE").upper(),

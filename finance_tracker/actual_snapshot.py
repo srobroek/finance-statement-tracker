@@ -281,6 +281,10 @@ def cashback_dashboard(
             "card": program.card,
             "name": program.name,
             "short_name": program.short_name or program.name,
+            "tracking_mode": program.tracking_mode,
+            "position_mode": program.position_mode,
+            "position_headline": program.position_headline,
+            "position_detail": program.position_detail,
             "programme_version": program.programme_version,
             "effective_start": None if program.effective_start is None else program.effective_start.isoformat(),
             "effective_end": None if program.effective_end is None else program.effective_end.isoformat(),
@@ -314,10 +318,10 @@ def cashback_dashboard(
             ],
             "routing_mode": routing_mode,
             "pace": pace,
-            "provisional_event_count": sum(
+            "notification_event_count": sum(
                 row.metadata.get("cashback_status") == "PROVISIONAL" for row in card_transactions
             ),
-            "confirmed_event_count": sum(
+            "statement_matched_event_count": sum(
                 row.metadata.get("cashback_status") == "CONFIRMED" for row in card_transactions
             ),
             "refund_effect_aed": _plain(
@@ -470,6 +474,8 @@ def cashback_dashboard(
                 "pace_status": pace_status_value,
                 "strategy_rank": strategy_rank,
                 "condition": condition,
+                "tracking_mode": program.tracking_mode,
+                "position_mode": program.position_mode,
                 "tier_before": candidate.tier_before,
                 "tier_after": candidate.tier_after,
                 "target_tier": candidate.target_tier,
@@ -529,5 +535,4 @@ def cashback_dashboard(
         "recommendations": recommendations,
         "routing_graphs": routing_graphs,
         "alerts": alerts,
-        "review_count": sum(row.review_required for row in rows),
     }

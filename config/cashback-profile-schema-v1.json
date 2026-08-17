@@ -190,6 +190,16 @@
         "card": {"type": "string", "minLength": 1},
         "name": {"type": "string", "minLength": 1},
         "short_name": {"type": "string"},
+        "tracking": {
+          "type": "object",
+          "properties": {
+            "mode": {"enum": ["LIVE", "STATEMENT_ONLY"]},
+            "position_mode": {"enum": ["SPEND", "UNLIMITED"]},
+            "headline": {"type": "string"},
+            "detail": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
         "programme_version": {"type": "string"},
         "effective_start": {"type": ["string", "null"], "format": "date"},
         "effective_end": {"type": ["string", "null"], "format": "date"},

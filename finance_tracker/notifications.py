@@ -184,6 +184,7 @@ class RakbankCardTransactionNotificationAdapter:
             requires_review=False,
         )
 
+
 DEFAULT_NOTIFICATION_ADAPTERS: tuple[NotificationAdapter, ...] = (
     ADCBOTPNotificationAdapter(),
     RakbankCardTransactionNotificationAdapter(),
@@ -247,10 +248,10 @@ def parse_outlook_notifications(
             amount_original=fact.amount,
             currency=fact.currency,
             channel=fact.channel,
-            source_type="OUTLOOK_CARD_AUTHORIZATION",
+            source_type="OUTLOOK_CARD_NOTIFICATION",
             source_message_id=message_id,
             review_required=fact.requires_review,
-            tags={"authorization-notification"},
+            tags={"card-notification", "purchase"},
             metadata={"notification_adapter": fact.adapter},
         )
         if transaction.channel == "UNKNOWN":

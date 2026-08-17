@@ -17,12 +17,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class CashbackServerTests(unittest.TestCase):
-    def test_browser_review_uses_narrow_same_origin_approval_endpoint(self) -> None:
+    def test_browser_has_no_live_transaction_approval_workflow(self) -> None:
         source = (ROOT / "apps" / "cashback-control" / "web" / "app.js").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('fetch("/api/review-approvals"', source)
+        self.assertNotIn("review-approvals", source)
+        self.assertNotIn("review-queue", source)
+        self.assertNotIn("provisional", source.casefold())
         self.assertNotIn('fetch("/api/corrections"', source)
 
     def test_health_and_ingest_authorization(self) -> None:
@@ -189,62 +191,7 @@ class CashbackServerTests(unittest.TestCase):
                     outlook["parse"]["events"][0]["purchase_type"],
                     "GENERAL",
                 )
-                review_queue = post("review-queue", {"limit": 20})
-                self.assertIn(
-                    "api-test:1",
-                    {event["source_event_id"] for event in review_queue["events"]},
-                )
-
-                def public_post(endpoint: str, value: dict[str, object], origin: str | None = None):
-                    headers = {"Content-Type": "application/json"}
-                    if origin is not None:
-                        headers["Origin"] = origin
-                    public_request = urllib.request.Request(
-                        f"http://127.0.0.1:{port}/api/{endpoint}",
-                        data=json.dumps(value).encode("utf-8"),
-                        headers=headers,
-                        method="POST",
-                    )
-                    return urllib.request.urlopen(public_request, timeout=5)
-
-                with self.assertRaises(urllib.error.HTTPError) as missing_origin:
-                    public_post("review-queue", {"limit": 20})
-                self.assertEqual(missing_origin.exception.code, 403)
-
-                with self.assertRaises(urllib.error.HTTPError) as wrong_origin:
-                    public_post("review-queue", {"limit": 20}, "https://attacker.example")
-                self.assertEqual(wrong_origin.exception.code, 403)
-
                 public_origin = f"http://127.0.0.1:{port}"
-                with public_post("review-queue", {"limit": 20}, public_origin) as response:
-                    browser_queue = json.loads(response.read())
-                self.assertEqual(browser_queue["event_count"], 1)
-
-                with self.assertRaises(urllib.error.HTTPError) as overbroad_approval:
-                    public_post(
-                        "review-approvals",
-                        {
-                            "source_event_id": "api-test:1",
-                            "changes": {"amount_aed": "0"},
-                        },
-                        public_origin,
-                    )
-                self.assertEqual(overbroad_approval.exception.code, 400)
-
-                with public_post(
-                    "review-approvals",
-                    {"source_event_id": "api-test:1"},
-                    public_origin,
-                ) as response:
-                    approval = json.loads(response.read())
-                self.assertEqual(
-                    approval["approval"]["source_event_id"],
-                    "api-test:1",
-                )
-                with public_post("review-queue", {"limit": 20}, public_origin) as response:
-                    empty_queue = json.loads(response.read())
-                self.assertEqual(empty_queue["event_count"], 0)
-
                 unauthenticated_correction = urllib.request.Request(
                     f"http://127.0.0.1:{port}/api/corrections",
                     data=json.dumps({
@@ -281,7 +228,7 @@ class CashbackServerTests(unittest.TestCase):
                 ) as response:
                     dashboard = json.loads(response.read())
                 self.assertEqual(dashboard["data_status"]["event_count"], 3)
-                self.assertEqual(dashboard["data_status"]["correction_count"], 2)
+                self.assertEqual(dashboard["data_status"]["correction_count"], 1)
                 self.assertIn(
                     "FINALIZED",
                     {period["status"] for period in dashboard["data_status"]["card_periods"]},

@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InputPath,
     [Parameter(Mandatory = $true)]
-    [ValidateSet('events', 'events/validate', 'ingest-runs', 'ingest-state', 'outlook/messages', 'review-queue', 'reconcile', 'corrections', 'periods/finalize')]
+    [ValidateSet('events', 'events/validate', 'ingest-runs', 'ingest-state', 'outlook/messages', 'reconcile', 'corrections', 'periods/finalize')]
     [string]$Endpoint,
     [string]$DeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.json'),
     [string]$DockerHost,

@@ -19,7 +19,6 @@ def main() -> int:
             "ingest-runs",
             "ingest-state",
             "outlook/messages",
-            "review-queue",
             "reconcile",
             "corrections",
             "periods/finalize",

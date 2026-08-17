@@ -74,10 +74,10 @@ class DeploymentScriptTests(unittest.TestCase):
             self.assertIn("$RUNNER_TEMP/finance-deploy-", deploy)
             self.assertIn('cd "$DEPLOY_SOURCE"', deploy)
 
-    def test_cashback_stale_window_allows_twice_daily_ingestion(self) -> None:
+    def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
 
-        self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "780"', compose)
+        self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
 
 
 if __name__ == "__main__":

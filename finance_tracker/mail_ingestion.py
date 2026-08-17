@@ -39,13 +39,13 @@ def plan_outlook_scan(
     outlook = ingestion_config.get("outlook")
     if not isinstance(outlook, dict):
         raise ValueError("ingestion config requires outlook")
-    source = str(outlook.get("cursor_source") or "outlook").strip()
+    state = ingest_state.get("ingest_state") if isinstance(ingest_state.get("ingest_state"), dict) else ingest_state
+    source = str(state.get("source") or outlook.get("cursor_source") or "outlook").strip()
     overlap_hours = int(outlook.get("scan_overlap_hours") or 0)
     initial_hours = int(outlook.get("initial_lookback_hours") or 0)
     if overlap_hours < 0 or initial_hours <= 0:
         raise ValueError("Outlook overlap must be non-negative and initial lookback must be positive")
 
-    state = ingest_state.get("ingest_state") if isinstance(ingest_state.get("ingest_state"), dict) else ingest_state
     cursor_text = str(state.get("cursor") or "").strip() or None
     if cursor_text:
         cursor = _datetime(cursor_text, "ingest cursor")

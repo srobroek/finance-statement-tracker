@@ -47,7 +47,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(rak["total_spend_aed"], "245.5")
             self.assertEqual(grocery["spend_aed"], "245.5")
             self.assertEqual(dashboard["data_status"]["event_count"], 1)
-            self.assertEqual(dashboard["data_status"]["provisional_count"], 1)
+            self.assertEqual(dashboard["data_status"]["live_event_count"], 1)
 
     def test_different_source_ids_with_same_normalized_identity_are_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -166,7 +166,7 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             dashboard = build_live_dashboard(store, date(2026, 8, 16))
 
-            self.assertEqual(dashboard["review_count"], 1)
+            self.assertNotIn("review_count", dashboard)
 
     def test_general_purchase_with_explicit_classification_does_not_require_review(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -185,7 +185,7 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             dashboard = build_live_dashboard(store, date(2026, 8, 16))
 
-            self.assertEqual(dashboard["review_count"], 0)
+            self.assertNotIn("review_count", dashboard)
             self.assertEqual(store.review_queue(20), [])
 
             store.correct_event({
@@ -297,7 +297,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             rak = next(card for card in dashboard["cards"] if card["card"] == "RAK_WORLD")
             grocery = next(bucket for bucket in rak["buckets"] if bucket["code"] == "RAK_GROCERY")
             self.assertEqual(grocery["spend_aed"], "120")
-            self.assertEqual(dashboard["review_count"], 0)
+            self.assertNotIn("review_count", dashboard)
             self.assertEqual(dashboard["data_status"]["correction_count"], 1)
             self.assertFalse(store.review_queue(20))
             stored = store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]
@@ -354,8 +354,8 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertIn("minimum:RAK_WORLD:2026-08-06:2026-09-05", keys)
             self.assertIn("bucket:RAK_WORLD:RAK_GROCERY:near_full", keys)
             rak = next(card for card in dashboard["cards"] if card["card"] == "RAK_WORLD")
-            self.assertEqual(rak["provisional_event_count"], 1)
-            self.assertEqual(rak["confirmed_event_count"], 0)
+            self.assertEqual(rak["notification_event_count"], 1)
+            self.assertEqual(rak["statement_matched_event_count"], 0)
 
     def test_unmet_card_targets_warn_during_the_final_week(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

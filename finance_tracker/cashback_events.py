@@ -209,7 +209,7 @@ def _event_polarity(value: object) -> str:
 
 
 class CashbackEventStore:
-    """Small operational store for provisional reward events, not a finance ledger."""
+    """Small operational store for live reward events, not a finance ledger."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -943,7 +943,7 @@ class CashbackEventStore:
             row = connection.execute(
                 """
                 SELECT COUNT(*) AS event_count, MAX(occurred_at) AS last_event_at,
-                       SUM(CASE WHEN status = 'PROVISIONAL' THEN 1 ELSE 0 END) AS provisional_count,
+                       SUM(CASE WHEN status IN ('PROVISIONAL', 'CONFIRMED') THEN 1 ELSE 0 END) AS live_event_count,
                        SUM(CASE WHEN reconciliation_status = 'VARIANCE' THEN 1 ELSE 0 END) AS variance_count
                 FROM cashback_events
                 """
@@ -960,7 +960,7 @@ class CashbackEventStore:
                 "SELECT COUNT(*) AS count FROM event_corrections"
             ).fetchone()["count"]
         result = dict(row)
-        result["provisional_count"] = result["provisional_count"] or 0
+        result["live_event_count"] = result["live_event_count"] or 0
         result["variance_count"] = result["variance_count"] or 0
         result["last_successful_ingest_at"] = ingest["last_success_at"] if ingest else None
         result["last_ingest_source"] = ingest["source"] if ingest else None
@@ -1066,7 +1066,7 @@ def build_live_dashboard(
         age_seconds = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
         stale = age_seconds > stale_after_minutes * 60
     result["data_status"] = {
-        "mode": "PROVISIONAL_LIVE_EVENTS",
+        "mode": "LIVE_TRANSACTION_EVENTS",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "stale_after_minutes": stale_after_minutes,
         "is_stale": stale,

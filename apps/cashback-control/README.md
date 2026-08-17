@@ -1,6 +1,6 @@
 # Cashback Control companion
 
-This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The twice-daily Outlook job submits exact regular-transaction messages from explicitly configured folders, senders, and subjects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
+This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. Each active bank has an independent morning Outlook task, cursor, and retry envelope. The app parses supported formats, applies static rules, deduplicates live reward events, persists them, updates buckets immediately, and rebuilds the dashboard.
 
 Run from the repository root:
 
@@ -45,8 +45,7 @@ Submit one event or a list to `POST /api/events`. Use the configured bearer toke
   "purchase_type": "DINING",
   "channel": "ONLINE",
   "merchant": "Example Restaurant",
-  "source": "outlook",
-  "status": "PROVISIONAL"
+  "source": "outlook"
 }
 ```
 
@@ -62,10 +61,6 @@ The scheduled Codex worker does not need that secret. It sends its raw Outlook e
 
 The tracked `config/deployment.json` is an environment-neutral example. Put host-specific values in ignored `config/deployment.local.json`, or set `FINANCE_DEPLOYMENT_CONFIG`, `FINANCE_DOCKER_HOST`, and `FINANCE_CASHBACK_CONTAINER`. Helper scripts contain no host literals.
 
-The SQLite sidecar contains only provisional cashback events and their operational status. It exists for live routing, idempotency, refunds, corrections, review state, and statement reconciliation. Actual remains the authoritative financial ledger. At statement close, the reconciliation job confirms, reverses, or ignores provisional events and imports the statement into Actual.
-
-## Browser review approvals
-
-The dashboard reads review-required events from `POST /api/review-queue` and approves the current deterministic classification through `POST /api/review-approvals`. Both endpoints require a same-origin JSON request matching `CASHBACK_PUBLIC_URL`. An approval accepts only `source_event_id` and can only clear `review_required`; it cannot change amounts, categories, buckets, cards, source identities, reconciliation state, or Actual data.
+The SQLite sidecar contains live cashback events and their internal reconciliation state. Valid notifications count in buckets immediately; there is no browser approval step. Actual remains the authoritative financial ledger. At statement close, the reconciliation job matches, replaces, reverses, or excludes notification events and imports the statement into Actual.
 
 General corrections remain restricted to `POST /api/corrections` with the ingest bearer token. The browser never receives or stores that token.

@@ -3,9 +3,20 @@
   "outlook": {
     "cursor_source": "outlook",
     "schedule": {
-      "cadence": "HOURLY",
+      "cadence": "DAILY_MORNING_PER_ACTIVE_BANK",
       "timezone": "Asia/Dubai",
-      "minute": 5
+      "active_bank_slots": [
+        {
+          "source": "outlook:rakbank",
+          "times": ["08:05"]
+        }
+      ],
+      "paused_bank_slots": [
+        {
+          "source": "outlook:standard-chartered",
+          "times": ["08:25"]
+        }
+      ]
     },
     "scan_overlap_hours": 2,
     "initial_lookback_hours": 24,

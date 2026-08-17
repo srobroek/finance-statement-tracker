@@ -24,10 +24,9 @@ class NotificationSourceTests(unittest.TestCase):
             [source.code for source in active],
             ["RAKBANK_CARD_TRANSACTION"],
         )
-        self.assertEqual([source.code for source in disabled], ["ADCB_CARD_OTP"])
+        self.assertEqual(disabled, [])
         self.assertEqual(active[0].mail_folder, "Inbox/Rakbank")
-        self.assertEqual(len(placeholders), 3)
-        self.assertIn("WIO_CARD_TRANSACTION", {source.code for source in placeholders})
+        self.assertEqual([source.code for source in placeholders], ["STANDARD_CHARTERED_CARD_TRANSACTION"])
         for source in placeholders:
             with self.subTest(source=source.code):
                 self.assertIsNone(source.adapter)
@@ -62,12 +61,10 @@ class NotificationSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not implemented"):
             validate_notification_adapter_coverage(sources, ())
 
-    def test_disabled_verified_adapter_does_not_participate_in_live_scan(self) -> None:
+    def test_only_registered_live_adapters_participate_in_live_scan(self) -> None:
         sources = load_notification_sources(Path("config/transaction-email-sources.json"))
-        adcb = next(source for source in sources if source.code == "ADCB_CARD_OTP")
-
-        self.assertFalse(adcb.active)
-        self.assertEqual(adcb.adapter, "adcb_card_otp_v1")
+        self.assertNotIn("ADCB_CARD_OTP", {source.code for source in sources})
+        self.assertNotIn("WIO_CARD_TRANSACTION", {source.code for source in sources})
         validate_notification_adapter_coverage(
             sources,
             (adapter.code for adapter in DEFAULT_NOTIFICATION_ADAPTERS),

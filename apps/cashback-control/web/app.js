@@ -67,6 +67,9 @@ function typeLabel(item) {
 
 function compactReason(item) {
   const preferred = item.ranked_cards?.[0];
+  if (preferred?.position_mode === "UNLIMITED") {
+    return `${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% cashback · unlimited · statement only`;
+  }
   if (preferred?.purpose === "THRESHOLD_FILLER" && Number(preferred.target_rate_percent) === 0) {
     return `Tier filler · ${compactMoney(preferred.card_target_remaining_aed)} remaining · no direct cashback`;
   }
@@ -106,6 +109,9 @@ function treeSwitchReason(candidate) {
 
 function candidateValueLabel(candidate) {
   const bucketRate = Number(candidate.target_rate_percent);
+  if (candidate.position_mode === "UNLIMITED") {
+    return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% cashback · unlimited`;
+  }
   if (candidate.purpose === "THRESHOLD_FILLER" && bucketRate === 0) {
     return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} left · 0% direct`;
   }
@@ -173,10 +179,14 @@ function renderDecisionTree(items) {
       const remaining = candidate.bucket_remaining_aed == null ? null : Number(candidate.bucket_remaining_aed);
       const threshold = Number(candidate.tier_threshold_aed);
       const method = shortPaymentMethod(candidate.payment_channel);
-      const bucketText = cap == null
+      const bucketText = candidate.position_mode === "UNLIMITED"
+        ? `${method} · unlimited cashback · no cap`
+        : cap == null
         ? `${method} · ${bucketLabel(candidate.bucket)} · ${compactMoney(candidate.bucket_spend_aed)} · uncapped`
         : `${method} · ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)}/${compactMoney(cap)} · ${compactMoney(remaining)} left`;
-      const tierText = threshold > 0
+      const tierText = candidate.position_mode === "UNLIMITED"
+        ? "No minimum spend · statement-only totals"
+        : threshold > 0
         ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(threshold)} · ${compactMoney(candidate.tier_remaining_aed)} to tier`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
       const switchText = treeSwitchReason(candidate);
@@ -311,6 +321,23 @@ function renderCards(cards) {
   const root = document.querySelector("#cards");
   root.replaceChildren(
     ...cards.map((card) => {
+      if (card.position_mode === "UNLIMITED") {
+        const node = document.createElement("article");
+        node.className = "position-card unlimited-position-card";
+        node.innerHTML = `
+          <div class="position-card-header">
+            <div class="position-summary-copy">
+              <strong title="${card.name}">${card.short_name || card.name}</strong>
+              <span>${card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : "Open"}</span>
+            </div>
+            <div class="position-total unlimited-position">
+              <strong>${card.position_headline || "Unlimited"}</strong>
+              <span>${card.position_detail || "No minimum or cap"}</span>
+            </div>
+          </div>
+        `;
+        return node;
+      }
       const target = Number(card.safety_target_aed || card.total_spend_aed || 1);
       const actual = Number(card.total_spend_aed);
       const percentage = Math.max(0, Math.min(100, (actual / target) * 100));
@@ -343,7 +370,7 @@ function renderCards(cards) {
         </div>
         ${tierPosition.ladder || `<div class="track primary"><i style="width:${percentage}%"></i></div>`}
         <div class="bucket-list">${buckets}</div>
-        <div class="source-state"><span>${card.provisional_event_count || 0} provisional</span><span>${card.confirmed_event_count || 0} confirmed</span>${Number(card.refund_effect_aed || 0) ? `<span>${money.format(card.refund_effect_aed)} refunded</span>` : ""}</div>
+        ${Number(card.refund_effect_aed || 0) ? `<div class="source-state"><span>${money.format(card.refund_effect_aed)} refunded this cycle</span></div>` : ""}
       `;
       return node;
     }),
@@ -411,9 +438,6 @@ function renderAttention(payload) {
   if (payload.data_status?.is_stale) {
     alerts.push({ key: "feed:stale", title: "Live feed is stale", detail: `No successful ingest recorded within ${payload.data_status.stale_after_minutes} minutes. Recommendations may be incomplete.` });
   }
-  if (payload.review_count) {
-    alerts.push({ key: "review:transactions", title: `${payload.review_count} transaction${payload.review_count === 1 ? " needs" : "s need"} review`, detail: "Classification or evidence is incomplete and may affect bucket totals." });
-  }
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
     alerts.push({ key: "reconciliation:variance", title: `${count} statement variance${count === 1 ? "" : "s"}`, detail: "Notification events did not match the authoritative statement and were excluded from cashback totals." });
@@ -432,11 +456,9 @@ function renderAttention(payload) {
       node.innerHTML = `
         <div class="alert-copy"><strong>${alert.title}</strong><span>${alert.detail}</span></div>
         <div class="alert-actions">
-          ${alert.key === "review:transactions" && !checked ? '<button class="review-open" type="button">Review</button>' : ""}
           <label class="alert-toggle"><input type="checkbox" ${checked ? "checked" : ""}>${checked ? "Hidden" : "Hide"}</label>
         </div>
       `;
-      node.querySelector(".review-open")?.addEventListener("click", openReviewQueue);
       node.querySelector("input").addEventListener("change", async (event) => {
         event.currentTarget.disabled = true;
         try {
@@ -457,91 +479,6 @@ function renderAttention(payload) {
     disclosure.append(...hidden.map((alert) => alertNode(alert, true)));
     root.append(disclosure);
   }
-}
-
-function reviewEventCard(event) {
-  const node = document.createElement("article");
-  node.className = "review-event";
-  const occurred = new Date(event.occurred_at).toLocaleDateString([], { day: "numeric", month: "short" });
-  node.innerHTML = `
-    <div class="review-event-copy">
-      <strong></strong>
-      <span></span>
-      <small></small>
-    </div>
-    <button type="button">Approve</button>
-  `;
-  node.querySelector("strong").textContent = event.merchant;
-  node.querySelector("span").textContent = `${event.currency} ${Number(event.amount_aed).toLocaleString(undefined, { maximumFractionDigits: 2 })} · ${compactCardLabel(event.card_code)}`;
-  node.querySelector("small").textContent = `${occurred} · ${typeLabel(event)} · ${shortPaymentMethod(event.channel) || "Channel unknown"}`;
-  const button = node.querySelector("button");
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    button.textContent = "Saving…";
-    try {
-      const response = await fetch("/api/review-approvals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source_event_id: event.source_event_id,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Could not approve transaction.");
-      await loadReviewQueue();
-      await loadDashboard();
-    } catch (error) {
-      button.disabled = false;
-      button.textContent = "Retry";
-      button.title = error.message;
-    }
-  });
-  return node;
-}
-
-async function loadReviewQueue() {
-  const root = document.querySelector("#review-events");
-  const response = await fetch("/api/review-queue", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ limit: 50 }),
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "Could not load transactions.");
-  root.replaceChildren(
-    ...(payload.events || []).map(reviewEventCard),
-  );
-  if (!payload.event_count) {
-    const empty = document.createElement("p");
-    empty.className = "review-empty";
-    empty.textContent = "Nothing needs review.";
-    root.append(empty);
-  }
-  return payload;
-}
-
-async function openReviewQueue() {
-  const dialog = document.querySelector("#review-dialog");
-  const root = document.querySelector("#review-events");
-  root.innerHTML = '<p class="review-empty">Loading…</p>';
-  dialog.showModal();
-  try {
-    await loadReviewQueue();
-  } catch (error) {
-    root.innerHTML = "";
-    const problem = document.createElement("p");
-    problem.className = "review-error";
-    problem.textContent = error.message;
-    root.append(problem);
-  }
-}
-
-function setupReviewDialog() {
-  const dialog = document.querySelector("#review-dialog");
-  dialog.querySelector(".review-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
-  });
 }
 
 async function setAlertAcknowledgement(alertKey, acknowledged) {
@@ -588,7 +525,6 @@ async function loadDashboard() {
 
 setupRoutingViews();
 setupScreenViews();
-setupReviewDialog();
 setupPushNotifications();
 loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");
