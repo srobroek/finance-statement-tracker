@@ -126,6 +126,7 @@ jobs:
           stack=/opt/stacks/finance-ingestion
           state=/opt/stacks/finance-actual-poc/ingestion-data
           sudo install -d "$stack"
+          sudo install -d -o 10002 -g 10002 -m 0700 "$stack/secrets"
           sudo install -d -o 10002 -g 10002 \
             "$state" \
             "$state/inbox" \

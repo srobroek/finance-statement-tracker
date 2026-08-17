@@ -1,13 +1,16 @@
 import json
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 
 from finance_tracker.actual_pipeline import (
     account_maps,
     build_actual_statement_run,
     load_compiled_rules,
+    runtime_secret,
 )
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
 from finance_tracker.cashback import PaymentIntent, poc_programs
@@ -16,6 +19,22 @@ from finance_tracker.statements import parse_statement_text
 
 
 class ActualStatementPipelineTests(TestCase):
+    def test_runtime_secret_file_takes_precedence_over_environment(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as temporary:
+            secret_path = Path(temporary) / "statement-password"
+            secret_path.write_text("file-secret\n", encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {
+                    "BANK_PASSWORD": "legacy-secret",
+                    "BANK_PASSWORD_FILE": str(secret_path),
+                },
+                clear=False,
+            ):
+                self.assertEqual(runtime_secret("BANK_PASSWORD"), "file-secret")
+
     def cashback_config(self) -> dict[str, object]:
         return json.loads(Path("config/cashback-programs.json").read_text(encoding="utf-8"))
 

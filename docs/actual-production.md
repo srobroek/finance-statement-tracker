@@ -49,6 +49,13 @@ The bridge reads these process environment variables:
 
 Statement decryption uses `STATEMENT_PASSWORD` by default. Passwords are never command-line arguments, run-manifest fields, or Git configuration.
 
+Production bank passwords use read-only files under
+`/opt/stacks/finance-ingestion/secrets/`. The worker receives only the
+corresponding `<NAME>_FILE` path (for example
+`EI_STATEMENT_PASSWORD_FILE`), and file-backed values take precedence over
+legacy direct environment variables. Secret files must be owned by UID/GID
+`10002`, mode `0400`, and must never be committed or copied into job payloads.
+
 The Docker host has 1Password CLI 2.34.1 and Bellwether uses a service account
 to render committed `op://` templates into a mode-600 runtime env file before
 `docker compose up -d`. The service account currently has access only to the

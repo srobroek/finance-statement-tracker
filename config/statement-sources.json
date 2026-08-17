@@ -6,30 +6,33 @@
       "institution": "ADCB",
       "adapter_status": "ACTIVE",
       "adapter": "adcb_v1",
-      "email_status": "PLACEHOLDER",
-      "email_senders": [],
-      "email_subjects": [],
-      "notes": "PDF parser and browser export are tested. Capture the real statement email sender and subject before activating mailbox acquisition."
+      "password_env": "ADCB_STATEMENT_PASSWORD",
+      "email_status": "ACTIVE",
+      "email_senders": ["estatement@adcb.com"],
+      "email_subjects": ["ADCB Credit card e-Statement"],
+      "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
     },
     {
       "card_code": "EI_AMAZON",
       "institution": "Emirates Islamic",
       "adapter_status": "ACTIVE",
       "adapter": "emirates_islamic_v1",
-      "email_status": "PLACEHOLDER",
-      "email_senders": [],
-      "email_subjects": [],
-      "notes": "PDF parser is tested. Capture and verify the production mailbox filter before activating email acquisition."
+      "password_env": "EI_STATEMENT_PASSWORD",
+      "email_status": "ACTIVE",
+      "email_senders": ["estatement@emiratesislamic.ae"],
+      "email_subjects": ["Statement of your Emirates Islamic Credit Card"],
+      "notes": "PDF parser and recurring production mailbox contract are verified."
     },
     {
       "card_code": "WIO_CREDIT",
       "institution": "Wio",
       "adapter_status": "ACTIVE",
       "adapter": "wio_credit_v1",
-      "email_status": "PLACEHOLDER",
-      "email_senders": [],
-      "email_subjects": [],
-      "notes": "PDF parser is tested. Account mapping and mailbox filter remain deployment-specific."
+      "password_env": null,
+      "email_status": "ACTIVE",
+      "email_senders": ["communications@email.wio.io"],
+      "email_subjects": ["Your Wio Credit statement for this month"],
+      "notes": "PDF parser and recurring production mailbox contract are verified. Account mapping remains deployment-specific."
     },
     {
       "card_code": "RAK_WORLD",

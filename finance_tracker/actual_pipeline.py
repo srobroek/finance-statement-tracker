@@ -276,6 +276,25 @@ def build_actual_statement_run(
     )
 
 
+def runtime_secret(name: str) -> str | None:
+    """Resolve a runtime secret without placing its value in job payloads.
+
+    ``<NAME>_FILE`` takes precedence over the legacy direct environment
+    variable. Containers should mount a read-only secret file and set only the
+    file path in their environment.
+    """
+    secret_path = os.environ.get(f"{name}_FILE")
+    if secret_path:
+        path = Path(secret_path)
+        if not path.is_file():
+            raise ValueError(f"Runtime secret file for {name} does not exist")
+        value = path.read_text(encoding="utf-8").strip()
+        if not value:
+            raise ValueError(f"Runtime secret file for {name} is empty")
+        return value
+    return os.environ.get(name)
+
+
 def export_statement_for_actual(
     pdf_path: str | Path,
     config_path: str | Path,
@@ -294,7 +313,7 @@ def export_statement_for_actual(
     """Create a durable run manifest without logging or persisting the PDF password."""
     statement = parse_statement_pdf(
         pdf_path,
-        password=os.environ.get(password_env),
+        password=runtime_secret(password_env),
         adapter_code=adapter_code,
     )
     if not statement.balance_tied and not allow_unbalanced:
