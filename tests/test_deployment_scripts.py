@@ -60,6 +60,20 @@ class DeploymentScriptTests(unittest.TestCase):
         service = Path("deploy/finance-monitor/finance-health-monitor.service").read_text(encoding="utf-8")
         self.assertIn("KillMode=process", service)
 
+    def test_self_hosted_deploys_fetch_exact_sha_without_checkout_action(self) -> None:
+        for path in (
+            Path(".github/workflows/actual-ingestion-image.yml"),
+            Path(".github/workflows/cashback-image.yml"),
+        ):
+            workflow = path.read_text(encoding="utf-8")
+            deploy = workflow.split("\n  deploy:\n", 1)[1]
+            self.assertNotIn("uses: actions/checkout", deploy)
+            self.assertIn("Fetch exact deployment source", deploy)
+            self.assertIn('fetch --no-tags --depth 1 origin "$GITHUB_SHA"', deploy)
+            self.assertIn('test "$(git -C "$source_dir" rev-parse HEAD)" = "$GITHUB_SHA"', deploy)
+            self.assertIn("$RUNNER_TEMP/finance-deploy-", deploy)
+            self.assertIn('cd "$DEPLOY_SOURCE"', deploy)
+
 
 if __name__ == "__main__":
     unittest.main()

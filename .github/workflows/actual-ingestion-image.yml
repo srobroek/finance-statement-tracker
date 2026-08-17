@@ -121,13 +121,33 @@ jobs:
       - self-hosted
       - finance-ci
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
+      - name: Fetch exact deployment source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          source_dir="$RUNNER_TEMP/finance-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$source_dir" in
+            "$RUNNER_TEMP"/finance-deploy-*) ;;
+            *) echo "Unsafe deployment source path: $source_dir" >&2; exit 1 ;;
+          esac
+          rm -rf -- "$source_dir"
+          install -d "$source_dir"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -C "$source_dir" init -q
+          git -C "$source_dir" remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git -C "$source_dir" -c "http.extraheader=AUTHORIZATION: basic $auth" \
+            fetch --no-tags --depth 1 origin "$GITHUB_SHA"
+          git -C "$source_dir" checkout --detach FETCH_HEAD
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'DEPLOY_SOURCE=%s\n' "$source_dir" >> "$GITHUB_ENV"
 
       - name: Prepare persistent state and Dockge configuration
         shell: bash
         run: |
           set -euo pipefail
+          cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-ingestion
           state=/opt/stacks/finance-actual-poc/ingestion-data
           sudo install -d "$stack"
@@ -157,6 +177,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          cd "$DEPLOY_SOURCE"
           auth_file=/root/.config/containers/finance-ghcr-auth.json
           sudo mkdir -p "$(dirname "$auth_file")"
           printf '%s' "$GHCR_TOKEN" | sudo podman login \
@@ -206,6 +227,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-actual-poc
           inbox="$stack/ingestion-data/inbox"
           base64 --decode tests/fixtures/synthetic-ei-statement.pdf.b64 | \
