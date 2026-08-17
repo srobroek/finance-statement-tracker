@@ -59,7 +59,7 @@ class CashbackServerTests(unittest.TestCase):
                     "source_event_id": "api-test:1",
                     "occurred_at": "2026-08-16T12:00:00+04:00",
                     "card_code": "RAK_WORLD",
-                    "amount_aed": "10",
+                    "amount": "10",
                     "merchant": "Test Merchant",
                 }).encode("utf-8")
                 request = urllib.request.Request(

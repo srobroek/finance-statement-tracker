@@ -339,6 +339,15 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             events = source if isinstance(source, list) else [source]
             if any(not isinstance(event, dict) for event in events):
                 raise ValueError("Payload must be an event object or a list of event objects")
+            profile_currency = str(
+                load_program_configuration(PROGRAM_CONFIG_PATH).get("currency") or ""
+            ).strip().upper()
+            if not profile_currency:
+                raise ValueError("Cashback profile currency is required")
+            events = [
+                {**event, "currency": event.get("currency") or profile_currency}
+                for event in events
+            ]
             if path == "/api/events/validate":
                 STORE.validate(events)
                 self._json(HTTPStatus.OK, {"valid": True, "event_count": len(events)})

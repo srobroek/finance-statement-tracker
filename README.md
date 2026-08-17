@@ -68,7 +68,7 @@ python -m finance_tracker.cli browser-adapters-status --sources config\browser-s
 
 Browser acquisition is an alternate source, not a second ledger. Provider/data recipes describe the exact authenticated UI path; official CSV/XLSX/PDF artifacts are normalized into the same staging, rules, review, and Actual import pipeline as email statements. See `docs/browser-ingestion.md`.
 
-The continuously running `actual-ingestion` container accepts statement PDFs, normalized browser captures, and official browser exports through one authenticated job API. `scripts/push-actual-ingestion-job.ps1` reads its SSH target and container name from `config/deployment.json`, uploads one content-addressed artifact, and submits an idempotent STAGE, PREFLIGHT, or explicitly gated COMMIT job. The container is published privately to GHCR and deployed by `.github/workflows/actual-ingestion-image.yml`.
+The continuously running `actual-ingestion` container accepts statement PDFs, normalized browser captures, and official browser exports through one authenticated job API. `scripts/push-actual-ingestion-job.ps1` reads its SSH target and container name from the environment-neutral `config/deployment.json`, an ignored `config/deployment.local.json`, or `FINANCE_DEPLOYMENT_CONFIG`, uploads one content-addressed artifact, and submits an idempotent STAGE, PREFLIGHT, or explicitly gated COMMIT job. The container is published to GHCR and deployed by `.github/workflows/actual-ingestion-image.yml`.
 
 ## Runtime model
 

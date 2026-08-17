@@ -25,7 +25,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $resolvedInput = (Resolve-Path -LiteralPath $InputPath).Path
-$deployment = Get-Content -Raw -LiteralPath (Resolve-Path -LiteralPath $DeploymentConfig) | ConvertFrom-Json
+$defaultDeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.json')
+$localDeploymentConfig = (Join-Path $PSScriptRoot '..\config\deployment.local.json')
+$requestedDeploymentConfig = (Resolve-Path -LiteralPath $DeploymentConfig).Path
+$resolvedDefaultDeploymentConfig = (Resolve-Path -LiteralPath $defaultDeploymentConfig).Path
+$effectiveDeploymentConfig = if ($env:FINANCE_DEPLOYMENT_CONFIG) {
+    (Resolve-Path -LiteralPath $env:FINANCE_DEPLOYMENT_CONFIG).Path
+} elseif ($requestedDeploymentConfig -eq $resolvedDefaultDeploymentConfig -and (Test-Path -LiteralPath $localDeploymentConfig)) {
+    (Resolve-Path -LiteralPath $localDeploymentConfig).Path
+} else {
+    $requestedDeploymentConfig
+}
+$deployment = Get-Content -Raw -LiteralPath $effectiveDeploymentConfig | ConvertFrom-Json
 if ($deployment.schema_version -ne 1) {
     throw 'Deployment config schema_version must be 1'
 }

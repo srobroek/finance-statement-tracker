@@ -38,7 +38,7 @@ Submit one event or a list to `POST /api/events`. Use the configured bearer toke
   "source_event_id": "outlook-message-id:transaction-1",
   "occurred_at": "2026-08-16T12:34:00+04:00",
   "card_code": "CARD_ALPHA",
-  "amount_aed": "245.50",
+  "amount": "245.50",
   "currency": "USD",
   "purchase_type": "DINING",
   "channel": "ONLINE",
@@ -48,6 +48,8 @@ Submit one event or a list to `POST /api/events`. Use the configured bearer toke
 }
 ```
 
+`amount` is always denominated in the event's `currency`. If `currency` is omitted, the deployed profile's base currency is used. The API still accepts `amount_aed` as a compatibility alias for existing UAE deployments, but new integrations should use `amount`.
+
 The only required companion secret is `CASHBACK_INGEST_TOKEN` when the endpoint is reachable beyond localhost.
 
 The scheduled Codex worker does not need that secret. It sends its raw Outlook envelope over SSH and invokes `submit_local.py` inside the container, where the token is already available:
@@ -56,6 +58,6 @@ The scheduled Codex worker does not need that secret. It sends its raw Outlook e
 .\scripts\push-outlook-messages.ps1 -InputPath .\runtime\outlook-message-batch.json
 ```
 
-The SSH target and container name are stored once in `config/deployment.json`, with environment-variable overrides available for another deployment. Helper scripts no longer contain host literals.
+The tracked `config/deployment.json` is an environment-neutral example. Put host-specific values in ignored `config/deployment.local.json`, or set `FINANCE_DEPLOYMENT_CONFIG`, `FINANCE_DOCKER_HOST`, and `FINANCE_CASHBACK_CONTAINER`. Helper scripts contain no host literals.
 
 The SQLite sidecar contains only provisional cashback events and their operational status. It exists for live routing, idempotency, refunds, corrections, review state, and statement reconciliation. Actual remains the authoritative financial ledger. At statement close, the reconciliation job confirms, reverses, or ignores provisional events and imports the statement into Actual.

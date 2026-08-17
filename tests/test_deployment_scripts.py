@@ -14,6 +14,15 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("ai_handoff_complete = $AIHandoffComplete.IsPresent", script)
         self.assertIn("ConvertTo-Json -Depth 20 -Compress", script)
 
+    def test_deployment_helpers_support_ignored_local_and_environment_overrides(self) -> None:
+        actual_script = Path("scripts/push-actual-ingestion-job.ps1").read_text(encoding="utf-8")
+        cashback_script = Path("scripts/invoke-cashback-endpoint.ps1").read_text(encoding="utf-8")
+        for script in (actual_script, cashback_script):
+            self.assertIn("deployment.local.json", script)
+            self.assertIn("FINANCE_DEPLOYMENT_CONFIG", script)
+        tracked = Path("config/deployment.json").read_text(encoding="utf-8")
+        self.assertNotIn("172.20.10.20", tracked)
+
 
 if __name__ == "__main__":
     unittest.main()

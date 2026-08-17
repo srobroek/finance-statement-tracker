@@ -10,6 +10,21 @@ from finance_tracker.cashback_events import CashbackEventStore, build_live_dashb
 
 
 class CashbackEventStoreTests(unittest.TestCase):
+    def test_currency_neutral_amount_alias_is_supported_and_conflicts_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            event = {
+                "source_event_id": "portable-api:1",
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "ANY_CARD",
+                "amount": "25.50",
+                "currency": "USD",
+                "merchant": "Example",
+            }
+            self.assertEqual(store.upsert([event])["inserted"], 1)
+            with self.assertRaisesRegex(ValueError, "disagree"):
+                store.validate([{**event, "source_event_id": "portable-api:2", "amount_aed": "30"}])
+
     def test_events_are_idempotent_and_drive_live_bucket(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")

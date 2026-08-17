@@ -81,10 +81,26 @@ def _amount_minor(value: object) -> int:
     try:
         amount = Decimal(str(value))
     except (InvalidOperation, ValueError) as error:
-        raise ValueError("amount_aed must be numeric") from error
+        raise ValueError("amount must be numeric") from error
     if amount <= 0:
-        raise ValueError("amount_aed must be greater than zero; use event_type REFUND for credits")
+        raise ValueError("amount must be greater than zero; use event_type REFUND for credits")
     return int((amount * Decimal("100")).quantize(Decimal("1")))
+
+
+def _event_amount(source: dict[str, Any]) -> object:
+    canonical = source.get("amount")
+    legacy = source.get("amount_aed")
+    if canonical in (None, "") and legacy in (None, ""):
+        raise ValueError("amount is required")
+    if canonical not in (None, "") and legacy not in (None, ""):
+        try:
+            canonical_amount = money(canonical)
+            legacy_amount = money(legacy)
+        except (InvalidOperation, ValueError) as error:
+            raise ValueError("amount and legacy amount_aed must be numeric") from error
+        if canonical_amount != legacy_amount:
+            raise ValueError("amount and legacy amount_aed disagree")
+    return canonical if canonical not in (None, "") else legacy
 
 
 def _confidence(value: object) -> float:
@@ -150,7 +166,7 @@ def _normalize_event(source: dict[str, Any]) -> dict[str, Any]:
         "source_event_id": source_event_id,
         "occurred_at": _iso_datetime(source.get("occurred_at")),
         "card_code": card_code,
-        "amount_aed_minor": _amount_minor(source.get("amount_aed")),
+        "amount_aed_minor": _amount_minor(_event_amount(source)),
         "currency": str(source.get("currency") or "AED").strip().upper(),
         "purchase_type": str(source.get("purchase_type") or "GENERAL").strip().upper(),
         "channel": str(source.get("channel") or "UNKNOWN").strip().upper(),

@@ -3,6 +3,7 @@
 .env.*
 secrets.*
 credentials.*
+config/deployment.local.json
 
 # Financial source data and generated review artifacts
 .tmp/
