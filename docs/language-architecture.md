@@ -8,4 +8,4 @@ The repository intentionally uses two runtimes behind one Docker and scripting w
 
 The Node bridge remains executable ESM (`.mjs`) because it is a small, process-per-command boundary and the Actual package already supplies TypeScript declarations. New pure bridge modules are covered by Node tests. If the bridge becomes a resident API or gains multiple external clients, migrate that surface to TypeScript with generated schemas; do not rewrite the Python domain engine merely to achieve a single-language repository.
 
-Operationally, the split is hidden: Actual and Cashback Control are separate containers, monthly statement jobs and one end-of-day transaction job call stable commands, and no Windows background process is required.
+Operationally, the split is hidden: Actual, Cashback Control, and the ingestion worker are independent containers; monthly statement jobs and one hourly durable-cursor transaction job call stable commands, and no Windows background process is required.

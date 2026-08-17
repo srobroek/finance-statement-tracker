@@ -99,6 +99,28 @@ python -m unittest discover -s tests -v
 
 Result: **167 tests passed; 0 failed; 0 errors; 0 skipped.**
 
+Final module totals:
+
+| Module | Passed | Module | Passed |
+|---|---:|---|---:|
+| `test_actual_pipeline` | 14 | `test_ai_rules` | 7 |
+| `test_browser_cli` | 2 | `test_browser_exports` | 8 |
+| `test_browser_ingestion` | 9 | `test_browser_recipes` | 5 |
+| `test_cashback_events` | 17 | `test_cashback_profiles` | 10 |
+| `test_cashback_routing_matrix` | 8 | `test_cashback_server` | 1 |
+| `test_cashback` | 9 | `test_cli` | 1 |
+| `test_deployment_scripts` | 4 | `test_evidence` | 5 |
+| `test_history` | 2 | `test_ingestion_jobs` | 7 |
+| `test_ingestion` | 2 | `test_mail_ingestion` | 4 |
+| `test_notification_sources` | 3 | `test_notifications` | 8 |
+| `test_platforms` | 4 | `test_reporting` | 3 |
+| `test_reports` | 2 | `test_rule_seed` | 7 |
+| `test_rules` | 9 | `test_savings` | 2 |
+| `test_statement_sources` | 3 | `test_statements` | 4 |
+| `test_subscriptions` | 2 | `test_web_push` | 5 |
+
+The selected per-test inventory below is the earlier scenario-run snapshot retained for traceability. The final module table above is the authoritative inventory for the 167-test run and includes the newer profile, ingestion-job, mail, source-registry, deployment-monitor, and web-push coverage.
+
 ### `test_actual_pipeline` — 13/13 PASS
 
 - PASS `test_account_map_rejects_duplicate_suffixes`

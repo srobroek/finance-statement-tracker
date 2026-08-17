@@ -4,7 +4,7 @@ This project is the deterministic automation layer for an Actual-first personal 
 
 The deterministic parser and rule engine use a small pinned Python dependency set. The continuously running cashback companion uses SQLite for durable operational state and `pywebpush` for iOS Declarative Web Push delivery.
 
-The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, and `docs/cashback-companion-decision.md`.
+The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, `docs/cashback-companion-decision.md`, and the current `docs/production-readiness-2026-08-17.md` audit.
 
 ## Included
 
