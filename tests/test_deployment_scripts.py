@@ -42,6 +42,24 @@ class DeploymentScriptTests(unittest.TestCase):
         service = Path("deploy/actual-poc/finance-backup.service").read_text(encoding="utf-8")
         self.assertIn("KillMode=process", service)
 
+    def test_health_monitor_repairs_only_independent_owned_services(self) -> None:
+        script = Path("deploy/finance-monitor/finance-health-monitor.sh").read_text(encoding="utf-8")
+        self.assertIn('flock -n 9', script)
+        self.assertIn('finance-actual-poc actual', script)
+        self.assertIn('finance-actual-poc actual-proxy', script)
+        self.assertIn('finance-cashback cashback-control', script)
+        self.assertIn('finance-ingestion actual-ingestion', script)
+        self.assertIn('--pull never', script)
+        self.assertNotIn('docker compose down', script)
+        self.assertNotIn('docker compose pull', script)
+        self.assertNotIn('rm -f', script)
+        self.assertIn('backup_stale', script)
+
+        timer = Path("deploy/finance-monitor/finance-health-monitor.timer").read_text(encoding="utf-8")
+        self.assertIn("OnUnitActiveSec=5m", timer)
+        service = Path("deploy/finance-monitor/finance-health-monitor.service").read_text(encoding="utf-8")
+        self.assertIn("KillMode=process", service)
+
 
 if __name__ == "__main__":
     unittest.main()

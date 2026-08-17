@@ -45,7 +45,7 @@ def _dashboard(*, grocery_card: str = "RAK_WORLD") -> dict[str, object]:
             "currency": "AED",
             "use_card": grocery_card,
         }],
-        "data_status": {"acknowledged_alerts": []},
+        "data_status": {"acknowledged_alerts": [], "is_stale": False},
     }
 
 
@@ -133,6 +133,24 @@ class WebPushStoreTests(unittest.TestCase):
             })
             self.assertEqual(result["sent"], 0)
             self.assertEqual(calls, [])
+
+    def test_stale_feed_notification_is_episode_scoped_and_acknowledgeable(self) -> None:
+        dashboard = _dashboard()
+        dashboard["alerts"] = []
+        dashboard["data_status"] = {
+            "acknowledged_alerts": [],
+            "is_stale": True,
+            "stale_after_minutes": 90,
+            "last_successful_ingest_at": "2026-08-17T13:06:03+00:00",
+        }
+        candidates, _ = notification_candidates(dashboard, None)
+        stale = next(item for item in candidates if item.title == "Cashback feed is stale")
+        self.assertEqual(stale.key, "feed:stale:2026-08-17T13:06:03+00:00")
+        self.assertIn("90 minutes", stale.body)
+
+        dashboard["data_status"]["acknowledged_alerts"] = ["feed:stale"]
+        candidates, _ = notification_candidates(dashboard, None)
+        self.assertNotIn("Cashback feed is stale", {item.title for item in candidates})
 
 
 if __name__ == "__main__":

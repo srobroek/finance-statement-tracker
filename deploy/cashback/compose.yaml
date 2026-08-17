@@ -12,6 +12,7 @@ services:
       ACTUAL_BOOTSTRAP_CONFIG_PATH: /etc/cashback/actual-bootstrap.json
       STATIC_RULES_CONFIG_PATH: /etc/cashback/static-rules.json
       TRANSACTION_EMAIL_SOURCES_PATH: /etc/cashback/transaction-email-sources.json
+      CASHBACK_REFRESH_SECONDS: "60"
     security_opt:
       - no-new-privileges:true
     ports:

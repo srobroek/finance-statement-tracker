@@ -47,7 +47,9 @@ INGEST_TOKEN = os.environ.get("CASHBACK_INGEST_TOKEN", "")
 STORE = CashbackEventStore(DATABASE_PATH)
 PUSH_STORE = WebPushStore(DATABASE_PATH)
 WRITE_LOCK = threading.Lock()
+PUSH_LOCK = threading.Lock()
 STALE_AFTER_MINUTES = int(os.environ.get("CASHBACK_STALE_AFTER_MINUTES", "90"))
+REFRESH_SECONDS = max(0, int(os.environ.get("CASHBACK_REFRESH_SECONDS", "60")))
 PROGRAM_CONFIG_PATH = Path(
     os.environ.get(
         "CASHBACK_PROGRAM_CONFIG_PATH",
@@ -130,8 +132,22 @@ def rebuild_dashboard() -> dict[str, object]:
             program_config_path=PROGRAM_CONFIG_PATH,
         )
         write_dashboard(DASHBOARD_PATH, payload)
-    PUSH_DISPATCHER.evaluate(payload)
+    with PUSH_LOCK:
+        PUSH_DISPATCHER.evaluate(payload)
     return payload
+
+
+def refresh_dashboard_periodically(stop_event: threading.Event) -> None:
+    while not stop_event.wait(REFRESH_SECONDS):
+        try:
+            rebuild_dashboard()
+        except Exception as error:  # service boundary; the next interval retries
+            print(json.dumps({
+                "timestamp": datetime_now(),
+                "level": "error",
+                "event": "dashboard_refresh_failed",
+                "error": f"{type(error).__name__}: {error}"[:500],
+            }), flush=True)
 
 
 def historical_periods(limit: int = 24) -> list[dict[str, object]]:
@@ -388,11 +404,23 @@ def main() -> None:
     port = int(os.environ.get("CASHBACK_PORT", "5010"))
     rebuild_dashboard()
     server = ThreadingHTTPServer((host, port), CashbackHandler)
-    for signal_name in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(
-            signal_name,
-            lambda *_: threading.Thread(target=server.shutdown, daemon=True).start(),
+    stop_event = threading.Event()
+    refresh_thread = None
+    if REFRESH_SECONDS:
+        refresh_thread = threading.Thread(
+            target=refresh_dashboard_periodically,
+            args=(stop_event,),
+            name="cashback-dashboard-refresh",
+            daemon=True,
         )
+        refresh_thread.start()
+
+    def stop_server(*_: object) -> None:
+        stop_event.set()
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    for signal_name in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signal_name, stop_server)
     print(json.dumps({
         "timestamp": datetime_now(),
         "level": "info",
@@ -403,6 +431,9 @@ def main() -> None:
     try:
         server.serve_forever()
     finally:
+        stop_event.set()
+        if refresh_thread is not None:
+            refresh_thread.join(timeout=min(REFRESH_SECONDS + 1, 5))
         server.server_close()
 
 

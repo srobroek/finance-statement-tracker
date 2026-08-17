@@ -29,6 +29,7 @@ class CashbackServerTests(unittest.TestCase):
                 "CASHBACK_DB_PATH": str(Path(temporary) / "events.sqlite3"),
                 "CASHBACK_DASHBOARD_PATH": str(Path(temporary) / "dashboard.json"),
                 "CASHBACK_INGEST_TOKEN": "test-token",
+                "CASHBACK_REFRESH_SECONDS": "0",
             })
             process = subprocess.Popen(
                 [sys.executable, str(ROOT / "apps" / "cashback-control" / "server.py")],

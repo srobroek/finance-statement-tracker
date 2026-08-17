@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitor and narrowly recover Finance Tracker services
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/finance-health-monitor
+User=root
+Group=root
+KillMode=process
+TimeoutStartSec=5m
+
+[Install]
+WantedBy=multi-user.target

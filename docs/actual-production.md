@@ -254,6 +254,17 @@ Production notification adapters currently support amount-bearing ADCB card-auth
 
 The CI host runs `finance-backup.timer` daily at approximately 03:15 Asia/Dubai. It archives the Actual bind mount, cashback event store, compose source, and a secret-free manifest under `/opt/backups/finance-actual-poc/`, then verifies the archive checksums. See `docs/backup-and-restore.md` for restore and validation commands. Keep an off-host copy of this backup root and create an Actual `.zip` export before upgrades.
 
+## Monitoring and recovery
+
+`finance-health-monitor.timer` runs every five minutes on the Docker host. It probes the Actual proxy, Cashback Control, and the ingestion worker twice before acting. It skips while the backup lock is held, never pulls an image, and only restarts or recreates the exact service owned by its independent Compose project. A failed recovery or a backup older than 48 hours makes the oneshot unit fail and leaves structured evidence in the system journal:
+
+```bash
+systemctl status finance-health-monitor.timer finance-health-monitor.service
+journalctl -u finance-health-monitor.service --since today
+```
+
+Cashback Control independently rebuilds the dashboard every minute. This makes weekly pace, close-window warnings, and feed age advance even when no purchase arrives. When the hourly mailbox cursor is older than the configured stale threshold, the installed PWA receives one deduplicated `Cashback feed is stale` notification for that ingestion episode; a later successful cursor commit arms the next episode.
+
 ## Cloudflare Tunnel and SharedArrayBuffer
 
 Actual must be opened through the tunnel's HTTPS hostname. Direct LAN access to

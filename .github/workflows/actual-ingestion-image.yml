@@ -15,6 +15,7 @@ on:
       - "deploy/actual-poc/backup.sh"
       - "deploy/actual-poc/finance-backup.service"
       - "deploy/actual-poc/finance-backup.timer"
+      - "deploy/finance-monitor/**"
       - "deploy/ingestion/**"
       - "deploy/finance-runtime/**"
       - "finance_tracker/**"
@@ -138,8 +139,12 @@ jobs:
           sudo install -m 0750 deploy/actual-poc/backup.sh /opt/stacks/finance-actual-poc/backup.sh
           sudo install -m 0644 deploy/actual-poc/finance-backup.service /etc/systemd/system/finance-backup.service
           sudo install -m 0644 deploy/actual-poc/finance-backup.timer /etc/systemd/system/finance-backup.timer
+          sudo install -m 0750 deploy/finance-monitor/finance-health-monitor.sh /usr/local/sbin/finance-health-monitor
+          sudo install -m 0644 deploy/finance-monitor/finance-health-monitor.service /etc/systemd/system/finance-health-monitor.service
+          sudo install -m 0644 deploy/finance-monitor/finance-health-monitor.timer /etc/systemd/system/finance-health-monitor.timer
           sudo systemctl daemon-reload
           sudo systemctl enable --now finance-backup.timer
+          sudo systemctl enable --now finance-health-monitor.timer
           sudo install -d -o 10002 -g 10002 \
             "$state" \
             "$state/inbox" \

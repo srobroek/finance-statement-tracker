@@ -275,6 +275,20 @@ def notification_candidates(
                 screen="cards",
             ))
 
+    data_status = dashboard.get("data_status") or {}
+    if data_status.get("is_stale") and "feed:stale" not in acknowledged:
+        last_success = str(data_status.get("last_successful_ingest_at") or "never")
+        stale_after = int(data_status.get("stale_after_minutes") or 90)
+        candidates.append(PushCandidate(
+            key=f"feed:stale:{last_success}",
+            title="Cashback feed is stale",
+            body=(
+                f"No successful transaction scan was recorded within {stale_after} minutes. "
+                "Live card routing may be incomplete."
+            ),
+            screen="routing",
+        ))
+
     routing = _routing_map(dashboard)
     routing_json = json.dumps(routing, sort_keys=True, separators=(",", ":"))
     if previous_routing_json and previous_routing_json != routing_json:

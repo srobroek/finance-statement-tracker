@@ -1,0 +1,12 @@
+[Unit]
+Description=Five-minute Finance Tracker health monitor
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+RandomizedDelaySec=20s
+Persistent=true
+Unit=finance-health-monitor.service
+
+[Install]
+WantedBy=timers.target
