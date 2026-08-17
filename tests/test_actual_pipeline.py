@@ -95,6 +95,38 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         with self.assertRaisesRegex(ValueError, "mapped more than once"):
             account_maps(config)
 
+    def test_wio_credit_statement_maps_card_and_account_suffix_to_one_account(self) -> None:
+        statement = parse_statement_text(
+            """CREDIT STATEMENT
+FROM 01/07/2026 TO 01/08/2026
+Wio Bank PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY
+01/08/2026 0.00 0.00
+ACCOUNT NUMBER 3342325009
+Balance From Last Statement 0.00
+Closing balance (Total to pay) -25.00
+04/07/2026 P100000001 Example Merchant ****4113 -100.00
+01/08/2026 P100000002 Credit Repayment +125.00
+""",
+            "wio.pdf",
+            "wio_credit_v1",
+        )
+        config = {
+            "accounts": [
+                {
+                    "name": "Wio Credit Card · 4113 / 5009",
+                    "card_code": "WIO_CREDIT",
+                    "card_last4": ["4113", "5009"],
+                }
+            ]
+        }
+
+        run = build_actual_statement_run(statement, config, load_compiled_rules("config/static-rules.seed.json"))
+
+        self.assertEqual(len(run.envelopes), 1)
+        self.assertEqual(run.envelopes[0]["account"], "Wio Credit Card · 4113 / 5009")
+        self.assertEqual([row["amount"] for row in run.envelopes[0]["records"]], [-10000, 12500])
+        self.assertIn("#card-payment", run.envelopes[0]["records"][1]["notes"])
+
     def test_loads_canonical_rule_json(self) -> None:
         from tempfile import TemporaryDirectory
         from pathlib import Path

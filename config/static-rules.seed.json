@@ -10,6 +10,15 @@
         {
           "all": [
             {
+              "field": "transaction_type",
+              "operator": "equals",
+              "value": "PAYMENT"
+            }
+          ]
+        },
+        {
+          "all": [
+            {
               "field": "merchant_raw",
               "operator": "contains_any",
               "value": [

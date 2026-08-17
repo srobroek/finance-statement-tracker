@@ -94,6 +94,35 @@ class ActualBudgetAdapterTests(TestCase):
         self.assertTrue(statement_envelope.default_cleared)
         self.assertFalse(portal_envelope.default_cleared)
 
+    def test_statement_direction_controls_actual_amount_sign(self) -> None:
+        common = {
+            "transaction_at": datetime(2026, 8, 1),
+            "card": "WIO_CREDIT",
+            "account": "Wio Credit Card",
+            "source_type": "statement",
+        }
+        purchase = Transaction(
+            transaction_id="statement:purchase",
+            merchant_raw="Merchant",
+            amount_aed=Decimal("100.00"),
+            transaction_type="PURCHASE",
+            metadata={"statement_direction": "DEBIT"},
+            **common,
+        )
+        payment = Transaction(
+            transaction_id="statement:payment",
+            merchant_raw="Credit Repayment",
+            amount_aed=Decimal("125.00"),
+            transaction_type="TRANSFER",
+            metadata={"statement_direction": "CREDIT"},
+            **common,
+        )
+
+        records = ActualBudgetAdapter().serialize_import([purchase, payment])[0].records
+
+        self.assertEqual(records[0]["amount"], -10000)
+        self.assertEqual(records[1]["amount"], 12500)
+
     def test_requires_an_account_mapping(self) -> None:
         row = Transaction(
             transaction_id="bank:missing-account",

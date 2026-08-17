@@ -118,11 +118,21 @@ def _actual_amount(transaction: Transaction) -> int:
     units = (abs(transaction.amount_aed) * Decimal("100")).quantize(
         Decimal("1"), rounding=ROUND_HALF_UP
     )
-    positive = transaction.is_refund or transaction.transaction_type.upper() in {
-        "INCOME",
-        "REFUND",
-        "CREDIT",
-    }
+    statement_direction = str(
+        transaction.metadata.get("statement_direction") or ""
+    ).upper()
+    if statement_direction in {"CREDIT", "DEBIT"}:
+        # A statement already supplies the authoritative account-side sign.
+        # Payments, refunds, and rewards are credits to a credit-card account;
+        # purchases and fees are debits. Do not infer their sign from a later
+        # classification such as TRANSFER.
+        positive = statement_direction == "CREDIT"
+    else:
+        positive = transaction.is_refund or transaction.transaction_type.upper() in {
+            "INCOME",
+            "REFUND",
+            "CREDIT",
+        }
     return int(units if positive else -units)
 
 

@@ -48,7 +48,7 @@ class BrowserRecipeTests(unittest.TestCase):
         sources = load_browser_sources(ROOT / "config" / "browser-sources.json")
         result = validate_source_coverage(sources, ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
-        self.assertEqual(7, len(result["coverage"]))
+        self.assertEqual(6, len(result["coverage"]))
         self.assertEqual(3, len(result["supplemental"]))
         self.assertEqual("ADAPTER_REQUIRED", result["coverage"][-1]["status"])
 

@@ -55,13 +55,13 @@ class BrowserCliTests(unittest.TestCase):
                 "--data-id", "csv-transactions",
                 "--file", str(export_path),
                 "--sources", str(ROOT / "config" / "browser-sources.json"),
-                "--actual-account", "Wio Current Account · 4113",
+                "--actual-account", "Wio Credit Card · 4113 / 5009",
                 "--adapters-root", str(ROOT / "browser_adapters"),
                 "--output", str(capture_path),
             ]))
             capture = json.loads(capture_path.read_text(encoding="utf-8"))
             self.assertEqual("TRANSACTION_ROWS", capture["artifact"]["kind"])
-            self.assertEqual("WIO_4113", capture["account"]["card_code"])
+            self.assertEqual("WIO_CREDIT", capture["account"]["card_code"])
 
 
 if __name__ == "__main__":

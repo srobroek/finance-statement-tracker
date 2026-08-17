@@ -36,21 +36,10 @@
       "preferred_acquisition": "browser-export"
     },
     {
-      "actual_account": "Wio Current Account · 4113",
-      "label": "Wio current account",
-      "card_code": "WIO_4113",
+      "actual_account": "Wio Credit Card · 4113 / 5009",
+      "label": "Wio credit card",
+      "card_code": "WIO_CREDIT",
       "account_last4": "4113",
-      "currency": "AED",
-      "required": false,
-      "provider_id": "generic-csv",
-      "data_ids": ["csv-transactions"],
-      "preferred_acquisition": "mobile-export-upload"
-    },
-    {
-      "actual_account": "Wio Current Account · 5009",
-      "label": "Wio current account",
-      "card_code": "WIO_5009",
-      "account_last4": "5009",
       "currency": "AED",
       "required": false,
       "provider_id": "generic-csv",
