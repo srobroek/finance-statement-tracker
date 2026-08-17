@@ -108,7 +108,12 @@ if ($AIResponsesPath) {
     if (-not $rawAIResponses.TrimStart().StartsWith('[')) {
         throw 'AIResponsesPath must contain one JSON array'
     }
-    $aiResponses = @($rawAIResponses | ConvertFrom-Json)
+    # Windows PowerShell 5.1 emits a JSON array as one pipeline object. Putting
+    # the pipeline directly inside @() therefore creates a nested array, while
+    # PowerShell 7 enumerates it. Assign first, then normalize the value so both
+    # runtimes produce the same flat request contract.
+    $parsedAIResponses = ConvertFrom-Json -InputObject $rawAIResponses
+    $aiResponses = @($parsedAIResponses)
     $job.ai_responses = @($aiResponses)
 }
 if ($EvidenceLinksPath) {
@@ -117,13 +122,23 @@ if ($EvidenceLinksPath) {
     if (-not $rawEvidenceLinks.TrimStart().StartsWith('[')) {
         throw 'EvidenceLinksPath must contain one JSON array'
     }
-    $evidenceLinks = @($rawEvidenceLinks | ConvertFrom-Json)
+    $parsedEvidenceLinks = ConvertFrom-Json -InputObject $rawEvidenceLinks
+    $evidenceLinks = @($parsedEvidenceLinks)
     $job.evidence_links = @($evidenceLinks)
 }
 $payload = $job | ConvertTo-Json -Depth 20 -Compress
 $remoteCommand = "sudo docker exec -i $containerName python3 /app/apps/actual-ingestion/submit_local.py"
-$response = @($payload | & ssh $target $remoteCommand 2>&1)
-$remoteExitCode = $LASTEXITCODE
+$previousOutputEncoding = $OutputEncoding
+try {
+    # Native-command stdin is OEM/ASCII by default in Windows PowerShell 5.1.
+    # Force BOM-free UTF-8 so account, merchant, and evidence names survive
+    # exactly; PowerShell 7 already uses UTF-8 but accepts the same setting.
+    $OutputEncoding = [Text.UTF8Encoding]::new($false)
+    $response = @($payload | & ssh $target $remoteCommand 2>&1)
+    $remoteExitCode = $LASTEXITCODE
+} finally {
+    $OutputEncoding = $previousOutputEncoding
+}
 if ($remoteExitCode -ne 0) {
     $detail = ($response | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
     throw "Actual ingestion job failed with exit code ${remoteExitCode}: $detail"
