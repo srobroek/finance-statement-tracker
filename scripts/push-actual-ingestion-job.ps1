@@ -112,7 +112,10 @@ if ($AIResponsesPath) {
 }
 $payload = $job | ConvertTo-Json -Depth 20 -Compress
 $remoteCommand = "sudo docker exec -i $containerName python3 /app/apps/actual-ingestion/submit_local.py"
-$payload | & ssh $target $remoteCommand
-if ($LASTEXITCODE -ne 0) {
-    throw "Actual ingestion job failed with exit code $LASTEXITCODE"
+$response = @($payload | & ssh $target $remoteCommand 2>&1)
+$remoteExitCode = $LASTEXITCODE
+if ($remoteExitCode -ne 0) {
+    $detail = ($response | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+    throw "Actual ingestion job failed with exit code ${remoteExitCode}: $detail"
 }
+$response

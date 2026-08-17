@@ -12,6 +12,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("source_filename = [IO.Path]::GetFileName($resolvedInput)", script)
         self.assertIn("$job.ai_responses = @($aiResponses)", script)
         self.assertIn("ai_handoff_complete = $AIHandoffComplete.IsPresent", script)
+        self.assertIn("$response = @($payload | & ssh", script)
+        self.assertIn("Actual ingestion job failed with exit code ${remoteExitCode}: $detail", script)
         self.assertIn("ConvertTo-Json -Depth 20 -Compress", script)
 
     def test_deployment_helpers_support_ignored_local_and_environment_overrides(self) -> None:
