@@ -479,15 +479,11 @@ function reviewEventCard(event) {
     button.disabled = true;
     button.textContent = "Saving…";
     try {
-      const response = await fetch("/api/corrections", {
+      const response = await fetch("/api/review-approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          correction_id: `live-review-approved-v1:${event.source_event_id}`,
           source_event_id: event.source_event_id,
-          source: "dashboard-review",
-          reason: "Approved current live classification",
-          changes: { review_required: false },
         }),
       });
       const payload = await response.json();

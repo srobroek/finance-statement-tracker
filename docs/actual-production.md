@@ -208,7 +208,7 @@ python -m finance_tracker.cli cashback-dashboard `
   --output .\runtime\cashback-dashboard.json
 ```
 
-The Docker companion does not poll Actual for live routing. The hourly Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
+The Docker companion does not poll Actual for live routing. The twice-daily Codex ingestion job submits minimal provisional cashback events from email or another supported source to the companion, which recalculates immediately. The browser refreshes its view every minute. Actual receives authoritative statement transactions on each configured statement cycle; the close job then reconciles and finalizes the companion's provisional events.
 
 The output contains card pace, current tier, bucket spend and headroom, routing mode, current payment recommendations, and review count. Late in a cycle, a card that is materially under pace is valued at its current tier instead of pretending an unreachable target tier will be achieved.
 
@@ -220,22 +220,23 @@ The output contains card pace, current tier, bucket spend and headroom, routing 
 - Cashback close: finalize only after that card statement is ingested and reconciled.
 - Aggregate month close: event-driven after all required card periods close.
 
-The current tentative schedule remains month-end with processing on the first day of the following month. Active Codex tasks are:
+The confirmed card cycles are RAKBANK World and Standard Chartered Platinum X closing on day 5, and Emirates Islamic Amazon closing on the last day of the month. Reward periods reset on the same statement-cycle boundary. Statement ingestion runs one day after each configured close while still requiring actual statement evidence before reconciliation or finalization. Active Codex tasks are:
 
 | Time (Asia/Dubai) | Task | Behaviour |
 |---|---|---|
-| Hourly at `:05` | Transaction and evidence ingestion | Full durable-cursor gap plus overlap; provisional cashback only. |
-| 20:00 on day 1 | RAKBANK World statement | Leaves the period open while its statement source/adapter remain placeholders. |
-| 20:20 on day 1 | Standard Chartered Platinum X statement | Leaves the period open while its statement source/adapter remain placeholders. |
+| 08:05 and 20:05 daily | Transaction and evidence ingestion | Full durable-cursor gap plus overlap; provisional cashback only. |
+| 20:00 on day 6 | RAKBANK World statement | Leaves the period open while its statement source/adapter remains a placeholder. |
+| 20:20 on day 6 | Standard Chartered Platinum X statement | Leaves the period open while its statement source/adapter remains a placeholder. |
 | 20:40 on day 1 | Emirates Islamic Amazon statement | Stage, AI handoff when requested, Actual preflight/commit, cashback reconciliation, and guarded finalization. |
-| 21:00 on day 1 | ADCB statement | Stage, AI handoff when requested, Actual preflight/commit, and due-date reminder; no companion close unless ADCB is added to a versioned cashback profile. |
 | 21:20 on day 1 | Wio statement | Preserve multi-account suffix mapping, then stage and commit only when every row maps cleanly; no companion close unless Wio is added to a versioned cashback profile. |
 
 The legacy daily aggregate month-close task remains paused. The attachment-retrieval step is performed by the card/source-specific Codex task; the deterministic command begins only after the exact PDF attachment and Outlook evidence IDs have been captured.
 
+Successful scheduled runs archive their own Codex task after all verification completes. Failed, partial, blocked, or review-required runs remain visible for attention.
+
 ## Live Outlook notifications
 
-The hourly Sol automation, scheduled at minute 5 in Asia/Dubai, writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
+The twice-daily Sol automation, scheduled at 08:05 and 20:05 in Asia/Dubai, writes exact fetched transaction-notification message objects into one envelope and submits it to the continuous companion:
 
 ```powershell
 .\scripts\push-outlook-messages.ps1 `
@@ -244,7 +245,7 @@ The hourly Sol automation, scheduled at minute 5 in Asia/Dubai, writes exact fet
 
 The container then performs parsing, card mapping, the live static-rule subset, normalized-identity deduplication, SQLite persistence, cashback calculation, and dashboard refresh. Sol inspects only unresolved results and performs the evidence-aware AI policy stage through auditable correction calls. Codex is not installed in the container and no container-side AI is assumed. Only after those corrections and evidence writes succeed does the task commit the candidate cursor through the companion's ingest-run endpoint.
 
-The hourly path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
+The live path uses only the `LIVE_CASHBACK` rule set configured under `cashback-programs.json/live_ingestion`. Rule-set membership is metadata on the canonical rules, not a second rule implementation. Budget-only classification, property, subscription, and evidence rules remain in the full statement pipeline and do not burden live routing. Cadence does not limit coverage: the worker always resumes from the last durable cursor minus overlap and therefore catches up across missed runs.
 
 Transaction notifications are retrieved in full from the durable cursor minus the configured overlap. Statement-PDF retrieval is different: each card-specific job selects only the latest statement message for that card/account and expected cycle, except for an explicit retry or backfill.
 
@@ -263,7 +264,7 @@ systemctl status finance-health-monitor.timer finance-health-monitor.service
 journalctl -u finance-health-monitor.service --since today
 ```
 
-Cashback Control independently rebuilds the dashboard every minute. This makes weekly pace, close-window warnings, and feed age advance even when no purchase arrives. When the hourly mailbox cursor is older than the configured stale threshold, the installed PWA receives one deduplicated `Cashback feed is stale` notification for that ingestion episode; a later successful cursor commit arms the next episode.
+Cashback Control independently rebuilds the dashboard every minute. This makes weekly pace, close-window warnings, and feed age advance even when no purchase arrives. When the mailbox cursor is older than the configured stale threshold, the installed PWA receives one deduplicated `Cashback feed is stale` notification for that ingestion episode; a later successful cursor commit arms the next episode. Production should set the stale threshold above the normal twice-daily interval so expected quiet time does not alert.
 
 ## Cloudflare Tunnel and SharedArrayBuffer
 

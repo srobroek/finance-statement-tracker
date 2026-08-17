@@ -72,6 +72,15 @@ class RuleSeedTests(TestCase):
 
         self.assertEqual(transaction.reward_bucket, "SC_WALLET")
 
+    def test_rak_wallet_purchase_retains_enhanced_merchant_category_bucket(self) -> None:
+        transaction = self.transaction("CARREFOUR MIRDIF", card="RAK_WORLD")
+        transaction.channel = "APPLE_PAY_POS"
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.category, "Groceries")
+        self.assertEqual(transaction.reward_bucket, "RAK_GROCERY")
+
     def test_sc_physical_spend_is_tracked_as_tier_filler(self) -> None:
         transaction = self.transaction("LOCAL MERCHANT", card="SC_PLATINUM_X")
         transaction.channel = "PHYSICAL_POS"

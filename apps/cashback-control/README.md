@@ -1,6 +1,6 @@
 # Cashback Control companion
 
-This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The hourly Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
+This is the continuously running operational surface for payment routing: a small web app with a SQLite backend. It does not copy the Actual ledger. The twice-daily Outlook job submits exact message objects; the app parses supported formats, applies static rules, deduplicates provisional reward events, persists them, and rebuilds the dashboard immediately.
 
 Run from the repository root:
 
@@ -61,3 +61,9 @@ The scheduled Codex worker does not need that secret. It sends its raw Outlook e
 The tracked `config/deployment.json` is an environment-neutral example. Put host-specific values in ignored `config/deployment.local.json`, or set `FINANCE_DEPLOYMENT_CONFIG`, `FINANCE_DOCKER_HOST`, and `FINANCE_CASHBACK_CONTAINER`. Helper scripts contain no host literals.
 
 The SQLite sidecar contains only provisional cashback events and their operational status. It exists for live routing, idempotency, refunds, corrections, review state, and statement reconciliation. Actual remains the authoritative financial ledger. At statement close, the reconciliation job confirms, reverses, or ignores provisional events and imports the statement into Actual.
+
+## Browser review approvals
+
+The dashboard reads review-required events from `POST /api/review-queue` and approves the current deterministic classification through `POST /api/review-approvals`. Both endpoints require a same-origin JSON request matching `CASHBACK_PUBLIC_URL`. An approval accepts only `source_event_id` and can only clear `review_required`; it cannot change amounts, categories, buckets, cards, source identities, reconciliation state, or Actual data.
+
+General corrections remain restricted to `POST /api/corrections` with the ingest bearer token. The browser never receives or stores that token.

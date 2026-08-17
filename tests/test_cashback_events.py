@@ -348,10 +348,10 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "merchant": "Carrefour",
             }])
 
-            dashboard = build_live_dashboard(store, date(2026, 8, 21))
+            dashboard = build_live_dashboard(store, date(2026, 8, 26))
 
             keys = {alert["key"] for alert in dashboard["alerts"]}
-            self.assertIn("minimum:RAK_WORLD:2026-08-01:2026-08-31", keys)
+            self.assertIn("minimum:RAK_WORLD:2026-08-06:2026-09-05", keys)
             self.assertIn("bucket:RAK_WORLD:RAK_GROCERY:near_full", keys)
             rak = next(card for card in dashboard["cards"] if card["card"] == "RAK_WORLD")
             self.assertEqual(rak["provisional_event_count"], 1)
@@ -361,11 +361,11 @@ class CashbackEventStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
 
-            dashboard = build_live_dashboard(store, date(2026, 8, 25))
+            dashboard = build_live_dashboard(store, date(2026, 8, 30))
 
             keys = {alert["key"] for alert in dashboard["alerts"]}
-            self.assertIn("close:RAK_WORLD:2026-08-01:2026-08-31", keys)
-            self.assertIn("close:SC_PLATINUM_X:2026-08-01:2026-08-31", keys)
+            self.assertIn("close:RAK_WORLD:2026-08-06:2026-09-05", keys)
+            self.assertIn("close:SC_PLATINUM_X:2026-08-06:2026-09-05", keys)
 
     def test_finalization_opens_the_next_configured_card_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -438,14 +438,14 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "merchant": "Example",
             }])
             store.reconcile_statement({
-                "statement_reference": "RAK-2026-08",
+                "statement_reference": "RAK-2026-09-05",
                 "card_code": "RAK_WORLD",
-                "period_start": "2026-08-01",
-                "period_end": "2026-08-31",
+                "period_start": "2026-08-06",
+                "period_end": "2026-09-05",
                 "transactions": [],
             })
             payload = {
-                "statement_reference": "RAK-2026-08",
+                "statement_reference": "RAK-2026-09-05",
                 "statement_evidence_reference": "sha256:def",
                 "statement_document_url": "Finance Evidence/2026/08/rak/statement.pdf",
                 "actual_import_verified": True,

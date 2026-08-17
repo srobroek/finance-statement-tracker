@@ -17,6 +17,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class CashbackServerTests(unittest.TestCase):
+    def test_browser_review_uses_narrow_same_origin_approval_endpoint(self) -> None:
+        source = (ROOT / "apps" / "cashback-control" / "web" / "app.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('fetch("/api/review-approvals"', source)
+        self.assertNotIn('fetch("/api/corrections"', source)
+
     def test_health_and_ingest_authorization(self) -> None:
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
@@ -29,14 +37,15 @@ class CashbackServerTests(unittest.TestCase):
                 "CASHBACK_DB_PATH": str(Path(temporary) / "events.sqlite3"),
                 "CASHBACK_DASHBOARD_PATH": str(Path(temporary) / "dashboard.json"),
                 "CASHBACK_INGEST_TOKEN": "test-token",
+                "CASHBACK_PUBLIC_URL": f"http://127.0.0.1:{port}",
                 "CASHBACK_REFRESH_SECONDS": "0",
             })
             process = subprocess.Popen(
                 [sys.executable, str(ROOT / "apps" / "cashback-control" / "server.py")],
                 cwd=ROOT,
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 text=True,
             )
             try:
@@ -89,10 +98,11 @@ class CashbackServerTests(unittest.TestCase):
                         headers={
                             "Content-Type": "application/json",
                             "Authorization": "Bearer test-token",
+                            "Origin": f"http://127.0.0.1:{port}",
                         },
                         method="POST",
                     )
-                    with urllib.request.urlopen(api_request, timeout=1) as api_response:
+                    with urllib.request.urlopen(api_request, timeout=5) as api_response:
                         return json.loads(api_response.read())
 
                 correction = post("corrections", {
@@ -116,10 +126,10 @@ class CashbackServerTests(unittest.TestCase):
                 self.assertEqual(refund["inserted"], 1)
 
                 reconciliation = post("reconcile", {
-                    "statement_reference": "synthetic-statement-2026-08",
+                    "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
                     "card_code": "RAK_WORLD",
-                    "period_start": "2026-08-01",
-                    "period_end": "2026-08-31",
+                    "period_start": "2026-08-06",
+                    "period_end": "2026-09-05",
                     "transactions": [
                         {
                             "statement_transaction_id": "purchase-1",
@@ -145,7 +155,7 @@ class CashbackServerTests(unittest.TestCase):
                 self.assertEqual(reconciliation["reconciliation"]["notification_only"], 0)
 
                 finalized = post("periods/finalize", {
-                    "statement_reference": "synthetic-statement-2026-08",
+                    "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
                     "statement_evidence_reference": "sha256:synthetic",
                     "statement_document_url": "https://evidence.example/statement.pdf",
                     "actual_import_verified": True,
@@ -183,6 +193,70 @@ class CashbackServerTests(unittest.TestCase):
                     "outlook-api-test-1:0",
                     {event["source_event_id"] for event in review_queue["events"]},
                 )
+
+                def public_post(endpoint: str, value: dict[str, object], origin: str | None = None):
+                    headers = {"Content-Type": "application/json"}
+                    if origin is not None:
+                        headers["Origin"] = origin
+                    public_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/{endpoint}",
+                        data=json.dumps(value).encode("utf-8"),
+                        headers=headers,
+                        method="POST",
+                    )
+                    return urllib.request.urlopen(public_request, timeout=5)
+
+                with self.assertRaises(urllib.error.HTTPError) as missing_origin:
+                    public_post("review-queue", {"limit": 20})
+                self.assertEqual(missing_origin.exception.code, 403)
+
+                with self.assertRaises(urllib.error.HTTPError) as wrong_origin:
+                    public_post("review-queue", {"limit": 20}, "https://attacker.example")
+                self.assertEqual(wrong_origin.exception.code, 403)
+
+                public_origin = f"http://127.0.0.1:{port}"
+                with public_post("review-queue", {"limit": 20}, public_origin) as response:
+                    browser_queue = json.loads(response.read())
+                self.assertEqual(browser_queue["event_count"], 1)
+
+                with self.assertRaises(urllib.error.HTTPError) as overbroad_approval:
+                    public_post(
+                        "review-approvals",
+                        {
+                            "source_event_id": "outlook-api-test-1:0",
+                            "changes": {"amount_aed": "0"},
+                        },
+                        public_origin,
+                    )
+                self.assertEqual(overbroad_approval.exception.code, 400)
+
+                with public_post(
+                    "review-approvals",
+                    {"source_event_id": "outlook-api-test-1:0"},
+                    public_origin,
+                ) as response:
+                    approval = json.loads(response.read())
+                self.assertEqual(
+                    approval["approval"]["source_event_id"],
+                    "outlook-api-test-1:0",
+                )
+                with public_post("review-queue", {"limit": 20}, public_origin) as response:
+                    empty_queue = json.loads(response.read())
+                self.assertEqual(empty_queue["event_count"], 0)
+
+                unauthenticated_correction = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/corrections",
+                    data=json.dumps({
+                        "correction_id": "unsafe-browser-correction",
+                        "source_event_id": "api-test:1",
+                        "changes": {"purchase_type": "DINING"},
+                    }).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "Origin": public_origin},
+                    method="POST",
+                )
+                with self.assertRaises(urllib.error.HTTPError) as protected_correction:
+                    urllib.request.urlopen(unauthenticated_correction, timeout=1)
+                self.assertEqual(protected_correction.exception.code, 401)
                 heartbeat = post("ingest-runs", {
                     "source": "outlook",
                     "completed_at": "2026-08-16T16:20:00+04:00",
@@ -206,7 +280,7 @@ class CashbackServerTests(unittest.TestCase):
                 ) as response:
                     dashboard = json.loads(response.read())
                 self.assertEqual(dashboard["data_status"]["event_count"], 3)
-                self.assertEqual(dashboard["data_status"]["correction_count"], 1)
+                self.assertEqual(dashboard["data_status"]["correction_count"], 2)
                 self.assertIn(
                     "FINALIZED",
                     {period["status"] for period in dashboard["data_status"]["card_periods"]},
@@ -225,7 +299,3 @@ class CashbackServerTests(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
-                if process.stdout:
-                    process.stdout.close()
-                if process.stderr:
-                    process.stderr.close()

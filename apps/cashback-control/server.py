@@ -44,6 +44,8 @@ DATABASE_PATH = Path(
     )
 ).resolve()
 INGEST_TOKEN = os.environ.get("CASHBACK_INGEST_TOKEN", "")
+PUBLIC_URL = os.environ.get("CASHBACK_PUBLIC_URL", "").strip()
+PUBLIC_ORIGIN = urlsplit(PUBLIC_URL)
 STORE = CashbackEventStore(DATABASE_PATH)
 PUSH_STORE = WebPushStore(DATABASE_PATH)
 WRITE_LOCK = threading.Lock()
@@ -247,11 +249,18 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/alerts/ack",
             "/api/outlook/messages",
             "/api/review-queue",
+            "/api/review-approvals",
             "/api/push/subscriptions",
         }:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
-        if path in {"/api/alerts/ack", "/api/push/subscriptions"}:
+        same_origin_paths = {
+            "/api/alerts/ack",
+            "/api/push/subscriptions",
+            "/api/review-queue",
+            "/api/review-approvals",
+        }
+        if path in same_origin_paths:
             origin = urlsplit(self.headers.get("Origin") or "")
             if (
                 self.headers.get_content_type() != "application/json"
@@ -259,6 +268,14 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                 or origin.netloc.casefold() != str(self.headers.get("Host") or "").casefold()
             ):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Same-origin JSON request required"})
+                return
+            if path in {"/api/review-queue", "/api/review-approvals"} and (
+                not PUBLIC_ORIGIN.scheme
+                or not PUBLIC_ORIGIN.netloc
+                or origin.scheme.casefold() != PUBLIC_ORIGIN.scheme.casefold()
+                or origin.netloc.casefold() != PUBLIC_ORIGIN.netloc.casefold()
+            ):
+                self._json(HTTPStatus.FORBIDDEN, {"error": "Public dashboard origin required"})
                 return
         elif INGEST_TOKEN and self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
@@ -330,6 +347,24 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                     raise ValueError("review queue limit must be an integer") from error
                 queue = STORE.review_queue(limit)
                 self._json(HTTPStatus.OK, {"events": queue, "event_count": len(queue)})
+                return
+            if path == "/api/review-approvals":
+                if not isinstance(source, dict):
+                    raise ValueError("Payload must be a review approval object")
+                if set(source) != {"source_event_id"}:
+                    raise ValueError("Review approval accepts only source_event_id")
+                source_event_id = str(source.get("source_event_id") or "").strip()
+                if not source_event_id:
+                    raise ValueError("source_event_id is required")
+                result = STORE.correct_event({
+                    "correction_id": f"live-review-approved-v1:{source_event_id}",
+                    "source_event_id": source_event_id,
+                    "source": "dashboard-review",
+                    "reason": "Approved current live classification",
+                    "changes": {"review_required": False},
+                })
+                dashboard = rebuild_dashboard()
+                self._json(HTTPStatus.OK, {"approval": result, "event_store": dashboard["data_status"]})
                 return
             if path == "/api/reconcile":
                 if not isinstance(source, dict):

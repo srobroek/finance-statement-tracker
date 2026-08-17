@@ -39,6 +39,18 @@ class CashbackRoutingMatrixTests(TestCase):
             result[graph["code"]] = (preferred["card"], preferred["bucket"])
         return result
 
+    def test_confirmed_program_cycles_and_sc_fx_cost(self) -> None:
+        programs = {program.card: program for program in poc_programs()}
+
+        self.assertEqual(self.config["status"], "USER_CONFIRMED")
+        self.assertEqual(programs["RAK_WORLD"].statement_close_day, 5)
+        self.assertEqual(programs["SC_PLATINUM_X"].statement_close_day, 5)
+        self.assertEqual(programs["EI_AMAZON"].statement_close_day, "LAST_DAY")
+        self.assertEqual(programs["SC_PLATINUM_X"].fx_cost_rate, Decimal("0.0299"))
+        self.assertEqual(programs["EI_AMAZON"].safety_target, None)
+        self.assertEqual(programs["EI_AMAZON"].buckets[0].cap_aed, None)
+        self.assertGreaterEqual(len(self.config["programs"][0]["source_references"]), 4)
+
     @staticmethod
     def rak_near_target() -> list[Transaction]:
         return [

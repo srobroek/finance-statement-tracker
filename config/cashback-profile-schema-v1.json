@@ -201,6 +201,18 @@
         "routing_priority": {"type": "integer"},
         "target_tier": {"type": "string"},
         "exclusions": {"type": "array", "items": {"type": "string"}},
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "url"],
+            "properties": {
+              "label": {"type": "string", "minLength": 1},
+              "url": {"type": "string", "format": "uri"}
+            },
+            "additionalProperties": false
+          }
+        },
         "safety_target": {"$ref": "#/$defs/nullableMoney"},
         "safety_target_aed": {"$ref": "#/$defs/nullableMoney"},
         "fx_cost_rate": {"$ref": "#/$defs/money"},
