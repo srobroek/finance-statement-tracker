@@ -117,9 +117,8 @@ These reports are native Actual objects and update as statement transactions are
 Upload and stage through the container worker:
 
 ```powershell
-.\scripts\push-actual-ingestion-job.ps1 `
-  -InputPath 'C:\path\statement.pdf' `
-  -Type STATEMENT_PDF `
+.\scripts\ingest-statement-to-actual.ps1 `
+  -Pdf 'C:\path\statement.pdf' `
   -CardCode EI_AMAZON `
   -SourceMessageId '<exact-outlook-message-id>' `
   -SourceAttachmentId '<exact-outlook-attachment-id>' `
@@ -206,9 +205,10 @@ STAGE, PREFLIGHT, and COMMIT with the same complete AI and evidence artifacts:
 ```
 
 Use the identical arguments with `-ActualMode COMMIT` only after PREFLIGHT and
-the owner-independent deterministic gates pass. Evidence must be linked before
-the first commit; replay deduplication deliberately prevents a later import from
-silently rewriting an existing transaction.
+the owner-independent deterministic gates pass. Both the caller and worker
+require `ALLOW_ACTUAL_WRITES=true`. Evidence must be linked before the first
+commit; replay deduplication deliberately prevents a later import from silently
+rewriting an existing transaction.
 
 ## Browser ingestion
 
@@ -229,11 +229,15 @@ After following the rendered provider/data recipe and downloading an official ex
   -Provider adcb `
   -DataId credit-card-transactions `
   -File 'C:\path\adcb-export.csv' `
-  -ActualAccount 'ADCB Credit Card · 8833 / 6838' `
-  -SyncId '<budget-sync-id>'
+  -ActualAccount 'ADCB Credit Card · 8833 / 6838'
 ```
 
-Add `-Commit` only after reviewing the generated manifest. Visible-row captures also require `-ApproveReviewedRows`. Official PDFs are routed into the existing statement parser and arithmetic-reconciliation gates. Account overview balances remain reviewable snapshots and never create synthetic transactions. Full operating details are in `docs/browser-ingestion.md`.
+Complete the returned AI handoff and evidence pass, require a review-free
+result, then repeat with `-ActualMode PREFLIGHT` and `-ActualMode COMMIT`. The
+wrapper cannot call the Actual bridge directly. Official PDFs use the statement
+wrapper and its arithmetic-reconciliation gates. Account overview balances
+remain reviewable snapshots and never create synthetic transactions. Full
+operating details are in `docs/browser-ingestion.md`.
 
 ## Cashback snapshot
 

@@ -52,13 +52,18 @@ RAKBANK and Standard Chartered remain `ADAPTER_REQUIRED` because the previous ap
 
 3. The user completes authentication and MFA. Follow the recipe in the authenticated browser and download the official export.
 
-4. Parse, normalize, stage, and dry-run against Actual:
+4. Upload, normalize, and stage through the guarded ingestion worker:
 
    ```powershell
-   .\scripts\ingest-browser-export.ps1 -Provider adcb -DataId credit-card-transactions -File 'C:\path\export.csv' -ActualAccount 'ADCB Credit Card · 8833 / 6838' -SyncId '<budget-sync-id>'
+   .\scripts\ingest-browser-export.ps1 `
+     -Provider adcb `
+     -DataId credit-card-transactions `
+     -File 'C:\path\export.csv' `
+     -ActualAccount 'ADCB Credit Card · 8833 / 6838'
    ```
 
-5. Inspect `runtime/browser-runs/.../browser-run.json`. Re-run with `-Commit` only after review. A capture based on visible rows also requires `-ApproveReviewedRows`.
+5. Save the returned compact AI handoff, answer every request, perform the selective evidence pass, and re-run with `-AIResponsesPath`, `-AIHandoffComplete`, and any `-EvidenceLinksPath`. Require zero review rows and zero rejected proposals.
+6. Re-run the identical source and handoff first with `-ActualMode PREFLIGHT`, then with `-ActualMode COMMIT`. The caller and worker both require `ALLOW_ACTUAL_WRITES=true` for the commit. Stable imported IDs, review gates, and post-write verification remain mandatory; there is no direct bridge bypass.
 
 ## Real export validation
 
@@ -100,6 +105,7 @@ the AI-handoff guard before the Actual bridge was contacted.
 - Untied statement rows are blocked as a batch; official PDFs use the stronger statement arithmetic checks.
 - Official transaction exports are not marked cleared. Only reconciled statement rows are cleared in Actual.
 - Account balances are point-in-time snapshots, not transactions.
+- All operator-facing statement, browser-capture, and browser-export scripts route through the container worker. They cannot prompt for Actual credentials or invoke `actualctl.mjs` directly.
 
 ## Extension contract
 

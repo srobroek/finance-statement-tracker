@@ -15,7 +15,7 @@ node actualctl.mjs bootstrap --config ..\..\config\actual-bootstrap.json
 node actualctl.mjs import --input .\statement-run.json
 ```
 
-`bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default and mutates only with `--commit`; a commit always repeats the complete preflight before writing.
+`bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Operator-facing statement and browser imports must use the PowerShell ingestion wrappers so AI completion, evidence linkage, review state, source identity, and container-level write gates are enforced before this bridge is reached.
 
 See `docs/actual-production.md` for the operating procedure and PowerShell wrappers.
 ## Read-only tag reports

@@ -3,6 +3,27 @@ from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
+    def test_all_operator_ingestion_wrappers_use_the_guarded_worker(self) -> None:
+        wrappers = {
+            "statement": Path("scripts/ingest-statement-to-actual.ps1"),
+            "capture": Path("scripts/ingest-browser-capture.ps1"),
+            "export": Path("scripts/ingest-browser-export.ps1"),
+        }
+        for name, path in wrappers.items():
+            with self.subTest(wrapper=name):
+                script = path.read_text(encoding="utf-8")
+                self.assertIn("push-actual-ingestion-job.ps1", script)
+                self.assertIn("[string]$ActualMode = 'STAGE'", script)
+                self.assertIn("AIHandoffComplete = $AIHandoffComplete", script)
+                self.assertIn("EvidenceLinksPath = $EvidenceLinksPath", script)
+                self.assertNotIn("actualctl.mjs", script)
+                self.assertNotIn("Read-Host", script)
+                self.assertNotIn("[switch]$Commit", script)
+
+        statement = wrappers["statement"].read_text(encoding="utf-8")
+        self.assertIn("Outlook statements require -SourceMessageId", statement)
+        self.assertIn("Outlook statements require -SourceAttachmentId", statement)
+
     def test_actual_ingestion_upload_is_private_and_readable_by_worker(self) -> None:
         script = Path("scripts/push-actual-ingestion-job.ps1").read_text(encoding="utf-8")
         self.assertIn("install -o 10002 -g 10002 -m 0600", script)

@@ -527,12 +527,19 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
   return { status: "committed", preflight, imported, verification, payment_reminder: paymentReminder };
 }
 
+export function assertCommitEnabled(commit, environment = process.env) {
+  if (commit && String(environment.ALLOW_ACTUAL_WRITES ?? "").toLowerCase() !== "true") {
+    throw new Error("Actual commits are disabled; set ALLOW_ACTUAL_WRITES=true explicitly");
+  }
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
   if (!command || !["doctor", "bootstrap", "import", "snapshot", "tag-report"].includes(command)) {
     throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|import|snapshot|tag-report> [options]");
   }
+  if (command === "import") assertCommitEnabled(Boolean(args.commit));
   await openBudget();
   try {
     let result;

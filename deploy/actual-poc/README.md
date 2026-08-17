@@ -29,7 +29,10 @@ sudo docker compose ps
 curl -fsSI http://127.0.0.1:5006/ | grep -E 'Cross-Origin-(Embedder|Opener)-Policy'
 ```
 
-Use `scripts/actual-setup.ps1` and `scripts/ingest-statement-to-actual.ps1` for
-authenticated Actual operations. Both default to planning/preflight; writes
-require their explicit apply/commit switches. See `docs/actual-production.md`
-and `docs/backup-and-restore.md` for the operating and recovery procedures.
+Use `scripts/actual-setup.ps1` for declarative bootstrap operations and the
+statement/browser ingestion wrappers for transaction imports. The ingestion
+wrappers always use the independent worker; they never call the Actual bridge
+directly. Bootstrap defaults to planning, ingestion defaults to staging, and
+writes require explicit mode plus the production write gate. See
+`docs/actual-production.md` and `docs/backup-and-restore.md` for the operating
+and recovery procedures.
