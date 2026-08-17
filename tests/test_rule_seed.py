@@ -52,6 +52,7 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.category, "Electricity & Water")
         self.assertIn("utility", transaction.tags)
         self.assertEqual(transaction.evidence_policy, "MATCH_AMOUNT_AND_PERIOD")
+        self.assertEqual(transaction.evidence_status, "REQUESTED")
 
     def test_wio_foreign_exchange_fee_is_categorized(self) -> None:
         transaction = Transaction(
@@ -68,7 +69,6 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.category, "Foreign Fees")
         self.assertEqual(transaction.transaction_type, "FEE")
         self.assertTrue({"fee", "foreign"}.issubset(transaction.tags))
-        self.assertEqual(transaction.evidence_status, "REQUESTED")
 
     def test_amazon_purchase_gets_ei_bucket_and_receipt_search(self) -> None:
         transaction = self.transaction("AMAZON.AE*AB12CD", card="EI_AMAZON")
