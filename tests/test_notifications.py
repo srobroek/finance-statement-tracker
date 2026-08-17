@@ -46,6 +46,50 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(result.accepted_count, 0)
         self.assertEqual(result.skipped[0]["reason"], "MISSING_AED_EQUIVALENT")
 
+    def test_rakbank_transaction_extracts_verified_fields_and_uses_configured_normalization(self):
+        message = json.loads(
+            Path("tests/fixtures/rakbank-card-transaction.json").read_text(encoding="utf-8")
+        )
+        result = parse_outlook_notifications(
+            [message], {"7210": "RAK_WORLD"}, self.rules
+        )
+        self.assertEqual(result.accepted_count, 1)
+        event = result.events[0]
+        self.assertEqual(event["merchant"], "Amazon")
+        self.assertEqual(event["amount_aed"], "41.49")
+        self.assertEqual(event["currency"], "AED")
+        self.assertEqual(event["occurred_at"], "2026-08-17T00:00:00+00:00")
+        self.assertEqual(event["card_code"], "RAK_WORLD")
+        self.assertEqual(event["purchase_type"], "AMAZON")
+        self.assertEqual(event["channel"], "ONLINE")
+        self.assertEqual(event["status"], "PROVISIONAL")
+        self.assertTrue(event["review_required"])
+
+    def test_rakbank_non_transaction_subject_is_not_accepted(self):
+        message = json.loads(
+            Path("tests/fixtures/rakbank-card-transaction.json").read_text(encoding="utf-8")
+        )
+        message["id"] = "rakbank-apple-pay-registration"
+        message["subject"] = "Your RAKBANK Card is successfully registered on Apple Pay"
+        message["bodyPreview"] = "Your Card ending 7210 is registered on Apple Pay."
+        result = parse_outlook_notifications(
+            [message], {"7210": "RAK_WORLD"}, self.rules
+        )
+        self.assertEqual(result.accepted_count, 0)
+        self.assertEqual(result.skipped[0]["reason"], "UNSUPPORTED_NOTIFICATION")
+
+    def test_rakbank_matching_subject_with_incomplete_body_is_rejected(self):
+        message = json.loads(
+            Path("tests/fixtures/rakbank-card-transaction.json").read_text(encoding="utf-8")
+        )
+        message["id"] = "rakbank-malformed-transaction"
+        message["bodyPreview"] = "A card transaction occurred, but no transaction facts are present."
+        result = parse_outlook_notifications(
+            [message], {"7210": "RAK_WORLD"}, self.rules
+        )
+        self.assertEqual(result.accepted_count, 0)
+        self.assertIn("PARSE_ERROR:RAKBANK transaction email", result.skipped[0]["reason"])
+
     def test_cli_batch_shape_is_json_serializable(self):
         result = parse_outlook_notifications(
             [self.message], {"8833": "ADCB_CASHBACK"}, self.rules

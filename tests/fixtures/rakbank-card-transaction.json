@@ -1,0 +1,8 @@
+{
+  "id": "rakbank-fixture-message-1",
+  "subject": "An update on your Card transaction",
+  "sender": {"emailAddress": {"address": "alerts@rakbank.ae", "name": "RAKBANK"}},
+  "receivedDateTime": "2026-08-17T12:02:01Z",
+  "bodyPreview": "Hello Customer,\r\n\r\nYou spent AED 41.49 at Amazon.ae on your Credit Card  559580******7210 on 17/08. Combined Available Balance: AED 458.51.\r\n\r\nDidn't make this request?",
+  "web_link": "https://outlook.office.example/rakbank-fixture-message-1"
+}

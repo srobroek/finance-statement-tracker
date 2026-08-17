@@ -10,7 +10,7 @@ from .ai_rules import AIEnrichmentEngine
 from .history import HistoryDecision, apply_history_match
 from .models import Transaction
 from .rules import RuleEngine, StaticRule
-from .cashback import load_program_configuration, purchase_type_from_config
+from .cashback import channel_from_config, load_program_configuration, purchase_type_from_config
 
 
 _ADCB_OTP = re.compile(
@@ -18,6 +18,15 @@ _ADCB_OTP = re.compile(
     r"(?P<currency>[A-Z]{3})\s+(?P<amount>[0-9,]+(?:\.[0-9]{1,2})?)\s+"
     r"on\s+your\s+ADCB\s+Credit\s+Card\s+XXX(?P<last4>[0-9]{4})",
     re.IGNORECASE,
+)
+
+_RAKBANK_CARD_TRANSACTION = re.compile(
+    r"You\s+spent\s+(?P<currency>[A-Z]{3})\s+"
+    r"(?P<amount>[0-9,]+(?:\.[0-9]{1,2})?)\s+at\s+"
+    r"(?P<merchant>.+?)\s+on\s+your\s+Credit\s+Card\s+"
+    r"[0-9*\s]*?(?P<last4>[0-9]{4})\s+on\s+"
+    r"(?P<day>[0-9]{1,2})/(?P<month>[0-9]{1,2})(?:\.|\s|$)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -113,8 +122,65 @@ class ADCBOTPNotificationAdapter:
         )
 
 
+def _resolve_notification_date(day: int, month: int, received: datetime) -> datetime:
+    candidates: list[datetime] = []
+    for year in (received.year - 1, received.year, received.year + 1):
+        try:
+            candidates.append(datetime(year, month, day, tzinfo=received.tzinfo))
+        except ValueError:
+            continue
+    if not candidates:
+        raise ValueError("RAKBANK transaction date is invalid")
+    occurred = min(candidates, key=lambda candidate: abs(candidate - received))
+    if abs((occurred.date() - received.date()).days) > 7:
+        raise ValueError("RAKBANK transaction date is not close to the email receipt date")
+    return occurred
+
+
+class RakbankCardTransactionNotificationAdapter:
+    """Parse RAKBANK card-spend notifications as provisional evidence."""
+
+    code = "rakbank_card_transaction_v1"
+    senders = frozenset({"alerts@rakbank.ae"})
+    subjects = frozenset({"an update on your card transaction"})
+
+    def detect(self, message: dict[str, Any]) -> bool:
+        return (
+            _sender_address(message) in self.senders
+            and str(message.get("subject") or "").strip().casefold() in self.subjects
+        )
+
+    def parse(self, message: dict[str, Any]) -> NotificationFact:
+        match = _RAKBANK_CARD_TRANSACTION.search(_message_text(message))
+        if not match:
+            raise ValueError(
+                "RAKBANK transaction email does not expose merchant, amount, currency, card suffix, and date"
+            )
+        received_raw = str(message.get("receivedDateTime") or "").strip()
+        if not received_raw:
+            raise ValueError("Outlook receivedDateTime is required")
+        received = datetime.fromisoformat(received_raw.replace("Z", "+00:00"))
+        occurred = _resolve_notification_date(
+            int(match.group("day")),
+            int(match.group("month")),
+            received,
+        )
+        return NotificationFact(
+            adapter=self.code,
+            institution="RAKBANK",
+            merchant=" ".join(match.group("merchant").split()),
+            amount=Decimal(match.group("amount").replace(",", "")),
+            currency=match.group("currency").upper(),
+            card_last4=match.group("last4"),
+            occurred_at=occurred,
+            channel="UNKNOWN",
+            confidence=0.95,
+            requires_review=True,
+        )
+
 DEFAULT_NOTIFICATION_ADAPTERS: tuple[NotificationAdapter, ...] = (
     ADCBOTPNotificationAdapter(),
+    RakbankCardTransactionNotificationAdapter(),
 )
 
 
@@ -181,6 +247,12 @@ def parse_outlook_notifications(
             tags={"authorization-notification"},
             metadata={"notification_adapter": fact.adapter},
         )
+        if transaction.channel == "UNKNOWN":
+            transaction.channel = channel_from_config(
+                cashback_source,
+                transaction.tags,
+                transaction.merchant_raw,
+            )
         static_trace = engine.apply(transaction)
         history_trace = apply_history_match(transaction, history_index or {})
         ai_trace = []

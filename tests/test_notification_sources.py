@@ -19,8 +19,11 @@ class NotificationSourceTests(unittest.TestCase):
         )
         active = [source for source in sources if source.active]
         placeholders = [source for source in sources if not source.active]
-        self.assertEqual([source.code for source in active], ["ADCB_CARD_OTP"])
-        self.assertEqual(len(placeholders), 3)
+        self.assertEqual(
+            [source.code for source in active],
+            ["ADCB_CARD_OTP", "RAKBANK_CARD_TRANSACTION"],
+        )
+        self.assertEqual(len(placeholders), 2)
         for source in placeholders:
             with self.subTest(source=source.code):
                 self.assertIsNone(source.adapter)

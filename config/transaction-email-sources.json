@@ -17,12 +17,12 @@
       "code": "RAKBANK_CARD_TRANSACTION",
       "institution": "RAKBANK",
       "card_code": "RAK_WORLD",
-      "status": "PLACEHOLDER",
-      "evidence_semantics": "UNKNOWN",
-      "adapter": null,
-      "senders": [],
-      "subjects": [],
-      "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
+      "status": "ACTIVE",
+      "evidence_semantics": "TRANSACTION_NOTIFICATION_PROVISIONAL",
+      "adapter": "rakbank_card_transaction_v1",
+      "senders": ["alerts@rakbank.ae"],
+      "subjects": ["An update on your Card transaction"],
+      "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and the event remains provisional until statement reconciliation."
     },
     {
       "code": "STANDARD_CHARTERED_CARD_TRANSACTION",
