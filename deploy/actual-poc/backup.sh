@@ -1,18 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STACK_DIR="${FINANCE_STACK_DIR:-/opt/stacks/finance-actual-poc}"
+ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
+CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
+INGESTION_STACK_DIR="${FINANCE_INGESTION_STACK_DIR:-/opt/stacks/finance-ingestion}"
 BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
 RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
 
-if [[ "${EUID}" -ne 0 ]]; then
-  echo '{"level":"error","event":"backup_refused","reason":"root_required"}' >&2
+ACTUAL_DATA_DIR="${FINANCE_ACTUAL_DATA_DIR:-${ACTUAL_STACK_DIR}/data}"
+CASHBACK_DATA_DIR="${FINANCE_CASHBACK_DATA_DIR:-${ACTUAL_STACK_DIR}/cashback-data}"
+INGESTION_DATA_DIR="${FINANCE_INGESTION_DATA_DIR:-${ACTUAL_STACK_DIR}/ingestion-data}"
+
+fail() {
+  printf '{"level":"error","event":"backup_refused","reason":"%s"}\n' "$1" >&2
   exit 1
-fi
-if [[ "$(readlink -f "${STACK_DIR}")" != "/opt/stacks/finance-actual-poc" ]]; then
-  echo '{"level":"error","event":"backup_refused","reason":"unexpected_stack_path"}' >&2
-  exit 1
-fi
+}
+
+resolved() {
+  readlink -m -- "$1"
+}
+
+if [[ "${EUID}" -ne 0 ]]; then fail "root_required"; fi
+[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual-poc" ]] || fail "unexpected_actual_stack_path"
+[[ "$(resolved "${CASHBACK_STACK_DIR}")" == "/opt/stacks/finance-cashback" ]] || fail "unexpected_cashback_stack_path"
+[[ "$(resolved "${INGESTION_STACK_DIR}")" == "/opt/stacks/finance-ingestion" ]] || fail "unexpected_ingestion_stack_path"
+backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
+[[ "${backup_root_resolved}" == "/opt/backups/finance-actual-poc" || "${backup_root_resolved}" == /opt/backups/finance-actual-poc/* ]] || fail "unexpected_backup_root"
+[[ "$(resolved "${ACTUAL_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/data" ]] || fail "unexpected_actual_data_path"
+[[ "$(resolved "${CASHBACK_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/cashback-data" ]] || fail "unexpected_cashback_data_path"
+[[ "$(resolved "${INGESTION_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/ingestion-data" ]] || fail "unexpected_ingestion_data_path"
+for required_dir in "${ACTUAL_DATA_DIR}" "${CASHBACK_DATA_DIR}" "${INGESTION_DATA_DIR}"; do
+  [[ -d "${required_dir}" ]] || fail "missing_data_directory"
+done
 
 mkdir -p "${BACKUP_ROOT}"
 exec 9>"${BACKUP_ROOT}/.backup.lock"
@@ -22,37 +41,90 @@ flock -n 9 || {
 }
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+working="${BACKUP_ROOT}/.${stamp}.incomplete"
 destination="${BACKUP_ROOT}/${stamp}"
-mkdir -p "${destination}"
+payload="${working}/payload"
+[[ ! -e "${working}" && ! -e "${destination}" ]] || fail "backup_destination_exists"
+mkdir -p "${payload}/actual-data" "${payload}/cashback-data" "${payload}/ingestion-data" "${payload}/configuration"
 
 actual_running="$(docker inspect -f '{{.State.Running}}' finance-actual-poc 2>/dev/null || true)"
 proxy_running="$(docker inspect -f '{{.State.Running}}' finance-actual-proxy 2>/dev/null || true)"
 cashback_running="$(docker inspect -f '{{.State.Running}}' finance-cashback-control 2>/dev/null || true)"
+ingestion_running="$(docker inspect -f '{{.State.Running}}' finance-actual-ingestion 2>/dev/null || true)"
 
 restart_services() {
-  if [[ "${actual_running}" == "true" ]]; then docker start finance-actual-poc >/dev/null; fi
-  if [[ "${cashback_running}" == "true" ]]; then docker start finance-cashback-control >/dev/null; fi
-  # Podman may assign Actual a new address after a stop/start. Restart Nginx
-  # last so its startup DNS lookup never retains the pre-backup address.
-  if [[ "${proxy_running}" == "true" ]]; then docker start finance-actual-proxy >/dev/null; fi
+  local failed=0
+  if [[ "${actual_running}" == "true" ]]; then docker start finance-actual-poc >/dev/null || failed=1; fi
+  if [[ "${cashback_running}" == "true" ]]; then docker start finance-cashback-control >/dev/null || failed=1; fi
+  if [[ "${ingestion_running}" == "true" ]]; then docker start finance-actual-ingestion >/dev/null || failed=1; fi
+  # Start the proxy last so its startup DNS lookup sees the running Actual container.
+  if [[ "${proxy_running}" == "true" ]]; then docker start finance-actual-proxy >/dev/null || failed=1; fi
+  return "${failed}"
 }
-trap restart_services EXIT
+
+wait_for_url() {
+  local label="$1"
+  local url="$2"
+  for _ in $(seq 1 90); do
+    if curl -fsS "${url}" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  printf '{"level":"error","event":"backup_restart_unhealthy","service":"%s"}\n' "${label}" >&2
+  return 1
+}
+
+emergency_restart() {
+  restart_services || true
+}
+trap emergency_restart EXIT
 
 if [[ "${proxy_running}" == "true" ]]; then docker stop finance-actual-proxy >/dev/null; fi
+if [[ "${ingestion_running}" == "true" ]]; then docker stop finance-actual-ingestion >/dev/null; fi
 if [[ "${actual_running}" == "true" ]]; then docker stop finance-actual-poc >/dev/null; fi
 if [[ "${cashback_running}" == "true" ]]; then docker stop finance-cashback-control >/dev/null; fi
 
-tar -C "${STACK_DIR}" -czf "${destination}/finance-data.tar.gz" data cashback-data
-sha256sum "${destination}/finance-data.tar.gz" > "${destination}/SHA256SUMS"
-cat > "${destination}/manifest.json" <<EOF
-{"schema_version":1,"created_at":"${stamp}","actual_image":"actualbudget/actual-server:26.8.1@sha256:6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5","includes":["data","cashback-data"],"secrets_included":false}
+cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"
+cp -a "${CASHBACK_DATA_DIR}/." "${payload}/cashback-data/"
+cp -a "${INGESTION_DATA_DIR}/." "${payload}/ingestion-data/"
+
+install -m 0644 "${ACTUAL_STACK_DIR}/compose.yaml" "${payload}/configuration/actual-compose.yaml"
+install -m 0644 "${CASHBACK_STACK_DIR}/compose.yaml" "${payload}/configuration/cashback-compose.yaml"
+install -m 0644 "${INGESTION_STACK_DIR}/compose.yaml" "${payload}/configuration/ingestion-compose.yaml"
+if [[ -d "${ACTUAL_STACK_DIR}/nginx" ]]; then
+  cp -a "${ACTUAL_STACK_DIR}/nginx" "${payload}/configuration/actual-nginx"
+fi
+for config_name in cashback-profile.json actual-bootstrap.json static-rules.json transaction-email-sources.json; do
+  if [[ -f "${CASHBACK_STACK_DIR}/${config_name}" ]]; then
+    install -m 0644 "${CASHBACK_STACK_DIR}/${config_name}" "${payload}/configuration/${config_name}"
+  fi
+done
+
+tar -C "${payload}" -czf "${working}/finance-data.tar.gz" .
+rm -rf -- "${payload}"
+sha256sum "${working}/finance-data.tar.gz" > "${working}/SHA256SUMS"
+(
+  cd "${working}"
+  sha256sum -c SHA256SUMS >/dev/null
+)
+cat > "${working}/manifest.json" <<EOF
+{"schema_version":2,"created_at":"${stamp}","includes":["actual-data","cashback-data","ingestion-data","configuration"],"secrets_included":false,"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control","ingestion":"finance-actual-ingestion"}}
 EOF
 
 restart_services
+if [[ "${actual_running}" == "true" && "${proxy_running}" == "true" ]]; then
+  wait_for_url "actual" "http://127.0.0.1:5006/"
+fi
+if [[ "${cashback_running}" == "true" ]]; then
+  wait_for_url "cashback" "http://127.0.0.1:5010/api/health"
+fi
+if [[ "${ingestion_running}" == "true" ]]; then
+  wait_for_url "ingestion" "http://127.0.0.1:5020/api/health"
+fi
 trap - EXIT
+mv -- "${working}" "${destination}"
 
 if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && (( RETENTION_DAYS > 0 )); then
-  find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +
+  find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +
 fi
 
 echo "{\"level\":\"info\",\"event\":\"backup_complete\",\"path\":\"${destination}\"}"

@@ -12,6 +12,9 @@ on:
       - "apps/actual-ingestion/**"
       - "browser_adapters/**"
       - "config/**"
+      - "deploy/actual-poc/backup.sh"
+      - "deploy/actual-poc/finance-backup.service"
+      - "deploy/actual-poc/finance-backup.timer"
       - "deploy/ingestion/**"
       - "deploy/finance-runtime/**"
       - "finance_tracker/**"
@@ -127,10 +130,16 @@ jobs:
           stack=/opt/stacks/finance-ingestion
           state=/opt/stacks/finance-actual-poc/ingestion-data
           sudo install -d "$stack"
+          sudo install -d /opt/stacks/finance-actual-poc
           sudo install -d -m 0700 /opt/stacks/finance-runtime
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
           sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
           sudo /opt/stacks/finance-runtime/render-env.sh
+          sudo install -m 0750 deploy/actual-poc/backup.sh /opt/stacks/finance-actual-poc/backup.sh
+          sudo install -m 0644 deploy/actual-poc/finance-backup.service /etc/systemd/system/finance-backup.service
+          sudo install -m 0644 deploy/actual-poc/finance-backup.timer /etc/systemd/system/finance-backup.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now finance-backup.timer
           sudo install -d -o 10002 -g 10002 \
             "$state" \
             "$state/inbox" \

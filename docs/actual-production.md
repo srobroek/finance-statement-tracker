@@ -220,7 +220,18 @@ The output contains card pace, current tier, bucket spend and headroom, routing 
 - Cashback close: finalize only after that card statement is ingested and reconciled.
 - Aggregate month close: event-driven after all required card periods close.
 
-The current tentative schedule remains month-end with processing on the first day of the following month. The attachment-retrieval step can be a Codex Outlook automation initially; the deterministic command begins once the PDF has been downloaded to the worker.
+The current tentative schedule remains month-end with processing on the first day of the following month. Active Codex tasks are:
+
+| Time (Asia/Dubai) | Task | Behaviour |
+|---|---|---|
+| Hourly at `:05` | Transaction and evidence ingestion | Full durable-cursor gap plus overlap; provisional cashback only. |
+| 20:00 on day 1 | RAKBANK World statement | Leaves the period open while its statement source/adapter remain placeholders. |
+| 20:20 on day 1 | Standard Chartered Platinum X statement | Leaves the period open while its statement source/adapter remain placeholders. |
+| 20:40 on day 1 | Emirates Islamic Amazon statement | Stage, AI handoff when requested, Actual preflight/commit, cashback reconciliation, and guarded finalization. |
+| 21:00 on day 1 | ADCB statement | Stage, AI handoff when requested, Actual preflight/commit, and due-date reminder; no companion close unless ADCB is added to a versioned cashback profile. |
+| 21:20 on day 1 | Wio statement | Preserve multi-account suffix mapping, then stage and commit only when every row maps cleanly; no companion close unless Wio is added to a versioned cashback profile. |
+
+The legacy daily aggregate month-close task remains paused. The attachment-retrieval step is performed by the card/source-specific Codex task; the deterministic command begins only after the exact PDF attachment and Outlook evidence IDs have been captured.
 
 ## Live Outlook notifications
 

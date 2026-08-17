@@ -23,6 +23,17 @@ class DeploymentScriptTests(unittest.TestCase):
         tracked = Path("config/deployment.json").read_text(encoding="utf-8")
         self.assertNotIn("172.20.10.20", tracked)
 
+    def test_backup_restarts_existing_independent_containers_without_compose_pull(self) -> None:
+        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        self.assertNotIn("docker compose", script)
+        self.assertNotIn("docker-compose", script)
+        self.assertIn("docker start finance-actual-poc", script)
+        self.assertIn("docker start finance-cashback-control", script)
+        self.assertIn("docker start finance-actual-ingestion", script)
+        self.assertIn('"${payload}/ingestion-data/"', script)
+        self.assertIn('"${CASHBACK_STACK_DIR}/compose.yaml"', script)
+        self.assertIn("sha256sum -c SHA256SUMS", script)
+
 
 if __name__ == "__main__":
     unittest.main()

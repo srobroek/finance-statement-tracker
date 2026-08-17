@@ -1,5 +1,5 @@
 [Unit]
-Description=Cold backup of Actual Budget and Cashback Control data
+Description=Cold backup of Actual, Cashback Control, and ingestion data
 After=docker.service
 
 [Service]
