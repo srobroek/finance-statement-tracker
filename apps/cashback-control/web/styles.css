@@ -75,7 +75,7 @@ section { margin-top: 14px; }
 .routing-tabs button { border: 0; border-radius: 6px; padding: 4px 7px; color: var(--muted); background: transparent; font-size: .6rem; cursor: pointer; }
 .routing-tabs button[aria-selected="true"] { color: var(--green); background: var(--surface-raised); }
 .route-table { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: #0d120f; }
-.route-table-head, .route-main { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.2fr) minmax(0, .75fr); gap: 7px; align-items: center; }
+.route-table-head, .route-main { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 2fr); gap: 9px; align-items: center; }
 .route-table-head { min-height: 20px; padding: 3px 7px; color: #d4ddd7; background: #253029; font-size: .52rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .route-row, .position-card, .alert-card, .empty-state {
   background: color-mix(in srgb, var(--surface), transparent 2%);
@@ -91,12 +91,11 @@ section { margin-top: 14px; }
 .route-main::-webkit-details-marker { display: none; }
 .route-main::marker { content: ""; }
 .route-main .route-type { overflow: hidden; color: #f4f7f5; font-size: .68rem; font-weight: 800; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
-.route-use { min-width: 0; display: grid; gap: 2px; overflow: hidden; }
-.route-use > span { min-width: 0; display: flex; align-items: baseline; gap: 5px; overflow: hidden; white-space: nowrap; }
-.route-use strong { overflow: hidden; color: #f7faf8; font-size: .64rem; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
-.route-use em { flex: 0 0 auto; color: var(--amber); font-size: .52rem; font-style: normal; }
-.route-use > small { overflow: hidden; color: var(--muted); font-size: .48rem; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
-.route-main > small { overflow: hidden; color: var(--red); font-size: .56rem; font-weight: 700; line-height: 1.05; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.route-cards { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; overflow: hidden; }
+.card-choice { min-width: 0; line-height: 1.05; white-space: nowrap; }
+.card-choice.use { flex: 0 1 auto; overflow: hidden; color: var(--green); font-size: .64rem; text-overflow: ellipsis; }
+.avoid-list { min-width: 0; display: flex; justify-content: flex-end; gap: 6px; overflow: hidden; }
+.card-choice.avoid { flex: 0 1 auto; overflow: hidden; color: var(--red); font-size: .56rem; font-weight: 700; text-overflow: ellipsis; }
 .route-reason { padding: 6px 7px 7px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; border-top: 1px solid var(--line); background: #0b100d; }
 .route-reason span { color: var(--muted); font-size: .5rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .route-reason p { color: var(--amber); font-size: .58rem; line-height: 1.25; }
@@ -263,8 +262,8 @@ section { margin-top: 14px; }
   .route-table { flex: 1 1 auto; display: flex; flex-direction: column; }
   #recommendations { flex: 1 1 auto; display: grid; grid-auto-rows: minmax(43px, 1fr); }
   .route-table-head, .route-main {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr) minmax(0, .85fr);
-    gap: 8px;
+    grid-template-columns: minmax(0, .85fr) minmax(0, 2.15fr);
+    gap: 10px;
   }
   .route-table-head { min-height: 28px; padding: 5px 9px; font-size: .72rem; }
   .route-row { padding: 0; }
@@ -276,21 +275,9 @@ section { margin-top: 14px; }
     text-overflow: clip;
     white-space: normal;
   }
-  .route-use { gap: 1px; align-content: center; }
-  .route-use strong {
-    overflow: hidden;
-    font-size: 1.18rem;
-    line-height: 1.05;
-    text-overflow: clip;
-    white-space: normal;
-  }
-  .route-main > small {
-    overflow: hidden;
-    font-size: .9rem;
-    line-height: 1.08;
-    text-overflow: clip;
-    white-space: normal;
-  }
+  .card-choice.use { font-size: 1.16rem; }
+  .card-choice.avoid { font-size: .88rem; }
+  .avoid-list { gap: 7px; }
   .route-reason { padding: 8px 9px 9px; gap: 9px; }
   .route-reason span { font-size: .62rem; }
   .route-reason p { font-size: .82rem; }
@@ -396,8 +383,12 @@ section { margin-top: 14px; }
 
 @media (max-width: 370px) {
   .shell { width: min(100% - 12px, 1180px); }
-  .route-table-head, .route-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, .82fr); gap: 4px; }
+  .route-table-head, .route-main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.7fr); gap: 7px; }
   .route-main { padding-inline: 6px; }
-  .route-main .route-type, .route-use strong { font-size: .98rem; }
-  .route-main > small { font-size: .76rem; }
+  .route-main .route-type { font-size: .96rem; }
+  .card-choice { font-size: 0 !important; }
+  .card-choice::after { content: attr(data-short); font-size: .9rem; }
+  .card-choice.use::after { color: var(--green); font-size: 1rem; }
+  .card-choice.avoid::after { color: var(--red); }
+  .avoid-list { gap: 8px; }
 }

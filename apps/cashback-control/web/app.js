@@ -12,6 +12,14 @@ function cardLabel(code) {
   }[code] || code.replaceAll("_", " ");
 }
 
+function compactCardLabel(code) {
+  return {
+    RAK_WORLD: "RAK",
+    SC_PLATINUM_X: "SC",
+    EI_AMAZON: "Amazon",
+  }[code] || cardLabel(code);
+}
+
 function compactMoney(value) {
   const amount = Number(value);
   if (amount >= 1000) return `AED ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
@@ -119,15 +127,22 @@ function renderRecommendations(items) {
     ...items.filter((item) => item.active !== false).map((item) => {
       const node = document.createElement("details");
       node.className = "route-row";
-      const avoid = (item.avoid_cards || []).map(cardLabel);
       const preferred = item.ranked_cards?.[0];
+      const preferredCode = preferred?.card || item.use_card;
+      const avoidCodes = item.avoid_cards || [];
+      const avoid = avoidCodes.map(cardLabel);
+      const avoidMarkup = avoidCodes
+        .map((code) => `<span class="card-choice avoid" data-short="${compactCardLabel(code)}">${compactCardLabel(code)}</span>`)
+        .join("");
       node.innerHTML = `
         <summary class="route-main" aria-label="${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.">
           <span class="route-type">${typeLabel(item)}</span>
-          <span class="route-use"><strong>${routeHeading(item, preferred)}</strong></span>
-          <small title="${avoid.length ? avoid.join(", ") : "None"}">${avoid.length ? avoid.join(", ") : ""}</small>
+          <span class="route-cards">
+            <strong class="card-choice use" data-short="${compactCardLabel(preferredCode)}">${routeHeading(item, preferred)}</strong>
+            <span class="avoid-list" title="Avoid ${avoid.length ? avoid.join(", ") : "none"}">${avoidMarkup}</span>
+          </span>
         </summary>
-        <div class="route-reason"><span>Why</span><p>${compactReason(item)}</p></div>
+        <div class="route-reason"><span>Why</span><p><b>Use ${routeHeading(item, preferred)}</b>${avoid.length ? ` · avoid ${avoid.join(", ")}` : ""}. ${compactReason(item)}</p></div>
       `;
       return node;
     }),
