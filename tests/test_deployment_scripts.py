@@ -23,6 +23,14 @@ class DeploymentScriptTests(unittest.TestCase):
         statement = wrappers["statement"].read_text(encoding="utf-8")
         self.assertIn("Outlook statements require -SourceMessageId", statement)
         self.assertIn("Outlook statements require -SourceAttachmentId", statement)
+        self.assertFalse(Path("integrations/actual/import.mjs").exists())
+        bridge_files = list(Path("integrations/actual").glob("*.mjs"))
+        direct_importers = [
+            path.name
+            for path in bridge_files
+            if "actual.importTransactions" in path.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(direct_importers, ["actualctl.mjs"])
 
     def test_actual_ingestion_upload_is_private_and_readable_by_worker(self) -> None:
         script = Path("scripts/push-actual-ingestion-job.ps1").read_text(encoding="utf-8")

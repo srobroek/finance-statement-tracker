@@ -9,13 +9,16 @@ npm install
 $env:ACTUAL_SERVER_URL = "https://actual.example"
 $env:ACTUAL_PASSWORD = "..."
 $env:ACTUAL_SYNC_ID = "..."
-$env:ACTUAL_DRY_RUN = "true"
 node actualctl.mjs doctor
 node actualctl.mjs bootstrap --config ..\..\config\actual-bootstrap.json
 node actualctl.mjs import --input .\statement-run.json
 ```
 
 `bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Operator-facing statement and browser imports must use the PowerShell ingestion wrappers so AI completion, evidence linkage, review state, source identity, and container-level write gates are enforced before this bridge is reached.
+
+There is no second standalone import executable or `ACTUAL_DRY_RUN=false`
+compatibility path. `actualctl.mjs` is the only bridge command that can import
+transactions, and production reaches it only through the ingestion worker.
 
 See `docs/actual-production.md` for the operating procedure and PowerShell wrappers.
 ## Read-only tag reports
