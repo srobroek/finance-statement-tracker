@@ -107,6 +107,16 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.reward_bucket, "EI_AMAZON")
         self.assertEqual(transaction.evidence_policy, "SEARCH_RECEIPT_BILL_WARRANTY")
 
+    def test_aws_domain_is_cloud_services_not_amazon_retail(self) -> None:
+        transaction = self.transaction("AWS EMEA aws.amazon.co - 0.61 USD")
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.vendor, "AWS")
+        self.assertEqual(transaction.category, "Cloud Services")
+        self.assertTrue({"business", "online"}.issubset(transaction.tags))
+        self.assertIsNone(transaction.evidence_policy)
+
     def test_sc_wallet_rule_is_distinct_from_online(self) -> None:
         transaction = self.transaction("LOCAL MERCHANT", card="SC_PLATINUM_X")
         transaction.channel = "APPLE_PAY_POS"

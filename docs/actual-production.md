@@ -180,6 +180,15 @@ transaction/policy request; the response may deliberately contain an empty
 proposal list when evidence is insufficient. Accepted responses are recorded
 in `ai_trace` and flow into the Actual import envelopes.
 
+Treat the handoff as an ordered fixed-point loop. Submit the cumulative response
+array in STAGE mode first, compare its answered transaction/policy identities to
+the newly returned handoff, and answer any later policy activated by an accepted
+classification. Repeat until there are no unanswered identities, then add
+`-AIHandoffComplete`. This is required because a category proposal can validly
+activate a later subscription, property, evidence, or rule-recommendation
+policy. The worker rejects an early completion claim rather than silently
+skipping the later request.
+
 Matched receipts, bills, warranties, and other purchase documents are an
 explicit pre-commit handoff as well. `purchase-evidence-archive` returns the
 content hash, portable relative path, and linked transaction IDs. Convert each

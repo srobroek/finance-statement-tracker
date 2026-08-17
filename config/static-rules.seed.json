@@ -209,6 +209,35 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "vendor-aws",
+    "name": "Normalize Amazon Web Services",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 25,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "merchant_raw",
+              "operator": "regex",
+              "value": "(?:^|[^A-Z0-9])AWS(?:[^A-Z0-9]|$)|AMAZON WEB SERVICES"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set",
+        "field": "vendor",
+        "value": "AWS"
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "vendor-amazon",
     "name": "Normalize Amazon",
     "stage": "VENDOR_NORMALIZATION",
@@ -220,7 +249,7 @@
             {
               "field": "merchant_raw",
               "operator": "regex",
-              "value": "AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?"
+              "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?!\\.[A-Z])(?:[^A-Z0-9]|$)"
             }
           ]
         }
@@ -625,6 +654,43 @@
         "value": [
           "utility",
           "home"
+        ],
+        "sequence": 20
+      }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-aws-cloud-services",
+    "name": "AWS cloud services",
+    "stage": "CLASSIFICATION",
+    "priority": 25,
+    "match": {
+      "any": [
+        {
+          "all": [
+            {
+              "field": "vendor",
+              "operator": "equals",
+              "value": "AWS"
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "action": "set_if_empty",
+        "field": "category",
+        "value": "Cloud Services"
+      },
+      {
+        "action": "add_tags",
+        "value": [
+          "business",
+          "online"
         ],
         "sequence": 20
       }

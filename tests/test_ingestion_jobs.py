@@ -541,6 +541,72 @@ class IngestionJobTests(unittest.TestCase):
                 }
             )
 
+    def test_ai_handoff_iterates_until_later_policies_reach_a_fixed_point(self) -> None:
+        pdf = self.runner.inbox / "iterative-ei-statement.pdf"
+        write_ei_pdf(pdf)
+        request = {
+            "type": "STATEMENT_PDF",
+            "source_path": pdf.name,
+            "card_code": "EI_AMAZON",
+            "actual_mode": "STAGE",
+            "source_message_id": "iterative-message",
+            "source_attachment_id": "iterative-attachment",
+        }
+        initial = self.runner.submit(request)
+        classify = next(
+            item
+            for item in initial["ai_handoff"]["requests"]
+            if item["policy_id"] == "classify-unresolved"
+        )
+        classification_response = {
+            "transaction_id": classify["transaction_id"],
+            "policy_id": classify["policy_id"],
+            "provider": "codex-scheduled-task",
+            "model": "gpt-5.6-sol",
+            "proposals": [
+                {
+                    "field": "category",
+                    "value": "Online Shopping",
+                    "confidence": 0.95,
+                    "rationale": "Marketplace descriptor supports an online purchase class",
+                    "source_refs": ["iterative-message"],
+                }
+            ],
+        }
+
+        expanded = self.runner.submit(
+            {**request, "ai_responses": [classification_response]}
+        )
+
+        self.assertEqual(expanded["ai_response_count"], 1)
+        self.assertGreater(expanded["ai_request_count"], initial["ai_request_count"])
+        evidence = next(
+            item
+            for item in expanded["ai_handoff"]["requests"]
+            if item["transaction_id"] == classify["transaction_id"]
+            and item["policy_id"] == "find-purchase-evidence"
+        )
+        complete = self.runner.submit(
+            {
+                **request,
+                "ai_responses": [
+                    classification_response,
+                    {
+                        "transaction_id": evidence["transaction_id"],
+                        "policy_id": evidence["policy_id"],
+                        "provider": "codex-scheduled-task",
+                        "model": "gpt-5.6-sol",
+                        "proposals": [],
+                    },
+                ],
+                "ai_handoff_complete": True,
+            }
+        )
+
+        self.assertTrue(complete["ai_handoff_complete"])
+        self.assertEqual(complete["ai_response_count"], complete["ai_request_count"])
+        self.assertEqual(complete["ai_rejected_count"], 0)
+
     def test_review_required_browser_capture_cannot_reach_actual(self) -> None:
         source = self.runner.inbox / "browser-capture.json"
         shutil.copyfile(Path("tests/fixtures/browser-capture.sample.json"), source)
