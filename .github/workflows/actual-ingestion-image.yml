@@ -218,6 +218,7 @@ jobs:
           expected_writes="$(sudo awk -F= '$1 == "ALLOW_ACTUAL_WRITES" { print tolower($2) }' /opt/stacks/finance-runtime/.env | tail -n1)"
           expected_writes="${expected_writes:-false}"
           grep -q "\"actual_writes_enabled\": $expected_writes" <<<"$health"
+          grep -q "\"pipeline_revision\": \"$GITHUB_SHA\"" <<<"$health"
           grep -q 'RAK_WORLD' <<<"$health"
           grep -q 'SC_PLATINUM_X' <<<"$health"
           # A worker deploy must leave Actual's public origin untouched.
@@ -241,7 +242,16 @@ jobs:
           statement_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"status": "STAGED"' <<<"$statement_result"
           grep -q '"envelope_count": 1' <<<"$statement_result"
-          grep -q '"ai_request_count":' <<<"$statement_result"
+          grep -q '"ai_request_count": 0' <<<"$statement_result"
+
+          replay_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"idempotent_replay": true' <<<"$replay_result"
+
+          browser_request='{"type":"BROWSER_CAPTURE","actual_mode":"STAGE","source_path":"ci-browser-capture.json"}'
+          browser_result="$(printf '%s' "$browser_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
+          grep -q '"status": "STAGED"' <<<"$browser_result"
+          grep -q '"envelope_count":' <<<"$browser_result"
+          grep -q '"ai_request_count": 1' <<<"$browser_result"
 
           ai_request="$(python3 -c '
           import json, sys
@@ -252,13 +262,9 @@ jobs:
               and "tags" in item["allowed_fields"]
           )
           print(json.dumps({
-              "type": "STATEMENT_PDF",
+              "type": "BROWSER_CAPTURE",
               "actual_mode": "STAGE",
-              "source_path": "ci-synthetic-ei.pdf",
-              "card_code": "EI_AMAZON",
-              "source_message_id": "ci-outlook-message",
-              "source_attachment_id": "ci-outlook-attachment",
-              "source_filename": "EI statement July 2026.pdf",
+              "source_path": "ci-browser-capture.json",
               "ai_handoff_complete": True,
               "ai_responses": [{
                   "transaction_id": request["transaction_id"],
@@ -270,31 +276,24 @@ jobs:
                       "value": ["gift"],
                       "confidence": 0.95,
                       "rationale": "Synthetic policy handoff test",
-                      "source_refs": ["ci-outlook-message"],
+                      "source_refs": ["ci-browser-capture"],
                   }],
               }],
           }))
-          ' <<<"$statement_result")"
+          ' <<<"$browser_result")"
           ai_result="$(printf '%s' "$ai_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"ai_response_count": 1' <<<"$ai_result"
           grep -q '"ai_accepted_count": 1' <<<"$ai_result"
           grep -q '"ai_rejected_count": 0' <<<"$ai_result"
-
-          replay_result="$(printf '%s' "$statement_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
-          grep -q '"idempotent_replay": true' <<<"$replay_result"
 
           evidence_request="$(python3 -c '
           import json, sys
           result = json.load(sys.stdin)
           transaction_id = result["ai_handoff"]["requests"][0]["transaction_id"]
           print(json.dumps({
-              "type": "STATEMENT_PDF",
+              "type": "BROWSER_CAPTURE",
               "actual_mode": "STAGE",
-              "source_path": "ci-synthetic-ei.pdf",
-              "card_code": "EI_AMAZON",
-              "source_message_id": "ci-outlook-message",
-              "source_attachment_id": "ci-outlook-attachment",
-              "source_filename": "EI statement July 2026.pdf",
+              "source_path": "ci-browser-capture.json",
               "evidence_links": [{
                   "transaction_id": transaction_id,
                   "evidence_id": "sha256:" + "e" * 64,
@@ -302,18 +301,13 @@ jobs:
                   "document_type": "receipt",
               }],
           }))
-          ' <<<"$statement_result")"
+          ' <<<"$browser_result")"
           evidence_result="$(printf '%s' "$evidence_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"evidence_link_count": 1' <<<"$evidence_result"
-          grep -q '"result_schema_version": 4' <<<"$evidence_result"
+          grep -q '"result_schema_version": 5' <<<"$evidence_result"
           evidence_manifest="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["manifest_path"])' <<<"$evidence_result")"
           sudo docker exec finance-actual-ingestion \
             grep -Fq 'evidence:Finance Evidence/2099/01/ci/ci-evidence.txt' "$evidence_manifest"
-
-          browser_request='{"type":"BROWSER_CAPTURE","actual_mode":"STAGE","source_path":"ci-browser-capture.json"}'
-          browser_result="$(printf '%s' "$browser_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
-          grep -q '"status": "STAGED"' <<<"$browser_result"
-          grep -q '"envelope_count":' <<<"$browser_result"
 
           placeholder_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"RAK_WORLD"}'
           if placeholder_error="$(printf '%s' "$placeholder_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
