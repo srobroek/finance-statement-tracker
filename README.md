@@ -2,7 +2,7 @@
 
 This project is the deterministic automation layer for an Actual-first personal finance tracker. It performs statement parsing, ordered multi-condition rules, idempotent ingestion, evidence matching, cashback tier simulation, and month-close validation.
 
-The deterministic parser and rule engine have no mandatory third-party Python packages. The continuously running cashback companion uses Python's standard-library SQLite driver for durable operational state.
+The deterministic parser and rule engine use a small pinned Python dependency set. The continuously running cashback companion uses SQLite for durable operational state and `pywebpush` for iOS Declarative Web Push delivery.
 
 The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, and `docs/cashback-companion-decision.md`.
 
@@ -28,6 +28,7 @@ The target is **Actual Budget as the primary ledger**, with a small continuous c
 - Read-only Actual snapshots that drive cashback pace and routing without a duplicate ledger.
 - A compact read-only cashback companion in `apps/cashback-control`, refreshed by `scripts/refresh-cashback-control.ps1`.
 - A tabbed mobile-first cashback interface verified at the 428 x 926 iPhone 13 Pro Max viewport: Routing and its decision tree fill one screen, while Cards and History have dedicated screens without horizontal overflow.
+- Installable iOS PWA support with declarative bucket-full, final-week target, and routing-change notifications; delivery state is deduplicated per device in the companion database.
 - Conservative Outlook notification adapters that emit traceable provisional events only when card, amount, currency, merchant, and a usable timestamp are evidenced.
 - Recipe-driven browser acquisition and deterministic official-export parsers migrated from the previous source app for ADCB, Emirates Islamic, FAB, Wio, generic CSV, and Sarwa capture.
 

@@ -27,6 +27,7 @@ from finance_tracker.notification_sources import (
     validate_notification_adapter_coverage,
 )
 from finance_tracker.notifications import DEFAULT_NOTIFICATION_ADAPTERS, parse_outlook_notifications
+from finance_tracker.web_push import WebPushDispatcher, WebPushStore
 
 
 WEB_ROOT = APP_ROOT / "web"
@@ -44,6 +45,7 @@ DATABASE_PATH = Path(
 ).resolve()
 INGEST_TOKEN = os.environ.get("CASHBACK_INGEST_TOKEN", "")
 STORE = CashbackEventStore(DATABASE_PATH)
+PUSH_STORE = WebPushStore(DATABASE_PATH)
 WRITE_LOCK = threading.Lock()
 STALE_AFTER_MINUTES = int(os.environ.get("CASHBACK_STALE_AFTER_MINUTES", "90"))
 PROGRAM_CONFIG_PATH = Path(
@@ -70,6 +72,13 @@ NOTIFICATION_SOURCES_PATH = Path(
         str(REPOSITORY_ROOT / "config" / "transaction-email-sources.json"),
     )
 ).resolve()
+PUSH_DISPATCHER = WebPushDispatcher(
+    PUSH_STORE,
+    public_key=os.environ.get("CASHBACK_VAPID_PUBLIC_KEY", ""),
+    private_key=os.environ.get("CASHBACK_VAPID_PRIVATE_KEY", ""),
+    subject=os.environ.get("CASHBACK_VAPID_SUBJECT", ""),
+    public_url=os.environ.get("CASHBACK_PUBLIC_URL", ""),
+)
 
 
 def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
@@ -120,7 +129,8 @@ def rebuild_dashboard() -> dict[str, object]:
             program_config_path=PROGRAM_CONFIG_PATH,
         )
         write_dashboard(DASHBOARD_PATH, payload)
-        return payload
+    PUSH_DISPATCHER.evaluate(payload)
+    return payload
 
 
 def historical_periods(limit: int = 24) -> list[dict[str, object]]:
@@ -183,6 +193,10 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             self._json(HTTPStatus.OK, {"periods": periods, "period_count": len(periods)})
             return
 
+        if path == "/api/push/config":
+            self._json(HTTPStatus.OK, PUSH_DISPATCHER.config())
+            return
+
         if path == "/api/dashboard":
             if not DASHBOARD_PATH.is_file():
                 self._json(
@@ -216,10 +230,11 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/alerts/ack",
             "/api/outlook/messages",
             "/api/review-queue",
+            "/api/push/subscriptions",
         }:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
-        if path == "/api/alerts/ack":
+        if path in {"/api/alerts/ack", "/api/push/subscriptions"}:
             origin = urlsplit(self.headers.get("Origin") or "")
             if (
                 self.headers.get_content_type() != "application/json"
@@ -236,6 +251,29 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             if length <= 0 or length > 1_000_000:
                 raise ValueError("Request body must be between 1 byte and 1 MB")
             source = json.loads(self.rfile.read(length))
+            if path == "/api/push/subscriptions":
+                if not isinstance(source, dict):
+                    raise ValueError("Payload must be a push subscription request")
+                action = str(source.get("action") or "subscribe").strip().casefold()
+                subscription = source.get("subscription")
+                if not isinstance(subscription, dict):
+                    raise ValueError("subscription must be an object")
+                if action == "unsubscribe":
+                    result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
+                    self._json(HTTPStatus.OK, {"subscription": result, "push": PUSH_DISPATCHER.config()})
+                    return
+                if action != "subscribe":
+                    raise ValueError("action must be subscribe or unsubscribe")
+                result = PUSH_STORE.upsert_subscription(
+                    subscription,
+                    str(self.headers.get("User-Agent") or "")[:500],
+                )
+                delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
+                self._json(
+                    HTTPStatus.OK,
+                    {"subscription": result, "test_delivery": delivery, "push": PUSH_DISPATCHER.config()},
+                )
+                return
             if path == "/api/alerts/ack":
                 if not isinstance(source, dict):
                     raise ValueError("Payload must be an alert acknowledgement object")

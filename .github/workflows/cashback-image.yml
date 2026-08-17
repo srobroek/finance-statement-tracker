@@ -11,6 +11,7 @@ on:
       - ".dockerignore"
       - "apps/cashback-control/**"
       - "deploy/cashback/**"
+      - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/cashback-programs.json"
       - "config/static-rules.seed.json"
@@ -106,6 +107,10 @@ jobs:
           set -euo pipefail
           stack=/opt/stacks/finance-cashback
           sudo install -d "$stack"
+          sudo install -d -m 0700 /opt/stacks/finance-runtime
+          sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
+          sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
+          sudo /opt/stacks/finance-runtime/render-env.sh
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           sudo docker exec finance-cashback-control python -c \
             "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"

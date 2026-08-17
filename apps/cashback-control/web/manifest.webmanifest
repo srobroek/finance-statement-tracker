@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Cashback Control",
+  "short_name": "Cashback",
+  "description": "Live credit-card cashback routing and bucket alerts.",
+  "start_url": "/?screen=routing",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#09100c",
+  "theme_color": "#101713",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

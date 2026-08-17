@@ -7,7 +7,9 @@ name = "finance-statement-worker"
 version = "0.1.0"
 description = "Platform-neutral deterministic statement, rule, evidence, and cashback worker"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pywebpush==2.3.0",
+]
 
 [project.optional-dependencies]
 statements = [

@@ -196,7 +196,82 @@ function setupScreenViews() {
   };
   buttons.forEach((button) => button.addEventListener("click", () => select(button.dataset.screenView)));
   mobile.addEventListener("change", () => select(document.body.dataset.screenActive || "routing"));
-  select(document.body.dataset.screenActive || "routing");
+  const requested = new URLSearchParams(window.location.search).get("screen");
+  select(requested || document.body.dataset.screenActive || "routing");
+}
+
+function applicationServerKey(value) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
+  return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+}
+
+async function browserPushManager() {
+  // Declarative Web Push is exposed directly by current Safari/iOS. The app
+  // intentionally has no service-worker notification fallback.
+  return window.pushManager || null;
+}
+
+async function updatePushButton(button, config, manager) {
+  const subscription = manager ? await manager.getSubscription() : null;
+  button.dataset.subscribed = String(Boolean(subscription));
+  button.textContent = subscription ? "Alerts on" : "Enable alerts";
+  button.classList.toggle("enabled", Boolean(subscription));
+  button.title = subscription
+    ? "Push notifications are enabled. Tap to disable."
+    : "Enable bucket, cycle and routing notifications.";
+  button.hidden = !config.enabled;
+}
+
+async function setupPushNotifications() {
+  const button = document.querySelector("#push-toggle");
+  try {
+    const response = await fetch("/api/push/config", { cache: "no-store" });
+    const config = await response.json();
+    if (!response.ok || !config.enabled || !("Notification" in window)) return;
+    const manager = await browserPushManager();
+    if (!manager) return;
+    await updatePushButton(button, config, manager);
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        const existing = await manager.getSubscription();
+        if (existing) {
+          await fetch("/api/push/subscriptions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "unsubscribe", subscription: existing.toJSON() }),
+          });
+          await existing.unsubscribe();
+        } else {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") throw new Error("Notification permission was not granted.");
+          const subscription = await manager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey(config.public_key),
+          });
+          const subscribeResponse = await fetch("/api/push/subscriptions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "subscribe", subscription: subscription.toJSON() }),
+          });
+          if (!subscribeResponse.ok) {
+            const problem = await subscribeResponse.json();
+            await subscription.unsubscribe();
+            throw new Error(problem.error || "Could not enable push notifications.");
+          }
+        }
+        await updatePushButton(button, config, manager);
+      } catch (error) {
+        button.title = error.message;
+        button.textContent = "Alerts failed";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  } catch (error) {
+    button.hidden = true;
+  }
 }
 
 function renderCards(cards) {
@@ -390,6 +465,7 @@ async function loadDashboard() {
 
 setupRoutingViews();
 setupScreenViews();
+setupPushNotifications();
 loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");
   status.className = "as-of stale";

@@ -312,6 +312,16 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(rak["provisional_event_count"], 1)
             self.assertEqual(rak["confirmed_event_count"], 0)
 
+    def test_unmet_card_targets_warn_during_the_final_week(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+
+            dashboard = build_live_dashboard(store, date(2026, 8, 25))
+
+            keys = {alert["key"] for alert in dashboard["alerts"]}
+            self.assertIn("close:RAK_WORLD:2026-08-01:2026-08-31", keys)
+            self.assertIn("close:SC_PLATINUM_X:2026-08-01:2026-08-31", keys)
+
     def test_finalization_opens_the_next_configured_card_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -5,7 +5,7 @@ services:
     container_name: finance-cashback-control
     restart: unless-stopped
     env_file:
-      - /opt/stacks/finance-actual-poc/.env
+      - /opt/stacks/finance-runtime/.env
     environment:
       TZ: Asia/Dubai
     security_opt:

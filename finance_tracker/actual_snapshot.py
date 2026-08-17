@@ -238,6 +238,17 @@ def cashback_dashboard(
                     "title": f"{program.name} minimum is at risk",
                     "detail": f"AED {_plain(program.safety_target - spend)} remains after the third week of the cycle.",
                 })
+            days_remaining = (period_end - as_of).days
+            if 0 <= days_remaining <= 7 and spend < program.safety_target:
+                alerts.append({
+                    "key": f"close:{program.card}:{period_start}:{period_end}",
+                    "severity": "critical" if days_remaining <= 3 else "warning",
+                    "title": f"{program.name} target is not secured",
+                    "detail": (
+                        f"AED {_plain(program.safety_target - spend)} remains with "
+                        f"{days_remaining} day{'s' if days_remaining != 1 else ''} until cycle close."
+                    ),
+                })
         else:
             routing_programs.append(program)
         program_rows.append({

@@ -49,23 +49,28 @@ The bridge reads these process environment variables:
 
 Statement decryption uses `STATEMENT_PASSWORD` by default. Passwords are never command-line arguments, run-manifest fields, or Git configuration.
 
-Production bank passwords use read-only files under
-`/opt/stacks/finance-ingestion/secrets/`. The worker receives only the
-corresponding `<NAME>_FILE` path (for example
-`EI_STATEMENT_PASSWORD_FILE`), and file-backed values take precedence over
-legacy direct environment variables. Secret files must be owned by UID/GID
-`10002`, mode `0400`, and must never be committed or copied into job payloads.
+The Docker host has 1Password CLI 2.34.1 and a Finance-only service-account
+bootstrap at `/opt/stacks/finance-runtime/.env.bootstrap`.
+`deploy/finance-runtime/finance.env.tpl` contains
+only `op://` references; `deploy/finance-runtime/render-env.sh` renders them atomically into
+`/opt/stacks/finance-runtime/.env` with mode `0600` immediately before either
+independent Compose project is deployed. The bootstrap token is never rendered,
+mounted into a container, or copied into a job payload.
 
-The Docker host has 1Password CLI 2.34.1 and Bellwether uses a service account
-to render committed `op://` templates into a mode-600 runtime env file before
-`docker compose up -d`. The service account currently has access only to the
-`Bellwether` vault; it cannot read the existing Actual login in the owner's
-`Private` vault. Production therefore keeps the rendered Actual values in the
-host-only stack `.env` for now. To make future refreshes host-native, create a
-dedicated Finance vault, grant that service account access, and add a separate
-Finance `op inject` template. Do not reuse Bellwether's rendered `.env`, expose
-its bootstrap token to a container, or overwrite the Finance `.env` because it
-also holds unrelated companion secrets.
+The runtime item owns the Actual application credentials, ingestion tokens,
+bank statement passwords, and VAPID keypair. The cashback and ingestion
+containers receive only the variables declared in their Compose environment.
+`runtime_secret()` still supports `<NAME>_FILE` for local or alternate secret
+providers, but production uses the injected environment to avoid a second
+credential bridge.
+
+The item lives in the dedicated `FinanceRuntime` vault. The host service account
+is granted view/copy access to that vault only; it does not receive access to the
+owner's Private vault or any Bellwether secrets.
+
+Changing a 1Password field does not mutate a running container. Re-run the
+corresponding deployment workflow (or the renderer followed by that project's
+`docker compose up -d`) to inject a fresh process environment.
 
 ## Bootstrap
 
@@ -277,6 +282,45 @@ $response.Headers['Cross-Origin-Opener-Policy']
 The expected values are `require-corp` and `same-origin`, each appearing once.
 Create a Cloudflare Cache Rule that bypasses cache for this hostname. Cloudflare
 WebSockets should remain enabled for Actual synchronization.
+
+## Cashback PWA and Declarative Web Push
+
+Publish the independent cashback service as a second application route on the
+existing Cloudflare Tunnel:
+
+- Public hostname: `cashback.vxsan.com`
+- Type: `HTTP`
+- Service URL: `http://172.20.10.20:5010`
+- Path: blank
+- Cache: bypass for the entire hostname
+
+Cloudflare terminates public HTTPS and forwards ordinary PWA and JSON API
+requests to the companion. It does not relay push delivery. On subscription,
+iOS returns an Apple-managed HTTPS push endpoint; the companion sends the
+encrypted declarative payload directly to that endpoint using its VAPID key.
+Cloudflare is involved again only when the user opens the notification's
+`https://cashback.vxsan.com/?screen=...` navigation URL.
+
+Cloudflare Access may protect the hostname. Authenticate in Safari before adding
+the app to the Home Screen. An expired Access session can require login when a
+notification is opened, but it does not prevent the notification itself from
+arriving. Do not put Access service tokens, cookies, or tunnel credentials in
+the PWA.
+
+The client targets current iOS Declarative Web Push directly through
+`window.pushManager`; there is deliberately no service-worker notification
+fallback. On the phone:
+
+1. Open the HTTPS hostname in Safari and complete Cloudflare Access.
+2. Choose **Share > Add to Home Screen**.
+3. Launch **Cashback Control** from the new icon.
+4. Tap **Enable alerts** and allow notifications.
+
+The server sends an immediate test notification. Later dashboard rebuilds emit
+deduplicated notifications when a cashback bucket becomes full, a card is
+inside its final seven days without its configured target, or a routing result
+changes. Subscriptions and delivery receipts remain in the companion SQLite
+store and survive container replacement.
 
 ## Primary documentation
 

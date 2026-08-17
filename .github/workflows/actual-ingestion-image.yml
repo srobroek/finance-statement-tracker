@@ -13,6 +13,7 @@ on:
       - "browser_adapters/**"
       - "config/**"
       - "deploy/ingestion/**"
+      - "deploy/finance-runtime/**"
       - "finance_tracker/**"
       - "integrations/actual/**"
       - "pyproject.toml"
@@ -126,16 +127,15 @@ jobs:
           stack=/opt/stacks/finance-ingestion
           state=/opt/stacks/finance-actual-poc/ingestion-data
           sudo install -d "$stack"
-          sudo install -d -o 10002 -g 10002 -m 0700 "$stack/secrets"
+          sudo install -d -m 0700 /opt/stacks/finance-runtime
+          sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
+          sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
+          sudo /opt/stacks/finance-runtime/render-env.sh
           sudo install -d -o 10002 -g 10002 \
             "$state" \
             "$state/inbox" \
             "$state/jobs" \
             "$state/actual-cache"
-          if ! sudo grep -q '^FINANCE_INGEST_TOKEN=' /opt/stacks/finance-actual-poc/.env; then
-            token="$(openssl rand -hex 32)"
-            printf '\nFINANCE_INGEST_TOKEN=%s\n' "$token" | sudo tee -a /opt/stacks/finance-actual-poc/.env >/dev/null
-          fi
 
       - name: Authenticate and pull tested image
         shell: bash
@@ -178,7 +178,7 @@ jobs:
           image="$(sudo docker inspect finance-actual-ingestion --format '{{.Config.Image}}')"
           test "$image" = "$IMAGE_NAME:main"
           health="$(curl -fsS http://127.0.0.1:5020/api/health)"
-          expected_writes="$(sudo awk -F= '$1 == "ALLOW_ACTUAL_WRITES" { print tolower($2) }' /opt/stacks/finance-actual-poc/.env | tail -n1)"
+          expected_writes="$(sudo awk -F= '$1 == "ALLOW_ACTUAL_WRITES" { print tolower($2) }' /opt/stacks/finance-runtime/.env | tail -n1)"
           expected_writes="${expected_writes:-false}"
           grep -q "\"actual_writes_enabled\": $expected_writes" <<<"$health"
           grep -q 'RAK_WORLD' <<<"$health"

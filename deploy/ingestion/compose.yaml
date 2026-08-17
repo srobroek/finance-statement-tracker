@@ -5,20 +5,17 @@ services:
     container_name: finance-actual-ingestion
     restart: unless-stopped
     env_file:
-      - /opt/stacks/finance-actual-poc/.env
+      - /opt/stacks/finance-runtime/.env
     environment:
       TZ: Asia/Dubai
       ACTUAL_SERVER_URL: http://actual:5006
       ACTUAL_DATA_DIR: /var/lib/finance-ingestion/actual-cache
-      ADCB_STATEMENT_PASSWORD_FILE: /run/finance-secrets/adcb-statement-password
-      EI_STATEMENT_PASSWORD_FILE: /run/finance-secrets/ei-statement-password
     security_opt:
       - no-new-privileges:true
     ports:
       - "127.0.0.1:5020:5020"
     volumes:
       - /opt/stacks/finance-actual-poc/ingestion-data:/var/lib/finance-ingestion
-      - /opt/stacks/finance-ingestion/secrets:/run/finance-secrets:ro
     networks:
       - actual-runtime
     healthcheck:
