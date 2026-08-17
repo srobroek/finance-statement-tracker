@@ -4,18 +4,37 @@ Date: 2026-08-17
 
 Test target: isolated scenario container at `http://172.20.10.20:5011/`
 
-Production target: `http://172.20.10.20:5010/` — not changed or restarted
+Production targets: `https://cashback.vxsan.com/`, `https://actual.vxsan.com/`, and the host-local ingestion API
 
 Overall result: **PASS**
 
 ## Executive result
 
-- Python regression suite: **120/120 passed** in 1.622 seconds.
+- Python regression suite: **165/165 passed** in the final run.
 - Focused routing matrix: **8/8 passed**.
 - Live isolated API and browser scenarios: **13/13 passed**.
 - JavaScript syntax, Python compilation, JSON parsing, whitespace, and live health checks: **8/8 passed**.
 - No statement period was finalized with synthetic notification data.
 - The isolated feed ended healthy and fresh with 9 provisional events, 1 durable correction, RAK total AED 10,300, and SC total AED 15,200 at tier 10.
+- Production UI labels render as `RAK World`, `SC Platinum X`, and `EI Amazon` without clipping at 430 px or 370 px widths.
+- The exact Outlook Emirates Islamic statements for the June and July periods passed parsing, balance checks, constrained Sol enrichment, Actual preflight, commit verification, and idempotent replay.
+- A quiesced production backup completed with a valid checksum and contained Actual, cashback, ingestion, and secret-free configuration payloads; all three application health endpoints returned HTTP 200 afterward.
+
+## Production pipeline validation
+
+| Test | Result | Observed result |
+|---|:---:|---|
+| Latest-message selection | PASS | Outlook search selected the newest Emirates Islamic statement message received 2026-08-01, not the older 2026-07-01 message. |
+| Exact evidence identity | PASS | The July-period statement used its exact Outlook message ID and attachment ID. Its SHA-256 matched the archived OneDrive statement (`738cee40…`) byte-for-byte, and the catalogue now links the Outlook evidence. |
+| Bank-neutral parse | PASS | The latest statement normalized 7 rows for card suffix 0082, period 2026-07-01 through 2026-07-31, statement date 2026-07-31, and due date 2026-08-25. |
+| Statement arithmetic | PASS | Opening AED 1,043.29 and closing AED 285.70 tied with AED 0.00 difference and no warnings. |
+| Static plus AI classification | PASS | Static rules resolved Amazon/vendor/category/bucket fields; Sol answered only 4 explicit online-channel gaps. All 4 proposals met the 0.95 policy threshold and none were rejected. |
+| Actual preflight | PASS | Actual reported no errors. All 7 imported IDs already existed, so the preflight proposed no additions or updates. |
+| Actual commit verification | PASS | The guarded commit verified 7/7 expected imported IDs and reported 0 duplicates. The payment reminder for 2026-08-25 and AED 285.70 was unchanged because it already existed. |
+| Durable replay | PASS | Repeating the identical COMMIT returned the same job ID with `idempotent_replay=true`; Actual was not written again. |
+| Older real statement | PASS | The June-period statement tied at AED 0.00; 15/15 scoped channel proposals were accepted; 18 transactions were committed and verified with 0 duplicates. Its already-past 2026-07-25 reminder was safely skipped. |
+| Placeholder fail-closed | PASS | Outlook contains no recurring RAKBANK or Standard Chartered monthly statement yet. RAKBANK has only a key-facts document, so both statement adapters remain non-importing placeholders. |
+| Production backup | PASS | Backup `20260817T131913Z` passed `sha256sum -c`; the archive includes `actual-data`, `cashback-data`, `ingestion-data`, and `configuration`. The timer is enabled and active. |
 
 ## Live isolated scenario results
 
@@ -70,7 +89,7 @@ Command:
 python -m unittest discover -s tests -v
 ```
 
-Result: **120 tests passed; 0 failed; 0 errors; 0 skipped.**
+Result: **165 tests passed; 0 failed; 0 errors; 0 skipped.**
 
 ### `test_actual_pipeline` — 13/13 PASS
 
@@ -292,8 +311,8 @@ Result: **120 tests passed; 0 failed; 0 errors; 0 skipped.**
 3. RAK enhanced reward treatment and any retroactive tier behaviour must be confirmed against the live programme terms.
 4. The live scenario uses synthetic normalized events. Each real sender/subject/body format still needs a captured fixture and parser test.
 5. Notification totals can differ from statements because of reversals, FX settlement, tips, fees, and delayed postings. The UI correctly labels the live ledger provisional.
-6. No synthetic statement was used to create fake finalized history. Finalized-period UI requires a real or purpose-built disposable statement-evidence fixture.
-7. Mobile behaviour was validated from mobile-first CSS structure and semantic browser rendering. A final device-width screenshot should be captured on the deployed public hostname after production deployment.
+6. Real EI statement ingestion and Actual verification are proven, but its July period predates the configured cashback programme's effective date. It was therefore not back-applied or used to invent companion history.
+7. The deployed public cashback hostname was visually verified at 430 px and 370 px widths with no routing-label clipping.
 
 ## Deployment recommendation
 
