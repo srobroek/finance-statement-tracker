@@ -57,6 +57,7 @@ class Handler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "status": "ok",
+                    "pipeline_revision": RUNNER.pipeline_revision,
                     "actual_writes_enabled": os.environ.get("ALLOW_ACTUAL_WRITES", "").casefold() == "true",
                     "statement_adapters": list(DEFAULT_STATEMENT_ADAPTERS.codes),
                     "statement_placeholders": [

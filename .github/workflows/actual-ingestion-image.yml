@@ -105,6 +105,8 @@ jobs:
         with:
           context: .
           file: apps/actual-ingestion/Dockerfile
+          build-args: |
+            FINANCE_PIPELINE_REVISION=${{ github.sha }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

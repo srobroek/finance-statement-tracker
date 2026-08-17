@@ -1,11 +1,14 @@
 FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
 
+ARG FINANCE_PIPELINE_REVISION
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FINANCE_INGEST_HOST=0.0.0.0 \
     FINANCE_INGEST_PORT=5020 \
     FINANCE_INGEST_DATA=/var/lib/finance-ingestion \
-    ACTUAL_DATA_DIR=/var/lib/finance-ingestion/actual-cache
+    ACTUAL_DATA_DIR=/var/lib/finance-ingestion/actual-cache \
+    FINANCE_PIPELINE_REVISION=${FINANCE_PIPELINE_REVISION}
 
 WORKDIR /app
 

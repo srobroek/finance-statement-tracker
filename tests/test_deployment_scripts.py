@@ -47,6 +47,12 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("Actual ingestion job failed with exit code ${remoteExitCode}: $detail", script)
         self.assertIn("ConvertTo-Json -Depth 20 -Compress", script)
 
+        dockerfile = Path("apps/actual-ingestion/Dockerfile").read_text(encoding="utf-8")
+        workflow = Path(".github/workflows/actual-ingestion-image.yml").read_text(encoding="utf-8")
+        self.assertIn("ARG FINANCE_PIPELINE_REVISION", dockerfile)
+        self.assertIn("FINANCE_PIPELINE_REVISION=${FINANCE_PIPELINE_REVISION}", dockerfile)
+        self.assertIn("FINANCE_PIPELINE_REVISION=${{ github.sha }}", workflow)
+
     def test_deployment_helpers_support_ignored_local_and_environment_overrides(self) -> None:
         actual_script = Path("scripts/push-actual-ingestion-job.ps1").read_text(encoding="utf-8")
         cashback_script = Path("scripts/invoke-cashback-endpoint.ps1").read_text(encoding="utf-8")

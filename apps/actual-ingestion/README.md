@@ -35,6 +35,13 @@ Durable idempotent results are schema-upgraded from their retained audit
 manifest, so response-contract changes do not require changing source identity
 or weakening duplicate protection.
 
+Job identity combines the source hash, canonical request, and the immutable
+pipeline revision injected by the image build. An exact retry on the same
+release returns the durable result; deploying changed parsers, rules, policies,
+or bridge code produces a new job and reprocesses the source instead of replaying
+an obsolete manifest. Local development derives a content fingerprint when no
+build revision is present.
+
 `-EvidenceLinksPath` accepts the validated transaction-to-catalogue handoff
 created after selective Outlook evidence matching. Links must use a safe
 `Finance Evidence/...` relative path and a `sha256:` identity, must target a

@@ -210,6 +210,11 @@ require `ALLOW_ACTUAL_WRITES=true`. Evidence must be linked before the first
 commit; replay deduplication deliberately prevents a later import from silently
 rewriting an existing transaction.
 
+Idempotency is release-aware: the source hash and canonical request deduplicate
+exact retries only within the same immutable ingestion revision. A parser, rule,
+policy, or bridge release creates a fresh job identity and reprocesses the
+source, preventing an old review result from surviving a corrected pipeline.
+
 ## Browser ingestion
 
 Browser acquisition is supported for banks that expose account history or statements only through an authenticated portal. It uses the same normalized transaction contract and Actual bridge as statement ingestion; it does not maintain a separate ledger.

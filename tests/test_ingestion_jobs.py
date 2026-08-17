@@ -180,7 +180,7 @@ class IngestionJobTests(unittest.TestCase):
         replay = self.runner.submit(request)
 
         self.assertTrue(replay["idempotent_replay"])
-        self.assertEqual(replay["result_schema_version"], 4)
+        self.assertEqual(replay["result_schema_version"], 5)
         self.assertEqual(
             len(replay["ai_handoff"]["requests"]), replay["ai_request_count"]
         )
@@ -208,8 +208,31 @@ class IngestionJobTests(unittest.TestCase):
         replay = self.runner.submit(request)
 
         self.assertTrue(replay["idempotent_replay"])
-        self.assertEqual(replay["result_schema_version"], 4)
+        self.assertEqual(replay["result_schema_version"], 5)
         self.assertEqual(replay["ai_handoff"]["schema_version"], 2)
+
+    def test_pipeline_revision_refreshes_processing_without_weakening_replay(self) -> None:
+        pdf = self.runner.inbox / "revisioned-ei-statement.pdf"
+        write_ei_pdf(pdf)
+        request = {
+            "type": "STATEMENT_PDF",
+            "source_path": pdf.name,
+            "card_code": "EI_AMAZON",
+            "actual_mode": "STAGE",
+            "source_message_id": "revisioned-message",
+        }
+        first_runner = IngestionJobRunner(self.root, Path.cwd(), "revision-one")
+        first = first_runner.submit(request)
+        replay = first_runner.submit(request)
+        second_runner = IngestionJobRunner(self.root, Path.cwd(), "revision-two")
+        refreshed = second_runner.submit(request)
+
+        self.assertTrue(replay["idempotent_replay"])
+        self.assertNotEqual(first["job_id"], refreshed["job_id"])
+        self.assertFalse(refreshed["idempotent_replay"])
+        self.assertEqual(first["pipeline_revision"], "revision-one")
+        self.assertEqual(refreshed["pipeline_revision"], "revision-two")
+        self.assertEqual(refreshed["result_schema_version"], 5)
 
     def test_evidence_link_is_validated_and_written_to_actual_notes(self) -> None:
         pdf = self.runner.inbox / "evidence-link-ei.pdf"

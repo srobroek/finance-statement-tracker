@@ -20,7 +20,7 @@ from .statement_sources import load_statement_sources, require_active_statement_
 JOB_TYPES = frozenset({"STATEMENT_PDF", "BROWSER_CAPTURE", "BROWSER_EXPORT"})
 ACTUAL_MODES = frozenset({"STAGE", "PREFLIGHT", "COMMIT"})
 AI_HANDOFF_SCHEMA_VERSION = 2
-RESULT_SCHEMA_VERSION = 4
+RESULT_SCHEMA_VERSION = 5
 EVIDENCE_ID_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -182,9 +182,18 @@ class IngestionJobResult:
 
 
 class IngestionJobRunner:
-    def __init__(self, data_root: Path, repository_root: Path) -> None:
+    def __init__(
+        self,
+        data_root: Path,
+        repository_root: Path,
+        pipeline_revision: str | None = None,
+    ) -> None:
         self.data_root = data_root.resolve()
         self.repository_root = repository_root.resolve()
+        configured_revision = str(
+            pipeline_revision or os.environ.get("FINANCE_PIPELINE_REVISION") or ""
+        ).strip()
+        self.pipeline_revision = configured_revision or self._repository_fingerprint()
         self.inbox = self.data_root / "inbox"
         self.jobs = self.data_root / "jobs"
         self.inbox.mkdir(parents=True, exist_ok=True)
@@ -209,9 +218,43 @@ class IngestionJobRunner:
                 digest.update(chunk)
         return digest.hexdigest()
 
+    def _repository_fingerprint(self) -> str:
+        """Hash deterministic worker inputs when no build revision is injected."""
+        paths: set[Path] = set()
+        for pattern in (
+            "finance_tracker/*.py",
+            "apps/actual-ingestion/*.py",
+            "integrations/actual/*.mjs",
+            "integrations/actual/package.json",
+            "integrations/actual/package-lock.json",
+            "config/*.json",
+            "browser_adapters/**/*",
+        ):
+            paths.update(
+                path
+                for path in self.repository_root.glob(pattern)
+                if path.is_file()
+            )
+        if not paths:
+            raise ValueError("Cannot fingerprint an empty ingestion pipeline")
+        digest = hashlib.sha256()
+        for path in sorted(paths, key=lambda item: item.as_posix()):
+            relative = path.relative_to(self.repository_root).as_posix()
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            digest.update(b"\0")
+        return f"content-sha256:{digest.hexdigest()}"
+
     def _identity(self, request: dict[str, Any], source_sha256: str) -> str:
         material = json.dumps(
-            {"request": request, "source_sha256": source_sha256},
+            {
+                "pipeline_revision": self.pipeline_revision,
+                "request": request,
+                "source_sha256": source_sha256,
+            },
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -583,6 +626,7 @@ class IngestionJobRunner:
         result["ai_handoff"] = compact_ai_handoff(list(staged.get("ai_requests") or []))
         result["ai_handoff_complete"] = ai_handoff_complete
         result["evidence_link_count"] = evidence_link_count
+        result["pipeline_revision"] = self.pipeline_revision
         result["result_schema_version"] = RESULT_SCHEMA_VERSION
         result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         return result
