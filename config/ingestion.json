@@ -3,9 +3,9 @@
   "outlook": {
     "cursor_source": "outlook",
     "schedule": {
-      "cadence": "DAILY",
+      "cadence": "HOURLY",
       "timezone": "Asia/Dubai",
-      "end_of_day_local": "23:50"
+      "minute": 5
     },
     "scan_overlap_hours": 2,
     "initial_lookback_hours": 24,

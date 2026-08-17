@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Evidence-backed transaction notification source registry for the end-of-day cashback scan",
+  "purpose": "Evidence-backed transaction notification source registry for the hourly cashback scan",
   "sources": [
     {
       "code": "ADCB_CARD_OTP",
