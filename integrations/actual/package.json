@@ -11,6 +11,7 @@
     "tag-report": "node actualctl.mjs tag-report",
     "bootstrap": "node actualctl.mjs bootstrap",
     "import": "node actualctl.mjs import",
+    "repair-transactions": "node actualctl.mjs repair-transactions",
     "integration": "node offline-integration.mjs ../../config/actual-bootstrap.json",
     "integration:statement": "node offline-integration.mjs ../../config/actual-bootstrap.json ../../runtime/real-statement-preflight/ei-preflight.json",
     "test": "node --test"

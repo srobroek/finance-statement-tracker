@@ -16,6 +16,8 @@ node actualctl.mjs import --input .\statement-run.json
 
 `bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Operator-facing statement and browser imports must use the PowerShell ingestion wrappers so AI completion, evidence linkage, review state, source identity, and container-level write gates are enforced before this bridge is reached.
 
+`repair-transactions` is the guarded exception for correcting an already imported row when Actual's import deduplication intentionally refuses to update it. Its versioned plan must identify every row by account, date, and `imported_id`, state the exact current amount, and provide only an exact sign reversal. It plans by default; `--apply` additionally requires `ALLOW_ACTUAL_WRITES=true`. The command refuses missing, duplicate, transferred, or drifted rows, re-reads every target after syncing, and is idempotent after a successful repair.
+
 There is no second standalone import executable or `ACTUAL_DRY_RUN=false`
 compatibility path. `actualctl.mjs` is the only bridge command that can import
 transactions, and production reaches it only through the ingestion worker.

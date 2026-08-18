@@ -607,13 +607,136 @@ export function assertCommitEnabled(commit, environment = process.env) {
   }
 }
 
+export function validateTransactionRepairPlan(plan) {
+  if (plan?.schema_version !== "actual-transaction-repair-v1") {
+    throw new Error("Unsupported transaction repair plan schema");
+  }
+  if (!String(plan.reason ?? "").trim()) throw new Error("Transaction repair plan requires a reason");
+  if (!Array.isArray(plan.repairs) || !plan.repairs.length) {
+    throw new Error("Transaction repair plan requires at least one repair");
+  }
+
+  const importedIds = new Set();
+  for (const [index, repair] of plan.repairs.entries()) {
+    const prefix = `Repair ${index + 1}`;
+    if (!String(repair.imported_id ?? "").trim()) throw new Error(`${prefix} requires imported_id`);
+    if (!String(repair.account ?? "").trim()) throw new Error(`${prefix} requires account`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(repair.date ?? ""))) {
+      throw new Error(`${prefix} requires an ISO date`);
+    }
+    if (!Number.isSafeInteger(repair.expected_current_amount) ||
+        !Number.isSafeInteger(repair.corrected_amount)) {
+      throw new Error(`${prefix} amounts must be integer minor units`);
+    }
+    if (repair.corrected_amount !== -repair.expected_current_amount) {
+      throw new Error(`${prefix} must be an exact sign reversal`);
+    }
+    if (importedIds.has(repair.imported_id)) {
+      throw new Error(`Duplicate imported_id in transaction repair plan: ${repair.imported_id}`);
+    }
+    importedIds.add(repair.imported_id);
+  }
+  return plan.repairs;
+}
+
+export async function repairTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
+  const repairs = validateTransactionRepairPlan(plan);
+  const accounts = byName(await api.getAccounts());
+  const byAccount = new Map();
+  for (const repair of repairs) {
+    const key = normalized(repair.account);
+    const rows = byAccount.get(key) ?? [];
+    rows.push(repair);
+    byAccount.set(key, rows);
+  }
+
+  const pending = [];
+  const alreadyCorrected = [];
+  for (const [accountKey, accountRepairs] of byAccount) {
+    const account = accounts.get(accountKey);
+    if (!account) throw new Error(`Unknown Actual account in repair plan: ${accountRepairs[0].account}`);
+    const dates = accountRepairs.map(repair => repair.date).sort();
+    const currentRows = await api.getTransactions(account.id, dates[0], dates[dates.length - 1]);
+
+    for (const repair of accountRepairs) {
+      const matches = currentRows.filter(row => row.imported_id === repair.imported_id);
+      if (matches.length !== 1) {
+        throw new Error(
+          `Repair target ${repair.imported_id} matched ${matches.length} transactions in ${account.name}`,
+        );
+      }
+      const row = matches[0];
+      if (row.date !== repair.date) {
+        throw new Error(`Repair target ${repair.imported_id} date drifted from ${repair.date} to ${row.date}`);
+      }
+      if (row.transfer_id) {
+        throw new Error(`Repair target ${repair.imported_id} is an Actual transfer and cannot be repaired here`);
+      }
+      const item = {
+        imported_id: repair.imported_id,
+        transaction_id: row.id,
+        account: account.name,
+        date: row.date,
+        expected_current_amount: repair.expected_current_amount,
+        corrected_amount: repair.corrected_amount,
+      };
+      if (row.amount === repair.corrected_amount) {
+        alreadyCorrected.push(item);
+      } else if (row.amount === repair.expected_current_amount) {
+        pending.push(item);
+      } else {
+        throw new Error(
+          `Repair target ${repair.imported_id} amount drifted: expected ${repair.expected_current_amount}, ` +
+          `already-corrected ${repair.corrected_amount}, found ${row.amount}`,
+        );
+      }
+    }
+  }
+
+  if (!apply) {
+    return {
+      status: "planned",
+      reason: plan.reason,
+      pending,
+      already_corrected: alreadyCorrected,
+    };
+  }
+
+  for (const item of pending) {
+    await api.updateTransaction(item.transaction_id, { amount: item.corrected_amount });
+  }
+  if (pending.length && syncRemote) await api.sync();
+
+  const verification = [];
+  for (const [accountKey, accountRepairs] of byAccount) {
+    const account = accounts.get(accountKey);
+    const dates = accountRepairs.map(repair => repair.date).sort();
+    const currentRows = await api.getTransactions(account.id, dates[0], dates[dates.length - 1]);
+    for (const repair of accountRepairs) {
+      const matches = currentRows.filter(row => row.imported_id === repair.imported_id);
+      if (matches.length !== 1 || matches[0].amount !== repair.corrected_amount) {
+        throw new Error(`Repair verification failed for ${repair.imported_id}`);
+      }
+      verification.push({ imported_id: repair.imported_id, amount: matches[0].amount });
+    }
+  }
+  return {
+    status: "applied",
+    reason: plan.reason,
+    repaired: pending,
+    already_corrected: alreadyCorrected,
+    verification,
+  };
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["doctor", "bootstrap", "import", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|import|snapshot|tag-report> [options]");
+  if (!command || !["doctor", "bootstrap", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|import|repair-transactions|snapshot|tag-report> [options]");
   }
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
+  if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
   await openBudget();
   try {
     let result;
@@ -634,6 +757,9 @@ async function main() {
     } else if (command === "bootstrap") {
       if (!args.config) throw new Error("bootstrap requires --config <file>");
       result = await bootstrap(await readJson(args.config), Boolean(args.apply), args.config);
+    } else if (command === "repair-transactions") {
+      if (!args.plan) throw new Error("repair-transactions requires --plan <file>");
+      result = await repairTransactions(await readJson(args.plan), Boolean(args.apply));
     } else {
       if (!args.input) throw new Error("import requires --input <file>");
       result = await importEnvelopes(await readJson(args.input), Boolean(args.commit));

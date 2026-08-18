@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   assertCommitEnabled,
   partitionCrossSourceStatementDuplicates,
+  repairTransactions,
+  validateTransactionRepairPlan,
 } from "./actualctl.mjs";
 
 
@@ -88,4 +90,73 @@ test("cross-source suppression remains conservative for repeated or committed ro
 
   assert.equal(result.records.length, 3);
   assert.equal(result.suppressed.length, 0);
+});
+
+const repairPlan = () => ({
+  schema_version: "actual-transaction-repair-v1",
+  reason: "Correct a proven source-direction sign mismatch",
+  repairs: [{
+    imported_id: "browser:fab:test-row",
+    account: "FAB Current",
+    date: "2026-08-01",
+    expected_current_amount: -12500,
+    corrected_amount: 12500,
+  }],
+});
+
+test("transaction repair plans require exact sign reversals and unique imported IDs", () => {
+  assert.equal(validateTransactionRepairPlan(repairPlan()).length, 1);
+  const invalidSign = repairPlan();
+  invalidSign.repairs[0].corrected_amount = 12000;
+  assert.throws(() => validateTransactionRepairPlan(invalidSign), /exact sign reversal/);
+  const duplicate = repairPlan();
+  duplicate.repairs.push({ ...duplicate.repairs[0] });
+  assert.throws(() => validateTransactionRepairPlan(duplicate), /Duplicate imported_id/);
+});
+
+test("transaction repair validates old state, applies once, and is idempotent", async () => {
+  const rows = [{
+    id: "actual-row-1",
+    imported_id: "browser:fab:test-row",
+    date: "2026-08-01",
+    amount: -12500,
+  }];
+  let syncCount = 0;
+  const api = {
+    getAccounts: async () => [{ id: "account-1", name: "FAB Current" }],
+    getTransactions: async () => rows,
+    updateTransaction: async (id, fields) => {
+      assert.equal(id, "actual-row-1");
+      rows[0] = { ...rows[0], ...fields };
+    },
+    sync: async () => { syncCount += 1; },
+  };
+
+  const planned = await repairTransactions(repairPlan(), false, api);
+  assert.equal(planned.pending.length, 1);
+  assert.equal(rows[0].amount, -12500);
+
+  const applied = await repairTransactions(repairPlan(), true, api);
+  assert.equal(applied.repaired.length, 1);
+  assert.equal(applied.verification.length, 1);
+  assert.equal(rows[0].amount, 12500);
+  assert.equal(syncCount, 1);
+
+  const replay = await repairTransactions(repairPlan(), true, api);
+  assert.equal(replay.repaired.length, 0);
+  assert.equal(replay.already_corrected.length, 1);
+  assert.equal(syncCount, 1);
+});
+
+test("transaction repair refuses amount drift", async () => {
+  const api = {
+    getAccounts: async () => [{ id: "account-1", name: "FAB Current" }],
+    getTransactions: async () => [{
+      id: "actual-row-1",
+      imported_id: "browser:fab:test-row",
+      date: "2026-08-01",
+      amount: -12499,
+    }],
+  };
+  await assert.rejects(() => repairTransactions(repairPlan(), false, api), /amount drifted/);
 });
