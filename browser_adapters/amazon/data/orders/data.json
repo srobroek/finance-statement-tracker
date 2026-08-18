@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "data_id": "orders",
+  "kind": "purchase-evidence",
+  "acquire": "upload",
+  "inputs": ["year"],
+  "parser": null,
+  "recipe": "recipe",
+  "capture_schema": "amazon-orders-v1",
+  "verified": true,
+  "verified_at": "2026-08-18"
+}

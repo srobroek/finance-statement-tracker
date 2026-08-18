@@ -17,7 +17,7 @@ class BrowserRecipeTests(unittest.TestCase):
         result = validate_registry(ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
         self.assertEqual(
-            ["adcb", "emirates-islamic", "fab", "generic-csv", "sarwa", "wio"],
+            ["adcb", "amazon", "emirates-islamic", "fab", "generic-csv", "sarwa", "wio"],
             [row["provider_id"] for row in result["providers"]],
         )
         self.assertEqual([], result["violations"])
@@ -49,7 +49,7 @@ class BrowserRecipeTests(unittest.TestCase):
         result = validate_source_coverage(sources, ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
         self.assertEqual(7, len(result["coverage"]))
-        self.assertEqual(2, len(result["supplemental"]))
+        self.assertEqual(3, len(result["supplemental"]))
         self.assertEqual("ADAPTER_REQUIRED", result["coverage"][-1]["status"])
 
     def test_account_last4_must_be_exactly_four_digits(self) -> None:
@@ -71,6 +71,18 @@ class BrowserRecipeTests(unittest.TestCase):
         )
 
         self.assertIn('READ selector: "Balance", as: "balance"', rendered["data_recipe"])
+
+    def test_amazon_orders_are_a_supplemental_evidence_capture(self) -> None:
+        rendered = render_recipe(
+            "amazon",
+            "orders",
+            {"year": "2026"},
+            ROOT / "browser_adapters",
+        )
+
+        self.assertEqual("purchase-evidence", rendered["data"]["kind"])
+        self.assertIn('option: "2026"', rendered["data_recipe"])
+        self.assertIn("must not create a second ledger transaction", rendered["data_recipe"])
 
 
 if __name__ == "__main__":

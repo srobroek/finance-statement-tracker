@@ -82,6 +82,11 @@
   ],
   "supplemental_sources": [
     {
+      "source_id": "amazon-orders",
+      "provider_id": "amazon",
+      "data_ids": ["orders"]
+    },
+    {
       "source_id": "wio-credit-statement-email",
       "provider_id": "wio",
       "data_ids": ["credit-statement"]

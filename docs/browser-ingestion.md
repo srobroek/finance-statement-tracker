@@ -24,6 +24,7 @@ Provider recipes own login and session navigation. Data recipes own one acquisit
 
 | Provider | Data | Acquisition | Parser | Legacy verification |
 |---|---|---|---|---|
+| Amazon UAE | Order evidence | Authenticated order-history capture | Evidence matching only | 2026-08-18 |
 | ADCB | Credit-card transactions | Browser CSV | `adcb_csv_v1` | 2026-07-09 |
 | ADCB | Credit statement | Browser PDF | `adcb_v1` statement pipeline | 2026-07-09 |
 | Emirates Islamic | Credit-card transactions | Browser XLSX | `emirates_islamic_xlsx_v1` | 2026-07-11 |
