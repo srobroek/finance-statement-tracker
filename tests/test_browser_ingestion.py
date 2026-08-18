@@ -342,6 +342,13 @@ class BrowserIngestionTests(TestCase):
         )
         self.assertEqual(run.transactions[4]["category"], "Needs Review")
         self.assertEqual(run.transactions[5]["category"], "Needs Review")
+        self.assertTrue(all(record["amount"] > 0 for record in run.envelopes[0]["records"]))
+        self.assertTrue(
+            all(
+                row["metadata"]["statement_direction"] == "CREDIT"
+                for row in run.transactions
+            )
+        )
 
     def test_static_rules_classify_known_fab_purchase_families(self):
         capture = self.capture()
@@ -372,6 +379,7 @@ class BrowserIngestionTests(TestCase):
         self.assertEqual(run.transactions[4]["transaction_type"], "TRANSFER")
         self.assertEqual(run.transactions[5]["transaction_type"], "TRANSFER")
         self.assertIsNone(run.transactions[6]["vendor"])
+        self.assertTrue(all(record["amount"] < 0 for record in run.envelopes[0]["records"]))
 
     def test_unique_exact_opposite_direction_pair_is_a_refund(self):
         capture = self.capture()

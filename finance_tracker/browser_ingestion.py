@@ -546,6 +546,10 @@ def build_browser_ingestion_run(
                 "browser_reference": str(row.get("reference") or "").strip() or None,
                 "browser_post_date": str(row.get("post_date") or "").strip() or None,
                 "browser_direction": direction,
+                # The portal supplies the authoritative account-side direction.
+                # Preserve the canonical key consumed by every ledger adapter so
+                # later transfer/reward classification cannot invert a credit.
+                "statement_direction": direction,
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
                 "browser_review_reasons": review_reasons,
                 "browser_review_resolutions": (
