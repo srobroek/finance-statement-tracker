@@ -6,7 +6,7 @@
       "id": "adcb-statements",
       "import_order": 20,
       "globs": [
-        "runtime/historical-backfill/adcb/manifests/*.json"
+        "runtime/full-restage/final/manifests/statement-ADCB_CASHBACK-*.json"
       ],
       "accounts": [
         "ADCB Credit Card · 8833 / 6838"
@@ -20,7 +20,7 @@
       "id": "wio-statements",
       "import_order": 20,
       "globs": [
-        "runtime/historical-backfill/wio/manifests/*.json"
+        "runtime/full-restage/final/manifests/statement-WIO_CREDIT-*.json"
       ],
       "accounts": [
         "Wio Credit Card · 4113 / 5009"
@@ -34,7 +34,7 @@
       "id": "emirates-islamic-statements",
       "import_order": 20,
       "globs": [
-        "runtime/historical-backfill/emirates-islamic/manifests/*.json"
+        "runtime/full-restage/final/manifests/statement-EI_AMAZON-*.json"
       ],
       "accounts": [
         "Emirates Islamic Amazon Credit Card · 0082"
@@ -48,7 +48,7 @@
       "id": "adcb-browser-export",
       "import_order": 10,
       "files": [
-        "runtime/browser-validation/refund-pair-runner/jobs/77605e8a2098e9397dfed407/manifest.json"
+        "runtime/full-restage/final/manifests/adcb-browser-export.json"
       ],
       "accounts": [
         "ADCB Credit Card · 8833 / 6838"
@@ -62,8 +62,8 @@
       "id": "fab-browser-captures",
       "import_order": 10,
       "files": [
-        "runtime/fab-account-2001-commit-manifest.json",
-        "runtime/fab-card-6031-commit-manifest.json"
+        "runtime/full-restage/final/manifests/fab-current-visible-rows.json",
+        "runtime/full-restage/final/manifests/fab-card-visible-rows.json"
       ],
       "accounts": [
         "FAB Elite Gold Current Account · 2001",

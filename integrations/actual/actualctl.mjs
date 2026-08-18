@@ -173,7 +173,7 @@ export function selectStageMigrationRuleIds(existingRules, desiredRules, migrati
   return selectRetiredRuleIds(existingRules, candidates);
 }
 
-async function openBudget() {
+export async function openBudget() {
   const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
   await fs.mkdir(dataDir, { recursive: true });
   actualInternal = await actual.init({
@@ -768,7 +768,11 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   };
 }
 
-export async function importEnvelopes(payload, commit, { syncRemote = true } = {}) {
+export async function importEnvelopes(
+  payload,
+  commit,
+  { syncRemote = true, reimportDeleted = false } = {},
+) {
   const envelopes = Array.isArray(payload) ? payload : payload.envelopes;
   if (!Array.isArray(envelopes) || !envelopes.length) throw new Error("No import envelopes found");
   const accounts = byName(await actual.getAccounts());
@@ -805,7 +809,7 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
         actual.importTransactions(item.account.id, item.records, {
           defaultCleared: Boolean(item.envelope.default_cleared),
           dryRun: true,
-          reimportDeleted: false,
+          reimportDeleted,
         }))
       : { added: [], updated: [], errors: [] };
     preflight.push({
@@ -826,7 +830,7 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
         actual.importTransactions(item.account.id, item.records, {
           defaultCleared: Boolean(item.envelope.default_cleared),
           dryRun: false,
-          reimportDeleted: false,
+          reimportDeleted,
         }))
       : { added: [], updated: [], errors: [] };
     imported.push({

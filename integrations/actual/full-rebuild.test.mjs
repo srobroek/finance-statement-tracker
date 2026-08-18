@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { loadFullRebuildManifests } from "./full-rebuild.mjs";
+import { isVerifiedEmptyManifest, loadFullRebuildManifests } from "./full-rebuild.mjs";
 
 test("full rebuild loads browser sources before statements with stable ordering", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "full-rebuild-manifest-test-"));
@@ -39,4 +39,19 @@ test("full rebuild rejects manifests outside the repository root", async () => {
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("full rebuild accepts only balance-tied review-free empty statements", () => {
+  const valid = {
+    envelopes: [],
+    review_count: 0,
+    statement: { transaction_count: 0, balance_tied: true },
+  };
+  assert.equal(isVerifiedEmptyManifest(valid), true);
+  assert.equal(isVerifiedEmptyManifest({ ...valid, review_count: 1 }), false);
+  assert.equal(
+    isVerifiedEmptyManifest({ ...valid, statement: { transaction_count: 0, balance_tied: false } }),
+    false,
+  );
+  assert.equal(isVerifiedEmptyManifest({ ...valid, envelopes: [{ records: [] }] }), false);
 });

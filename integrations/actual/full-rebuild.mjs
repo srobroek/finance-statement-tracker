@@ -74,6 +74,14 @@ export async function loadFullRebuildManifests(rootPath, validationConfig) {
     normalized(left.filename).localeCompare(normalized(right.filename)));
 }
 
+export function isVerifiedEmptyManifest(payload) {
+  return Array.isArray(payload?.envelopes) &&
+    payload.envelopes.length === 0 &&
+    Number(payload?.statement?.transaction_count) === 0 &&
+    payload?.statement?.balance_tied === true &&
+    Number(payload?.review_count ?? 0) === 0;
+}
+
 export async function runDisposableFullRebuild({
   root,
   validationConfigPath,
@@ -103,6 +111,15 @@ export async function runDisposableFullRebuild({
     const imports = [];
     for (const manifest of manifests) {
       const payload = JSON.parse(await fs.readFile(manifest.filename, "utf8"));
+      if (isVerifiedEmptyManifest(payload)) {
+        imports.push({
+          source_id: manifest.source_id,
+          manifest: path.relative(resolvedRoot, manifest.filename).replaceAll("\\", "/"),
+          verification: { status: "verified-empty", records: 0 },
+          replay_verification: { status: "verified-empty", records: 0 },
+        });
+        continue;
+      }
       const first = await importEnvelopes(payload, true, { syncRemote: false });
       const replay = await importEnvelopes(payload, true, { syncRemote: false });
       if (first.status !== "committed" || replay.status !== "committed") {

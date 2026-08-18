@@ -28,6 +28,12 @@ disposable rebuild passes.
 9. Run the same audit against production, replay every manifest, and require
    both a `PASS` audit and zero duplicate imported IDs before unfreezing jobs.
 
+Production uses `integrations/actual/production-rebuild.mjs`. It exports an
+exclusive Actual `.zip` backup and SHA-256 sidecar before deleting only rows in
+the configured account plus imported-ID scope. Applying requires both `--apply`
+and `ALLOW_ACTUAL_LEDGER_REPLACEMENT=true`; manual and unrelated rows are
+preserved.
+
 ## Disposable rebuild
 
 Create the fresh staging set first. This command submits `STAGE` jobs only and
