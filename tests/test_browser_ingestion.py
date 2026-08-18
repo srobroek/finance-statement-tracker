@@ -343,6 +343,36 @@ class BrowserIngestionTests(TestCase):
         self.assertEqual(run.transactions[4]["category"], "Needs Review")
         self.assertEqual(run.transactions[5]["category"], "Needs Review")
 
+    def test_static_rules_classify_known_fab_purchase_families(self):
+        capture = self.capture()
+        capture["source"]["provider"] = "FAB"
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["account"]["card_code"] = "FAB_6031"
+        capture["account"]["account_last4"] = "6031"
+        capture["rows"] = [
+            {"transaction_date": "2026-08-01", "description": "ACE DUBAI HILLS MALL", "amount_aed": "20", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-02", "description": "Debit Card Purchase-www.getstake.com Dubai", "amount_aed": "700", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-03", "description": "Debit Card Purchase-CABINCAMP RES 131023 OSLO", "amount_aed": "6000", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-04", "description": "IPP Charges-AC-123-CRP", "amount_aed": "0.49", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-05", "description": "IPP Transfer-MOB-LOCAL FT-CRP", "amount_aed": "100", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-06", "description": "Transfer to other Bank Credit Card", "amount_aed": "2500", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-07", "description": "UNKNOWN MARKETPLACE DUBAI ARE", "amount_aed": "25", "direction": "DEBIT"},
+        ]
+
+        run = build_browser_ingestion_run(
+            capture,
+            self.config(),
+            load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
+        )
+
+        self.assertEqual(
+            [row["category"] for row in run.transactions],
+            ["Maintenance & Repairs", "Investments", "Accommodation", "Bank Fees", "Needs Review", "Card Payments", None],
+        )
+        self.assertEqual(run.transactions[4]["transaction_type"], "TRANSFER")
+        self.assertEqual(run.transactions[5]["transaction_type"], "TRANSFER")
+        self.assertIsNone(run.transactions[6]["vendor"])
+
     def test_unique_exact_opposite_direction_pair_is_a_refund(self):
         capture = self.capture()
         capture["source"]["capture_method"] = "OFFICIAL_EXPORT"

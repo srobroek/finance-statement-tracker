@@ -151,6 +151,52 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "normalize-outgoing-card-payment",
+    "name": "Outgoing payment to another credit card",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 15,
+    "match": {
+      "any": [{
+        "all": [{"field": "merchant_raw", "operator": "contains", "value": "TRANSFER TO OTHER BANK CREDIT CARD"}]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "TRANSFER", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Card Payments", "sequence": 20},
+      {"action": "add_tags", "value": ["transfer", "card-payment"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-outgoing-bank-transfer",
+    "name": "Outgoing bank transfer",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 16,
+    "match": {
+      "any": [{
+        "all": [{
+          "field": "merchant_raw",
+          "operator": "contains_any",
+          "value": [
+            "IPP TRANSFER-MOB-LOCAL FT",
+            "STANDING ORDER - TRANSFER WITHIN UAE",
+            "TRANSFER TO OTHER FAB ACCOUNT"
+          ]
+        }]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "TRANSFER", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Needs Review", "sequence": 20},
+      {"action": "add_tags", "value": ["transfer", "review"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "normalize-cashback-credit",
     "name": "Cashback and reward credit",
     "stage": "TRANSACTION_NORMALIZATION",
@@ -280,6 +326,153 @@
       {"action": "set_if_empty", "field": "category", "value": "Needs Review", "sequence": 20},
       {"action": "add_tags", "value": ["adjustment", "review"], "sequence": 30}
     ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-ace",
+    "name": "Normalize ACE Hardware",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 1,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(?:^|[^A-Z0-9])ACE (?:DUBAI|FESTIVAL)"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "ACE Hardware"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-ikea",
+    "name": "Normalize IKEA",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 2,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "IKEA"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "IKEA"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-al-futtaim-ecommerce",
+    "name": "Normalize Al-Futtaim eCommerce",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 3,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "AL FUTTAIM TRD CO ECOM"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Al-Futtaim eCommerce"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-blue-box",
+    "name": "Normalize Blue Box vending",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 4,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "BLUE BOX VENDING"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "The Blue Box Vending"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-unrwa",
+    "name": "Normalize UNRWA",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 5,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "UNRWA"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "UNRWA"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-lulu",
+    "name": "Normalize LuLu Hypermarket",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 6,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "LULU HYPERMARKET"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "LuLu Hypermarket"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-istyle",
+    "name": "Normalize iSTYLE",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 7,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "I STYLE COMPUTERS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "iSTYLE"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-aliexpress",
+    "name": "Normalize AliExpress",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 8,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "ALIEXPRESS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "AliExpress"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-skyhound",
+    "name": "Normalize Skyhound",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 9,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "SKYHOUND"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Skyhound"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-stake",
+    "name": "Normalize Stake",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 10,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "GETSTAKE.COM"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Stake"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-cabincamp",
+    "name": "Normalize Cabincamp",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 11,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "CABINCAMP"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Cabincamp"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-one-central-parking",
+    "name": "Normalize One Central Parking",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 12,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "ONE CENTRAL PARKING"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "One Central Parking"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-fab-services",
+    "name": "Normalize FAB banking services",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 13,
+    "match": {"any": [{"all": [{
+      "field": "merchant_raw",
+      "operator": "contains_any",
+      "value": ["VAT ON SERVICE CHARGES", "DEBIT CARD PURCHASE-VAT", "FUND TRANSFER CHARGES", "IPP CHARGES", "LOAN TRANSACTION-MORTGAGE"]
+    }]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "FAB"}],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
   },
@@ -723,6 +916,169 @@
         "field": "vendor",
         "value": "Apple"
       }
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-ace-maintenance",
+    "name": "ACE home maintenance",
+    "stage": "CLASSIFICATION",
+    "priority": 1,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "ACE Hardware"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Maintenance & Repairs"},
+      {"action": "add_tags", "value": ["home", "maintenance"], "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-al-futtaim-ecommerce",
+    "name": "Al-Futtaim online retail",
+    "stage": "CLASSIFICATION",
+    "priority": 2,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Al-Futtaim eCommerce"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "General Retail"},
+      {"action": "add_tag", "value": "online", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-blue-box-vending",
+    "name": "Vending snacks and drinks",
+    "stage": "CLASSIFICATION",
+    "priority": 3,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "The Blue Box Vending"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Coffee & Snacks"},
+      {"action": "add_tag", "value": "dining", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-unrwa-charity",
+    "name": "UNRWA charitable donations",
+    "stage": "CLASSIFICATION",
+    "priority": 4,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "UNRWA"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Charity"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-lulu-groceries",
+    "name": "LuLu groceries",
+    "stage": "CLASSIFICATION",
+    "priority": 5,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "LuLu Hypermarket"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Groceries"},
+      {"action": "add_tag", "value": "grocery", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-istyle-electronics",
+    "name": "iSTYLE electronics",
+    "stage": "CLASSIFICATION",
+    "priority": 6,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "iSTYLE"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Electronics"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-aliexpress-online",
+    "name": "AliExpress online shopping",
+    "stage": "CLASSIFICATION",
+    "priority": 7,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "AliExpress"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Online Shopping"},
+      {"action": "add_tag", "value": "online", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-skyhound-travel",
+    "name": "Skyhound travel activity",
+    "stage": "CLASSIFICATION",
+    "priority": 8,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Skyhound"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Travel Activities"},
+      {"action": "add_tag", "value": "travel", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-stake-investment",
+    "name": "Stake property investment",
+    "stage": "CLASSIFICATION",
+    "priority": 9,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Stake"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Investments"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-cabincamp-accommodation",
+    "name": "Cabincamp accommodation",
+    "stage": "CLASSIFICATION",
+    "priority": 10,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Cabincamp"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Accommodation"},
+      {"action": "add_tag", "value": "travel", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-fab-transfer-fees",
+    "name": "FAB transfer and card VAT fees",
+    "stage": "CLASSIFICATION",
+    "priority": 11,
+    "match": {"any": [{"all": [{
+      "field": "merchant_raw",
+      "operator": "contains_any",
+      "value": ["DEBIT CARD PURCHASE-VAT", "FUND TRANSFER CHARGES", "IPP CHARGES"]
+    }]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Bank Fees"},
+      {"action": "add_tag", "value": "fee", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-fab-mortgage",
+    "name": "FAB mortgage payment",
+    "stage": "CLASSIFICATION",
+    "priority": 12,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "LOAN TRANSACTION-MORTGAGE"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Rent & Mortgage"},
+      {"action": "add_tag", "value": "home", "sequence": 20}
     ],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
