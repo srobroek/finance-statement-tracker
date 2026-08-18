@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assertCommitEnabled,
   enrichTransactions,
+  exportDashboardDocument,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
   selectRetiredRuleIds,
@@ -11,6 +12,53 @@ import {
   validateTransactionRepairPlan,
   validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
+
+test("dashboard export embeds custom report metadata and keeps visual order", () => {
+  const page = { id: "page-1", name: "Overview" };
+  const widgets = [
+    {
+      id: "second",
+      dashboard_page_id: "page-1",
+      type: "custom-report",
+      x: 3,
+      y: 1,
+      width: 6,
+      height: 4,
+      meta: JSON.stringify({ id: "report-1" }),
+      tombstone: false,
+    },
+    {
+      id: "first",
+      dashboard_page_id: "page-1",
+      type: "summary-card",
+      x: 0,
+      y: 0,
+      width: 3,
+      height: 2,
+      meta: { name: "Spend" },
+      tombstone: false,
+    },
+    {
+      id: "deleted",
+      dashboard_page_id: "page-1",
+      type: "summary-card",
+      x: 0,
+      y: 9,
+      width: 3,
+      height: 2,
+      meta: {},
+      tombstone: true,
+    },
+  ];
+  const reports = [{ id: "report-1", name: "Shared spend", graphType: "table" }];
+
+  const exported = exportDashboardDocument(page, widgets, reports);
+
+  assert.equal(exported.version, 1);
+  assert.equal(exported.name, "Overview");
+  assert.deepEqual(exported.widgets.map(widget => widget.type), ["summary-card", "custom-report"]);
+  assert.equal(exported.widgets[1].meta.name, "Shared spend");
+});
 
 
 test("Actual commit requires the explicit production write gate", () => {

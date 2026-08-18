@@ -243,6 +243,106 @@ async function snapshot(start, end) {
   };
 }
 
+async function dashboardRows() {
+  const pages = (await actual.aqlQuery(actual.q("dashboard_pages").select("*"))).data;
+  const widgets = (await actual.aqlQuery(actual.q("dashboard").select("*"))).data;
+  const reports = await actual.internal.send("report/get");
+  return { pages, widgets, reports };
+}
+
+function parseDashboardMeta(value) {
+  if (value === null || value === undefined || value === "") return {};
+  if (typeof value === "string") return JSON.parse(value);
+  return value;
+}
+
+export function exportDashboardDocument(page, widgets, reports) {
+  const reportsById = new Map(reports.map(report => [report.id, report]));
+  return {
+    version: 1,
+    name: page.name,
+    widgets: widgets
+      .filter(widget => widget.dashboard_page_id === page.id && !widget.tombstone)
+      .sort((left, right) => left.y - right.y || left.x - right.x)
+      .map(widget => {
+        const meta = parseDashboardMeta(widget.meta);
+        const exportedMeta = widget.type === "custom-report"
+          ? reportsById.get(meta.id) ?? meta
+          : meta;
+        return {
+          type: widget.type,
+          x: widget.x,
+          y: widget.y,
+          width: widget.width,
+          height: widget.height,
+          meta: exportedMeta,
+        };
+      }),
+  };
+}
+
+async function dashboardAudit() {
+  const { pages, widgets, reports } = await dashboardRows();
+  return {
+    status: "ok",
+    dashboards: pages
+      .filter(page => !page.tombstone)
+      .sort((left, right) => String(left.name).localeCompare(String(right.name)))
+      .map(page => ({
+        id: page.id,
+        name: page.name,
+        widgets: widgets.filter(widget => widget.dashboard_page_id === page.id && !widget.tombstone).length,
+      })),
+    custom_reports: reports.map(report => ({ id: report.id, name: report.name })),
+  };
+}
+
+async function dashboardExport(name) {
+  if (!name) throw new Error("dashboard-export requires --name <dashboard>");
+  const { pages, widgets, reports } = await dashboardRows();
+  const page = pages.find(item => !item.tombstone && normalized(item.name) === normalized(name));
+  if (!page) throw new Error(`Unknown dashboard: ${name}`);
+  return exportDashboardDocument(page, widgets, reports);
+}
+
+async function dashboardApply(configPath, apply) {
+  if (!configPath) throw new Error("dashboard-apply requires --config <file>");
+  const config = await readJson(configPath);
+  if (config.schema_version !== "actual-dashboard-suite-v1" || !Array.isArray(config.dashboards)) {
+    throw new Error("dashboard suite must use actual-dashboard-suite-v1 and provide dashboards");
+  }
+  const existing = (await dashboardRows()).pages.filter(page => !page.tombstone);
+  const byDashboardName = byName(existing);
+  const planned = [];
+  for (const entry of config.dashboards) {
+    if (!entry.name || !entry.file) throw new Error("dashboard entries require name and file");
+    const filename = path.resolve(path.dirname(path.resolve(configPath)), entry.file);
+    const document = await readJson(filename);
+    if (!Array.isArray(document.widgets) || document.widgets.length === 0) {
+      throw new Error(`dashboard ${entry.name} must contain at least one widget`);
+    }
+    let page = byDashboardName.get(normalized(entry.name));
+    planned.push({
+      action: page ? "replace" : "create",
+      dashboard: entry.name,
+      widgets: document.widgets.length,
+      source: filename,
+    });
+    if (!apply) continue;
+    if (!page) {
+      const id = await actual.internal.send("dashboard-create", { name: entry.name });
+      page = { id, name: entry.name };
+      byDashboardName.set(normalized(entry.name), page);
+    }
+    await actual.internal.send("dashboard-import", {
+      filePath: filename,
+      dashboardPageId: page.id,
+    });
+  }
+  if (apply) await actual.sync();
+  return { status: apply ? "applied" : "planned", dashboards: planned };
+}
+
 async function canonicalRules(config, configPath) {
   const collected = [];
   const skipped = [];
@@ -1032,17 +1132,24 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
+  if (!command || !["dashboard-apply", "dashboard-audit", "dashboard-export", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <dashboard-apply|dashboard-audit|dashboard-export|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
   if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
+  if (command === "dashboard-apply") assertCommitEnabled(Boolean(args.apply));
   await openBudget();
   try {
     let result;
     if (command === "doctor") {
       result = await doctor();
+    } else if (command === "dashboard-audit") {
+      result = await dashboardAudit();
+    } else if (command === "dashboard-export") {
+      result = await dashboardExport(args.name);
+    } else if (command === "dashboard-apply") {
+      result = await dashboardApply(args.config, Boolean(args.apply));
     } else if (command === "snapshot") {
       result = await snapshot(args.start, args.end);
     } else if (command === "tag-report") {
