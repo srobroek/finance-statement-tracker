@@ -91,9 +91,9 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(result.accepted_count, 1)
         event = result.events[0]
         self.assertEqual(event["amount_aed"], "16.00")
-        self.assertEqual(event["merchant"], "BEST OF VENDS FZC LLC")
+        self.assertEqual(event["merchant"], "Best of Vends")
         self.assertEqual(event["channel"], "APPLE_PAY_POS")
-        self.assertEqual(event["bucket_code"], "RAK_EWALLET")
+        self.assertEqual(event["bucket_code"], "RAK_DINING")
         self.assertIn("channel-config-default", event["tags"])
         self.assertFalse(event["review_required"])
 

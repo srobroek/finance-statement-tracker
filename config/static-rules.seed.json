@@ -371,7 +371,7 @@
     "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "BLUE BOX VENDING"}]}]},
     "actions": [{"action": "set", "field": "vendor", "value": "The Blue Box Vending"}],
     "stop_on_match": true,
-    "rule_sets": ["FULL_LEDGER"]
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
   },
   {
     "schema_version": 1,
@@ -727,7 +727,7 @@
     },
     "actions": [
       {
-        "action": "set_if_empty",
+        "action": "set",
         "field": "vendor",
         "value": "Mobile Provider"
       }
@@ -765,7 +765,7 @@
     },
     "actions": [
       {
-        "action": "set_if_empty",
+        "action": "set",
         "field": "vendor",
         "value": "Food Delivery"
       }
@@ -782,31 +782,10 @@
     "name": "Normalize ride hailing",
     "stage": "VENDOR_NORMALIZATION",
     "priority": 90,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "contains",
-              "value": "CAREEM"
-            }
-          ]
-        },
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "regex",
-              "value": "\\bUBER\\b"
-            }
-          ]
-        }
-      ]
-    },
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(?:CAREEM|\\bUBER\\b|DUBAI TAXI|NATIONAL TAXI|CARS TAXI|TAKSI YONETIM)"}]}]},
     "actions": [
       {
-        "action": "set_if_empty",
+        "action": "set",
         "field": "vendor",
         "value": "Ride Hailing"
       }
@@ -839,7 +818,7 @@
     },
     "actions": [
       {
-        "action": "set_if_empty",
+        "action": "set",
         "field": "vendor",
         "value": "Airline"
       }
@@ -865,10 +844,23 @@
               "operator": "contains_any",
               "value": [
                 "BOOKING.COM",
+                "ANANTARA",
+                "ATLANTIS",
+                "HATTA FORT HOTEL",
+                "JA RESORT",
                 "MARRIOTT",
+                "MADINAT JUMEIRAH",
+                "MEDIA ONE HOTEL",
                 "HILTON",
                 "HYATT",
-                "ACCOR"
+                "ACCOR",
+                "OCCIDENTAL SHARJAH",
+                "RADISON BLU",
+                "RADISSON BLU",
+                "SOFITEL",
+                "TOWERS ROTANA",
+                "VIDA BEACH RESORT",
+                "BKG*HOTEL AT BOOKING.C"
               ]
             }
           ]
@@ -877,7 +869,7 @@
     },
     "actions": [
       {
-        "action": "set_if_empty",
+        "action": "set",
         "field": "vendor",
         "value": "Hotel or Booking Platform"
       }
@@ -922,6 +914,380 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "vendor-gmg-consumer",
+    "name": "Normalize GMG Consumer grocery descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 121,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "GMG CONSUMER"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "GMG Consumer"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-kibsons",
+    "name": "Normalize Kibsons descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 122,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "KIBSONS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Kibsons"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-farzana",
+    "name": "Normalize Farzana Trading descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 123,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "FARZANA"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Farzana Trading"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-instashop",
+    "name": "Normalize Instashop descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 124,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "INSTASHOP"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Instashop"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-urban-foods",
+    "name": "Normalize Urban Foods descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 125,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "URBAN FOODS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Urban Foods"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-best-vends",
+    "name": "Normalize Best of Vends descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 126,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "BEST OF VENDS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Best of Vends"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-adnh-catering",
+    "name": "Normalize ADNH Catering descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 127,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "ADNH CATERING"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "ADNH Catering"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-life-pharmacy",
+    "name": "Normalize Life Pharmacy descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 128,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "LIFE PHARMACY"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Life Pharmacy"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-jbr-shams-pharmacy",
+    "name": "Normalize JBR Shams Pharmacy descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 129,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "JBR SHAMS PH"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "JBR Shams Pharmacy"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-franklin-chiropractic",
+    "name": "Normalize Franklin Chiropractic descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 130,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "FRANKLIN CHIROPRACTIC"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Franklin Chiropractic"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-glucare",
+    "name": "Normalize Glucare descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 131,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "GLUCARE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Glucare"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-art-fertility",
+    "name": "Normalize ART Fertility descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 132,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "ART FERTILITY"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "ART Fertility Clinics"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-german-neuroscience",
+    "name": "Normalize German Neuroscience Centre descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 133,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "GERMAN NEUROSCIENCE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "German Neuroscience Centre"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-keyani-health",
+    "name": "Normalize Keyani Health descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 134,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "KEYANI"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Keyani Health Services"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-service-market",
+    "name": "Normalize ServiceMarket descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 135,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["SERVICE MARKET", "SERVICE SOUK"]}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "ServiceMarket"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-james-pro-barbers",
+    "name": "Normalize James Pro Barbers descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 136,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "JAMES PRO BARBERS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "James Pro Barbers"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-emirates-delivers",
+    "name": "Normalize Emirates Delivers descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 137,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["EMIRATESDEL", "EMIRATES DELIVERY"]}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Emirates Delivers"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-emirates-post",
+    "name": "Normalize Emirates Post descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 138,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "EMIRATES POST"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Emirates Post"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-cloudflare",
+    "name": "Normalize Cloudflare descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 139,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "CLOUDFLARE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Cloudflare"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-porkbun",
+    "name": "Normalize Porkbun descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 140,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "PORKBUN"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Porkbun"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-real-debrid",
+    "name": "Normalize Real-Debrid descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 141,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["REAL-DEBRID", "REAL DEBRID"]}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Real-Debrid"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-openai",
+    "name": "Normalize OpenAI descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 142,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "OPENAI"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "OpenAI"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-anthropic",
+    "name": "Normalize Anthropic and Claude descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 143,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["ANTHROPIC", "CLAUDE.AI"]}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Anthropic"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-steam",
+    "name": "Normalize Steam descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 144,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["STEAMGAMES.COM", "STEAM PURCHASE"]}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Steam"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-urban-company",
+    "name": "Normalize Urban Company descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 145,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "URBAN COMPANY"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Urban Company"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-fresha",
+    "name": "Normalize Fresha descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 146,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "FRESHA"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Fresha"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-aramex",
+    "name": "Normalize Aramex descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 147,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "ARAMEX"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Aramex"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-naqel",
+    "name": "Normalize Naqel descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 148,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "NAQEL"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Naqel"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-dhl",
+    "name": "Normalize DHL descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 149,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "DHL EXPRESS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "DHL Express"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-cults3d",
+    "name": "Normalize Cults3D descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 150,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "CULTS3D"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Cults3D"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-darkmoon-3d",
+    "name": "Normalize Darkmoon 3D descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 151,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "DARKMOON 3D"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Darkmoon 3D"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-move-shoot-move",
+    "name": "Normalize Move Shoot Move descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 152,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "MOVE SHOOT MOVE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Move Shoot Move"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-sukoon-insurance",
+    "name": "Normalize Sukoon Insurance descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 153,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "SUKOON INSURANCE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Sukoon Insurance"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-ritz-auto-care",
+    "name": "Normalize Ritz Auto Care descriptors",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 154,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "RITZ AUTO CARE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Ritz Auto Care"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "class-ace-maintenance",
     "name": "ACE home maintenance",
     "stage": "CLASSIFICATION",
@@ -951,16 +1317,16 @@
   {
     "schema_version": 1,
     "rule_id": "class-blue-box-vending",
-    "name": "Vending snacks and drinks",
+    "name": "Office vending and catering",
     "stage": "CLASSIFICATION",
     "priority": 3,
-    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "The Blue Box Vending"}]}]},
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["The Blue Box Vending", "Best of Vends", "ADNH Catering"]}]}]},
     "actions": [
       {"action": "set_if_empty", "field": "category", "value": "Coffee & Snacks"},
-      {"action": "add_tag", "value": "dining", "sequence": 20}
+      {"action": "add_tags", "value": ["dining", "business"], "sequence": 20}
     ],
     "stop_on_match": true,
-    "rule_sets": ["FULL_LEDGER"]
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
   },
   {
     "schema_version": 1,
@@ -970,20 +1336,6 @@
     "priority": 4,
     "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "UNRWA"}]}]},
     "actions": [{"action": "set_if_empty", "field": "category", "value": "Charity"}],
-    "stop_on_match": true,
-    "rule_sets": ["FULL_LEDGER"]
-  },
-  {
-    "schema_version": 1,
-    "rule_id": "class-lulu-groceries",
-    "name": "LuLu groceries",
-    "stage": "CLASSIFICATION",
-    "priority": 5,
-    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "LuLu Hypermarket"}]}]},
-    "actions": [
-      {"action": "set_if_empty", "field": "category", "value": "Groceries"},
-      {"action": "add_tag", "value": "grocery", "sequence": 20}
-    ],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
   },
@@ -1209,7 +1561,13 @@
               "operator": "in",
               "value": [
                 "Carrefour",
+                "Farzana Trading",
+                "GMG Consumer",
+                "Instashop",
+                "Kibsons",
+                "LuLu Hypermarket",
                 "Spinneys",
+                "Urban Foods",
                 "Waitrose"
               ]
             }
@@ -1224,8 +1582,11 @@
         "value": "Groceries"
       },
       {
-        "action": "add_tag",
-        "value": "grocery",
+        "action": "add_tags",
+        "value": [
+          "grocery",
+          "shared"
+        ],
         "sequence": 20
       }
     ],
@@ -1274,7 +1635,8 @@
         "value": [
           "grocery",
           "online",
-          "amazon"
+          "amazon",
+          "shared"
         ],
         "sequence": 20
       }
@@ -1561,7 +1923,8 @@
                 "SERVICE CHARGE",
                 "OWNERS ASSOCIATION",
                 "HOMEOWNERS ASSOCIATION",
-                "MOLLAK"
+                "MOLLAK",
+                "BLUE WATERS COMMUNITY"
               ]
             }
           ]
@@ -1687,7 +2050,7 @@
             {
               "field": "merchant_raw",
               "operator": "regex",
-              "value": "^(?:ENOC|EPPCO|ADNOC)(?:\\s|$)|^EMARAT SERVICE"
+              "value": "^(?:ENOC|EPPCO|ADNOC|EMARAT)(?:\\s|$)|^SHELL SERVICE"
             }
           ]
         }
@@ -2017,7 +2380,21 @@
                 "MICROSOFT 365",
                 "ADOBE",
                 "DROPBOX",
-                "OPENAI"
+                "OPENAI",
+                "ANTHROPIC",
+                "CLAUDE.AI",
+                "CLOUDFLARE",
+                "DEEPSEEK",
+                "PORKBUN",
+                "REAL-DEBRID",
+                "REAL DEBRID",
+                "TILLER MONEY",
+                "TRANSIP",
+                "3DS.COM",
+                "1PASSWORD",
+                "ASTROBIN",
+                "PDFAID.COM",
+                "SHARPCAP"
               ]
             }
           ]
@@ -2042,6 +2419,269 @@
         "sequence": 30
       }
     ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-known-subscription-vendors",
+    "name": "Known software, AI, hosting and media subscriptions",
+    "stage": "CLASSIFICATION",
+    "priority": 99,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Anthropic", "Cloudflare", "OpenAI", "Porkbun", "Real-Debrid"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Software & App Subscriptions"},
+      {"action": "set", "field": "is_subscription", "value": true, "sequence": 20},
+      {"action": "add_tag", "value": "subscription", "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-known-pharmacies",
+    "name": "Known pharmacies",
+    "stage": "CLASSIFICATION",
+    "priority": 116,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Life Pharmacy", "JBR Shams Pharmacy"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Pharmacy"},
+      {"action": "add_tag", "value": "health", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-known-medical-providers",
+    "name": "Known medical and wellness providers",
+    "stage": "CLASSIFICATION",
+    "priority": 117,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["ART Fertility Clinics", "Franklin Chiropractic", "German Neuroscience Centre", "Glucare", "Keyani Health Services"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Medical"},
+      {"action": "add_tag", "value": "health", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-service-market",
+    "name": "ServiceMarket home services",
+    "stage": "CLASSIFICATION",
+    "priority": 118,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "ServiceMarket"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Maintenance & Repairs"},
+      {"action": "add_tags", "value": ["home", "maintenance"], "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-personal-care-vendors",
+    "name": "Known grooming and personal care providers",
+    "stage": "CLASSIFICATION",
+    "priority": 119,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Fresha", "James Pro Barbers", "Urban Company"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Personal Care"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-shipping-vendors",
+    "name": "Known shipping and delivery providers",
+    "stage": "CLASSIFICATION",
+    "priority": 121,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Aramex", "DHL Express", "Emirates Delivers", "Emirates Post", "Naqel"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Shipping & Delivery"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-hobby-vendors",
+    "name": "Games, astronomy and 3D-printing hobbies",
+    "stage": "CLASSIFICATION",
+    "priority": 122,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Cults3D", "Darkmoon 3D", "Move Shoot Move", "Steam"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Hobbies & Entertainment"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-sukoon-insurance",
+    "name": "Sukoon insurance",
+    "stage": "CLASSIFICATION",
+    "priority": 123,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Sukoon Insurance"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Insurance"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-ritz-auto-care",
+    "name": "Ritz Auto Care vehicle maintenance",
+    "stage": "CLASSIFICATION",
+    "priority": 124,
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "equals", "value": "Ritz Auto Care"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Vehicle Maintenance"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-known-dining",
+    "name": "Known restaurants and dining venues",
+    "stage": "CLASSIFICATION",
+    "priority": 125,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["AL YASAT CAT N REST", "BLA BLA BEACH CLUB", "BRASS MONKEY", "EAT GREEK", "EMIRATES LEISURE", "FAT*MITTS", "GENATSVale", "HAKO SUSHI", "J K R INTERNATIONAL", "JKR INTERNATIONAL", "JTG ETIHAD", "KFC ", "MCDONALDS", "MITTS N TRAY", "NINE SQUAR", "NOLA EATERY", "QAZAQ RESTAURANT", "SEVEN CUBES REST", "TEXAS MEADOWS", "THE STRAND RESTAURANT", "ZOU ZOU"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Dining Out"},
+      {"action": "add_tag", "value": "dining", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-known-cafes",
+    "name": "Known cafes and snack venues",
+    "stage": "CLASSIFICATION",
+    "priority": 126,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["CARIBOU COFFEE", "ELIXIR SPECIALTY COFFEE", "MENCHIE'S"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Coffee & Snacks"},
+      {"action": "add_tag", "value": "dining", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-smart-dubai-parking",
+    "name": "Smart Dubai low-value parking",
+    "stage": "CLASSIFICATION",
+    "priority": 135,
+    "match": {"any": [{"all": [
+      {"field": "merchant_raw", "operator": "contains", "value": "SMART DUBAI GOVERNMENT"},
+      {"field": "spend_aed", "operator": "between", "value": 0.01, "second_value": 30}
+    ]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Parking & Tolls"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-smart-dubai-tolls",
+    "name": "Smart Dubai Salik top-ups",
+    "stage": "CLASSIFICATION",
+    "priority": 136,
+    "match": {"any": [{"all": [
+      {"field": "merchant_raw", "operator": "contains", "value": "DUBAI SMART GOVERNMENT ES"},
+      {"field": "spend_aed", "operator": "between", "value": 190, "second_value": 210}
+    ]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Parking & Tolls"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-smart-dubai-government",
+    "name": "Other Smart Dubai government payments",
+    "stage": "CLASSIFICATION",
+    "priority": 137,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["SMART DUBAI GOVERNMENT", "DUBAI SMART GOVERNMENT ES"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Taxes & Government"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-grocery-descriptor-fallback",
+    "name": "Known supermarket and foodstuff descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 29,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["BLUE BIRD FOODSTUFF", "BUBBLE-BRO", "FIRST EXIT SUPER MARKE", "FRESH BASKET SUPER", "FRESHMART", "HARISINGHANI", "NOUR FRESH MART", "PASTURE TRADING", "PLUS POINT MINI MART", "SHARJAH CO OPERATIVE", "SHJ CO OPERATIVE", "SOL FOODS SUPERMARK", "ZAD 1 GENREAL TRADING"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Groceries"},
+      {"action": "add_tags", "value": ["grocery", "shared"], "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-electronics-descriptors",
+    "name": "Known electronics retailers",
+    "stage": "CLASSIFICATION",
+    "priority": 5,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["B&H PHOTO", "MICROLESS GENERAL TRADING", "SP MECHANICAL KEYBOARD", "SP TECHIOZO"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Electronics"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-medical-descriptor-fallback",
+    "name": "Known healthcare and wellness descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 117,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["HCARE WELLNESS PROJECT", "KCH HEALTHCARE", "NADZ HEALTH CARE", "NATURES LIFE PHY", "THE LAKE CLINIC"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Medical"},
+      {"action": "add_tag", "value": "health", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-travel-activities-descriptors",
+    "name": "Known travel attractions and activities",
+    "stage": "CLASSIFICATION",
+    "priority": 67,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["AQUARIUM SHARJAH", "SHARJAH AQUARIUM", "SHARJAH MUSEUMS AUTHORITY", "ZION NATIONAL PARK"]}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Travel Activities"},
+      {"action": "add_tag", "value": "travel", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-events-descriptors",
+    "name": "Known events and attractions",
+    "stage": "CLASSIFICATION",
+    "priority": 127,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["DUBAI WORLD TRD CTR", "DUBAI WORLD TRADE CENTRE", "VOX CINEMAS"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Events & Attractions"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-government-fee-descriptors",
+    "name": "Known UAE government fees",
+    "stage": "CLASSIFICATION",
+    "priority": 134,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains_any", "value": ["SHARJAH FINANCE DEPARTMEN", "TASJEEL FEES"]}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Taxes & Government"}],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
   },

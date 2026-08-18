@@ -5,6 +5,8 @@ import {
   assertCommitEnabled,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
+  selectRetiredRuleIds,
+  selectStageMigrationRuleIds,
   validateTransactionRepairPlan,
 } from "./actualctl.mjs";
 
@@ -15,6 +17,22 @@ test("Actual commit requires the explicit production write gate", () => {
   assert.throws(
     () => assertCommitEnabled(true, {}),
     /Actual commits are disabled/,
+  );
+});
+
+test("native classification rules migrate from pre to Actual default without touching unrelated rules", () => {
+  const payload = {
+    conditionsOp: "and",
+    conditions: [{ field: "payee", op: "is", value: "amazon" }],
+    actions: [{ field: "category", op: "set", value: "online" }],
+  };
+  const legacy = { id: "legacy", stage: "pre", ...payload };
+  const unrelated = { id: "unrelated", stage: "pre", ...payload, actions: [{ field: "category", op: "set", value: "other" }] };
+  const desired = { stage: null, ...payload };
+
+  assert.deepEqual(
+    selectStageMigrationRuleIds([legacy, unrelated], [desired], [{ from: "pre", to: "default" }]),
+    ["legacy"],
   );
 });
 
@@ -90,6 +108,32 @@ test("cross-source suppression remains conservative for repeated or committed ro
 
   assert.equal(result.records.length, 3);
   assert.equal(result.suppressed.length, 0);
+});
+
+test("retired Actual rules are selected only by their full semantic signature", () => {
+  const oldRule = {
+    id: "old-grocery",
+    stage: "pre",
+    conditionsOp: "and",
+    conditions: [{ field: "payee", op: "oneOf", value: ["carrefour", "spinneys"] }],
+    actions: [
+      { field: "category", op: "set", value: "groceries" },
+      { op: "append-notes", value: " #grocery" },
+    ],
+  };
+  const unrelated = {
+    ...oldRule,
+    id: "new-grocery",
+    actions: [
+      { field: "category", op: "set", value: "groceries" },
+      { op: "append-notes", value: " #grocery #shared" },
+    ],
+  };
+
+  assert.deepEqual(
+    selectRetiredRuleIds([oldRule, unrelated], [{ ...oldRule, id: undefined }]),
+    ["old-grocery"],
+  );
 });
 
 const repairPlan = () => ({

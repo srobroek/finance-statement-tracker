@@ -21,6 +21,12 @@ const operatorMap = {
 
 const refField = { payee: "payee", category: "category", account: "account" };
 
+const stageMap = {
+  VENDOR_NORMALIZATION: "pre",
+  CLASSIFICATION: null,
+  TAGGING: "post",
+};
+
 function referencedValue(field, operator, value) {
   const ref = refField[field];
   if (!ref || ["contains", "doesNotContain", "matches"].includes(operator)) return value;
@@ -124,7 +130,7 @@ export function compileCanonicalRules(rows, { onlyMarked = true } = {}) {
     conditions.push(...emptyGuards);
     rules.push({
       name: `[canonical:${ruleId}] ${row.name}`,
-      stage: "pre",
+      stage: stageMap[row.stage],
       conditionsOp: flat.op,
       conditions,
       actions,
@@ -143,6 +149,8 @@ export function validateBootstrapConfig(config) {
     "tags",
     "payees",
     "rules",
+    "retired_rules",
+    "rule_stage_migrations",
     "canonical_rule_sources",
     "schedules",
     "budget_months",
@@ -153,6 +161,13 @@ export function validateBootstrapConfig(config) {
   }
   for (const name of config.retired_accounts ?? []) {
     if (!String(name ?? "").trim()) throw new Error("retired_accounts entries must be names")
+  }
+  for (const migration of config.rule_stage_migrations ?? []) {
+    if (!["pre", "default", "post"].includes(migration.from) ||
+        !["pre", "default", "post"].includes(migration.to) ||
+        migration.from === migration.to) {
+      throw new Error("rule_stage_migrations require distinct pre, default, or post stages");
+    }
   }
   for (const month of config.budget_months ?? []) {
     if (!/^\d{4}-\d{2}$/.test(String(month.month ?? ""))) {

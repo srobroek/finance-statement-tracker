@@ -92,7 +92,7 @@
     },
     {
       "name": "Shopping",
-      "categories": ["Online Shopping", "Clothing", "Electronics", "General Retail", "Gifts"]
+      "categories": ["Online Shopping", "Clothing", "Electronics", "General Retail", "Gifts", "Shipping & Delivery"]
     },
     {
       "name": "Digital & Subscriptions",
@@ -101,6 +101,10 @@
     {
       "name": "Health & Personal",
       "categories": ["Medical", "Pharmacy", "Fitness", "Personal Care", "Education"]
+    },
+    {
+      "name": "Lifestyle & Entertainment",
+      "categories": ["Hobbies & Entertainment", "Events & Attractions"]
     },
     {
       "name": "Travel",
@@ -121,6 +125,7 @@
   ],
   "tags": [
     {"tag": "shared", "description": "Shared household spending"},
+    {"tag": "grocery", "description": "Groceries and supermarket spending"},
     {"tag": "subscription", "description": "Recurring non-utility subscription"},
     {"tag": "utility", "description": "Utility or property service"},
     {"tag": "rental", "description": "Rental property income or expense"},
@@ -130,17 +135,53 @@
     {"tag": "needs-review", "description": "Deterministic or manual review is required"}
   ],
   "payees": [
+    {"name": "ADNH Catering"},
+    {"name": "ART Fertility Clinics"},
+    {"name": "Anthropic"},
     {"name": "Amazon"},
     {"name": "Apple"},
+    {"name": "Aramex"},
+    {"name": "Best of Vends"},
     {"name": "Carrefour"},
+    {"name": "Cloudflare"},
+    {"name": "Cults3D"},
     {"name": "DEWA"},
+    {"name": "DHL Express"},
+    {"name": "Darkmoon 3D"},
     {"name": "Empower"},
+    {"name": "Emirates Delivers"},
+    {"name": "Emirates Post"},
+    {"name": "Farzana Trading"},
     {"name": "Food Delivery"},
+    {"name": "Franklin Chiropractic"},
+    {"name": "Fresha"},
+    {"name": "GMG Consumer"},
+    {"name": "German Neuroscience Centre"},
+    {"name": "Glucare"},
     {"name": "Ride Hailing"},
     {"name": "Airline"},
     {"name": "Hotel or Booking Platform"},
+    {"name": "Instashop"},
+    {"name": "JBR Shams Pharmacy"},
+    {"name": "James Pro Barbers"},
+    {"name": "Keyani Health Services"},
+    {"name": "Kibsons"},
+    {"name": "Life Pharmacy"},
+    {"name": "LuLu Hypermarket"},
     {"name": "Mobile Provider"},
+    {"name": "Move Shoot Move"},
+    {"name": "Naqel"},
+    {"name": "OpenAI"},
+    {"name": "Porkbun"},
+    {"name": "Real-Debrid"},
+    {"name": "Ritz Auto Care"},
+    {"name": "ServiceMarket"},
     {"name": "Spinneys"},
+    {"name": "Steam"},
+    {"name": "Sukoon Insurance"},
+    {"name": "The Blue Box Vending"},
+    {"name": "Urban Company"},
+    {"name": "Urban Foods"},
     {"name": "Virgin Mobile"},
     {"name": "Waitrose"}
   ],
@@ -152,9 +193,47 @@
         "vendor-dewa",
         "vendor-empower",
         "vendor-amazon",
-        "vendor-carrefour",
-        "vendor-spinneys",
-        "vendor-waitrose",
+        "vendor-mobile",
+        "vendor-food-delivery",
+        "vendor-ride-hailing",
+        "vendor-airlines",
+        "vendor-hotels",
+        "vendor-apple",
+        "vendor-blue-box",
+        "vendor-gmg-consumer",
+        "vendor-kibsons",
+        "vendor-farzana",
+        "vendor-instashop",
+        "vendor-urban-foods",
+        "vendor-best-vends",
+        "vendor-adnh-catering",
+        "vendor-life-pharmacy",
+        "vendor-jbr-shams-pharmacy",
+        "vendor-franklin-chiropractic",
+        "vendor-glucare",
+        "vendor-art-fertility",
+        "vendor-german-neuroscience",
+        "vendor-keyani-health",
+        "vendor-service-market",
+        "vendor-james-pro-barbers",
+        "vendor-emirates-delivers",
+        "vendor-emirates-post",
+        "vendor-cloudflare",
+        "vendor-porkbun",
+        "vendor-real-debrid",
+        "vendor-openai",
+        "vendor-anthropic",
+        "vendor-steam",
+        "vendor-urban-company",
+        "vendor-fresha",
+        "vendor-aramex",
+        "vendor-naqel",
+        "vendor-dhl",
+        "vendor-cults3d",
+        "vendor-darkmoon-3d",
+        "vendor-move-shoot-move",
+        "vendor-sukoon-insurance",
+        "vendor-ritz-auto-care",
         "class-utilities-dewa",
         "class-utilities-empower",
         "class-groceries",
@@ -163,7 +242,55 @@
         "class-ride-hailing",
         "class-flights",
         "class-hotels",
-        "class-mobile"
+        "class-mobile",
+        "class-blue-box-vending",
+        "class-known-pharmacies",
+        "class-known-medical-providers",
+        "class-service-market",
+        "class-personal-care-vendors",
+        "class-shipping-vendors",
+        "class-hobby-vendors",
+        "class-sukoon-insurance",
+        "class-ritz-auto-care"
+      ]
+    }
+  ],
+  "rule_stage_migrations": [
+    {"from": "pre", "to": "default"}
+  ],
+  "retired_rules": [
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "CARREFOUR"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Carrefour"}}]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "SPINNEYS"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Spinneys"}}]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "WAITROSE"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Waitrose"}}]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [
+        {"field": "payee", "op": "oneOf", "value": [
+          {"ref": "payee", "name": "Carrefour"},
+          {"ref": "payee", "name": "Spinneys"},
+          {"ref": "payee", "name": "Waitrose"}
+        ]},
+        {"field": "category", "op": "is", "value": null}
+      ],
+      "actions": [
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Groceries"}},
+        {"op": "append-notes", "value": " #grocery"}
       ]
     }
   ],

@@ -144,6 +144,26 @@ function signature(rule) {
   }));
 }
 
+export function selectRetiredRuleIds(existingRules, retiredRules) {
+  const retiredSignatures = new Set(retiredRules.map(signature));
+  return existingRules
+    .filter(existing => retiredSignatures.has(signature(existing)))
+    .map(existing => existing.id);
+}
+
+export function selectStageMigrationRuleIds(existingRules, desiredRules, migrations) {
+  const stageValue = stage => stage === "default" ? null : stage;
+  const candidates = [];
+  for (const rule of desiredRules) {
+    for (const migration of migrations ?? []) {
+      if (stageValue(migration.to) === rule.stage) {
+        candidates.push({ ...rule, stage: stageValue(migration.from) });
+      }
+    }
+  }
+  return selectRetiredRuleIds(existingRules, candidates);
+}
+
 async function openBudget() {
   const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
   await fs.mkdir(dataDir, { recursive: true });
@@ -377,14 +397,40 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   }
 
   const compiled = await canonicalRules(config, configPath);
-  const existingRuleSignatures = new Set((await actual.getRules()).map(signature));
-  for (const desired of [...(config.rules ?? []), ...compiled.rules]) {
-    const rule = resolve({
+  const desiredRules = [...(config.rules ?? []), ...compiled.rules].map(desired => ({
+    desired,
+    rule: resolve({
+      stage: desired.stage === undefined ? "pre" : desired.stage,
+      conditionsOp: desired.conditionsOp ?? "and",
+      conditions: desired.conditions ?? [],
+      actions: desired.actions ?? [],
+    }),
+  }));
+  let existingRules = await actual.getRules();
+  const retiredRules = (config.retired_rules ?? []).map(desired => resolve({
       stage: desired.stage ?? "pre",
       conditionsOp: desired.conditionsOp ?? "and",
       conditions: desired.conditions ?? [],
       actions: desired.actions ?? [],
-    });
+    }));
+  const retiredRuleIds = new Set([
+    ...selectRetiredRuleIds(existingRules, retiredRules),
+    ...selectStageMigrationRuleIds(
+      existingRules,
+      desiredRules.map(item => item.rule),
+      config.rule_stage_migrations,
+    ),
+  ]);
+  for (const existing of existingRules) {
+    if (!retiredRuleIds.has(existing.id)) continue;
+    changes.push({ action: "delete", type: "rule", id: existing.id });
+    if (apply && await actual.deleteRule(existing.id) === false) {
+      throw new Error(`Actual refused to delete retired rule ${existing.id}`);
+    }
+  }
+  if (apply && retiredRuleIds.size) existingRules = await actual.getRules();
+  const existingRuleSignatures = new Set(existingRules.map(signature));
+  for (const { desired, rule } of desiredRules) {
     if (!existingRuleSignatures.has(signature(rule))) {
       changes.push({ action: "create", type: "rule", name: desired.name });
       if (apply) {

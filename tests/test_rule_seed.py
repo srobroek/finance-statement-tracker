@@ -72,13 +72,47 @@ class RuleSeedTests(TestCase):
         self.assertIsNone(transaction.category)
         self.assertNotIn("health", transaction.tags)
 
-    def test_concession_at_fuel_site_is_not_classified_as_fuel(self) -> None:
+    def test_concession_at_fuel_site_is_dining_not_fuel(self) -> None:
         transaction = self.transaction("KFC ENOC AL BARSHA DUBAI")
 
         self.engine.apply(transaction)
 
-        self.assertIsNone(transaction.category)
+        self.assertEqual(transaction.category, "Dining Out")
         self.assertNotIn("transport", transaction.tags)
+
+    def test_gmg_consumer_uses_combined_grocery_rule_and_shared_tag(self) -> None:
+        transaction = self.transaction("GMG CONSUMER LLC DUBAI ARE")
+
+        trace = self.engine.apply(transaction)
+
+        self.assertEqual(transaction.vendor, "GMG Consumer")
+        self.assertEqual(transaction.category, "Groceries")
+        self.assertTrue({"grocery", "shared"}.issubset(transaction.tags))
+        self.assertIn("class-groceries", {item.rule_id for item in trace if item.matched})
+
+    def test_known_medical_vendor_is_normalized_before_classification(self) -> None:
+        transaction = self.transaction("GERMAN NEUROSCIENCE CENTE DUBAI ARE")
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.vendor, "German Neuroscience Centre")
+        self.assertEqual(transaction.category, "Medical")
+        self.assertIn("health", transaction.tags)
+
+    def test_smart_dubai_amount_heuristics_split_parking_tolls_and_government(self) -> None:
+        parking = self.transaction("SMART DUBAI GOVERNMENT DUBAI ARE")
+        parking.amount_aed = Decimal("12")
+        toll = self.transaction("DUBAI SMART GOVERNMENT ES DUBAI ARE")
+        toll.amount_aed = Decimal("200")
+        government = self.transaction("DUBAI SMART GOVERNMENT ES DUBAI ARE")
+        government.amount_aed = Decimal("418.95")
+
+        for transaction in (parking, toll, government):
+            self.engine.apply(transaction)
+
+        self.assertEqual(parking.category, "Parking & Tolls")
+        self.assertEqual(toll.category, "Parking & Tolls")
+        self.assertEqual(government.category, "Taxes & Government")
 
     def test_wio_foreign_exchange_fee_is_categorized(self) -> None:
         transaction = Transaction(
@@ -132,7 +166,19 @@ class RuleSeedTests(TestCase):
         self.engine.apply(transaction)
 
         self.assertEqual(transaction.category, "Groceries")
+        self.assertTrue({"grocery", "shared"}.issubset(transaction.tags))
         self.assertEqual(transaction.reward_bucket, "RAK_GROCERY")
+
+    def test_lulu_uses_the_combined_supermarket_rule(self) -> None:
+        transaction = self.transaction("LULU HYPERMARKET EFT DUBAI AE")
+
+        trace = self.engine.apply(transaction)
+
+        self.assertEqual(transaction.vendor, "LuLu Hypermarket")
+        self.assertEqual(transaction.category, "Groceries")
+        self.assertTrue({"grocery", "shared"}.issubset(transaction.tags))
+        self.assertIn("class-groceries", {item.rule_id for item in trace})
+        self.assertNotIn("class-lulu-groceries", {item.rule_id for item in trace})
 
     def test_sc_physical_spend_is_tracked_as_tier_filler(self) -> None:
         transaction = self.transaction("LOCAL MERCHANT", card="SC_PLATINUM_X")
