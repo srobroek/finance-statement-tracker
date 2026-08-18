@@ -309,7 +309,12 @@ jobs:
           grep -q '"result_schema_version": 5' <<<"$evidence_result"
           evidence_manifest="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["manifest_path"])' <<<"$evidence_result")"
           sudo docker exec finance-actual-ingestion \
-            grep -Fq 'evidence:Finance Evidence/2099/01/ci/ci-evidence.txt' "$evidence_manifest"
+            grep -Fq 'Doc: Finance Evidence/2099/01/ci/ci-evidence.txt' "$evidence_manifest"
+            if sudo docker exec finance-actual-ingestion \
+              grep -Fq 'evidence:Finance Evidence/' "$evidence_manifest"; then
+              echo 'Legacy evidence metadata escaped the note contract' >&2
+              exit 1
+            fi
 
           placeholder_request='{"type":"STATEMENT_PDF","actual_mode":"STAGE","source_path":"ci-synthetic-ei.pdf","card_code":"RAK_WORLD"}'
           if placeholder_error="$(printf '%s' "$placeholder_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py 2>&1)"; then
