@@ -453,6 +453,16 @@
         {"field": "category", "op": "set", "value": {"ref": "category", "name": "Groceries"}},
         {"op": "append-notes", "value": " #grocery"}
       ]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "contains", "value": "APPLE.COM/BILL"}],
+      "actions": [
+        {"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Apple"}},
+        {"field": "category", "op": "set", "value": {"ref": "category", "name": "Software & App Subscriptions"}},
+        {"op": "append-notes", "value": " #subscription"}
+      ]
     }
   ],
   "schedules": [],
