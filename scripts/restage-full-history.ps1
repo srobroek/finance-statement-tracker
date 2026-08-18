@@ -120,6 +120,10 @@ foreach ($source in @($configuration.browser_sources)) {
         -SourceAttachmentId ''
 }
 
+$totalAIRequests = 0
+foreach ($result in $results) {
+    $totalAIRequests += [int]$result.ai_request_count
+}
 $summary = [ordered]@{
     schema_version = 'full-restage-result-v1'
     run_id = $runId
@@ -132,7 +136,7 @@ $summary = [ordered]@{
         'STAGED'
     }
     source_count = $results.Count
-    ai_request_count = [int](($results | Measure-Object ai_request_count -Sum).Sum)
+    ai_request_count = $totalAIRequests
     results = @($results)
 }
 $summaryPath = Join-Path $runRoot 'summary.json'

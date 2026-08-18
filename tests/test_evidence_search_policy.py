@@ -19,6 +19,7 @@ class EvidenceSearchPolicyTests(TestCase):
         self.assertIn("Dining Out", policy["never_search_categories"])
         self.assertIn("Groceries", policy["never_search_categories"])
         self.assertIn("Mortgage Payments", policy["never_search_categories"])
+        self.assertIn("Rent & Mortgage", policy["never_search_categories"])
         self.assertIn("Investment Contributions", policy["never_search_categories"])
         self.assertNotIn("Dining Out", policy["always_search_categories"])
         self.assertGreaterEqual(policy["matching"]["minimum_strong_facts"], 2)

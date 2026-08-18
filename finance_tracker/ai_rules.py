@@ -156,6 +156,13 @@ class AIEnrichmentEngine:
             if not any(field in unresolved for field in trigger_fields):
                 continue
             response = resolver(self._request(transaction, policy, unresolved))
+            # The durable job collector marks a request as pending when no
+            # response was supplied yet. Later policies must see the accepted
+            # output of earlier policies, so stop this transaction's ordered
+            # AI pass and expose only the first unresolved decision. A replay
+            # with that response continues from the new fixed point.
+            if isinstance(response, dict) and str(response.get("model") or "") == "pending":
+                break
             proposals = response.get("proposals", []) if isinstance(response, dict) else []
             if not isinstance(proposals, list):
                 raise ValueError(f"AI response for {policy.policy_id} must contain a proposals list")

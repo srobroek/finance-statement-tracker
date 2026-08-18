@@ -552,6 +552,10 @@ class IngestionJobTests(unittest.TestCase):
             "source_attachment_id": "iterative-attachment",
         }
         initial = self.runner.submit(request)
+        self.assertEqual(
+            ["classify-unresolved"],
+            [item["policy_id"] for item in initial["ai_handoff"]["requests"]],
+        )
         classify = next(
             item
             for item in initial["ai_handoff"]["requests"]
@@ -565,7 +569,7 @@ class IngestionJobTests(unittest.TestCase):
             "proposals": [
                 {
                     "field": "category",
-                    "value": "Online Shopping",
+                    "value": "Electronics",
                     "confidence": 0.95,
                     "rationale": "Marketplace descriptor supports an online purchase class",
                     "source_refs": ["iterative-message"],

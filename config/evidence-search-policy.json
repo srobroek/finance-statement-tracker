@@ -12,15 +12,11 @@
     "District Cooling",
     "Service Charges",
     "Maintenance & Repairs",
-    "Online Shopping",
     "Electronics",
     "Furniture & Appliances",
     "Flights",
     "Accommodation",
-    "Travel Activities",
-    "Insurance",
-    "Medical",
-    "Professional Services"
+    "Insurance"
   ],
   "never_search_categories": [
     "Groceries",
@@ -31,6 +27,8 @@
     "Parking & Tolls",
     "Ride Hailing",
     "Public Transport",
+    "Rent & Mortgage",
+    "Mortgage Interest",
     "Mortgage Payments",
     "Investment Contributions",
     "Investments",
@@ -88,5 +86,5 @@
       "return_deadline"
     ]
   },
-  "notes": "A high-value general purchase is eligible only when it is not in a never-search category. Manual evidence requests always win."
+  "notes": "Always-search is reserved for property/utility documents, durable goods, travel bookings, and insurance. Medical, professional-service, online-shopping, and travel-activity records use the general value threshold. A high-value general purchase is eligible only when it is not in a never-search category. Manual evidence requests always win."
 }

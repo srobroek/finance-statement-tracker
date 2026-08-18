@@ -81,7 +81,7 @@ class AIRuleTests(TestCase):
         self.assertTrue(self.transaction.metadata["ai_trace"])
         self.assertEqual(self.transaction.metadata["ai_trace"][0]["provider"], "test")
         self.assertEqual(self.transaction.metadata["ai_trace"][0]["model"], "fake-model")
-        self.assertEqual(self.transaction.metadata["ai_trace"][0]["policy_version"], 1)
+        self.assertEqual(self.transaction.metadata["ai_trace"][0]["policy_version"], 2)
 
     def test_ai_cannot_modify_protected_facts(self) -> None:
         def resolver(request):
@@ -107,8 +107,9 @@ class AIRuleTests(TestCase):
 
         self.engine.enrich(self.transaction, resolver)
 
-        classification = next(request for request in requests if request["policy_id"] == "classify-unresolved")
-        self.assertNotIn("category", classification["allowed_fields"])
+        self.assertNotIn(
+            "classify-unresolved", [request["policy_id"] for request in requests]
+        )
         self.assertEqual(self.transaction.category, "Groceries")
 
     def test_low_confidence_proposal_is_rejected_for_review(self) -> None:
