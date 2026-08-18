@@ -486,8 +486,13 @@ class WioCreditStatementAdapter:
             re.I,
         )
         opening = re.search(rf"Balance From Last Statement\s+({_SIGNED_MONEY})", text, re.I)
+        # Wio's first-generation credit statement labelled this field only as
+        # "Closing Balance". Newer statements append "(Total to pay)". Both
+        # labels represent the same reconciled statement fact.
         closing = re.search(
-            rf"Closing balance \(Total to pay\)\s+({_SIGNED_MONEY})", text, re.I
+            rf"Closing balance(?:\s+\(Total to pay\))?\s+({_SIGNED_MONEY})",
+            text,
+            re.I,
         )
         row_re = re.compile(
             rf"^(\d{{2}}/\d{{2}}/\d{{4}})\s+([A-Z]\d+)\s+(.+?)(?:\s+\*{{4}}(\d{{4}}))?\s+([+-])({_MONEY})$",
