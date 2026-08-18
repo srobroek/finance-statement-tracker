@@ -76,6 +76,14 @@ corresponding deployment workflow (or the renderer followed by that project's
 
 `config/actual-bootstrap.json` is the declarative setup source for accounts, category groups, categories, tags, payees, native schedules, and monthly budget amounts. Native Actual rules are compiled from the marked subset of `config/static-rules.seed.json`; the same business rule is not manually maintained in a second list. Rules that require OR-of-AND groups, evidence actions, protected fields, AI, or cashback logic remain in the deterministic worker.
 
+Category learning is disabled by `actual_settings.category_learning: false`.
+Actual's automatic category rules compete with the ordered static, history, and
+scoped AI pipeline, so bootstrap disables learning for every non-transfer payee.
+This setting does not silently delete existing rules; redundant learned rules
+must be retired only by exact reviewed signatures during the final rule audit.
+The transaction note grammar and final cleanup gate are documented in
+`docs/actual-note-contract.md`.
+
 Plan changes:
 
 ```powershell

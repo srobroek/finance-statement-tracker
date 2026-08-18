@@ -1,4 +1,4 @@
-const TAG_PATTERN = /(?:^|\s)#([A-Za-z0-9_-]+)/g;
+const TAG_PATTERN = /(?:^|\s)#([A-Za-z0-9_:-]+)/g;
 
 export function parseTags(notes = "") {
   return new Set([...String(notes).matchAll(TAG_PATTERN)].map(match => match[1].toLocaleLowerCase()));

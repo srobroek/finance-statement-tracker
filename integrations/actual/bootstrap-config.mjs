@@ -27,6 +27,40 @@ const stageMap = {
   TAGGING: "post",
 };
 
+function caseInsensitiveRegex(pattern) {
+  let output = "";
+  let escaped = false;
+  let inCharacterClass = false;
+  for (const character of String(pattern)) {
+    if (escaped) {
+      output += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      output += character;
+      escaped = true;
+      continue;
+    }
+    if (character === "[") {
+      output += character;
+      inCharacterClass = true;
+      continue;
+    }
+    if (character === "]") {
+      output += character;
+      inCharacterClass = false;
+      continue;
+    }
+    if (!inCharacterClass && /[A-Za-z]/.test(character)) {
+      output += `[${character.toUpperCase()}${character.toLowerCase()}]`;
+    } else {
+      output += character;
+    }
+  }
+  return output;
+}
+
 function referencedValue(field, operator, value) {
   const ref = refField[field];
   if (!ref || ["contains", "doesNotContain", "matches"].includes(operator)) return value;
@@ -52,6 +86,7 @@ function expandContainsAny(condition) {
 export function compileCanonicalRules(rows, { onlyMarked = true } = {}) {
   const rules = [];
   const skipped = [];
+  const deferred = [];
   for (const row of rows) {
     const ruleId = String(row.rule_id ?? row.name ?? "unnamed");
     if (onlyMarked && row.native_actual !== true) {
@@ -86,14 +121,17 @@ export function compileCanonicalRules(rows, { onlyMarked = true } = {}) {
     for (const source of flat.rows) {
       const field = fieldMap[source.field];
       const op = operatorMap[source.operator];
-      if (!field || !op || source.negate || source.case_sensitive) {
+      if (!field || !op || source.negate) {
         unsupported = "UNSUPPORTED_CONDITION";
         break;
       }
+      const value = source.operator === "regex" && source.case_sensitive !== true
+        ? caseInsensitiveRegex(source.value ?? "")
+        : source.value ?? null;
       conditions.push({
         field,
         op,
-        value: referencedValue(field, op, source.value ?? null),
+        value: referencedValue(field, op, value),
       });
     }
     if (unsupported) {
@@ -110,17 +148,26 @@ export function compileCanonicalRules(rows, { onlyMarked = true } = {}) {
         if (source.action === "set_if_empty") {
           emptyGuards.push({ field, op: "is", value: null });
         }
-      } else if (source.action === "add_tag") {
-        actions.push({ op: "append-notes", value: ` #${source.value}` });
-      } else if (source.action === "add_tags" && Array.isArray(source.value)) {
-        actions.push({ op: "append-notes", value: source.value.map(tag => `#${tag}`).join(" ").padStart(source.value.map(tag => `#${tag}`).join(" ").length + 1) });
+      } else if (source.action === "add_tag" ||
+                 (source.action === "add_tags" && Array.isArray(source.value))) {
+        // Actual can prepend arbitrary note text but cannot guarantee tag
+        // de-duplication or canonical ordering after several matching rules.
+        // The deterministic worker applies these actions before import.
+        deferred.push({
+          rule_id: ruleId,
+          action: source.action,
+          reason: "NOTE_CONTRACT_REQUIRES_DETERMINISTIC_WORKER",
+        });
       } else {
         unsupported = "UNSUPPORTED_ACTION";
         break;
       }
     }
     if (unsupported || !actions.length) {
-      skipped.push({ rule_id: ruleId, reason: unsupported ?? "NO_ACTIONS" });
+      skipped.push({
+        rule_id: ruleId,
+        reason: unsupported ?? "WORKER_ONLY_NOTE_ACTIONS",
+      });
       continue;
     }
     if (emptyGuards.length && flat.op === "or") {
@@ -137,11 +184,21 @@ export function compileCanonicalRules(rows, { onlyMarked = true } = {}) {
       source_rule_id: ruleId,
     });
   }
-  return { rules, skipped };
+  return { rules, skipped, deferred };
 }
 
 export function validateBootstrapConfig(config) {
   if (config.schema_version !== 1) throw new Error("Bootstrap schema_version must be 1");
+  if (config.actual_settings !== undefined) {
+    if (!config.actual_settings || typeof config.actual_settings !== "object" ||
+        Array.isArray(config.actual_settings)) {
+      throw new Error("actual_settings must be an object");
+    }
+    if (config.actual_settings.category_learning !== undefined &&
+        typeof config.actual_settings.category_learning !== "boolean") {
+      throw new Error("actual_settings.category_learning must be boolean");
+    }
+  }
   for (const property of [
     "accounts",
     "retired_accounts",
@@ -161,6 +218,21 @@ export function validateBootstrapConfig(config) {
   }
   for (const name of config.retired_accounts ?? []) {
     if (!String(name ?? "").trim()) throw new Error("retired_accounts entries must be names")
+  }
+  for (const account of config.accounts ?? []) {
+    if (!String(account.name ?? "").trim()) throw new Error("accounts require a name");
+    if (account.initial_balance !== undefined && !Number.isInteger(account.initial_balance)) {
+      throw new Error(`account ${account.name} initial_balance must be integer minor units`);
+    }
+  }
+  for (const rule of config.rules ?? []) {
+    if (!String(rule.name ?? "").trim()) throw new Error("rules require a name");
+    if (rule.enabled === false) continue;
+    for (const action of rule.actions ?? []) {
+      if (action.options?.formula && !String(action.options.formula).startsWith("=")) {
+        throw new Error(`rule ${rule.name} formulas must start with =`);
+      }
+    }
   }
   for (const migration of config.rule_stage_migrations ?? []) {
     if (!["pre", "default", "post"].includes(migration.from) ||

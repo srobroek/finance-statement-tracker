@@ -87,7 +87,8 @@ class BrowserIngestionTests(TestCase):
         )
         self.assertEqual(first.transactions[0]["source_type"], "browser_portal")
         self.assertFalse(first.envelopes[0]["default_cleared"])
-        self.assertIn("#browser-import", first.envelopes[0]["records"][0]["notes"])
+        self.assertNotIn("#browser-import", first.envelopes[0]["records"][0]["notes"])
+        self.assertNotIn("#primary", first.envelopes[0]["records"][0]["notes"])
         self.assertIn("#owner-owner-a", first.envelopes[0]["records"][0]["notes"])
 
     def test_owner_approval_clears_only_the_visible_row_review_reason(self):

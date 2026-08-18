@@ -1,6 +1,9 @@
 {
   "schema_version": 1,
   "currency": "AED",
+  "actual_settings": {
+    "category_learning": false
+  },
   "accounts": [
     {
       "name": "ADCB Credit Card · 8833 / 6838",
@@ -30,6 +33,15 @@
       "offbudget": false,
       "card_code": "FAB_CURRENT_2001",
       "card_last4": ["2001"]
+    },
+    {
+      "name": "Abu Dhabi Islamic Bank Mortgage · Bluewaters B7-306",
+      "type": "mortgage",
+      "offbudget": true,
+      "enabled": false,
+      "initial_balance": -260000000,
+      "loan_code": "ADIB_BLUEWATERS_B7_306",
+      "activation_note": "Enable only after the new mortgage account exists and the exact loan start date is known."
     },
     {
       "name": "RAKBANK World Credit Card",
@@ -74,6 +86,7 @@
       "name": "Home & Property",
       "categories": [
         "Rent & Mortgage",
+        "Mortgage Interest",
         "Electricity & Water",
         "District Cooling",
         "Service Charges",
@@ -128,7 +141,12 @@
     {"tag": "grocery", "description": "Groceries and supermarket spending"},
     {"tag": "subscription", "description": "Recurring non-utility subscription"},
     {"tag": "utility", "description": "Utility or property service"},
+    {"tag": "property", "description": "Transaction attributed to a configured property"},
+    {"tag": "home", "description": "Owner-occupied home expense"},
+    {"tag": "mortgage", "description": "Mortgage payment, interest, principal, or related adjustment"},
     {"tag": "rental", "description": "Rental property income or expense"},
+    {"tag": "rental:lt713", "description": "Rental unit LT713"},
+    {"tag": "rental:indigo1414", "description": "Rental unit Indigo 1414"},
     {"tag": "business", "description": "Business-related transaction"},
     {"tag": "receipt", "description": "Receipt evidence is linked"},
     {"tag": "warranty", "description": "Purchase has warranty evidence"},
@@ -184,6 +202,117 @@
     {"name": "Urban Foods"},
     {"name": "Virgin Mobile"},
     {"name": "Waitrose"}
+  ],
+  "rules": [
+    {
+      "name": "[guard:card-payment-sign] Incoming credit-card payments are inflows",
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [
+        {
+          "field": "account",
+          "op": "oneOf",
+          "value": [
+            {"ref": "account", "name": "ADCB Credit Card · 8833 / 6838"},
+            {"ref": "account", "name": "Emirates Islamic Amazon Credit Card · 0082"},
+            {"ref": "account", "name": "FAB Credit Card · 6031"},
+            {"ref": "account", "name": "RAKBANK World Credit Card"},
+            {"ref": "account", "name": "Standard Chartered Platinum X Credit Card"},
+            {"ref": "account", "name": "Wio Credit Card · 4113 / 5009"}
+          ]
+        },
+        {
+          "field": "imported_payee",
+          "op": "matches",
+          "value": "(?:payment received|credit repayment|card repayment)"
+        }
+      ],
+      "actions": [
+        {
+          "field": "amount",
+          "op": "set",
+          "value": null,
+          "options": {"formula": "=ABS(amount / 100)"}
+        }
+      ]
+    },
+    {
+      "name": "[loan:ADIB_BLUEWATERS_B7_306] Split payment into interest and principal",
+      "enabled": false,
+      "activation_requirements": [
+        "Enable the Abu Dhabi Islamic Bank mortgage account.",
+        "Replace __LOAN_START_DATE__ with the exact contractual start date in both formulas.",
+        "Confirm the imported payment description matches the configured regex."
+      ],
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [
+        {
+          "field": "imported_payee",
+          "op": "matches",
+          "value": "(?:adib|abu dhabi islamic).*(?:mortgage|home finance)|(?:mortgage|home finance).*(?:adib|abu dhabi islamic)"
+        },
+        {"field": "amount", "op": "lt", "value": 0}
+      ],
+      "actions": [
+        {
+          "op": "set-split-amount",
+          "value": null,
+          "options": {
+            "splitIndex": 1,
+            "method": "formula",
+            "formula": "=-ROUND(ABS(IPMT(0.0399/12, DATEDIF(\"__LOAN_START_DATE__\", date, \"M\") + 1, 240, -2600000)), 2)"
+          }
+        },
+        {
+          "field": "category",
+          "op": "set",
+          "value": {"ref": "category", "name": "Mortgage Interest"},
+          "options": {"splitIndex": 1}
+        },
+        {
+          "op": "prepend-notes",
+          "value": "#home #mortgage ",
+          "options": {"splitIndex": 1}
+        },
+        {
+          "op": "set-split-amount",
+          "value": null,
+          "options": {
+            "splitIndex": 2,
+            "method": "formula",
+            "formula": "=-ROUND(ABS(PPMT(0.0399/12, DATEDIF(\"__LOAN_START_DATE__\", date, \"M\") + 1, 240, -2600000)), 2)"
+          }
+        },
+        {
+          "field": "payee",
+          "op": "set",
+          "value": {"ref": "payee", "name": "Abu Dhabi Islamic Bank Mortgage · Bluewaters B7-306"},
+          "options": {"splitIndex": 2}
+        },
+        {
+          "op": "prepend-notes",
+          "value": "#home #mortgage ",
+          "options": {"splitIndex": 2}
+        },
+        {
+          "op": "set-split-amount",
+          "value": null,
+          "options": {"splitIndex": 3, "method": "remainder"}
+        },
+        {
+          "field": "category",
+          "op": "set",
+          "value": {"ref": "category", "name": "Needs Review"},
+          "options": {"splitIndex": 3}
+        },
+        {
+          "op": "prepend-notes",
+          "value": "#home #mortgage #needs-review | Review: mortgage-payment-variance",
+          "options": {"splitIndex": 3}
+        }
+      ]
+    }
   ],
   "canonical_rule_sources": [
     {
@@ -251,7 +380,20 @@
         "class-shipping-vendors",
         "class-hobby-vendors",
         "class-sukoon-insurance",
-        "class-ritz-auto-care"
+        "class-ritz-auto-care",
+        "class-regex-supermarkets",
+        "class-regex-airlines",
+        "class-regex-hotels",
+        "class-regex-shipping-carriers",
+        "class-regex-pharmacies",
+        "class-regex-medical-providers",
+        "class-regex-insurance-providers",
+        "class-regex-vehicle-services",
+        "class-regex-cafes",
+        "class-regex-restaurants",
+        "class-regex-entertainment-venues",
+        "class-regex-fuel-stations",
+        "class-regex-parking-tolls"
       ]
     }
   ],
@@ -259,6 +401,24 @@
     {"from": "pre", "to": "default"}
   ],
   "retired_rules": [
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "matches", "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?!\\.[A-Z])(?:[^A-Z0-9]|$)"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Amazon"}}]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "matches", "value": "(^|[^A-Z])ETISALAT|(^|[^A-Z])E&([^A-Z]|$)"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Mobile Provider"}}]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
+      "conditions": [{"field": "imported_payee", "op": "matches", "value": "(?:CAREEM|\\bUBER\\b|DUBAI TAXI|NATIONAL TAXI|CARS TAXI|TAKSI YONETIM)"}],
+      "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Ride Hailing"}}]
+    },
     {
       "stage": "pre",
       "conditionsOp": "and",

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "properties": [
+    {
+      "property_code": "LT713",
+      "display_name": "Lake Terrace 713",
+      "occupancy": "RENTAL",
+      "rental_unit": "LT713",
+      "tags": ["rental", "rental:lt713"],
+      "utility_accounts": [
+        {
+          "provider": "DEWA",
+          "account_reference": "2049280351",
+          "premise_reference": "393009041"
+        },
+        {
+          "provider": "EMPOWER",
+          "account_reference": "6237953218"
+        }
+      ]
+    },
+    {
+      "property_code": "INDIGO1414",
+      "display_name": "Indigo 1414",
+      "occupancy": "RENTAL",
+      "rental_unit": "Indigo1414",
+      "tags": ["rental", "rental:indigo1414"],
+      "utility_accounts": [
+        {
+          "provider": "DEWA",
+          "account_reference": "2051795398",
+          "premise_reference": "393024750"
+        },
+        {
+          "provider": "EMPOWER",
+          "account_reference": "8641003035"
+        }
+      ]
+    },
+    {
+      "property_code": "BLUEWATERS_B7_306",
+      "display_name": "Bluewaters B7-306",
+      "occupancy": "OWNER_OCCUPIED",
+      "rental_unit": null,
+      "tags": ["home"],
+      "utility_accounts": [
+        {
+          "provider": "DEWA",
+          "account_reference": "2032939533",
+          "premise_reference": "392369451"
+        },
+        {
+          "provider": "EMPOWER",
+          "account_reference": "6997139878"
+        }
+      ]
+    }
+  ]
+}

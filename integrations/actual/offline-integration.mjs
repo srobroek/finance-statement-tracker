@@ -28,12 +28,36 @@ try {
       amount: -12345,
       imported_payee: "Integration Test Merchant",
       imported_id: "finance-bridge-integration:1",
-      notes: "integration-test",
+      notes: "#integration-test",
       cleared: true,
     }],
   }];
   const firstImport = await importEnvelopes(envelope, true, { syncRemote: false });
   const secondImport = await importEnvelopes(envelope, true, { syncRemote: false });
+  const formulaGuardAccountName = "Emirates Islamic Amazon Credit Card · 0082";
+  const formulaGuardId = "finance-bridge-integration:card-payment-sign";
+  const formulaGuardImport = await importEnvelopes([{
+    account: formulaGuardAccountName,
+    default_cleared: true,
+    records: [{
+      date: "2026-08-16",
+      amount: -10000,
+      imported_payee: "TRANSFER PAYMENT RECEIVED THANK YOU",
+      imported_id: formulaGuardId,
+      cleared: true,
+    }],
+  }], true, { syncRemote: false });
+  const formulaGuardAccount = (await actual.getAccounts())
+    .find(item => item.name === formulaGuardAccountName);
+  if (!formulaGuardAccount) throw new Error("Formula guard integration account was not created");
+  const formulaGuardRow = (await actual.getTransactions(
+    formulaGuardAccount.id,
+    "2026-08-16",
+    "2026-08-16",
+  )).find(item => item.imported_id === formulaGuardId);
+  if (formulaGuardRow?.amount !== 10000) {
+    throw new Error(`Card-payment formula guard did not flip the sign: ${formulaGuardRow?.amount}`);
+  }
   if (secondBootstrap.changes.length) {
     throw new Error(`Bootstrap is not idempotent: ${JSON.stringify(secondBootstrap.changes)}`);
   }
@@ -54,6 +78,8 @@ try {
     second_bootstrap_changes: secondBootstrap.changes.length,
     first_import_verified: firstImport.verification,
     second_import_verified: secondImport.verification,
+    formula_guard_verified: formulaGuardImport.verification,
+    formula_guard_amount: formulaGuardRow.amount,
     statement_import_verified: statementImport?.verification ?? null,
     statement_replay_verified: statementReplay?.verification ?? null,
     statement_payment_reminder: statementImport?.payment_reminder ?? null,

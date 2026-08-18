@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import * as actual from "@actual-app/api";
 import { buildTagReport, csvTags } from "./tag-report.mjs";
 import { statementPaymentReminderSpec } from "./payment-reminder.mjs";
+import { validateCanonicalActualNotes } from "./note-contract.mjs";
 import {
   compileCanonicalRules,
   scheduleSignature,
@@ -245,6 +246,7 @@ async function snapshot(start, end) {
 async function canonicalRules(config, configPath) {
   const collected = [];
   const skipped = [];
+  const deferred = [];
   for (const source of config.canonical_rule_sources ?? []) {
     const filename = path.resolve(path.dirname(path.resolve(configPath)), source.path);
     const payload = await readJson(filename);
@@ -254,8 +256,9 @@ async function canonicalRules(config, configPath) {
     const compiled = compileCanonicalRules(rows, { onlyMarked: source.only_marked !== false });
     collected.push(...compiled.rules);
     skipped.push(...compiled.skipped.map(item => ({ ...item, source: filename })));
+    deferred.push(...compiled.deferred.map(item => ({ ...item, source: filename })));
   }
-  return { rules: collected, skipped };
+  return { rules: collected, skipped, deferred };
 }
 
 export async function bootstrap(config, apply, configPath, { syncRemote = true } = {}) {
@@ -267,7 +270,7 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   let tags = await actual.getTags();
   let payees = await actual.getPayees();
 
-  for (const desired of config.accounts ?? []) {
+  for (const desired of (config.accounts ?? []).filter(item => item.enabled !== false)) {
     const names = [desired.name, ...(desired.aliases ?? [])].map(normalized);
     const found = accounts.find(account => names.includes(normalized(account.name)));
     if (!found) {
@@ -294,7 +297,10 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   }
 
   const desiredAccountNames = new Set(
-    (config.accounts ?? []).flatMap(desired => [desired.name, ...(desired.aliases ?? [])]).map(normalized),
+    (config.accounts ?? [])
+      .filter(item => item.enabled !== false)
+      .flatMap(desired => [desired.name, ...(desired.aliases ?? [])])
+      .map(normalized),
   );
   for (const retiredName of config.retired_accounts ?? []) {
     const retiredKey = normalized(retiredName);
@@ -373,6 +379,17 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
     tags = await actual.getTags();
     payees = await actual.getPayees();
   }
+  if (config.actual_settings?.category_learning === false) {
+    const learningPayees = (await actual.aqlQuery(
+      actual.q("payees").select(["id", "name", "transfer_acct", "learn_categories"]),
+    )).data;
+    for (const payee of learningPayees.filter(item => !item.transfer_acct)) {
+      if (payee.learn_categories !== false) {
+        changes.push({ action: "disable", type: "payee_category_learning", name: payee.name });
+        if (apply) await actual.updatePayee(payee.id, { learn_categories: false });
+      }
+    }
+  }
   const refs = {
     account: byName(accounts),
     category: byName(categories),
@@ -397,7 +414,10 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   }
 
   const compiled = await canonicalRules(config, configPath);
-  const desiredRules = [...(config.rules ?? []), ...compiled.rules].map(desired => ({
+  const desiredRules = [
+    ...(config.rules ?? []).filter(item => item.enabled !== false),
+    ...compiled.rules,
+  ].map(desired => ({
     desired,
     rule: resolve({
       stage: desired.stage === undefined ? "pre" : desired.stage,
@@ -501,6 +521,7 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
     native_rule_compilation: {
       compiled: compiled.rules.length,
       skipped: compiled.skipped,
+      deferred: compiled.deferred,
     },
   };
 }
@@ -517,6 +538,8 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
     if (!account) throw new Error(`Unknown Actual account: ${envelope.account}`);
     const records = envelope.records.map(source => {
       const record = { ...source };
+      record.notes = record.notes ?? "";
+      validateCanonicalActualNotes(record.notes);
       if (record.category_name) {
         const category = categories.get(normalized(record.category_name));
         if (!category) throw new Error(`Unknown Actual category: ${record.category_name}`);
@@ -775,14 +798,246 @@ export async function repairTransactions(plan, apply, api = actual, { syncRemote
   };
 }
 
+const noteParts = value => String(value ?? "")
+  .split("|")
+  .map(part => part.trim())
+  .filter(Boolean);
+
+function mutateNoteParts(current, add = [], remove = []) {
+  const removed = new Set(remove.map(normalized));
+  const parts = noteParts(current).filter(part => !removed.has(normalized(part)));
+  const present = new Set(parts.map(normalized));
+  for (const token of add) {
+    if (!present.has(normalized(token))) {
+      parts.push(token);
+      present.add(normalized(token));
+    }
+  }
+  return parts.join(" | ");
+}
+
+function safeNoteToken(value, prefix) {
+  const token = String(value ?? "").trim();
+  if (!token || token.length > 500 || /[|\r\n\t]/.test(token)) {
+    throw new Error(`${prefix} contains an unsafe note token`);
+  }
+  return token;
+}
+
+export function validateTransactionEnrichmentPlan(plan) {
+  if (plan?.schema_version !== "actual-transaction-enrichment-v1") {
+    throw new Error("Unsupported transaction enrichment plan schema");
+  }
+  if (plan.expected_server_version !== "26.8.1") {
+    throw new Error("Transaction enrichment plan must pin Actual server version 26.8.1");
+  }
+  if (!String(plan.reason ?? "").trim()) {
+    throw new Error("Transaction enrichment plan requires a reason");
+  }
+  if (!Array.isArray(plan.changes) || !plan.changes.length) {
+    throw new Error("Transaction enrichment plan requires at least one change");
+  }
+  const importedIds = new Set();
+  for (const [index, change] of plan.changes.entries()) {
+    const prefix = `Change ${index + 1}`;
+    const importedId = String(change.imported_id ?? "").trim();
+    if (!importedId) throw new Error(`${prefix} requires imported_id`);
+    if (importedIds.has(importedId)) {
+      throw new Error(`Duplicate imported_id in transaction enrichment plan: ${importedId}`);
+    }
+    importedIds.add(importedId);
+    if (!String(change.account ?? "").trim()) throw new Error(`${prefix} requires account`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(change.date ?? ""))) {
+      throw new Error(`${prefix} requires an ISO date`);
+    }
+    if (!Number.isSafeInteger(change.expected_current_amount)) {
+      throw new Error(`${prefix} expected_current_amount must be integer minor units`);
+    }
+    if (typeof change.expected_current_notes !== "string") {
+      throw new Error(`${prefix} requires expected_current_notes`);
+    }
+    if (change.desired_notes !== undefined) {
+      if (typeof change.desired_notes !== "string") {
+        throw new Error(`${prefix} desired_notes must be a string`);
+      }
+      noteParts(change.desired_notes).forEach((value, tokenIndex) =>
+        safeNoteToken(value, `${prefix} desired_notes[${tokenIndex}]`));
+    }
+    for (const [field, values] of [
+      ["add_note_tokens", change.add_note_tokens ?? []],
+      ["remove_note_tokens", change.remove_note_tokens ?? []],
+    ]) {
+      if (!Array.isArray(values)) throw new Error(`${prefix} ${field} must be an array`);
+      values.forEach((value, tokenIndex) => safeNoteToken(value, `${prefix} ${field}[${tokenIndex}]`));
+    }
+    if (change.split !== undefined) {
+      if (!Array.isArray(change.split) || change.split.length < 2) {
+        throw new Error(`${prefix} split requires at least two children`);
+      }
+      let total = 0;
+      for (const [childIndex, child] of change.split.entries()) {
+        if (!Number.isSafeInteger(child.amount) || child.amount === 0) {
+          throw new Error(`${prefix} split[${childIndex}] requires a non-zero integer amount`);
+        }
+        total += child.amount;
+        if (typeof child.notes !== "string") {
+          throw new Error(`${prefix} split[${childIndex}] requires notes`);
+        }
+        noteParts(child.notes).forEach((value, tokenIndex) =>
+          safeNoteToken(value, `${prefix} split[${childIndex}].notes[${tokenIndex}]`));
+      }
+      if (total !== change.expected_current_amount) {
+        throw new Error(`${prefix} split children must sum to the parent amount`);
+      }
+    }
+  }
+  return plan.changes;
+}
+
+function splitMatches(row, desiredChildren) {
+  const current = row.subtransactions ?? [];
+  if (!row.is_parent || current.length !== desiredChildren.length) return false;
+  return current.every((child, index) => {
+    const desired = desiredChildren[index];
+    return child.amount === desired.amount &&
+      String(child.notes ?? "") === desired.notes &&
+      (desired.category === undefined || child.category === desired.category);
+  });
+}
+
+export async function enrichTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
+  const changes = validateTransactionEnrichmentPlan(plan);
+  const serverResponse = await api.getServerVersion();
+  const serverVersion = String(
+    serverResponse && typeof serverResponse === "object"
+      ? serverResponse.version ?? ""
+      : serverResponse ?? "",
+  );
+  if (serverVersion !== plan.expected_server_version) {
+    throw new Error(
+      `Actual server version drifted: expected ${plan.expected_server_version}, found ${serverVersion}`,
+    );
+  }
+  const accounts = byName(await api.getAccounts());
+  const categories = byName(await api.getCategories());
+  const grouped = new Map();
+  for (const change of changes) {
+    const key = normalized(change.account);
+    const rows = grouped.get(key) ?? [];
+    rows.push(change);
+    grouped.set(key, rows);
+  }
+
+  const pending = [];
+  const alreadyApplied = [];
+  for (const [accountKey, accountChanges] of grouped) {
+    const account = accounts.get(accountKey);
+    if (!account) throw new Error(`Unknown Actual account: ${accountChanges[0].account}`);
+    const dates = accountChanges.map(change => change.date).sort();
+    const currentRows = await api.getTransactions(account.id, dates[0], dates[dates.length - 1]);
+    for (const change of accountChanges) {
+      const matches = currentRows.filter(row => row.imported_id === change.imported_id);
+      if (matches.length !== 1) {
+        throw new Error(`Enrichment target ${change.imported_id} matched ${matches.length} transactions`);
+      }
+      const row = matches[0];
+      if (row.date !== change.date || row.amount !== change.expected_current_amount) {
+        throw new Error(`Enrichment target ${change.imported_id} date or amount drifted`);
+      }
+      if (row.transfer_id) throw new Error(`Enrichment target ${change.imported_id} is a transfer`);
+      const desiredNotes = change.desired_notes ?? mutateNoteParts(
+        change.expected_current_notes,
+        change.add_note_tokens,
+        change.remove_note_tokens,
+      );
+      const desiredChildren = change.split?.map(child => {
+        const category = child.category_name
+          ? categories.get(normalized(child.category_name))
+          : null;
+        if (child.category_name && !category) {
+          throw new Error(`Unknown Actual category in split: ${child.category_name}`);
+        }
+        return {
+          amount: child.amount,
+          notes: child.notes,
+          ...(category ? { category: category.id } : {}),
+        };
+      });
+      const item = {
+        transaction_id: row.id,
+        imported_id: row.imported_id,
+        account: account.name,
+        date: row.date,
+        amount: row.amount,
+        expected_current_notes: change.expected_current_notes,
+        desired_notes: desiredNotes,
+        desired_children: desiredChildren,
+      };
+      const already = String(row.notes ?? "") === desiredNotes &&
+        (desiredChildren ? splitMatches(row, desiredChildren) : !row.is_parent);
+      if (already) {
+        alreadyApplied.push(item);
+      } else if (String(row.notes ?? "") === change.expected_current_notes && !row.is_parent) {
+        pending.push(item);
+      } else {
+        throw new Error(`Enrichment target ${change.imported_id} notes or split state drifted`);
+      }
+    }
+  }
+
+  if (!apply) {
+    return { status: "planned", reason: plan.reason, pending, already_applied: alreadyApplied };
+  }
+  for (const item of pending) {
+    const fields = { notes: item.desired_notes };
+    if (item.desired_children) fields.subtransactions = item.desired_children;
+    await api.updateTransaction(item.transaction_id, fields);
+  }
+  if (pending.length && syncRemote) await api.sync();
+
+  const verification = [];
+  for (const [accountKey, accountChanges] of grouped) {
+    const account = accounts.get(accountKey);
+    const dates = accountChanges.map(change => change.date).sort();
+    const currentRows = await api.getTransactions(account.id, dates[0], dates[dates.length - 1]);
+    for (const change of accountChanges) {
+      const row = currentRows.find(item => item.imported_id === change.imported_id);
+      const desiredNotes = change.desired_notes ?? mutateNoteParts(
+        change.expected_current_notes,
+        change.add_note_tokens,
+        change.remove_note_tokens,
+      );
+      const desiredChildren = change.split?.map(child => {
+        const category = child.category_name
+          ? categories.get(normalized(child.category_name))
+          : null;
+        return { amount: child.amount, notes: child.notes, ...(category ? { category: category.id } : {}) };
+      });
+      if (!row || String(row.notes ?? "") !== desiredNotes ||
+          (desiredChildren && !splitMatches(row, desiredChildren))) {
+        throw new Error(`Enrichment verification failed for ${change.imported_id}`);
+      }
+      verification.push({ imported_id: row.imported_id, notes: row.notes, split_count: row.subtransactions?.length ?? 0 });
+    }
+  }
+  return {
+    status: "applied",
+    reason: plan.reason,
+    enriched: pending,
+    already_applied: alreadyApplied,
+    verification,
+  };
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["doctor", "bootstrap", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|import|repair-transactions|snapshot|tag-report> [options]");
+  if (!command || !["doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
   if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
+  if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
   await openBudget();
   try {
     let result;
@@ -806,6 +1061,9 @@ async function main() {
     } else if (command === "repair-transactions") {
       if (!args.plan) throw new Error("repair-transactions requires --plan <file>");
       result = await repairTransactions(await readJson(args.plan), Boolean(args.apply));
+    } else if (command === "enrich-transactions") {
+      if (!args.plan) throw new Error("enrich-transactions requires --plan <file>");
+      result = await enrichTransactions(await readJson(args.plan), Boolean(args.apply));
     } else {
       if (!args.input) throw new Error("import requires --input <file>");
       result = await importEnvelopes(await readJson(args.input), Boolean(args.commit));

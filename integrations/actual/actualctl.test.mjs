@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   assertCommitEnabled,
+  enrichTransactions,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
   selectRetiredRuleIds,
   selectStageMigrationRuleIds,
   validateTransactionRepairPlan,
+  validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
 
 
@@ -203,4 +205,123 @@ test("transaction repair refuses amount drift", async () => {
     }],
   };
   await assert.rejects(() => repairTransactions(repairPlan(), false, api), /amount drifted/);
+});
+
+const enrichmentPlan = () => ({
+  schema_version: "actual-transaction-enrichment-v1",
+  expected_server_version: "26.8.1",
+  reason: "Backfill explicit rental property evidence",
+  changes: [{
+    imported_id: "statement:adcb:test-row",
+    account: "ADCB Credit Card",
+    date: "2026-07-18",
+    expected_current_amount: -20790,
+    expected_current_notes: "source:statement | #home | #utility",
+    add_note_tokens: ["#rental", "#rental:lt713"],
+    remove_note_tokens: ["#home"],
+  }],
+});
+
+test("transaction enrichment validates colon tags and balanced splits", () => {
+  assert.equal(validateTransactionEnrichmentPlan(enrichmentPlan()).length, 1);
+  const split = enrichmentPlan();
+  split.changes[0].expected_current_amount = -162457;
+  split.changes[0].split = [
+    { amount: -99984, notes: "#utility | #home", category_name: "Electricity & Water" },
+    { amount: -62473, notes: "#utility | #rental | #rental:lt713", category_name: "Electricity & Water" },
+  ];
+  assert.equal(validateTransactionEnrichmentPlan(split).length, 1);
+  split.changes[0].split[1].amount = -62472;
+  assert.throws(
+    () => validateTransactionEnrichmentPlan(split),
+    /must sum to the parent amount/,
+  );
+});
+
+test("transaction enrichment plans, applies, verifies, and replays idempotently", async () => {
+  let rows = [{
+    id: "actual-row-1",
+    imported_id: "statement:adcb:test-row",
+    date: "2026-07-18",
+    amount: -20790,
+    notes: "source:statement | #home | #utility",
+    is_parent: false,
+  }];
+  let syncCount = 0;
+  const api = {
+    getServerVersion: async () => "26.8.1",
+    getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
+    getCategories: async () => [{ id: "category-1", name: "Electricity & Water" }],
+    getTransactions: async () => rows,
+    updateTransaction: async (id, fields) => {
+      assert.equal(id, "actual-row-1");
+      rows = [{ ...rows[0], ...fields }];
+    },
+    sync: async () => { syncCount += 1; },
+  };
+
+  const planned = await enrichTransactions(enrichmentPlan(), false, api);
+  assert.equal(planned.pending.length, 1);
+  assert.equal(rows[0].notes, "source:statement | #home | #utility");
+
+  const applied = await enrichTransactions(enrichmentPlan(), true, api);
+  assert.equal(applied.verification.length, 1);
+  assert.equal(rows[0].notes, "source:statement | #utility | #rental | #rental:lt713");
+  assert.equal(syncCount, 1);
+
+  const replay = await enrichTransactions(enrichmentPlan(), true, api);
+  assert.equal(replay.enriched.length, 0);
+  assert.equal(replay.already_applied.length, 1);
+  assert.equal(syncCount, 1);
+});
+
+test("transaction enrichment refuses note drift and server version drift", async () => {
+  const base = {
+    getServerVersion: async () => "26.8.1",
+    getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
+    getCategories: async () => [],
+    getTransactions: async () => [{
+      id: "actual-row-1",
+      imported_id: "statement:adcb:test-row",
+      date: "2026-07-18",
+      amount: -20790,
+      notes: "manually changed",
+    }],
+  };
+  await assert.rejects(() => enrichTransactions(enrichmentPlan(), false, base), /notes or split state drifted/);
+  await assert.rejects(
+    () => enrichTransactions(enrichmentPlan(), false, { ...base, getServerVersion: async () => "26.9.0" }),
+    /server version drifted/,
+  );
+});
+
+test("transaction enrichment accepts the production server-version response shape", async () => {
+  const plan = {
+    schema_version: "actual-transaction-enrichment-v1",
+    expected_server_version: "26.8.1",
+    reason: "test",
+    changes: [{
+      imported_id: "statement:test:one",
+      account: "Card",
+      date: "2026-08-18",
+      expected_current_amount: -100,
+      expected_current_notes: "#utility",
+      add_note_tokens: ["#rental"],
+    }],
+  };
+  const api = {
+    getServerVersion: async () => ({ version: "26.8.1" }),
+    getAccounts: async () => [{ id: "account-1", name: "Card" }],
+    getCategories: async () => [],
+    getTransactions: async () => [{
+      id: "transaction-1",
+      imported_id: "statement:test:one",
+      date: "2026-08-18",
+      amount: -100,
+      notes: "#utility",
+    }],
+  };
+  const result = await enrichTransactions(plan, false, api, { syncRemote: false });
+  assert.equal(result.status, "planned");
+  assert.equal(result.pending.length, 1);
 });

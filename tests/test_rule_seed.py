@@ -72,6 +72,42 @@ class RuleSeedTests(TestCase):
         self.assertIsNone(transaction.category)
         self.assertNotIn("health", transaction.tags)
 
+    def test_broad_pharmacy_regex_uses_pharmacy_category(self) -> None:
+        for merchant in (
+            "CVS/PHARMACY #10348 LAS VEGAS USA",
+            "Community Pharmacy Dubai",
+        ):
+            with self.subTest(merchant=merchant):
+                transaction = self.transaction(merchant)
+                self.engine.apply(transaction)
+                self.assertEqual(transaction.category, "Pharmacy")
+                self.assertIn("health", transaction.tags)
+
+    def test_broad_supermarket_regex_is_shared_groceries(self) -> None:
+        transaction = self.transaction("FIRST EXIT SUPER MARKET DUBAI ARE")
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.category, "Groceries")
+        self.assertTrue({"grocery", "shared"}.issubset(transaction.tags))
+
+    def test_broad_descriptor_rules_cover_common_payee_families(self) -> None:
+        cases = {
+            "UPS GULF LLC DUBAI ARE": "Shipping & Delivery",
+            "WATANIA TAKAFUL GENERAL DUBAI ARE": "Insurance",
+            "PARKONIC PARKING SYSTEMS DUBAI ARE": "Parking & Tolls",
+            "BATEEL CAFE DUBAI ARE": "Coffee & Snacks",
+            "77 ASIA RESTAURANT LLC DUBAI ARE": "Dining Out",
+            "LATAM AIRLINES FOZ DO IGUACU BRA": "Flights",
+            "BLUEWATERS RESORTS LLC DUBAI ARE": "Accommodation",
+        }
+
+        for merchant, category in cases.items():
+            with self.subTest(merchant=merchant):
+                transaction = self.transaction(merchant)
+                self.engine.apply(transaction)
+                self.assertEqual(transaction.category, category)
+
     def test_concession_at_fuel_site_is_dining_not_fuel(self) -> None:
         transaction = self.transaction("KFC ENOC AL BARSHA DUBAI")
 
@@ -177,7 +213,7 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.vendor, "LuLu Hypermarket")
         self.assertEqual(transaction.category, "Groceries")
         self.assertTrue({"grocery", "shared"}.issubset(transaction.tags))
-        self.assertIn("class-groceries", {item.rule_id for item in trace})
+        self.assertIn("class-regex-supermarkets", {item.rule_id for item in trace})
         self.assertNotIn("class-lulu-groceries", {item.rule_id for item in trace})
 
     def test_sc_physical_spend_is_tracked_as_tier_filler(self) -> None:

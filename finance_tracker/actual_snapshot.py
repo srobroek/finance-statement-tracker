@@ -25,8 +25,11 @@ from .models import Transaction
 from .actual_pipeline import account_maps, account_owner_map
 
 
-_TAG = re.compile(r"(?:^|\s)#([A-Za-z0-9_-]+)")
-_CURRENCY = re.compile(r"(?:^|\s)currency:([A-Z]{3})(?:\s|$)", re.I)
+_TAG = re.compile(r"(?:^|\s)#([A-Za-z0-9_:-]+)")
+_CURRENCY = re.compile(
+    r"(?:^|\s)(?:currency:|FX:?\s+)([A-Z]{3})(?:\s|$)",
+    re.I,
+)
 
 
 def _tags(notes: str) -> set[str]:

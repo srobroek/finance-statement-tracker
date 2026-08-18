@@ -6,6 +6,7 @@ from pathlib import Path
 
 from reportlab.pdfgen import canvas
 
+from finance_tracker.actual_notes import validate_actual_notes
 from finance_tracker.ingestion_jobs import (
     IngestionJobRunner,
     compact_ai_handoff,
@@ -81,12 +82,8 @@ class IngestionJobTests(unittest.TestCase):
         self.assertEqual(first["envelope_count"], 1)
         statement_rows = manifest["envelopes"][0]["records"]
         self.assertTrue(statement_rows)
-        self.assertTrue(
-            all(
-                "message:synthetic-email-message" in row["notes"]
-                for row in statement_rows
-            )
-        )
+        self.assertTrue(all("message:" not in row["notes"] for row in statement_rows))
+        self.assertTrue(all("source:" not in row["notes"] for row in statement_rows))
         self.assertGreater(first["ai_request_count"], 0)
         self.assertNotIn("ai_requests", first)
         self.assertEqual(
@@ -278,7 +275,9 @@ class IngestionJobTests(unittest.TestCase):
             if record["imported_id"] == transaction_id
         )
         self.assertEqual(linked["evidence_link_count"], 1)
-        self.assertIn(f"evidence:{relative_path}", record["notes"])
+        self.assertIn(f"Doc: {relative_path}", record["notes"])
+        self.assertNotIn("evidence:", record["notes"])
+        validate_actual_notes(record["notes"])
         self.assertEqual(linked_manifest["evidence_links"][0]["transaction_id"], transaction_id)
 
     def test_evidence_link_cannot_target_an_unstaged_transaction(self) -> None:

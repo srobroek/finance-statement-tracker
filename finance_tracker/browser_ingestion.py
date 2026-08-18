@@ -18,6 +18,7 @@ from .ai_rules import AIEnrichmentEngine, AITrace, load_ai_policies, load_ai_pro
 from .history import HistoryDecision, HistoryTrace, apply_history_match, load_history_index
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
+from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleEngine, StaticRule
 
 
@@ -367,6 +368,7 @@ def build_browser_ingestion_run(
     history_index: dict[str, HistoryDecision] | None = None,
     ai_engine: AIEnrichmentEngine | None = None,
     ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    property_registry: PropertyRegistry | None = None,
 ) -> BrowserIngestionRun:
     _reject_sensitive_values(capture)
     if capture.get("schema_version") != 1:
@@ -403,6 +405,9 @@ def build_browser_ingestion_run(
     }
     resolved_account, account_blockers = _resolve_account(account, config)
     account_name = str(resolved_account["name"]) if resolved_account else None
+    account_type = str(
+        (resolved_account or {}).get("type") or account.get("type") or "checking"
+    )
     card_code = (
         str(resolved_account.get("card_code") or resolved_account["name"]).upper()
         if resolved_account
@@ -527,14 +532,9 @@ def build_browser_ingestion_run(
             transaction_type=transaction_type,
             review_required=bool(review_reasons),
             is_refund=transaction_type == "REFUND",
-            tags={
-                "browser-import",
-                *(
-                    {str(row.get("card_role")).strip().casefold()}
-                    if str(row.get("card_role") or "").strip()
-                    else set()
-                ),
-            },
+            # Acquisition provenance and card role stay in structured metadata,
+            # not in the human-facing Actual tag namespace.
+            tags=set(),
             metadata={
                 "import_status": "STAGED",
                 "capture_id": capture_id,
@@ -546,10 +546,14 @@ def build_browser_ingestion_run(
                 "browser_reference": str(row.get("reference") or "").strip() or None,
                 "browser_post_date": str(row.get("post_date") or "").strip() or None,
                 "browser_direction": direction,
+                "browser_card_role": str(row.get("card_role") or "").strip() or None,
                 # The portal supplies the authoritative account-side direction.
                 # Preserve the canonical key consumed by every ledger adapter so
                 # later transfer/reward classification cannot invert a credit.
                 "statement_direction": direction,
+                "account_balance_convention": (
+                    "LIABILITY" if account_type.casefold() == "credit" else "ASSET"
+                ),
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
                 "browser_review_reasons": review_reasons,
                 "browser_review_resolutions": (
@@ -625,6 +629,8 @@ def build_browser_ingestion_run(
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
+        if property_registry:
+            project_property_tags(transaction, property_registry)
 
     _match_exact_refunds(transactions)
 
@@ -678,6 +684,7 @@ def export_browser_capture_for_actual(
             raise ValueError("AI enrichment requires both a policies file and provider configuration")
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
         resolved_ai_resolver = load_ai_provider(ai_provider_path)
+    property_config = Path(config_path).parent / "properties.json"
     run = build_browser_ingestion_run(
         capture,
         load_actual_config(config_path),
@@ -685,6 +692,9 @@ def export_browser_capture_for_actual(
         history_index=load_history_index(history_path) if history_path else None,
         ai_engine=ai_engine,
         ai_resolver=resolved_ai_resolver,
+        property_registry=(
+            load_property_registry(property_config) if property_config.is_file() else None
+        ),
     )
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)

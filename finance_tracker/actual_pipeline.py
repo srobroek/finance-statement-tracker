@@ -16,6 +16,7 @@ from .ai_rules import (
 )
 from .history import HistoryDecision, HistoryTrace, apply_history_match, load_history_index
 from .platforms import ActualBudgetAdapter
+from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
 
@@ -135,6 +136,7 @@ def build_actual_statement_run(
     history_index: dict[str, HistoryDecision] | None = None,
     ai_engine: AIEnrichmentEngine | None = None,
     ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    property_registry: PropertyRegistry | None = None,
 ) -> ActualStatementRun:
     card_by_last4, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
@@ -175,6 +177,8 @@ def build_actual_statement_run(
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
+        if property_registry:
+            project_property_tags(transaction, property_registry)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
     period_start = statement.period_start or min(
@@ -327,6 +331,7 @@ def export_statement_for_actual(
             raise ValueError("AI enrichment requires both a policies file and provider configuration")
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
         resolved_ai_resolver = load_ai_provider(ai_provider_path)
+    property_config = Path(config_path).parent / "properties.json"
     run = build_actual_statement_run(
         statement,
         load_actual_config(config_path),
@@ -335,6 +340,9 @@ def export_statement_for_actual(
         history_index=load_history_index(history_path) if history_path else None,
         ai_engine=ai_engine,
         ai_resolver=resolved_ai_resolver,
+        property_registry=(
+            load_property_registry(property_config) if property_config.is_file() else None
+        ),
     )
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)

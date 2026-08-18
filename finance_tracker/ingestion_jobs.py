@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .actual_notes import add_actual_document
 from .actual_pipeline import export_statement_for_actual
 from .browser_exports import build_capture_from_export
 from .browser_ingestion import export_browser_capture_for_actual
@@ -333,12 +334,8 @@ class IngestionJobRunner:
                 raise ValueError(
                     f"Evidence link does not match a staged transaction: {transaction_id}"
                 )
-            token = f"evidence:{link['relative_path']}"
             notes = str(record.get("notes") or "")
-            note_parts = [part.strip() for part in notes.split("|") if part.strip()]
-            if token not in note_parts:
-                note_parts.append(token)
-            record["notes"] = " | ".join(note_parts)
+            record["notes"] = add_actual_document(notes, link["relative_path"])
             transaction_row = transaction_rows.get(transaction_id)
             if transaction_row is not None:
                 transaction_row["evidence_status"] = "LINKED"

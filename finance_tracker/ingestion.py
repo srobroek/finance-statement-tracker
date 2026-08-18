@@ -56,6 +56,7 @@ def stage_statement(
                     "statement_transaction_id": row.transaction_id,
                     "statement_card_last4": row.card_last4,
                     "statement_direction": row.direction,
+                    "account_balance_convention": "LIABILITY",
                     "statement_post_date": row.post_date.isoformat() if row.post_date else None,
                     "statement_exchange_rate": None if row.exchange_rate is None else str(row.exchange_rate),
                     "statement_balance_tied": statement.balance_tied,

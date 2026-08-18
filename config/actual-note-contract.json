@@ -1,0 +1,14 @@
+{
+  "schema_version": "actual-note-contract-v1",
+  "delimiter": " | ",
+  "detail_order": ["Doc", "FX", "Review", "Memo"],
+  "forbidden_tags": ["browser-import", "primary", "evidence", "statement"],
+  "discarded_legacy_fields": [
+    "source",
+    "message",
+    "message-id",
+    "attachment-id",
+    "evidence"
+  ],
+  "document_root": "Finance Evidence/"
+}

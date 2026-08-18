@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .models import Transaction
+from .properties import load_property_registry
 from .rules import RuleCondition, condition_matches
 
 
@@ -343,6 +344,15 @@ def _configured_allowed_values(
             str(category)
             for group in source.get("category_groups", [])
             for category in group.get("categories", [])
+        )
+    if source_name in {"properties.codes", "properties.rental_units"}:
+        configured = os.environ.get("PROPERTY_CONFIG_PATH")
+        config_path = Path(configured) if configured else policy_path.parent / "properties.json"
+        registry = load_property_registry(config_path)
+        if source_name == "properties.codes":
+            return tuple(item.property_code for item in registry.properties)
+        return tuple(
+            item.rental_unit for item in registry.properties if item.rental_unit
         )
     raise ValueError(f"Unsupported AI allowed-value source: {source_name}")
 

@@ -2687,6 +2687,179 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "class-regex-supermarkets",
+    "name": "Supermarket and grocery descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 28,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:SUPER ?MARKET|HYPER ?MARKET|GROCER(?:Y|IES)|FOODSTUFF|MINI ?MART|FRESH ?MART|CO[ -]?OPERATIVE(?: SOCIETY)?)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Groceries"},
+      {"action": "add_tags", "value": ["grocery", "shared"], "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-airlines",
+    "name": "Airline descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 69,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:AIRLINES?|AIRWAYS|FLYDUBAI|EMIRATES AIR|ETIHAD AIR)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Flights"},
+      {"action": "add_tag", "value": "travel", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-hotels",
+    "name": "Hotel and booking descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 79,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:HOTELS?|RESORTS?|BOOKING\\.COM|AIRBNB)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Accommodation"},
+      {"action": "add_tag", "value": "travel", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-shipping-carriers",
+    "name": "Shipping carrier descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 109,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:ARAMEX|DHL|EMIRATES POST|NAQEL|FEDEX|UPS)\\b"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Shipping & Delivery"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-pharmacies",
+    "name": "Pharmacy descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 115,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:PHARMAC(?:Y|IES)|APOTHECARY|DRUGSTORE)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Pharmacy"},
+      {"action": "add_tag", "value": "health", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-medical-providers",
+    "name": "Medical provider descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 116,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:HOSPITAL|CLINIC|MEDICAL CENT(?:RE|ER)|HEALTH ?CARE|DENTAL|OPTICAL)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Medical"},
+      {"action": "add_tag", "value": "health", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-insurance-providers",
+    "name": "Insurance provider descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 122,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:INSURANCE|TAKAFUL)\\b"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Insurance"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-vehicle-services",
+    "name": "Vehicle service descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 123,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:AUTO CARE|AUTO SERVICE|CAR WASH|TYRE|TIRE)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Vehicle Maintenance"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-cafes",
+    "name": "Cafe and snack descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 124,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:CAFE|COFFEE|BAKERY|CAFETERIA)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Coffee & Snacks"},
+      {"action": "add_tag", "value": "dining", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-restaurants",
+    "name": "Restaurant descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 125,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:RESTAURANT|GRILL|BISTRO|EATERY)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Dining Out"},
+      {"action": "add_tag", "value": "dining", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-entertainment-venues",
+    "name": "Cinema and theatre descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 127,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:CINEMA|THEATRE|THEATER)\\b"}]}]},
+    "actions": [{"action": "set_if_empty", "field": "category", "value": "Events & Attractions"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-fuel-stations",
+    "name": "Fuel station descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 129,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(?:^|\\b)(?:ENOC|EPPCO|ADNOC|EMARAT|SHELL SERVICE|PETROL STATION|FUEL STATION)(?:\\b|$)"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Fuel"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "class-regex-parking-tolls",
+    "name": "Parking and toll descriptors",
+    "stage": "CLASSIFICATION",
+    "priority": 139,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "\\b(?:PARKING|SALIK|DARB TOLL|RTA PARK)\\b"}]}]},
+    "actions": [
+      {"action": "set_if_empty", "field": "category", "value": "Parking & Tolls"},
+      {"action": "add_tag", "value": "transport", "sequence": 20}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "tag-foreign",
     "name": "Tag foreign currency",
     "stage": "TAGGING",
@@ -2742,7 +2915,7 @@
   {
     "schema_version": 1,
     "rule_id": "tag-property-unit",
-    "name": "Tag rental property unit",
+    "name": "Tag known property",
     "stage": "TAGGING",
     "priority": 30,
     "match": {

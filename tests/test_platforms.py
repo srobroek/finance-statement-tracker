@@ -93,6 +93,9 @@ class ActualBudgetAdapterTests(TestCase):
 
         self.assertTrue(statement_envelope.default_cleared)
         self.assertFalse(portal_envelope.default_cleared)
+        self.assertNotIn("source:browser_statement", statement_envelope.records[0]["notes"])
+        self.assertNotIn("message:", statement_envelope.records[0]["notes"])
+        self.assertNotIn("source:browser_portal", portal_envelope.records[0]["notes"])
 
     def test_statement_direction_controls_actual_amount_sign(self) -> None:
         common = {
@@ -122,6 +125,40 @@ class ActualBudgetAdapterTests(TestCase):
 
         self.assertEqual(records[0]["amount"], -10000)
         self.assertEqual(records[1]["amount"], 12500)
+
+    def test_card_payment_sign_uses_explicit_account_balance_convention(self) -> None:
+        common = {
+            "transaction_at": datetime(2026, 8, 1),
+            "card": "CARD",
+            "merchant_raw": "TRANSFER PAYMENT RECEIVED THANK YOU",
+            "amount_aed": Decimal("100.00"),
+            "transaction_type": "TRANSFER",
+            "tags": {"card-payment", "transfer"},
+        }
+        liability = Transaction(
+            transaction_id="statement:card-payment",
+            account="Credit Card",
+            metadata={
+                "statement_direction": "DEBIT",
+                "account_balance_convention": "LIABILITY",
+            },
+            **common,
+        )
+        asset = Transaction(
+            transaction_id="statement:cash-payment",
+            account="Current Account",
+            metadata={
+                "statement_direction": "CREDIT",
+                "account_balance_convention": "ASSET",
+            },
+            **common,
+        )
+
+        envelopes = ActualBudgetAdapter().serialize_import([liability, asset])
+        by_account = {envelope.account: envelope.records[0] for envelope in envelopes}
+
+        self.assertEqual(by_account["Credit Card"]["amount"], 10000)
+        self.assertEqual(by_account["Current Account"]["amount"], -10000)
 
     def test_requires_an_account_mapping(self) -> None:
         row = Transaction(

@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
-import re
 from typing import Iterable, Protocol
 
+from .actual_notes import format_actual_notes, normalize_actual_tag
 from .models import Transaction
 
 
@@ -96,8 +96,7 @@ class ImportEnvelope:
 
 def _actual_tag(value: str) -> str:
     """Return a stable Actual tag token (Actual tags cannot contain spaces)."""
-    token = re.sub(r"[^A-Za-z0-9_-]+", "-", value.strip()).strip("-")
-    return token.casefold()
+    return normalize_actual_tag(value)
 
 
 class LedgerBackend(Protocol):
@@ -121,7 +120,25 @@ def _actual_amount(transaction: Transaction) -> int:
     statement_direction = str(
         transaction.metadata.get("statement_direction") or ""
     ).upper()
-    if statement_direction in {"CREDIT", "DEBIT"}:
+    balance_convention = str(
+        transaction.metadata.get("account_balance_convention") or ""
+    ).upper()
+    is_card_payment = "card-payment" in {
+        str(tag).strip().casefold() for tag in transaction.tags
+    }
+    incoming_payment_description = any(
+        token in " ".join(transaction.merchant_raw.upper().split())
+        for token in ("PAYMENT RECEIVED", "CREDIT REPAYMENT", "CARD REPAYMENT")
+    )
+    if is_card_payment and incoming_payment_description and balance_convention == "LIABILITY":
+        # A payment received by a credit-card account reduces the liability.
+        # Some issuer exports label the row inconsistently; the semantic row
+        # type plus an explicit liability convention is the safer invariant.
+        positive = True
+    elif is_card_payment and balance_convention == "ASSET":
+        # The matching payment leaving a current account is an asset debit.
+        positive = False
+    elif statement_direction in {"CREDIT", "DEBIT"}:
         # A statement already supplies the authoritative account-side sign.
         # Payments, refunds, and rewards are credits to a credit-card account;
         # purchases and fees are debits. Do not infer their sign from a later
@@ -167,28 +184,29 @@ class ActualBudgetAdapter:
             }
             if transaction.subcategory or transaction.category:
                 record["category_name"] = transaction.subcategory or transaction.category
-            note_parts = [f"source:{transaction.source_type}"]
+            # Provenance and Outlook IDs are durable in imported_id and the
+            # ingestion manifest. Actual notes stay human-facing: tags first,
+            # then only compact facts that are useful in the ledger.
+            semantic_tags: list[str] = []
             if transaction.channel != "UNKNOWN":
-                note_parts.append(f"#channel-{_actual_tag(transaction.channel)}")
-            if transaction.currency != "AED":
-                note_parts.append(f"currency:{transaction.currency}")
-            if transaction.amount_original is not None:
-                note_parts.append(f"original:{transaction.amount_original}")
-            if transaction.source_message_id:
-                note_parts.append(f"message:{transaction.source_message_id}")
+                semantic_tags.append(f"channel-{_actual_tag(transaction.channel)}")
             if transaction.tags:
-                note_parts.extend(
-                    f"#{token}"
-                    for token in sorted(_actual_tag(tag) for tag in transaction.tags)
-                    if token
-                )
+                semantic_tags.extend(_actual_tag(tag) for tag in transaction.tags)
             if transaction.owner:
-                note_parts.append(f"#owner-{_actual_tag(transaction.owner)}")
+                semantic_tags.append(f"owner-{_actual_tag(transaction.owner)}")
             if transaction.reward_bucket:
-                note_parts.append(f"#cashback-{_actual_tag(transaction.reward_bucket)}")
+                semantic_tags.append(f"cashback-{_actual_tag(transaction.reward_bucket)}")
             if transaction.review_required:
-                note_parts.append("#needs-review")
-            record["notes"] = " | ".join(note_parts)
+                semantic_tags.append("needs-review")
+            fx_parts: list[str] = []
+            if transaction.currency != "AED":
+                original = (
+                    f" {transaction.amount_original}"
+                    if transaction.amount_original is not None
+                    else ""
+                )
+                fx_parts.append(f"{transaction.currency}{original}")
+            record["notes"] = format_actual_notes(tags=semantic_tags, fx=fx_parts)
             grouped.setdefault(transaction.account, []).append(record)
 
         return [

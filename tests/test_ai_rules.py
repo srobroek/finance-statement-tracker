@@ -122,6 +122,69 @@ class AIRuleTests(TestCase):
 
         self.assertEqual([], requests)
 
+    def test_property_policy_only_accepts_configured_property_identities(self) -> None:
+        transaction = Transaction(
+            "property-ai",
+            datetime(2026, 8, 16),
+            "ADCB_CASHBACK",
+            "EMPOWER",
+            "207.90",
+            category="District Cooling",
+        )
+
+        def resolver(request):
+            if request["policy_id"] == "enrich-property":
+                return {"proposals": [
+                    {
+                        "field": "property_code",
+                        "value": "LT713",
+                        "confidence": 0.99,
+                        "rationale": "Explicit account reference in linked bill",
+                        "source_refs": ["outlook-message"],
+                    },
+                    {
+                        "field": "rental_unit",
+                        "value": "LT713",
+                        "confidence": 0.99,
+                        "rationale": "Explicit unit in linked bill",
+                        "source_refs": ["outlook-message"],
+                    },
+                ]}
+            return {"proposals": []}
+
+        traces = self.engine.enrich(transaction, resolver)
+
+        self.assertEqual(transaction.property_code, "LT713")
+        self.assertEqual(transaction.rental_unit, "LT713")
+        self.assertTrue(all(trace.accepted for trace in traces))
+
+    def test_property_policy_rejects_unconfigured_unit(self) -> None:
+        transaction = Transaction(
+            "property-ai-unknown",
+            datetime(2026, 8, 16),
+            "ADCB_CASHBACK",
+            "DEWA",
+            "500",
+            category="Electricity & Water",
+        )
+
+        traces = self.engine.enrich(
+            transaction,
+            lambda request: {
+                "proposals": [{
+                    "field": "rental_unit",
+                    "value": "Invented99",
+                    "confidence": 1,
+                    "rationale": "Unsupported",
+                }]
+            } if request["policy_id"] == "enrich-property" else {"proposals": []},
+        )
+
+        rejected = next(trace for trace in traces if trace.field == "rental_unit")
+        self.assertFalse(rejected.accepted)
+        self.assertEqual(rejected.reason, "value_not_allowed")
+        self.assertIsNone(transaction.rental_unit)
+
     def test_high_value_unresolved_purchase_requests_only_relevant_policies(self) -> None:
         transaction = Transaction(
             "ai-adcb-high-value",

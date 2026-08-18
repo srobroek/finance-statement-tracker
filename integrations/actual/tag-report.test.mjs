@@ -11,6 +11,15 @@ test("supports any, all, and excluded tag semantics", () => {
   assert.equal(matchesTagFilter(tags, { none: ["shared"] }), false);
 });
 
+test("colon-delimited property tags remain distinct and filterable", () => {
+  const tags = parseTags("#rental #rental:lt713 #utility");
+
+  assert.equal(tags.has("rental"), true);
+  assert.equal(tags.has("rental:lt713"), true);
+  assert.equal(tags.has("rental:indigo1414"), false);
+  assert.equal(matchesTagFilter(tags, { all: ["rental", "rental:lt713"] }), true);
+});
+
 test("does not double count a split parent and its children", () => {
   const report = buildTagReport([
     { id: "parent", is_parent: true, amount: -10000, notes: "#shared", category_name: null },

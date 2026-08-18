@@ -32,14 +32,17 @@
     },
     {
       "policy_id": "enrich-property",
-      "version": 1,
+      "version": 2,
       "name": "Enrich property and rental unit",
       "priority": 30,
-      "instruction": "Use explicit transaction or linked email evidence to identify the configured property and rental unit. Never guess a unit from amount alone.",
-      "target_fields": ["property_code", "rental_unit", "tags"],
+      "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
+      "target_fields": ["property_code", "rental_unit"],
       "conditions": [{"field": "category", "operator": "in", "value": ["Electricity & Water", "District Cooling", "Service Charges", "Maintenance & Repairs", "Rental Income"]}],
       "minimum_confidence": 0.9,
-      "allowed_tags": ["property", "rental", "owner-occupied"]
+      "allowed_value_sources": {
+        "property_code": "properties.codes",
+        "rental_unit": "properties.rental_units"
+      }
     },
     {
       "policy_id": "find-purchase-evidence",
