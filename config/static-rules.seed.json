@@ -24,6 +24,7 @@
               "value": [
                 "PAYMENT RECEIVED",
                 "CARD PAYMENT",
+                "CARD PMT",
                 "AUTOPAY PAYMENT"
               ]
             }
@@ -58,6 +59,98 @@
   },
   {
     "schema_version": 1,
+    "rule_id": "normalize-salary-credit",
+    "name": "Salary income credit",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 11,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {"field": "merchant_raw", "operator": "contains", "value": "SALARY TRANSFER"}
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "INCOME", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Salary", "sequence": 20},
+      {"action": "add_tags", "value": ["income", "salary"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-explicit-account-transfer",
+    "name": "Explicit account-to-account transfer",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 12,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {
+            "field": "merchant_raw",
+            "operator": "contains_any",
+            "value": ["TRANSFER BETWEEN OWN ACCOUNTS", "TRANSFER FROM OTHER FAB ACCOUNT"]
+          }
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "TRANSFER", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Needs Review", "sequence": 20},
+      {"action": "add_tags", "value": ["transfer", "review"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-inward-bill-reimbursement",
+    "name": "Incoming bill reimbursement",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 13,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {"field": "merchant_raw", "operator": "contains", "value": "INWARD IPP PAYMENT"}
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "REFUND", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Refunds & Reimbursements", "sequence": 20},
+      {"action": "add_tags", "value": ["refund", "reimbursement"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-ambiguous-incoming-transfer",
+    "name": "Ambiguous incoming bank transfer",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 14,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {"field": "merchant_raw", "operator": "equals", "value": "Transfer within UAE"}
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "INCOME", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Needs Review", "sequence": 20},
+      {"action": "add_tags", "value": ["income", "review"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
     "rule_id": "normalize-cashback-credit",
     "name": "Cashback and reward credit",
     "stage": "TRANSACTION_NORMALIZATION",
@@ -72,7 +165,8 @@
               "value": [
                 "CASHBACK",
                 "CASH BACK",
-                "REWARD CREDIT"
+                "REWARD CREDIT",
+                "RDMPTION"
               ]
             }
           ]
@@ -142,6 +236,52 @@
       "FULL_LEDGER",
       "LIVE_CASHBACK"
     ]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-fab-merchant-credit",
+    "name": "FAB merchant refund credit",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 31,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "card", "operator": "equals", "value": "FAB_6031"},
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {"field": "merchant_raw", "operator": "contains_any", "value": ["AMAZON.AE", "PAYPAL *SKYHOUND"]}
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "REFUND", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Refunds & Reimbursements", "sequence": 20},
+      {"action": "add_tag", "value": "refund", "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "normalize-fab-installment-adjustment",
+    "name": "FAB installment credit adjustment",
+    "stage": "TRANSACTION_NORMALIZATION",
+    "priority": 32,
+    "match": {
+      "any": [{
+        "all": [
+          {"field": "institution", "operator": "equals", "value": "FAB"},
+          {"field": "transaction_type", "operator": "equals", "value": "CREDIT"},
+          {"field": "merchant_raw", "operator": "regex", "value": "^INST[A-Z0-9]+$"}
+        ]
+      }]
+    },
+    "actions": [
+      {"action": "set", "field": "transaction_type", "value": "REFUND", "sequence": 10},
+      {"action": "set_if_empty", "field": "category", "value": "Needs Review", "sequence": 20},
+      {"action": "add_tags", "value": ["adjustment", "review"], "sequence": 30}
+    ],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
   },
   {
     "schema_version": 1,

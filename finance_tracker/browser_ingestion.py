@@ -603,7 +603,12 @@ def build_browser_ingestion_run(
         review_reasons = list(transaction.metadata.get("browser_review_reasons", []))
         if (
             "UNCLASSIFIED_CREDIT" in review_reasons
-            and transaction.transaction_type in {"TRANSFER", "REWARD_CREDIT", "REFUND"}
+            and transaction.transaction_type in {
+                "TRANSFER",
+                "INCOME",
+                "REWARD_CREDIT",
+                "REFUND",
+            }
             and transaction.category
         ):
             review_reasons.remove("UNCLASSIFIED_CREDIT")

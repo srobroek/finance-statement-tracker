@@ -32,6 +32,12 @@ class BrowserIngestionTests(TestCase):
                     "card_code": "EI_AMAZON",
                     "card_last4": ["0082"],
                 },
+                {
+                    "name": "FAB Credit Card · 6031",
+                    "type": "credit",
+                    "card_code": "FAB_6031",
+                    "card_last4": ["6031"],
+                },
             ],
         }
 
@@ -277,6 +283,65 @@ class BrowserIngestionTests(TestCase):
         )
         self.assertTrue(run.transactions[1]["review_required"])
         self.assertEqual(run.review_count, 1)
+
+    def test_static_rules_classify_known_fab_credit_families(self):
+        capture = self.capture()
+        capture["source"]["provider"] = "FAB"
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["account"]["card_code"] = "FAB_6031"
+        capture["account"]["account_last4"] = "6031"
+        capture["rows"] = [
+            {
+                "transaction_date": "2026-08-01",
+                "description": "FT123-FAB CARD PMT AUH",
+                "amount_aed": "1000.00",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-02",
+                "description": "ALFT REWARD RDMPTION FEE REV",
+                "amount_aed": "31.50",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-03",
+                "description": "Salary Transfer-REF SALARY FOR",
+                "amount_aed": "10000.00",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-04",
+                "description": "Inward IPP Payment--Utility Bill Payments",
+                "amount_aed": "500.00",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-05",
+                "description": "Transfer within UAE",
+                "amount_aed": "750.00",
+                "direction": "CREDIT",
+            },
+            {
+                "transaction_date": "2026-08-06",
+                "description": "INSTQ2MKKOB7QB00",
+                "amount_aed": "536.00",
+                "direction": "CREDIT",
+            },
+        ]
+
+        run = build_browser_ingestion_run(
+            capture,
+            self.config(),
+            load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
+        )
+
+        self.assertEqual(run.review_count, 0)
+        self.assertEqual(
+            [row["transaction_type"] for row in run.transactions],
+            ["TRANSFER", "REWARD_CREDIT", "INCOME", "REFUND", "INCOME", "REFUND"],
+        )
+        self.assertEqual(run.transactions[4]["category"], "Needs Review")
+        self.assertEqual(run.transactions[5]["category"], "Needs Review")
 
     def test_unique_exact_opposite_direction_pair_is_a_refund(self):
         capture = self.capture()
