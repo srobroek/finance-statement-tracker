@@ -227,7 +227,7 @@ async function doctor() {
   };
 }
 
-async function snapshot(start, end) {
+export async function snapshot(start, end) {
   if (!start || !end) throw new Error("snapshot requires --start and --end (YYYY-MM-DD)");
   const accounts = await actual.getAccounts();
   const categories = new Map((await actual.getCategories()).map(row => [row.id, row.name]));
