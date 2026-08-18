@@ -91,10 +91,16 @@ candidates remain unlinked instead of being inferred.
 
 Production PREFLIGHT job `03e8f01870380e4c8bc7326c` dry-ran all 303 rows
 against `ADCB Credit Card · 8833 / 6838`: 303 additions, zero updates, and zero
-errors. It imported nothing. Cashback enrichment was correctly omitted because
-ADCB is not part of the live cashback profile. A handoff marked complete must
-answer every emitted request, including empty responses when evidence is weak;
-an incomplete PREFLIGHT is rejected before the Actual bridge is contacted.
+errors. After explicit owner approval, production COMMIT job
+`f265bf6dddc4361e46e94a55` imported the same 303-row envelope. The bridge's
+post-write verification found 303 expected imported IDs and zero duplicates. A
+separate fresh Actual snapshot matched every expected imported ID exactly once
+and retained all ten evidence notes. Replaying the identical submission returned
+the same job with `idempotent_replay: true` and did not run a second import.
+Cashback enrichment was correctly omitted because ADCB is not part of the live
+cashback profile. A handoff marked complete must answer every emitted request,
+including empty responses when evidence is weak; an incomplete PREFLIGHT or
+COMMIT is rejected before the Actual bridge is contacted.
 
 ## Correctness gates
 
