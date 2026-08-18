@@ -381,8 +381,8 @@ class AdcbStatementAdapter:
 
     def parse(self, text: str, source_file: str = "") -> NormalizedStatement:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        opening_match = re.search(rf"PREVIOUS BALANCE OUTSTANDING\s+({_MONEY})", text, re.I)
-        closing_match = re.search(rf"NEW BALANCE OUTSTANDING\s+({_MONEY})", text, re.I)
+        opening_match = re.search(rf"PREVIOUS BALANCE OUTSTANDING\s+({_SIGNED_MONEY})", text, re.I)
+        closing_match = re.search(rf"NEW BALANCE OUTSTANDING\s+({_SIGNED_MONEY})", text, re.I)
         header_dates = [
             datetime.strptime(match.group(0), "%d/%m/%y").date()
             for match in re.finditer(r"(?m)^\d{2}/\d{2}/\d{2}$", text)

@@ -63,6 +63,21 @@ Card No : XXXXXXXXXXXX6838 - TEST USER TWO
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("175.00"))
         self.assertTrue(statement.balance_tied)
 
+    def test_adcb_statement_accepts_negative_overpaid_closing_balance(self) -> None:
+        text = """15/08/26
+15/09/26
+PREVIOUS BALANCE OUTSTANDING 100.00
+Card No : XXXXXXXXXXXX8833 - TEST USER
+14/08/2026 PAYMENT RECEIVED, THANK YOU 150.00 CR
+15/08/2026 NEW BALANCE OUTSTANDING -50.00
+"""
+
+        statement = parse_statement_text(text, "adcb-overpaid.pdf")
+
+        self.assertEqual(statement.closing_balance_aed, Decimal("-50.00"))
+        self.assertEqual(statement.calculated_closing_balance_aed, Decimal("-50.00"))
+        self.assertTrue(statement.balance_tied)
+
     def test_registry_is_the_bank_extension_boundary(self) -> None:
         adapters = (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())
         registry = StatementAdapterRegistry(adapters)
