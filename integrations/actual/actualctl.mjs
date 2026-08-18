@@ -11,6 +11,12 @@ import {
   scheduleSignature,
   validateBootstrapConfig,
 } from "./bootstrap-config.mjs";
+import {
+  canonicalCleanup,
+  cleanupGroupNames,
+  compileCleanup,
+  validateBudgetAutomationConfig,
+} from "./budget-automation.mjs";
 
 let actualInternal = null;
 
@@ -284,6 +290,24 @@ export function exportDashboardDocument(page, widgets, reports) {
   };
 }
 
+export function resolvePortableReferences(value, refs, { strict = true } = {}) {
+  if (Array.isArray(value)) return value.map(item => resolvePortableReferences(item, refs, { strict }));
+  if (value && typeof value === "object" && value.ref && value.name) {
+    const match = refs[value.ref]?.get(normalized(value.name));
+    if (!match) {
+      if (!strict) return `@${value.ref}:${value.name}`;
+      throw new Error(`Unknown ${value.ref} reference: ${value.name}`);
+    }
+    return match.id;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, resolvePortableReferences(item, refs, { strict })]),
+    );
+  }
+  return value;
+}
+
 async function dashboardAudit() {
   const { pages, widgets, reports } = await dashboardRows();
   return {
@@ -316,6 +340,13 @@ async function dashboardApply(configPath, apply) {
   }
   const existing = (await dashboardRows()).pages.filter(page => !page.tombstone);
   const byDashboardName = byName(existing);
+  const refs = apply ? {
+    account: byName(await actual.getAccounts()),
+    category: byName(await actual.getCategories()),
+    category_group: byName(await actual.getCategoryGroups()),
+    payee: byName(await actual.getPayees()),
+    tag: byName(await actual.getTags(), "tag"),
+  } : {};
   const planned = [];
   for (const entry of config.dashboards) {
     if (!entry.name || !entry.file) throw new Error("dashboard entries require name and file");
@@ -337,13 +368,117 @@ async function dashboardApply(configPath, apply) {
       page = { id, name: entry.name };
       byDashboardName.set(normalized(entry.name), page);
     }
-    await actualInternal.send("dashboard-import", {
-      filePath: filename,
-      dashboardPageId: page.id,
-    });
+    const materialized = resolvePortableReferences(document, refs);
+    const importDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache", "dashboard-imports");
+    await fs.mkdir(importDir, { recursive: true });
+    const importPath = path.join(importDir, `${page.id}-${process.pid}.json`);
+    await fs.writeFile(importPath, `${JSON.stringify(materialized, null, 2)}\n`, "utf8");
+    try {
+      await actualInternal.send("dashboard-import", {
+        filePath: importPath,
+        dashboardPageId: page.id,
+      });
+    } finally {
+      await fs.rm(importPath, { force: true });
+    }
+  }
+  const desiredNames = new Set(config.dashboards.map(entry => normalized(entry.name)));
+  for (const retiredName of config.retired_dashboard_names ?? []) {
+    if (desiredNames.has(normalized(retiredName))) {
+      throw new Error(`Dashboard cannot be both managed and retired: ${retiredName}`);
+    }
+    for (const page of existing.filter(item => normalized(item.name) === normalized(retiredName))) {
+      planned.push({ action: "delete", dashboard: page.name, id: page.id });
+      if (apply) await actualInternal.send("dashboard-delete", page.id);
+    }
   }
   if (apply) await actual.sync();
   return { status: apply ? "applied" : "planned", dashboards: planned };
+}
+
+function parsedJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Expected a JSON array");
+  return parsed;
+}
+
+async function budgetAutomation(configPath, apply) {
+  if (!configPath) throw new Error("budget-automation requires --config <file>");
+  const config = await readJson(configPath);
+  validateBudgetAutomationConfig(config);
+  const serverResponse = await actual.getServerVersion();
+  const serverVersion = String(
+    typeof serverResponse === "string"
+      ? serverResponse
+      : serverResponse?.version ?? serverResponse?.serverVersion ?? "",
+  );
+  if (serverVersion !== config.required_actual_version) {
+    throw new Error(
+      `Actual server version drifted: expected ${config.required_actual_version}, found ${serverVersion}`,
+    );
+  }
+  const categoryRows = (await actual.aqlQuery(actual.q("categories").select("*"))).data
+    .filter(row => !row.tombstone);
+  const categories = byName(categoryRows);
+  const groupRows = (await actual.aqlQuery(actual.q("cleanup_groups").select("*"))).data
+    .filter(row => !row.tombstone);
+  const groupIds = new Map(groupRows.map(row => [normalized(row.name), row.id]));
+  const groupsById = new Map(groupRows.map(row => [row.id, row.name]));
+
+  if (apply) {
+    for (const name of cleanupGroupNames(config)) {
+      if (groupIds.has(normalized(name))) continue;
+      const created = await actualInternal.send("budget/create-cleanup-group", { name });
+      groupIds.set(normalized(name), created.id);
+      groupsById.set(created.id, name);
+    }
+  }
+
+  const desiredRows = [];
+  const changes = [];
+  for (const desired of config.categories) {
+    const category = categories.get(normalized(desired.category));
+    if (!category) throw new Error(`Unknown category reference: ${desired.category}`);
+    const desiredCleanup = apply
+      ? compileCleanup(desired.cleanup, groupIds)
+      : desired.cleanup.map(item => ({ ...item }));
+    const currentTemplates = parsedJsonArray(category.goal_def);
+    const currentCleanup = canonicalCleanup(parsedJsonArray(category.cleanup_def), groupsById);
+    const desiredCanonicalCleanup = apply
+      ? canonicalCleanup(desiredCleanup, groupsById)
+      : desiredCleanup;
+    if (JSON.stringify(stable(currentTemplates)) !== JSON.stringify(stable(desired.templates)) ||
+        JSON.stringify(stable(currentCleanup)) !== JSON.stringify(stable(desiredCanonicalCleanup)) ||
+        category.template_settings?.source !== "ui") {
+      changes.push({
+        action: "set",
+        category: desired.category,
+        templates: desired.templates.length,
+        cleanup: desired.cleanup.length,
+      });
+      if (apply) {
+        desiredRows.push({
+          id: category.id,
+          templates: desired.templates,
+          cleanup: desiredCleanup,
+        });
+      }
+    }
+  }
+  if (apply && desiredRows.length) {
+    await actualInternal.send("budget/set-category-automations", {
+      categoriesWithTemplates: desiredRows,
+      source: "ui",
+    });
+    await actual.sync();
+  }
+  return {
+    status: apply ? "applied" : "planned",
+    required_actual_version: config.required_actual_version,
+    changes,
+  };
 }
 
 async function canonicalRules(config, configPath) {
@@ -1139,18 +1274,21 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["dashboard-apply", "dashboard-audit", "dashboard-export", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <dashboard-apply|dashboard-audit|dashboard-export|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
+  if (!command || !["budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <budget-automation|dashboard-apply|dashboard-audit|dashboard-export|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
   if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "dashboard-apply") assertCommitEnabled(Boolean(args.apply));
+  if (command === "budget-automation") assertCommitEnabled(Boolean(args.apply));
   await openBudget();
   try {
     let result;
     if (command === "doctor") {
       result = await doctor();
+    } else if (command === "budget-automation") {
+      result = await budgetAutomation(args.config, Boolean(args.apply));
     } else if (command === "dashboard-audit") {
       result = await dashboardAudit();
     } else if (command === "dashboard-export") {

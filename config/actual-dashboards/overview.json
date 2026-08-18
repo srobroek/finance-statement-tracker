@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "widgets": [
+    {"type":"summary-card","x":0,"y":0,"width":3,"height":2,"meta":{"name":"Income · YTD","content":"{\"type\":\"sum\",\"fontSize\":28}","timeFrame":{"start":"2026-01-01","end":"2026-12-31","mode":"yearToDate"},"conditions":[{"field":"amount","op":"gt","value":0},{"field":"account","op":"onBudget","value":""},{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}},
+    {"type":"summary-card","x":3,"y":0,"width":3,"height":2,"meta":{"name":"Spending · YTD","content":"{\"type\":\"sum\",\"fontSize\":28}","timeFrame":{"start":"2026-01-01","end":"2026-12-31","mode":"yearToDate"},"conditions":[{"field":"amount","op":"lt","value":0},{"field":"account","op":"onBudget","value":""},{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}},
+    {"type":"summary-card","x":6,"y":0,"width":3,"height":2,"meta":{"name":"Average · Month","content":"{\"type\":\"avgPerMonth\",\"fontSize\":28}","timeFrame":{"start":"2026-01-01","end":"2026-12-31","mode":"yearToDate"},"conditions":[{"field":"amount","op":"lt","value":0},{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}},
+    {"type":"summary-card","x":9,"y":0,"width":3,"height":2,"meta":{"name":"Average · Transaction","content":"{\"type\":\"avgPerTransact\",\"fontSize\":28}","timeFrame":{"start":"2026-01-01","end":"2026-12-31","mode":"yearToDate"},"conditions":[{"field":"amount","op":"lt","value":0},{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}},
+    {"type":"net-worth-card","x":0,"y":2,"width":6,"height":3,"meta":{}},
+    {"type":"cash-flow-card","x":6,"y":2,"width":6,"height":3,"meta":{}},
+    {"type":"spending-card","x":0,"y":5,"width":4,"height":2,"meta":{"name":"This Month","mode":"single-month"}},
+    {"type":"spending-card","x":4,"y":5,"width":4,"height":2,"meta":{"name":"Budget","mode":"budget"}},
+    {"type":"spending-card","x":8,"y":5,"width":4,"height":2,"meta":{"name":"Three-Month Average","mode":"average"}},
+    {"type":"calendar-card","x":0,"y":7,"width":6,"height":4,"meta":{"name":"Upcoming & Recent","timeFrame":{"start":"2026-06-01","end":"2026-08-31","mode":"sliding-window"},"conditions":[{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}},
+    {"type":"custom-report","x":6,"y":7,"width":6,"height":4,"meta":{"id":"dc0e52cd-449b-4f01-84f0-3a6fcb8f1b09","name":"Spending by Category · Last 12 Months","startDate":"2025-08-01","endDate":"2026-08-31","isDateStatic":false,"dateRange":"Last 12 months","mode":"total","groupBy":"Category","sortBy":"desc","interval":"Monthly","balanceType":"Payment","showEmpty":false,"showOffBudget":false,"showHiddenCategories":false,"showUncategorized":true,"trimIntervals":false,"showTrendLines":false,"includeCurrentInterval":true,"graphType":"DonutGraph","conditions":[{"field":"transfer","op":"is","value":false}],"conditionsOp":"and","metadata":null}}
+  ]
+}

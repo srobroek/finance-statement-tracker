@@ -129,7 +129,7 @@
     },
     {
       "name": "Goals & Giving",
-      "categories": ["Savings Goals", "Investments", "Charity", "Family Support"]
+      "categories": ["Savings Goals", "Emergency Fund", "Retirement", "Monthly Buffer", "Utilities Buffer", "Investments", "Charity", "Family Support"]
     },
     {
       "name": "Review",
@@ -150,6 +150,7 @@
     {"tag": "business", "description": "Business-related transaction"},
     {"tag": "receipt", "description": "Receipt evidence is linked"},
     {"tag": "warranty", "description": "Purchase has warranty evidence"},
+    {"tag": "category-review", "description": "AI proposed a new category for owner review"},
     {"tag": "needs-review", "description": "Deterministic or manual review is required"}
   ],
   "payees": [

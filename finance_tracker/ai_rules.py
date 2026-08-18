@@ -24,6 +24,7 @@ AI_WRITABLE_FIELDS = frozenset(
         "evidence_policy",
         "channel",
         "reward_bucket",
+        "category_recommendation",
         "rule_recommendation",
     }
 )
@@ -285,6 +286,18 @@ class AIEnrichmentEngine:
                 accepted, reason = False, "rule_recommendation_must_be_object"
             else:
                 transaction.metadata.setdefault("static_rule_recommendations", []).append(value)
+        elif field == "category_recommendation":
+            if not isinstance(value, dict) or not str(value.get("name") or "").strip():
+                accepted, reason = False, "category_recommendation_must_name_category"
+            else:
+                recommendation = {
+                    "name": str(value["name"]).strip(),
+                    "group": str(value.get("group") or "Needs Review").strip(),
+                    "reason": str(value.get("reason") or rationale).strip(),
+                }
+                transaction.metadata.setdefault("category_recommendations", []).append(recommendation)
+                transaction.tags.add("category-review")
+                transaction.review_required = True
         else:
             transaction.set_value(field, value)
         return AITrace(
@@ -417,7 +430,7 @@ def record_ai_review(
     reason: str,
 ) -> dict[str, Any]:
     """Record a human correction and lock the reviewed derived field."""
-    if field not in AI_WRITABLE_FIELDS | {"tags"} or field == "rule_recommendation":
+    if field not in AI_WRITABLE_FIELDS | {"tags"} or field in {"category_recommendation", "rule_recommendation"}:
         raise ValueError(f"Unsupported AI review field: {field}")
     if field == "tags":
         if not isinstance(final_value, list):

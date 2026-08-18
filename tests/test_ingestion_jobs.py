@@ -578,7 +578,10 @@ class IngestionJobTests(unittest.TestCase):
         )
 
         self.assertEqual(expanded["ai_response_count"], 1)
-        self.assertGreater(expanded["ai_request_count"], initial["ai_request_count"])
+        self.assertNotIn(
+            "find-purchase-evidence",
+            [item["policy_id"] for item in initial["ai_handoff"]["requests"]],
+        )
         evidence = next(
             item
             for item in expanded["ai_handoff"]["requests"]

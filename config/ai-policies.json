@@ -15,6 +15,20 @@
       "allowed_tags": ["home", "grocery", "dining", "transport", "travel", "online", "health", "education", "gift", "business", "shared", "review"]
     },
     {
+      "policy_id": "recommend-category",
+      "version": 1,
+      "name": "Recommend a missing category",
+      "priority": 15,
+      "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
+      "target_fields": ["category_recommendation"],
+      "trigger_fields": ["category_recommendation"],
+      "conditions": [
+        {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 1},
+        {"field": "category", "operator": "is_empty", "group": 1}
+      ],
+      "minimum_confidence": 0.92
+    },
+    {
       "policy_id": "detect-subscription",
       "version": 1,
       "name": "Detect recurring subscription",

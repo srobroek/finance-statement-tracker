@@ -107,18 +107,33 @@ Verify health and object counts:
 
 Bootstrap is idempotent. A clean second plan must return `changes: []`.
 
-`schedules` and `budget_months` are intentionally empty until the owner supplies real recurrence dates and budget amounts. This is a data constraint, not missing plumbing. Schedule amounts and budget amounts are integer minor units (fils); the bridge creates or updates them by stable name/month and reports every planned change before applying it. Optional `owner` values on account records become owner tags on imported transactions because Actual does not expose a first-class account-owner field.
+The read-only financial-planning compiler derives reviewable schedule ranges and
+monthly envelope proposals from completed, classified months. Sparse,
+unresolved, transfer, income, refund, and card-payment rows are excluded. The
+accepted plan is applied only after the clean full-ingestion audit. Actual
+schedule amounts support exact, approximate, and evidenced min/max ranges;
+budget amounts remain integer minor units (fils). See
+`docs/financial-planning.md`.
+
+Native UI-backed budget automation and month-end cleanup are versioned in
+`config/actual-budget-automation.json`. They are pinned to Actual 26.8.1 and
+remain separate from transaction notes. Local utility pools, the monthly buffer,
+and the global savings sink are described in
+`docs/actual-budget-automation.md`. Optional `owner` values on account records
+become owner tags on imported transactions because Actual does not expose a
+first-class account-owner field.
 
 Statement payment reminders are separate from recurring bill configuration. After a successful commit, a statement with an evidenced future payment due date and positive closing balance creates a one-time Actual schedule on the card account. The schedule never auto-posts a transaction. Missing due dates, forecast-only dates, zero/credit balances, ambiguous account mappings, and already-past dates are skipped explicitly.
 
 ## Native reports
 
-The production budget's `Main` reports dashboard includes two saved custom reports in addition to Actual's built-in overview widgets:
-
-- `Spending by Category · Last 12 Months`: total-mode donut, grouped by category, payment transactions only.
-- `Monthly Spending Trend · Last 12 Months`: time-mode line chart, monthly interval, payment transactions only.
-
-These reports are native Actual objects and update as statement transactions are imported. They were verified in the authenticated Actual 26.8.1 UI. Actual does not currently expose a supported API for creating saved report-dashboard layouts, so this small UI-authored layer is documented here rather than falsely represented as bootstrap-managed configuration. The deterministic companion report remains the supported fallback for tag-filtered reporting; see `docs/tag-reporting.md`.
+The complete native dashboard suite is versioned under
+`config/actual-dashboards/` and imported through Actual's own dashboard JSON
+handler. It includes Main, Spending & Trends, Shared, Properties, Review, Bills
+& Subscriptions, and Retirement pages. Stable custom-report identifiers update
+existing reports instead of creating duplicates. Portable references are
+resolved by name immediately before import. See
+`docs/actual-dashboard-suite.md`.
 
 ## Statement ingestion
 

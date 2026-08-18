@@ -1,0 +1,13 @@
+{
+  "schema_version": "actual-dashboard-suite-v1",
+  "retired_dashboard_names": ["New dashboard"],
+  "dashboards": [
+    {"name": "Main", "file": "overview.json"},
+    {"name": "Spending & Trends", "file": "spending-trends.json"},
+    {"name": "Shared", "file": "shared.json"},
+    {"name": "Properties", "file": "properties.json"},
+    {"name": "Review", "file": "review.json"},
+    {"name": "Bills & Subscriptions", "file": "bills-subscriptions.json"},
+    {"name": "Retirement", "file": "retirement.json"}
+  ]
+}

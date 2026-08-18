@@ -1,0 +1,86 @@
+{
+  "schema_version": "actual-budget-automation-v1",
+  "required_actual_version": "26.8.1",
+  "experimental_feature": true,
+  "notes": "Definitions may be installed before the clean full-ingestion audit, but monthly automation and cleanup must not execute until that audit passes. Amount-bearing recommendations are generated from the verified ledger; this seed defines safe automation behavior and cleanup routing.",
+  "categories": [
+    {
+      "category": "Electricity & Water",
+      "templates": [
+        {"type": "average", "directive": "template", "priority": 10, "numMonths": 3, "adjustment": 10, "adjustmentType": "percent"}
+      ],
+      "cleanup": [
+        {"role": "source", "group": "Utilities"},
+        {"role": "overspend", "group": "Utilities"}
+      ]
+    },
+    {
+      "category": "District Cooling",
+      "templates": [
+        {"type": "average", "directive": "template", "priority": 10, "numMonths": 3, "adjustment": 10, "adjustmentType": "percent"}
+      ],
+      "cleanup": [
+        {"role": "source", "group": "Utilities"},
+        {"role": "overspend", "group": "Utilities"}
+      ]
+    },
+    {
+      "category": "Mobile & Internet",
+      "templates": [
+        {"type": "average", "directive": "template", "priority": 10, "numMonths": 3, "adjustment": 5, "adjustmentType": "percent"}
+      ],
+      "cleanup": [
+        {"role": "source", "group": "Utilities"},
+        {"role": "overspend", "group": "Utilities"}
+      ]
+    },
+    {
+      "category": "Utilities Buffer",
+      "templates": [],
+      "cleanup": [
+        {"role": "sink", "group": "Utilities", "weight": 1}
+      ]
+    },
+    {
+      "category": "Monthly Buffer",
+      "templates": [],
+      "cleanup": [
+        {"role": "source", "group": "Monthly Buffer"}
+      ]
+    },
+    {
+      "category": "Groceries",
+      "templates": [
+        {"type": "average", "directive": "template", "priority": 20, "numMonths": 3, "adjustment": 10, "adjustmentType": "percent"}
+      ],
+      "cleanup": [
+        {"role": "overspend", "group": "Monthly Buffer"},
+        {"role": "source"}
+      ]
+    },
+    {
+      "category": "Savings Goals",
+      "templates": [
+        {"type": "remainder", "directive": "template", "priority": null, "weight": 1}
+      ],
+      "cleanup": [
+        {"role": "sink", "weight": 1}
+      ]
+    },
+    {
+      "category": "Investments",
+      "templates": [],
+      "cleanup": []
+    },
+    {
+      "category": "Emergency Fund",
+      "templates": [],
+      "cleanup": []
+    },
+    {
+      "category": "Retirement",
+      "templates": [],
+      "cleanup": []
+    }
+  ]
+}

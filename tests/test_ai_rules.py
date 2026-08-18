@@ -29,6 +29,41 @@ class AIRuleTests(TestCase):
             "100",
         )
 
+    def test_missing_category_recommendation_is_review_only(self) -> None:
+        policy = AIPolicy(
+            policy_id="recommend-category",
+            name="Recommend category",
+            priority=15,
+            instruction="Recommend only",
+            target_fields=("category_recommendation",),
+            trigger_fields=("category_recommendation",),
+            minimum_confidence=0.9,
+        )
+        engine = AIEnrichmentEngine([policy])
+
+        traces = engine.enrich(
+            self.transaction,
+            lambda _request: {"provider": "test", "model": "fake", "proposals": [{
+                "field": "category_recommendation",
+                "value": {
+                    "name": "Photography",
+                    "group": "Hobbies",
+                    "reason": "Repeated specialist vendor",
+                },
+                "confidence": 0.96,
+                "rationale": "Merchant evidence",
+            }]},
+        )
+
+        self.assertTrue(traces[0].accepted)
+        self.assertIsNone(self.transaction.category)
+        self.assertTrue(self.transaction.review_required)
+        self.assertIn("category-review", self.transaction.tags)
+        self.assertEqual(
+            self.transaction.metadata["category_recommendations"][0]["name"],
+            "Photography",
+        )
+
     def test_ai_accepts_allowed_unresolved_category_and_tag(self) -> None:
         def resolver(request):
             if request["policy_id"] == "classify-unresolved":
@@ -198,7 +233,7 @@ class AIRuleTests(TestCase):
         self.engine.enrich(transaction, lambda request: requests.append(request) or {"proposals": []})
 
         self.assertEqual(
-            ["classify-unresolved", "find-purchase-evidence"],
+            ["classify-unresolved", "recommend-category", "find-purchase-evidence"],
             [request["policy_id"] for request in requests],
         )
 

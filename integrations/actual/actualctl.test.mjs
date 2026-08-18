@@ -7,11 +7,29 @@ import {
   exportDashboardDocument,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
+  resolvePortableReferences,
   selectRetiredRuleIds,
   selectStageMigrationRuleIds,
   validateTransactionRepairPlan,
   validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
+
+test("portable dashboard references resolve from names to Actual ids", () => {
+  const refs = {
+    category: new Map([["groceries", { id: "category-1" }]]),
+  };
+  const document = {
+    widgets: [{ meta: { conditions: [{ value: { ref: "category", name: "Groceries" } }] } }],
+  };
+  assert.equal(
+    resolvePortableReferences(document, refs).widgets[0].meta.conditions[0].value,
+    "category-1",
+  );
+  assert.throws(
+    () => resolvePortableReferences({ ref: "category", name: "Missing" }, refs),
+    /Unknown category reference/,
+  );
+});
 
 test("dashboard export embeds custom report metadata and keeps visual order", () => {
   const page = { id: "page-1", name: "Overview" };

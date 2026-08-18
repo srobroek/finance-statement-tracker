@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "widgets": [
+    {"type":"custom-report","x":0,"y":0,"width":12,"height":4,"meta":{"id":"cff33f76-59a0-4a70-b6e8-d0705dd3d3f3","name":"Monthly Spending Trend · Last 12 Months","startDate":"2025-08-01","endDate":"2026-08-31","isDateStatic":false,"dateRange":"Last 12 months","mode":"time","groupBy":"Category","sortBy":"desc","interval":"Monthly","balanceType":"Payment","showEmpty":false,"showOffBudget":false,"showHiddenCategories":false,"showUncategorized":true,"trimIntervals":false,"showTrendLines":true,"includeCurrentInterval":true,"graphType":"LineGraph","conditions":[{"field":"transfer","op":"is","value":false}],"conditionsOp":"and","metadata":null}},
+    {"type":"custom-report","x":0,"y":4,"width":6,"height":4,"meta":{"id":"d157920f-11c9-4e36-8ed4-1cfaa68bc5d0","name":"Category Mix · Last 12 Months","startDate":"2025-08-01","endDate":"2026-08-31","isDateStatic":false,"dateRange":"Last 12 months","mode":"total","groupBy":"Category","sortBy":"desc","interval":"Monthly","balanceType":"Payment","showEmpty":false,"showOffBudget":false,"showHiddenCategories":false,"showUncategorized":true,"trimIntervals":false,"showTrendLines":false,"includeCurrentInterval":true,"graphType":"DonutGraph","conditions":[{"field":"transfer","op":"is","value":false}],"conditionsOp":"and","metadata":null}},
+    {"type":"sankey-card","x":6,"y":4,"width":6,"height":4,"meta":{"name":"Income to Spending","timeFrame":{"start":"2026-01-01","end":"2026-12-31","mode":"yearToDate"},"conditions":[],"conditionsOp":"and"}},
+    {"type":"calendar-card","x":0,"y":8,"width":12,"height":4,"meta":{"name":"Transaction Calendar","timeFrame":{"start":"2026-06-01","end":"2026-08-31","mode":"sliding-window"},"conditions":[{"field":"transfer","op":"is","value":false}],"conditionsOp":"and"}}
+  ]
+}

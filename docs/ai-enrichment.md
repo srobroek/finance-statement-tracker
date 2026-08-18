@@ -14,6 +14,11 @@ AI may propose:
 
 AI cannot change transaction IDs, dates, amounts, currency, card/account identity, raw merchant text, source IDs, transaction type, reconciliation state, or cashback arithmetic. It may fill an unknown channel or reward bucket only when the scoped policy allows the value and explicit evidence supports it; an already populated or locked value is never offered to the model. Category and tag proposals can be restricted to configured values. Proposals below the policy confidence threshold are rejected and sent to review.
 
+When no configured category fits after static and history matching, AI may emit
+a `category_recommendation` object. This never creates or assigns a category.
+It adds the semantic `#category-review` marker and keeps the transaction in the
+review gate until an owner accepts a category design and reruns classification.
+
 Each proposal produces an `AITrace` recording the policy, field, value, confidence, acceptance decision, reason, rationale, and source references. The trace is appended to transaction metadata for auditability.
 
 The engine is provider-neutral. In the current deployment, the card-specific
