@@ -954,6 +954,100 @@ export function validateTransactionRepairPlan(plan) {
   return plan.repairs;
 }
 
+export function validateTransactionDeletionPlan(plan) {
+  if (plan?.schema_version !== "actual-transaction-deletion-v1") {
+    throw new Error("Unsupported transaction deletion plan schema");
+  }
+  if (plan.expected_server_version !== "26.8.1") {
+    throw new Error("Transaction deletion plan must pin Actual server version 26.8.1");
+  }
+  if (!String(plan.reason ?? "").trim()) {
+    throw new Error("Transaction deletion plan requires a reason");
+  }
+  if (!Array.isArray(plan.deletions) || !plan.deletions.length) {
+    throw new Error("Transaction deletion plan requires at least one deletion");
+  }
+  const ids = new Set();
+  for (const [index, deletion] of plan.deletions.entries()) {
+    const prefix = `Deletion ${index + 1}`;
+    if (!String(deletion.transaction_id ?? "").trim()) {
+      throw new Error(`${prefix} requires transaction_id`);
+    }
+    if (ids.has(deletion.transaction_id)) {
+      throw new Error(`Duplicate transaction_id in deletion plan: ${deletion.transaction_id}`);
+    }
+    ids.add(deletion.transaction_id);
+    if (!String(deletion.account ?? "").trim()) throw new Error(`${prefix} requires account`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(deletion.date ?? ""))) {
+      throw new Error(`${prefix} requires an ISO date`);
+    }
+    if (!Number.isSafeInteger(deletion.expected_amount)) {
+      throw new Error(`${prefix} expected_amount must be integer minor units`);
+    }
+    for (const field of ["expected_payee", "expected_category", "expected_notes"]) {
+      if (typeof deletion[field] !== "string") throw new Error(`${prefix} requires ${field}`);
+    }
+    if (deletion.expected_imported_id !== null) {
+      throw new Error(`${prefix} may delete only an explicitly unimported row`);
+    }
+  }
+  return plan.deletions;
+}
+
+export async function deleteTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
+  const deletions = validateTransactionDeletionPlan(plan);
+  const server = await api.getServerVersion();
+  const version = String(server && typeof server === "object" ? server.version ?? "" : server ?? "");
+  if (version !== plan.expected_server_version) {
+    throw new Error(`Actual server version drifted: expected ${plan.expected_server_version}, found ${version}`);
+  }
+  const accounts = byName(await api.getAccounts());
+  const categories = new Map((await api.getCategories()).map(row => [row.id, row.name]));
+  const payees = new Map((await api.getPayees()).map(row => [row.id, row.name]));
+  const pending = [];
+  for (const deletion of deletions) {
+    const account = accounts.get(normalized(deletion.account));
+    if (!account) throw new Error(`Unknown Actual account: ${deletion.account}`);
+    const rows = await api.getTransactions(account.id, deletion.date, deletion.date);
+    const matches = rows.filter(row => row.id === deletion.transaction_id && !row.tombstone);
+    if (matches.length !== 1) {
+      throw new Error(`Deletion target ${deletion.transaction_id} matched ${matches.length} live rows`);
+    }
+    const row = matches[0];
+    const actualState = {
+      amount: row.amount,
+      payee: payees.get(row.payee) ?? "",
+      category: categories.get(row.category) ?? "",
+      notes: String(row.notes ?? ""),
+      imported_id: row.imported_id ?? null,
+      transfer_id: row.transfer_id ?? null,
+    };
+    const expectedState = {
+      amount: deletion.expected_amount,
+      payee: deletion.expected_payee,
+      category: deletion.expected_category,
+      notes: deletion.expected_notes,
+      imported_id: deletion.expected_imported_id,
+      transfer_id: null,
+    };
+    if (JSON.stringify(actualState) !== JSON.stringify(expectedState)) {
+      throw new Error(`Deletion target ${deletion.transaction_id} drifted from its exact expected state`);
+    }
+    pending.push({ ...deletion });
+  }
+  if (!apply) return { status: "planned", reason: plan.reason, pending };
+  for (const deletion of pending) await api.deleteTransaction(deletion.transaction_id);
+  if (pending.length && syncRemote) await api.sync();
+  for (const deletion of pending) {
+    const account = accounts.get(normalized(deletion.account));
+    const rows = await api.getTransactions(account.id, deletion.date, deletion.date);
+    if (rows.some(row => row.id === deletion.transaction_id && !row.tombstone)) {
+      throw new Error(`Deletion verification failed for ${deletion.transaction_id}`);
+    }
+  }
+  return { status: "applied", reason: plan.reason, deleted: pending };
+}
+
 export async function repairTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
   const repairs = validateTransactionRepairPlan(plan);
   const accounts = byName(await api.getAccounts());
@@ -1278,12 +1372,13 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <budget-automation|dashboard-apply|dashboard-audit|dashboard-export|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
+  if (!command || !["budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
   if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
+  if (command === "delete-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "dashboard-apply") assertCommitEnabled(Boolean(args.apply));
   if (command === "budget-automation") assertCommitEnabled(Boolean(args.apply));
   await openBudget();
@@ -1320,6 +1415,9 @@ async function main() {
     } else if (command === "enrich-transactions") {
       if (!args.plan) throw new Error("enrich-transactions requires --plan <file>");
       result = await enrichTransactions(await readJson(args.plan), Boolean(args.apply));
+    } else if (command === "delete-transactions") {
+      if (!args.plan) throw new Error("delete-transactions requires --plan <file>");
+      result = await deleteTransactions(await readJson(args.plan), Boolean(args.apply));
     } else {
       if (!args.input) throw new Error("import requires --input <file>");
       result = await importEnvelopes(await readJson(args.input), Boolean(args.commit));
