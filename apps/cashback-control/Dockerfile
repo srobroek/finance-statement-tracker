@@ -11,6 +11,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY finance_tracker ./finance_tracker
+COPY config/actual-note-contract.json ./config/actual-note-contract.json
 COPY config/cashback-programs.json ./config/cashback-programs.json
 COPY config/actual-bootstrap.json ./config/actual-bootstrap.json
 COPY config/static-rules.seed.json ./config/static-rules.seed.json

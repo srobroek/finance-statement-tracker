@@ -13,6 +13,7 @@ on:
       - "deploy/cashback/**"
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
+      - "config/actual-note-contract.json"
       - "config/cashback-programs.json"
       - "config/cashback-profile-schema-v1.json"
       - "config/static-rules.seed.json"
