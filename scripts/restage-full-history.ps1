@@ -3,6 +3,8 @@ param(
     [string]$SourceConfig = (Join-Path $PSScriptRoot '..\config\full-restage-sources.json'),
     [string]$EvidenceCatalogue = (Join-Path $PSScriptRoot '..\Finance Evidence\catalogue.json'),
     [string]$OutputRoot = (Join-Path $PSScriptRoot '..\runtime\full-restage'),
+    [string]$AIResponsesRoot,
+    [switch]$AIHandoffComplete,
     [switch]$PlanOnly
 )
 
@@ -45,6 +47,7 @@ function Submit-StagingJob {
         [string]$SourceMessageId,
         [string]$SourceAttachmentId
     )
+    $safeId = $Id -replace '[^A-Za-z0-9._-]+', '-'
     $parameters = @{
         InputPath = (Assert-InRepository $InputPath)
         Type = $Type
@@ -53,6 +56,13 @@ function Submit-StagingJob {
     if ($CardCode) { $parameters.CardCode = $CardCode }
     if ($SourceMessageId) { $parameters.SourceMessageId = $SourceMessageId }
     if ($SourceAttachmentId) { $parameters.SourceAttachmentId = $SourceAttachmentId }
+    if ($AIResponsesRoot) {
+        $responsePath = Join-Path $AIResponsesRoot "$safeId.json"
+        if (Test-Path -LiteralPath $responsePath) {
+            $parameters.AIResponsesPath = (Assert-InRepository $responsePath)
+        }
+    }
+    if ($AIHandoffComplete) { $parameters.AIHandoffComplete = $true }
     if ($PlanOnly) {
         $results.Add([ordered]@{
             id = $Id
@@ -65,6 +75,8 @@ function Submit-StagingJob {
             staging_status = $null
             review_count = $null
             ai_request_count = 0
+            ai_response_count = 0
+            ai_handoff_complete = $false
             manifest_path = $null
             result_file = $null
         })
@@ -72,7 +84,6 @@ function Submit-StagingJob {
     }
     $raw = @(& $pushScript @parameters)
     $parsed = ConvertFrom-Json -InputObject (($raw | ForEach-Object { [string]$_ }) -join [Environment]::NewLine)
-    $safeId = $Id -replace '[^A-Za-z0-9._-]+', '-'
     $resultPath = Join-Path $runRoot "$safeId.json"
     [IO.File]::WriteAllText(
         $resultPath,
@@ -90,6 +101,8 @@ function Submit-StagingJob {
         staging_status = $parsed.staging_status
         review_count = $parsed.review_count
         ai_request_count = $parsed.ai_request_count
+        ai_response_count = $parsed.ai_response_count
+        ai_handoff_complete = $parsed.ai_handoff_complete
         manifest_path = $parsed.manifest_path
         result_file = Get-RepositoryRelativePath $resultPath
     })
@@ -137,6 +150,8 @@ $summary = [ordered]@{
     }
     source_count = $results.Count
     ai_request_count = $totalAIRequests
+    ai_response_count = [int](($results | ForEach-Object { [int]$_.ai_response_count } | Measure-Object -Sum).Sum)
+    ai_handoff_complete = -not (@($results | Where-Object { -not $_.ai_handoff_complete }).Count)
     results = @($results)
 }
 $summaryPath = Join-Path $runRoot 'summary.json'

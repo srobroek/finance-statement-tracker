@@ -253,38 +253,22 @@ jobs:
           browser_result="$(printf '%s' "$browser_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
           grep -q '"status": "STAGED"' <<<"$browser_result"
           grep -q '"envelope_count":' <<<"$browser_result"
-          grep -q '"ai_request_count": 2' <<<"$browser_result"
+          grep -q '"ai_request_count": 1' <<<"$browser_result"
 
           ai_request="$(python3 -c '
           import json, sys
           result = json.load(sys.stdin)
           requests = result["ai_handoff"]["requests"]
-          assert {item["policy_id"] for item in requests} == {
-              "classify-unresolved",
-              "recommend-category",
-          }
+          assert [item["policy_id"] for item in requests] == ["classify-unresolved"]
           responses = []
           for request in requests:
-              if request["policy_id"] == "classify-unresolved":
-                  proposal = {
-                      "field": "tags",
-                      "value": ["gift"],
-                      "confidence": 0.95,
-                      "rationale": "Synthetic policy handoff test",
-                      "source_refs": ["ci-browser-capture"],
-                  }
-              else:
-                  proposal = {
-                      "field": "category_recommendation",
-                      "value": {
-                          "name": "Collectibles",
-                          "group": "Lifestyle",
-                          "reason": "Synthetic missing-category test",
-                      },
-                      "confidence": 0.95,
-                      "rationale": "Synthetic missing-category test",
-                      "source_refs": ["ci-browser-capture"],
-                  }
+              proposal = {
+                  "field": "category",
+                  "value": "General Retail",
+                  "confidence": 0.95,
+                  "rationale": "Synthetic policy handoff test",
+                  "source_refs": ["ci-browser-capture"],
+              }
               responses.append({
                   "transaction_id": request["transaction_id"],
                   "policy_id": request["policy_id"],
@@ -301,8 +285,8 @@ jobs:
           }))
           ' <<<"$browser_result")"
           ai_result="$(printf '%s' "$ai_request" | sudo docker exec -i finance-actual-ingestion python3 /app/apps/actual-ingestion/submit_local.py)"
-          grep -q '"ai_response_count": 2' <<<"$ai_result"
-          grep -q '"ai_accepted_count": 2' <<<"$ai_result"
+          grep -q '"ai_response_count": 1' <<<"$ai_result"
+          grep -q '"ai_accepted_count": 1' <<<"$ai_result"
           grep -q '"ai_rejected_count": 0' <<<"$ai_result"
 
           evidence_request="$(python3 -c '

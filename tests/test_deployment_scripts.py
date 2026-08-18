@@ -53,6 +53,15 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("Actual ingestion job failed with exit code ${remoteExitCode}: $detail", script)
         self.assertIn("ConvertTo-Json -Depth 20 -Compress", script)
 
+    def test_full_restage_supports_cumulative_fixed_point_ai_responses(self) -> None:
+        script = Path("scripts/restage-full-history.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[string]$AIResponsesRoot", script)
+        self.assertIn("[switch]$AIHandoffComplete", script)
+        self.assertIn("$parameters.AIResponsesPath", script)
+        self.assertIn("$parameters.AIHandoffComplete = $true", script)
+        self.assertIn("ai_response_count = $parsed.ai_response_count", script)
+
         dockerfile = Path("apps/actual-ingestion/Dockerfile").read_text(encoding="utf-8")
         workflow = Path(".github/workflows/actual-ingestion-image.yml").read_text(encoding="utf-8")
         self.assertIn("ARG FINANCE_PIPELINE_REVISION", dockerfile)

@@ -42,6 +42,20 @@ Its timestamped `runtime/full-restage/<run>/summary.json` is the AI/evidence
 handoff inventory and records the exact durable manifest paths used by the
 rebuild.
 
+AI response files are cumulative JSON arrays named after each source id. Replay
+them until the ordered handoff reaches a fixed point; mark the handoff complete
+only on the final pass:
+
+```powershell
+& .\scripts\restage-full-history.ps1 `
+  -AIResponsesRoot .\runtime\full-restage-ai\current
+& .\scripts\restage-full-history.ps1 `
+  -AIResponsesRoot .\runtime\full-restage-ai\current `
+  -AIHandoffComplete
+```
+
+The second command fails closed if any source emits a response-free request.
+
 After every handoff is completed and every result is review-free:
 
 ```powershell
