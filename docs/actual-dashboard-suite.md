@@ -14,7 +14,11 @@ The managed pages are:
 - Properties: rental income and costs filtered by `#rental`;
 - Review: uncategorised, category-recommendation, and review queues;
 - Bills & Subscriptions: due-date calendar, utilities, and subscriptions;
-- Retirement: net worth and savings/investment contribution trends.
+- Retirement: net worth, contribution trends, off-budget portfolio value,
+  3.5% and 4% annual safe-withdrawal references, and a 3.5% monthly reference.
+  The withdrawal cards query off-budget accounts only, remain zero until
+  evidence-backed investment accounts exist, and never treat cash or card
+  balances as retirement assets.
 
 The suite deliberately contains data, charts, and actionable queues rather than
 instructions or documentation cards. Custom report identifiers are stable, so
@@ -33,4 +37,3 @@ remain read-only:
 node integrations/actual/actualctl.mjs dashboard-audit
 node integrations/actual/actualctl.mjs dashboard-export --name Main
 ```
-
