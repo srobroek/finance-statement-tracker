@@ -1,0 +1,57 @@
+{
+  "schema_version": "financial-planning-v1",
+  "budget_recommendations": {
+    "lookback_months": 12,
+    "minimum_months": 3,
+    "buffer_percent": "10",
+    "round_to_minor": 5000,
+    "notes": "Recommendations use completed months, exclude transfers/income/refunds/review rows, and remain proposals until the clean ledger is verified."
+  },
+  "schedule_policies": [
+    {
+      "name": "DEWA utility bill",
+      "enabled": true,
+      "payee_names": ["DEWA"],
+      "category_names": ["Electricity & Water"],
+      "minimum_months": 3,
+      "amount_mode": "between",
+      "posts_transaction": false
+    },
+    {
+      "name": "Empower district cooling",
+      "enabled": true,
+      "payee_names": ["Empower"],
+      "category_names": ["District Cooling"],
+      "minimum_months": 3,
+      "amount_mode": "between",
+      "posts_transaction": false
+    },
+    {
+      "name": "Mobile and internet",
+      "enabled": true,
+      "payee_names": ["Mobile Provider", "Virgin Mobile"],
+      "category_names": ["Mobile & Internet"],
+      "minimum_months": 3,
+      "amount_mode": "between",
+      "posts_transaction": false
+    },
+    {
+      "name": "Property service charges",
+      "enabled": false,
+      "payee_names": ["Mollak", "Bluewaters Community"],
+      "category_names": ["Service Charges"],
+      "minimum_months": 3,
+      "amount_mode": "between",
+      "posts_transaction": false
+    },
+    {
+      "name": "Sarwa investment transfer",
+      "enabled": true,
+      "payee_names": ["Sarwa"],
+      "category_names": ["Investments"],
+      "minimum_months": 3,
+      "amount_mode": "between",
+      "posts_transaction": false
+    }
+  ]
+}

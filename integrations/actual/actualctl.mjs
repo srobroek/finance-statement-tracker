@@ -12,6 +12,8 @@ import {
   validateBootstrapConfig,
 } from "./bootstrap-config.mjs";
 
+let actualInternal = null;
+
 function parseArgs(values) {
   const result = { _: [] };
   for (let index = 0; index < values.length; index += 1) {
@@ -168,7 +170,7 @@ export function selectStageMigrationRuleIds(existingRules, desiredRules, migrati
 async function openBudget() {
   const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
   await fs.mkdir(dataDir, { recursive: true });
-  await actual.init({
+  actualInternal = await actual.init({
     dataDir,
     serverURL: requireEnv("ACTUAL_SERVER_URL"),
     password: requireEnv("ACTUAL_PASSWORD"),
@@ -246,7 +248,8 @@ async function snapshot(start, end) {
 async function dashboardRows() {
   const pages = (await actual.aqlQuery(actual.q("dashboard_pages").select("*"))).data;
   const widgets = (await actual.aqlQuery(actual.q("dashboard").select("*"))).data;
-  const reports = await actual.internal.send("report/get");
+  if (!actualInternal) throw new Error("Actual internal API is not initialized");
+  const reports = await actualInternal.send("report/get");
   return { pages, widgets, reports };
 }
 
@@ -330,11 +333,11 @@ async function dashboardApply(configPath, apply) {
     });
     if (!apply) continue;
     if (!page) {
-      const id = await actual.internal.send("dashboard-create", { name: entry.name });
+      const id = await actualInternal.send("dashboard-create", { name: entry.name });
       page = { id, name: entry.name };
       byDashboardName.set(normalized(entry.name), page);
     }
-    await actual.internal.send("dashboard-import", {
+    await actualInternal.send("dashboard-import", {
       filePath: filename,
       dashboardPageId: page.id,
     });
@@ -563,12 +566,16 @@ export async function bootstrap(config, apply, configPath, { syncRemote = true }
   const existingSchedules = await actual.getSchedules();
   const schedulesByName = byName(existingSchedules);
   for (const desired of (config.schedules ?? []).filter(item => item.enabled !== false)) {
+    const amountOp = desired.amount_op ?? "is";
+    const amount = amountOp === "isbetween"
+      ? { num1: desired.amount_min_minor, num2: desired.amount_max_minor }
+      : desired.amount_minor;
     const schedule = resolve({
       name: desired.name,
       account: { ref: "account", name: desired.account },
       payee: { ref: "payee", name: desired.payee },
-      amount: desired.amount_minor,
-      amountOp: desired.amount_op ?? "is",
+      amount,
+      amountOp,
       date: desired.date,
       posts_transaction: Boolean(desired.posts_transaction),
     });

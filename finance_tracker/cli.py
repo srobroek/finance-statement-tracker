@@ -50,6 +50,7 @@ from .evidence import (
 )
 from .full_ingestion_validation import run_full_ingestion_audit
 from .models import Transaction, money
+from .planning import SchedulePolicy, recommend_category_budgets, recommend_schedules
 from .platforms import ActualBudgetAdapter
 from .reports import evaluate_month_close, month_close_markdown
 
@@ -291,6 +292,14 @@ def main(argv: list[str] | None = None) -> int:
     ingestion_audit.add_argument("--snapshot", type=Path, required=True)
     ingestion_audit.add_argument("--output", type=Path, required=True)
     ingestion_audit.add_argument("--project-root", type=Path, default=Path.cwd())
+    planning = subparsers.add_parser(
+        "financial-planning",
+        help="Generate evidence-backed budget and recurring schedule recommendations",
+    )
+    planning.add_argument("--snapshot", type=Path, required=True)
+    planning.add_argument("--config", type=Path, required=True)
+    planning.add_argument("--output", type=Path, required=True)
+    planning.add_argument("--as-of", type=date.fromisoformat, default=date.today())
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -310,6 +319,41 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(report["counts"], indent=2))
         return 0 if report["status"] == "PASS" else 2
+    if args.command == "financial-planning":
+        snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
+        config = json.loads(args.config.read_text(encoding="utf-8"))
+        transactions = snapshot.get("transactions") or []
+        budget = config.get("budget_recommendations") or {}
+        policies = [
+            SchedulePolicy(
+                name=str(item["name"]),
+                payee_names=tuple(str(value) for value in item.get("payee_names") or []),
+                category_names=tuple(str(value) for value in item.get("category_names") or []),
+                minimum_months=int(item.get("minimum_months", 3)),
+                amount_mode=str(item.get("amount_mode", "between")),
+                posts_transaction=bool(item.get("posts_transaction", False)),
+            )
+            for item in config.get("schedule_policies") or []
+            if item.get("enabled", True)
+        ]
+        result = {
+            "schema_version": "financial-planning-report-v1",
+            "generated_at": datetime.now().astimezone().isoformat(),
+            "as_of": args.as_of.isoformat(),
+            "budgets": recommend_category_budgets(
+                transactions,
+                as_of=args.as_of,
+                lookback_months=int(budget.get("lookback_months", 12)),
+                minimum_months=int(budget.get("minimum_months", 3)),
+                buffer_percent=money(budget.get("buffer_percent", "10")),
+                round_to_minor=int(budget.get("round_to_minor", 5000)),
+            ),
+            "schedules": recommend_schedules(transactions, policies, as_of=args.as_of),
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        print(json.dumps({"budgets": len(result["budgets"]), "schedules": len(result["schedules"])}, indent=2))
+        return 0
     if args.command == "actual-statement-export":
         run = export_statement_for_actual(
             args.pdf,

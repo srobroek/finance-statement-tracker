@@ -257,7 +257,17 @@ export function validateBootstrapConfig(config) {
     if (!schedule.name || !schedule.account || !schedule.payee || !schedule.date) {
       throw new Error("enabled schedules require name, account, payee, and date");
     }
-    if (!Number.isInteger(schedule.amount_minor)) {
+    const amountOp = schedule.amount_op ?? "is";
+    if (!["is", "isapprox", "isbetween"].includes(amountOp)) {
+      throw new Error(`schedule ${schedule.name} uses unsupported amount_op ${amountOp}`);
+    }
+    if (amountOp === "isbetween") {
+      if (!Number.isInteger(schedule.amount_min_minor) ||
+          !Number.isInteger(schedule.amount_max_minor) ||
+          schedule.amount_min_minor > schedule.amount_max_minor) {
+        throw new Error(`schedule ${schedule.name} requires an ordered integer amount range`);
+      }
+    } else if (!Number.isInteger(schedule.amount_minor)) {
       throw new Error(`schedule ${schedule.name} requires integer amount_minor`);
     }
   }

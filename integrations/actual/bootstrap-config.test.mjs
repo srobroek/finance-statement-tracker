@@ -64,6 +64,33 @@ test("validates schedule and budget contracts", () => {
     schedules: [],
     budget_months: [{ month: "2026-08", categories: [{ name: "Groceries", amount_minor: 10000 }] }],
   }));
+  assert.doesNotThrow(() => validateBootstrapConfig({
+    schema_version: 1,
+    schedules: [{
+      name: "Variable utility",
+      account: "Current Account",
+      payee: "DEWA",
+      date: { frequency: "monthly", start: "2026-09-26", endMode: "never" },
+      amount_op: "isbetween",
+      amount_min_minor: 50000,
+      amount_max_minor: 100000,
+    }],
+  }));
+  assert.throws(
+    () => validateBootstrapConfig({
+      schema_version: 1,
+      schedules: [{
+        name: "Broken range",
+        account: "Current Account",
+        payee: "DEWA",
+        date: "2026-09-26",
+        amount_op: "isbetween",
+        amount_min_minor: 100000,
+        amount_max_minor: 50000,
+      }],
+    }),
+    /ordered integer amount range/,
+  );
   assert.throws(
     () => validateBootstrapConfig({ schema_version: 1, retired_accounts: [""] }),
     /retired_accounts entries must be names/,
