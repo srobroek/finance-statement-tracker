@@ -8,6 +8,18 @@
   "properties": {
     "schema_version": {"const": 1},
     "capture_id": {"type": "string", "minLength": 1},
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "scope", "capture_id", "approved_by", "approved_at"],
+      "properties": {
+        "status": {"const": "OWNER_APPROVED"},
+        "scope": {"const": "ALL_VISIBLE_ROWS"},
+        "capture_id": {"type": "string", "minLength": 1},
+        "approved_by": {"const": "OWNER"},
+        "approved_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,

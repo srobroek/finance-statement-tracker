@@ -84,6 +84,59 @@ class BrowserIngestionTests(TestCase):
         self.assertIn("#browser-import", first.envelopes[0]["records"][0]["notes"])
         self.assertIn("#owner-owner-a", first.envelopes[0]["records"][0]["notes"])
 
+    def test_owner_approval_clears_only_the_visible_row_review_reason(self):
+        capture = self.capture()
+        capture["approval"] = {
+            "status": "OWNER_APPROVED",
+            "scope": "ALL_VISIBLE_ROWS",
+            "capture_id": capture["capture_id"],
+            "approved_by": "OWNER",
+            "approved_at": "2026-08-18T09:20:00Z",
+        }
+
+        run = build_browser_ingestion_run(capture, self.config())
+
+        self.assertEqual(run.staging_status, "READY_FOR_APPROVAL")
+        self.assertEqual(run.review_count, 0)
+        self.assertFalse(run.transactions[0]["review_required"])
+        self.assertEqual(
+            run.transactions[0]["metadata"]["browser_review_resolutions"],
+            ["OWNER_APPROVED_VISIBLE_CAPTURE"],
+        )
+        self.assertEqual(run.source["approval"]["capture_id"], capture["capture_id"])
+
+    def test_owner_approval_does_not_clear_an_unclassified_credit(self):
+        capture = self.capture()
+        capture["approval"] = {
+            "status": "OWNER_APPROVED",
+            "scope": "ALL_VISIBLE_ROWS",
+            "capture_id": capture["capture_id"],
+            "approved_by": "OWNER",
+            "approved_at": "2026-08-18T09:20:00Z",
+        }
+        capture["rows"][0]["direction"] = "CREDIT"
+
+        run = build_browser_ingestion_run(capture, self.config())
+
+        self.assertEqual(run.review_count, 1)
+        self.assertEqual(
+            run.transactions[0]["metadata"]["browser_review_reasons"],
+            ["UNCLASSIFIED_CREDIT"],
+        )
+
+    def test_owner_approval_must_match_the_exact_capture(self):
+        capture = self.capture()
+        capture["approval"] = {
+            "status": "OWNER_APPROVED",
+            "scope": "ALL_VISIBLE_ROWS",
+            "capture_id": "different-capture",
+            "approved_by": "OWNER",
+            "approved_at": "2026-08-18T09:20:00Z",
+        }
+
+        with self.assertRaisesRegex(ValueError, "must match capture.capture_id"):
+            build_browser_ingestion_run(capture, self.config())
+
     def test_tied_official_statement_rows_are_authoritative_and_cleared(self):
         capture = self.capture()
         capture["capture_id"] = "ei-0082-2026-08"

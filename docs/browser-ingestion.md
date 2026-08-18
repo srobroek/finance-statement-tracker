@@ -65,6 +65,13 @@ RAKBANK and Standard Chartered remain `ADAPTER_REQUIRED` because the previous ap
 5. Save the returned compact AI handoff, answer every request, perform the selective evidence pass, and re-run with `-AIResponsesPath`, `-AIHandoffComplete`, and any `-EvidenceLinksPath`. Require zero review rows and zero rejected proposals.
 6. Re-run the identical source and handoff first with `-ActualMode PREFLIGHT`, then with `-ActualMode COMMIT`. The caller and worker both require `ALLOW_ACTUAL_WRITES=true` for the commit. Stable imported IDs, review gates, and post-write verification remain mandatory; there is no direct bridge bypass.
 
+Visible-row captures remain review-required until the owner explicitly approves
+that exact immutable capture. Record the approval in the capture's top-level
+`approval` object with status `OWNER_APPROVED`, scope `ALL_VISIBLE_ROWS`, the
+matching `capture_id`, `approved_by: OWNER`, and an ISO `approved_at` timestamp.
+This clears only `VISIBLE_ROWS_REQUIRE_REVIEW`; every other source, credit,
+currency, account, AI, and evidence gate remains active.
+
 ## Real export validation
 
 The legacy application's original ADCB portal export, not its derived ledger

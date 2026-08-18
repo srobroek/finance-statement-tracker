@@ -107,6 +107,51 @@ def _safe_url(value: Any) -> str | None:
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
+def _visible_rows_approval(
+    capture: Mapping[str, Any],
+    *,
+    capture_id: str,
+    capture_method: str,
+) -> dict[str, str] | None:
+    """Validate an explicit owner approval for one immutable visible-row capture.
+
+    Approval clears only the review reason created by the acquisition method.
+    Source warnings, unclassified credits, missing currency evidence, and account
+    mapping failures remain independent review gates.
+    """
+    raw = capture.get("approval")
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError("capture.approval must be an object")
+    if capture_method != "VISIBLE_ROWS":
+        raise ValueError("capture.approval is valid only for VISIBLE_ROWS captures")
+    status = _required_text(raw, "status", "capture.approval").upper()
+    scope = _required_text(raw, "scope", "capture.approval").upper()
+    approved_capture_id = _required_text(
+        raw,
+        "capture_id",
+        "capture.approval",
+    )
+    approved_by = _required_text(raw, "approved_by", "capture.approval").upper()
+    if status != "OWNER_APPROVED":
+        raise ValueError("capture.approval.status must be OWNER_APPROVED")
+    if scope != "ALL_VISIBLE_ROWS":
+        raise ValueError("capture.approval.scope must be ALL_VISIBLE_ROWS")
+    if approved_capture_id != capture_id:
+        raise ValueError("capture.approval.capture_id must match capture.capture_id")
+    if approved_by != "OWNER":
+        raise ValueError("capture.approval.approved_by must be OWNER")
+    approved_at = _datetime(raw.get("approved_at"), "capture.approval.approved_at")
+    return {
+        "status": status,
+        "scope": scope,
+        "capture_id": approved_capture_id,
+        "approved_by": approved_by,
+        "approved_at": approved_at.isoformat(),
+    }
+
+
 def _slug(value: str) -> str:
     return "-".join(part for part in "".join(
         character.casefold() if character.isalnum() else " " for character in value
@@ -340,6 +385,11 @@ def build_browser_ingestion_run(
         raise ValueError(f"Unsupported browser capture method: {method}")
     if kind not in CAPTURE_KINDS:
         raise ValueError(f"Unsupported browser artifact kind: {kind}")
+    approval = _visible_rows_approval(
+        capture,
+        capture_id=capture_id,
+        capture_method=method,
+    )
     sanitized_source: dict[str, object] = {
         "provider": provider,
         "site": str(source.get("site") or provider).strip(),
@@ -349,6 +399,7 @@ def build_browser_ingestion_run(
         "captured_at": captured_at.isoformat(),
         "date_range": dict(source.get("date_range") or {}),
         "limitations": [str(value) for value in source.get("limitations", [])],
+        "approval": approval,
     }
     resolved_account, account_blockers = _resolve_account(account, config)
     account_name = str(resolved_account["name"]) if resolved_account else None
@@ -447,7 +498,7 @@ def build_browser_ingestion_run(
         transaction_type = explicit_type or "PURCHASE"
         if currency != "AED" and amount_original is None:
             review_reasons.append("MISSING_AED_EQUIVALENT")
-        if method == "VISIBLE_ROWS":
+        if method == "VISIBLE_ROWS" and approval is None:
             review_reasons.append("VISIBLE_ROWS_REQUIRE_REVIEW")
         if resolved_account is None:
             review_reasons.append("UNMAPPED_ACCOUNT")
@@ -497,6 +548,9 @@ def build_browser_ingestion_run(
                 "browser_direction": direction,
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
                 "browser_review_reasons": review_reasons,
+                "browser_review_resolutions": (
+                    ["OWNER_APPROVED_VISIBLE_CAPTURE"] if approval is not None else []
+                ),
                 "browser_capture_limitations": sanitized_source["limitations"],
                 "ledger_reconciled": False,
                 "locked_fields": [
