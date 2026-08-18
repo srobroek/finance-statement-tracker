@@ -71,7 +71,7 @@
         {"field": "category", "operator": "in", "value": ["Electricity & Water", "District Cooling", "Service Charges", "Maintenance & Repairs", "Online Shopping", "Electronics", "Furniture & Appliances", "Flights", "Accommodation", "Travel Activities", "Insurance", "Medical", "Professional Services"], "group": 1},
         {"field": "transaction_type", "operator": "equals", "value": "PURCHASE", "group": 2},
         {"field": "amount_aed", "operator": "gte", "value": "500", "group": 2},
-        {"field": "category", "operator": "in", "value": ["Groceries", "Dining Out", "Food Delivery", "Coffee & Snacks", "Fuel", "Parking & Tolls", "Public Transport", "Card Payments", "Bank Fees"], "group": 2, "negate": true}
+        {"field": "category", "operator": "in", "value": ["Groceries", "Dining Out", "Food Delivery", "Coffee & Snacks", "Fuel", "Parking & Tolls", "Ride Hailing", "Public Transport", "Mortgage Payments", "Investment Contributions", "Investments", "Savings Transfers", "Internal Transfers", "Cash Withdrawal", "Card Payments", "Bank Fees"], "group": 2, "negate": true}
       ],
       "minimum_confidence": 0.8,
       "allowed_values": {"evidence_policy": ["SEARCH_RELATED_EMAIL", "SEARCH_RECEIPT_BILL_WARRANTY", "MATCH_AMOUNT_AND_PERIOD"]}

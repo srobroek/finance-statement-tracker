@@ -31,6 +31,11 @@
     "Parking & Tolls",
     "Ride Hailing",
     "Public Transport",
+    "Mortgage Payments",
+    "Investment Contributions",
+    "Investments",
+    "Savings Transfers",
+    "Internal Transfers",
     "Cash Withdrawal",
     "Card Payments",
     "Bank Fees"
@@ -46,7 +51,7 @@
     "Supermarket basket or low-value convenience-store purchase",
     "Cafe, restaurant or food-delivery charge",
     "Petrol, parking, toll, taxi or public-transport charge",
-    "Cash withdrawal, bank transfer, credit-card payment, interest or bank fee",
+    "Cash withdrawal, bank transfer, mortgage payment, investment funding, credit-card payment, interest or bank fee",
     "Low-value general retail purchase with no warranty, contract, tax or ownership value"
   ],
   "document_types": [

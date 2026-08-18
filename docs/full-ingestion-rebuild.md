@@ -30,6 +30,20 @@ disposable rebuild passes.
 
 ## Disposable rebuild
 
+Create the fresh staging set first. This command submits `STAGE` jobs only and
+cannot write to Actual:
+
+```powershell
+& .\scripts\restage-full-history.ps1 -PlanOnly
+& .\scripts\restage-full-history.ps1
+```
+
+Its timestamped `runtime/full-restage/<run>/summary.json` is the AI/evidence
+handoff inventory and records the exact durable manifest paths used by the
+rebuild.
+
+After every handoff is completed and every result is review-free:
+
 ```powershell
 Push-Location integrations/actual
 node full-rebuild.mjs `

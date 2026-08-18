@@ -18,6 +18,8 @@ class EvidenceSearchPolicyTests(TestCase):
         self.assertIn("Service Charges", policy["always_search_categories"])
         self.assertIn("Dining Out", policy["never_search_categories"])
         self.assertIn("Groceries", policy["never_search_categories"])
+        self.assertIn("Mortgage Payments", policy["never_search_categories"])
+        self.assertIn("Investment Contributions", policy["never_search_categories"])
         self.assertNotIn("Dining Out", policy["always_search_categories"])
         self.assertGreaterEqual(policy["matching"]["minimum_strong_facts"], 2)
         self.assertFalse(policy["matching"]["vendor_only_match_allowed"])
@@ -27,3 +29,25 @@ class EvidenceSearchPolicyTests(TestCase):
             "product_or_service_description",
             policy["search_strategy"]["extract_from_matched_evidence"],
         )
+
+    def test_ai_policy_uses_the_same_selective_category_sets(self) -> None:
+        evidence = json.loads(
+            Path("config/evidence-search-policy.json").read_text(encoding="utf-8")
+        )
+        ai = json.loads(Path("config/ai-policies.json").read_text(encoding="utf-8"))
+        purchase_policy = next(
+            item for item in ai["policies"] if item["policy_id"] == "find-purchase-evidence"
+        )
+        always = next(
+            condition["value"]
+            for condition in purchase_policy["conditions"]
+            if condition.get("group") == 1 and condition["field"] == "category"
+        )
+        never = next(
+            condition["value"]
+            for condition in purchase_policy["conditions"]
+            if condition.get("group") == 2 and condition["field"] == "category"
+        )
+
+        self.assertEqual(always, evidence["always_search_categories"])
+        self.assertEqual(never, evidence["never_search_categories"])

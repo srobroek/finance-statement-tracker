@@ -1,0 +1,21 @@
+{
+  "schema_version": "full-restage-sources-v1",
+  "statement_cards": ["ADCB_CASHBACK", "WIO_CREDIT", "EI_AMAZON"],
+  "browser_sources": [
+    {
+      "id": "adcb-browser-export",
+      "type": "BROWSER_CAPTURE",
+      "path": "runtime/browser-validation/adcb-real-export/capture.json"
+    },
+    {
+      "id": "fab-current-visible-rows",
+      "type": "BROWSER_CAPTURE",
+      "path": "runtime/browser-captures/fab-account-2001-2026-08-18.json"
+    },
+    {
+      "id": "fab-card-visible-rows",
+      "type": "BROWSER_CAPTURE",
+      "path": "runtime/browser-captures/fab-card-6031-2026-08-18.json"
+    }
+  ]
+}
