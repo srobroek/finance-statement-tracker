@@ -1,0 +1,97 @@
+{
+  "schema_version": "full-ingestion-validation-v1",
+  "evidence_catalogue": "Finance Evidence/catalogue.json",
+  "manifest_sources": [
+    {
+      "id": "adcb-statements",
+      "globs": [
+        "runtime/historical-backfill/adcb/manifests/*.json"
+      ],
+      "accounts": [
+        "ADCB Credit Card · 8833 / 6838"
+      ],
+      "imported_id_prefixes": [
+        "statement:adcb_v1:"
+      ],
+      "require_balance_tied": true
+    },
+    {
+      "id": "wio-statements",
+      "globs": [
+        "runtime/historical-backfill/wio/manifests/*.json"
+      ],
+      "accounts": [
+        "Wio Credit Card · 4113 / 5009"
+      ],
+      "imported_id_prefixes": [
+        "statement:wio_credit_v1:"
+      ],
+      "require_balance_tied": true
+    },
+    {
+      "id": "emirates-islamic-statements",
+      "globs": [
+        "runtime/historical-backfill/emirates-islamic/manifests/*.json"
+      ],
+      "accounts": [
+        "Emirates Islamic Amazon Credit Card · 0082"
+      ],
+      "imported_id_prefixes": [
+        "statement:emirates_islamic_v1:"
+      ],
+      "require_balance_tied": true
+    },
+    {
+      "id": "adcb-browser-export",
+      "files": [
+        "runtime/browser-validation/refund-pair-runner/jobs/77605e8a2098e9397dfed407/manifest.json"
+      ],
+      "accounts": [
+        "ADCB Credit Card · 8833 / 6838"
+      ],
+      "imported_id_prefixes": [
+        "browser:adcb-personal-internet-banking:"
+      ],
+      "require_balance_tied": false
+    },
+    {
+      "id": "fab-browser-captures",
+      "files": [
+        "runtime/fab-account-2001-commit-manifest.json",
+        "runtime/fab-card-6031-commit-manifest.json"
+      ],
+      "accounts": [
+        "FAB Elite Gold Current Account · 2001",
+        "FAB Credit Card · 6031"
+      ],
+      "imported_id_prefixes": [
+        "browser:fab:"
+      ],
+      "require_balance_tied": false
+    }
+  ],
+  "snapshot_scope": {
+    "accounts": [
+      "ADCB Credit Card · 8833 / 6838",
+      "Wio Credit Card · 4113 / 5009",
+      "Emirates Islamic Amazon Credit Card · 0082",
+      "FAB Elite Gold Current Account · 2001",
+      "FAB Credit Card · 6031"
+    ],
+    "imported_id_prefixes": [
+      "statement:adcb_v1:",
+      "statement:wio_credit_v1:",
+      "statement:emirates_islamic_v1:",
+      "browser:adcb-personal-internet-banking:",
+      "browser:fab:"
+    ]
+  },
+  "required_exact_fields": [
+    "account",
+    "date",
+    "amount",
+    "imported_payee",
+    "cleared"
+  ],
+  "sample_limit": 25
+}

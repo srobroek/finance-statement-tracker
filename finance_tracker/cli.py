@@ -48,6 +48,7 @@ from .evidence import (
     statement_catalogue_record,
     update_evidence_catalogue,
 )
+from .full_ingestion_validation import run_full_ingestion_audit
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
 from .reports import evaluate_month_close, month_close_markdown
@@ -282,6 +283,14 @@ def main(argv: list[str] | None = None) -> int:
     automation_audit.add_argument("--automation-root", type=Path, required=True)
     automation_audit.add_argument("--project-root", type=Path)
     automation_audit.add_argument("--output", type=Path)
+    ingestion_audit = subparsers.add_parser(
+        "full-ingestion-audit",
+        help="Verify complete manifest, evidence, and Actual snapshot parity without writes",
+    )
+    ingestion_audit.add_argument("--config", type=Path, required=True)
+    ingestion_audit.add_argument("--snapshot", type=Path, required=True)
+    ingestion_audit.add_argument("--output", type=Path, required=True)
+    ingestion_audit.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
     if args.command == "demo":
         return _demo()
@@ -292,6 +301,15 @@ def main(argv: list[str] | None = None) -> int:
         args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(args.output)
         return 0
+    if args.command == "full-ingestion-audit":
+        report = run_full_ingestion_audit(
+            args.project_root,
+            args.config,
+            args.snapshot,
+            args.output,
+        )
+        print(json.dumps(report["counts"], indent=2))
+        return 0 if report["status"] == "PASS" else 2
     if args.command == "actual-statement-export":
         run = export_statement_for_actual(
             args.pdf,
