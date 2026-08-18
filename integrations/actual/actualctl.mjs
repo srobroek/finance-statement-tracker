@@ -51,6 +51,53 @@ const normalized = value => String(value ?? "").trim().toLocaleLowerCase();
 const byName = (rows, property = "name") =>
   new Map(rows.map(row => [normalized(row[property]), row]));
 
+const importedPayeeKey = value => normalized(value).replace(/[^a-z0-9]+/g, " ").trim();
+const economicKey = row => JSON.stringify([
+  String(row.date ?? ""),
+  Number(row.amount ?? 0),
+  importedPayeeKey(row.imported_payee),
+]);
+
+export function partitionCrossSourceStatementDuplicates(records, existingRows) {
+  const existingIds = new Set(
+    existingRows.map(row => String(row.imported_id ?? "")).filter(Boolean),
+  );
+  const incomingCounts = new Map();
+  for (const record of records) {
+    const key = economicKey(record);
+    incomingCounts.set(key, (incomingCounts.get(key) ?? 0) + 1);
+  }
+  const browserByKey = new Map();
+  for (const row of existingRows) {
+    if (row.tombstone || !String(row.imported_id ?? "").startsWith("browser:")) continue;
+    const key = economicKey(row);
+    const matches = browserByKey.get(key) ?? [];
+    matches.push(row);
+    browserByKey.set(key, matches);
+  }
+
+  const kept = [];
+  const suppressed = [];
+  for (const record of records) {
+    const importedId = String(record.imported_id ?? "");
+    const key = economicKey(record);
+    const browserMatches = browserByKey.get(key) ?? [];
+    const isUncommittedStatement = importedId.startsWith("statement:") && !existingIds.has(importedId);
+    if (isUncommittedStatement && incomingCounts.get(key) === 1 && browserMatches.length === 1) {
+      suppressed.push({
+        imported_id: importedId,
+        matched_existing_id: String(browserMatches[0].imported_id),
+        date: record.date,
+        amount: record.amount,
+        imported_payee: record.imported_payee,
+      });
+      continue;
+    }
+    kept.push(record);
+  }
+  return { records: kept, suppressed };
+}
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === "object") {
@@ -418,7 +465,8 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
   const accounts = byName(await actual.getAccounts());
   const categories = byName(await actual.getCategories());
 
-  const prepared = envelopes.map(envelope => {
+  const prepared = [];
+  for (const envelope of envelopes) {
     const account = accounts.get(normalized(envelope.account));
     if (!account) throw new Error(`Unknown Actual account: ${envelope.account}`);
     const records = envelope.records.map(source => {
@@ -431,19 +479,29 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
       }
       return record;
     });
-    return { account, envelope, records };
-  });
+    const dates = records.map(record => record.date).sort();
+    const existingRows = dates.length
+      ? await actual.getTransactions(account.id, dates[0], dates[dates.length - 1])
+      : [];
+    const partition = partitionCrossSourceStatementDuplicates(records, existingRows);
+    prepared.push({ account, envelope, records: partition.records, suppressed: partition.suppressed });
+  }
 
   const preflight = [];
   for (const item of prepared) {
-    const result = await withoutActualReconciliationNoise(() =>
-      actual.importTransactions(item.account.id, item.records, {
-        defaultCleared: Boolean(item.envelope.default_cleared),
-        dryRun: true,
-        reimportDeleted: false,
-      }),
-    );
-    preflight.push({ account: item.account.name, result });
+    const result = item.records.length
+      ? await withoutActualReconciliationNoise(() =>
+        actual.importTransactions(item.account.id, item.records, {
+          defaultCleared: Boolean(item.envelope.default_cleared),
+          dryRun: true,
+          reimportDeleted: false,
+        }))
+      : { added: [], updated: [], errors: [] };
+    preflight.push({
+      account: item.account.name,
+      result,
+      suppressed_cross_source: item.suppressed,
+    });
   }
   const errors = preflight.flatMap(item => item.result.errors ?? []);
   if (errors.length || !commit) {
@@ -452,17 +510,32 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
 
   const imported = [];
   for (const item of prepared) {
-    const result = await withoutActualReconciliationNoise(() =>
-      actual.importTransactions(item.account.id, item.records, {
-        defaultCleared: Boolean(item.envelope.default_cleared),
-        dryRun: false,
-        reimportDeleted: false,
-      }),
-    );
-    imported.push({ account: item.account.name, result });
+    const result = item.records.length
+      ? await withoutActualReconciliationNoise(() =>
+        actual.importTransactions(item.account.id, item.records, {
+          defaultCleared: Boolean(item.envelope.default_cleared),
+          dryRun: false,
+          reimportDeleted: false,
+        }))
+      : { added: [], updated: [], errors: [] };
+    imported.push({
+      account: item.account.name,
+      result,
+      suppressed_cross_source: item.suppressed,
+    });
   }
   const verification = [];
   for (const item of prepared) {
+    if (!item.records.length) {
+      verification.push({
+        account: item.account.name,
+        expected: 0,
+        verified: 0,
+        duplicated: 0,
+        suppressed_cross_source: item.suppressed.length,
+      });
+      continue;
+    }
     const dates = item.records.map(record => record.date).sort();
     const rows = await actual.getTransactions(
       item.account.id,
@@ -487,6 +560,7 @@ export async function importEnvelopes(payload, commit, { syncRemote = true } = {
       expected: expected.length,
       verified: expected.length,
       duplicated: 0,
+      suppressed_cross_source: item.suppressed.length,
     });
   }
   const reminderSpec = statementPaymentReminderSpec(payload);
