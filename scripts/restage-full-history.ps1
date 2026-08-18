@@ -4,6 +4,7 @@ param(
     [string]$EvidenceCatalogue = (Join-Path $PSScriptRoot '..\Finance Evidence\catalogue.json'),
     [string]$OutputRoot = (Join-Path $PSScriptRoot '..\runtime\full-restage'),
     [string]$AIResponsesRoot,
+    [string]$EvidenceLinksRoot,
     [switch]$AIHandoffComplete,
     [switch]$PlanOnly
 )
@@ -62,6 +63,12 @@ function Submit-StagingJob {
             $parameters.AIResponsesPath = (Assert-InRepository $responsePath)
         }
     }
+    if ($EvidenceLinksRoot) {
+        $evidencePath = Join-Path $EvidenceLinksRoot "$safeId.json"
+        if (Test-Path -LiteralPath $evidencePath) {
+            $parameters.EvidenceLinksPath = (Assert-InRepository $evidencePath)
+        }
+    }
     if ($AIHandoffComplete) { $parameters.AIHandoffComplete = $true }
     if ($PlanOnly) {
         $results.Add([ordered]@{
@@ -77,6 +84,7 @@ function Submit-StagingJob {
             ai_request_count = 0
             ai_response_count = 0
             ai_handoff_complete = $false
+            evidence_link_count = 0
             manifest_path = $null
             result_file = $null
         })
@@ -103,6 +111,7 @@ function Submit-StagingJob {
         ai_request_count = $parsed.ai_request_count
         ai_response_count = $parsed.ai_response_count
         ai_handoff_complete = $parsed.ai_handoff_complete
+        evidence_link_count = $parsed.evidence_link_count
         manifest_path = $parsed.manifest_path
         result_file = Get-RepositoryRelativePath $resultPath
     })
@@ -152,6 +161,7 @@ $summary = [ordered]@{
     ai_request_count = $totalAIRequests
     ai_response_count = [int](($results | ForEach-Object { [int]$_.ai_response_count } | Measure-Object -Sum).Sum)
     ai_handoff_complete = -not (@($results | Where-Object { -not $_.ai_handoff_complete }).Count)
+    evidence_link_count = [int](($results | ForEach-Object { [int]$_.evidence_link_count } | Measure-Object -Sum).Sum)
     results = @($results)
 }
 $summaryPath = Join-Path $runRoot 'summary.json'

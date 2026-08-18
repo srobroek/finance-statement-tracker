@@ -55,6 +55,35 @@ only on the final pass:
 ```
 
 The second command fails closed if any source emits a response-free request.
+Private backfill decisions can be converted into those exact arrays without
+putting personal merchant data in executable code or repository configuration:
+
+```powershell
+python -m finance_tracker.full_restage_ai `
+  --run-root .\runtime\full-restage\<run> `
+  --decisions .\runtime\full-restage-ai\decisions.json `
+  --output-root .\runtime\full-restage-ai\current `
+  --report .\runtime\full-restage-ai\build-report.json
+```
+
+The builder merges each new transaction/policy response into the existing
+per-source array, so later fixed-point rounds retain earlier decisions.
+
+Export the exact staged manifests and build catalogue-backed evidence links
+before the final pass:
+
+```powershell
+& .\scripts\export-full-restage-manifests.ps1 `
+  -RunRoot .\runtime\full-restage\<run>
+python -m finance_tracker.full_restage_evidence `
+  --manifests-root .\runtime\full-restage\<run>\manifests `
+  --catalogue '.\Finance Evidence\catalogue.json' `
+  --output-root .\runtime\full-restage-evidence\current
+```
+
+Pass `-EvidenceLinksRoot .\runtime\full-restage-evidence\current` to the next
+restage. Each link is accepted only when its exact imported transaction ID is
+present in that source manifest.
 
 After every handoff is completed and every result is review-free:
 

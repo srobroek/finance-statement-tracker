@@ -365,6 +365,7 @@ class BrowserIngestionTests(TestCase):
             {"transaction_date": "2026-08-05", "description": "IPP Transfer-MOB-LOCAL FT-CRP", "amount_aed": "100", "direction": "DEBIT"},
             {"transaction_date": "2026-08-06", "description": "Transfer to other Bank Credit Card", "amount_aed": "2500", "direction": "DEBIT"},
             {"transaction_date": "2026-08-07", "description": "UNKNOWN MARKETPLACE DUBAI ARE", "amount_aed": "25", "direction": "DEBIT"},
+            {"transaction_date": "2026-08-08", "description": "FAB BLUE payment [P277544183]", "amount_aed": "536", "direction": "DEBIT"},
         ]
 
         run = build_browser_ingestion_run(
@@ -375,10 +376,11 @@ class BrowserIngestionTests(TestCase):
 
         self.assertEqual(
             [row["category"] for row in run.transactions],
-            ["Maintenance & Repairs", "Investments", "Accommodation", "Bank Fees", "Needs Review", "Card Payments", None],
+            ["Maintenance & Repairs", "Investments", "Accommodation", "Bank Fees", "Needs Review", "Card Payments", None, "Card Payments"],
         )
         self.assertEqual(run.transactions[4]["transaction_type"], "TRANSFER")
         self.assertEqual(run.transactions[5]["transaction_type"], "TRANSFER")
+        self.assertEqual(run.transactions[7]["transaction_type"], "TRANSFER")
         self.assertIsNone(run.transactions[6]["vendor"])
         self.assertTrue(all(record["amount"] < 0 for record in run.envelopes[0]["records"]))
 
