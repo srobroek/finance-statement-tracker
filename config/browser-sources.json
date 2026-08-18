@@ -36,6 +36,17 @@
       "preferred_acquisition": "browser-export"
     },
     {
+      "actual_account": "FAB Elite Gold Current Account · 2001",
+      "label": "FAB Elite Gold current account",
+      "card_code": "FAB_CURRENT_2001",
+      "account_last4": "2001",
+      "currency": "AED",
+      "required": false,
+      "provider_id": "fab",
+      "data_ids": ["current-account-transactions", "current-account-balance"],
+      "preferred_acquisition": "browser-export"
+    },
+    {
       "actual_account": "Wio Credit Card · 4113 / 5009",
       "label": "Wio credit card",
       "card_code": "WIO_CREDIT",
@@ -70,11 +81,6 @@
     }
   ],
   "supplemental_sources": [
-    {
-      "source_id": "fab-current-account",
-      "provider_id": "fab",
-      "data_ids": ["current-account-transactions", "current-account-balance"]
-    },
     {
       "source_id": "wio-credit-statement-email",
       "provider_id": "wio",

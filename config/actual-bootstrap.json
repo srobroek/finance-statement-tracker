@@ -25,6 +25,13 @@
       "card_last4": ["6031"]
     },
     {
+      "name": "FAB Elite Gold Current Account · 2001",
+      "type": "checking",
+      "offbudget": false,
+      "card_code": "FAB_CURRENT_2001",
+      "card_last4": ["2001"]
+    },
+    {
       "name": "RAKBANK World Credit Card",
       "type": "credit",
       "offbudget": false,
