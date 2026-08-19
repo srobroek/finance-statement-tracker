@@ -141,7 +141,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Merge Allowed AI Proposals. Keep this deterministic and fail closed.\nconst base = $('Apply N8N Only Rules').first().json, proposals = $input.all().flatMap(i => Array.isArray(i.json.proposals) ? i.json.proposals : []), locked = new Set(['amount', 'date', 'source_id', 'imported_id', 'direction', 'topic', 'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount']), pairs = new Set();\nfor (const p of proposals) {\n    const pair = `${p.transaction_id}\u0000${p.field}`;\n    if (locked.has(String(p.field)) || pairs.has(pair))\n        throw new Error('AI_LOCKED_OR_DUPLICATE_FIELD_REJECTED');\n    pairs.add(pair);\n}\nreturn [{ json: { ...base, accepted_ai_proposals: proposals } }];\n"
+        "jsCode": "// Purpose: Merge Allowed AI Proposals. Keep this deterministic and fail closed.\nconst base = $('Apply N8N Only Rules').first().json;\nconst proposals = $input.all().flatMap(item => (Array.isArray(item.json.proposals) ? item.json.proposals : []));\nconst locked = new Set([\n    'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',\n    'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',\n]);\nconst pairs = new Set();\nfor (const proposal of proposals) {\n    const pair = JSON.stringify([\n        String(proposal.transaction_id),\n        String(proposal.field),\n    ]);\n    if (locked.has(String(proposal.field)) || pairs.has(pair)) {\n        throw new Error('AI_LOCKED_OR_DUPLICATE_FIELD_REJECTED');\n    }\n    pairs.add(pair);\n}\nreturn [{ json: { ...base, accepted_ai_proposals: proposals } }];\n"
       }
     },
     {

@@ -390,6 +390,31 @@ return [{
     statement["connections"]["Run Isolated PDF Extraction"] = {
         "main": [[{"node": "Parse Verified Statement Profile", "type": "main", "index": 0}]]
     }
+    merge_proposals = node_by_name(statement, "Merge Allowed AI Proposals")
+    merge_proposals["parameters"]["jsCode"] = r"""
+const base = $('Apply N8N Only Rules').first().json;
+const proposals = $input.all().flatMap(item => (
+  Array.isArray(item.json.proposals) ? item.json.proposals : []
+));
+const locked = new Set([
+  'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',
+  'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',
+]);
+const pairs = new Set();
+
+for (const proposal of proposals) {
+  const pair = JSON.stringify([
+    String(proposal.transaction_id),
+    String(proposal.field),
+  ]);
+  if (locked.has(String(proposal.field)) || pairs.has(pair)) {
+    throw new Error('AI_LOCKED_OR_DUPLICATE_FIELD_REJECTED');
+  }
+  pairs.add(pair);
+}
+
+return [{ json: { ...base, accepted_ai_proposals: proposals } }];
+""".strip()
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     ready = node_by_name(local_pdf, "Ready for Deterministic Parser")
     ready["parameters"]["includeOtherFields"] = True
@@ -751,7 +776,7 @@ for (const proposal of response.proposals) {
   }
   const item = requestById.get(proposal.transaction_id);
   const allowedFields = new Set(item?.allowed_fields || []);
-  const pair = `${proposal.transaction_id}\0${proposal.field}`;
+  const pair = JSON.stringify([proposal.transaction_id, proposal.field]);
   if (seenPairs.has(pair)) {
     throw new Error('Duplicate proposal field');
   }

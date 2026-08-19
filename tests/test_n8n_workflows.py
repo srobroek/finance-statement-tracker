@@ -135,6 +135,30 @@ class N8nWorkflowTests(unittest.TestCase):
                 for marker in forbidden_markers:
                     self.assertNotIn(marker, raw)
 
+    def test_workflow_nodes_are_postgres_jsonb_compatible(self) -> None:
+        for filename, workflow in self.workflows.items():
+            with self.subTest(workflow=filename):
+                serialized_nodes = json.dumps(workflow["nodes"], ensure_ascii=True)
+                self.assertNotIn("\\u0000", serialized_nodes)
+                self.assertNotIn("\x00", serialized_nodes)
+
+        shared_code = self.nodes("03-shared-statement-pipeline.json")[
+            "Merge Allowed AI Proposals"
+        ]["parameters"]["jsCode"]
+        proposal_code = self.nodes("09-ai-proposal.json")[
+            "Validate Proposal Schema and Policy Boundary"
+        ]["parameters"]["jsCode"]
+        compact_shared = re.sub(r"\s+", "", shared_code)
+        self.assertIn("constpair=JSON.stringify([", compact_shared)
+        self.assertIn(
+            "String(proposal.transaction_id),String(proposal.field)",
+            compact_shared,
+        )
+        self.assertIn(
+            "JSON.stringify([proposal.transaction_id, proposal.field])",
+            proposal_code,
+        )
+
     def test_custom_node_contract_is_narrow_and_frozen(self) -> None:
         contract = self.registry["custom_nodes"]
         self.assertEqual((contract["package"], contract["version"]), ("n8n-nodes-finance", "0.1.0"))
