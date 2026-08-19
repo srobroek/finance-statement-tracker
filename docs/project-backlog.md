@@ -19,17 +19,19 @@ Repository code, tests and historical user acceptance remain unverified until th
 
 ## Evidence snapshot
 
-Progress recorded: **2026-08-19** at `3a6acc6`.
-Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
+Progress recorded: **2026-08-20** at `b07c410`.
+Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 
-- da6b0c1 closes the stale n8n contract failures: 21 inactive exports, 20 of 20 Execute Sub-workflow references using From list, eight declared folders, 17 semantic groups, readable notes and code, and one typed provider-neutral proposal schema.
-- The rootless fa8fd58 local image imported 21 inactive and unpublished workflows, bootstrapped 15 Data Tables, passed health, registered eight community nodes and three credential types, scanned at zero HIGH or CRITICAL findings, and produced an SPDX SBOM. It is local disposable evidence, not production evidence.
-- Both n8n OAuth credentials now show Account connected for Outlook Mail.Read and OneDrive Files.ReadWrite. Persistent workflow binding, bounded mailbox and root-folder readback, and token-refresh evidence remain in progress; identifiers and secret values are intentionally excluded.
+- The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.
+- Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.
+- The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.
+- The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.
+- The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.
 - Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.
 - Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.
 - b845ccf records a guarded 45-manifest, 3,927-identity Actual dry run with 400 proposed exact-state changes, zero amount mutations, 28 preserved manual-category conflicts, and 15 snapshot-absent identities. No disposable Actual replay or production write occurred.
-- The independent 3a6acc6 readiness audit keeps ADCB issuer-balance contradiction, duplicated Finance Evidence paths, missing warranty and property metadata, missing fresh wealth and FX evidence, and runtime commit drift open. CI-host SSH is unavailable and production deployment or activation remains forbidden.
-- One batched 1Password update to FinanceAutomation/n8n-runtime preserved existing fields, concealed the secret, and left Bellwether untouched. Cold-start injection, rotation, persistence/log scanning, restore, and the retained-mount mismatch still block runtime promotion.
+- The independent 3a6acc6 readiness audit still keeps the ADCB issuer-balance contradiction, duplicated Finance Evidence paths, missing warranty and property metadata, and missing fresh wealth and FX evidence open. Production activation and finance writes remain forbidden pending their separate acceptance gates.
+- One batched 1Password update to FinanceAutomation/n8n-runtime preserved existing fields, concealed the secret, and left Bellwether untouched. Retained Postgres rotation and n8n key recovery completed; cold-start injection, persistence/log scanning, and backup restore remain open.
 
 ## Latest orchestration overrides
 
@@ -43,11 +45,11 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 | # | ID | Owner | Priority | Status | Next action |
 | ---: | --- | --- | --- | --- | --- |
 | 1 | `AGENT-003` | `agent_runtime` | P0 | `PARTIAL` | Run one schema-bound proposal per provider after isolated authentication succeeds. |
-| 2 | `N8N-001` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Bind both connected credentials to inactive workflows and retain bounded mailbox and root-folder readback. |
-| 3 | `N8N-002` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Apply the folder manifest and Tidy Workflow, then record human readability review. |
-| 4 | `N8N-008` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Repair isolated Codex login and execute one schema-bound proposal per provider. |
+| 2 | `N8N-001` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Run bounded Outlook and OneDrive refresh/readback acceptance while all workflows remain inactive. |
+| 3 | `N8N-002` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Complete the remaining issuer workflow semantics; use Tidy Workflow only when a human canvas cleanup is desired. |
+| 4 | `N8N-008` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Authenticate each isolated subscription and execute one schema-bound proposal per provider. |
 | 5 | `DOCS-002` | `documentation_acceptance` | P0 | `IMPLEMENTED_UNVERIFIED` | Review this generated backlog as the orchestration source, then require --check and focused tests on every backlog change. |
-| 6 | `PLATFORM-003` | `platform_operations` | P0 | `IMPLEMENTED_UNVERIFIED` | Run one disposable cold start and rotation with persistence, execution, log, and backup scans. |
+| 6 | `PLATFORM-003` | `platform_operations` | P0 | `IMPLEMENTED_UNVERIFIED` | Run one disposable cold start and restore with persistence, execution, log, and backup scans. |
 | 7 | `PLATFORM-006` | `platform_operations` | P0 | `PARTIAL` | Complete current-byte disposable replay and restore evidence while production remains untouched. |
 | 8 | `BROWSER-002` | `browser_acquisition` | P0 | `IMPLEMENTED_UNVERIFIED` | Prove current Actual API and authenticated UI contain exactly the complete FAB non-credit inventory with source-matching signed balances. |
 | 9 | `BROWSER-003` | `browser_acquisition` | P0 | `PARTIAL` | Acquire fresh interactive holdings and FX, run disposable idempotent projection, then guardedly create/read back each included off-budget portfolio account. |
@@ -58,7 +60,7 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 | 14 | `ACTUAL-006` | `actual_finance` | P0 | `IMPLEMENTED_UNVERIFIED` | Compile the current canonical rules into the ownership manifest, require an empty overlap report, and run Actual/canonical evaluator parity fixtures. |
 | 15 | `DOC-002` | `document_evidence` | P0 | `PARTIAL` | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage. |
 | 16 | `DOC-007` | `document_evidence` | P0 | `IMPLEMENTED_UNVERIFIED` | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage. |
-| 17 | `N8N-003` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Run a bounded filtered mailbox and root-folder readback after binding, without recording credential identifiers. |
+| 17 | `N8N-003` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Run the bounded Microsoft refresh acceptance and restart repeat without recording credential identifiers or token values. |
 | 18 | `N8N-005` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Run concurrent and kill-at-boundary disposable tests for the fenced Actual outbox and prove one row, one verified commit and one cursor advance. |
 | 19 | `ACTUAL-019` | `actual_finance` | P0 | `BLOCKED` | Execute the current corpus twice through the inactive n8n writer. |
 | 20 | `PLATFORM-004` | `platform_operations` | P0 | `PARTIAL` | Record immutable image digests, verify independent restarts, execute restore drill, validate tunnel origin/headers and AD/Service Auth boundaries, and deploy reviewed n8n candidate. |
@@ -82,8 +84,8 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 | 38 | `CASHBACK-013` | `cashback_companion` | P0 | `PARTIAL` | Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover. |
 | 39 | `CASHBACK-014` | `cashback_companion` | P0 | `PARTIAL` | Finish disposable semantic replay before live cashback acceptance. |
 | 40 | `N8N-004` | `n8n_workflows` | P0 | `PARTIAL` | Run the sole writer in disposable Actual and compare every economic field and balance. |
-| 41 | `N8N-006` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Reconcile runtime bytes and keep all workflows inactive through acceptance review. |
-| 42 | `PLATFORM-001` | `platform_operations` | P0 | `PARTIAL` | Collect read-only CI-host state before any deployment. |
+| 41 | `N8N-006` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Keep all workflows inactive while completing disposable double replay and reviewed finance-write acceptance. |
+| 42 | `PLATFORM-001` | `platform_operations` | P0 | `PARTIAL` | Run the independent restart, protected-route, and restore acceptance matrix. |
 | 43 | `ACTUAL-007` | `actual_finance` | P1 | `PARTIAL` | Run classification audit over the full disposable corpus and authenticated production readback; resolve owner/property/payee exceptions. |
 | 44 | `ACTUAL-008` | `actual_finance` | P1 | `PARTIAL` | Run classification audit over the full disposable corpus and authenticated production readback; resolve owner/property/payee exceptions. |
 | 45 | `ACTUAL-009` | `actual_finance` | P1 | `PARTIAL` | Run classification audit over the full disposable corpus and authenticated production readback; resolve owner/property/payee exceptions. |
@@ -100,14 +102,14 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 | 56 | `CASHBACK-009` | `cashback_companion` | P1 | `PARTIAL` | Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover. |
 | 57 | `CASHBACK-010` | `cashback_companion` | P1 | `PARTIAL` | Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover. |
 | 58 | `CASHBACK-011` | `cashback_companion` | P1 | `IMPLEMENTED_UNVERIFIED` | Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover. |
-| 59 | `DOC-001` | `document_evidence` | P1 | `PARTIAL` | Produce a no-write deduplication and metadata repair plan before changing the archive. |
+| 59 | `DOC-001` | `document_evidence` | P1 | `PARTIAL` | Import and run the inactive setup-only workflow once, retain the redacted exact-root receipt, then proceed with archive normalization. |
 | 60 | `DOC-003` | `document_evidence` | P1 | `PARTIAL` | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage. |
 | 61 | `DOC-004` | `document_evidence` | P1 | `PARTIAL` | Review the 28 preserved manual-category conflicts and 15 corpus identities absent from the snapshot, replay the guarded plan in disposable Actual, then separately authorize any production delta and verify authenticated UI samples. |
 | 62 | `DOC-005` | `document_evidence` | P1 | `PARTIAL` | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage. |
 | 63 | `DOC-006` | `document_evidence` | P1 | `PARTIAL` | Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures. |
 | 64 | `DOCS-001` | `documentation_acceptance` | P1 | `PARTIAL` | Implement and prove: Fresh clone runbook. |
 | 65 | `N8N-007` | `n8n_workflows` | P1 | `PARTIAL` | Run the disposable operations and error-workflow negative matrix and retain redacted durable receipts. |
-| 66 | `PLATFORM-002` | `platform_operations` | P1 | `IMPLEMENTED_UNVERIFIED` | Run exact image build and provenance attestation in CI after access returns. |
+| 66 | `PLATFORM-002` | `platform_operations` | P1 | `IMPLEMENTED_UNVERIFIED` | Run exact image build and provenance attestation in CI and compare the deployed digest. |
 | 67 | `PLATFORM-005` | `platform_operations` | P1 | `IMPLEMENTED_UNVERIFIED` | Record immutable image digests, verify independent restarts, execute restore drill, validate tunnel origin/headers and AD/Service Auth boundaries, and deploy reviewed n8n candidate. |
 | 68 | `ACTUAL-015` | `actual_finance` | P2 | `PARTIAL` | Populate only after account/UI parity; obtain approved budget values and verify every named report against authoritative source data. |
 | 69 | `AGENT-004` | `agent_runtime` | P2 | `PARTIAL` | Run protected-field and automatic-write attacks and prove every AI result remains a review-only proposal. |
@@ -124,9 +126,9 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 | --- | --- | --- | --- | --- | --- |
 | `AGENT-001` | `agent_runtime` | `ACTUAL-005`, `ACTUAL-010` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 3 files, 0 tests; live readback: none; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | AI runs only after deterministic rules and history matching |
 | `AGENT-002` | `agent_runtime` | `AGENT-003` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 3 files, 0 tests; live readback: none; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Luna normal path and gated Sol exception path |
-| `AGENT-003` | `agent_runtime` | `PLATFORM-003`, `N8N-007` | `PARTIAL` | PARTIAL / REPOSITORY_TESTED_PROVIDER_AUTH_BLOCKED; 6 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Ephemeral bounded Codex proposal runner |
+| `AGENT-003` | `agent_runtime` | `PLATFORM-003`, `N8N-007` | `PARTIAL` | PARTIAL / HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED; 7 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Ephemeral bounded Codex proposal runner |
 | `AGENT-004` | `agent_runtime` | `AGENT-001`, `ACTUAL-009` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 3 files, 0 tests; live readback: none; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | AI category and rule recommendations remain proposals |
-| `AGENT-005` | `agent_runtime` | `AGENT-003`, `N8N-008` | `PARTIAL` | PARTIAL / REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING; 6 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Community AI nodes are optional, pinned pilots only |
+| `AGENT-005` | `agent_runtime` | `AGENT-003`, `N8N-008` | `PARTIAL` | PARTIAL / HOST_REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING; 7 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Community AI nodes are optional, pinned pilots only |
 
 ### Actual accounts, ledger, rules, budgets and reports
 
@@ -158,7 +160,7 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 
 | ID | Owner | Dependencies | Status | Acceptance evidence and validator | Title |
 | --- | --- | --- | --- | --- | --- |
-| `DOC-001` | `document_evidence` | `DOC-007`, `PLATFORM-003` | `PARTIAL` | PARTIAL / REPOSITORY_TESTED_ARCHIVE_NORMALIZATION_PENDING; 5 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: evidence tests plus immutable archive and readback receipt review | Immutable OneDrive evidence archive |
+| `DOC-001` | `document_evidence` | `DOC-007`, `PLATFORM-003` | `PARTIAL` | PARTIAL / REPOSITORY_TESTED_ROOT_SETUP_LIVE_RUN_PENDING; 7 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: evidence tests plus immutable archive and readback receipt review | Immutable OneDrive evidence archive |
 | `DOC-002` | `document_evidence` | `PLATFORM-003`, `N8N-008` | `PARTIAL` | PARTIAL / MIXED: DESIGN_ONLY_FOR_CURRENT_STACK, UNIT_VERIFIED_ONLY; 8 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: evidence tests plus immutable archive and readback receipt review | Local secure PDF unlock and extraction |
 | `DOC-003` | `document_evidence` | `DOC-001`, `AGENT-001` | `PARTIAL` | PARTIAL / UNIT_VERIFIED_ONLY; 4 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: evidence tests plus immutable archive and readback receipt review | Selective receipts, bills, warranties, and purchase-proof acquisition |
 | `DOC-004` | `document_evidence` | `DOC-001`, `ACTUAL-011` | `PARTIAL` | PARTIAL / MIXED: FULL_CORPUS_DRY_RUN_VERIFIED, UNIT_VERIFIED_ONLY; 16 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: evidence tests plus immutable archive and readback receipt review | Transaction-to-email and document links |
@@ -207,26 +209,26 @@ Evidence commits: `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 
 | ID | Owner | Dependencies | Status | Acceptance evidence and validator | Title |
 | --- | --- | --- | --- | --- | --- |
-| `N8N-001` | `n8n_workflows` | `N8N-005`, `N8N-006`, `PLATFORM-001`, `AGENT-003` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / REPOSITORY_TESTED_LOCAL_IMPORT_BOOTSTRAP_VERIFIED; 8 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | n8n is the sole production scheduler and orchestrator |
-| `N8N-002` | `n8n_workflows` | `N8N-001`, `N8N-008` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / REPOSITORY_TESTED_IMPORTED_CANVAS_REVIEW_PENDING; 6 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Workflow stages remain visible and composable |
-| `N8N-003` | `n8n_workflows` | `N8N-004`, `DOC-007` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / REPOSITORY_TESTED_OAUTH_CONNECTED_BINDING_PENDING; 5 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Cursor-safe Outlook acquisition |
-| `N8N-004` | `n8n_workflows` | `ACTUAL-001`, `CASHBACK-001` | `PARTIAL` | PARTIAL / LOCAL_DATA_TABLE_BOOTSTRAP_VERIFIED_ACTUAL_READBACK_PENDING; 8 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Postgres and Data Tables hold operational state only |
+| `N8N-001` | `n8n_workflows` | `N8N-005`, `N8N-006`, `PLATFORM-001`, `AGENT-003` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / RUNTIME_INACTIVE_IMPORT_BINDING_SCHEMA_AND_HEALTH_VERIFIED; 10 files, 6 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | n8n is the sole production scheduler and orchestrator |
+| `N8N-002` | `n8n_workflows` | `N8N-001`, `N8N-008` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / RUNTIME_FOLDER_PLACEMENT_VERIFIED_CANVAS_REVIEW_DEFERRED; 7 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Workflow stages remain visible and composable |
+| `N8N-003` | `n8n_workflows` | `N8N-004`, `DOC-007` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / RUNTIME_BINDINGS_VERIFIED_OAUTH_REFRESH_PENDING; 7 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Cursor-safe Outlook acquisition |
+| `N8N-004` | `n8n_workflows` | `ACTUAL-001`, `CASHBACK-001` | `PARTIAL` | PARTIAL / RUNTIME_EXACT_SCHEMA_AND_SEED_READBACK_VERIFIED_ACTUAL_READBACK_PENDING; 9 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Postgres and Data Tables hold operational state only |
 | `N8N-005` | `n8n_workflows` | `PLATFORM-003`, `ACTUAL-019` | `IMPLEMENTED_UNVERIFIED` | PARTIAL / MIXED: FAIL, FAILING_WORKTREE; 7 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Single fenced Actual writer and recoverable outbox |
-| `N8N-006` | `n8n_workflows` | `N8N-001`, `N8N-005`, `PLATFORM-006` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / LOCAL_INACTIVE_IMPORT_VERIFIED_PRODUCTION_PENDING; 8 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Production workflows start inactive and write-disabled |
+| `N8N-006` | `n8n_workflows` | `N8N-001`, `N8N-005`, `PLATFORM-006` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / RUNTIME_EXACT_INACTIVE_IMPORT_VERIFIED_ACTIVATION_FORBIDDEN; 9 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Production workflows start inactive and write-disabled |
 | `N8N-007` | `n8n_workflows` | `N8N-003`, `DOC-007`, `PLATFORM-003` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 4 files, 0 tests; live readback: none; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Bounded operations and error workflows |
-| `N8N-008` | `n8n_workflows` | `PLATFORM-002` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / LOCAL_REGISTRATION_VERIFIED_AUTH_EXECUTION_PENDING; 7 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Native-node-first and reviewed extension policy |
+| `N8N-008` | `n8n_workflows` | `PLATFORM-002` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / HOST_REGISTRATION_VERIFIED_AUTH_EXECUTION_PENDING; 8 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Native-node-first and reviewed extension policy |
 | `N8N-009` | `n8n_workflows` | `PLATFORM-004`, `N8N-007` | `IMPLEMENTED_UNVERIFIED` | PARTIAL / FAILING_WORKTREE; 4 files, 0 tests; live readback: none; 4 acceptance checks; validator: n8n contract tests plus exact disposable execution receipt review | Bounded MCP facade |
 
 ### platform, security and deployment
 
 | ID | Owner | Dependencies | Status | Acceptance evidence and validator | Title |
 | --- | --- | --- | --- | --- | --- |
-| `PLATFORM-001` | `platform_operations` | `PLATFORM-002`, `PLATFORM-006` | `PARTIAL` | PARTIAL / LOCAL_DISPOSABLE_VERIFIED_CI_HOST_PENDING; 6 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Separate containerized services on the CI host |
-| `PLATFORM-002` | `platform_operations` | `PLATFORM-003`, `DOCS-001` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / LOCAL_IMAGE_SCAN_SBOM_VERIFIED_CI_PENDING; 8 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | CI builds pinned images and supports reproducible deployment |
-| `PLATFORM-003` | `platform_operations` | `PLATFORM-006` | `IMPLEMENTED_UNVERIFIED` | IMPLEMENTED_NOT_DEPLOYED / BATCH_SECRET_METADATA_UPDATE_CONFIRMED_RUNTIME_INJECTION_PENDING; 4 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Dedicated 1Password vault and runtime secret injection |
+| `PLATFORM-001` | `platform_operations` | `PLATFORM-002`, `PLATFORM-006` | `PARTIAL` | PARTIAL / CI_HOST_N8N_RUNTIME_HEALTH_AND_INACTIVE_DEPLOYMENT_VERIFIED; 8 files, 5 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Separate containerized services on the CI host |
+| `PLATFORM-002` | `platform_operations` | `PLATFORM-003`, `DOCS-001` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / HOST_IMAGE_RUNNING_LOCAL_SCAN_SBOM_VERIFIED_CI_ATTESTATION_PENDING; 8 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | CI builds pinned images and supports reproducible deployment |
+| `PLATFORM-003` | `platform_operations` | `PLATFORM-006` | `IMPLEMENTED_UNVERIFIED` | DEPLOYED_INACTIVE / DEDICATED_VAULT_AND_ROTATION_VERIFIED_COLD_START_RESTORE_PENDING; 6 files, 3 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Dedicated 1Password vault and runtime secret injection |
 | `PLATFORM-004` | `platform_operations` | `PLATFORM-001`, `PLATFORM-003` | `PARTIAL` | PARTIAL / CI_DEFINED_LIVE_STATE_UNVERIFIED; 5 files, 2 tests; live readback: recorded; 5 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Cloudflare route and authentication matrix |
 | `PLATFORM-005` | `platform_operations` | `PLATFORM-004` | `IMPLEMENTED_UNVERIFIED` | PARTIAL / CI_DEFINED_LIVE_STATE_UNVERIFIED; 5 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Actual reverse proxy supplies SharedArrayBuffer headers |
-| `PLATFORM-006` | `platform_operations` | `PLATFORM-001`, `PLATFORM-003` | `PARTIAL` | PARTIAL / LOCAL_RECEIPTS_VERIFIED_DEPLOY_RESTORE_PENDING; 10 files, 5 tests; live readback: recorded; 5 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Backups, restore drills, restart health and deployment receipts |
+| `PLATFORM-006` | `platform_operations` | `PLATFORM-001`, `PLATFORM-003` | `PARTIAL` | PARTIAL / HOST_INACTIVE_DEPLOY_AND_HEALTH_VERIFIED_RESTORE_PENDING; 12 files, 7 tests; live readback: recorded; 5 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Backups, restore drills, restart health and deployment receipts |
 | `PLATFORM-007` | `platform_operations` | `CASHBACK-002`, `DOCS-003` | `PARTIAL` | NOT_ASSESSED / NOT_VERIFIED; 0 files, 0 tests; live readback: none; 4 acceptance checks; validator: platform tests plus image, deploy, restart, security, and restore receipt review | Repository privacy versus public deployability is explicit |
 
 ### scheduling and task lifecycle

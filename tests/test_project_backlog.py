@@ -67,12 +67,24 @@ class ProjectBacklogTests(unittest.TestCase):
         commits = self.payload["progress_overlay"]["evidence_commits"]
         self.assertIn("da6b0c128210b2cd44a7a2c5a120b08e942de9ce", commits)
         self.assertIn("3a6acc625abe99d977d2b225eaae63f8ffe02c65", commits)
+        self.assertIn("00491aae2ab43c486f3a9b4a62ce3ba5e63032f6", commits)
+        self.assertIn("c8d4f7ce984ec0107846b2c7aa398cb1141caf39", commits)
         self.assertIn("From list", render_markdown(self.payload))
-        self.assertIn("OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED", tasks["N8N-003"]["blockers"])
         self.assertIn("EMAIL_TO_PDF_RENDERER_REQUIRED", tasks["N8N-003"]["blockers"])
         self.assertIn("ADCB_ISSUER_BALANCE_CONTRADICTION", tasks["ACTUAL-021"]["blockers"])
         self.assertIn("DUPLICATED_FINANCE_EVIDENCE_PATHS", tasks["DOC-001"]["blockers"])
-        self.assertIn("RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED", tasks["PLATFORM-006"]["blockers"])
+        self.assertNotIn("RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED", tasks["PLATFORM-006"]["blockers"])
+        self.assertIn("OAUTH_TOKEN_REFRESH_PROOF_REQUIRED", tasks["N8N-003"]["blockers"])
+        self.assertNotIn(
+            "OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED",
+            tasks["N8N-003"]["blockers"],
+        )
+        self.assertIn(
+            "ONEDRIVE_FINANCE_EVIDENCE_ROOT_LIVE_RUN_REQUIRED",
+            tasks["DOC-001"]["blockers"],
+        )
+        self.assertIn("21 workflows", tasks["N8N-006"]["live_readback"])
+        self.assertIn("zero active", tasks["N8N-006"]["live_readback"])
         self.assertEqual(tasks["AGENT-005"]["status"], "PARTIAL")
 
     def test_superseded_notion_requirement_is_not_queued(self) -> None:
