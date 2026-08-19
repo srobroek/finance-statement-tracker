@@ -319,8 +319,9 @@ jobs:
           docker run --rm --network none finance-cloudflared:${{ github.sha }} tunnel --no-autoupdate run >/tmp/cloudflared-run.txt 2>&1
           status=$?
           set -e
+          cat /tmp/cloudflared-run.txt
           test "$status" -ne 0
-          grep -Ei "requires exactly 1 argument|tunnel ID|credentials|token" /tmp/cloudflared-run.txt
+          grep -F '"cloudflared tunnel run" requires the ID or name of the tunnel to run' /tmp/cloudflared-run.txt
       - name: Scan Cloudflared image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
