@@ -3,9 +3,9 @@
   "name":"Finance · RAK Monthly Statement · Paused",
   "active":false,
   "nodes":[
-    {"id":"6001","name":"Day 6 at 20:00","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-500,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"0 20 6 * *"}]}},"disabled":true},
+    {"id":"6001","name":"Daily 20:00 Cycle Poll","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-500,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"0 20 * * *"}]}},"disabled":true},
     {"id":"6002","name":"Block Until Adapter Verified","type":"n8n-nodes-base.stopAndError","typeVersion":1,"position":[-200,0],"parameters":{"errorMessage":"RAK_WORLD requires a verified statement fixture, source contract, and active adapter before publication"}}
   ],
-  "connections":{"Day 6 at 20:00":{"main":[[{"node":"Block Until Adapter Verified","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"RAK_MONTHLY_STATEMENT","migrationStatus":"PAUSED"}
+  "connections":{"Daily 20:00 Cycle Poll":{"main":[[{"node":"Block Until Adapter Verified","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},"meta":{"financeWorkflowCode":"RAK_MONTHLY_STATEMENT","migrationStatus":"SPEC_ONLY","cyclePollingRequired":true,"cycleDay":6,"deadlineDays":5,"activationBlocked":true}
 }

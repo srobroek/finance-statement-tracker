@@ -1,0 +1,21 @@
+FROM docker.n8n.io/n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401 AS node-builder
+
+USER root
+WORKDIR /tmp/n8n-nodes-finance
+COPY packages/n8n-nodes-finance/package.json packages/n8n-nodes-finance/package-lock.json packages/n8n-nodes-finance/tsconfig.json packages/n8n-nodes-finance/tsconfig.build.json ./
+RUN npm ci
+COPY packages/n8n-nodes-finance/src ./src
+COPY packages/n8n-nodes-finance/CONTRACT.md ./
+RUN npm run build \
+    && npm prune --omit=dev \
+    && npm cache clean --force
+
+FROM docker.n8n.io/n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401
+
+USER root
+RUN mkdir -p /home/node/.n8n/nodes/node_modules/n8n-nodes-finance
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/package.json
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/CONTRACT.md
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/dist /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/dist
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/node_modules /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/node_modules
+USER node

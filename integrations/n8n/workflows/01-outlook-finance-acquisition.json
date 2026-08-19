@@ -4,16 +4,8 @@
   "active": false,
   "nodes": [
     {
-      "id": "10000000-0000-4000-8000-000000000101",
-      "name": "Manual Test",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [-900, -120],
-      "parameters": {}
-    },
-    {
       "id": "10000000-0000-4000-8000-000000000102",
-      "name": "Called by Workflow or MCP",
+      "name": "Called by Trusted Workflow",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [-900, 120],
@@ -26,7 +18,7 @@
       "typeVersion": 2,
       "position": [-650, 0],
       "parameters": {
-        "jsCode": "const r = $json; const required = ['source_code','folder_id','senders','subjects','window_start','window_end']; for (const k of required) if (r[k] === undefined || r[k] === null || r[k] === '') throw new Error(`Missing ${k}`); if (!Array.isArray(r.senders) || !Array.isArray(r.subjects) || !r.senders.length || !r.subjects.length) throw new Error('Source contract requires sender and subject allowlists'); const start = new Date(r.window_start); const end = new Date(r.window_end); if (!(start < end) || end - start > 7 * 86400000) throw new Error('Acquisition window must be positive and at most seven days'); return [{json:{...r, senders:r.senders.map(v=>String(v).toLowerCase()), subjects:r.subjects.map(String)}}];"
+        "jsCode": "const r = $json; const required = ['run_id','source_code','folder_id','senders','subjects','window_start','run_upper_bound']; for (const k of required) if (r[k] === undefined || r[k] === null || r[k] === '') throw new Error(`Missing trusted contract field ${k}`); if (!Array.isArray(r.senders) || !Array.isArray(r.subjects) || !r.senders.length || !r.subjects.length) throw new Error('Trusted sender and subject allowlists are required'); const start = new Date(r.window_start); const upper = new Date(r.run_upper_bound); if (!(start < upper) || upper > new Date()) throw new Error('Acquisition window must be positive and frozen no later than now'); return [{json:{...r, window_end:upper.toISOString(), senders:r.senders.map(v=>String(v).toLowerCase()), subjects:r.subjects.map(String)}}];"
       }
     },
     {
@@ -39,8 +31,7 @@
         "resource": "folderMessage",
         "operation": "getAll",
         "folderId": "={{ $json.folder_id }}",
-        "returnAll": false,
-        "limit": 100,
+        "returnAll": true,
         "filters": {
           "receivedAfter": "={{ $json.window_start }}",
           "receivedBefore": "={{ $json.window_end }}"
@@ -144,26 +135,23 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000111",
-      "name": "Immutable Acquisition Receipt",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "name": "Upsert Durable Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [1350, 0],
-      "parameters": {
-        "assignments": {"assignments": [
-          {"id": "r1", "name": "status", "type": "string", "value": "ARCHIVED"},
-          {"id": "r2", "name": "source_code", "type": "string", "value": "={{ $('Validate Bounded Source Request').first().json.source_code }}"},
-          {"id": "r3", "name": "message_id", "type": "string", "value": "={{ $('Exact Sender Subject and Window Filter').item.json.id }}"},
-          {"id": "r4", "name": "attachment_id", "type": "string", "value": "={{ $('PDF Attachments Only').item.json.id }}"},
-          {"id": "r5", "name": "document_sha256", "type": "string", "value": "={{ $('SHA-256 Original').item.json.document_sha256 }}"},
-          {"id": "r6", "name": "onedrive_item_id", "type": "string", "value": "={{ $json.id }}"}
-        ]},
-        "options": {}
-      }
+      "parameters": {"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_archive_receipts","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"={{ $('Validate Bounded Source Request').first().json.source_code }}"},{"keyName":"source_message_id","condition":"eq","keyValue":"={{ $('Exact Sender Subject and Window Filter').item.json.id }}"},{"keyName":"source_attachment_id","condition":"eq","keyValue":"={{ $('PDF Attachments Only').item.json.id }}"},{"keyName":"source_sha256","condition":"eq","keyValue":"={{ $('SHA-256 Original').item.json.document_sha256 }}"}]},"columns":{"mappingMode":"defineBelow","value":{"archive_receipt_id":"={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $('SHA-256 Original').item.json.document_sha256 }}","run_id":"={{ $('Validate Bounded Source Request').first().json.run_id }}","source_code":"={{ $('Validate Bounded Source Request').first().json.source_code }}","source_message_id":"={{ $('Exact Sender Subject and Window Filter').item.json.id }}","source_attachment_id":"={{ $('PDF Attachments Only').item.json.id }}","source_sha256":"={{ $('SHA-256 Original').item.json.document_sha256 }}","onedrive_item_id":"={{ $json.id }}","onedrive_etag":"={{ $json.eTag || $json.etag || '' }}","archive_state":"HASH_VERIFIED","verified_at":"={{ $now.toISO() }}","updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000112",
+      "name": "Read Back Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1600, 0],
+      "parameters": {"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_archive_receipts","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"archive_receipt_id","condition":"eq","keyValue":"={{ $json.archive_receipt_id }}"},{"keyName":"archive_state","condition":"eq","keyValue":"HASH_VERIFIED"}]},"options":{}}
     }
   ],
   "connections": {
-    "Manual Test": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
-    "Called by Workflow or MCP": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
+    "Called by Trusted Workflow": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
     "Validate Bounded Source Request": {"main": [[{"node": "Get Messages from Configured Folder", "type": "main", "index": 0}]]},
     "Get Messages from Configured Folder": {"main": [[{"node": "Exact Sender Subject and Window Filter", "type": "main", "index": 0}]]},
     "Exact Sender Subject and Window Filter": {"main": [[{"node": "List Message Attachments", "type": "main", "index": 0}]]},
@@ -171,9 +159,10 @@
     "PDF Attachments Only": {"main": [[{"node": "Download Original Attachment", "type": "main", "index": 0}]]},
     "Download Original Attachment": {"main": [[{"node": "SHA-256 Original", "type": "main", "index": 0}]]},
     "SHA-256 Original": {"main": [[{"node": "Archive Original in OneDrive", "type": "main", "index": 0}]]},
-    "Archive Original in OneDrive": {"main": [[{"node": "Immutable Acquisition Receipt", "type": "main", "index": 0}]]}
+    "Archive Original in OneDrive": {"main": [[{"node": "Upsert Durable Archive Receipt", "type": "main", "index": 0}]]},
+    "Upsert Durable Archive Receipt": {"main": [[{"node": "Read Back Archive Receipt", "type": "main", "index": 0}]]}
   },
-  "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "none"},
+  "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "errorWorkflow":"10000000-0000-4000-8000-000000000016"},
   "pinData": {},
-  "meta": {"financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION", "mcpSafe": true}
+  "meta": {"financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION", "mcpSafe": false, "migrationStatus":"SPEC_ONLY", "terminalReceiptTable":"finance_archive_receipts", "terminalReceiptReadback":true, "manualMutationForbidden":true}
 }

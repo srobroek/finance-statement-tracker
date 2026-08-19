@@ -1,14 +1,201 @@
 {
-  "id":"10000000-0000-4000-8000-000000000009",
-  "name":"Finance · Scoped AI Proposal",
-  "active":false,
-  "nodes":[
-    {"id":"9001","name":"AI Request Input","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-600,0],"parameters":{"inputSource":"passthrough"}},
-    {"id":"9002","name":"Validate Policy and Allowed Fields","type":"n8n-nodes-base.code","typeVersion":2,"position":[-360,0],"parameters":{"jsCode":"const r=$json; if(!r.policy_id || !r.instruction || !Array.isArray(r.allowed_fields) || !r.output_schema) throw new Error('Invalid AI proposal request'); const locked=['amount','source_id','imported_id','direction','topic','reconciliation_state','cashback_amount']; if(r.allowed_fields.some(f=>locked.includes(f))) throw new Error('AI request includes a locked field'); return [{json:r}];"}},
-    {"id":"9003","name":"Information Extractor","type":"@n8n/n8n-nodes-langchain.informationExtractor","typeVersion":1,"position":[-80,0],"parameters":{"text":"={{ JSON.stringify($json.transaction_context) }}","schemaType":"manual","inputSchema":"={{ JSON.stringify($json.output_schema) }}","options":{"systemPromptTemplate":"={{ $json.instruction }}"}}},
-    {"id":"9004","name":"OpenAI Chat Model","type":"@n8n/n8n-nodes-langchain.lmChatOpenAi","typeVersion":1.2,"position":[-80,220],"parameters":{"modelName":"gpt-5-mini","options":{"responseFormat":"json_object","temperature":0}},"credentials":{"openAiApi":{"id":"BIND_OPENAI","name":"Finance AI Provider"}}},
-    {"id":"9005","name":"Reject Locked or Invented Output","type":"n8n-nodes-base.code","typeVersion":2,"position":[220,0],"parameters":{"jsCode":"const req=$('Validate Policy and Allowed Fields').first().json; const proposals=Array.isArray($json.proposals)?$json.proposals:[]; for(const p of proposals){ if(!req.allowed_fields.includes(p.field)) throw new Error(`AI proposed forbidden field ${p.field}`); if(typeof p.confidence!=='number' || p.confidence<0 || p.confidence>1) throw new Error('Invalid AI confidence'); } return [{json:{policy_id:req.policy_id,transaction_id:req.transaction_id,provider:'n8n-openai',proposals}}];"}}
+  "id": "10000000-0000-4000-8000-000000000009",
+  "name": "Finance · Bounded Codex Proposal Handoff · SPEC ONLY",
+  "active": false,
+  "nodes": [
+    {
+      "id": "9001",
+      "name": "Trusted AI Proposal Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-1200, 0],
+      "parameters": {"inputSource": "passthrough"}
+    },
+    {
+      "id": "9002",
+      "name": "Validate Untrusted Proposal Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1000, 0],
+      "parameters": {
+        "jsCode": "const r=$json; for(const forbidden of ['policy_class','agent_profile','policy_sha256','config_sha256','output_schema_sha256','allowed_values','instruction','prompt','model','reasoning_effort','auth_mode','api_key','command','path','url','provider','credential']) if(Object.hasOwn(r,forbidden)) throw new Error(`Forbidden agent input ${forbidden}`); if(!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(r.policy_id||''))) throw new Error('Invalid policy id'); if(!Array.isArray(r.unresolved)||!r.unresolved.length||r.unresolved.length>100) throw new Error('Invalid unresolved batch'); const allowed=new Set(['vendor','category','subcategory','tags','evidence_policy','review_required','category_recommendation','is_subscription','property_code','rental_unit','channel','reward_bucket','rule_recommendation']),locked=new Set(['amount','date','source_id','imported_id','direction','topic','dedupe_key','reconciliation_state','cashback','cashback_amount']),ids=new Set(); const unresolved=r.unresolved.map(x=>{const id=String(x.transaction_id||''); if(!id||id.length>256||ids.has(id)) throw new Error('Invalid or duplicate transaction id'); ids.add(id); if(!Array.isArray(x.allowed_fields)||!x.allowed_fields.length||new Set(x.allowed_fields).size!==x.allowed_fields.length||x.allowed_fields.some(f=>locked.has(f)||!allowed.has(f))) throw new Error('Forbidden proposal field'); const context=x.redacted_context||{}; if(!context||typeof context!=='object'||Array.isArray(context)||Object.keys(context).length>24) throw new Error('Invalid redacted context'); const redacted_context={}; for(const [k,v] of Object.entries(context)){if(locked.has(k)||/message|email|account|card_number|password|token/i.test(k)) continue; if(v===null||['string','number','boolean'].includes(typeof v)) redacted_context[k]=typeof v==='string'?v.slice(0,500):v;} return {transaction_id:id,requested_fields:[...x.allowed_fields].sort(),redacted_context};}); return [{json:{policy_id:String(r.policy_id),unresolved}}];"
+      }
+    },
+    {
+      "id": "9015",
+      "name": "Read Active Server AI Policy Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [-800, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {"__rl": true, "value": "finance_ai_policy_contracts", "mode": "name"},
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {"conditions": [
+          {"keyName": "policy_id", "condition": "eq", "keyValue": "={{ $('Validate Untrusted Proposal Request').item.json.policy_id }}"},
+          {"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}
+        ]},
+        "options": {}
+      }
+    },
+    {
+      "id": "9016",
+      "name": "Build Authoritative Redacted Proposal Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-600, 0],
+      "parameters": {
+        "jsCode": "const request=$('Validate Untrusted Proposal Request').first().json,rows=$input.all().map(i=>i.json).filter(r=>r.policy_id===request.policy_id&&r.state==='ACTIVE'); if(rows.length!==1) throw new Error('AI_POLICY_ACTIVE_VERSION_AMBIGUOUS_OR_MISSING'); const p=rows[0],profileClass={LUNA_MAX:'NORMAL',SOL_XHIGH:'EXCEPTION'},policy_class=profileClass[p.agent_profile],sha=v=>/^[a-f0-9]{64}$/.test(String(v)); if(!policy_class) throw new Error('Unregistered server agent profile'); if(!sha(p.policy_sha256)||!sha(p.config_sha256)||!sha(p.output_schema_sha256)) throw new Error('Invalid server policy hashes'); let policyFields,policyDomains; try{policyFields=JSON.parse(p.allowed_fields_json);policyDomains=JSON.parse(p.allowed_values_json);}catch{throw new Error('Invalid server policy domain JSON');} if(!Array.isArray(policyFields)||!policyFields.length||new Set(policyFields).size!==policyFields.length||!policyDomains||typeof policyDomains!=='object'||Array.isArray(policyDomains)) throw new Error('Invalid server policy contract'); const permitted=new Set(policyFields),domainFields=new Set(['category','subcategory','tags','evidence_policy','review_required','is_subscription','property_code','rental_unit','channel','reward_bucket']); const unresolved=request.unresolved.map(x=>{if(x.requested_fields.some(f=>!permitted.has(f))) throw new Error('Requested field not owned by active policy'); const allowed_values={}; for(const field of x.requested_fields.filter(f=>domainFields.has(f))){const values=policyDomains[field]; if(!Array.isArray(values)||!values.length||values.length>512||new Set(values).size!==values.length||values.some(v=>!['string','boolean'].includes(typeof v)||typeof v==='string'&&(!v.length||v.length>128))) throw new Error(`Missing bounded server value domain for ${field}`); allowed_values[field]=values;} return {transaction_id:x.transaction_id,allowed_fields:x.requested_fields,allowed_values,redacted_context:x.redacted_context};}); const body={schema_version:1,operation_code:'FINANCE_AI_PROPOSAL',policy_id:request.policy_id,policy_class,policy_sha256:String(p.policy_sha256),config_sha256:String(p.config_sha256),output_schema_sha256:String(p.output_schema_sha256),unresolved},canonical=v=>Array.isArray(v)?v.map(canonical):(v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v); return [{json:{...body,request_canonical:JSON.stringify(canonical(body))}}];"
+      }
+    },
+    {
+      "id": "9003",
+      "name": "SHA-256 Agent Request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-400, 0],
+      "parameters": {"action": "hash", "type": "SHA256", "value": "={{ $json.request_canonical }}", "dataPropertyName": "request_sha256"}
+    },
+    {
+      "id": "9004",
+      "name": "Build Idempotent Agent Handoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0],
+      "parameters": {
+        "jsCode": "const r=$json,h=String(r.request_sha256||''); if(!/^[a-f0-9]{64}$/.test(h)) throw new Error('Agent request hash missing'); return [{json:{schema_version:1,job_id:`finance-ai:${h}`,idempotency_key:h,operation_code:r.operation_code,policy_id:r.policy_id,policy_class:r.policy_class,policy_sha256:r.policy_sha256,config_sha256:r.config_sha256,output_schema_sha256:r.output_schema_sha256,unresolved:r.unresolved,request_sha256:h}}];"
+      }
+    },
+    {
+      "id": "9005",
+      "name": "Upsert SUBMITTED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "resource": "row", "operation": "upsert",
+        "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"},
+        "matchType": "allConditions",
+        "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $json.idempotency_key }}"}]},
+        "columns": {"mappingMode": "defineBelow", "value": {"job_id": "={{ $json.job_id }}", "idempotency_key": "={{ $json.idempotency_key }}", "operation_code": "FINANCE_AI_PROPOSAL", "policy_id": "={{ $json.policy_id }}", "policy_sha256": "={{ $json.policy_sha256 }}", "config_sha256": "={{ $json.config_sha256 }}", "output_schema_sha256": "={{ $json.output_schema_sha256 }}", "request_sha256": "={{ $json.request_sha256 }}", "state": "SUBMITTED", "terminal_readback_verified": false, "attempt_count": 1, "created_at": "={{ $now.toISO() }}", "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false},
+        "options": {"dryRun": false}
+      }
+    },
+    {
+      "id": "9006",
+      "name": "Read Back SUBMITTED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [200, 0],
+      "parameters": {"resource": "row", "operation": "get", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "returnAll": false, "limit": 1, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}, {"keyName": "state", "condition": "eq", "keyValue": "SUBMITTED"}]}, "options": {}}
+    },
+    {
+      "id": "9017",
+      "name": "Compare SUBMITTED Agent Job Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 0],
+      "parameters": {"jsCode": "const expected=$('Build Idempotent Agent Handoff').first().json,observed=$json; for(const k of ['job_id','idempotency_key','policy_id','policy_sha256','config_sha256','output_schema_sha256','request_sha256']) if(String(observed[k])!==String(expected[k])) throw new Error(`AGENT_SUBMITTED_RECEIPT_MISMATCH:${k}`); return [{json:observed}];"}
+    },
+    {
+      "id": "9007",
+      "name": "Invoke Fixed Codex Agent Runner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0],
+      "parameters": {"url": "http://codex-agent-runner:5090/v1/jobs/finance-ai-proposal", "method": "POST", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ Object.fromEntries(Object.entries($('Build Idempotent Agent Handoff').item.json).filter(([key]) => key !== 'request_sha256')) }}", "options": {"timeout": 120000}},
+      "credentials": {"httpHeaderAuth": {"id": "BIND_CODEX_AGENT_RUNNER", "name": "Finance Codex Agent Runner Bearer"}}
+    },
+    {
+      "id": "9008",
+      "name": "Validate Proposal Schema and Policy Boundary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0],
+      "parameters": {
+        "jsCode": "const req=$('Build Idempotent Agent Handoff').first().json,r=$json,top=new Set(['schema_version','job_id','idempotency_key','policy_id','policy_class','policy_sha256','config_sha256','output_schema_sha256','runner_receipt_id','runner_model','runner_reasoning_effort','auth_mode','proposals']); if(Object.keys(r).some(k=>!top.has(k))) throw new Error('Agent proposal has unknown envelope field'); for(const k of top) if(r[k]===undefined) throw new Error(`Agent proposal schema missing ${k}`); if(r.schema_version!==1||r.job_id!==req.job_id||r.idempotency_key!==req.idempotency_key||r.policy_id!==req.policy_id||r.policy_class!==req.policy_class||r.policy_sha256!==req.policy_sha256||r.config_sha256!==req.config_sha256||r.output_schema_sha256!==req.output_schema_sha256) throw new Error('Agent proposal envelope mismatch'); if(typeof r.runner_receipt_id!=='string'||!r.runner_receipt_id.length||r.runner_receipt_id.length>256) throw new Error('Invalid runner receipt identity'); const expected=req.policy_class==='EXCEPTION'?['gpt-5.6-sol','xhigh']:['gpt-5.6-luna','max']; if(r.auth_mode!=='CHATGPT_SUBSCRIPTION'||r.runner_model!==expected[0]||r.runner_reasoning_effort!==expected[1]) throw new Error('Agent runner auth or model policy mismatch'); const max=Math.min(600,req.unresolved.reduce((n,x)=>n+x.allowed_fields.length,0)); if(!Array.isArray(r.proposals)||r.proposals.length>max) throw new Error('Invalid proposal count'); const requestById=new Map(req.unresolved.map(x=>[x.transaction_id,x])),pairs=new Set(),locked=new Set(['amount','date','source_id','imported_id','direction','topic','dedupe_key','reconciliation_state','cashback','cashback_amount']),strings=new Set(['vendor','category','subcategory','evidence_policy','property_code','rental_unit','channel','reward_bucket']),proposalKeys=new Set(['transaction_id','field','value','confidence','reason_code']); for(const p of r.proposals){if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!proposalKeys.has(k))) throw new Error('Invalid proposal object'); const item=requestById.get(String(p.transaction_id)),a=new Set(item?.allowed_fields||[]),pair=`${p.transaction_id}\u0000${p.field}`; if(pairs.has(pair)) throw new Error('Duplicate proposal field'); pairs.add(pair); if(!item||locked.has(p.field)||!a.has(p.field)) throw new Error('Agent proposed forbidden field'); if(typeof p.confidence!=='number'||p.confidence<0||p.confidence>1) throw new Error('Invalid proposal confidence'); if(p.reason_code!==undefined&&(typeof p.reason_code!=='string'||!/^[A-Z0-9_:-]{1,128}$/.test(p.reason_code))) throw new Error('Invalid proposal reason'); if(p.field==='tags'&&(!Array.isArray(p.value)||!p.value.length||p.value.length>12||new Set(p.value).size!==p.value.length||p.value.some(v=>typeof v!=='string'||v.length>64||!/^[a-z0-9:_-]+$/.test(v)))) throw new Error('Invalid tags proposal'); if(['review_required','is_subscription'].includes(p.field)&&typeof p.value!=='boolean') throw new Error('Invalid boolean proposal'); if(strings.has(p.field)&&(typeof p.value!=='string'||!p.value.length||p.value.length>128)) throw new Error('Invalid string proposal'); if(p.field==='category_recommendation'&&(!p.value||typeof p.value!=='object'||Array.isArray(p.value)||Object.keys(p.value).some(k=>!['name','group','reason'].includes(k))||typeof p.value.name!=='string'||!p.value.name.length||p.value.name.length>80||typeof p.value.group!=='string'||!p.value.group.length||p.value.group.length>80||typeof p.value.reason!=='string'||!p.value.reason.length||p.value.reason.length>300)) throw new Error('Invalid category recommendation'); if(p.field==='rule_recommendation'&&(!p.value||typeof p.value!=='object'||Array.isArray(p.value)||p.value.enabled!==false||!Number.isInteger(p.value.evidence_count)||p.value.evidence_count<3||p.value.evidence_count>10000)) throw new Error('Invalid rule recommendation'); const domain=item.allowed_values?.[p.field]; if(Array.isArray(domain)){if(p.field==='tags'&&!p.value.every(v=>domain.includes(v))) throw new Error('Tag proposal outside configured domain'); if(p.field!=='tags'&&!domain.includes(p.value)) throw new Error('Proposal outside configured domain');}} return [{json:r}];"
+      }
+    },
+    {
+      "id": "9009",
+      "name": "SHA-256 Validated Proposal",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [800, 0],
+      "parameters": {"action": "hash", "type": "SHA256", "value": "={{ JSON.stringify($json) }}", "dataPropertyName": "proposal_sha256"}
+    },
+    {
+      "id": "9010",
+      "name": "Upsert SUCCEEDED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1000, 0],
+      "parameters": {"resource": "row", "operation": "upsert", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}]}, "columns": {"mappingMode": "defineBelow", "value": {"job_id": "={{ $('Build Idempotent Agent Handoff').item.json.job_id }}", "idempotency_key": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}", "state": "SUCCEEDED", "runner_receipt_id": "={{ $('Validate Proposal Schema and Policy Boundary').item.json.runner_receipt_id }}", "proposal_sha256": "={{ $json.proposal_sha256 }}", "terminal_readback_verified": false, "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false}, "options": {"dryRun": false}}
+    },
+    {
+      "id": "9011",
+      "name": "Read Back SUCCEEDED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1200, 0],
+      "parameters": {"resource": "row", "operation": "get", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "returnAll": false, "limit": 1, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}, {"keyName": "state", "condition": "eq", "keyValue": "SUCCEEDED"}]}, "options": {}}
+    },
+    {
+      "id": "9018",
+      "name": "Compare SUCCEEDED Agent Job Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 0],
+      "parameters": {"jsCode": "const request=$('Build Idempotent Agent Handoff').first().json,proposal=$('Validate Proposal Schema and Policy Boundary').first().json,hashed=$('SHA-256 Validated Proposal').first().json,observed=$json; if(observed.job_id!==request.job_id||observed.idempotency_key!==request.idempotency_key||observed.runner_receipt_id!==proposal.runner_receipt_id||observed.proposal_sha256!==hashed.proposal_sha256) throw new Error('AGENT_SUCCEEDED_RECEIPT_MISMATCH'); return [{json:observed}];"}
+    },
+    {
+      "id": "9012",
+      "name": "Mark Agent Receipt Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1400, 0],
+      "parameters": {"resource": "row", "operation": "upsert", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $json.idempotency_key }}"}]}, "columns": {"mappingMode": "defineBelow", "value": {"idempotency_key": "={{ $json.idempotency_key }}", "terminal_readback_verified": true, "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false}, "options": {"dryRun": false}}
+    },
+    {
+      "id": "9013",
+      "name": "Read Back Verified Agent Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1600, 0],
+      "parameters": {"resource": "row", "operation": "get", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "returnAll": false, "limit": 1, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}, {"keyName": "terminal_readback_verified", "condition": "eq", "keyValue": true}]}, "options": {}}
+    },
+    {
+      "id": "9014",
+      "name": "Return Proposal Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 0],
+      "parameters": {"jsCode": "const p=$('Validate Proposal Schema and Policy Boundary').first().json; return [{json:{policy_id:p.policy_id,job_id:p.job_id,idempotency_key:p.idempotency_key,proposals:p.proposals}}];"}
+    }
   ],
-  "connections":{"AI Request Input":{"main":[[{"node":"Validate Policy and Allowed Fields","type":"main","index":0}]]},"Validate Policy and Allowed Fields":{"main":[[{"node":"Information Extractor","type":"main","index":0}]]},"OpenAI Chat Model":{"ai_languageModel":[[{"node":"Information Extractor","type":"ai_languageModel","index":0}]]},"Information Extractor":{"main":[[{"node":"Reject Locked or Invented Output","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"AI_PROPOSAL","migrationStatus":"SHADOW","provider":"OFFICIAL_OPENAI_NODE"}
+  "connections": {
+    "Trusted AI Proposal Input": {"main": [[{"node": "Validate Untrusted Proposal Request", "type": "main", "index": 0}]]},
+    "Validate Untrusted Proposal Request": {"main": [[{"node": "Read Active Server AI Policy Contract", "type": "main", "index": 0}]]},
+    "Read Active Server AI Policy Contract": {"main": [[{"node": "Build Authoritative Redacted Proposal Job", "type": "main", "index": 0}]]},
+    "Build Authoritative Redacted Proposal Job": {"main": [[{"node": "SHA-256 Agent Request", "type": "main", "index": 0}]]},
+    "SHA-256 Agent Request": {"main": [[{"node": "Build Idempotent Agent Handoff", "type": "main", "index": 0}]]},
+    "Build Idempotent Agent Handoff": {"main": [[{"node": "Upsert SUBMITTED Agent Job", "type": "main", "index": 0}]]},
+    "Upsert SUBMITTED Agent Job": {"main": [[{"node": "Read Back SUBMITTED Agent Job", "type": "main", "index": 0}]]},
+    "Read Back SUBMITTED Agent Job": {"main": [[{"node": "Compare SUBMITTED Agent Job Readback", "type": "main", "index": 0}]]},
+    "Compare SUBMITTED Agent Job Readback": {"main": [[{"node": "Invoke Fixed Codex Agent Runner", "type": "main", "index": 0}]]},
+    "Invoke Fixed Codex Agent Runner": {"main": [[{"node": "Validate Proposal Schema and Policy Boundary", "type": "main", "index": 0}]]},
+    "Validate Proposal Schema and Policy Boundary": {"main": [[{"node": "SHA-256 Validated Proposal", "type": "main", "index": 0}]]},
+    "SHA-256 Validated Proposal": {"main": [[{"node": "Upsert SUCCEEDED Agent Job", "type": "main", "index": 0}]]},
+    "Upsert SUCCEEDED Agent Job": {"main": [[{"node": "Read Back SUCCEEDED Agent Job", "type": "main", "index": 0}]]},
+    "Read Back SUCCEEDED Agent Job": {"main": [[{"node": "Compare SUCCEEDED Agent Job Readback", "type": "main", "index": 0}]]},
+    "Compare SUCCEEDED Agent Job Readback": {"main": [[{"node": "Mark Agent Receipt Readback Verified", "type": "main", "index": 0}]]},
+    "Mark Agent Receipt Readback Verified": {"main": [[{"node": "Read Back Verified Agent Receipt", "type": "main", "index": 0}]]},
+    "Read Back Verified Agent Receipt": {"main": [[{"node": "Return Proposal Only", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "errorWorkflow": "10000000-0000-4000-8000-000000000016"},
+  "pinData": {},
+  "meta": {"financeWorkflowCode": "AI_PROPOSAL", "migrationStatus": "SPEC_ONLY", "provider": "CODEX_AGENT_HANDOFF", "authMode": "CHATGPT_SUBSCRIPTION", "normalModel": "gpt-5.6-luna", "exceptionModel": "gpt-5.6-sol", "requestSchema": "contracts/codex-agent-handoff-v1.schema.json", "outputSchema": "contracts/ai-proposal-v1.schema.json", "policyContractTable": "finance_ai_policy_contracts", "terminalReceiptTable": "finance_agent_jobs", "terminalReceiptReadback": true, "activationBlockers": ["CODEX_AGENT_RUNNER_REQUIRED", "CHATGPT_SUBSCRIPTION_LOGIN_REQUIRED", "AI_POLICY_CONTRACT_SEED_REQUIRED", "RUNNER_EXACT_IMAGE_REQUIRED", "THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"], "importTested": false, "fixtureExecuted": false}
 }

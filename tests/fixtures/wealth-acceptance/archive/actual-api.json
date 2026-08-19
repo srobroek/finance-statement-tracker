@@ -1,0 +1,30 @@
+{
+  "accounts": [
+    {"actual_account_id": "actual-fab-2001", "balance_minor": 2500000, "closed": false, "offbudget": false, "provider_account_id": "fab:current:2001"},
+    {"actual_account_id": "actual-sarwa-personal", "balance_minor": 404800, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:personal"},
+    {"actual_account_id": "actual-sarwa-parents", "balance_minor": 165600, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:parents"},
+    {"actual_account_id": "actual-sarwa-shared", "balance_minor": 110400, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:shared-airbnb"},
+    {"actual_account_id": "actual-sarwa-trade", "balance_minor": 44160, "closed": false, "offbudget": true, "provider_account_id": "sarwa:trade:primary"},
+    {"actual_account_id": "actual-adcb-closed", "balance_minor": 0, "closed": true, "history_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "offbudget": false, "provider_account_id": "adcb:credit:8833-6838"}
+  ],
+  "aggregate_net_worth_minor": 3224960,
+  "environment_id": "disposable-actual-wealth",
+  "replay": {
+    "t1_replay_state_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "t1_state_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "t2_replay_state_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "t2_state_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "schema_version": 1,
+  "sync_id": "disposable-sync-wealth-1",
+  "valuations": [
+    {"delta_minor": 367000, "imported_id": "wealth:t1:personal", "observed_before_minor": 0, "provider_account_id": "sarwa:invest:personal", "snapshot_id": "sarwa-disposable-t1", "target_balance_minor": 367000},
+    {"delta_minor": 183500, "imported_id": "wealth:t1:parents", "observed_before_minor": 0, "provider_account_id": "sarwa:invest:parents", "snapshot_id": "sarwa-disposable-t1", "target_balance_minor": 183500},
+    {"delta_minor": 91750, "imported_id": "wealth:t1:shared", "observed_before_minor": 0, "provider_account_id": "sarwa:invest:shared-airbnb", "snapshot_id": "sarwa-disposable-t1", "target_balance_minor": 91750},
+    {"delta_minor": 36700, "imported_id": "wealth:t1:trade", "observed_before_minor": 0, "provider_account_id": "sarwa:trade:primary", "snapshot_id": "sarwa-disposable-t1", "target_balance_minor": 36700},
+    {"delta_minor": 37800, "imported_id": "wealth:t2:personal", "observed_before_minor": 367000, "provider_account_id": "sarwa:invest:personal", "snapshot_id": "sarwa-disposable-t2", "target_balance_minor": 404800},
+    {"delta_minor": -17900, "imported_id": "wealth:t2:parents", "observed_before_minor": 183500, "provider_account_id": "sarwa:invest:parents", "snapshot_id": "sarwa-disposable-t2", "target_balance_minor": 165600},
+    {"delta_minor": 18650, "imported_id": "wealth:t2:shared", "observed_before_minor": 91750, "provider_account_id": "sarwa:invest:shared-airbnb", "snapshot_id": "sarwa-disposable-t2", "target_balance_minor": 110400},
+    {"delta_minor": 7460, "imported_id": "wealth:t2:trade", "observed_before_minor": 36700, "provider_account_id": "sarwa:trade:primary", "snapshot_id": "sarwa-disposable-t2", "target_balance_minor": 44160}
+  ]
+}

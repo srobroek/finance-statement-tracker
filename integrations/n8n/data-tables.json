@@ -1,67 +1,114 @@
 {
-  "schema_version": 1,
-  "storage": "n8n-data-tables-on-pooled-wal-sqlite",
+  "$schema": "./data-tables.schema.json",
+  "schema_version": 2,
+  "storage": "n8n-data-tables-on-postgres",
+  "contract_status": "SPEC_ONLY",
+  "notes": [
+    "Bootstrap and validation contract only; not evidence that tables exist in n8n.",
+    "Finance transactions never live here; Actual remains the posted ledger.",
+    "A cursor advances only after terminal durable readback."
+  ],
   "tables": [
     {
+      "name": "finance_source_contracts",
+      "purpose": "Trusted server-side mailbox and archive source configuration.",
+      "idempotency_key": ["source_code", "config_version"],
+      "columns": {"source_code":"string","config_version":"string","folder_id":"string","senders_json":"string","subjects_json":"string","onedrive_parent_id":"string","manifest_onedrive_parent_id":"string","overlap_seconds":"number","cycle_day":"number","deadline_days":"number","actual_file_id":"string","account_id":"string","card_code":"string","cashback_close_required":"boolean","enabled":"boolean","content_sha256":"string","updated_at":"date"}
+    },
+    {
+      "name": "finance_source_cursors",
+      "purpose": "One authoritative cursor per non-cashback acquisition source.",
+      "idempotency_key": ["source_code"],
+      "columns": {"source_code":"string","cursor_value":"date","committed_run_id":"string","run_upper_bound":"date","overlap_seconds":"number","scanned_count":"number","matched_count":"number","cursor_version":"number","updated_at":"date"}
+    },
+    {
+      "name": "finance_acquisition_receipts",
+      "purpose": "Exact paginated mailbox-window and valid-empty heartbeat receipt.",
+      "idempotency_key": ["run_id", "source_code"],
+      "columns": {"run_id":"string","source_code":"string","window_start":"date","run_upper_bound":"date","pages_fetched":"number","pagination_exhausted":"boolean","scanned_count":"number","matched_count":"number","heartbeat":"boolean","terminal_state":"string","cursor_commit_eligible":"boolean","created_at":"date","updated_at":"date"},
+      "allowed_states": ["ENUMERATED", "ARCHIVED", "DOWNSTREAM_VERIFIED", "FAILED"]
+    },
+    {
+      "name": "finance_archive_receipts",
+      "purpose": "Immutable OneDrive identity and content-hash receipt.",
+      "idempotency_key": ["source_code", "source_message_id", "source_attachment_id", "source_sha256"],
+      "columns": {"archive_receipt_id":"string","run_id":"string","source_code":"string","source_message_id":"string","source_attachment_id":"string","source_sha256":"string","onedrive_item_id":"string","onedrive_etag":"string","archive_state":"string","verified_at":"date","updated_at":"date"},
+      "allowed_states": ["UPLOADED", "HASH_VERIFIED", "DUPLICATE_OBSERVED", "FAILED"]
+    },
+    {
       "name": "finance_document_operations",
+      "purpose": "Redacted document state; never decrypted binary or extracted text.",
       "idempotency_key": ["source_sha256", "document_profile", "requested_schema_version"],
-      "columns": {
-        "document_id": "string",
-        "source_sha256": "string",
-        "document_profile": "string",
-        "requested_schema_version": "string",
-        "onedrive_item_id": "string",
-        "source_message_id": "string",
-        "source_attachment_id": "string",
-        "state": "string",
-        "attempt_count": "number",
-        "last_execution_id": "string",
-        "parser_version": "string",
-        "output_sha256": "string",
-        "error_class": "string",
-        "error_detail_redacted": "string",
-        "updated_at": "date"
-      },
-      "allowed_states": [
-        "RECEIVED",
-        "VALIDATED",
-        "DECRYPTED",
-        "EXTRACTED",
-        "SCHEMA_VALIDATED",
-        "READY_FOR_PARSE",
-        "COMMITTED",
-        "QUARANTINED",
-        "UNSUPPORTED",
-        "PASSWORD_FAILED"
-      ]
+      "columns": {"document_id":"string","source_sha256":"string","document_profile":"string","requested_schema_version":"string","onedrive_item_id":"string","source_message_id":"string","source_attachment_id":"string","state":"string","attempt_count":"number","last_execution_id":"string","parser_version":"string","output_sha256":"string","error_class":"string","error_detail_redacted":"string","updated_at":"date"},
+      "allowed_states": ["RECEIVED", "VALIDATED", "DECRYPTED_EPHEMERAL", "EXTRACTED_EPHEMERAL", "SCHEMA_VALIDATED", "READY_FOR_PARSE", "COMMITTED", "QUARANTINED", "UNSUPPORTED", "PASSWORD_FAILED"]
+    },
+    {
+      "name": "finance_pipeline_runs",
+      "purpose": "Terminal workflow receipt with direct readback token.",
+      "idempotency_key": ["run_id", "workflow_code"],
+      "columns": {"run_id":"string","workflow_code":"string","source_code":"string","trigger_kind":"string","config_version":"string","state":"string","receipt_sha256":"string","terminal_readback_verified":"boolean","started_at":"date","completed_at":"date","updated_at":"date"},
+      "allowed_states": ["STARTED", "WAITING", "SUCCEEDED", "FAILED", "CANCELLED"]
+    },
+    {
+      "name": "finance_actual_outbox",
+      "purpose": "Fenced idempotent intent for the single Actual writer.",
+      "idempotency_key": ["imported_id"],
+      "columns": {"outbox_id":"string","run_id":"string","imported_id":"string","actual_file_id":"string","payload_sha256":"string","artifact_item_id":"string","artifact_etag":"string","artifact_schema_version":"string","config_version":"string","parser_version":"string","state":"string","lease_owner":"string","lease_fence":"number","lease_expires_at":"date","actual_transaction_id":"string","attempt_count":"number","last_error_class":"string","updated_at":"date"},
+      "allowed_states": ["PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED", "FAILED"]
+    },
+    {
+      "name": "finance_actual_verifications",
+      "purpose": "Actual readback proof independent from the write attempt.",
+      "idempotency_key": ["outbox_id", "verification_version"],
+      "columns": {"outbox_id":"string","verification_version":"number","actual_file_id":"string","account_id":"string","period_start":"date","period_end":"date","expected_payload_sha256":"string","observed_payload_sha256":"string","expected_count":"number","observed_count":"number","expected_amount_sum_minor":"number","observed_amount_sum_minor":"number","expected_account_balance":"number","observed_account_balance":"number","invariants_passed":"boolean","verified_at":"date"}
+    },
+    {
+      "name": "finance_reconciliations",
+      "purpose": "Statement and cashback-close reconciliation receipt.",
+      "idempotency_key": ["source_code", "period_key", "reconciliation_version"],
+      "columns": {"source_code":"string","period_key":"string","reconciliation_version":"number","statement_sha256":"string","actual_verification_sha256":"string","cashback_close_id":"string","state":"string","difference_minor":"number","verified_at":"date","updated_at":"date"},
+      "allowed_states": ["OPEN", "STATEMENT_OBSERVED", "ACTUAL_VERIFIED", "CASHBACK_CLOSED", "COMMITTED", "FAILED"]
+    },
+    {
+      "name": "finance_config_versions",
+      "purpose": "Immutable fingerprint of trusted server-side configuration.",
+      "idempotency_key": ["config_name", "version"],
+      "columns": {"config_name":"string","version":"string","content_sha256":"string","git_commit":"string","state":"string","activated_at":"date","retired_at":"date"},
+      "allowed_states": ["STAGED", "ACTIVE", "RETIRED", "REVOKED"]
     },
     {
       "name": "finance_provider_circuits",
+      "purpose": "Provider backoff state without source payloads.",
       "idempotency_key": ["provider_code"],
-      "columns": {
-        "provider_code": "string",
-        "state": "string",
-        "transient_failure_count": "number",
-        "opened_at": "date",
-        "retry_after": "date",
-        "updated_at": "date"
-      },
+      "columns": {"provider_code":"string","state":"string","transient_failure_count":"number","opened_at":"date","retry_after":"date","updated_at":"date"},
       "allowed_states": ["CLOSED", "OPEN", "HALF_OPEN"]
     },
     {
       "name": "finance_execution_failures",
+      "purpose": "Redacted failure receipt written by the attached error workflow.",
       "idempotency_key": ["execution_id"],
-      "columns": {
-        "execution_id": "string",
-        "workflow_id": "string",
-        "workflow_name": "string",
-        "error_class": "string",
-        "error_message_redacted": "string",
-        "execution_url": "string",
-        "first_seen_at": "date",
-        "acknowledged_at": "date",
-        "replay_execution_id": "string"
-      }
+      "columns": {"execution_id":"string","workflow_id":"string","workflow_name":"string","workflow_code":"string","run_id":"string","error_class":"string","error_message_redacted":"string","first_seen_at":"date","acknowledged_at":"date","replay_execution_id":"string","readback_verified":"boolean"}
+    },
+    {
+      "name": "finance_mcp_requests",
+      "purpose": "Audit of bounded MCP operation codes without arbitrary arguments.",
+      "idempotency_key": ["request_id"],
+      "columns": {"request_id":"string","operation_code":"string","caller_subject_hash":"string","target_workflow_code":"string","state":"string","created_at":"date","completed_at":"date"},
+      "allowed_states": ["ACCEPTED", "REJECTED", "COMPLETED", "FAILED"]
+    },
+    {
+      "name": "finance_agent_jobs",
+      "purpose": "Idempotent redacted job state and validated proposal receipt.",
+      "idempotency_key": ["idempotency_key"],
+      "columns": {"job_id":"string","idempotency_key":"string","operation_code":"string","policy_id":"string","policy_sha256":"string","config_sha256":"string","output_schema_sha256":"string","request_sha256":"string","state":"string","runner_receipt_id":"string","proposal_sha256":"string","terminal_readback_verified":"boolean","attempt_count":"number","error_class":"string","created_at":"date","updated_at":"date"},
+      "allowed_states": ["PREPARED", "SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "REJECTED"]
+    },
+    {
+      "name": "finance_ai_policy_contracts",
+      "purpose": "Active server-owned AI policy profile, hashes, fields, and resolved value domains.",
+      "idempotency_key": ["policy_id", "policy_version"],
+      "columns": {"policy_id":"string","policy_version":"number","agent_profile":"string","policy_sha256":"string","config_sha256":"string","output_schema_sha256":"string","allowed_fields_json":"string","allowed_values_json":"string","state":"string","updated_at":"date"},
+      "allowed_states": ["STAGED", "ACTIVE", "RETIRED", "REVOKED"]
     }
   ]
 }

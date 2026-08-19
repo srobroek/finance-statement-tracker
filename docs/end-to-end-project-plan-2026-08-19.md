@@ -24,7 +24,8 @@ Deliver a production-validated, Actual-first finance platform where:
   execution-receipt state, but never duplicates finance transactions;
 - deterministic source parsing, source direction/topic, normalization,
   reconciliation, and cashback arithmetic precede AI;
-- scoped AI proposes only unresolved classifications/evidence policies;
+- scoped AI proposes only unresolved classifications/evidence policies through
+  an isolated, ephemeral, schema-constrained Codex runner;
 - user-assisted browser capture covers FAB, Sarwa, and Amazon;
 - FAB non-credit accounts, Sarwa wealth, ADCB at AED 0, net worth, notes,
   refunds/transfers/rewards, budgets, schedules, owners, evidence, and reports
@@ -60,17 +61,25 @@ Also excluded:
 
 Repository:
 
-- finance branch `codex/n8n-finance-orchestration`, draft PR #2, checks green;
-- private `srobroek/finance-n8n-orchestrator`, compose checks green;
-- **15** inactive workflow exports exist, but finance custom node types are
-  specifications only and exports have not imported/executed in n8n;
-- registry/Data Table metadata still contains stale SQLite wording;
-- Python and Actual Node tests pass but do not prove deployed workflows.
+- finance branch `codex/n8n-finance-orchestration`, draft PR #2; the current
+  Phase-1 changes remain unpushed pending this review cycle;
+- private `srobroek/finance-n8n-orchestrator` is at `7dafc63` with passing
+  compose, network, secret, image-lock, and runner-boundary checks;
+- **18** inactive `SPEC_ONLY` workflow exports and Postgres-backed state
+  contracts exist; none has yet imported or executed in disposable n8n;
+- the fixed-purpose finance nodes, networkless PDF utility, and private Codex
+  runner are implemented and locally tested but their exact images have not
+  yet passed Linux/container/runtime acceptance;
+- Python, Actual, custom-node, and Codex-runner tests pass but do not prove
+  deployed workflows or production finance state.
 
 Runtime on `ci@172.20.10.20`:
 
-- Actual, proxy, cashback, and the legacy ingestion container are running;
+- Actual, proxy, and cashback are running; the legacy ingestion bridge/runtime
+  has been removed rather than retained as a fallback;
 - n8n and n8n Postgres are not deployed;
+- the Codex CLI is authenticated with ChatGPT on the trusted CI host, but the
+  isolated runner-container mount and three-receipt path are not yet proven;
 - Sarwa is absent from Actual; FAB inventory/opening evidence is incomplete;
 - ADCB zero is not proven; Actual UI/API state has diverged;
 - existing Codex schedules remain the active orchestration.
@@ -89,7 +98,7 @@ flowchart LR
     PDF --> ETL["Visible native n8n ETL"]
     ETL --> RULES["Exclusive static-rule owner"]
     RULES --> AI{"Unresolved?"}
-    AI -->|"yes"| MODEL["Bounded AI proposals"]
+    AI -->|"yes"| MODEL["Ephemeral Codex proposal runner"]
     AI -->|"no"| VALIDATE["Validate / reconcile"]
     MODEL --> VALIDATE
     VALIDATE --> OUTBOX["Postgres Actual outbox"]
@@ -283,7 +292,13 @@ Implement and failure-test inactive workflows for:
 4. EI and Wio monthly statements;
 5. RAK and SC monthly placeholders that cannot activate without real fixtures;
 6. RAK live cashback and SC placeholder;
-7. provider-neutral AI proposal fixed point;
+7. bounded Codex proposal fixed point: n8n submits only redacted unresolved
+   fields and policy/config hashes to a fixed runner contract; the runner uses
+   `codex exec --ephemeral` in a read-only sandbox with a checked-in output
+   schema, has no Actual/OneDrive/cashback credentials, cannot accept a caller
+   command/model/path/prompt, and returns proposal data only. n8n validates and
+   rejects protected-field output before review. The credential is scoped to
+   the single invocation, and job/idempotency/receipt state is durable;
 8. selective receipts/bills/warranties using strong evidence and durable-goods/
    value/category policies;
 9. interactive FAB/Sarwa/Amazon artifact handoff;

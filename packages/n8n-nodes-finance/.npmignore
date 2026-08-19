@@ -1,0 +1,5 @@
+src/
+dist/lib/*.test.js
+dist/lib/*.test.d.ts
+tsconfig.json
+tsconfig.build.json

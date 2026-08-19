@@ -7,5 +7,5 @@
     {"id":"8002","name":"Block Until Notification Contract Verified","type":"n8n-nodes-base.stopAndError","typeVersion":1,"position":[-200,0],"parameters":{"errorMessage":"STANDARD_CHARTERED_CARD_TRANSACTION remains a placeholder until a real message fixture and parser pass tests"}}
   ],
   "connections":{"08:25 Dubai Daily":{"main":[[{"node":"Block Until Notification Contract Verified","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"SC_LIVE_CASHBACK","migrationStatus":"PAUSED"}
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},"meta":{"financeWorkflowCode":"SC_LIVE_CASHBACK","migrationStatus":"SPEC_ONLY","activationBlocked":true}
 }

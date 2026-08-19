@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "authoring_source": "config/static-rules.seed.json",
+  "authoring_source_sha256": "d88d96f7097f1aaf13ab29cacced7aa52f841376ae923d15fb3123727b85893f",
+  "capability_version": "actual-rule-capability-v1",
+  "execution_owner": "ACTUAL",
+  "rules": [
+    {
+      "schema_version": 1,
+      "rule_id": "class-unrwa-charity",
+      "name": "UNRWA charitable donations",
+      "stage": "CLASSIFICATION",
+      "priority": 4,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "UNRWA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Charity"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-istyle-electronics",
+      "name": "iSTYLE electronics",
+      "stage": "CLASSIFICATION",
+      "priority": 6,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "iSTYLE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Electronics"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-stake-investment",
+      "name": "Stake property investment",
+      "stage": "CLASSIFICATION",
+      "priority": 9,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Stake"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Investments"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-personal-care-vendors",
+      "name": "Known grooming and personal care providers",
+      "stage": "CLASSIFICATION",
+      "priority": 119,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Fresha",
+                  "James Pro Barbers",
+                  "Urban Company"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Personal Care"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-shipping-vendors",
+      "name": "Known shipping and delivery providers",
+      "stage": "CLASSIFICATION",
+      "priority": 121,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Aramex",
+                  "DHL Express",
+                  "Emirates Delivers",
+                  "Emirates Post",
+                  "Naqel"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Shipping & Delivery"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-hobby-vendors",
+      "name": "Games, astronomy and 3D-printing hobbies",
+      "stage": "CLASSIFICATION",
+      "priority": 122,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Cults3D",
+                  "Darkmoon 3D",
+                  "Move Shoot Move",
+                  "Steam"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Hobbies & Entertainment"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-sukoon-insurance",
+      "name": "Sukoon insurance",
+      "stage": "CLASSIFICATION",
+      "priority": 123,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Sukoon Insurance"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Insurance"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    }
+  ]
+}

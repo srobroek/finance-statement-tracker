@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "warning": "These fixtures define required disposable executions; their presence is not execution evidence.",
+  "mail_sweep_cases": [
+    {"id":"zero-messages","pages":[[]],"expected":{"output_items":1,"scanned_count":0,"matched_count":0,"heartbeat":true,"pagination_exhausted":true,"cursor_commits":1}},
+    {"id":"one-hundred-one-messages","page_size":100,"message_count":101,"expected":{"pages_fetched":2,"output_items":1,"scanned_count":101,"pagination_exhausted":true,"cursor_commits":1}},
+    {"id":"pagination-failure","fail_page":2,"expected":{"terminal_state":"FAILED","cursor_commits":0,"terminal_receipt":true}},
+    {"id":"late-out-of-order","received_order":["m3","m1","m2"],"expected_order":["m1","m2","m3"],"expected":{"cursor_commits":1,"skipped_ids":[]}},
+    {"id":"duplicate-message-attachment-hash","duplicates":["message_id","attachment_id","source_sha256"],"expected":{"archive_rows":1,"downstream_commits":1,"cursor_commits":1}},
+    {"id":"failure-before-cursor","failure_boundary":"after_downstream_before_cursor","expected":{"cursor_commits":0,"downstream_commits":1,"retry_observes_existing":true}},
+    {"id":"failure-after-cursor","failure_boundary":"after_cursor_before_response","expected":{"cursor_commits":1,"retry_cursor_commits":0,"retry_observes_existing":true}}
+  ],
+  "monthly_poll_cases": [
+    {"id":"statement-on-cycle-day","expected":{"state":"FOUND","deadline_alert":false}},
+    {"id":"late-statement-before-deadline","days_after_cycle":4,"expected":{"state":"FOUND","deadline_alert":false}},
+    {"id":"statement-missing-at-deadline","days_after_cycle":5,"expected":{"state":"DEADLINE_EXCEEDED","deadline_alert":true,"cursor_commits":0}}
+  ],
+  "writer_lease_cases": [
+    {"id":"concurrent-acquire","attempts":2,"expected":{"successful_acquires":1,"actual_writes":0}},
+    {"id":"expired-reacquire","expected":{"fencing_token_increment":1,"old_token_valid":false}},
+    {"id":"stale-token-before-import","expected":{"lease_assertion":false,"actual_writes":0}},
+    {"id":"kill-after-prepared","expected":{"recovery_downloads_artifact":true,"actual_rows":1,"outbox_state":"COMMITTED"}},
+    {"id":"kill-after-actual-observed","expected":{"recovery_observes_existing":true,"actual_rows":1,"outbox_state":"COMMITTED"}},
+    {"id":"kill-after-verified","expected":{"actual_writes":0,"outbox_state":"COMMITTED"}},
+    {"id":"release-wrong-fence","expected":{"released":false}},
+    {"id":"release-current-fence","expected":{"released":true}}
+  ],
+  "agent_handoff_cases": [
+    {"id":"normal-policy","expected":{"model":"gpt-5.6-luna","reasoning_effort":"max","auth_mode":"CHATGPT_SUBSCRIPTION"}},
+    {"id":"exception-policy","expected":{"model":"gpt-5.6-sol","reasoning_effort":"xhigh","auth_mode":"CHATGPT_SUBSCRIPTION"}},
+    {"id":"caller-model-rejected","input_field":"model","expected":{"accepted":false}},
+    {"id":"caller-profile-rejected","input_field":"agent_profile","expected":{"accepted":false}},
+    {"id":"caller-hash-rejected","input_field":"policy_sha256","expected":{"accepted":false}},
+    {"id":"missing-active-policy-contract","expected":{"accepted":false,"runner_calls":0}},
+    {"id":"ambiguous-active-policy-contract","active_rows":2,"expected":{"accepted":false,"runner_calls":0}},
+    {"id":"api-key-fallback-rejected","input_field":"api_key","expected":{"accepted":false}},
+    {"id":"duplicate-proposal-rejected","expected":{"accepted":false}},
+    {"id":"locked-field-rejected","field":"amount","expected":{"accepted":false}}
+  ],
+  "required_common_invariants": [
+    "run_upper_bound is frozen once per run",
+    "pagination is exhausted before an acquisition receipt becomes cursor-eligible",
+    "exact local filter is [window_start, run_upper_bound)",
+    "one aggregate item is returned including a valid-empty heartbeat",
+    "cursor is committed by one terminal step after durable downstream readback",
+    "duplicates are observed by stable source identity and never re-applied"
+  ]
+}

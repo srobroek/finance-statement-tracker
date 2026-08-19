@@ -1,0 +1,12 @@
+{
+  "schema_version":1,
+  "contract_status":"SPEC_ONLY",
+  "authoring_source":"config/ai-policies.json",
+  "target_fields":["category","category_recommendation","channel","evidence_policy","is_subscription","property_code","rental_unit","reward_bucket","rule_recommendation","subcategory","tags","vendor"],
+  "protected_proposal_fields":["channel","reward_bucket"],
+  "direct_commit_forbidden":true,
+  "profile_policy":{
+    "LUNA_MAX":{"policy_class":"NORMAL","runner_model":"gpt-5.6-luna","runner_reasoning_effort":"max"},
+    "SOL_XHIGH":{"policy_class":"EXCEPTION","runner_model":"gpt-5.6-sol","runner_reasoning_effort":"xhigh"}
+  }
+}

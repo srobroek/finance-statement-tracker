@@ -57,6 +57,7 @@ class AIPolicy:
     priority: int
     instruction: str
     target_fields: tuple[str, ...]
+    agent_profile: str = "LUNA_MAX"
     trigger_fields: tuple[str, ...] = ()
     conditions: tuple[RuleCondition, ...] = ()
     minimum_confidence: float = 0.82
@@ -113,6 +114,8 @@ def validate_policy(policy: AIPolicy) -> None:
         errors.append("minimum_confidence must be between 0 and 1")
     if not policy.target_fields:
         errors.append("at least one target field is required")
+    if policy.agent_profile not in {"LUNA_MAX", "SOL_XHIGH"}:
+        errors.append("agent_profile must be LUNA_MAX or SOL_XHIGH")
     invalid_targets = set(policy.target_fields) - (AI_WRITABLE_FIELDS | {"tags"})
     if invalid_targets:
         errors.append("unsupported target fields: " + ", ".join(sorted(invalid_targets)))
@@ -205,6 +208,7 @@ class AIEnrichmentEngine:
             "schema_version": 1,
             "policy_id": policy.policy_id,
             "policy_version": policy.version,
+            "agent_profile": policy.agent_profile,
             "instruction": policy.instruction,
             "allowed_fields": unresolved,
             "allowed_values": policy.allowed_values or {},
@@ -416,6 +420,7 @@ def load_ai_policies(path: str | Path) -> list[AIPolicy]:
                 priority=int(row.get("priority", 100)),
                 instruction=str(row["instruction"]),
                 target_fields=tuple(str(field) for field in row.get("target_fields", [])),
+                agent_profile=str(row.get("agent_profile", "LUNA_MAX")),
                 trigger_fields=tuple(str(field) for field in row.get("trigger_fields", [])),
                 conditions=conditions,
                 minimum_confidence=float(row.get("minimum_confidence", 0.82)),
