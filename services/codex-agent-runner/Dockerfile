@@ -17,7 +17,7 @@ RUN apk add --no-cache ca-certificates curl
 RUN curl --fail --show-error --location --proto '=https' --tlsv1.2 \
       "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-x86_64-unknown-linux-musl.tar.gz" \
       --output /tmp/codex.tar.gz \
-    && printf '%s  %s\n' "${CODEX_ARCHIVE_SHA256}" /tmp/codex.tar.gz | sha256sum --check --strict \
+    && printf '%s  %s\n' "${CODEX_ARCHIVE_SHA256}" /tmp/codex.tar.gz | sha256sum -c \
     && tar -xzf /tmp/codex.tar.gz -C /tmp \
     && install -m 0755 /tmp/codex-x86_64-unknown-linux-musl /usr/local/bin/codex \
     && /usr/local/bin/codex --version | grep -Fx "codex-cli ${CODEX_VERSION}"
