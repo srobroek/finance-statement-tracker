@@ -42,6 +42,8 @@ class MicrosoftOAuthRefreshProofWorkflowTests(unittest.TestCase):
         self.assertEqual(node["parameters"]["operation"], "getAll")
         self.assertFalse(node["parameters"]["returnAll"])
         self.assertEqual(node["parameters"]["limit"], "={{ $('Freeze Bounded Probe').first().json.outlook_max_messages }}")
+        self.assertEqual(node["parameters"]["output"], "fields")
+        self.assertEqual(node["parameters"]["fields"], ["id"])
         filters = node["parameters"]["filtersUI"]["values"]["filters"]
         self.assertIn("outlook_window_start", filters["receivedAfter"])
         self.assertIn("outlook_window_end", filters["receivedBefore"])

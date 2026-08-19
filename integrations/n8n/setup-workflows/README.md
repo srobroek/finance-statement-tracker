@@ -22,11 +22,12 @@ needed.
 `23-microsoft-oauth-refresh-proof.json` is a separate manual-only, inactive,
 read-only proof for the two Microsoft OAuth credentials. Its Outlook operation
 uses a frozen seven-day window, the server-side `isDraft eq false` filter, and
-a maximum of one result. Its OneDrive operation lists the drive root once. It
-does not download content and contains no provider-write node. The final item
-retains only result counts, the bounded time window, execution ID, safety
-booleans, and verification timestamp; it discards message fields, file fields,
-credential values, and token values.
+a maximum of one result. The Graph projection requests only the message `id`,
+which is discarded before the next node. Its OneDrive operation lists the drive
+root once. It does not download content and contains no provider-write node.
+The final item retains only result counts, the bounded time window, execution
+ID, safety booleans, and verification timestamp; it discards message fields,
+file fields, credential values, and token values.
 
 For the restart proof, import this file alone into `90 Platform & Admin`, bind
 the existing `Finance Outlook` and `Finance OneDrive` credentials, and keep the

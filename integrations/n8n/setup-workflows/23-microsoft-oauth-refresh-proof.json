@@ -48,7 +48,8 @@
         "folderId": "={{ $('Freeze Bounded Probe').first().json.outlook_folder_id }}",
         "returnAll": false,
         "limit": "={{ $('Freeze Bounded Probe').first().json.outlook_max_messages }}",
-        "output": "raw",
+        "output": "fields",
+        "fields": ["id"],
         "filtersUI": {
           "values": {
             "filterBy": "filters",
