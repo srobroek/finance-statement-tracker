@@ -207,6 +207,11 @@
         {
           "all": [
             {
+              "field": "source_direction",
+              "operator": "equals",
+              "value": "CREDIT"
+            },
+            {
               "field": "merchant_raw",
               "operator": "contains_any",
               "value": [
@@ -3337,6 +3342,11 @@
               "field": "vendor",
               "operator": "equals",
               "value": "Amazon"
+            },
+            {
+              "field": "transaction_type",
+              "operator": "equals",
+              "value": "PURCHASE"
             }
           ]
         }

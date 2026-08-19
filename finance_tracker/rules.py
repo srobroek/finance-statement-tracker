@@ -32,6 +32,7 @@ SUPPORTED_FIELDS = frozenset(
         "spend_aed",
         "currency",
         "amount_original",
+        "source_direction",
         "channel",
         "source_type",
         "vendor",

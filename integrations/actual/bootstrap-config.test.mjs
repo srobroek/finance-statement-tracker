@@ -125,10 +125,10 @@ test("validates schedule and budget contracts", () => {
   assert.throws(() => validateBootstrapConfig({
     schema_version: 1,
     rules: [{
-      name: "Broken active formula",
-      actions: [{ field: "amount", op: "set", options: { formula: "ABS(amount)" } }],
+      name: "Forbidden active amount mutation",
+      actions: [{ field: "amount", op: "set", options: { formula: "=ABS(amount)" } }],
     }],
-  }), /formulas must start with =/);
+  }), /must not mutate source amounts/);
 });
 
 test("ADIB mortgage profile is disabled but contains complete IPMT and PPMT actions", async () => {

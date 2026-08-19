@@ -8,21 +8,23 @@ be copied into notes.
 ## Canonical grammar
 
 ```text
-#semantic-tag #namespace:value | Doc: Finance Evidence/YYYY/MM/vendor/file.ext | FX: CUR amount | Review: controlled-reason | Memo: human text
+#semantic-tag #namespace:value | Doc: Finance Evidence/YYYY/MM/vendor/file.ext | Review: controlled-reason | Memo: human text
 ```
 
 The sections are optional but, when present, always appear in this order:
 
 1. one tag block;
 2. one or more `Doc:` paths;
-3. original-currency `FX:` facts;
-4. short `Review:` reasons;
-5. explicitly human-authored `Memo:` text.
+3. short `Review:` reasons;
+4. explicitly human-authored `Memo:` text.
 
 Tags are lower-case, de-duplicated, sorted, and may contain letters, digits,
 hyphens, underscores, and namespace colons. Automated ingestion does not write
 `Memo:`. `#browser-import`, `#primary`, `#evidence`, and `#statement` are
 technical implementation details and are forbidden.
+Derived `#cashback-*` bucket tags and routine original-currency facts are also
+forbidden. Cashback state belongs to the companion/configuration and FX facts
+remain in source manifests and evidence metadata, not the display note.
 
 Only paths below `Finance Evidence/` may be written as `Doc:` values. The
 catalogue remains authoritative for hashes, message identities, document

@@ -14,12 +14,11 @@ class ActualNoteContractTests(unittest.TestCase):
         notes = format_actual_notes(
             tags=["Shared", "rental:LT713", "shared"],
             documents=["Finance Evidence/2026/08/dewa/receipt.pdf"],
-            fx=["NOK 340.00"],
         )
         self.assertEqual(
             notes,
             "#rental:lt713 #shared | "
-            "Doc: Finance Evidence/2026/08/dewa/receipt.pdf | FX: NOK 340.00",
+            "Doc: Finance Evidence/2026/08/dewa/receipt.pdf",
         )
         validate_actual_notes(notes)
 
@@ -42,7 +41,7 @@ class ActualNoteContractTests(unittest.TestCase):
         self.assertEqual(
             canonical,
             "#foreign #travel | "
-            "Doc: Finance Evidence/2026/08/vendor/receipt.pdf | FX: NOK 340.00",
+            "Doc: Finance Evidence/2026/08/vendor/receipt.pdf",
         )
         self.assertEqual(canonicalize_actual_notes(canonical), canonical)
 
@@ -59,6 +58,14 @@ class ActualNoteContractTests(unittest.TestCase):
     def test_document_must_live_under_finance_evidence(self) -> None:
         with self.assertRaisesRegex(ValueError, "Finance Evidence"):
             format_actual_notes(documents=["random/receipt.pdf"])
+
+    def test_derived_cashback_tags_and_routine_fx_are_removed_from_legacy_notes(self) -> None:
+        original = (
+            "#amazon #cashback-ei_amazon #online | "
+            "FX: INR 284.00 | currency:INR | original:284.00"
+        )
+
+        self.assertEqual(canonicalize_actual_notes(original), "#amazon #online")
 
     def test_cleanup_plan_is_exact_and_skips_unsafe_rows(self) -> None:
         snapshot = {
@@ -78,7 +85,7 @@ class ActualNoteContractTests(unittest.TestCase):
                     "account_name": "Card",
                     "date": "2026-08-02",
                     "amount": -200,
-                    "notes": "#shared",
+                    "notes": "#cashback-ei_amazon #shared | FX: INR 284.00",
                 },
                 {
                     "id": "actual-3",
@@ -92,10 +99,11 @@ class ActualNoteContractTests(unittest.TestCase):
 
         plan, audit = build_actual_note_cleanup_plan(snapshot)
 
-        self.assertEqual(len(plan["changes"]), 1)
+        self.assertEqual(len(plan["changes"]), 2)
         self.assertEqual(plan["changes"][0]["desired_notes"], "#shared")
         self.assertEqual(plan["changes"][0]["expected_current_notes"], "source:statement | #primary #shared")
         self.assertEqual(audit["scanned_count"], 3)
+        self.assertEqual(audit["removed_technical_tag_prefixes"], {"cashback-": 1})
         self.assertEqual(audit["skipped"][0]["reason"], "NO_IMPORTED_ID")
 
 

@@ -39,6 +39,7 @@ PROTECTED_FIELDS = frozenset(
         "merchant_raw",
         "amount_aed",
         "amount_original",
+        "source_direction",
         "currency",
         "source_type",
         "source_message_id",

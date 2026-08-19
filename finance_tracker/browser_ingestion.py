@@ -20,6 +20,8 @@ from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleEngine, StaticRule
+from .transaction_semantics import finalize_transaction_topic
+from .classification_audit import enforce_transaction_invariants
 
 
 CAPTURE_KINDS = {
@@ -306,7 +308,7 @@ def _match_exact_refunds(transactions: Iterable[Transaction]) -> int:
         reasons = list(credit.metadata.get("browser_review_reasons", []))
         if (
             "UNCLASSIFIED_CREDIT" not in reasons
-            or credit.transaction_type != "CREDIT"
+            or credit.transaction_type not in {"CREDIT", "REFUND"}
             or credit.metadata.get("browser_direction") != "CREDIT"
         ):
             continue
@@ -530,6 +532,7 @@ def build_browser_ingestion_run(
             channel=str(row.get("channel") or "UNKNOWN"),
             source_type="browser_portal",
             transaction_type=transaction_type,
+            source_direction=direction,
             review_required=bool(review_reasons),
             is_refund=transaction_type == "REFUND",
             # Acquisition provenance and card role stay in structured metadata,
@@ -597,10 +600,13 @@ def build_browser_ingestion_run(
     owner_by_card = account_owner_map(dict(config))
     for transaction in transactions:
         transaction.owner = owner_by_card.get(transaction.card)
+        rule_traces.extend(
+            engine.apply_stages(transaction, ("TRANSACTION_NORMALIZATION",))
+        )
+        finalize_transaction_topic(transaction)
         rule_traces.extend(engine.apply_stages(
             transaction,
             (
-                "TRANSACTION_NORMALIZATION",
                 "VENDOR_NORMALIZATION",
                 "CLASSIFICATION",
                 "TAGGING",
@@ -618,6 +624,8 @@ def build_browser_ingestion_run(
                 "REFUND",
             }
             and transaction.category
+            and transaction.metadata.get("transaction_topic_reason")
+            != "CREDIT_DEFAULT_REFUND"
         ):
             review_reasons.remove("UNCLASSIFIED_CREDIT")
             transaction.metadata["browser_review_reasons"] = review_reasons
@@ -633,6 +641,8 @@ def build_browser_ingestion_run(
             project_property_tags(transaction, property_registry)
 
     _match_exact_refunds(transactions)
+    for transaction in transactions:
+        enforce_transaction_invariants(transaction)
 
     blockers = list(account_blockers)
     if kind == "STATEMENT_ROWS" and not authoritative_statement:

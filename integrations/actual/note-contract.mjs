@@ -4,11 +4,12 @@ import { fileURLToPath } from "node:url";
 
 const configPath = fileURLToPath(new URL("../../config/actual-note-contract.json", import.meta.url));
 const contract = JSON.parse(fs.readFileSync(configPath, "utf8"));
-if (contract.schema_version !== "actual-note-contract-v1") {
+if (contract.schema_version !== "actual-note-contract-v2") {
   throw new Error("Unsupported Actual note contract");
 }
 
 const forbiddenTags = new Set(contract.forbidden_tags.map(value => String(value).toLowerCase()));
+const forbiddenTagPrefixes = (contract.forbidden_tag_prefixes ?? []).map(value => String(value).toLowerCase());
 const allowedDetails = new Map(contract.detail_order.map((value, index) => [value, index]));
 const tagPattern = /^#[a-z0-9][a-z0-9_:-]*$/;
 
@@ -27,7 +28,7 @@ export function validateCanonicalActualNotes(notes) {
       throw new Error("Actual notes contain an invalid tag block");
     }
     const normalized = tags.map(tag => tag.slice(1).toLowerCase());
-    if (normalized.some(tag => forbiddenTags.has(tag))) {
+    if (normalized.some(tag => forbiddenTags.has(tag) || forbiddenTagPrefixes.some(prefix => tag.startsWith(prefix)))) {
       throw new Error("Actual notes contain a forbidden technical tag");
     }
     if (new Set(normalized).size !== normalized.length) {
@@ -40,7 +41,7 @@ export function validateCanonicalActualNotes(notes) {
   }
   let lastDetail = -1;
   for (; index < segments.length; index += 1) {
-    const match = /^(Doc|FX|Review|Memo): (.+)$/.exec(segments[index]);
+    const match = /^(Doc|Review|Memo): (.+)$/.exec(segments[index]);
     if (!match) throw new Error(`Unsupported Actual note segment: ${segments[index]}`);
     const detailIndex = allowedDetails.get(match[1]);
     if (detailIndex < lastDetail) throw new Error("Actual note details are out of order");

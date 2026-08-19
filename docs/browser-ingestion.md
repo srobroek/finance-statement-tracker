@@ -33,7 +33,7 @@ Provider recipes own login and session navigation. Data recipes own one acquisit
 | FAB | Current-account balance | On-screen snapshot | No ledger parser | 2026-07-09 |
 | Wio | Credit statement | Email PDF | Existing statement pipeline | 2026-07-11 |
 | Generic CSV | Account/card transactions | User upload | `generic_csv_v1` | 2026-07-09 |
-| Sarwa | Holdings capture | Explicit JSON upload | Registered; separate wealth snapshot path | 2026-07-11 |
+| Sarwa | Holdings capture | User-assisted authenticated browser capture, then explicit JSON upload | `sarwa_holdings_v1`; separate wealth snapshot path | 2026-08-19 |
 
 RAKBANK and Standard Chartered remain `ADAPTER_REQUIRED` because the previous app contained no validated browser recipe for them. Their email-statement path remains available.
 
@@ -72,6 +72,12 @@ that exact immutable capture. Record the approval in the capture's top-level
 matching `capture_id`, `approved_by: OWNER`, and an ISO `approved_at` timestamp.
 This clears only `VISIBLE_ROWS_REQUIRE_REVIEW`; every other source, credit,
 currency, account, AI, and evidence gate remains active.
+
+Sarwa follows the same user-assisted authentication boundary but feeds the
+wealth snapshot path documented in `docs/wealth-ingestion.md`, not the ordinary
+transaction staging path. Its provider capability explicitly disallows
+unattended refresh and persisted cookies or credentials. Snapshot freshness is
+reported from the provider `as_of` value.
 
 ## Real export validation
 

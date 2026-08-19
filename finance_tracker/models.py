@@ -43,15 +43,26 @@ class Transaction:
     is_subscription: bool = False
     property_code: str | None = None
     rental_unit: str | None = None
+    source_direction: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.amount_aed = money(self.amount_aed)
         if self.amount_original is not None:
             self.amount_original = money(self.amount_original)
+            if self.amount_original < 0:
+                raise ValueError(
+                    "Canonical amount_original must be a non-negative magnitude"
+                )
         self.currency = self.currency.upper()
         self.card = self.card.upper()
         self.channel = self.channel.upper()
+        if self.amount_aed < 0:
+            raise ValueError("Canonical amount_aed must be a non-negative magnitude")
+        if self.source_direction is not None:
+            self.source_direction = str(self.source_direction).strip().upper() or None
+            if self.source_direction not in {"CREDIT", "DEBIT"}:
+                raise ValueError("source_direction must be CREDIT or DEBIT")
 
     @property
     def spend_aed(self) -> Decimal:
@@ -78,6 +89,14 @@ class Transaction:
         if hasattr(self, field_name):
             if field_name in {"amount_aed", "amount_original"} and value is not None:
                 value = money(value)
+                if value < 0:
+                    raise ValueError(
+                        f"Canonical {field_name} must be a non-negative magnitude"
+                    )
+            if field_name == "source_direction" and value is not None:
+                value = str(value).strip().upper()
+                if value not in {"CREDIT", "DEBIT"}:
+                    raise ValueError("source_direction must be CREDIT or DEBIT")
             setattr(self, field_name, value)
         else:
             self.metadata[field_name] = value
@@ -111,5 +130,6 @@ class Transaction:
             "is_subscription": self.is_subscription,
             "property_code": self.property_code,
             "rental_unit": self.rental_unit,
+            "source_direction": self.source_direction,
             "metadata": self.metadata,
         }

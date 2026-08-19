@@ -23,6 +23,21 @@ compatibility path. `actualctl.mjs` is the only bridge command that can import
 transactions, and production reaches it only through the ingestion worker.
 
 See `docs/actual-production.md` for the operating procedure and PowerShell wrappers.
+
+Before planning or applying a production replacement, generate a manual-state
+preservation report from the exact production snapshot and rebuild manifests:
+
+```powershell
+node manual-state-audit.mjs --root ../.. --validation ../../config/full-ingestion-validation.json --snapshot ../../runtime/audit/live-full-chat-audit-snapshot.json --output ../../runtime/audit/manual-state-preservation.json
+```
+
+The report flags reconciliations, transfers, schedules, splits, and managed-field
+drift, then fingerprints every row that must remain untouched. A replacement
+with blocking rows requires `ALLOW_ACTUAL_MANUAL_STATE_REPLACEMENT=true` and the
+exact reviewed report digest via `--approve-preservation-sha256`. Preserved rows
+are verified again after import. This guard does not replace review of the exact
+production delta.
+
 ## Read-only tag reports
 
 `actualctl.mjs tag-report` provides `any`, `all`, and excluded-tag filters plus grouping by category, payee, account, or tag. It reads the authoritative Actual budget and never creates a companion ledger. See `docs/tag-reporting.md` for examples and the documented native-report limitations.

@@ -47,7 +47,7 @@
       "required": ["field", "operator"],
       "properties": {
         "field": {
-          "enum": ["transaction_at", "card", "account", "owner", "institution", "account_last4", "merchant_raw", "amount_aed", "spend_aed", "currency", "amount_original", "channel", "source_type", "vendor", "category", "subcategory", "transaction_type", "reward_bucket", "tags", "evidence_policy", "evidence_status", "review_required", "is_refund", "is_foreign", "is_subscription", "property_code", "rental_unit", "reference", "mcc", "history_count"]
+          "enum": ["transaction_at", "card", "account", "owner", "institution", "account_last4", "merchant_raw", "amount_aed", "spend_aed", "currency", "amount_original", "source_direction", "channel", "source_type", "vendor", "category", "subcategory", "transaction_type", "reward_bucket", "tags", "evidence_policy", "evidence_status", "review_required", "is_refund", "is_foreign", "is_subscription", "property_code", "rental_unit", "reference", "mcc", "history_count"]
         },
         "operator": {
           "enum": ["equals", "not_equals", "contains", "contains_any", "not_contains", "starts_with", "ends_with", "regex", "in", "not_in", "numeric_equals", "gt", "gte", "lt", "lte", "between", "date_on", "date_before", "date_after", "date_between", "polarity", "is_empty", "not_empty", "is_true", "is_false", "has_tag"]

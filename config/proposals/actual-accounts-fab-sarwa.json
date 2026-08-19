@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "mode": "PROPOSAL_ONLY",
+  "actual_writes_allowed": false,
+  "status": "BLOCKED",
+  "generated_from": [
+    "config/account-completeness.json",
+    "runtime/browser-captures/fab-account-2001-2026-08-18.json",
+    "runtime/browser-captures/sarwa-holdings-2026-08-18.json"
+  ],
+  "blockers": [
+    "FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED",
+    "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED",
+    "FX_SNAPSHOT_REQUIRED"
+  ],
+  "fab": {
+    "inventory_status": "INCOMPLETE",
+    "known_accounts": [
+      {
+        "provider_account_id": "fab:current:2001",
+        "name": "FAB Elite Gold Current Account · 2001",
+        "action": "VERIFY_EXISTING_ACCOUNT_AND_PROPOSE_REPLACEABLE_ADJUSTMENT",
+        "type": "checking",
+        "offbudget": false,
+        "currency": "AED",
+        "source_balance_minor": 22501145,
+        "source_balance_as_of": "2026-08-18T08:36:58.922Z",
+        "covered_activity_actual_balance_minor": 10995672,
+        "derived_adjustment_minor": 11505473,
+        "derived_adjustment_formula": "source_balance_minor - covered_activity_actual_balance_minor",
+        "replaceable": true,
+        "replacement_trigger": "Older official history or an evidenced opening balance becomes available",
+        "review_required": true,
+        "write_manifest_present": false
+      }
+    ],
+    "unknown_accounts": {
+      "count": null,
+      "reason": "A complete authenticated FAB non-credit-card account inventory has not been captured"
+    }
+  },
+  "sarwa": {
+    "inventory_status": "COMPLETE_FOR_CAPTURE",
+    "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c",
+    "source_currency": "USD",
+    "source_total": "1571611.22",
+    "source_as_of": "2026-08-17T00:00:00Z",
+    "acquisition_mode": "USER_ASSISTED_BROWSER_CAPTURE",
+    "unattended_refresh_supported": false,
+    "accounts": [
+      {
+        "provider_account_id": "sarwa:invest:personal",
+        "name": "Sarwa Invest · Personal",
+        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
+        "type": "investment",
+        "offbudget": true,
+        "source_value": "1249330.82",
+        "source_currency": "USD",
+        "initial_balance_minor": null,
+        "fx_snapshot_id": null,
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "positions_are_ledger_transactions": false,
+        "review_required": true
+      },
+      {
+        "provider_account_id": "sarwa:invest:parents",
+        "name": "Sarwa Invest · Parents",
+        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
+        "type": "investment",
+        "offbudget": true,
+        "source_value": "98819.13",
+        "source_currency": "USD",
+        "initial_balance_minor": null,
+        "fx_snapshot_id": null,
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "positions_are_ledger_transactions": false,
+        "review_required": true
+      },
+      {
+        "provider_account_id": "sarwa:invest:shared-airbnb",
+        "name": "Sarwa Invest · Shared Airbnb",
+        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
+        "type": "investment",
+        "offbudget": true,
+        "source_value": "15872.67",
+        "source_currency": "USD",
+        "initial_balance_minor": null,
+        "fx_snapshot_id": null,
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "positions_are_ledger_transactions": false,
+        "review_required": true
+      },
+      {
+        "provider_account_id": "sarwa:trade:primary",
+        "name": "Sarwa Trade · Primary",
+        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
+        "type": "investment",
+        "offbudget": true,
+        "source_value": "207588.60",
+        "source_currency": "USD",
+        "initial_balance_minor": null,
+        "fx_snapshot_id": null,
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "positions_are_ledger_transactions": false,
+        "review_required": true
+      }
+    ],
+    "excluded_accounts": [
+      {
+        "provider_account_id": "sarwa:invest:classic",
+        "display_name": "Sarwa Classic",
+        "source_value": "0.00",
+        "reason": "CLOSED_ZERO_BALANCE"
+      }
+    ],
+    "non_asset_exclusions": [
+      {
+        "display_name": "Black Swan Protection",
+        "amount": "1300000",
+        "currency": "USD",
+        "reason": "INSURANCE_COVERAGE_IS_NOT_AN_ASSET"
+      }
+    ]
+  }
+}

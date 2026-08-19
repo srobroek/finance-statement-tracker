@@ -103,9 +103,10 @@ class BrowserIngestionTests(TestCase):
 
         run = build_browser_ingestion_run(capture, self.config())
 
-        self.assertEqual(run.staging_status, "READY_FOR_APPROVAL")
-        self.assertEqual(run.review_count, 0)
-        self.assertFalse(run.transactions[0]["review_required"])
+        self.assertEqual(run.staging_status, "REVIEW_REQUIRED")
+        self.assertEqual(run.review_count, 1)
+        self.assertTrue(run.transactions[0]["review_required"])
+        self.assertIn("UNCATEGORIZED", run.transactions[0]["metadata"]["classification_review_reasons"])
         self.assertEqual(
             run.transactions[0]["metadata"]["browser_review_resolutions"],
             ["OWNER_APPROVED_VISIBLE_CAPTURE"],
@@ -184,8 +185,8 @@ class BrowserIngestionTests(TestCase):
 
         run = build_browser_ingestion_run(capture, self.config())
 
-        self.assertEqual(run.staging_status, "READY_FOR_APPROVAL")
-        self.assertEqual(run.review_count, 0)
+        self.assertEqual(run.staging_status, "REVIEW_REQUIRED")
+        self.assertEqual(run.review_count, 2)
         self.assertTrue(run.statement_check["balance_tied"])
         self.assertTrue(run.envelopes[0]["default_cleared"])
         self.assertTrue(all(row["source_type"] == "browser_statement" for row in run.transactions))
@@ -336,7 +337,7 @@ class BrowserIngestionTests(TestCase):
             load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
         )
 
-        self.assertEqual(run.review_count, 0)
+        self.assertEqual(run.review_count, 2)
         self.assertEqual(
             [row["transaction_type"] for row in run.transactions],
             ["TRANSFER", "REWARD_CREDIT", "INCOME", "REFUND", "INCOME", "REFUND"],
@@ -418,7 +419,7 @@ class BrowserIngestionTests(TestCase):
             ["EXACT_UNIQUE_REFUND_PAIR"],
         )
 
-    def test_ambiguous_duplicate_purchase_candidates_do_not_infer_a_refund(self):
+    def test_ambiguous_credit_defaults_to_refund_but_stays_in_review(self):
         capture = self.capture()
         capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
         capture["rows"] = [
@@ -449,7 +450,8 @@ class BrowserIngestionTests(TestCase):
         )
 
         credit = run.transactions[2]
-        self.assertEqual(credit["transaction_type"], "CREDIT")
+        self.assertEqual(credit["transaction_type"], "REFUND")
+        self.assertTrue(credit["is_refund"])
         self.assertTrue(credit["review_required"])
         self.assertEqual(run.review_count, 1)
 

@@ -577,16 +577,16 @@ class IngestionJobRunner:
         ai_handoff_complete = bool(normalized_request.get("ai_handoff_complete"))
         ai_response_count = len(normalized_request.get("ai_responses") or [])
         if actual_mode != "STAGE":
+            if ai_request_count and not ai_handoff_complete:
+                raise ValueError(
+                    f"Actual {actual_mode} requires ai_handoff_complete=true"
+                )
             if staged.get("staging_status") not in {
                 "READY_FOR_LEDGER_MATCH",
                 "READY_FOR_APPROVAL",
             }:
                 raise ValueError(
                     f"Actual {actual_mode} requires a review-free staging manifest"
-                )
-            if ai_request_count and not ai_handoff_complete:
-                raise ValueError(
-                    f"Actual {actual_mode} requires ai_handoff_complete=true"
                 )
         if ai_handoff_complete and ai_response_count != ai_request_count:
             raise ValueError(

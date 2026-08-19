@@ -78,6 +78,40 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertIn("#owner-owner-a", run.envelopes[0]["records"][0]["notes"])
         self.assertEqual(run.cashback_reconciliation, ())
 
+    def test_ei_positive_amazon_statement_row_is_refund_without_cashback_tag(self) -> None:
+        statement = parse_statement_text(
+            """Statement of Card Account
+From: 1st Aug 2026
+31st Aug 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+12 AUG 12 AUG AMAZON.AE DUBAI ARE 3.55CR
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,903.55 96.45 25/08/26 96.45 0.00 96.45
+""",
+            "ei-refund.pdf",
+        )
+
+        run = build_actual_statement_run(
+            statement,
+            self.config(),
+            load_compiled_rules("config/static-rules.seed.json"),
+        )
+
+        record = run.envelopes[0]["records"][0]
+        self.assertEqual(record["amount"], 355)
+        self.assertEqual(record["category_name"], "Online Shopping")
+        self.assertIn("#refund", record["notes"])
+        self.assertNotIn("#cashback-", record["notes"])
+        self.assertEqual(
+            run.cashback_reconciliation[0]["transactions"][0]["event_type"],
+            "REFUND",
+        )
+        self.assertIsNone(
+            run.cashback_reconciliation[0]["transactions"][0]["bucket_code"]
+        )
+
     def test_rejects_unmapped_card_suffix(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unmapped card suffixes: 0082"):
             build_actual_statement_run(

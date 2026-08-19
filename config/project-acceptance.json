@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-19T06:20:00Z",
+  "requirements": [
+    {
+      "id": "actual-authoritative-ledger",
+      "description": "Actual is the sole authoritative finance ledger and the cashback companion does not duplicate posted ledger state.",
+      "status": "VERIFIED",
+      "production_gate": true,
+      "evidence": ["AGENTS.md", "config/deployment.json", "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"]
+    },
+    {
+      "id": "fab-complete-inventory",
+      "description": "Every FAB non-credit-card account found in the authenticated portal exists exactly once in Actual with a reconciled source balance.",
+      "status": "BLOCKED",
+      "production_gate": true,
+      "evidence": ["config/account-completeness.json", "runtime/browser-captures/fab-account-2001-2026-08-18.json"],
+      "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED"]
+    },
+    {
+      "id": "sarwa-wealth-accounts",
+      "description": "Each included Sarwa portfolio is represented once as an off-budget valuation account using an immutable source and FX snapshot.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["finance_tracker/wealth.py", "config/wealth-sources.json", "tests/test_wealth.py"],
+      "blockers": ["FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED", "FX_SNAPSHOT_REQUIRED", "REVIEWED_ACTUAL_DELTA_REQUIRED"]
+    },
+    {
+      "id": "adcb-closed-zero",
+      "description": "The closed ADCB credit card retains history, is excluded from active routing, and reconciles to AED 0 without a synthetic balancing entry.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["config/account-completeness.json", "tests/test_account_completeness.py", "tests/test_transaction_semantics.py"],
+      "blockers": ["PRODUCTION_ADCB_BALANCE_READBACK_REQUIRED", "EVIDENCED_CLOSING_PAYMENT_RECONCILIATION_REQUIRED"]
+    },
+    {
+      "id": "locked-transaction-semantics",
+      "description": "Source adapters finalize direction and topic before classification; later static and AI rules cannot mutate source amounts or finalized semantics.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["finance_tracker/transaction_semantics.py", "tests/test_transaction_semantics.py", "integrations/actual/bootstrap-config.mjs"]
+    },
+    {
+      "id": "refund-reward-transfer-correctness",
+      "description": "Merchant credits, refunds, reversals, card payments, transfers, and explicit rewards are separated without treating EI Amazon refunds as cashback.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["finance_tracker/transaction_semantics.py", "tests/test_transaction_semantics.py", "tests/test_actual_pipeline.py"],
+      "blockers": ["FULL_CORPUS_EXCEPTION_REPORT_REQUIRED", "GUARDED_PRODUCTION_BACKFILL_REQUIRED"]
+    },
+    {
+      "id": "canonical-display-notes",
+      "description": "Transaction notes use the v2 tags-first grammar and omit routine source, message, FX, original amount, and derived cashback metadata.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["config/actual-note-contract.json", "finance_tracker/actual_notes.py", "integrations/actual/note-contract.mjs"],
+      "blockers": ["V1_MANIFEST_REGENERATION_REQUIRED", "PRODUCTION_UI_SPOT_CHECK_REQUIRED"]
+    },
+    {
+      "id": "classification-review-coverage",
+      "description": "Every transaction is resolved or appears in one explicit review queue, with consistent category, tag, and property invariants.",
+      "status": "PARTIAL",
+      "production_gate": true,
+      "evidence": ["finance_tracker/classification_audit.py", "tests/test_transaction_semantics.py"],
+      "blockers": ["DISPOSABLE_CORPUS_CLASSIFICATION_AUDIT_REQUIRED", "PRODUCTION_REVIEW_QUEUE_BACKFILL_REQUIRED"]
+    },
+    {
+      "id": "manual-state-preservation",
+      "description": "Production corrections, reconciliations, splits, transfers, schedules, and manual notes survive any repair or explicitly block it.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "evidence": ["integrations/actual/production-rebuild.mjs", "integrations/actual/manual-state-audit.mjs", "runtime/audit/manual-state-preservation-2026-08-19.json"],
+      "blockers": ["FORTY_TWO_MANUAL_FIELD_DIFFS_REQUIRE_REVIEW"]
+    },
+    {
+      "id": "disposable-idempotent-rebuild",
+      "description": "The complete scoped corpus replays twice into a disposable Actual file with no duplicates, drift, balance mismatch, or semantic violations.",
+      "status": "MISSING",
+      "production_gate": true,
+      "evidence": ["runtime/full-restage/20260819T060427Z/summary.json"],
+      "blockers": ["NEW_PIPELINE_IMAGE_OR_LOCAL_WORKER_REQUIRED", "FULL_RESTAGE_NOT_EXECUTED"]
+    },
+    {
+      "id": "actual-ui-api-parity",
+      "description": "The production UI and API show the same Actual file, accounts, transaction identities, balances, and net worth.",
+      "status": "BLOCKED",
+      "production_gate": true,
+      "evidence": ["docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"],
+      "blockers": ["CLIENT_SERVER_STATE_DIVERGENCE", "MISSING_FAB_AND_SARWA_ACCOUNTS"]
+    },
+    {
+      "id": "selective-evidence-pipeline",
+      "description": "High-value and durable purchases can acquire and link receipts, bills, warranties, and supporting email while low-value consumables are excluded.",
+      "status": "PARTIAL",
+      "production_gate": false,
+      "evidence": ["Finance Evidence/catalogue.json", "config/evidence-policies.json"],
+      "blockers": ["END_TO_END_WARRANTY_ACQUISITION_VALIDATION_REQUIRED"]
+    },
+    {
+      "id": "budgets-schedules-owners-reports",
+      "description": "Approved budgets, recurring schedules, owner attribution, and all claimed dashboards are populated and validated against authoritative data.",
+      "status": "PARTIAL",
+      "production_gate": false,
+      "evidence": ["config/actual-bootstrap.json", "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"],
+      "blockers": ["USER_APPROVED_BUDGETS_REQUIRED", "SCHEDULES_NOT_POPULATED", "OWNER_MODEL_NOT_POPULATED", "SOURCE_DATA_NOT_YET_COMPLETE"]
+    },
+    {
+      "id": "deterministic-statement-worker",
+      "description": "Email statement acquisition lands encrypted source artifacts once and a dedicated deterministic host worker performs parsing, dedupe, audit, and guarded Actual submission.",
+      "status": "PARTIAL",
+      "production_gate": false,
+      "evidence": ["docs/deterministic-statement-ingestion-architecture-2026-08-19.md", "apps/actual-ingestion/server.py"],
+      "blockers": ["POWER_AUTOMATE_ONEDRIVE_LANDING_POC_REQUIRED", "HOST_LANDING_WATCHER_REQUIRED"]
+    },
+    {
+      "id": "successful-task-lifecycle",
+      "description": "Successful scheduled scans do not accumulate visible tasks, while failures remain visible and auditable.",
+      "status": "PARTIAL",
+      "production_gate": false,
+      "evidence": ["docs/automation-lifecycle-audit-2026-08-19.md", "finance_tracker/automation_lifecycle.py"],
+      "blockers": ["PERSISTENT_CONTROLLER_NOT_DEPLOYED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
+    },
+    {
+      "id": "operational-restore-and-restart",
+      "description": "Backups restore into a disposable environment and Actual, cashback, ingestion, proxy, push, and Cloudflare paths survive controlled restarts.",
+      "status": "PARTIAL",
+      "production_gate": true,
+      "evidence": ["deploy/actual-poc/backup.sh", "deploy/actual-poc/verify-backup.py"],
+      "blockers": ["DISPOSABLE_RESTORE_DRILL_REQUIRED", "CONTROLLED_RESTART_VALIDATION_REQUIRED"]
+    }
+  ]
+}
