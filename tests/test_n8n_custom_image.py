@@ -65,6 +65,11 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(package["dependencies"]["@ggomez91npm/n8n-nodes-claude-code"], "0.8.0")
         self.assertEqual(package["dependencies"]["@anthropic-ai/claude-code"], "2.1.235")
         self.assertEqual(package["overrides"], {"nanoid": "3.3.18", "uuid": "11.1.1"})
+        dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
+        self.assertIn("node_modules/@anthropic-ai/claude-code/install.cjs", dockerfile)
+        self.assertIn("ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3", dockerfile)
+        self.assertIn("sha256sum -c -", dockerfile)
+        self.assertNotIn("ADD --checksum", dockerfile)
         lock = json.loads(
             (ROOT / "packages/n8n-nodes-finance/community-ai/package-lock.json").read_text(encoding="utf-8")
         )

@@ -28,15 +28,17 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
+RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt \
+    && test "$(cat /tmp/nodemailer-pack.txt)" = "nodemailer-9.0.1.tgz" \
+    && echo "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3  /tmp/nodemailer-9.0.1.tgz" | sha256sum -c -
+
 # n8n 2.36.2 ships nodemailer 8.0.10, which is affected by
 # GHSA-p6gq-j5cr-w38f. Keep the upstream n8n image immutable and replace only
 # the dependency payload at its existing pnpm target with the compatible fixed
-# 9.0.1 package. The registry archive is content-addressed and verified by
-# BuildKit before extraction.
+# 9.0.1 package. The exact registry archive is fetched in the audited builder
+# and hash-verified before this stage, which works with both BuildKit and the
+# rootless Podman build engine used by the CI host.
 FROM node-builder AS nodemailer-security-patch
-ADD --checksum=sha256:ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3 \
-    https://registry.npmjs.org/nodemailer/-/nodemailer-9.0.1.tgz \
-    /tmp/nodemailer-9.0.1.tgz
 RUN mkdir -p /tmp/nodemailer-9.0.1 \
     && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
     && node -e "if(require('/tmp/nodemailer-9.0.1/package.json').version!=='9.0.1') process.exit(1)"
