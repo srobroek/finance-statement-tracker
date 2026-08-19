@@ -20,8 +20,8 @@
     "config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "output_schema_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "runner_receipt_id": {"type": "string", "minLength": 1, "maxLength": 256},
-    "runner_model": {"type": "string", "enum": ["gpt-5.6-luna", "gpt-5.6-sol"]},
-    "runner_reasoning_effort": {"type": "string", "enum": ["max", "xhigh"]},
+    "runner_model": {"type": "string", "enum": ["gpt-5.6-luna", "gpt-5.6-sol", "claude-sonnet-4-6"]},
+    "runner_reasoning_effort": {"type": "string", "enum": ["max", "xhigh", "default"]},
     "auth_mode": {"type": "string", "enum": ["CHATGPT_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"]},
     "proposals": {
       "type": "array",
@@ -29,7 +29,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["transaction_id", "field", "value_json", "confidence", "reason_code"],
+        "required": ["transaction_id", "field", "value", "confidence", "reason_code"],
         "properties": {
           "transaction_id": {"type": "string", "minLength": 1, "maxLength": 256},
           "field": {
@@ -41,11 +41,102 @@
               "rule_recommendation"
             ]
           },
-          "value_json": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "value": {},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
           "reason_code": {"type": "string", "pattern": "^[A-Z0-9_:-]{0,128}$"}
-        }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "enum": [
+                  "vendor", "category", "subcategory", "evidence_policy",
+                  "property_code", "rental_unit", "channel", "reward_bucket"
+                ]
+              },
+              "value": {"type": "string", "minLength": 1, "maxLength": 128}
+            }
+          },
+          {
+            "properties": {
+              "field": {"const": "tags"},
+              "value": {
+                "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true,
+                "items": {
+                  "type": "string", "minLength": 1, "maxLength": 64,
+                  "pattern": "^[a-z0-9:_-]+$"
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "field": {"enum": ["review_required", "is_subscription"]},
+              "value": {"type": "boolean"}
+            }
+          },
+          {
+            "properties": {
+              "field": {"const": "category_recommendation"},
+              "value": {
+                "type": "object", "additionalProperties": false,
+                "required": ["name", "group", "reason"],
+                "properties": {
+                  "name": {"type": "string", "minLength": 1, "maxLength": 80},
+                  "group": {"type": "string", "minLength": 1, "maxLength": 80},
+                  "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "field": {"const": "rule_recommendation"},
+              "value": {
+                "type": "object", "additionalProperties": false,
+                "required": ["enabled", "evidence_count"],
+                "properties": {
+                  "enabled": {"const": false},
+                  "evidence_count": {"type": "integer", "minimum": 3, "maximum": 10000}
+                }
+              }
+            }
+          }
+        ]
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "agent_provider": {"const": "CODEX_SUBSCRIPTION"},
+            "policy_class": {"const": "NORMAL"},
+            "runner_model": {"const": "gpt-5.6-luna"},
+            "runner_reasoning_effort": {"const": "max"},
+            "auth_mode": {"const": "CHATGPT_SUBSCRIPTION"}
+          }
+        },
+        {
+          "properties": {
+            "agent_provider": {"const": "CODEX_SUBSCRIPTION"},
+            "policy_class": {"const": "EXCEPTION"},
+            "runner_model": {"const": "gpt-5.6-sol"},
+            "runner_reasoning_effort": {"const": "xhigh"},
+            "auth_mode": {"const": "CHATGPT_SUBSCRIPTION"}
+          }
+        },
+        {
+          "properties": {
+            "agent_provider": {"const": "CLAUDE_SUBSCRIPTION"},
+            "policy_class": {"enum": ["NORMAL", "EXCEPTION"]},
+            "runner_model": {"const": "claude-sonnet-4-6"},
+            "runner_reasoning_effort": {"const": "default"},
+            "auth_mode": {"const": "CLAUDE_SUBSCRIPTION"}
+          }
+        }
+      ]
+    }
+  ]
 }

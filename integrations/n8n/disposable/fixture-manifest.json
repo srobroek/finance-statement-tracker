@@ -4,7 +4,7 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "3cff73cfa35d13ba508d2ff82cb52242e655832243601202545911f4fcb77367",
+    "09-ai-proposal.json": "029c58acc9506d35aeee094334875dbd8082d5dce1933bf7ba3fedddc89e89e3",
     "12-outlook-message-sweep.json": "fed17b2885a2d110c4793abe76146d1d7dedb9255d892d9bc14b4f1ee2c42f52",
     "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
     "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",

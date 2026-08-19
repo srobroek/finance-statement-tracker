@@ -386,6 +386,68 @@ class N8nWorkflowTests(unittest.TestCase):
         if jsonschema:
             jsonschema.validators.validator_for(handoff).check_schema(handoff)
             jsonschema.validators.validator_for(proposal).check_schema(proposal)
+            base = {
+                "schema_version": 1,
+                "job_id": f"finance-ai:{'a' * 64}",
+                "idempotency_key": "a" * 64,
+                "agent_provider": "CODEX_SUBSCRIPTION",
+                "policy_id": "classify-unresolved",
+                "policy_class": "NORMAL",
+                "policy_sha256": "b" * 64,
+                "config_sha256": "c" * 64,
+                "output_schema_sha256": "d" * 64,
+                "runner_receipt_id": "receipt-1",
+                "runner_model": "gpt-5.6-luna",
+                "runner_reasoning_effort": "max",
+                "auth_mode": "CHATGPT_SUBSCRIPTION",
+            }
+            typed_values = {
+                "vendor": "Carrefour",
+                "tags": ["grocery", "in_store"],
+                "review_required": False,
+                "category_recommendation": {
+                    "name": "Groceries", "group": "Living", "reason": "Exact merchant",
+                },
+                "rule_recommendation": {"enabled": False, "evidence_count": 3},
+            }
+            for field, value in typed_values.items():
+                result = {
+                    **base,
+                    "proposals": [{
+                        "transaction_id": "actual:fixture:1",
+                        "field": field,
+                        "value": value,
+                        "confidence": 0.95,
+                        "reason_code": "FIXTURE_MATCH",
+                    }],
+                }
+                jsonschema.validate(result, proposal)
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate({
+                    **base,
+                    "proposals": [{
+                        "transaction_id": "actual:fixture:1",
+                        "field": "vendor",
+                        "value": False,
+                        "confidence": 0.95,
+                        "reason_code": "TYPE_MISMATCH",
+                    }],
+                }, proposal)
+            claude = {
+                **base,
+                "agent_provider": "CLAUDE_SUBSCRIPTION",
+                "runner_model": "claude-sonnet-4-6",
+                "runner_reasoning_effort": "default",
+                "auth_mode": "CLAUDE_SUBSCRIPTION",
+                "proposals": [],
+            }
+            jsonschema.validate(claude, proposal)
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate({**claude, "auth_mode": "CHATGPT_SUBSCRIPTION"}, proposal)
+        proposal_item = proposal["properties"]["proposals"]["items"]
+        self.assertIn("value", proposal_item["required"])
+        self.assertNotIn("value_json", json.dumps(proposal_item))
+        self.assertEqual(len(proposal_item["oneOf"]), 5)
         unresolved = handoff["$defs"]["unresolved"]
         self.assertIn("allowed_values", unresolved["required"])
         self.assertEqual(unresolved["properties"]["allowed_values"]["maxProperties"], 10)
@@ -415,6 +477,11 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertIn("Proposal outside configured domain", response)
         self.assertIn("Duplicate proposal field", response)
         self.assertIn("Agent proposal envelope mismatch", response)
+        self.assertIn("CLAUDE_SUBSCRIPTION", response)
+        self.assertIn("claude-sonnet-4-6", response)
+        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", response)
+        handoff_code = nodes["Build Idempotent Agent Handoff"]["parameters"]["jsCode"]
+        self.assertIn("agent_provider: request.agent_provider", handoff_code)
         adapter = nodes["Invoke Subscription Agent Adapter"]
         self.assertEqual(adapter["type"], "n8n-nodes-base.executeWorkflow")
         self.assertEqual(
@@ -961,9 +1028,43 @@ class N8nWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(claude["parameters"]["responseFormat"], "json")
         self.assertFalse(claude["parameters"]["options"]["useCache"])
+        self.assertEqual(claude["parameters"]["model"], "={{ $json.provider_model }}")
+        proposal_schema = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
+        self.assertEqual(
+            json.loads(codex["parameters"]["options"]["outputSchema"]),
+            proposal_schema,
+        )
+        assignments = {
+            row["name"]: row["value"]
+            for row in nodes["Subscription Provider Parameters"]["parameters"]["assignments"]["assignments"]
+        }
+        self.assertEqual(json.loads(assignments["proposal_output_schema"]), proposal_schema)
         build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"]["jsCode"]
         for forbidden in ("command", "working_directory", "sandbox", "prompt"):
             self.assertIn(forbidden, build)
+        for expected in (
+            "CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION", "provider_model",
+            "provider_reasoning_effort", "provider_auth_mode", "Output JSON Schema",
+        ):
+            self.assertIn(expected, build)
+        normalizer = nodes["Normalize Community Provider Output"]["parameters"]["jsCode"]
+        for expected in (
+            "runner_model: invocation.provider_model",
+            "runner_reasoning_effort: invocation.provider_reasoning_effort",
+            "auth_mode: invocation.provider_auth_mode",
+        ):
+            self.assertIn(expected, normalizer)
+        adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
+        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", adapter_json)
+        self.assertEqual(
+            self.workflow("21-subscription-agent-adapter.json")["meta"]["providerBranchesEnabled"],
+            ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+        )
+        route = self.workflow("21-subscription-agent-adapter.json")["connections"]["Provider Route"]["main"]
+        self.assertEqual(
+            [branch[0]["node"] for branch in route[:2]],
+            ["Run Codex Subscription Provider", "Run Claude Subscription Provider"],
+        )
         self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
         self.assertIn("gpt-5.6-sol", json.dumps(nodes["Subscription Provider Parameters"]))
 
