@@ -64,7 +64,7 @@ class CloudflaredArtifactTests(unittest.TestCase):
             "GOTOOLCHAIN=local", "GOFLAGS=-mod=vendor", "-trimpath",
             "-buildvcs=false", "-buildid=", "FROM scratch",
             "USER 65532:65532", 'ENTRYPOINT ["cloudflared"]',
-            "go list -mod=vendor -m all", "google.golang.org/grpc v1.82.1",
+            "go list -mod=vendor -m -f", "google.golang.org/grpc v1.82.1",
         ):
             self.assertIn(marker, dockerfile)
         self.assertNotRegex(dockerfile, re.compile(r"^CMD\s", re.MULTILINE))

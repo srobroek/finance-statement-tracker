@@ -43,10 +43,15 @@ RUN test "$(sha256sum /tmp/grpc-1.82.1-security-overlay.tar.gz | awk '{print $1}
     && test "$(sha256sum go.mod | awk '{print $1}')" = "abb8cc486ac0deac4a31142e58a3a507bbc2b54ffce99dc5b4f6a3f56f9fc629" \
     && test "$(sha256sum go.sum | awk '{print $1}')" = "b8cd67798a462f596e8e7676471d02d5814e83a1e8973f542c342329b651cf25" \
     && test "$(sha256sum vendor/modules.txt | awk '{print $1}')" = "acbaccc28686e8f7d3576ccf561eab2c64706b73a97c8042d3fb3f578985366f" \
-    && go list -mod=vendor -m all > /tmp/module-graph.txt \
+    && go list -mod=vendor -m -f '{{.Path}} {{.Version}}' \
+      google.golang.org/grpc \
+      google.golang.org/genproto/googleapis/api \
+      google.golang.org/genproto/googleapis/rpc \
+      > /tmp/module-graph.txt \
     && grep -Fx "google.golang.org/grpc v1.82.1" /tmp/module-graph.txt \
     && grep -Fx "google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478" /tmp/module-graph.txt \
     && grep -Fx "google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478" /tmp/module-graph.txt \
+    && test "$(wc -l < /tmp/module-graph.txt)" -eq 3 \
     && ! grep -F "google.golang.org/grpc v1.81.1" /tmp/module-graph.txt
 RUN mkdir -p /out \
     && go build \
