@@ -45,7 +45,7 @@ workflow status can move beyond `SPEC_ONLY`, CI/disposable validation must:
 1. bind the Outlook and OneDrive credentials;
 2. seed the source/rule/cursor Data Tables from versioned configuration;
 3. install the reviewed finance custom nodes;
-4. import every export into the exact n8n 2.36.1 image with no unknown nodes;
+4. import every export into the exact n8n 2.36.2 image with no unknown nodes;
 5. execute the resilience and security fixture matrix, including restarts;
 6. read back every terminal receipt directly from Postgres/Data Tables;
 7. leave all schedules and mutation workflows inactive until promotion gates.
@@ -101,6 +101,6 @@ contracts so table/seed drift fails tests.
 
 The native parameter shape is grounded in n8n's official Data Table create-node
 source and documentation. It has not been imported into or executed against the
-pinned 2.36.1 image, so `EXACT_IMAGE_IMPORT_REQUIRED` and
+pinned 2.36.2 image, so `EXACT_IMAGE_IMPORT_REQUIRED` and
 `DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED` remain activation blockers. The
 generated manifest and export are specifications, not runtime evidence.

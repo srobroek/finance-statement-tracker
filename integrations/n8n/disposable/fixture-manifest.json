@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "contract_status": "DISPOSABLE_ONLY",
+  "production_import_forbidden": true,
+  "required_acknowledgement": "DISPOSABLE_ONLY",
+  "source_workflow_sha256": {
+    "09-ai-proposal.json": "d5fec36df00ae91f5ab88477994a0e71a1f0101343fa28f137501ac02c1073be",
+    "12-outlook-message-sweep.json": "e592f9763d85b4750292da957f335cb6a41cdc1df9dfb0b3e4cb1b45acd597d6",
+    "16-operations-error-handler.json": "28dd3d5ad2100037d7c4011da8f701200e3d23733b2e0126fe66cb933a2af4fb",
+    "17-actual-outbox-recovery.json": "de261ab89b69d50d3d2750fc7d5b1d3eebebd02bb5156f0e2f395419c61ad748",
+    "18-finance-writer-lease.json": "a81c1647815f969ebc9e80e77b2f8feefb53918ebecd6970b85067c1aecfeef4"
+  },
+  "workflows": [
+    {
+      "file": "90-derived-outlook-sweep-core.json",
+      "id": "90000000-0000-4000-8000-000000000012",
+      "sha256": "8baf54fd1c5bfc2121619f3136eb79b1a3f5623ba7cab1d2b02dbc1950dca83d"
+    },
+    {
+      "file": "91-sweep-zero.json",
+      "id": "90000000-0000-4000-8000-000000000901",
+      "sha256": "b14c0a2a986b03b2382b3d3c02d9734a71bf19842e17346a0d5230fbbbf86fce"
+    },
+    {
+      "file": "92-sweep-101.json",
+      "id": "90000000-0000-4000-8000-000000000902",
+      "sha256": "5340bc1e7cbc699efce22d2e9dd33497c097134652430eb388fe668ed4b39f30"
+    },
+    {
+      "file": "93-sweep-late-order.json",
+      "id": "90000000-0000-4000-8000-000000000903",
+      "sha256": "c95ece6e575c8a851cc820cdbebfaa13ef32997dfa2623d0e6948dcded384448"
+    },
+    {
+      "file": "94-sweep-pagination-failure.json",
+      "id": "90000000-0000-4000-8000-000000000904",
+      "sha256": "1641edde5dfda67778741e7eeed7ee16c5cfa24cde01414e5b9993ae16972333"
+    },
+    {
+      "file": "95-lease-acquire-a.json",
+      "id": "90000000-0000-4000-8000-000000000905",
+      "sha256": "3b9bc15096e358e3d9f7afb48f508b2ff98c131c5f8159b876939bd390ad1482"
+    },
+    {
+      "file": "96-lease-acquire-b.json",
+      "id": "90000000-0000-4000-8000-000000000906",
+      "sha256": "27c74b0b46ec2533d8f876a74ea64c0be1efc7a05c5be32e662fc134d52f4e0a"
+    },
+    {
+      "file": "97-lease-stale-assert.json",
+      "id": "90000000-0000-4000-8000-000000000907",
+      "sha256": "f0bbb16b85e26686b980ae2f5240cbb8ca40b4b3c8fad94664ad7888d4db3c4f"
+    },
+    {
+      "file": "98-ai-caller-model-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000908",
+      "sha256": "f3274618ea55751ccee0dce4326983dd9e0ad1d3ffe50af6cb2b47ae4c8af1e3"
+    },
+    {
+      "file": "99-ai-locked-field-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000909",
+      "sha256": "49b9edc8e955408a36d828cba82ab43177afe9ebb8dbd82dec6459883bc3f400"
+    },
+    {
+      "file": "100-ai-missing-policy-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000910",
+      "sha256": "5c1d4e59c3a1232249df078d7085fc6ef6060460b72b1ef9f5cec4f9efc3094a"
+    },
+    {
+      "file": "101-error-redaction.json",
+      "id": "90000000-0000-4000-8000-000000000916",
+      "sha256": "ad0ae115946332e43699eb4ae568d5b608747ddd72713eae969006b9fc6dcfbf"
+    },
+    {
+      "file": "102-derived-recovery-core.json",
+      "id": "90000000-0000-4000-8000-000000000017",
+      "sha256": "2319ed557e273cde70968fdb44f949f4059988cb338a81c44d7892bd70876264"
+    },
+    {
+      "file": "103-recover-prepared.json",
+      "id": "90000000-0000-4000-8000-000000000918",
+      "sha256": "646122751e16a0e82d7f43ecc4d4a5cbe2287588cff36f20a4d0f7b6e5649921"
+    },
+    {
+      "file": "104-recover-actual-observed.json",
+      "id": "90000000-0000-4000-8000-000000000919",
+      "sha256": "278740d4d298b05a9c5a4b2444005b63ffa0ed86c2ddc6364941cdf9be12996f"
+    },
+    {
+      "file": "105-recover-verified.json",
+      "id": "90000000-0000-4000-8000-000000000920",
+      "sha256": "d6ea618518eb5338675669595cdb81437398840e579d26e09f6169e080e1b971"
+    }
+  ],
+  "scenario_contract": {
+    "sweep_zero": {
+      "workflow_id": "90000000-0000-4000-8000-000000000901",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 0,
+        "heartbeat": true
+      }
+    },
+    "sweep_101": {
+      "workflow_id": "90000000-0000-4000-8000-000000000902",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 101,
+        "matched_count": 101
+      }
+    },
+    "sweep_late_order": {
+      "workflow_id": "90000000-0000-4000-8000-000000000903",
+      "expected_exit": 0,
+      "expected_ids": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    },
+    "sweep_pagination_failure": {
+      "workflow_id": "90000000-0000-4000-8000-000000000904",
+      "expected_exit": "nonzero"
+    },
+    "lease_concurrency": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000905",
+        "90000000-0000-4000-8000-000000000906"
+      ],
+      "run_concurrently": true,
+      "expected_successes": 1
+    },
+    "lease_stale": {
+      "workflow_id": "90000000-0000-4000-8000-000000000907",
+      "expected_exit": "nonzero",
+      "expected_error": "WRITER_LEASE_STALE"
+    },
+    "ai_negative": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000908",
+        "90000000-0000-4000-8000-000000000909",
+        "90000000-0000-4000-8000-000000000910"
+      ],
+      "expected_exit": "nonzero",
+      "runner_calls": 0
+    },
+    "error_redaction": {
+      "workflow_id": "90000000-0000-4000-8000-000000000916",
+      "expected_exit": 0,
+      "receipt_table": "finance_execution_failures",
+      "forbidden_readback": [
+        "DontLeak",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "4111111111111111"
+      ]
+    },
+    "outbox_recovery": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000918",
+        "90000000-0000-4000-8000-000000000919",
+        "90000000-0000-4000-8000-000000000920"
+      ],
+      "expected_exit": 0,
+      "expected_state": "COMMITTED",
+      "finance_writes": 0
+    }
+  },
+  "blocked_runtime_scenarios": {
+    "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
+    "positive_ai_subscription_run": "Requires a disposable runner with cached ChatGPT subscription login; negative boundary cases stop before the runner.",
+    "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements."
+  },
+  "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called."
+}

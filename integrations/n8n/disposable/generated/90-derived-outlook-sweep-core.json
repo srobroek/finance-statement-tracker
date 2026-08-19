@@ -1,0 +1,132 @@
+{
+  "id": "90000000-0000-4000-8000-000000000012",
+  "name": "DISPOSABLE ONLY · Derived Outlook Sweep Fixture Core",
+  "active": false,
+  "nodes": [
+    {
+      "id": "12001",
+      "name": "Called by Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -600,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "12002",
+      "name": "Freeze Trusted Cursor Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -350,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r=$json; for(const k of ['run_id','source_code','folder_id','senders','subjects','window_start']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing trusted contract field ${k}`); if(!Array.isArray(r.senders)||!r.senders.length||!Array.isArray(r.subjects)||!r.subjects.length) throw new Error('Trusted sender and subject allowlists are required'); const start=new Date(r.window_start); const upper=r.run_upper_bound?new Date(r.run_upper_bound):new Date(); if(!Number.isFinite(start.valueOf())||!Number.isFinite(upper.valueOf())||!(start<upper)||upper>new Date()) throw new Error('Invalid frozen cursor window'); return [{json:{...r,run_upper_bound:upper.toISOString(),senders:r.senders.map(v=>String(v).toLowerCase()),subjects:r.subjects.map(String)}}];"
+      }
+    },
+    {
+      "id": "12003",
+      "name": "Exhaust Outlook Pagination",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); if(kind==='zero') return [{json:{}}]; const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
+      }
+    },
+    {
+      "id": "12004",
+      "name": "Aggregate Exact Window Heartbeat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json; const start=new Date(c.window_start), upper=new Date(c.run_upper_bound); const enumerated=$input.all().map(i=>i.json).filter(j=>j&&j.id); const messages=enumerated.filter(j=>{const sender=String(j.from?.emailAddress?.address||j.sender?.emailAddress?.address||'').toLowerCase(); const received=new Date(j.receivedDateTime); return c.senders.includes(sender)&&c.subjects.includes(String(j.subject||''))&&received>=start&&received<upper;}).sort((a,b)=>String(a.receivedDateTime).localeCompare(String(b.receivedDateTime))||String(a.id).localeCompare(String(b.id))); return [{json:{run_id:c.run_id,source_code:c.source_code,window_start:c.window_start,run_upper_bound:c.run_upper_bound,pagination_exhausted:true,pages_fetched:null,scanned_count:enumerated.length,matched_count:messages.length,heartbeat:messages.length===0,messages}}];"
+      }
+    },
+    {
+      "id": "12005",
+      "name": "Shape Aggregate Sweep Contract",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "includeOtherFields": true,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Called by Workflow": {
+      "main": [
+        [
+          {
+            "node": "Freeze Trusted Cursor Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freeze Trusted Cursor Window": {
+      "main": [
+        [
+          {
+            "node": "Exhaust Outlook Pagination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exhaust Outlook Pagination": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Exact Window Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Exact Window Heartbeat": {
+      "main": [
+        [
+          {
+            "node": "Shape Aggregate Sweep Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "disposableOnly": true,
+    "productionImportForbidden": true,
+    "derivedFrom": "12-outlook-message-sweep.json",
+    "externalNodeReplacement": "Exhaust Outlook Pagination only"
+  }
+}

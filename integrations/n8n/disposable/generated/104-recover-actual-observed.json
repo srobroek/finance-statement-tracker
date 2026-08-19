@@ -1,0 +1,127 @@
+{
+  "id": "90000000-0000-4000-8000-000000000919",
+  "name": "DISPOSABLE ONLY · Recover from ACTUAL_OBSERVED",
+  "active": false,
+  "nodes": [
+    {
+      "id": "fixture-trigger",
+      "name": "Run Disposable Fixture",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "seed-actual-observed",
+      "name": "Seed ACTUAL_OBSERVED Outbox Crash Boundary",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "fixture-recovery-actual-observed"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "fixture-recovery-actual-observed",
+            "run_id": "fixture-recovery-actual-observed",
+            "imported_id": "fixture:recovery:actual-observed",
+            "actual_file_id": "fixture_actual",
+            "payload_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "artifact_item_id": "fixture-artifact-actual-observed",
+            "artifact_etag": "fixture-etag",
+            "artifact_schema_version": "statement-delta-v1",
+            "config_version": "fixture-v1",
+            "parser_version": "fixture-v1",
+            "state": "ACTUAL_OBSERVED",
+            "attempt_count": 0,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "run-recovery",
+      "name": "Run Derived Recovery Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "90000000-0000-4000-8000-000000000017",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Disposable Fixture": {
+      "main": [
+        [
+          {
+            "node": "Seed ACTUAL_OBSERVED Outbox Crash Boundary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed ACTUAL_OBSERVED Outbox Crash Boundary": {
+      "main": [
+        [
+          {
+            "node": "Run Derived Recovery Core",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "disposableOnly": true,
+    "productionImportForbidden": true
+  }
+}

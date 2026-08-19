@@ -1,0 +1,311 @@
+{
+  "id": "90000000-0000-4000-8000-000000000916",
+  "name": "DISPOSABLE ONLY · Derived Error Redaction Receipt",
+  "active": false,
+  "nodes": [
+    {
+      "id": "16001",
+      "name": "Run Disposable Fixture",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fixture-error-envelope",
+      "name": "Emit Synthetic Sensitive Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{execution:{id:'fixture-error-redaction',error:{message:'password=DontLeak token=ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 card=4111111111111111'}},workflow:{id:'fixture-workflow',name:'Disposable fixture',financeWorkflowCode:'DISPOSABLE_ERROR'}}}];"
+      }
+    },
+    {
+      "id": "16002",
+      "name": "Redact and Classify Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const e=$json.execution||{},w=$json.workflow||{}; const raw=String(e.error?.message||$json.error?.message||'Unknown workflow failure'); const redacted=raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi,'$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g,'[REDACTED]').slice(0,500); const status=Number(e.error?.httpCode||e.error?.statusCode||0); const retryable=status===429||status>=500||/timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw); return [{json:{execution_id:String(e.id||''),workflow_id:String(w.id||''),workflow_name:String(w.name||'').slice(0,200),workflow_code:String(w.financeWorkflowCode||''),run_id:String(e.id||''),error_class:retryable?'TRANSIENT':'TERMINAL',error_message_redacted:redacted,first_seen_at:new Date().toISOString(),readback_verified:false}}];"
+      }
+    },
+    {
+      "id": "16003",
+      "name": "Upsert Durable Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -300,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.execution_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "execution_id": "={{ $json.execution_id }}",
+            "workflow_id": "={{ $json.workflow_id }}",
+            "workflow_name": "={{ $json.workflow_name }}",
+            "workflow_code": "={{ $json.workflow_code }}",
+            "run_id": "={{ $json.run_id }}",
+            "error_class": "={{ $json.error_class }}",
+            "error_message_redacted": "={{ $json.error_message_redacted }}",
+            "first_seen_at": "={{ $json.first_seen_at }}",
+            "readback_verified": false
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16004",
+      "name": "Read Back Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16005",
+      "name": "Compare Failure Receipt Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const expected=$('Redact and Classify Failure').first().json,observed=$json; if(observed.execution_id!==expected.execution_id||observed.workflow_id!==expected.workflow_id||observed.error_class!==expected.error_class||observed.error_message_redacted!==expected.error_message_redacted) throw new Error('FAILURE_RECEIPT_READBACK_MISMATCH'); return [{json:observed}];"
+      }
+    },
+    {
+      "id": "16006",
+      "name": "Mark Failure Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        300,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.execution_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "execution_id": "={{ $json.execution_id }}",
+            "readback_verified": true
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16007",
+      "name": "Read Back Verified Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Redact and Classify Failure": {
+      "main": [
+        [
+          {
+            "node": "Upsert Durable Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Durable Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Compare Failure Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Failure Receipt Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark Failure Readback Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failure Readback Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Disposable Fixture": {
+      "main": [
+        [
+          {
+            "node": "Emit Synthetic Sensitive Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit Synthetic Sensitive Failure": {
+      "main": [
+        [
+          {
+            "node": "Redact and Classify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "disposableOnly": true,
+    "productionImportForbidden": true,
+    "derivedFrom": "16-operations-error-handler.json",
+    "externalNodeReplacement": "Error Trigger only"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "id": "90000000-0000-4000-8000-000000000907",
+  "name": "DISPOSABLE ONLY · Stale writer fence rejected",
+  "active": false,
+  "nodes": [
+    {
+      "id": "fixture-trigger",
+      "name": "Run Disposable Fixture",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "lease-stale-input",
+      "name": "Build Stale Fixture Acquire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -250,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{operation:'ACQUIRE',resource_key:'actual:fixture_stale',lease_owner:'n8n:fixture:stale',ttl_seconds:120}}];"
+      }
+    },
+    {
+      "id": "lease-stale-acquire",
+      "name": "Acquire Fixture Lease",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "lease-stale-corrupt",
+      "name": "Build Stale Fence Assertion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{operation:'ASSERT',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];"
+      }
+    },
+    {
+      "id": "lease-stale-assert",
+      "name": "Assert Stale Fixture Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Disposable Fixture": {
+      "main": [
+        [
+          {
+            "node": "Build Stale Fixture Acquire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Stale Fixture Acquire": {
+      "main": [
+        [
+          {
+            "node": "Acquire Fixture Lease",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Fixture Lease": {
+      "main": [
+        [
+          {
+            "node": "Build Stale Fence Assertion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Stale Fence Assertion": {
+      "main": [
+        [
+          {
+            "node": "Assert Stale Fixture Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "disposableOnly": true,
+    "productionImportForbidden": true
+  }
+}

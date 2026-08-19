@@ -45,7 +45,7 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def test_registry_is_postgres_spec_only_without_execution_claims(self) -> None:
         self.assertEqual(self.registry["schema_version"], 2)
-        self.assertEqual(self.registry["n8n_version"], "2.36.1")
+        self.assertEqual(self.registry["n8n_version"], "2.36.2")
         self.assertEqual(
             self.registry["deployment_mode"], "regular-postgres-external-runners"
         )
@@ -395,7 +395,7 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
         self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
-        self.assertEqual(manifest["n8n_version"], "2.36.1")
+        self.assertEqual(manifest["n8n_version"], "2.36.2")
         self.assertEqual(set(manifest["execution_evidence"].values()), {False})
         self.assertEqual(
             manifest["sources"]["data_tables_sha256"],
@@ -517,6 +517,77 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertIn(
             json.dumps(seed["rows"], ensure_ascii=False, separators=(",", ":"), sort_keys=True),
             nodes["Emit Versioned AI Policy Seed"]["parameters"]["jsCode"],
+        )
+
+    def test_disposable_fixture_workflows_are_generated_current_and_hashed(self) -> None:
+        disposable = N8N / "disposable"
+        generated = disposable / "generated"
+        result = subprocess.run(
+            [sys.executable, str(disposable / "generate_fixture_workflows.py")],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = load_json(disposable / "fixture-manifest.json")
+        self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
+        self.assertTrue(manifest["production_import_forbidden"])
+        self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
+        self.assertEqual(len(manifest["workflows"]), 16)
+        for row in manifest["workflows"]:
+            path = generated / row["file"]
+            self.assertTrue(path.is_file())
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"])
+
+    def test_disposable_fixtures_are_inactive_manual_and_external_write_free(self) -> None:
+        generated = N8N / "disposable" / "generated"
+        fixtures = [load_json(path) for path in sorted(generated.glob("*.json"))]
+        production_ids = {workflow["id"] for workflow in self.workflows.values()}
+        registry_files = {row["file"] for row in self.registry["workflows"]}
+        forbidden = {
+            "n8n-nodes-base.scheduleTrigger",
+            "n8n-nodes-base.webhook",
+            "@n8n/n8n-nodes-langchain.mcpTrigger",
+            "n8n-nodes-base.microsoftOutlook",
+            "n8n-nodes-base.microsoftOneDrive",
+            "n8n-nodes-finance.actualBudget",
+        }
+        for workflow in fixtures:
+            with self.subTest(workflow=workflow["name"]):
+                self.assertFalse(workflow["active"])
+                self.assertNotIn(workflow["id"], production_ids)
+                self.assertTrue(workflow["meta"]["disposableOnly"])
+                self.assertTrue(workflow["meta"]["productionImportForbidden"])
+                self.assertFalse({node["type"] for node in workflow["nodes"]} & forbidden)
+                self.assertTrue(any(
+                    node["type"] in {
+                        "n8n-nodes-base.manualTrigger",
+                        "n8n-nodes-base.executeWorkflowTrigger",
+                    }
+                    for node in workflow["nodes"]
+                ))
+        self.assertFalse(registry_files & {path.name for path in generated.glob("*.json")})
+
+    def test_disposable_fixture_matrix_covers_runtime_requested_boundaries(self) -> None:
+        manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
+        scenarios = manifest["scenario_contract"]
+        self.assertEqual(scenarios["sweep_zero"]["expected"]["scanned_count"], 0)
+        self.assertTrue(scenarios["sweep_zero"]["expected"]["heartbeat"])
+        self.assertEqual(scenarios["sweep_101"]["expected"]["scanned_count"], 101)
+        self.assertEqual(scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"])
+        self.assertEqual(scenarios["sweep_pagination_failure"]["expected_exit"], "nonzero")
+        self.assertTrue(scenarios["lease_concurrency"]["run_concurrently"])
+        self.assertEqual(scenarios["lease_concurrency"]["expected_successes"], 1)
+        self.assertEqual(scenarios["lease_stale"]["expected_error"], "WRITER_LEASE_STALE")
+        self.assertEqual(scenarios["ai_negative"]["runner_calls"], 0)
+        self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
+        self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
+        self.assertEqual(scenarios["error_redaction"]["receipt_table"], "finance_execution_failures")
+        self.assertEqual(
+            set(manifest["blocked_runtime_scenarios"]),
+            {
+                "bounded_mcp_network_negative",
+                "positive_ai_subscription_run",
+                "real_actual_recovery_write",
+            },
         )
 
     def test_rule_ownership_compiler_is_current_disjoint_and_complete(self) -> None:
