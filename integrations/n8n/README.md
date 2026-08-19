@@ -115,6 +115,13 @@ Each workflow also contains native `nodeGroups` plus finance-specific sticky
 notes. Execute Sub-workflow selectors use n8n's `From list` representation with
 the stable workflow ID and cached readable name.
 
+Manual provider setup exports live under `setup-workflows/` and are deliberately
+excluded from the regular 21-workflow registry and import. The OneDrive root
+setup export is an explicit single-file action for `90 Platform & Admin`: it
+creates the top-level `Finance Evidence` folder only when absent, reads it back,
+rejects nested same-name duplication, emits a redacted receipt, and must remain
+inactive and unscheduled.
+
 Instance-level n8n MCP is disabled. Workflow 15 specifies a dedicated MCP Server
 Trigger façade with exactly three fixed operation codes. It accepts no arbitrary
 mailbox, sender, subject, URL, path, provider, credential, Actual ID, command, or
