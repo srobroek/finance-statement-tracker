@@ -247,7 +247,7 @@ jobs:
           test "$(docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} --version)" = "v24.18.1"
           docker run --rm --entrypoint /opt/runners/task-runner-python/.venv/bin/python finance-n8n-task-runners:${{ github.sha }} -I -B -X disable_remote_debug -c "import src.main, urllib3, websockets"
           docker run --rm --entrypoint python finance-n8n-task-runners:${{ github.sha }} -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not names.intersection({'pip','setuptools','msgpack'}), names"
-          test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels \"finance.n8n.source_commit\" }}')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
+          test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.n8n.source_commit" }}')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
           sh services/n8n-task-runners/protocol-smoke.sh \
             finance-n8n-task-runners:${{ github.sha }} \
             ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386

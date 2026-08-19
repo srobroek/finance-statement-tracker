@@ -46,6 +46,18 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("python_runner", smoke)
         self.assertIn("js_runner", smoke)
 
+        workflow = (ROOT / ".github" / "workflows" / "phase1-finance-artifacts.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "--format '{{ index .Config.Labels \"finance.n8n.source_commit\" }}'",
+            workflow,
+        )
+        self.assertNotIn(
+            "--format '{{ index .Config.Labels \\\"finance.n8n.source_commit\\\" }}'",
+            workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
