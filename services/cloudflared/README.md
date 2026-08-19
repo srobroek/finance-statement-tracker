@@ -10,9 +10,15 @@ and deliberately has no default command.
 The tagged source carried gRPC `1.81.1`, which is affected by
 `GHSA-hrxh-6v49-42gf`. The checked-in `grpc-1.82.1-security.patch` is the exact
 `go get`, `go mod tidy`, and `go mod vendor` delta for gRPC `1.82.1` and its two
-resolved genproto modules. The build verifies the patch hash, patched
-`go.mod`/`go.sum`/`vendor/modules.txt` hashes, and the vendored module graph
-before compiling; it does not download dependencies or waive the image scan.
+resolved genproto modules. Repository tests verify the patch hash. The build
+verifies the patched `go.mod`/`go.sum`/`vendor/modules.txt` hashes and vendored
+module graph before compiling; it does not download dependencies or waive the
+image scan.
+Because the digest-pinned Go Alpine builder deliberately has no package manager
+additions, CI consumes the reproducible, manifest-bearing overlay produced by
+`generate_security_overlay.py` instead of installing a patch utility. The
+source patch remains checked in for review, and the build verifies the overlay
+and every resulting module-control-file hash.
 
 The deployed Compose command remains:
 

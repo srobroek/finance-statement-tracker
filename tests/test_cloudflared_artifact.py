@@ -1,8 +1,9 @@
 import hashlib
 import json
 import re
+import tarfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +27,23 @@ class CloudflaredArtifactTests(unittest.TestCase):
         patch = SERVICE / security_update["patch"]
         self.assertTrue(patch.is_file())
         self.assertEqual(hashlib.sha256(patch.read_bytes()).hexdigest(), security_update["patch_sha256"])
+        overlay = SERVICE / security_update["overlay"]
+        self.assertTrue(overlay.is_file())
+        self.assertEqual(hashlib.sha256(overlay.read_bytes()).hexdigest(), security_update["overlay_sha256"])
+        self.assertTrue((SERVICE / security_update["overlay_generator"]).is_file())
+        with tarfile.open(overlay, mode="r:gz") as archive:
+            members = archive.getmembers()
+            names = {member.name for member in members}
+            self.assertTrue(all(not PurePosixPath(name).is_absolute() for name in names))
+            self.assertTrue(all(".." not in PurePosixPath(name).parts for name in names))
+            manifest_file = archive.extractfile("overlay-manifest.json")
+            self.assertIsNotNone(manifest_file)
+            manifest = json.loads(manifest_file.read())
+            self.assertEqual(set(manifest["files"]), names - {"overlay-manifest.json"})
+            for name, expected_sha256 in manifest["files"].items():
+                content = archive.extractfile(name)
+                self.assertIsNotNone(content)
+                self.assertEqual(hashlib.sha256(content.read()).hexdigest(), expected_sha256)
         self.assertEqual(lock["runtime"], "scratch")
         self.assertEqual(lock["entrypoint"], ["cloudflared"])
         self.assertEqual(lock["compose_command"], ["tunnel", "--no-autoupdate", "run"])
@@ -36,7 +54,7 @@ class CloudflaredArtifactTests(unittest.TestCase):
         for value in (
             lock["version"], lock["source_commit"], lock["source_archive_sha256"],
             lock["go_version"], lock["go_builder_image"], str(lock["source_date_epoch"]),
-            lock["security_module_update"]["patch_sha256"],
+            lock["security_module_update"]["overlay_sha256"],
             lock["security_module_update"]["patched_go_mod_sha256"],
             lock["security_module_update"]["patched_go_sum_sha256"],
             lock["security_module_update"]["patched_vendor_modules_sha256"],

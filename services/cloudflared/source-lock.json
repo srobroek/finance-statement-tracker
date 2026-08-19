@@ -14,6 +14,9 @@
     "reason": "GHSA-hrxh-6v49-42gf",
     "patch": "grpc-1.82.1-security.patch",
     "patch_sha256": "4444b3b846d805d38f35883a2fed7cf742a552db1d67ad943e2bff1fc9af192b",
+    "overlay": "grpc-1.82.1-security-overlay.tar.gz",
+    "overlay_sha256": "24770fdedc94e4695d48933b221faa202e01279d3b2267547b6b67ced2dc10cb",
+    "overlay_generator": "generate_security_overlay.py",
     "resolved_modules": {
       "google.golang.org/grpc": "v1.82.1",
       "google.golang.org/genproto/googleapis/api": "v0.0.0-20260414002931-afd174a4e478",
