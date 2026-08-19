@@ -4,7 +4,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = '/opt/finance-n8n/custom-extensions/n8n-nodes-finance';
+const financeRoot = '/opt/finance-n8n/custom-extensions/n8n-nodes-finance';
+const communityRoot = '/opt/finance-n8n/community-extensions';
 const receipt = '/opt/finance-n8n/extension-tree.sha256';
 
 function updateTree(hash, directory, relative = '') {
@@ -28,12 +29,31 @@ function updateTree(hash, directory, relative = '') {
   }
 }
 
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const manifest = JSON.parse(fs.readFileSync(path.join(financeRoot, 'package.json'), 'utf8'));
 if (manifest.name !== 'n8n-nodes-finance' || manifest.version !== '0.1.0') {
   throw new Error('FINANCE_EXTENSION_VERSION_MISMATCH');
 }
+const communityManifest = JSON.parse(fs.readFileSync(path.join(communityRoot, 'package.json'), 'utf8'));
+const expectedCommunity = {
+  '@anthropic-ai/claude-code': '2.1.235',
+  '@ggomez91npm/n8n-nodes-claude-code': '0.8.0',
+  'n8n-nodes-prodex': '0.5.1',
+};
+if (JSON.stringify(communityManifest.dependencies) !== JSON.stringify(expectedCommunity)) {
+  throw new Error('COMMUNITY_AI_EXTENSION_VERSION_MISMATCH');
+}
+for (const [name, version] of Object.entries(expectedCommunity)) {
+  const installed = JSON.parse(fs.readFileSync(path.join(communityRoot, 'node_modules', name, 'package.json'), 'utf8'));
+  if (installed.version !== version) throw new Error(`COMMUNITY_AI_INSTALLED_VERSION_MISMATCH:${name}`);
+}
+for (const forbidden of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']) {
+  if (process.env[forbidden] !== undefined) throw new Error(`COMMUNITY_AI_API_KEY_FORBIDDEN:${forbidden}`);
+}
 const hash = crypto.createHash('sha256');
-updateTree(hash, root);
+hash.update('finance\0');
+updateTree(hash, financeRoot);
+hash.update('community\0');
+updateTree(hash, communityRoot);
 const observed = hash.digest('hex');
 if (process.argv[2] === '--write') {
   fs.writeFileSync(receipt, `${observed}\n`, { encoding: 'ascii', mode: 0o444 });
