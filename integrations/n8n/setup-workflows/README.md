@@ -29,24 +29,52 @@ The final item retains only result counts, the bounded time window, execution
 ID, safety booleans, and verification timestamp; it discards message fields,
 file fields, credential values, and token values.
 
-For the restart proof, import this file alone into `90 Platform & Admin`, bind
-the existing `Finance Outlook` and `Finance OneDrive` credentials, and keep the
-workflow inactive. Then use this exact reviewed sequence:
+For the restart proof, use the guarded
+`runner/run-transient-microsoft-oauth-refresh-proof.sh` contract. Do not import
+or execute WF23 manually. The runner resolves the existing project-owner
+credentials, compares their identities before and after only in memory without
+printing or recording their IDs, creates a bound copy under `/dev/shm`, and
+performs this exact reviewed sequence:
 
 1. Run the workflow manually and retain its redacted terminal receipt.
 2. Capture a metadata-only readback for both bound credentials containing only
-   credential ID, credential type, `updatedAt`, and token expiry time when the
-   guarded readback can derive it. Never print or persist encrypted credential
-   data, access tokens, refresh tokens, client secrets, or response bodies.
+   credential type, `updatedAt`, token expiry time, and presence booleans. The
+   readback deliberately omits credential IDs. Never print or persist encrypted
+   credential data, access tokens, refresh tokens, client secrets, or response
+   bodies.
 3. Restart only the n8n service and wait for its health check to pass.
 4. Run the same inactive workflow again and retain the second redacted receipt.
 5. Repeat the same metadata-only readback. Accept the proof only when both
    executions are `VERIFIED`, both provider reads succeeded, each Outlook count
-   is at most one, the credential IDs/types remain stable, and expiry/updatedAt
-   metadata shows no invalid regression. A refresh is proven only if the
-   metadata demonstrates a later token lifetime or credential update; two
-   successful reads alone prove restart persistence, not refresh.
+   is at most one, and the credential types remain stable. Before the first
+   execution, both access-token expiries must already be in the past. The first
+   execution must move each expiry strictly forward to a future, unexpired
+   value. After restart, the second execution must succeed with each expiry
+   still future and no earlier than after the first execution. `updatedAt` is
+   retained only as supplemental non-regression metadata and never counts as
+   refresh proof by itself.
 
-The two workflow receipts and two metadata-only snapshots form the reviewed
-evidence set. Remove the setup workflow from n8n afterward if it is no longer
-needed.
+The runner requires explicit `FINANCE_MICROSOFT_OAUTH_PROOF_ACK`, exact finance
+and orchestrator commits, and the exact retained project. It starts only from
+the reviewed `21 workflows / 0 active / 0 published` state, imports exactly one
+inactive workflow, places it in `90 Platform & Admin`, and returns to the exact
+21-workflow baseline. Raw n8n `IRun` objects and provider responses exist only
+inside the execution process long enough to validate the terminal node; only
+the redacted terminal result leaves that process. Execution persistence is
+disabled and independently checked in PostgreSQL after both calls.
+
+The runner restarts only the n8n container and verifies that every other
+service container and start time remains unchanged. Exact baseline and Finance
+Data Table digests must match after cleanup. The final mode-600 receipt contains
+the two redacted workflow results and three metadata-only snapshots (before,
+after the first call, and after the post-restart call). Failure cleanup removes
+only an exact inactive WF23 instance and emits a redacted failure receipt; any
+cleanup or digest mismatch fails closed for review.
+
+A failure receipt uses three-state postconditions. It reports
+`raw_irun_persisted: false` only after a zero-row execution readback, and
+`finance_data_table_writes: false` only after a fresh official
+`DataTableService` digest matches the baseline. Otherwise those fields are
+`null`, not optimistic assertions. `FAILED_CLEAN_BOUNDARY_RESTORED` is allowed
+only when workflow restoration, zero execution rows, and the official Data
+Table digest recheck all succeeded.
