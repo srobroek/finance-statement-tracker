@@ -25,6 +25,7 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
     def test_launcher_is_source_built_with_a_narrow_auditable_patch(self):
         dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
         dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        package_verifier = (SERVICE / "verify_workspace_packages.mjs").read_text(encoding="utf-8")
         patcher = (SERVICE / "patch_launcher.py").read_text(encoding="utf-8")
         self.assertNotIn("FROM n8nio/runners", dockerfile)
         self.assertIn("go test ./...", dockerfile)
@@ -32,8 +33,8 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertNotIn("pnpm add moment", dockerfile)
         self.assertNotIn("npm ci", dockerfile)
         self.assertIn("finance-closure-manifest.json", dockerfile)
-        self.assertIn("'@n8n/di'", dockerfile)
-        self.assertIn("require.resolve(name)", dockerfile)
+        self.assertIn("'@n8n/di'", package_verifier)
+        self.assertIn("require.resolve(exported)", package_verifier)
         self.assertIn("golang.org/x/text v0.14.0", patcher)
         self.assertIn("golang.org/x/text v0.39.0", patcher)
         self.assertIn("SOURCE_SHA256", patcher)
@@ -81,10 +82,12 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         )
         self.assertIn("relink_closure.py", workflow)
         self.assertIn("validate_closure.py", workflow)
+        self.assertIn("workspace_package_manifest.py", workflow)
+        self.assertIn("verify_workspace_packages.mjs", workflow)
         self.assertIn("javascript-extras/package-lock.json", workflow)
         self.assertIn("docker cp", workflow)
         self.assertIn("closure_sha256", workflow)
-        self.assertIn("'./dist/start.js'", workflow)
+        self.assertIn("finance-workspace-packages.json", workflow)
 
 
 if __name__ == "__main__":

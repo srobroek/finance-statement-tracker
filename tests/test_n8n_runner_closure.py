@@ -17,9 +17,30 @@ def _load(name, path):
 
 validate_closure = _load("finance_validate_runner_closure", SERVICE / "validate_closure.py")
 relink_closure = _load("finance_relink_runner_closure", SERVICE / "relink_closure.py")
+workspace_manifest = _load(
+    "finance_runner_workspace_manifest", SERVICE / "workspace_package_manifest.py"
+)
 
 
 class N8nRunnerClosurePortableTests(unittest.TestCase):
+    def _package_fixture(self, base, mismatch=None):
+        workspace = base / "workspace"
+        closure = workspace / "dist" / "runner"
+        for name, source_relative in workspace_manifest.PACKAGE_PATHS.items():
+            source = workspace / source_relative
+            shipped = closure / "node_modules" / pathlib.Path(*name.split("/"))
+            source.mkdir(parents=True)
+            shipped.mkdir(parents=True)
+            source_version = "1.2.3"
+            shipped_version = "9.9.9" if mismatch == name else source_version
+            (source / "package.json").write_text(
+                f'{{"name":"{name}","version":"{source_version}"}}\n', encoding="utf-8"
+            )
+            (shipped / "package.json").write_text(
+                f'{{"name":"{name}","version":"{shipped_version}"}}\n', encoding="utf-8"
+            )
+        return workspace, closure
+
     def test_regular_file_fingerprint_is_stable(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp) / "closure"
@@ -33,6 +54,19 @@ class N8nRunnerClosurePortableTests(unittest.TestCase):
             self.assertEqual(first["files"], 1)
             self.assertEqual(first["symlinks"], 0)
             self.assertRegex(first["closure_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_workspace_manifest_binds_shipped_package_versions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace, closure = self._package_fixture(pathlib.Path(temp))
+            manifest = workspace_manifest.build_manifest(closure, workspace)
+            self.assertEqual(set(manifest["packages"]), set(workspace_manifest.PACKAGE_PATHS))
+            self.assertEqual(set(manifest["packages"].values()), {"1.2.3"})
+
+    def test_workspace_manifest_rejects_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace, closure = self._package_fixture(pathlib.Path(temp), mismatch="@n8n/utils")
+            with self.assertRaisesRegex(ValueError, "workspace/shipped identity mismatch"):
+                workspace_manifest.build_manifest(closure, workspace)
 
 
 @unittest.skipIf(os.name == "nt", "symlink creation is not guaranteed on Windows runners")

@@ -251,16 +251,19 @@ jobs:
           test "$(node -p "require('$extras/node_modules/moment/package.json').version")" = "2.30.1"
           cp -a "$extras/node_modules/moment" "$closure/node_modules/moment"
           python ../../services/n8n-task-runners/relink_closure.py "$closure" .
+          cp ../../services/n8n-task-runners/verify_workspace_packages.mjs "$closure/finance-verify-workspace-packages.mjs"
+          python ../../services/n8n-task-runners/workspace_package_manifest.py \
+            "$closure" . \
+            --output "$closure/finance-workspace-packages.json"
+          node "$closure/finance-verify-workspace-packages.mjs" "$closure"
           python ../../services/n8n-task-runners/validate_closure.py "$closure"
           test "$(jq -r .schema_version "$closure/finance-closure-manifest.json")" = "1"
           test "$(jq -r .relinked "$closure/finance-closure-relinks.json")" = "0"
-          (
-            cd "$closure"
-            node -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','moment','./dist/start.js']) require.resolve(name);"
-          )
           sha256sum \
             ../../services/n8n-task-runners/relink_closure.py \
             ../../services/n8n-task-runners/validate_closure.py \
+            ../../services/n8n-task-runners/workspace_package_manifest.py \
+            ../../services/n8n-task-runners/verify_workspace_packages.mjs \
             ../../services/n8n-task-runners/javascript-extras/package-lock.json
       - name: Build source-reproduced task runners image
         run: docker build --file services/n8n-task-runners/Dockerfile --tag finance-n8n-task-runners:${{ github.sha }} .
@@ -270,7 +273,7 @@ jobs:
           test "$(docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} --version)" = "v24.18.1"
           docker run --rm --entrypoint /opt/runners/task-runner-python/.venv/bin/python finance-n8n-task-runners:${{ github.sha }} -I -B -X disable_remote_debug -c "import src.main, urllib3, websockets"
           docker run --rm --entrypoint python finance-n8n-task-runners:${{ github.sha }} -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not names.intersection({'pip','setuptools','msgpack'}), names"
-          docker run --rm --workdir /opt/runners/task-runner-javascript --entrypoint node finance-n8n-task-runners:${{ github.sha }} -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','moment']) require.resolve(name);"
+          docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} /opt/runners/task-runner-javascript/finance-verify-workspace-packages.mjs /opt/runners/task-runner-javascript
           source_closure_sha="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"
           copied_closure="$(mktemp -d)"
           closure_container="$(docker create finance-n8n-task-runners:${{ github.sha }})"
@@ -308,6 +311,8 @@ jobs:
           closure_sha256="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"
           relinker_sha256="$(sha256sum services/n8n-task-runners/relink_closure.py | cut -d' ' -f1)"
           validator_sha256="$(sha256sum services/n8n-task-runners/validate_closure.py | cut -d' ' -f1)"
+          workspace_manifest_builder_sha256="$(sha256sum services/n8n-task-runners/workspace_package_manifest.py | cut -d' ' -f1)"
+          workspace_verifier_sha256="$(sha256sum services/n8n-task-runners/verify_workspace_packages.mjs | cut -d' ' -f1)"
           jq -n \
             --arg image "$image" \
             --arg immutable_ref "$immutable_ref" \
@@ -317,7 +322,9 @@ jobs:
             --arg closure_sha256 "$closure_sha256" \
             --arg relinker_sha256 "$relinker_sha256" \
             --arg validator_sha256 "$validator_sha256" \
-            '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha,n8n_source_commit:$n8n_source_commit,launcher_source_commit:$launcher_source_commit,closure_sha256:$closure_sha256,relinker_sha256:$relinker_sha256,validator_sha256:$validator_sha256,security_overrides:{"golang.org/x/text":"v0.39.0"}}' \
+            --arg workspace_manifest_builder_sha256 "$workspace_manifest_builder_sha256" \
+            --arg workspace_verifier_sha256 "$workspace_verifier_sha256" \
+            '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha,n8n_source_commit:$n8n_source_commit,launcher_source_commit:$launcher_source_commit,closure_sha256:$closure_sha256,relinker_sha256:$relinker_sha256,validator_sha256:$validator_sha256,workspace_manifest_builder_sha256:$workspace_manifest_builder_sha256,workspace_verifier_sha256:$workspace_verifier_sha256,security_overrides:{"golang.org/x/text":"v0.39.0"}}' \
             > finance-n8n-task-runners-image-receipt.json
       - name: Upload task runners digest receipt
         if: github.event_name == 'push'

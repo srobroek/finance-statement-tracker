@@ -10,8 +10,9 @@ RUN test "$(node -p "require('./package.json').version")" = "2.36.1" \
     && test -f dist/start.js \
     && test -f finance-closure-manifest.json \
     && test -f finance-closure-relinks.json \
+    && test -f finance-workspace-packages.json \
     && node --check dist/start.js \
-    && node -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','moment']) require.resolve(name);"
+    && node finance-verify-workspace-packages.mjs .
 
 FROM ${PYTHON_IMAGE} AS python-runner
 ARG UV_VERSION=0.8.14
