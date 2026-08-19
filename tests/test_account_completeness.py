@@ -25,9 +25,30 @@ WEALTH_CONFIG = ROOT / "config" / "wealth-sources.json"
 SARWA_CAPTURE = ROOT / "tests" / "fixtures" / "sarwa-holdings.sample.json"
 FAB_INVENTORY = ROOT / "config" / "evidence" / "browser-captures" / "fab-non-credit-inventory-2026-08-19.json"
 ADCB_STATUS = ROOT / "config" / "evidence" / "adcb-closed-card-status-2026-08-19.json"
+RECONCILIATION_RECEIPT = ROOT / "config" / "evidence" / "production-account-reconciliation-receipt-2026-08-19.json"
 
 
 class AccountCompletenessTests(unittest.TestCase):
+    def test_production_reconciliation_receipt_is_redacted_and_hash_bound(self) -> None:
+        receipt = json.loads(RECONCILIATION_RECEIPT.read_text(encoding="utf-8"))
+        rendered = json.dumps(receipt)
+
+        self.assertEqual(receipt["verification"]["api_readback"], "PASS")
+        self.assertEqual(receipt["verification"]["transaction_readback"], "PASS")
+        self.assertEqual(receipt["summary"]["target_account_count"], 7)
+        self.assertEqual(receipt["summary"]["created_account_count"], 5)
+        self.assertEqual(receipt["summary"]["reconciliation_adjustment_count"], 3)
+        self.assertEqual(receipt["summary"]["unrelated_account_mutation_count"], 0)
+        self.assertNotRegex(
+            rendered,
+            r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+        )
+        self.assertNotIn("balance_minor", rendered)
+        self.assertNotIn("amount_minor", rendered)
+        self.assertNotIn("actual_account_id", rendered)
+        for digest in receipt["runtime_artifacts"].values():
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+
     def test_manifest_uses_unique_safe_stable_identities(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
 
