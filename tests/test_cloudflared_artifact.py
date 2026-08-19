@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import unittest
@@ -18,6 +19,13 @@ class CloudflaredArtifactTests(unittest.TestCase):
         self.assertRegex(lock["source_archive_sha256"], r"^[a-f0-9]{64}$")
         self.assertEqual(lock["go_version"], "1.26.6")
         self.assertRegex(lock["go_builder_image"], r"@sha256:[a-f0-9]{64}$")
+        security_update = lock["security_module_update"]
+        self.assertEqual(security_update["reason"], "GHSA-hrxh-6v49-42gf")
+        self.assertEqual(security_update["resolved_modules"]["google.golang.org/grpc"], "v1.82.1")
+        self.assertRegex(security_update["patch_sha256"], r"^[a-f0-9]{64}$")
+        patch = SERVICE / security_update["patch"]
+        self.assertTrue(patch.is_file())
+        self.assertEqual(hashlib.sha256(patch.read_bytes()).hexdigest(), security_update["patch_sha256"])
         self.assertEqual(lock["runtime"], "scratch")
         self.assertEqual(lock["entrypoint"], ["cloudflared"])
         self.assertEqual(lock["compose_command"], ["tunnel", "--no-autoupdate", "run"])
@@ -28,12 +36,17 @@ class CloudflaredArtifactTests(unittest.TestCase):
         for value in (
             lock["version"], lock["source_commit"], lock["source_archive_sha256"],
             lock["go_version"], lock["go_builder_image"], str(lock["source_date_epoch"]),
+            lock["security_module_update"]["patch_sha256"],
+            lock["security_module_update"]["patched_go_mod_sha256"],
+            lock["security_module_update"]["patched_go_sum_sha256"],
+            lock["security_module_update"]["patched_vendor_modules_sha256"],
         ):
             self.assertIn(value, dockerfile)
         for marker in (
             "GOTOOLCHAIN=local", "GOFLAGS=-mod=vendor", "-trimpath",
             "-buildvcs=false", "-buildid=", "FROM scratch",
             "USER 65532:65532", 'ENTRYPOINT ["cloudflared"]',
+            "go list -mod=vendor -m all", "google.golang.org/grpc v1.82.1",
         ):
             self.assertIn(marker, dockerfile)
         self.assertNotRegex(dockerfile, re.compile(r"^CMD\s", re.MULTILINE))

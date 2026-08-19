@@ -16,6 +16,7 @@ ENV CGO_ENABLED=0 \
     SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 
 WORKDIR /src
+COPY grpc-1.82.1-security.patch /tmp/grpc-1.82.1-security.patch
 ADD --checksum=sha256:07a0fd9879fba3dee7affd2f8571f8759b31e226a70a91ae7a108f88d4881811 \
     ${CLOUDFLARED_SOURCE_URL} \
     /tmp/cloudflared-source.tar.gz
@@ -25,6 +26,19 @@ RUN tar -xzf /tmp/cloudflared-source.tar.gz --strip-components=1 -C /src \
     && test -s go.sum \
     && test -s vendor/modules.txt \
     && printf '%s\n' "${CLOUDFLARED_SOURCE_COMMIT}" > /src/.source-commit
+RUN test "$(sha256sum /tmp/grpc-1.82.1-security.patch | awk '{print $1}')" = "4444b3b846d805d38f35883a2fed7cf742a552db1d67ad943e2bff1fc9af192b" \
+    && mkdir -p \
+      vendor/google.golang.org/grpc/experimental/balancer/weight \
+      vendor/google.golang.org/grpc/internal/transport/internal \
+    && patch -p1 < /tmp/grpc-1.82.1-security.patch \
+    && test "$(sha256sum go.mod | awk '{print $1}')" = "abb8cc486ac0deac4a31142e58a3a507bbc2b54ffce99dc5b4f6a3f56f9fc629" \
+    && test "$(sha256sum go.sum | awk '{print $1}')" = "b8cd67798a462f596e8e7676471d02d5814e83a1e8973f542c342329b651cf25" \
+    && test "$(sha256sum vendor/modules.txt | awk '{print $1}')" = "acbaccc28686e8f7d3576ccf561eab2c64706b73a97c8042d3fb3f578985366f" \
+    && go list -mod=vendor -m all > /tmp/module-graph.txt \
+    && grep -Fx "google.golang.org/grpc v1.82.1" /tmp/module-graph.txt \
+    && grep -Fx "google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478" /tmp/module-graph.txt \
+    && grep -Fx "google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478" /tmp/module-graph.txt \
+    && ! grep -F "google.golang.org/grpc v1.81.1" /tmp/module-graph.txt
 RUN mkdir -p /out \
     && go build \
       -trimpath \
