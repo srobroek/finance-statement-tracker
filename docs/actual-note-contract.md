@@ -49,10 +49,43 @@ date, amount, and the complete previous note. A drifted row fails instead of
 being overwritten. Cleanup runs only at the final migration gate after the
 classification, tagging, schedule, budget, and evidence work is complete.
 
+## Full-corpus dry run
+
+`scripts/plan-actual-corpus-migration.py` regenerates every source manifest
+without modifying its signed amounts, produces a corpus-wide topic/note
+exception report, and optionally compares the proposed state with a read-only
+Actual snapshot. The Actual plan is always marked `DRY_RUN_ONLY`, is keyed by
+unique `imported_id`, and carries a SHA-256 guard over the complete current
+account/date/amount/category/note state. Current `Memo:`, `Review:`, and `Doc:`
+content is retained. The corpus report must show zero amount mutations and zero
+note-contract violations. A manual category is reported as a conflict and
+preserved.
+
+Ordinary positive merchant credits default to refunds. An issuer reward needs
+explicit reward evidence. In particular, a positive Amazon merchant row on the
+Emirates Islamic statement is a refund; an actual EI cashback award is an
+Amazon credit with `cash_equivalent=false`, not cash deposited to the card.
+The words `Amazon credit` alone do not establish a reward.
+
+Example read-only invocation:
+
+```powershell
+python scripts/plan-actual-corpus-migration.py `
+  runtime/full-restage/final/manifests `
+  runtime/full-restage/note-v2/manifests `
+  runtime/audit/actual-corpus-semantics-audit-2026-08-19.json `
+  --snapshot runtime/audit/live-full-chat-audit-snapshot.json `
+  --plan runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json `
+  --migration-audit runtime/audit/actual-corpus-migration-audit-2026-08-19.json
+```
+
+This command has no apply mode and never opens an Actual connection.
+
 Run the contract and full ingestion tests before any deployment:
 
 ```powershell
 python -m unittest tests.test_actual_notes -v
+python -m unittest tests.test_corpus_migration -v
 python -m unittest discover -s tests -v
 Push-Location integrations/actual
 npm test
