@@ -11,6 +11,10 @@ server-owned AI policy contracts. The fixture gate then imports the separate
 `generated` directory and executes only the fixed IDs declared in
 `fixture-manifest.json` with `n8n execute --id <ID>`.
 
+The harness binds the existing server-owned `BIND_CODEX_AGENT_RUNNER`
+HTTP-header credential to production workflow 09. Neither positive wrapper
+accepts a model, URL, credential, prompt, or policy hash from its input.
+
 `generate_fixture_workflows.py` derives fixture cores from the production
 exports and records exact source and generated hashes. It replaces only the
 boundaries that cannot be called in a disposable test without external state:
@@ -21,13 +25,17 @@ boundaries that cannot be called in a disposable test without external state:
 - Recovery's scheduler, OneDrive download, and Actual operations are replaced
   with fixed no-finance-write nodes; the Data Table state machine and the real
   fenced-lease subworkflow remain.
-- AI fixtures contain only invalid requests that must fail before the runner.
+- Negative AI fixtures contain invalid requests that must fail before the
+  runner. The positive Luna wrapper exercises the production workflow's fixed
+  private runner HTTP boundary with a schema-bound, redacted request and no
+  finance write. The positive Sol wrapper is excluded from default execution
+  and requires the explicit harness gate `DISPOSABLE_ALLOW_SOL_XHIGH`.
 
 The manifest distinguishes these derived execution receipts from production
 provider proof. In particular, an inactive MCP Server Trigger cannot be tested
-over its transport without publishing it; a positive ChatGPT subscription run
-requires a disposable cached login; and a real Actual recovery write is
-intentionally forbidden here.
+over its transport without publishing it, and a real Actual recovery write is
+intentionally forbidden here. Positive agent receipts prove only the fixed
+private runner handoff and checked proposal boundary in the disposable stack.
 
 Regenerate and verify drift with:
 

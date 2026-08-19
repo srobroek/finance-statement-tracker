@@ -67,6 +67,16 @@
       "sha256": "5c1d4e59c3a1232249df078d7085fc6ef6060460b72b1ef9f5cec4f9efc3094a"
     },
     {
+      "file": "106-ai-positive-luna.json",
+      "id": "90000000-0000-4000-8000-000000000911",
+      "sha256": "34a0f91419e6ada2302335e20c100294dac12654201fa970de276f72e5f28ede"
+    },
+    {
+      "file": "107-ai-positive-sol-gated.json",
+      "id": "90000000-0000-4000-8000-000000000912",
+      "sha256": "f953e1f9fae8e4988e7d3f301efdbd303246d60d0ba50a70e107481d1238a576"
+    },
+    {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
       "sha256": "ad0ae115946332e43699eb4ae568d5b608747ddd72713eae969006b9fc6dcfbf"
@@ -144,6 +154,26 @@
       "expected_exit": "nonzero",
       "runner_calls": 0
     },
+    "ai_positive_luna": {
+      "workflow_id": "90000000-0000-4000-8000-000000000911",
+      "expected_exit": 0,
+      "policy_id": "classify-unresolved",
+      "expected_model": "gpt-5.6-luna",
+      "expected_reasoning_effort": "max",
+      "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+      "finance_writes": 0
+    },
+    "ai_positive_sol_gated": {
+      "workflow_id": "90000000-0000-4000-8000-000000000912",
+      "expected_exit": 0,
+      "policy_id": "recommend-category",
+      "expected_model": "gpt-5.6-sol",
+      "expected_reasoning_effort": "xhigh",
+      "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+      "finance_writes": 0,
+      "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH",
+      "default_execution_forbidden": true
+    },
     "error_redaction": {
       "workflow_id": "90000000-0000-4000-8000-000000000916",
       "expected_exit": 0,
@@ -167,7 +197,6 @@
   },
   "blocked_runtime_scenarios": {
     "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
-    "positive_ai_subscription_run": "Requires a disposable runner with cached ChatGPT subscription login; negative boundary cases stop before the runner.",
     "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements."
   },
   "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called."

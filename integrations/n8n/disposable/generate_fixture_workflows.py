@@ -157,6 +157,55 @@ def build_ai_wrapper(workflow_id: str, case: str) -> dict:
     )
 
 
+def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
+    if profile == "luna":
+        request = {
+            "policy_id": "classify-unresolved",
+            "unresolved": [{
+                "transaction_id": "fixture:positive:luna:carrefour",
+                "allowed_fields": ["category", "tags"],
+                "redacted_context": {
+                    "merchant_description": "CARREFOUR MARKET UAE",
+                    "normalized_vendor": "Carrefour",
+                    "transaction_type": "PURCHASE",
+                    "deterministic_result": "category unresolved",
+                },
+            }],
+        }
+        name = "DISPOSABLE ONLY · Positive Luna proposal"
+    elif profile == "sol":
+        request = {
+            "policy_id": "recommend-category",
+            "unresolved": [{
+                "transaction_id": "fixture:positive:sol:category-recommendation",
+                "allowed_fields": ["category_recommendation"],
+                "redacted_context": {
+                    "merchant_description": "SPECIALIST FIXTURE MERCHANT",
+                    "normalized_vendor": "Specialist Fixture Merchant",
+                    "transaction_type": "PURCHASE",
+                    "deterministic_result": "no configured category fits",
+                },
+            }],
+        }
+        name = "DISPOSABLE ONLY · GATED Positive Sol proposal"
+    else:
+        raise ValueError(profile)
+    workflow = wrapper(
+        workflow_id,
+        name,
+        f"return [{{json:{canonical(request)}}}];",
+        AI_ID,
+    )
+    workflow["meta"]["agentProfileExpected"] = (
+        "LUNA_MAX" if profile == "luna" else "SOL_XHIGH"
+    )
+    workflow["meta"]["financeWritesImpossible"] = True
+    if profile == "sol":
+        workflow["meta"]["executionGate"] = "DISPOSABLE_ALLOW_SOL_XHIGH"
+        workflow["meta"]["defaultExecutionForbidden"] = True
+    return workflow
+
+
 def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
     request = {
         "operation": "ACQUIRE",
@@ -362,6 +411,8 @@ def build_all() -> dict[str, dict]:
         "98-ai-caller-model-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000908", "caller-model-rejected"),
         "99-ai-locked-field-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000909", "locked-field-rejected"),
         "100-ai-missing-policy-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000910", "missing-active-policy"),
+        "106-ai-positive-luna.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000911", "luna"),
+        "107-ai-positive-sol-gated.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000912", "sol"),
         "101-error-redaction.json": build_error_redaction_fixture(),
         "102-derived-recovery-core.json": build_recovery_core(),
         "103-recover-prepared.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000918", "PREPARED"),
@@ -404,12 +455,13 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
             "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
             "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
+            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
+            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "xhigh", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH", "default_execution_forbidden": True},
             "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
             "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
         },
         "blocked_runtime_scenarios": {
             "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
-            "positive_ai_subscription_run": "Requires a disposable runner with cached ChatGPT subscription login; negative boundary cases stop before the runner.",
             "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements.",
         },
         "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called.",

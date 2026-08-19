@@ -531,7 +531,7 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 16)
+        self.assertEqual(len(manifest["workflows"]), 18)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
@@ -578,6 +578,24 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(scenarios["lease_concurrency"]["expected_successes"], 1)
         self.assertEqual(scenarios["lease_stale"]["expected_error"], "WRITER_LEASE_STALE")
         self.assertEqual(scenarios["ai_negative"]["runner_calls"], 0)
+        self.assertEqual(
+            scenarios["ai_positive_luna"],
+            {
+                "workflow_id": "90000000-0000-4000-8000-000000000911",
+                "expected_exit": 0,
+                "policy_id": "classify-unresolved",
+                "expected_model": "gpt-5.6-luna",
+                "expected_reasoning_effort": "max",
+                "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+                "finance_writes": 0,
+            },
+        )
+        sol = scenarios["ai_positive_sol_gated"]
+        self.assertEqual(sol["workflow_id"], "90000000-0000-4000-8000-000000000912")
+        self.assertEqual(sol["expected_model"], "gpt-5.6-sol")
+        self.assertEqual(sol["expected_reasoning_effort"], "xhigh")
+        self.assertEqual(sol["execution_gate"], "DISPOSABLE_ALLOW_SOL_XHIGH")
+        self.assertTrue(sol["default_execution_forbidden"])
         self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
         self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
         self.assertEqual(scenarios["error_redaction"]["receipt_table"], "finance_execution_failures")
@@ -585,10 +603,30 @@ class N8nWorkflowTests(unittest.TestCase):
             set(manifest["blocked_runtime_scenarios"]),
             {
                 "bounded_mcp_network_negative",
-                "positive_ai_subscription_run",
                 "real_actual_recovery_write",
             },
         )
+
+    def test_positive_ai_wrappers_are_fixed_redacted_and_model_unselectable(self) -> None:
+        generated = N8N / "disposable" / "generated"
+        luna = load_json(generated / "106-ai-positive-luna.json")
+        sol = load_json(generated / "107-ai-positive-sol-gated.json")
+        for workflow, policy_id in (
+            (luna, "classify-unresolved"),
+            (sol, "recommend-category"),
+        ):
+            serialized = json.dumps(workflow)
+            self.assertIn(policy_id, serialized)
+            self.assertIn("10000000-0000-4000-8000-000000000009", serialized)
+            for forbidden in (
+                '"model"', '"url"', '"credential"', '"prompt"',
+                '"policy_sha256"', '"config_sha256"', '"output_schema_sha256"',
+                '"amount"', '"source_id"', '"dedupe_key"',
+            ):
+                self.assertNotIn(forbidden, serialized)
+            self.assertTrue(workflow["meta"]["financeWritesImpossible"])
+        self.assertEqual(sol["meta"]["executionGate"], "DISPOSABLE_ALLOW_SOL_XHIGH")
+        self.assertTrue(sol["meta"]["defaultExecutionForbidden"])
 
     def test_rule_ownership_compiler_is_current_disjoint_and_complete(self) -> None:
         result = subprocess.run(
