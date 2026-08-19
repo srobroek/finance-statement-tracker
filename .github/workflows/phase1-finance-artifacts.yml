@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/n8n-nodes-finance/**"
+      - "tests/test_n8n_custom_image.py"
       - "services/pdf-utility/**"
       - "services/codex-agent-runner/**"
       - "services/n8n-task-runners/**"
@@ -17,6 +18,7 @@ on:
     branches: [main, "codex/**"]
     paths:
       - "packages/n8n-nodes-finance/**"
+      - "tests/test_n8n_custom_image.py"
       - "services/pdf-utility/**"
       - "services/codex-agent-runner/**"
       - "services/n8n-task-runners/**"
@@ -55,7 +57,25 @@ jobs:
       - name: Smoke custom node image
         run: |
           test "$(docker run --rm --entrypoint n8n finance-n8n:${{ github.sha }} --version)" = "2.36.2"
-          docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const p=require('/home/node/.n8n/nodes/node_modules/n8n-nodes-finance/package.json'); if(p.version!=='0.1.0') process.exit(1); require('/home/node/.n8n/nodes/node_modules/n8n-nodes-finance/dist/nodes/ActualBudget/ActualBudget.node.js'); require('/home/node/.n8n/nodes/node_modules/n8n-nodes-finance/dist/nodes/FinancePdf/FinancePdf.node.js');"
+          docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const root='/opt/finance-n8n/custom-extensions/n8n-nodes-finance'; const p=require(root+'/package.json'); if(p.version!=='0.1.0'||process.env.N8N_CUSTOM_EXTENSIONS!==undefined) process.exit(1); for(const f of ['ActualBudget/ActualBudget.node.js','FinancePdf/FinancePdf.node.js','FinanceRules/FinanceRules.node.js','FinanceStatement/FinanceStatement.node.js']) require(root+'/dist/nodes/'+f); for(const f of ['ActualBudgetApi.credentials.js','FinanceStatementPassword.credentials.js']) require(root+'/dist/credentials/'+f);"
+          docker run --rm \
+            --tmpfs /home/node/.n8n:uid=1000,gid=1000,mode=0700 \
+            --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
+            finance-n8n:${{ github.sha }} \
+            node /opt/finance-n8n/assert-runtime-registration.cjs export:nodes --output=/tmp/node-types.json | \
+            grep -Fx 'finance extension registration verified: 4 nodes, 2 credentials'
+          state_dir="$(mktemp -d)"
+          chmod 0777 "$state_dir"
+          docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
+          docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
+          test "$(readlink "$state_dir/nodes/node_modules/n8n-nodes-finance")" = "/opt/finance-n8n/custom-extensions/n8n-nodes-finance"
+          rm "$state_dir/nodes/node_modules/n8n-nodes-finance"
+          mkdir "$state_dir/nodes/node_modules/n8n-nodes-finance"
+          if docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version; then
+            echo "Mutable finance package substitution unexpectedly passed" >&2
+            exit 1
+          fi
+          rm -rf "$state_dir"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); if(p.version!=='9.0.1'||typeof n.createTransport({jsonTransport:true}).sendMail!=='function') process.exit(1);"
       - name: Scan custom n8n image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

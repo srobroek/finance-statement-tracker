@@ -35,9 +35,16 @@ RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10
     && mkdir -p /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer
 COPY --from=nodemailer-security-patch /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
 RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const t=n.createTransport({jsonTransport:true}); if(p.version!=='9.0.1'||typeof t.sendMail!=='function') process.exit(1)"
-RUN mkdir -p /home/node/.n8n/nodes/node_modules/n8n-nodes-finance
-COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/package.json
-COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/CONTRACT.md
-COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/dist /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/dist
-COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/node_modules /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/node_modules
+RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /opt/finance-n8n/custom-extensions/n8n-nodes-finance/package.json
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /opt/finance-n8n/custom-extensions/n8n-nodes-finance/CONTRACT.md
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/dist /opt/finance-n8n/custom-extensions/n8n-nodes-finance/dist
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/node_modules /opt/finance-n8n/custom-extensions/n8n-nodes-finance/node_modules
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs /opt/finance-n8n/assert-runtime-registration.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs /opt/finance-n8n/verify-immutable-extension.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh /opt/finance-n8n/finance-entrypoint.sh
+RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
+    && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
+    && chmod 0444 /opt/finance-n8n/extension-tree.sha256
 USER node
+ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]
