@@ -1,6 +1,8 @@
-# Actual Budget bridge
+# Actual Budget integration
 
-The Python worker owns PDF parsing, normalization, evidence matching, static rules, and cashback arithmetic. This optional Node bridge performs the authenticated write through Actual Budget's official `@actual-app/api` package.
+The n8n finance workflows own orchestration. This package provides the tested
+Actual operations that the fixed-purpose n8n custom node wraps through Actual
+Budget's official `@actual-app/api` package.
 
 `actualctl.mjs` is the supported command surface. It provides health inspection, declarative bootstrap, read-only snapshots, and two-phase imports. Each import uses stable `imported_id` values and sets `reimportDeleted=false`. A committed statement with an evidenced future due date and a positive balance also creates or updates a one-time, non-posting payment reminder in Actual; forecasts and past dates do not create reminders.
 
@@ -14,15 +16,15 @@ node actualctl.mjs bootstrap --config ..\..\config\actual-bootstrap.json
 node actualctl.mjs import --input .\statement-run.json
 ```
 
-`bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Operator-facing statement and browser imports must use the PowerShell ingestion wrappers so AI completion, evidence linkage, review state, source identity, and container-level write gates are enforced before this bridge is reached.
+`bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Production statement and browser imports reach these operations only through the reviewed n8n custom node after AI, evidence, review, source-identity, and reconciliation gates pass.
 
 `repair-transactions` is the guarded exception for correcting an already imported row when Actual's import deduplication intentionally refuses to update it. Its versioned plan must identify every row by account, date, and `imported_id`, state the exact current amount, and provide only an exact sign reversal. It plans by default; `--apply` additionally requires `ALLOW_ACTUAL_WRITES=true`. The command refuses missing, duplicate, transferred, or drifted rows, re-reads every target after syncing, and is idempotent after a successful repair.
 
-There is no second standalone import executable or `ACTUAL_DRY_RUN=false`
-compatibility path. `actualctl.mjs` is the only bridge command that can import
-transactions, and production reaches it only through the ingestion worker.
+There is no HTTP ingestion bridge, standalone writer service, SSH wrapper, or
+`ACTUAL_DRY_RUN=false` compatibility path. `actualctl.mjs` remains an operator
+and test CLI; production uses the same modules in the direct n8n node.
 
-See `docs/actual-production.md` for the operating procedure and PowerShell wrappers.
+See `docs/actual-production.md` for the operating procedure.
 
 Before planning or applying a production replacement, generate a manual-state
 preservation report from the exact production snapshot and rebuild manifests:

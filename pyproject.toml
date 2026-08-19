@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "finance-statement-worker"
+name = "finance-statement-tracker"
 version = "0.1.0"
-description = "Platform-neutral deterministic statement, rule, evidence, and cashback worker"
+description = "Platform-neutral finance parsing, rules, evidence, and cashback library"
 requires-python = ">=3.11"
 dependencies = [
     "pywebpush==2.3.0",
@@ -21,7 +21,7 @@ test = [
 ]
 
 [project.scripts]
-finance-worker = "finance_tracker.cli:main"
+finance-toolkit = "finance_tracker.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["finance_tracker*"]

@@ -108,7 +108,7 @@ def _demo() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="finance-worker")
+    parser = argparse.ArgumentParser(prog="finance-toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("demo")
     close = subparsers.add_parser("month-close")

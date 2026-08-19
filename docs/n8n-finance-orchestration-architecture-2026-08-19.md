@@ -133,7 +133,7 @@ node.
 ### Extraction resilience
 
 `integrations/n8n/data-tables.json` defines a durable Data Table state machine
-separate from n8n execution history:
+stored with n8n in Postgres and separate from execution history:
 
 `RECEIVED → VALIDATED → DECRYPTED → EXTRACTED → SCHEMA_VALIDATED → READY_FOR_PARSE → COMMITTED`
 
@@ -201,13 +201,13 @@ executions until a terminal state. Cloudflare Access must allow a dedicated
 machine-to-machine path for MCP instead of relying on an interactive AD browser
 session.
 
-## Community-edition boundaries
+## Runtime and Cloudflare boundary
 
-- Regular mode with pooled-WAL SQLite is sufficient for this low-volume,
-  single-main deployment. Finance records live in Actual, cashback SQLite, and
-  OneDrive; n8n Data Tables hold only compact operational state. Move to
-  PostgreSQL if queue mode, multiple mains, or higher write concurrency is
-  introduced.
+- n8n uses a private Postgres container for workflows, credentials, execution
+  metadata, and Data Tables. Postgres is not a transaction ledger.
+- Regular mode is sufficient. Up to four workflows may execute concurrently,
+  but the fixed-purpose Actual node serializes ledger mutations and verifies
+  imported IDs before releasing its lock.
 - External task runners are used only for Code nodes and must match the n8n
   version. They are not general service or CLI runners.
 - Keep Execute Command and SSH nodes excluded.
@@ -215,6 +215,15 @@ session.
   External S3 binary storage and native Git environments are paid features.
 - Store workflows as sanitized JSON in Git. Native n8n Git environments are not
   required for this deployment.
+- Publish `n8n.vxsan.com` through the existing Cloudflare Tunnel to
+  `http://127.0.0.1:5678`. Leave the origin Host-header override unset. The UI
+  can use interactive AD; MCP and unattended webhook paths need a separate
+  machine-to-machine Access policy and must never depend on a browser cookie.
+
+There is no ingestion bridge, finance-worker service, SSH submission wrapper,
+or host-local ingestion API. The n8n custom Actual node imports directly with
+`@actual-app/api` over the private `finance-actual-poc_default` network and uses
+the persistent n8n volume for its local Actual cache.
 
 ## Cutover gates
 

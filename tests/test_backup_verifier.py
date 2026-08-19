@@ -31,11 +31,9 @@ class BackupVerifierTests(unittest.TestCase):
         self._sqlite(source / "actual-data/user-files/budget.sqlite")
         self._sqlite(source / "cashback-data/cashback-events.sqlite3")
         (source / "configuration").mkdir(parents=True)
-        for name in ("actual-compose.yaml", "cashback-compose.yaml", "ingestion-compose.yaml"):
+        for name in ("actual-compose.yaml", "cashback-compose.yaml"):
             (source / "configuration" / name).write_text("services: {}\n", encoding="utf-8")
         (source / "configuration/profile.json").write_text('{"schema_version": 1}\n', encoding="utf-8")
-        (source / "ingestion-data/jobs/job-1").mkdir(parents=True)
-        (source / "ingestion-data/jobs/job-1/request.json").write_text('{"type": "test"}\n', encoding="utf-8")
 
         backup = root / "20260818T010203Z"
         backup.mkdir()
@@ -53,9 +51,9 @@ class BackupVerifierTests(unittest.TestCase):
         (backup / "manifest.json").write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "created_at": backup.name,
-                    "includes": ["actual-data", "cashback-data", "ingestion-data", "configuration"],
+                    "includes": ["actual-data", "cashback-data", "configuration"],
                     "secrets_included": False,
                 }
             ),
@@ -72,7 +70,7 @@ class BackupVerifierTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["backup"], backup.name)
-            self.assertEqual(result["json_documents"], 2)
+            self.assertEqual(result["json_documents"], 1)
             self.assertEqual(len(result["sqlite_databases"]), 3)
 
     def test_rejects_checksum_mismatch(self) -> None:

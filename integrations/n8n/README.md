@@ -3,7 +3,8 @@
 This directory contains sanitized, importable n8n workflow JSON for the finance
 system. n8n owns schedules, acquisition, orchestration, retries, and execution
 visibility. Actual remains the authoritative ledger, the cashback app remains
-the live routing store, and OneDrive remains the evidence archive.
+the live routing store, and OneDrive remains the evidence archive. n8n stores
+workflow and operational state in its private Postgres container.
 
 ## Design rules
 
@@ -23,6 +24,8 @@ the live routing store, and OneDrive remains the evidence archive.
   sub-workflows. Live mail never traverses attachment or PDF processing.
 - All companion calls use an n8n HTTP Header Auth credential. Tokens are never
   embedded in expressions, workflow JSON, or model-visible tool inputs.
+- Actual writes use the reviewed fixed-purpose custom node directly. There is
+  no HTTP ingestion bridge, SSH hop, or generic command runner.
 
 ## Import
 

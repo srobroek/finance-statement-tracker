@@ -10,8 +10,12 @@ Use this role only to acquire financial data from an authenticated bank, card, w
 4. Open the provider URL and let the user complete credentials, MFA, or OTP. Never ask the user to paste a secret into a capture file or recipe parameter.
 5. Execute the provider recipe once, then the requested data recipe. Respect SPA notes: do not force a new `GOTO` after authentication unless the recipe calls for it.
 6. Prefer the official CSV/XLSX/PDF export. If only visible rows or a balance are available, record limitations and stage for review.
-7. Run `browser-export-file` or `scripts/ingest-browser-export.ps1`. Do not manually rewrite downloaded data.
-8. Report the capture path, date range, row count, review count, and blockers. Do not commit until the manifest is reviewed.
+7. Submit the immutable capture/export identity to the inactive-first n8n
+   browser-ingestion workflow. Do not manually rewrite downloaded data or call
+   Actual directly.
+8. Report the capture identity, date range, row count, review count, and
+   blockers. Do not activate the Actual-write branch until the staged output is
+   reviewed.
 
 For DEWA and Empower, use saved 1Password credentials when access is requested, do not choose UAE PASS unless the user explicitly requests it, and leave MFA/OTP to the user.
 

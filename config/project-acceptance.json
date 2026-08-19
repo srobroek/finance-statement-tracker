@@ -78,7 +78,7 @@
       "status": "MISSING",
       "production_gate": true,
       "evidence": ["runtime/full-restage/20260819T060427Z/summary.json"],
-      "blockers": ["NEW_PIPELINE_IMAGE_OR_LOCAL_WORKER_REQUIRED", "FULL_RESTAGE_NOT_EXECUTED"]
+      "blockers": ["N8N_FINANCE_CUSTOM_NODES_REQUIRED", "FULL_RESTAGE_NOT_EXECUTED"]
     },
     {
       "id": "actual-ui-api-parity",
@@ -107,10 +107,10 @@
     {
       "id": "deterministic-n8n-orchestration",
       "description": "n8n owns schedules, bounded Outlook acquisition, visible deterministic ETL stages, model handoff, retries, receipts, and run-state lookup without SSH or an opaque finance-worker container.",
-      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "status": "PARTIAL",
       "production_gate": false,
       "evidence": ["docs/n8n-finance-orchestration-architecture-2026-08-19.md", "integrations/n8n/pipeline-registry.json", "tests/test_n8n_workflows.py"],
-      "blockers": ["PRIVATE_N8N_REPOSITORY_PUSH_REQUIRED", "FINANCE_CUSTOM_NODES_REQUIRED", "N8N_SHADOW_RUN_REQUIRED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
+      "blockers": ["FINANCE_CUSTOM_NODES_REQUIRED", "N8N_POSTGRES_STACK_NOT_DEPLOYED", "N8N_SHADOW_RUN_REQUIRED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
     },
     {
       "id": "resilient-document-extraction",
@@ -130,7 +130,7 @@
     },
     {
       "id": "operational-restore-and-restart",
-      "description": "Backups restore into a disposable environment and Actual, cashback, ingestion, proxy, push, and Cloudflare paths survive controlled restarts.",
+      "description": "Backups restore into a disposable environment and Actual, cashback, n8n Postgres, proxy, push, and Cloudflare paths survive controlled restarts.",
       "status": "PARTIAL",
       "production_gate": true,
       "evidence": ["deploy/actual-poc/backup.sh", "deploy/actual-poc/verify-backup.py"],

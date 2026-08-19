@@ -30,7 +30,6 @@ REQUIRED_ARCHIVE_PATHS = (
     "cashback-data/cashback-events.sqlite3",
     "configuration/actual-compose.yaml",
     "configuration/cashback-compose.yaml",
-    "configuration/ingestion-compose.yaml",
 )
 
 
@@ -77,7 +76,7 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
     manifest = _load_json(backup / "manifest.json")
     if not isinstance(manifest, dict):
         raise VerificationError("backup manifest must be an object")
-    if manifest.get("schema_version") != 2:
+    if manifest.get("schema_version") != 3:
         raise VerificationError("unsupported backup manifest schema")
     if manifest.get("secrets_included") is not False:
         raise VerificationError("backup manifest does not assert secret exclusion")
@@ -85,7 +84,6 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
     if not isinstance(includes, list) or set(includes) != {
         "actual-data",
         "cashback-data",
-        "ingestion-data",
         "configuration",
     }:
         raise VerificationError("backup manifest has incomplete scope")
@@ -178,12 +176,10 @@ def _verify_extracted(root: Path) -> tuple[list[str], int]:
         root / "cashback-data/cashback-events.sqlite3",
         *user_databases,
     ]
-    databases.extend(sorted((root / "ingestion-data/actual-cache").glob("*/*.sqlite")))
     for database in databases:
         _sqlite_integrity(database)
 
     json_paths = sorted((root / "configuration").glob("*.json"))
-    json_paths.extend(sorted((root / "ingestion-data/jobs").glob("*/*.json")))
     dashboard = root / "cashback-data/cashback-dashboard.json"
     if dashboard.is_file():
         json_paths.append(dashboard)
