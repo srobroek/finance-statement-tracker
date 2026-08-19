@@ -16,6 +16,8 @@ WORKDIR /opt/runners/task-runner-javascript
 COPY --from=javascript-extras /opt/javascript-extras/node_modules/moment ./node_modules/moment
 RUN test "$(node -p "require('./package.json').version")" = "2.36.1" \
     && test -f dist/start.js \
+    && test -f finance-closure-manifest.json \
+    && test -f finance-closure-relinks.json \
     && node --check dist/start.js \
     && node -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','moment']) require.resolve(name);"
 

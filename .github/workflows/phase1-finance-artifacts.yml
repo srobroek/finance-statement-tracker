@@ -219,6 +219,7 @@ jobs:
       - name: Verify upstream commits and apply security-only source update
         shell: bash
         run: |
+          python -m unittest tests.test_n8n_task_runners_image tests.test_n8n_runner_closure -v
           test "$(git -C .upstream/n8n rev-parse HEAD)" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
           test "$(git -C .upstream/task-runner-launcher rev-parse HEAD)" = "fad71fc0dab52a6b6558765d1431c7846cfd816f"
           python services/n8n-task-runners/patch_launcher.py .upstream/task-runner-launcher
@@ -241,10 +242,17 @@ jobs:
           test -f dist/task-runner-javascript/dist/start.js
           test -f dist/task-runner-javascript/node_modules/@n8n/di/package.json
           closure=dist/task-runner-javascript
-          printf 'closure_symlink_count=%s\n' "$(find "$closure" -type l | wc -l)"
-          find "$closure" -type l -printf '%P -> %l\n' | LC_ALL=C sort | sed -n '1,80p'
-          printf 'closure_config_store_entries=%s\n' "$(find "$closure/node_modules/.pnpm" -path '*@n8n+config*' -type f 2>/dev/null | wc -l)"
-          find "$closure/node_modules/.pnpm" -path '*@n8n+config*' -type f -printf '%P\n' 2>/dev/null | LC_ALL=C sort | sed -n '1,20p'
+          python ../../services/n8n-task-runners/relink_closure.py "$closure" .
+          python ../../services/n8n-task-runners/validate_closure.py "$closure"
+          test "$(jq -r .schema_version "$closure/finance-closure-manifest.json")" = "1"
+          test "$(jq -r .relinked "$closure/finance-closure-relinks.json")" -gt 0
+          (
+            cd "$closure"
+            node -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','./dist/start.js']) require.resolve(name);"
+          )
+          sha256sum \
+            ../../services/n8n-task-runners/relink_closure.py \
+            ../../services/n8n-task-runners/validate_closure.py
       - name: Build source-reproduced task runners image
         run: docker build --file services/n8n-task-runners/Dockerfile --tag finance-n8n-task-runners:${{ github.sha }} .
       - name: Smoke exact runtime and n8n broker protocol
@@ -281,13 +289,19 @@ jobs:
           docker push "$image"
           immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           test -n "$immutable_ref"
+          closure_sha256="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"
+          relinker_sha256="$(sha256sum services/n8n-task-runners/relink_closure.py | cut -d' ' -f1)"
+          validator_sha256="$(sha256sum services/n8n-task-runners/validate_closure.py | cut -d' ' -f1)"
           jq -n \
             --arg image "$image" \
             --arg immutable_ref "$immutable_ref" \
             --arg source_sha "${{ github.sha }}" \
             --arg n8n_source_commit "bc9090e8c61d0dc84aa85528e62142dfb7001243" \
             --arg launcher_source_commit "fad71fc0dab52a6b6558765d1431c7846cfd816f" \
-            '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha,n8n_source_commit:$n8n_source_commit,launcher_source_commit:$launcher_source_commit,security_overrides:{"golang.org/x/text":"v0.39.0"}}' \
+            --arg closure_sha256 "$closure_sha256" \
+            --arg relinker_sha256 "$relinker_sha256" \
+            --arg validator_sha256 "$validator_sha256" \
+            '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha,n8n_source_commit:$n8n_source_commit,launcher_source_commit:$launcher_source_commit,closure_sha256:$closure_sha256,relinker_sha256:$relinker_sha256,validator_sha256:$validator_sha256,security_overrides:{"golang.org/x/text":"v0.39.0"}}' \
             > finance-n8n-task-runners-image-receipt.json
       - name: Upload task runners digest receipt
         if: github.event_name == 'push'

@@ -31,6 +31,7 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertNotIn("pnpm add moment", dockerfile)
         self.assertIn("javascript-extras/package-lock.json", dockerfile)
         self.assertIn("node_modules/moment ./node_modules/moment", dockerfile)
+        self.assertIn("finance-closure-manifest.json", dockerfile)
         self.assertIn("'@n8n/di'", dockerfile)
         self.assertIn("require.resolve(name)", dockerfile)
         self.assertIn("golang.org/x/text v0.14.0", patcher)
@@ -74,6 +75,10 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
             "--format '{{ index .Config.Labels \\\"finance.n8n.source_commit\\\" }}'",
             workflow,
         )
+        self.assertIn("relink_closure.py", workflow)
+        self.assertIn("validate_closure.py", workflow)
+        self.assertIn("closure_sha256", workflow)
+        self.assertIn("'./dist/start.js'", workflow)
 
 
 if __name__ == "__main__":
