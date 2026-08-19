@@ -19,6 +19,18 @@
       "financeRules": ["normalize", "applyNonRepresentableRules", "projectActualImport"],
       "actualBudget": ["doctor", "read", "preflight", "import", "verify"]
     },
+    "full_node_types": {
+      "financePdf": "n8n-nodes-finance.financePdf",
+      "financeStatement": "n8n-nodes-finance.financeStatement",
+      "financeRules": "n8n-nodes-finance.financeRules",
+      "actualBudget": "n8n-nodes-finance.actualBudget"
+    },
+    "type_versions": {
+      "n8n-nodes-finance.financePdf": 1,
+      "n8n-nodes-finance.financeStatement": 1,
+      "n8n-nodes-finance.financeRules": 1,
+      "n8n-nodes-finance.actualBudget": 1
+    },
     "credentials": ["financeStatementPassword", "actualBudgetApi"],
     "pdf_transport": "fixed-unix-domain-socket"
   },
@@ -41,7 +53,7 @@
     {"code":"RAK_MONTHLY_STATEMENT","file":"06-rak-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=0","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"RAK_WORLD","replaces_codex_automation":"rakbank-world-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","RAK_WORLD cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"]},
     {"code":"SC_MONTHLY_STATEMENT","file":"07-sc-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=20","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"SC_PLATINUM_X","replaces_codex_automation":"standard-chartered-platinum-x-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","SC_PLATINUM_X cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"]},
     {"code":"SC_LIVE_CASHBACK","file":"08-sc-live-cashback.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=8;BYMINUTE=25","source":"STANDARD_CHARTERED_CARD_TRANSACTION","replaces_codex_automation":"standard-chartered-morning-cashback-scan","mcp_exposed":false,"intended_writes":["cashback event store","cashback-owned outlook cursor"],"blockers":["ACTIVE_EMAIL_SOURCE_REQUIRED","VERIFIED_MESSAGE_FIXTURE_REQUIRED"]},
-    {"code":"AI_PROPOSAL","file":"09-ai-proposal.json","status":"SPEC_ONLY","schedule":null,"source":"bounded CODEX_AGENT_HANDOFF","mcp_exposed":false,"intended_writes":["redacted agent job receipt","immutable OneDrive proposal artifact","review proposal only"],"blockers":["CODEX_AGENT_RUNNER_REQUIRED","CHATGPT_SUBSCRIPTION_LOGIN_REQUIRED","AI_POLICY_CONTRACT_SEED_REQUIRED","AI_PROPOSAL_ARCHIVE_CONTRACT_REQUIRED","RUNNER_EXACT_IMAGE_REQUIRED","THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"]},
+    {"code":"AI_PROPOSAL","file":"09-ai-proposal.json","status":"SPEC_ONLY","schedule":null,"source":"bounded subscription-agent proposal contract","mcp_exposed":false,"intended_writes":["redacted agent job receipt","immutable OneDrive proposal artifact","review proposal only"],"blockers":["SUBSCRIPTION_PROVIDER_RUNTIME_REQUIRED","SUBSCRIPTION_LOGIN_REQUIRED","AI_POLICY_CONTRACT_SEED_REQUIRED","AI_PROPOSAL_ARCHIVE_CONTRACT_REQUIRED","RUNNER_EXACT_IMAGE_REQUIRED","THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"]},
     {"code":"FINANCE_OPERATIONS_STATUS","file":"10-finance-operations-status.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=8;BYMINUTE=45","source":"Postgres operational state and bounded MCP facade","mcp_exposed":false,"intended_writes":["operations alert only","redacted MCP request and result receipt"]},
     {"code":"INTERACTIVE_ARTIFACT_HANDOFF","file":"11-interactive-artifact-handoff.json","status":"SPEC_ONLY","schedule":null,"source":"reviewed FAB, Sarwa, or Amazon artifact","mcp_exposed":false,"intended_writes":["OneDrive evidence archive","pipeline receipt"]},
     {"code":"OUTLOOK_MESSAGE_SWEEP","file":"12-outlook-message-sweep.json","status":"SPEC_ONLY","schedule":null,"source":"trusted source configuration","mcp_exposed":false,"intended_writes":["aggregate sweep receipt","N8N-owned source cursor after downstream receipt","provider circuit state"]},
@@ -51,7 +63,9 @@
     {"code":"OPERATIONS_ERROR_HANDLER","file":"16-operations-error-handler.json","status":"SPEC_ONLY","schedule":null,"source":"n8n workflow error events","mcp_exposed":false,"intended_writes":["redacted failure receipt"]},
     {"code":"ACTUAL_OUTBOX_RECOVERY","file":"17-actual-outbox-recovery.json","status":"SPEC_ONLY","schedule":"FREQ=MINUTELY;INTERVAL=10","source":"Postgres nonterminal Actual outbox","mcp_exposed":false,"intended_writes":["Actual recovery after immutable artifact readback","outbox state"]},
     {"code":"FINANCE_WRITER_LEASE","file":"18-finance-writer-lease.json","status":"SPEC_ONLY","schedule":null,"source":"fixed finance_ops Postgres functions","mcp_exposed":false,"intended_writes":["fenced writer lease only"]},
-    {"code":"PLATFORM_DATA_TABLE_BOOTSTRAP","file":"19-platform-data-table-bootstrap.json","status":"SPEC_ONLY","schedule":null,"source":"versioned Data Table, AI policy, and config fingerprint seed contracts","mcp_exposed":false,"manual_only":true,"intended_writes":["n8n platform Data Table schema","finance_ai_policy_contracts seed","finance_config_versions seed"],"blockers":["EXACT_IMAGE_IMPORT_REQUIRED","DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"]}
+    {"code":"PLATFORM_DATA_TABLE_BOOTSTRAP","file":"19-platform-data-table-bootstrap.json","status":"SPEC_ONLY","schedule":null,"source":"versioned Data Table, AI policy, and config fingerprint seed contracts","mcp_exposed":false,"manual_only":true,"intended_writes":["n8n platform Data Table schema","finance_ai_policy_contracts seed","finance_config_versions seed"],"blockers":["EXACT_IMAGE_IMPORT_REQUIRED","DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"]},
+    {"code":"ACTUAL_OUTBOX_APPLY","file":"20-actual-outbox-apply.json","status":"SPEC_ONLY","schedule":null,"source":"durable PREPARED or nonterminal Actual outbox row","mcp_exposed":false,"intended_writes":["single fenced Actual import","exact Actual readback verification","Actual outbox state transitions"],"blockers":["EXACT_IMAGE_IMPORT_REQUIRED","DISPOSABLE_WRITER_REPLAY_REQUIRED"]},
+    {"code":"SUBSCRIPTION_AGENT_ADAPTER","file":"21-subscription-agent-adapter.json","status":"SPEC_ONLY","schedule":null,"source":"server-owned provider field and schema-bound proposal job","mcp_exposed":false,"intended_writes":["proposal response only"],"blockers":["CODEX_PROVIDER_RUNTIME_PROOF_REQUIRED","CLAUDE_PROVIDER_RUNNER_REQUIRED","THREE_CONSECUTIVE_SCHEMA_VALID_RECEIPTS_REQUIRED"]}
   ],
   "retired_or_not_migrated": [
     {"source":"ADCB_CASHBACK","reason":"closed historical card; no recurring ingestion"}

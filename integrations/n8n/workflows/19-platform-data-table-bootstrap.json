@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000019",
-  "name": "Finance · Platform Data Table Bootstrap · SPEC ONLY",
+  "name": "Finance · Platform Data Table Bootstrap · Setup Required",
   "active": false,
   "nodes": [
     {
@@ -9,7 +9,7 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -1800,
+        -1120,
         0
       ],
       "parameters": {}
@@ -20,7 +20,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1420,
+        -820,
         0
       ],
       "parameters": {
@@ -90,7 +90,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1240,
+        -520,
         0
       ],
       "parameters": {
@@ -172,7 +172,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1060,
+        -220,
         0
       ],
       "parameters": {
@@ -266,7 +266,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -880,
+        80,
         0
       ],
       "parameters": {
@@ -352,7 +352,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -700,
+        380,
         0
       ],
       "parameters": {
@@ -466,7 +466,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        680,
         0
       ],
       "parameters": {
@@ -485,6 +485,10 @@
             },
             {
               "name": "agent_profile",
+              "type": "string"
+            },
+            {
+              "name": "agent_provider",
               "type": "string"
             },
             {
@@ -528,7 +532,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -340,
+        980,
         0
       ],
       "parameters": {
@@ -594,8 +598,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -160,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -652,8 +656,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        20,
-        0
+        -820,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -687,6 +691,26 @@
             },
             {
               "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
               "type": "string"
             },
             {
@@ -734,8 +758,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        200,
-        0
+        -520,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -804,8 +828,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        0
+        -220,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -870,8 +894,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        560,
-        0
+        80,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -924,8 +948,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        740,
-        0
+        380,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -986,8 +1010,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        920,
-        0
+        680,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -1076,8 +1100,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1100,
-        0
+        980,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -1138,11 +1162,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
-        0
+        -1120,
+        760
       ],
       "parameters": {
-        "jsCode": "const rows=[{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"vendor\\\",\\\"category\\\",\\\"subcategory\\\",\\\"tags\\\"]\",\"allowed_values_json\":\"{\\\"category\\\":[\\\"Accommodation\\\",\\\"Bank Fees\\\",\\\"Card Payments\\\",\\\"Cashback & Rewards\\\",\\\"Charity\\\",\\\"Clothing\\\",\\\"Cloud Services\\\",\\\"Coffee & Snacks\\\",\\\"Dining Out\\\",\\\"District Cooling\\\",\\\"Education\\\",\\\"Electricity & Water\\\",\\\"Electronics\\\",\\\"Emergency Fund\\\",\\\"Events & Attractions\\\",\\\"Family Support\\\",\\\"Fitness\\\",\\\"Flights\\\",\\\"Food Delivery\\\",\\\"Foreign Fees\\\",\\\"Fuel\\\",\\\"Furniture & Appliances\\\",\\\"General Retail\\\",\\\"Gifts\\\",\\\"Groceries\\\",\\\"Hobbies & Entertainment\\\",\\\"Household Supplies\\\",\\\"Insurance\\\",\\\"Interest & Dividends\\\",\\\"Investments\\\",\\\"Maintenance & Repairs\\\",\\\"Media Subscriptions\\\",\\\"Medical\\\",\\\"Mobile & Internet\\\",\\\"Monthly Buffer\\\",\\\"Mortgage Interest\\\",\\\"Needs Review\\\",\\\"Online Shopping\\\",\\\"Other Income\\\",\\\"Parking & Tolls\\\",\\\"Personal Care\\\",\\\"Pharmacy\\\",\\\"Professional Services\\\",\\\"Public Transport\\\",\\\"Refunds & Reimbursements\\\",\\\"Rent & Mortgage\\\",\\\"Rental Income\\\",\\\"Retirement\\\",\\\"Ride Hailing\\\",\\\"Salary\\\",\\\"Savings Goals\\\",\\\"Service Charges\\\",\\\"Shipping & Delivery\\\",\\\"Software & App Subscriptions\\\",\\\"Taxes & Government\\\",\\\"Travel Activities\\\",\\\"Travel Transport\\\",\\\"Utilities Buffer\\\",\\\"Vehicle Maintenance\\\"],\\\"subcategory\\\":[\\\"Accommodation\\\",\\\"Bank Fees\\\",\\\"Card Payments\\\",\\\"Cashback & Rewards\\\",\\\"Charity\\\",\\\"Clothing\\\",\\\"Cloud Services\\\",\\\"Coffee & Snacks\\\",\\\"Dining Out\\\",\\\"District Cooling\\\",\\\"Education\\\",\\\"Electricity & Water\\\",\\\"Electronics\\\",\\\"Emergency Fund\\\",\\\"Events & Attractions\\\",\\\"Family Support\\\",\\\"Fitness\\\",\\\"Flights\\\",\\\"Food Delivery\\\",\\\"Foreign Fees\\\",\\\"Fuel\\\",\\\"Furniture & Appliances\\\",\\\"General Retail\\\",\\\"Gifts\\\",\\\"Groceries\\\",\\\"Hobbies & Entertainment\\\",\\\"Household Supplies\\\",\\\"Insurance\\\",\\\"Interest & Dividends\\\",\\\"Investments\\\",\\\"Maintenance & Repairs\\\",\\\"Media Subscriptions\\\",\\\"Medical\\\",\\\"Mobile & Internet\\\",\\\"Monthly Buffer\\\",\\\"Mortgage Interest\\\",\\\"Needs Review\\\",\\\"Online Shopping\\\",\\\"Other Income\\\",\\\"Parking & Tolls\\\",\\\"Personal Care\\\",\\\"Pharmacy\\\",\\\"Professional Services\\\",\\\"Public Transport\\\",\\\"Refunds & Reimbursements\\\",\\\"Rent & Mortgage\\\",\\\"Rental Income\\\",\\\"Retirement\\\",\\\"Ride Hailing\\\",\\\"Salary\\\",\\\"Savings Goals\\\",\\\"Service Charges\\\",\\\"Shipping & Delivery\\\",\\\"Software & App Subscriptions\\\",\\\"Taxes & Government\\\",\\\"Travel Activities\\\",\\\"Travel Transport\\\",\\\"Utilities Buffer\\\",\\\"Vehicle Maintenance\\\"],\\\"tags\\\":[\\\"home\\\",\\\"grocery\\\",\\\"dining\\\",\\\"transport\\\",\\\"travel\\\",\\\"online\\\",\\\"health\\\",\\\"education\\\",\\\"gift\\\",\\\"business\\\",\\\"shared\\\",\\\"review\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"classify-unresolved\",\"policy_sha256\":\"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"category_recommendation\\\"]\",\"allowed_values_json\":\"{}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"recommend-category\",\"policy_sha256\":\"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"is_subscription\\\",\\\"tags\\\"]\",\"allowed_values_json\":\"{\\\"is_subscription\\\":[true],\\\"tags\\\":[\\\"subscription\\\",\\\"recurring\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"detect-subscription\",\"policy_sha256\":\"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"property_code\\\",\\\"rental_unit\\\"]\",\"allowed_values_json\":\"{\\\"property_code\\\":[\\\"BLUEWATERS_B7_306\\\",\\\"INDIGO1414\\\",\\\"LT713\\\"],\\\"rental_unit\\\":[\\\"Indigo1414\\\",\\\"LT713\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"enrich-property\",\"policy_sha256\":\"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"evidence_policy\\\"]\",\"allowed_values_json\":\"{\\\"evidence_policy\\\":[\\\"SEARCH_RELATED_EMAIL\\\",\\\"SEARCH_RECEIPT_BILL_WARRANTY\\\",\\\"MATCH_AMOUNT_AND_PERIOD\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"find-purchase-evidence\",\"policy_sha256\":\"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"channel\\\",\\\"reward_bucket\\\"]\",\"allowed_values_json\":\"{\\\"channel\\\":[\\\"ONLINE\\\",\\\"PHYSICAL_POS\\\",\\\"APPLE_PAY_POS\\\",\\\"UNKNOWN\\\"],\\\"reward_bucket\\\":[\\\"EI_AMAZON\\\",\\\"RAK_DINING\\\",\\\"RAK_EWALLET\\\",\\\"RAK_GROCERY\\\",\\\"RAK_STANDARD\\\",\\\"RAK_TRAVEL\\\",\\\"SC_FILLER\\\",\\\"SC_FOREIGN\\\",\\\"SC_ONLINE\\\",\\\"SC_WALLET\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"enrich-cashback-classification\",\"policy_sha256\":\"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"rule_recommendation\\\"]\",\"allowed_values_json\":\"{}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"recommend-static-rule\",\"policy_sha256\":\"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\"policy_version\":1,\"state\":\"ACTIVE\"}]; const updated_at=new Date().toISOString(); return rows.map(row=>({json:{...row,updated_at}}));"
+        "jsCode": "// Purpose: Emit Versioned AI Policy Seed. Keep this deterministic and fail closed.\nconst rows = [\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"vendor\",\n            \"category\",\n            \"subcategory\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"category\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"subcategory\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"tags\": [\n                \"home\",\n                \"grocery\",\n                \"dining\",\n                \"transport\",\n                \"travel\",\n                \"online\",\n                \"health\",\n                \"education\",\n                \"gift\",\n                \"business\",\n                \"shared\",\n                \"review\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"classify-unresolved\",\n        \"policy_sha256\": \"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"category_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"recommend-category\",\n        \"policy_sha256\": \"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"is_subscription\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"is_subscription\": [\n                true\n            ],\n            \"tags\": [\n                \"subscription\",\n                \"recurring\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"detect-subscription\",\n        \"policy_sha256\": \"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"property_code\",\n            \"rental_unit\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"property_code\": [\n                \"BLUEWATERS_B7_306\",\n                \"INDIGO1414\",\n                \"LT713\"\n            ],\n            \"rental_unit\": [\n                \"Indigo1414\",\n                \"LT713\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"enrich-property\",\n        \"policy_sha256\": \"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"evidence_policy\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"evidence_policy\": [\n                \"SEARCH_RELATED_EMAIL\",\n                \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                \"MATCH_AMOUNT_AND_PERIOD\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"find-purchase-evidence\",\n        \"policy_sha256\": \"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"channel\",\n            \"reward_bucket\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"channel\": [\n                \"ONLINE\",\n                \"PHYSICAL_POS\",\n                \"APPLE_PAY_POS\",\n                \"UNKNOWN\"\n            ],\n            \"reward_bucket\": [\n                \"EI_AMAZON\",\n                \"RAK_DINING\",\n                \"RAK_EWALLET\",\n                \"RAK_GROCERY\",\n                \"RAK_STANDARD\",\n                \"RAK_TRAVEL\",\n                \"SC_FILLER\",\n                \"SC_FOREIGN\",\n                \"SC_ONLINE\",\n                \"SC_WALLET\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"enrich-cashback-classification\",\n        \"policy_sha256\": \"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"rule_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"recommend-static-rule\",\n        \"policy_sha256\": \"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    }\n];\nconst updated_at = new Date().toISOString();\nreturn rows.map(row => ({ json: { ...row, updated_at } }));\n"
       }
     },
     {
@@ -1151,8 +1175,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1400,
-        0
+        -820,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -1183,6 +1207,7 @@
             "policy_id": "={{ $json.policy_id }}",
             "policy_version": "={{ $json.policy_version }}",
             "agent_profile": "={{ $json.agent_profile }}",
+            "agent_provider": "={{ $json.agent_provider }}",
             "policy_sha256": "={{ $json.policy_sha256 }}",
             "config_sha256": "={{ $json.config_sha256 }}",
             "output_schema_sha256": "={{ $json.output_schema_sha256 }}",
@@ -1207,11 +1232,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1600,
-        0
+        -520,
+        760
       ],
       "parameters": {
-        "jsCode": "const rows=$input.all(); if(rows.length!==7) throw new Error('AI_POLICY_SEED_UPSERT_COUNT_MISMATCH'); return [{json:{seed_write_count:rows.length}}];"
+        "jsCode": "// Purpose: Collapse Seed Writes to One Readback. Keep this deterministic and fail closed.\nconst rows = $input.all();\nif (rows.length !== 7)\n    throw new Error('AI_POLICY_SEED_UPSERT_COUNT_MISMATCH');\nreturn [{ json: { seed_write_count: rows.length } }];\n"
       }
     },
     {
@@ -1220,8 +1245,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1800,
-        0
+        -220,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -1252,11 +1277,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2000,
-        0
+        80,
+        760
       ],
       "parameters": {
-        "jsCode": "const expected=[{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"vendor\\\",\\\"category\\\",\\\"subcategory\\\",\\\"tags\\\"]\",\"allowed_values_json\":\"{\\\"category\\\":[\\\"Accommodation\\\",\\\"Bank Fees\\\",\\\"Card Payments\\\",\\\"Cashback & Rewards\\\",\\\"Charity\\\",\\\"Clothing\\\",\\\"Cloud Services\\\",\\\"Coffee & Snacks\\\",\\\"Dining Out\\\",\\\"District Cooling\\\",\\\"Education\\\",\\\"Electricity & Water\\\",\\\"Electronics\\\",\\\"Emergency Fund\\\",\\\"Events & Attractions\\\",\\\"Family Support\\\",\\\"Fitness\\\",\\\"Flights\\\",\\\"Food Delivery\\\",\\\"Foreign Fees\\\",\\\"Fuel\\\",\\\"Furniture & Appliances\\\",\\\"General Retail\\\",\\\"Gifts\\\",\\\"Groceries\\\",\\\"Hobbies & Entertainment\\\",\\\"Household Supplies\\\",\\\"Insurance\\\",\\\"Interest & Dividends\\\",\\\"Investments\\\",\\\"Maintenance & Repairs\\\",\\\"Media Subscriptions\\\",\\\"Medical\\\",\\\"Mobile & Internet\\\",\\\"Monthly Buffer\\\",\\\"Mortgage Interest\\\",\\\"Needs Review\\\",\\\"Online Shopping\\\",\\\"Other Income\\\",\\\"Parking & Tolls\\\",\\\"Personal Care\\\",\\\"Pharmacy\\\",\\\"Professional Services\\\",\\\"Public Transport\\\",\\\"Refunds & Reimbursements\\\",\\\"Rent & Mortgage\\\",\\\"Rental Income\\\",\\\"Retirement\\\",\\\"Ride Hailing\\\",\\\"Salary\\\",\\\"Savings Goals\\\",\\\"Service Charges\\\",\\\"Shipping & Delivery\\\",\\\"Software & App Subscriptions\\\",\\\"Taxes & Government\\\",\\\"Travel Activities\\\",\\\"Travel Transport\\\",\\\"Utilities Buffer\\\",\\\"Vehicle Maintenance\\\"],\\\"subcategory\\\":[\\\"Accommodation\\\",\\\"Bank Fees\\\",\\\"Card Payments\\\",\\\"Cashback & Rewards\\\",\\\"Charity\\\",\\\"Clothing\\\",\\\"Cloud Services\\\",\\\"Coffee & Snacks\\\",\\\"Dining Out\\\",\\\"District Cooling\\\",\\\"Education\\\",\\\"Electricity & Water\\\",\\\"Electronics\\\",\\\"Emergency Fund\\\",\\\"Events & Attractions\\\",\\\"Family Support\\\",\\\"Fitness\\\",\\\"Flights\\\",\\\"Food Delivery\\\",\\\"Foreign Fees\\\",\\\"Fuel\\\",\\\"Furniture & Appliances\\\",\\\"General Retail\\\",\\\"Gifts\\\",\\\"Groceries\\\",\\\"Hobbies & Entertainment\\\",\\\"Household Supplies\\\",\\\"Insurance\\\",\\\"Interest & Dividends\\\",\\\"Investments\\\",\\\"Maintenance & Repairs\\\",\\\"Media Subscriptions\\\",\\\"Medical\\\",\\\"Mobile & Internet\\\",\\\"Monthly Buffer\\\",\\\"Mortgage Interest\\\",\\\"Needs Review\\\",\\\"Online Shopping\\\",\\\"Other Income\\\",\\\"Parking & Tolls\\\",\\\"Personal Care\\\",\\\"Pharmacy\\\",\\\"Professional Services\\\",\\\"Public Transport\\\",\\\"Refunds & Reimbursements\\\",\\\"Rent & Mortgage\\\",\\\"Rental Income\\\",\\\"Retirement\\\",\\\"Ride Hailing\\\",\\\"Salary\\\",\\\"Savings Goals\\\",\\\"Service Charges\\\",\\\"Shipping & Delivery\\\",\\\"Software & App Subscriptions\\\",\\\"Taxes & Government\\\",\\\"Travel Activities\\\",\\\"Travel Transport\\\",\\\"Utilities Buffer\\\",\\\"Vehicle Maintenance\\\"],\\\"tags\\\":[\\\"home\\\",\\\"grocery\\\",\\\"dining\\\",\\\"transport\\\",\\\"travel\\\",\\\"online\\\",\\\"health\\\",\\\"education\\\",\\\"gift\\\",\\\"business\\\",\\\"shared\\\",\\\"review\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"classify-unresolved\",\"policy_sha256\":\"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"category_recommendation\\\"]\",\"allowed_values_json\":\"{}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"recommend-category\",\"policy_sha256\":\"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"is_subscription\\\",\\\"tags\\\"]\",\"allowed_values_json\":\"{\\\"is_subscription\\\":[true],\\\"tags\\\":[\\\"subscription\\\",\\\"recurring\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"detect-subscription\",\"policy_sha256\":\"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"property_code\\\",\\\"rental_unit\\\"]\",\"allowed_values_json\":\"{\\\"property_code\\\":[\\\"BLUEWATERS_B7_306\\\",\\\"INDIGO1414\\\",\\\"LT713\\\"],\\\"rental_unit\\\":[\\\"Indigo1414\\\",\\\"LT713\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"enrich-property\",\"policy_sha256\":\"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"evidence_policy\\\"]\",\"allowed_values_json\":\"{\\\"evidence_policy\\\":[\\\"SEARCH_RELATED_EMAIL\\\",\\\"SEARCH_RECEIPT_BILL_WARRANTY\\\",\\\"MATCH_AMOUNT_AND_PERIOD\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"find-purchase-evidence\",\"policy_sha256\":\"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\"policy_version\":2,\"state\":\"ACTIVE\"},{\"agent_profile\":\"LUNA_MAX\",\"allowed_fields_json\":\"[\\\"channel\\\",\\\"reward_bucket\\\"]\",\"allowed_values_json\":\"{\\\"channel\\\":[\\\"ONLINE\\\",\\\"PHYSICAL_POS\\\",\\\"APPLE_PAY_POS\\\",\\\"UNKNOWN\\\"],\\\"reward_bucket\\\":[\\\"EI_AMAZON\\\",\\\"RAK_DINING\\\",\\\"RAK_EWALLET\\\",\\\"RAK_GROCERY\\\",\\\"RAK_STANDARD\\\",\\\"RAK_TRAVEL\\\",\\\"SC_FILLER\\\",\\\"SC_FOREIGN\\\",\\\"SC_ONLINE\\\",\\\"SC_WALLET\\\"]}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"enrich-cashback-classification\",\"policy_sha256\":\"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\"policy_version\":1,\"state\":\"ACTIVE\"},{\"agent_profile\":\"SOL_XHIGH\",\"allowed_fields_json\":\"[\\\"rule_recommendation\\\"]\",\"allowed_values_json\":\"{}\",\"config_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"output_schema_sha256\":\"40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab\",\"policy_id\":\"recommend-static-rule\",\"policy_sha256\":\"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\"policy_version\":1,\"state\":\"ACTIVE\"}]; const fields=[\"policy_id\",\"policy_version\",\"agent_profile\",\"policy_sha256\",\"config_sha256\",\"output_schema_sha256\",\"allowed_fields_json\",\"allowed_values_json\",\"state\"]; const observed=$input.all().map(item=>item.json).filter(row=>row&&row.state==='ACTIVE'); if(observed.length!==expected.length) throw new Error('AI_POLICY_ACTIVE_COUNT_MISMATCH'); const key=row=>JSON.stringify([row.policy_id,Number(row.policy_version)]); const byKey=new Map(); for(const row of observed){const k=key(row); if(byKey.has(k)) throw new Error('AI_POLICY_DUPLICATE_ACTIVE_VERSION'); byKey.set(k,row);} for(const row of expected){const actual=byKey.get(key(row)); if(!actual) throw new Error(`AI_POLICY_READBACK_MISSING:${row.policy_id}`); for(const field of fields) if(String(actual[field])!==String(row[field])) throw new Error(`AI_POLICY_READBACK_MISMATCH:${row.policy_id}:${field}`); if(!actual.updated_at||Number.isNaN(Date.parse(actual.updated_at))) throw new Error(`AI_POLICY_UPDATED_AT_INVALID:${row.policy_id}`);} return [{json:{status:'VERIFIED',tables_created_or_reused:15,ai_policy_rows_verified:7,finance_ledger_writes:false,actual_writes:false,contract_status:'SPEC_ONLY'}}];"
+        "jsCode": "// Purpose: Exact Compare AI Policy Seed Readback. Keep this deterministic and fail closed.\nconst expected = [\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"vendor\",\n            \"category\",\n            \"subcategory\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"category\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"subcategory\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"tags\": [\n                \"home\",\n                \"grocery\",\n                \"dining\",\n                \"transport\",\n                \"travel\",\n                \"online\",\n                \"health\",\n                \"education\",\n                \"gift\",\n                \"business\",\n                \"shared\",\n                \"review\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"classify-unresolved\",\n        \"policy_sha256\": \"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"category_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"recommend-category\",\n        \"policy_sha256\": \"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"is_subscription\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"is_subscription\": [\n                true\n            ],\n            \"tags\": [\n                \"subscription\",\n                \"recurring\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"detect-subscription\",\n        \"policy_sha256\": \"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"property_code\",\n            \"rental_unit\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"property_code\": [\n                \"BLUEWATERS_B7_306\",\n                \"INDIGO1414\",\n                \"LT713\"\n            ],\n            \"rental_unit\": [\n                \"Indigo1414\",\n                \"LT713\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"enrich-property\",\n        \"policy_sha256\": \"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"evidence_policy\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"evidence_policy\": [\n                \"SEARCH_RELATED_EMAIL\",\n                \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                \"MATCH_AMOUNT_AND_PERIOD\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"find-purchase-evidence\",\n        \"policy_sha256\": \"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"channel\",\n            \"reward_bucket\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"channel\": [\n                \"ONLINE\",\n                \"PHYSICAL_POS\",\n                \"APPLE_PAY_POS\",\n                \"UNKNOWN\"\n            ],\n            \"reward_bucket\": [\n                \"EI_AMAZON\",\n                \"RAK_DINING\",\n                \"RAK_EWALLET\",\n                \"RAK_GROCERY\",\n                \"RAK_STANDARD\",\n                \"RAK_TRAVEL\",\n                \"SC_FILLER\",\n                \"SC_FOREIGN\",\n                \"SC_ONLINE\",\n                \"SC_WALLET\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"enrich-cashback-classification\",\n        \"policy_sha256\": \"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"rule_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4\",\n        \"policy_id\": \"recommend-static-rule\",\n        \"policy_sha256\": \"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    }\n];\nconst fields = [\n    \"policy_id\",\n    \"policy_version\",\n    \"agent_profile\",\n    \"agent_provider\",\n    \"policy_sha256\",\n    \"config_sha256\",\n    \"output_schema_sha256\",\n    \"allowed_fields_json\",\n    \"allowed_values_json\",\n    \"state\"\n];\nconst observed = $input.all().map(item => item.json).filter(row => row && row.state === 'ACTIVE');\nif (observed.length !== expected.length)\n    throw new Error('AI_POLICY_ACTIVE_COUNT_MISMATCH');\nconst key = row => JSON.stringify([row.policy_id, Number(row.policy_version)]);\nconst byKey = new Map();\nfor (const row of observed) {\n    const k = key(row);\n    if (byKey.has(k))\n        throw new Error('AI_POLICY_DUPLICATE_ACTIVE_VERSION');\n    byKey.set(k, row);\n}\nfor (const row of expected) {\n    const actual = byKey.get(key(row));\n    if (!actual)\n        throw new Error(`AI_POLICY_READBACK_MISSING:${row.policy_id}`);\n    for (const field of fields)\n        if (String(actual[field]) !== String(row[field]))\n            throw new Error(`AI_POLICY_READBACK_MISMATCH:${row.policy_id}:${field}`);\n    if (!actual.updated_at || Number.isNaN(Date.parse(actual.updated_at)))\n        throw new Error(`AI_POLICY_UPDATED_AT_INVALID:${row.policy_id}`);\n}\nreturn [{ json: { status: 'VERIFIED', tables_created_or_reused: 15, ai_policy_rows_verified: 7, finance_ledger_writes: false, actual_writes: false, contract_status: 'SPEC_ONLY' } }];\n"
       }
     },
     {
@@ -1265,11 +1290,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2200,
-        0
+        380,
+        760
       ],
       "parameters": {
-        "jsCode": "const rows=[{\"config_name\":\"ai-policies\",\"content_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/ai-policies.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"static-rules.seed\",\"content_sha256\":\"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/static-rules.seed.json\",\"state\":\"ACTIVE\",\"version\":\"sha256-92680d5c55464a77\"},{\"config_name\":\"transaction-email-sources\",\"content_sha256\":\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/transaction-email-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"statement-sources\",\"content_sha256\":\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/statement-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"browser-sources\",\"content_sha256\":\"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/browser-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"cashback-programs\",\"content_sha256\":\"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/cashback-programs.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"document-processing\",\"content_sha256\":\"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/document-processing.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"evidence-search-policy\",\"content_sha256\":\"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/evidence-search-policy.json\",\"state\":\"ACTIVE\",\"version\":\"1\"}]; const activated_at=new Date().toISOString(); return rows.map(row=>({json:{...row,activated_at}}));"
+        "jsCode": "// Purpose: Emit Versioned Config Fingerprints. Keep this deterministic and fail closed.\nconst rows = [\n    {\n        \"config_name\": \"ai-policies\",\n        \"content_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/ai-policies.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"agent-providers\",\n        \"content_sha256\": \"d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/agent-providers.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"static-rules.seed\",\n        \"content_sha256\": \"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/static-rules.seed.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"sha256-92680d5c55464a77\"\n    },\n    {\n        \"config_name\": \"transaction-email-sources\",\n        \"content_sha256\": \"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/transaction-email-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"statement-sources\",\n        \"content_sha256\": \"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/statement-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"browser-sources\",\n        \"content_sha256\": \"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/browser-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"cashback-programs\",\n        \"content_sha256\": \"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/cashback-programs.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"document-processing\",\n        \"content_sha256\": \"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/document-processing.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"evidence-search-policy\",\n        \"content_sha256\": \"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/evidence-search-policy.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    }\n];\nconst activated_at = new Date().toISOString();\nreturn rows.map(row => ({ json: { ...row, activated_at } }));\n"
       }
     },
     {
@@ -1278,8 +1303,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        2400,
-        0
+        680,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -1332,11 +1357,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2600,
-        0
+        980,
+        760
       ],
       "parameters": {
-        "jsCode": "const rows=$input.all(); if(rows.length!==8) throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH'); return [{json:{config_write_count:rows.length}}];"
+        "jsCode": "// Purpose: Collapse Config Writes to One Readback. Keep this deterministic and fail closed.\nconst rows = $input.all();\nif (rows.length !== 9)\n    throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH');\nreturn [{ json: { config_write_count: rows.length } }];\n"
       }
     },
     {
@@ -1345,8 +1370,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        2800,
-        0
+        -1120,
+        1140
       ],
       "parameters": {
         "resource": "row",
@@ -1377,11 +1402,75 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3000,
-        0
+        -820,
+        1140
       ],
       "parameters": {
-        "jsCode": "const expected=[{\"config_name\":\"ai-policies\",\"content_sha256\":\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/ai-policies.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"static-rules.seed\",\"content_sha256\":\"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/static-rules.seed.json\",\"state\":\"ACTIVE\",\"version\":\"sha256-92680d5c55464a77\"},{\"config_name\":\"transaction-email-sources\",\"content_sha256\":\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/transaction-email-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"statement-sources\",\"content_sha256\":\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/statement-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"browser-sources\",\"content_sha256\":\"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/browser-sources.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"cashback-programs\",\"content_sha256\":\"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/cashback-programs.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"document-processing\",\"content_sha256\":\"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/document-processing.json\",\"state\":\"ACTIVE\",\"version\":\"1\"},{\"config_name\":\"evidence-search-policy\",\"content_sha256\":\"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\"git_commit\":\"RUNTIME_BIND_GIT_COMMIT\",\"readback_verified\":false,\"source_path\":\"config/evidence-search-policy.json\",\"state\":\"ACTIVE\",\"version\":\"1\"}],fields=[\"config_name\",\"version\",\"source_path\",\"content_sha256\",\"git_commit\",\"state\"]; const rows=$input.all().map(i=>i.json).filter(r=>r&&r.state==='ACTIVE'),byKey=new Map(rows.map(r=>[JSON.stringify([r.config_name,String(r.version)]),r])); for(const row of expected){const actual=byKey.get(JSON.stringify([row.config_name,String(row.version)])); if(!actual) throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`); for(const field of fields){const value=field==='git_commit'&&row[field]==='RUNTIME_BIND_GIT_COMMIT'?actual[field]:row[field]; if(String(actual[field])!==String(value)) throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);}} return [{json:{status:'VERIFIED',tables_created_or_reused:15,ai_policy_rows_verified:7,config_rows_verified:8,finance_ledger_writes:false,actual_writes:false,contract_status:'SPEC_ONLY'}}];"
+        "jsCode": "// Purpose: Exact Compare Config Fingerprint Readback. Keep this deterministic and fail closed.\nconst expected = [\n    {\n        \"config_name\": \"ai-policies\",\n        \"content_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/ai-policies.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"agent-providers\",\n        \"content_sha256\": \"d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/agent-providers.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"static-rules.seed\",\n        \"content_sha256\": \"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/static-rules.seed.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"sha256-92680d5c55464a77\"\n    },\n    {\n        \"config_name\": \"transaction-email-sources\",\n        \"content_sha256\": \"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/transaction-email-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"statement-sources\",\n        \"content_sha256\": \"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/statement-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"browser-sources\",\n        \"content_sha256\": \"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/browser-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"cashback-programs\",\n        \"content_sha256\": \"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/cashback-programs.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"document-processing\",\n        \"content_sha256\": \"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/document-processing.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"evidence-search-policy\",\n        \"content_sha256\": \"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/evidence-search-policy.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    }\n], fields = [\n    \"config_name\",\n    \"version\",\n    \"source_path\",\n    \"content_sha256\",\n    \"git_commit\",\n    \"state\"\n];\nconst rows = $input.all().map(i => i.json).filter(r => r && r.state === 'ACTIVE'), byKey = new Map(rows.map(r => [JSON.stringify([r.config_name, String(r.version)]), r]));\nfor (const row of expected) {\n    const actual = byKey.get(JSON.stringify([row.config_name, String(row.version)]));\n    if (!actual)\n        throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`);\n    for (const field of fields) {\n        const value = field === 'git_commit' && row[field] === 'RUNTIME_BIND_GIT_COMMIT' ? actual[field] : row[field];\n        if (String(actual[field]) !== String(value))\n            throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);\n    }\n}\nreturn [{ json: { status: 'VERIFIED', tables_created_or_reused: 15, ai_policy_rows_verified: 7, config_rows_verified: 9, finance_ledger_writes: false, actual_writes: false, contract_status: 'SPEC_ONLY' } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
+      "name": "Stage 1 · Manual Platform Bootstrap Only to Create or Reuse finance_archive_receipts",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Manual Platform Bootstrap Only → Create or Reuse finance_archive_receipts\n**Input:** Manual Platform Bootstrap Only  ·  **Output:** Create or Reuse finance_archive_receipts  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-2",
+      "name": "Stage 2 · Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Create or Reuse finance_config_versions → Create or Reuse finance_source_cursors\n**Input:** Create or Reuse finance_config_versions  ·  **Output:** Create or Reuse finance_source_cursors  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-3",
+      "name": "Stage 3 · Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Emit Versioned AI Policy Seed → Collapse Config Writes to One Readback\n**Input:** Emit Versioned AI Policy Seed  ·  **Output:** Collapse Config Writes to One Readback  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-4",
+      "name": "Stage 4 · Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Read Back ACTIVE Config Fingerprints → Exact Compare Config Fingerprint Readback\n**Input:** Read Back ACTIVE Config Fingerprints  ·  **Output:** Exact Compare Config Fingerprint Readback  ·  **Nodes:** 25–26\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
       }
     }
   ],
@@ -1686,6 +1775,83 @@
       "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"
     ],
     "importTested": false,
-    "fixtureExecuted": false
-  }
+    "fixtureExecuted": false,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000090",
+      "name": "90 Platform & Admin",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Create or Reuse finance_execution_failures to Create or Reuse finance_archive_receipts",
+      "nodeIds": [
+        "19002",
+        "19003",
+        "19004",
+        "19005",
+        "19006",
+        "19007",
+        "19008"
+      ],
+      "description": "Finance stage 1. Input starts at Create or Reuse finance_execution_failures; verified output leaves through Create or Reuse finance_archive_receipts."
+    },
+    {
+      "name": "Stage 2: Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "nodeIds": [
+        "19009",
+        "19010",
+        "19011",
+        "19012",
+        "19013",
+        "19014",
+        "19015",
+        "19016"
+      ],
+      "description": "Finance stage 2. Input starts at Create or Reuse finance_config_versions; verified output leaves through Create or Reuse finance_source_cursors."
+    },
+    {
+      "name": "Stage 3: Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "nodeIds": [
+        "19050",
+        "19051",
+        "19052",
+        "19053",
+        "19054",
+        "19055",
+        "19056",
+        "19057"
+      ],
+      "description": "Finance stage 3. Input starts at Emit Versioned AI Policy Seed; verified output leaves through Collapse Config Writes to One Readback."
+    },
+    {
+      "name": "Stage 4: Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "nodeIds": [
+        "19058",
+        "19059"
+      ],
+      "description": "Finance stage 4. Input starts at Read Back ACTIVE Config Fingerprints; verified output leaves through Exact Compare Config Fingerprint Readback."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

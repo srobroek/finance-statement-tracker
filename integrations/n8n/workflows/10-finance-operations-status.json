@@ -1,30 +1,1002 @@
 {
-  "id":"10000000-0000-4000-8000-000000000010","name":"Finance · Operations Status and Audited MCP Dispatch","active":false,
-  "nodes":[
-    {"id":"10001","name":"08:45 Daily Health Summary","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-1000,-300],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"45 8 * * *"}]}}},
-    {"id":"10002","name":"Called by MCP Facade","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-1200,100],"parameters":{"inputSource":"passthrough"}},
-    {"id":"10003","name":"Get Scheduled Finance Executions","type":"n8n-nodes-base.n8n","typeVersion":1,"position":[-700,-300],"parameters":{"resource":"execution","operation":"getAll","returnAll":false,"limit":100,"filters":{"status":"all"}},"credentials":{"n8nApi":{"id":"BIND_N8N_API","name":"Local n8n Operations"}}},
-    {"id":"10004","name":"Summarize Scheduled Terminal State","type":"n8n-nodes-base.code","typeVersion":2,"position":[-400,-300],"parameters":{"jsCode":"const rows=$input.all().map(i=>i.json),finance=rows.filter(r=>String(r.workflowData?.name||r.workflowName||'').startsWith('Finance ·')),failed=finance.filter(r=>['error','crashed','canceled'].includes(String(r.status).toLowerCase())),running=finance.filter(r=>['new','running','waiting'].includes(String(r.status).toLowerCase())); return [{json:{status:failed.length?'ATTENTION':running.length?'RUNNING':'OK',execution_count:finance.length,failed_count:failed.length,running_count:running.length,checked_at:new Date().toISOString()}}];"}},
-    {"id":"10010","name":"Validate Bounded MCP Dispatch","type":"n8n-nodes-base.code","typeVersion":2,"position":[-1000,100],"parameters":{"jsCode":"const r=$json,allowed=new Set(['finance.status','artifact.submit_reviewed','document.request']),op=String(r.operation_code||''); if(!allowed.has(op)) throw new Error('MCP_OPERATION_NOT_ALLOWED'); const request_id=String(r._mcp_request_id||''); if(!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id)) throw new Error('MCP_REQUEST_ID_INVALID'); const specs={ 'finance.status':[], 'artifact.submit_reviewed':['artifact_id','expected_sha256'], 'document.request':['document_id','expected_sha256','document_profile','requested_schema_version']},args={}; for(const key of specs[op]){const value=String(r[key]||''); if(!value||value.length>256) throw new Error(`MCP_ARGUMENT_INVALID:${key}`); args[key]=value;} if(args.expected_sha256&&!/^[a-f0-9]{64}$/.test(args.expected_sha256)) throw new Error('MCP_HASH_INVALID'); const target={ 'finance.status':'FINANCE_OPERATIONS_STATUS', 'artifact.submit_reviewed':'INTERACTIVE_ARTIFACT_HANDOFF', 'document.request':'DOCUMENT_EXTRACTION_REQUEST'}[op]; return [{json:{request_id,operation_code:op,target_workflow_code:target,args,request_canonical:JSON.stringify({operation_code:op,args})}}];"}},
-    {"id":"10011","name":"SHA-256 MCP Request","type":"n8n-nodes-base.crypto","typeVersion":1,"position":[-800,100],"parameters":{"action":"hash","type":"SHA256","value":"={{ $json.request_canonical }}","dataPropertyName":"request_sha256"}},
-    {"id":"10012","name":"Upsert ACCEPTED MCP Request","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-600,100],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $json.request_id }}"}]},"columns":{"mappingMode":"defineBelow","value":{"request_id":"={{ $json.request_id }}","request_sha256":"={{ $json.request_sha256 }}","operation_code":"={{ $json.operation_code }}","caller_subject_hash":"73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275","target_workflow_code":"={{ $json.target_workflow_code }}","state":"ACCEPTED","result_sha256":"","error_class":"","error_message_redacted":"","readback_verified":false,"created_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"10013","name":"Read Back ACCEPTED MCP Request","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-400,100],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $('SHA-256 MCP Request').item.json.request_id }}"},{"keyName":"state","condition":"eq","keyValue":"ACCEPTED"}]},"options":{}}},
-    {"id":"10014","name":"Compare ACCEPTED MCP Readback","type":"n8n-nodes-base.code","typeVersion":2,"position":[-200,100],"parameters":{"jsCode":"const e=$('SHA-256 MCP Request').first().json,o=$json; for(const k of ['request_id','request_sha256','operation_code','target_workflow_code']) if(o[k]!==e[k]) throw new Error(`MCP_ACCEPTED_READBACK_MISMATCH:${k}`); return [{json:e}];"}},
-    {"id":"10015","name":"Route Audited MCP Operation","type":"n8n-nodes-base.switch","typeVersion":3.2,"position":[0,100],"parameters":{"rules":{"values":[{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.operation_code }}","rightValue":"finance.status","operator":{"type":"string","operation":"equals"}}]}},{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.operation_code }}","rightValue":"artifact.submit_reviewed","operator":{"type":"string","operation":"equals"}}]}},{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.operation_code }}","rightValue":"document.request","operator":{"type":"string","operation":"equals"}}]}}]},"options":{"fallbackOutput":"none"}}},
-    {"id":"10016","name":"Get MCP Finance Executions","type":"n8n-nodes-base.n8n","typeVersion":1,"position":[200,-60],"onError":"continueRegularOutput","parameters":{"resource":"execution","operation":"getAll","returnAll":false,"limit":100,"filters":{"status":"all"}},"credentials":{"n8nApi":{"id":"BIND_N8N_API","name":"Local n8n Operations"}}},
-    {"id":"10017","name":"Summarize MCP Finance Status","type":"n8n-nodes-base.code","typeVersion":2,"position":[400,-60],"parameters":{"jsCode":"if($json.error) return [{json:$json}]; const rows=$input.all().map(i=>i.json),finance=rows.filter(r=>String(r.workflowData?.name||r.workflowName||'').startsWith('Finance ·')),failed=finance.filter(r=>['error','crashed','canceled'].includes(String(r.status).toLowerCase())); return [{json:{status:failed.length?'ATTENTION':'OK',execution_count:finance.length,failed_count:failed.length,checked_at:new Date().toISOString()}}];"}},
-    {"id":"10018","name":"Dispatch Reviewed Artifact","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[300,100],"onError":"continueRegularOutput","parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000011","mode":"id"},"workflowInputs":{"mappingMode":"defineBelow","value":{"operation_code":"artifact.submit_reviewed","artifact_id":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}","expected_sha256":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}"},"matchingColumns":[],"schema":[]},"options":{"waitForSubWorkflow":true}}},
-    {"id":"10019","name":"Dispatch Document Request","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[300,260],"onError":"continueRegularOutput","parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000013","mode":"id"},"workflowInputs":{"mappingMode":"defineBelow","value":{"operation_code":"document.request","document_id":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_id }}","expected_sha256":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}","document_profile":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_profile }}","requested_schema_version":"={{ $('Compare ACCEPTED MCP Readback').item.json.args.requested_schema_version }}"},"matchingColumns":[],"schema":[]},"options":{"waitForSubWorkflow":true}}},
-    {"id":"10020","name":"Build Redacted MCP Terminal Receipt","type":"n8n-nodes-base.code","typeVersion":2,"position":[650,100],"parameters":{"jsCode":"const req=$('Compare ACCEPTED MCP Readback').first().json,raw=$json,error=raw?.error,redact=v=>String(v||'').replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi,'$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g,'[REDACTED]').slice(0,500); const state=error?'FAILED':'COMPLETED',result=error?{error_class:'MCP_TARGET_ERROR'}:raw; return [{json:{...req,state,error_class:error?'MCP_TARGET_ERROR':'',error_message_redacted:error?redact(error.message||error):'',result,result_canonical:JSON.stringify(result)}}];"}},
-    {"id":"10021","name":"SHA-256 MCP Result","type":"n8n-nodes-base.crypto","typeVersion":1,"position":[850,100],"parameters":{"action":"hash","type":"SHA256","value":"={{ $json.result_canonical }}","dataPropertyName":"result_sha256"}},
-    {"id":"10022","name":"Upsert Terminal MCP Request","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1050,100],"parameters":{"resource":"row","operation":"update","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $json.request_id }}"},{"keyName":"request_sha256","condition":"eq","keyValue":"={{ $json.request_sha256 }}"},{"keyName":"state","condition":"eq","keyValue":"ACCEPTED"}]},"columns":{"mappingMode":"defineBelow","value":{"state":"={{ $json.state }}","result_sha256":"={{ $json.result_sha256 }}","error_class":"={{ $json.error_class }}","error_message_redacted":"={{ $json.error_message_redacted }}","readback_verified":false,"completed_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"10023","name":"Read Back Terminal MCP Request","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1250,100],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $('SHA-256 MCP Result').item.json.request_id }}"},{"keyName":"result_sha256","condition":"eq","keyValue":"={{ $('SHA-256 MCP Result').item.json.result_sha256 }}"}]},"options":{}}},
-    {"id":"10024","name":"Compare and Mark MCP Readback","type":"n8n-nodes-base.code","typeVersion":2,"position":[1450,100],"parameters":{"jsCode":"const e=$('SHA-256 MCP Result').first().json,o=$json; if(o.request_id!==e.request_id||o.state!==e.state||o.result_sha256!==e.result_sha256||o.error_class!==e.error_class||o.error_message_redacted!==e.error_message_redacted) throw new Error('MCP_TERMINAL_READBACK_MISMATCH'); return [{json:e}];"}},
-    {"id":"10025","name":"Mark MCP Receipt Verified","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1650,100],"parameters":{"resource":"row","operation":"update","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $json.request_id }}"},{"keyName":"result_sha256","condition":"eq","keyValue":"={{ $json.result_sha256 }}"}]},"columns":{"mappingMode":"defineBelow","value":{"readback_verified":true},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"10026","name":"Read Verified MCP Receipt","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1850,100],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_mcp_requests","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"request_id","condition":"eq","keyValue":"={{ $('SHA-256 MCP Result').item.json.request_id }}"},{"keyName":"readback_verified","condition":"eq","keyValue":true}]},"options":{}}},
-    {"id":"10027","name":"Return Redacted MCP Result","type":"n8n-nodes-base.code","typeVersion":2,"position":[2050,100],"parameters":{"jsCode":"const r=$('SHA-256 MCP Result').first().json; if(r.state!=='COMPLETED') throw new Error(`MCP_DISPATCH_FAILED:${r.error_class}`); return [{json:r.result}];"}}
+  "id": "10000000-0000-4000-8000-000000000010",
+  "name": "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "10001",
+      "name": "08:45 Daily Health Summary",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "45 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "10002",
+      "name": "Called by MCP Facade",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "10003",
+      "name": "Get Scheduled Finance Executions",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "execution",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "status": "all"
+        }
+      },
+      "credentials": {
+        "n8nApi": {
+          "id": "BIND_N8N_API",
+          "name": "Local n8n Operations"
+        }
+      }
+    },
+    {
+      "id": "10004",
+      "name": "Summarize Scheduled Terminal State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Summarize Scheduled Terminal State. Keep this deterministic and fail closed.\nconst rows = $input.all().map(i => i.json), finance = rows.filter(r => String(r.workflowData?.name || r.workflowName || '').startsWith('Finance · ')), failed = finance.filter(r => ['error', 'crashed', 'canceled'].includes(String(r.status).toLowerCase())), running = finance.filter(r => ['new', 'running', 'waiting'].includes(String(r.status).toLowerCase()));\nreturn [{ json: { status: failed.length ? 'ATTENTION' : running.length ? 'RUNNING' : 'OK', execution_count: finance.length, failed_count: failed.length, running_count: running.length, checked_at: new Date().toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "10010",
+      "name": "Validate Bounded MCP Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Bounded MCP Dispatch. Keep this deterministic and fail closed.\nconst r = $json, allowed = new Set(['finance.status', 'artifact.submit_reviewed', 'document.request']), op = String(r.operation_code || '');\nif (!allowed.has(op))\n    throw new Error('MCP_OPERATION_NOT_ALLOWED');\nconst request_id = String(r._mcp_request_id || '');\nif (!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id))\n    throw new Error('MCP_REQUEST_ID_INVALID');\nconst specs = { 'finance.status': [], 'artifact.submit_reviewed': ['artifact_id', 'expected_sha256'], 'document.request': ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'] }, args = {};\nfor (const key of specs[op]) {\n    const value = String(r[key] || '');\n    if (!value || value.length > 256)\n        throw new Error(`MCP_ARGUMENT_INVALID:${key}`);\n    args[key] = value;\n}\nif (args.expected_sha256 && !/^[a-f0-9]{64}$/.test(args.expected_sha256))\n    throw new Error('MCP_HASH_INVALID');\nconst target = { 'finance.status': 'FINANCE_OPERATIONS_STATUS', 'artifact.submit_reviewed': 'INTERACTIVE_ARTIFACT_HANDOFF', 'document.request': 'DOCUMENT_EXTRACTION_REQUEST' }[op];\nreturn [{ json: { request_id, operation_code: op, target_workflow_code: target, args, request_canonical: JSON.stringify({ operation_code: op, args }) } }];\n"
+      }
+    },
+    {
+      "id": "10011",
+      "name": "SHA-256 MCP Request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.request_canonical }}",
+        "dataPropertyName": "request_sha256"
+      }
+    },
+    {
+      "id": "10012",
+      "name": "Upsert ACCEPTED MCP Request",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "request_id": "={{ $json.request_id }}",
+            "request_sha256": "={{ $json.request_sha256 }}",
+            "operation_code": "={{ $json.operation_code }}",
+            "caller_subject_hash": "73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275",
+            "target_workflow_code": "={{ $json.target_workflow_code }}",
+            "state": "ACCEPTED",
+            "result_sha256": "",
+            "error_class": "",
+            "error_message_redacted": "",
+            "readback_verified": false,
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10013",
+      "name": "Read Back ACCEPTED MCP Request",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 MCP Request').item.json.request_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACCEPTED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10014",
+      "name": "Compare ACCEPTED MCP Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare ACCEPTED MCP Readback. Keep this deterministic and fail closed.\nconst e = $('SHA-256 MCP Request').first().json, o = $json;\nfor (const k of ['request_id', 'request_sha256', 'operation_code', 'target_workflow_code'])\n    if (o[k] !== e[k])\n        throw new Error(`MCP_ACCEPTED_READBACK_MISMATCH:${k}`);\nreturn [{ json: e }];\n"
+      }
+    },
+    {
+      "id": "10015",
+      "name": "Route Audited MCP Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation_code }}",
+                    "rightValue": "finance.status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation_code }}",
+                    "rightValue": "artifact.submit_reviewed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation_code }}",
+                    "rightValue": "document.request",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
+      "id": "10016",
+      "name": "Get MCP Finance Executions",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        380
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "execution",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "status": "all"
+        }
+      },
+      "credentials": {
+        "n8nApi": {
+          "id": "BIND_N8N_API",
+          "name": "Local n8n Operations"
+        }
+      }
+    },
+    {
+      "id": "10017",
+      "name": "Summarize MCP Finance Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Summarize MCP Finance Status. Keep this deterministic and fail closed.\nif ($json.error)\n    return [{ json: $json }];\nconst rows = $input.all().map(i => i.json), finance = rows.filter(r => String(r.workflowData?.name || r.workflowName || '').startsWith('Finance · ')), failed = finance.filter(r => ['error', 'crashed', 'canceled'].includes(String(r.status).toLowerCase()));\nreturn [{ json: { status: failed.length ? 'ATTENTION' : 'OK', execution_count: finance.length, failed_count: failed.length, checked_at: new Date().toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "10018",
+      "name": "Dispatch Reviewed Artifact",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        380
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000011",
+          "mode": "list",
+          "cachedResultName": "Finance · Interactive Artifact Handoff · Setup Required"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operation_code": "artifact.submit_reviewed",
+            "artifact_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}",
+            "expected_sha256": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "10019",
+      "name": "Dispatch Document Request",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        380
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000013",
+          "mode": "list",
+          "cachedResultName": "Finance · Request Document Extraction · Setup Required"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operation_code": "document.request",
+            "document_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_id }}",
+            "expected_sha256": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}",
+            "document_profile": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_profile }}",
+            "requested_schema_version": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.requested_schema_version }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "10020",
+      "name": "Build Redacted MCP Terminal Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Redacted MCP Terminal Receipt. Keep this deterministic and fail closed.\nconst req = $('Compare ACCEPTED MCP Readback').first().json, raw = $json, error = raw?.error, redact = v => String(v || '').replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 500);\nconst state = error ? 'FAILED' : 'COMPLETED', result = error ? { error_class: 'MCP_TARGET_ERROR' } : raw;\nreturn [{ json: { ...req, state, error_class: error ? 'MCP_TARGET_ERROR' : '', error_message_redacted: error ? redact(error.message || error) : '', result, result_canonical: JSON.stringify(result) } }];\n"
+      }
+    },
+    {
+      "id": "10021",
+      "name": "SHA-256 MCP Result",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.result_canonical }}",
+        "dataPropertyName": "result_sha256"
+      }
+    },
+    {
+      "id": "10022",
+      "name": "Upsert Terminal MCP Request",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "request_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_sha256 }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACCEPTED"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "state": "={{ $json.state }}",
+            "result_sha256": "={{ $json.result_sha256 }}",
+            "error_class": "={{ $json.error_class }}",
+            "error_message_redacted": "={{ $json.error_message_redacted }}",
+            "readback_verified": false,
+            "completed_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10023",
+      "name": "Read Back Terminal MCP Request",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
+            },
+            {
+              "keyName": "result_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 MCP Result').item.json.result_sha256 }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10024",
+      "name": "Compare and Mark MCP Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare and Mark MCP Readback. Keep this deterministic and fail closed.\nconst e = $('SHA-256 MCP Result').first().json, o = $json;\nif (o.request_id !== e.request_id || o.state !== e.state || o.result_sha256 !== e.result_sha256 || o.error_class !== e.error_class || o.error_message_redacted !== e.error_message_redacted)\n    throw new Error('MCP_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
+      }
+    },
+    {
+      "id": "10025",
+      "name": "Mark MCP Receipt Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "result_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $json.result_sha256 }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "readback_verified": true
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10026",
+      "name": "Read Verified MCP Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_mcp_requests",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10027",
+      "name": "Return Redacted MCP Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Redacted MCP Result. Keep this deterministic and fail closed.\nconst r = $('SHA-256 MCP Result').first().json;\nif (r.state !== 'COMPLETED')\n    throw new Error(`MCP_DISPATCH_FAILED:${r.error_class}`);\nreturn [{ json: r.result }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000010-generated-note-1",
+      "name": "Stage 1 · 08:45 Daily Health Summary to Read Back ACCEPTED MCP Request",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · 08:45 Daily Health Summary → Read Back ACCEPTED MCP Request\n**Input:** 08:45 Daily Health Summary  ·  **Output:** Read Back ACCEPTED MCP Request  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000010-generated-note-2",
+      "name": "Stage 2 · Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Compare ACCEPTED MCP Readback → SHA-256 MCP Result\n**Input:** Compare ACCEPTED MCP Readback  ·  **Output:** SHA-256 MCP Result  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000010-generated-note-3",
+      "name": "Stage 3 · Upsert Terminal MCP Request to Return Redacted MCP Result",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Upsert Terminal MCP Request → Return Redacted MCP Result\n**Input:** Upsert Terminal MCP Request  ·  **Output:** Return Redacted MCP Result  ·  **Nodes:** 17–22\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"08:45 Daily Health Summary":{"main":[[{"node":"Get Scheduled Finance Executions","type":"main","index":0}]]},"Get Scheduled Finance Executions":{"main":[[{"node":"Summarize Scheduled Terminal State","type":"main","index":0}]]},"Called by MCP Facade":{"main":[[{"node":"Validate Bounded MCP Dispatch","type":"main","index":0}]]},"Validate Bounded MCP Dispatch":{"main":[[{"node":"SHA-256 MCP Request","type":"main","index":0}]]},"SHA-256 MCP Request":{"main":[[{"node":"Upsert ACCEPTED MCP Request","type":"main","index":0}]]},"Upsert ACCEPTED MCP Request":{"main":[[{"node":"Read Back ACCEPTED MCP Request","type":"main","index":0}]]},"Read Back ACCEPTED MCP Request":{"main":[[{"node":"Compare ACCEPTED MCP Readback","type":"main","index":0}]]},"Compare ACCEPTED MCP Readback":{"main":[[{"node":"Route Audited MCP Operation","type":"main","index":0}]]},"Route Audited MCP Operation":{"main":[[{"node":"Get MCP Finance Executions","type":"main","index":0}],[{"node":"Dispatch Reviewed Artifact","type":"main","index":0}],[{"node":"Dispatch Document Request","type":"main","index":0}]]},"Get MCP Finance Executions":{"main":[[{"node":"Summarize MCP Finance Status","type":"main","index":0}]]},"Summarize MCP Finance Status":{"main":[[{"node":"Build Redacted MCP Terminal Receipt","type":"main","index":0}]]},"Dispatch Reviewed Artifact":{"main":[[{"node":"Build Redacted MCP Terminal Receipt","type":"main","index":0}]]},"Dispatch Document Request":{"main":[[{"node":"Build Redacted MCP Terminal Receipt","type":"main","index":0}]]},"Build Redacted MCP Terminal Receipt":{"main":[[{"node":"SHA-256 MCP Result","type":"main","index":0}]]},"SHA-256 MCP Result":{"main":[[{"node":"Upsert Terminal MCP Request","type":"main","index":0}]]},"Upsert Terminal MCP Request":{"main":[[{"node":"Read Back Terminal MCP Request","type":"main","index":0}]]},"Read Back Terminal MCP Request":{"main":[[{"node":"Compare and Mark MCP Readback","type":"main","index":0}]]},"Compare and Mark MCP Readback":{"main":[[{"node":"Mark MCP Receipt Verified","type":"main","index":0}]]},"Mark MCP Receipt Verified":{"main":[[{"node":"Read Verified MCP Receipt","type":"main","index":0}]]},"Read Verified MCP Receipt":{"main":[[{"node":"Return Redacted MCP Result","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},
-  "meta":{"financeWorkflowCode":"FINANCE_OPERATIONS_STATUS","mcpSafe":false,"migrationStatus":"SPEC_ONLY","mcpAuditTable":"finance_mcp_requests","mcpTerminalReadback":true,"importTested":false,"fixtureExecuted":false}
+  "connections": {
+    "08:45 Daily Health Summary": {
+      "main": [
+        [
+          {
+            "node": "Get Scheduled Finance Executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scheduled Finance Executions": {
+      "main": [
+        [
+          {
+            "node": "Summarize Scheduled Terminal State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by MCP Facade": {
+      "main": [
+        [
+          {
+            "node": "Validate Bounded MCP Dispatch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Bounded MCP Dispatch": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 MCP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 MCP Request": {
+      "main": [
+        [
+          {
+            "node": "Upsert ACCEPTED MCP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert ACCEPTED MCP Request": {
+      "main": [
+        [
+          {
+            "node": "Read Back ACCEPTED MCP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back ACCEPTED MCP Request": {
+      "main": [
+        [
+          {
+            "node": "Compare ACCEPTED MCP Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare ACCEPTED MCP Readback": {
+      "main": [
+        [
+          {
+            "node": "Route Audited MCP Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Audited MCP Operation": {
+      "main": [
+        [
+          {
+            "node": "Get MCP Finance Executions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch Reviewed Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch Document Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get MCP Finance Executions": {
+      "main": [
+        [
+          {
+            "node": "Summarize MCP Finance Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize MCP Finance Status": {
+      "main": [
+        [
+          {
+            "node": "Build Redacted MCP Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Reviewed Artifact": {
+      "main": [
+        [
+          {
+            "node": "Build Redacted MCP Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Document Request": {
+      "main": [
+        [
+          {
+            "node": "Build Redacted MCP Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Redacted MCP Terminal Receipt": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 MCP Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 MCP Result": {
+      "main": [
+        [
+          {
+            "node": "Upsert Terminal MCP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Terminal MCP Request": {
+      "main": [
+        [
+          {
+            "node": "Read Back Terminal MCP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Terminal MCP Request": {
+      "main": [
+        [
+          {
+            "node": "Compare and Mark MCP Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare and Mark MCP Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark MCP Receipt Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark MCP Receipt Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Verified MCP Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Verified MCP Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return Redacted MCP Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "FINANCE_OPERATIONS_STATUS",
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "mcpAuditTable": "finance_mcp_requests",
+    "mcpTerminalReadback": true,
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_N8N_API",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000007",
+      "name": "07 Operations & Recovery",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Get Scheduled Finance Executions to Summarize Scheduled Terminal State",
+      "nodeIds": [
+        "10003",
+        "10004"
+      ],
+      "description": "Finance stage 1. Input starts at Get Scheduled Finance Executions; verified output leaves through Summarize Scheduled Terminal State."
+    },
+    {
+      "name": "Stage 1: Validate Bounded MCP Dispatch to Read Back ACCEPTED MCP Request",
+      "nodeIds": [
+        "10010",
+        "10011",
+        "10012",
+        "10013"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Bounded MCP Dispatch; verified output leaves through Read Back ACCEPTED MCP Request."
+    },
+    {
+      "name": "Stage 2: Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
+      "nodeIds": [
+        "10014",
+        "10015",
+        "10016",
+        "10017",
+        "10018",
+        "10019",
+        "10020",
+        "10021"
+      ],
+      "description": "Finance stage 2. Input starts at Compare ACCEPTED MCP Readback; verified output leaves through SHA-256 MCP Result."
+    },
+    {
+      "name": "Stage 3: Upsert Terminal MCP Request to Return Redacted MCP Result",
+      "nodeIds": [
+        "10022",
+        "10023",
+        "10024",
+        "10025",
+        "10026",
+        "10027"
+      ],
+      "description": "Finance stage 3. Input starts at Upsert Terminal MCP Request; verified output leaves through Return Redacted MCP Result."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

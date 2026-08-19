@@ -1,19 +1,501 @@
 {
-  "id":"10000000-0000-4000-8000-000000000005","name":"Finance · Wio Statement Cycle Poll · SPEC ONLY","active":false,
-  "nodes":[
-    {"id":"5001","name":"Daily 20:40 Cycle Poll","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-900,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"40 20 * * *"}]}}},
-    {"id":"5002","name":"Open Configured Cycle Window","type":"n8n-nodes-base.code","typeVersion":2,"position":[-700,0],"parameters":{"jsCode":"const now=new Date(); const cycleDay=3, deadlineDays=5; const day=now.getDate(); if(day<cycleDay||day>cycleDay+deadlineDays) return []; const upper=now.toISOString(); const start=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,cycleDay)); return [{json:{run_id:`WIO_CREDIT:${upper}`,source_code:'WIO_CREDIT',window_start:start.toISOString(),run_upper_bound:upper,cycle_day:cycleDay,deadline_at:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),cycleDay+deadlineDays,23,59,59)).toISOString(),period_key:`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`,trigger_kind:'SCHEDULE'}}];"}},
-    {"id":"5003","name":"Load Trusted Source Contract","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-500,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_source_contracts","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"WIO_CREDIT"},{"keyName":"enabled","condition":"eq","keyValue":true}]},"options":{}}},
-    {"id":"5004","name":"Assemble Trusted Acquisition Contract","type":"n8n-nodes-base.code","typeVersion":2,"position":[-300,0],"parameters":{"jsCode":"const w=$('Open Configured Cycle Window').first().json,c=$json; return [{json:{...w,...c,senders:JSON.parse(c.senders_json),subjects:JSON.parse(c.subjects_json)}}];"}},
-    {"id":"5005","name":"Acquire Archive and Read Back","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[-100,0],"alwaysOutputData":true,"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000001","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"5006","name":"Statement Found","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[100,0],"parameters":{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ !!$json.onedrive_item_id }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}]}}},
-    {"id":"5007","name":"Download Archived Source","type":"n8n-nodes-base.microsoftOneDrive","typeVersion":1,"position":[300,-100],"parameters":{"resource":"file","operation":"download","fileId":"={{ $json.onedrive_item_id }}","binaryPropertyName":"data"},"credentials":{"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}},
-    {"id":"5008","name":"Assemble Immutable Pipeline Input","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,-100],"parameters":{"jsCode":"const c=$('Assemble Trusted Acquisition Contract').first().json,r=$('Acquire Archive and Read Back').first().json; return [{json:{...c,...r},binary:$binary}];"}},
-    {"id":"5009","name":"Run Shared Statement Pipeline","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[700,-100],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000003","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"5010","name":"Upsert Waiting or Deadline Receipt","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[300,100],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_pipeline_runs","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"run_id","condition":"eq","keyValue":"={{ $('Open Configured Cycle Window').item.json.run_id }}"},{"keyName":"workflow_code","condition":"eq","keyValue":"WIO_MONTHLY_STATEMENT"}]},"columns":{"mappingMode":"defineBelow","value":{"run_id":"={{ $('Open Configured Cycle Window').item.json.run_id }}","workflow_code":"WIO_MONTHLY_STATEMENT","source_code":"WIO_CREDIT","trigger_kind":"SCHEDULE","config_version":"={{ $('Load Trusted Source Contract').item.json.config_version }}","state":"={{ $now.toISO() >= $('Open Configured Cycle Window').item.json.deadline_at ? 'FAILED' : 'WAITING' }}","terminal_readback_verified":false,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"5011","name":"Read Back Waiting or Deadline Receipt","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[500,100],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_pipeline_runs","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"run_id","condition":"eq","keyValue":"={{ $('Open Configured Cycle Window').item.json.run_id }}"},{"keyName":"workflow_code","condition":"eq","keyValue":"WIO_MONTHLY_STATEMENT"}]},"options":{}}}
+  "id": "10000000-0000-4000-8000-000000000005",
+  "name": "Finance · Wio Statement Cycle Poll · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "5001",
+      "name": "Daily 20:40 Cycle Poll",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 20 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5002",
+      "name": "Open Configured Cycle Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Open Configured Cycle Window. Keep this deterministic and fail closed.\nconst now = new Date();\nconst cycleDay = 3, deadlineDays = 5;\nconst day = now.getDate();\nif (day < cycleDay || day > cycleDay + deadlineDays)\n    return [];\nconst upper = now.toISOString();\nconst start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, cycleDay));\nreturn [{ json: { run_id: `WIO_CREDIT:${upper}`, source_code: 'WIO_CREDIT', window_start: start.toISOString(), run_upper_bound: upper, cycle_day: cycleDay, deadline_at: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), cycleDay + deadlineDays, 23, 59, 59)).toISOString(), period_key: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`, trigger_kind: 'SCHEDULE' } }];\n"
+      }
+    },
+    {
+      "id": "5003",
+      "name": "Load Trusted Source Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_contracts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "WIO_CREDIT"
+            },
+            {
+              "keyName": "enabled",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5004",
+      "name": "Assemble Trusted Acquisition Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst w = $('Open Configured Cycle Window').first().json, c = $json;\nreturn [{ json: { ...w, ...c, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+      }
+    },
+    {
+      "id": "5005",
+      "name": "Acquire Archive and Read Back",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000001",
+          "mode": "list",
+          "cachedResultName": "Finance · Acquire Outlook Documents · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "5006",
+      "name": "Statement Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.onedrive_item_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5007",
+      "name": "Download Archived Source",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.onedrive_item_id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "5008",
+      "name": "Assemble Immutable Pipeline Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Immutable Pipeline Input. Keep this deterministic and fail closed.\nconst c = $('Assemble Trusted Acquisition Contract').first().json, r = $('Acquire Archive and Read Back').first().json;\nreturn [{ json: { ...c, ...r }, binary: $binary }];\n"
+      }
+    },
+    {
+      "id": "5009",
+      "name": "Run Shared Statement Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000003",
+          "mode": "list",
+          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "5010",
+      "name": "Upsert Waiting or Deadline Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Open Configured Cycle Window').item.json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "WIO_MONTHLY_STATEMENT"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $('Open Configured Cycle Window').item.json.run_id }}",
+            "workflow_code": "WIO_MONTHLY_STATEMENT",
+            "source_code": "WIO_CREDIT",
+            "trigger_kind": "SCHEDULE",
+            "config_version": "={{ $('Load Trusted Source Contract').item.json.config_version }}",
+            "state": "={{ $now.toISO() >= $('Open Configured Cycle Window').item.json.deadline_at ? 'FAILED' : 'WAITING' }}",
+            "terminal_readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "5011",
+      "name": "Read Back Waiting or Deadline Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Open Configured Cycle Window').item.json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "WIO_MONTHLY_STATEMENT"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000005-generated-note-1",
+      "name": "Stage 1 · Daily 20:40 Cycle Poll to Assemble Immutable Pipeline Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Daily 20:40 Cycle Poll → Assemble Immutable Pipeline Input\n**Input:** Daily 20:40 Cycle Poll  ·  **Output:** Assemble Immutable Pipeline Input  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000005-generated-note-2",
+      "name": "Stage 2 · Run Shared Statement Pipeline to Read Back Waiting or Deadline Receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Run Shared Statement Pipeline → Read Back Waiting or Deadline Receipt\n**Input:** Run Shared Statement Pipeline  ·  **Output:** Read Back Waiting or Deadline Receipt  ·  **Nodes:** 9–11\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"Daily 20:40 Cycle Poll":{"main":[[{"node":"Open Configured Cycle Window","type":"main","index":0}]]},"Open Configured Cycle Window":{"main":[[{"node":"Load Trusted Source Contract","type":"main","index":0}]]},"Load Trusted Source Contract":{"main":[[{"node":"Assemble Trusted Acquisition Contract","type":"main","index":0}]]},"Assemble Trusted Acquisition Contract":{"main":[[{"node":"Acquire Archive and Read Back","type":"main","index":0}]]},"Acquire Archive and Read Back":{"main":[[{"node":"Statement Found","type":"main","index":0}]]},"Statement Found":{"main":[[{"node":"Download Archived Source","type":"main","index":0}],[{"node":"Upsert Waiting or Deadline Receipt","type":"main","index":0}]]},"Download Archived Source":{"main":[[{"node":"Assemble Immutable Pipeline Input","type":"main","index":0}]]},"Assemble Immutable Pipeline Input":{"main":[[{"node":"Run Shared Statement Pipeline","type":"main","index":0}]]},"Upsert Waiting or Deadline Receipt":{"main":[[{"node":"Read Back Waiting or Deadline Receipt","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},
-  "meta":{"financeWorkflowCode":"WIO_MONTHLY_STATEMENT","migrationStatus":"SPEC_ONLY","cyclePollingRequired":true,"cycleDay":3,"deadlineDays":5,"terminalReceiptReadbackRequired":true,"importTested":false}
+  "connections": {
+    "Daily 20:40 Cycle Poll": {
+      "main": [
+        [
+          {
+            "node": "Open Configured Cycle Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open Configured Cycle Window": {
+      "main": [
+        [
+          {
+            "node": "Load Trusted Source Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Trusted Source Contract": {
+      "main": [
+        [
+          {
+            "node": "Assemble Trusted Acquisition Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Trusted Acquisition Contract": {
+      "main": [
+        [
+          {
+            "node": "Acquire Archive and Read Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Archive and Read Back": {
+      "main": [
+        [
+          {
+            "node": "Statement Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Statement Found": {
+      "main": [
+        [
+          {
+            "node": "Download Archived Source",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Waiting or Deadline Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Archived Source": {
+      "main": [
+        [
+          {
+            "node": "Assemble Immutable Pipeline Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Immutable Pipeline Input": {
+      "main": [
+        [
+          {
+            "node": "Run Shared Statement Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Waiting or Deadline Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Waiting or Deadline Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "WIO_MONTHLY_STATEMENT",
+    "migrationStatus": "SPEC_ONLY",
+    "cyclePollingRequired": true,
+    "cycleDay": 3,
+    "deadlineDays": 5,
+    "terminalReceiptReadbackRequired": true,
+    "importTested": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000002",
+      "name": "02 Statements",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Open Configured Cycle Window to Assemble Immutable Pipeline Input",
+      "nodeIds": [
+        "5002",
+        "5003",
+        "5004",
+        "5005",
+        "5006",
+        "5007",
+        "5008"
+      ],
+      "description": "Finance stage 1. Input starts at Open Configured Cycle Window; verified output leaves through Assemble Immutable Pipeline Input."
+    },
+    {
+      "name": "Stage 2: Upsert Waiting or Deadline Receipt to Read Back Waiting or Deadline Receipt",
+      "nodeIds": [
+        "5010",
+        "5011"
+      ],
+      "description": "Finance stage 2. Input starts at Upsert Waiting or Deadline Receipt; verified output leaves through Read Back Waiting or Deadline Receipt."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

@@ -12,6 +12,15 @@
       "readback_verified": false
     },
     {
+      "config_name": "agent-providers",
+      "version": "1",
+      "source_path": "config/agent-providers.json",
+      "content_sha256": "d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
       "config_name": "static-rules.seed",
       "version": "sha256-92680d5c55464a77",
       "source_path": "config/static-rules.seed.json",

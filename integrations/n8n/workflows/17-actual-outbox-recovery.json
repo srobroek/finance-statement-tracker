@@ -1,33 +1,184 @@
 {
-  "id":"10000000-0000-4000-8000-000000000017","name":"Finance · Actual Outbox Recovery · SPEC ONLY","active":false,
-  "nodes":[
-    {"id":"17001","name":"Every 10 Minutes","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-900,0],"parameters":{"rule":{"interval":[{"field":"minutes","minutesInterval":10}]}}},
-    {"id":"17002","name":"Read Nonterminal Actual Outbox","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-700,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"returnAll":true,"matchType":"anyCondition","filters":{"conditions":[{"keyName":"state","condition":"eq","keyValue":"PREPARED"},{"keyName":"state","condition":"eq","keyValue":"ACTUAL_OBSERVED"},{"keyName":"state","condition":"eq","keyValue":"VERIFIED"}]},"options":{}}},
-    {"id":"17003","name":"Download Immutable Delta Artifact","type":"n8n-nodes-base.microsoftOneDrive","typeVersion":1,"position":[-500,0],"parameters":{"resource":"file","operation":"download","fileId":"={{ $json.artifact_item_id }}","binaryPropertyName":"data"},"credentials":{"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}},
-    {"id":"17004","name":"SHA-256 Recovered Delta","type":"n8n-nodes-base.crypto","typeVersion":1,"position":[-300,0],"parameters":{"action":"hash","type":"SHA256","binaryData":true,"binaryPropertyName":"data","dataPropertyName":"recovered_sha256"}},
-    {"id":"17005","name":"Extract Recovered Delta JSON","type":"n8n-nodes-base.extractFromFile","typeVersion":1,"position":[-100,0],"parameters":{"operation":"fromJson","binaryPropertyName":"data","options":{}}},
-    {"id":"17006","name":"Verify Recovery Contract","type":"n8n-nodes-base.code","typeVersion":2,"position":[100,0],"parameters":{"jsCode":"const o=$('Read Nonterminal Actual Outbox').item.json,m=$json,h=$('SHA-256 Recovered Delta').item.json.recovered_sha256; if(h!==o.payload_sha256||m.schema_version!==o.artifact_schema_version||m.actual_file_id!==o.actual_file_id||m.config_version!==o.config_version) throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH'); if(!Array.isArray(m.transactions)||!m.transactions.length) throw new Error('OUTBOX_RECOVERY_EMPTY'); return [{json:{outbox_row:o,manifest:m,verification:{account_id:m.account_id,start_date:m.period_start,end_date:m.period_end,expected_transactions:m.transactions,expected_account_balance:m.expected_statement_balance_minor}}}];"}},
-    {"id":"17007","name":"Build Recovery Lease Acquire Request","type":"n8n-nodes-base.code","typeVersion":2,"position":[300,0],"parameters":{"jsCode":"const r=$json; return [{json:{operation:'ACQUIRE',resource_key:`actual:${r.outbox_row.actual_file_id}`,lease_owner:`n8n:recovery:${r.outbox_row.outbox_id}`,ttl_seconds:120}}];"}},
-    {"id":"17015","name":"Acquire Recovery Writer Fence","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[400,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000018","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"17008","name":"Build Fenced Recovery Envelope","type":"n8n-nodes-base.code","typeVersion":2,"position":[500,0],"parameters":{"jsCode":"const r=$('Verify Recovery Contract').first().json,l=$json; if(!l.lease_id||Number(l.fencing_token)<=0||new Date(l.expires_at)<=new Date()) throw new Error('RECOVERY_WRITER_LEASE_INVALID'); return [{json:{original_state:r.outbox_row.state,outbox:{state:'PREPARED',outbox_id:r.outbox_row.outbox_id,actual_file_id:r.outbox_row.actual_file_id,account_id:r.manifest.account_id,transactions:r.manifest.transactions,reimportDeleted:false,writer_lease:{lease_id:String(l.lease_id),fencing_token:Number(l.fencing_token),expires_at:String(l.expires_at)}},verification:r.verification}}];"}},
-    {"id":"17009","name":"Recovery State","type":"n8n-nodes-base.switch","typeVersion":3.2,"position":[700,0],"parameters":{"rules":{"values":[{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.original_state }}","rightValue":"PREPARED","operator":{"type":"string","operation":"equals"}}]}},{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.original_state }}","rightValue":"ACTUAL_OBSERVED","operator":{"type":"string","operation":"equals"}}]}},{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.original_state }}","rightValue":"VERIFIED","operator":{"type":"string","operation":"equals"}}]}}]},"options":{"fallbackOutput":"none"}}},
-    {"id":"17010","name":"Recovery Actual Preflight","type":"n8n-nodes-finance.actualBudget","typeVersion":1,"position":[900,-160],"parameters":{"operation":"preflight"},"credentials":{"actualBudgetApi":{"id":"BIND_ACTUAL","name":"Finance Actual"}}},
-    {"id":"17016","name":"Build Recovery Fence Assert","type":"n8n-nodes-base.code","typeVersion":2,"position":[1000,-160],"parameters":{"jsCode":"const l=$('Acquire Recovery Writer Fence').first().json; return [{json:{operation:'ASSERT',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];"}},
-    {"id":"17017","name":"Assert Recovery Fence Before Import","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[1050,-160],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000018","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"17018","name":"Rebuild Asserted Recovery Envelope","type":"n8n-nodes-base.code","typeVersion":2,"position":[1075,-160],"parameters":{"jsCode":"if($json.valid!==true) throw new Error('RECOVERY_FENCE_ASSERTION_FAILED'); return [{json:$('Build Fenced Recovery Envelope').first().json}];"}},
-    {"id":"17011","name":"Recovery Import PREPARED","type":"n8n-nodes-finance.actualBudget","typeVersion":1,"position":[1100,-160],"parameters":{"operation":"import"},"credentials":{"actualBudgetApi":{"id":"BIND_ACTUAL","name":"Finance Actual"}}},
-    {"id":"17021","name":"Upsert ACTUAL OBSERVED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1150,-120],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"}]},"columns":{"mappingMode":"defineBelow","value":{"outbox_id":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}","state":"ACTUAL_OBSERVED","actual_transaction_id":"={{ $json.actual_transaction_ids?.[0] || '' }}","attempt_count":"={{ Number($('Verify Recovery Contract').item.json.outbox_row.attempt_count || 0) + 1 }}","updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"17022","name":"Read Back ACTUAL OBSERVED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1200,-80],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"},{"keyName":"state","condition":"eq","keyValue":"ACTUAL_OBSERVED"}]},"options":{}}},
-    {"id":"17023","name":"Build Recovery Verification Contract","type":"n8n-nodes-base.code","typeVersion":2,"position":[1250,-60],"parameters":{"jsCode":"return [{json:{verification:$('Verify Recovery Contract').first().json.verification}}];"}},
-    {"id":"17012","name":"Recovery Verify Actual","type":"n8n-nodes-finance.actualBudget","typeVersion":1,"position":[1300,-60],"parameters":{"operation":"verify"},"credentials":{"actualBudgetApi":{"id":"BIND_ACTUAL","name":"Finance Actual"}}},
-    {"id":"17024","name":"Upsert VERIFIED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1350,-20],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"}]},"columns":{"mappingMode":"defineBelow","value":{"outbox_id":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}","state":"VERIFIED","updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"17025","name":"Read Back VERIFIED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1400,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"},{"keyName":"state","condition":"eq","keyValue":"VERIFIED"}]},"options":{}}},
-    {"id":"17013","name":"Upsert COMMITTED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1500,0],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"}]},"columns":{"mappingMode":"defineBelow","value":{"outbox_id":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}","state":"COMMITTED","attempt_count":"={{ Number($('Verify Recovery Contract').item.json.outbox_row.attempt_count || 0) + 1 }}","updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"17014","name":"Read Back COMMITTED Recovery","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[1700,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_actual_outbox","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"outbox_id","condition":"eq","keyValue":"={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"},{"keyName":"state","condition":"eq","keyValue":"COMMITTED"}]},"options":{}}},
-    {"id":"17019","name":"Build Recovery Fence Release","type":"n8n-nodes-base.code","typeVersion":2,"position":[1800,0],"parameters":{"jsCode":"const l=$('Acquire Recovery Writer Fence').first().json; return [{json:{operation:'RELEASE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];"}},
-    {"id":"17020","name":"Release Recovery Writer Fence","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[1900,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000018","mode":"id"},"options":{"waitForSubWorkflow":true}}}
+  "id": "10000000-0000-4000-8000-000000000017",
+  "name": "Finance · Actual Outbox Recovery · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "17001",
+      "name": "Every 10 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "17002",
+      "name": "Read Nonterminal Actual Outbox",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "anyCondition",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "PREPARED"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACTUAL_OBSERVED"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "VERIFIED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17026",
+      "name": "Apply Nonterminal Outbox Safely",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000020",
+          "mode": "list",
+          "cachedResultName": "Finance · Apply Prepared Actual Outbox · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000017-generated-note-1",
+      "name": "Stage 1 · Every 10 Minutes to Apply Nonterminal Outbox Safely",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Every 10 Minutes → Apply Nonterminal Outbox Safely\n**Input:** Every 10 Minutes  ·  **Output:** Apply Nonterminal Outbox Safely  ·  **Nodes:** 1–3\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"Every 10 Minutes":{"main":[[{"node":"Read Nonterminal Actual Outbox","type":"main","index":0}]]},"Read Nonterminal Actual Outbox":{"main":[[{"node":"Download Immutable Delta Artifact","type":"main","index":0}]]},"Download Immutable Delta Artifact":{"main":[[{"node":"SHA-256 Recovered Delta","type":"main","index":0}]]},"SHA-256 Recovered Delta":{"main":[[{"node":"Extract Recovered Delta JSON","type":"main","index":0}]]},"Extract Recovered Delta JSON":{"main":[[{"node":"Verify Recovery Contract","type":"main","index":0}]]},"Verify Recovery Contract":{"main":[[{"node":"Build Recovery Lease Acquire Request","type":"main","index":0}]]},"Build Recovery Lease Acquire Request":{"main":[[{"node":"Acquire Recovery Writer Fence","type":"main","index":0}]]},"Acquire Recovery Writer Fence":{"main":[[{"node":"Build Fenced Recovery Envelope","type":"main","index":0}]]},"Build Fenced Recovery Envelope":{"main":[[{"node":"Recovery State","type":"main","index":0}]]},"Recovery State":{"main":[[{"node":"Recovery Actual Preflight","type":"main","index":0}],[{"node":"Read Back ACTUAL OBSERVED Recovery","type":"main","index":0}],[{"node":"Read Back VERIFIED Recovery","type":"main","index":0}]]},"Recovery Actual Preflight":{"main":[[{"node":"Build Recovery Fence Assert","type":"main","index":0}]]},"Build Recovery Fence Assert":{"main":[[{"node":"Assert Recovery Fence Before Import","type":"main","index":0}]]},"Assert Recovery Fence Before Import":{"main":[[{"node":"Rebuild Asserted Recovery Envelope","type":"main","index":0}]]},"Rebuild Asserted Recovery Envelope":{"main":[[{"node":"Recovery Import PREPARED","type":"main","index":0}]]},"Recovery Import PREPARED":{"main":[[{"node":"Upsert ACTUAL OBSERVED Recovery","type":"main","index":0}]]},"Upsert ACTUAL OBSERVED Recovery":{"main":[[{"node":"Read Back ACTUAL OBSERVED Recovery","type":"main","index":0}]]},"Read Back ACTUAL OBSERVED Recovery":{"main":[[{"node":"Build Recovery Verification Contract","type":"main","index":0}]]},"Build Recovery Verification Contract":{"main":[[{"node":"Recovery Verify Actual","type":"main","index":0}]]},"Recovery Verify Actual":{"main":[[{"node":"Upsert VERIFIED Recovery","type":"main","index":0}]]},"Upsert VERIFIED Recovery":{"main":[[{"node":"Read Back VERIFIED Recovery","type":"main","index":0}]]},"Read Back VERIFIED Recovery":{"main":[[{"node":"Upsert COMMITTED Recovery","type":"main","index":0}]]},"Upsert COMMITTED Recovery":{"main":[[{"node":"Read Back COMMITTED Recovery","type":"main","index":0}]]},"Read Back COMMITTED Recovery":{"main":[[{"node":"Build Recovery Fence Release","type":"main","index":0}]]},"Build Recovery Fence Release":{"main":[[{"node":"Release Recovery Writer Fence","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},
-  "meta":{"financeWorkflowCode":"ACTUAL_OUTBOX_RECOVERY","migrationStatus":"SPEC_ONLY","customNodePackage":"n8n-nodes-finance@0.1.0","terminalReceiptTable":"finance_actual_outbox","terminalReceiptReadback":true,"financeRowsInPostgresForbidden":true,"importTested":false,"fixtureExecuted":false}
+  "connections": {
+    "Every 10 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Read Nonterminal Actual Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Nonterminal Actual Outbox": {
+      "main": [
+        [
+          {
+            "node": "Apply Nonterminal Outbox Safely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "ACTUAL_OUTBOX_RECOVERY",
+    "migrationStatus": "SPEC_ONLY",
+    "customNodePackage": "n8n-nodes-finance@0.1.0",
+    "terminalReceiptTable": "finance_actual_outbox",
+    "terminalReceiptReadback": true,
+    "financeRowsInPostgresForbidden": true,
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [],
+    "delegatesActualWritesTo": "ACTUAL_OUTBOX_APPLY",
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000007",
+      "name": "07 Operations & Recovery",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Read Nonterminal Actual Outbox to Apply Nonterminal Outbox Safely",
+      "nodeIds": [
+        "17002",
+        "17026"
+      ],
+      "description": "Finance stage 1. Input starts at Read Nonterminal Actual Outbox; verified output leaves through Apply Nonterminal Outbox Safely."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

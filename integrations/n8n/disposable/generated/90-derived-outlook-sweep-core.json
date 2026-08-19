@@ -9,7 +9,7 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1200,
+        -1120,
         0
       ],
       "parameters": {
@@ -22,11 +22,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1000,
+        -820,
         0
       ],
       "parameters": {
-        "jsCode": "const r=$json,operation=String(r.operation||'ENUMERATE'); if(!['ENUMERATE','COMMIT'].includes(operation)) throw new Error('INVALID_SWEEP_OPERATION'); for(const k of ['run_id','source_code']) if(!r[k]) throw new Error(`Missing ${k}`); if(operation==='COMMIT'){for(const k of ['run_upper_bound','downstream_receipt_sha256','expected_cursor_version']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing ${k}`); if(!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256))) throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');} return [{json:{...r,operation}}];"
+        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['run_upper_bound', 'downstream_receipt_sha256', 'expected_cursor_version'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');\n}\nreturn [{ json: { ...r, operation } }];\n"
       }
     },
     {
@@ -35,7 +35,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -800,
+        -520,
         0
       ],
       "parameters": {
@@ -92,11 +92,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -600,
-        -220
+        -220,
+        0
       ],
       "parameters": {
-        "jsCode": "const r=$json; for(const k of ['folder_id','senders','subjects','window_start']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing ${k}`); if(!Array.isArray(r.senders)||!r.senders.length||!Array.isArray(r.subjects)||!r.subjects.length) throw new Error('Trusted allowlists required'); const start=new Date(r.window_start),upper=r.run_upper_bound?new Date(r.run_upper_bound):new Date(); if(!Number.isFinite(start.valueOf())||!Number.isFinite(upper.valueOf())||!(start<upper)||upper>new Date()) throw new Error('Invalid frozen cursor window'); return [{json:{...r,run_upper_bound:upper.toISOString(),senders:r.senders.map(v=>String(v).toLowerCase()),subjects:r.subjects.map(String)}}];"
+        "jsCode": "// Purpose: Freeze Trusted Cursor Window. Keep this deterministic and fail closed.\nconst request = $json;\nfor (const field of ['folder_id', 'senders', 'subjects', 'window_start']) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst start = new Date(request.window_start);\nconst upper = request.run_upper_bound ? new Date(request.run_upper_bound) : new Date();\nif (!Number.isFinite(start.valueOf()) || !Number.isFinite(upper.valueOf()) || !(start < upper) || upper > new Date()) {\n    throw new Error('Invalid frozen cursor window');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders.map(value => `from/emailAddress/address eq ${quoteOData(value)}`).join(' or ');\nconst subjectFilter = subjects.map(value => `contains(subject,${quoteOData(value)})`).join(' or ');\nreturn [{\n        json: {\n            ...request,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            run_upper_bound: upper.toISOString(),\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
       }
     },
     {
@@ -105,8 +105,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -400,
-        -220
+        80,
+        0
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -138,11 +138,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -200,
-        -220
+        380,
+        0
       ],
       "parameters": {
-        "jsCode": "const now=new Date(),row=$json?.provider_code?$json:{state:'CLOSED',transient_failure_count:0},retry=row.retry_after?new Date(row.retry_after):null; if(row.state==='OPEN'&&retry&&retry>now) throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH'); return [{json:{provider_code:'MICROSOFT_GRAPH',state:row.state==='OPEN'?'HALF_OPEN':'CLOSED',transient_failure_count:Number(row.transient_failure_count||0),last_error_class:row.last_error_class||'',opened_at:row.opened_at||null,retry_after:row.retry_after||null,readback_verified:false,updated_at:now.toISOString()}}];"
+        "jsCode": "// Purpose: Gate Outlook Circuit. Keep this deterministic and fail closed.\nconst now = new Date(), row = $json?.provider_code ? $json : { state: 'CLOSED', transient_failure_count: 0 }, retry = row.retry_after ? new Date(row.retry_after) : null;\nif (row.state === 'OPEN' && retry && retry > now)\n    throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH');\nreturn [{ json: { provider_code: 'MICROSOFT_GRAPH', state: row.state === 'OPEN' ? 'HALF_OPEN' : 'CLOSED', transient_failure_count: Number(row.transient_failure_count || 0), last_error_class: row.last_error_class || '', opened_at: row.opened_at || null, retry_after: row.retry_after || null, readback_verified: false, updated_at: now.toISOString() } }];\n"
       }
     },
     {
@@ -151,8 +151,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        0,
-        -220
+        680,
+        0
       ],
       "parameters": {
         "resource": "row",
@@ -200,8 +200,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        200,
-        -220
+        980,
+        0
       ],
       "parameters": {
         "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); if(kind==='zero') return [{json:{}}]; const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
@@ -213,11 +213,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        400,
-        -220
+        -1120,
+        380
       ],
       "parameters": {
-        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,start=new Date(c.window_start),upper=new Date(c.run_upper_bound),all=$input.all().map(i=>i.json).filter(j=>j&&j.id); const messages=all.filter(j=>{const sender=String(j.from?.emailAddress?.address||j.sender?.emailAddress?.address||'').toLowerCase(),received=new Date(j.receivedDateTime); return c.senders.includes(sender)&&c.subjects.includes(String(j.subject||''))&&received>=start&&received<upper;}).sort((a,b)=>String(a.receivedDateTime).localeCompare(String(b.receivedDateTime))||String(a.id).localeCompare(String(b.id))); return [{json:{run_id:c.run_id,source_code:c.source_code,window_start:c.window_start,run_upper_bound:c.run_upper_bound,pagination_exhausted:true,pages_fetched:null,scanned_count:all.length,matched_count:messages.length,heartbeat:messages.length===0,messages}}];"
+        "jsCode": "// Purpose: Aggregate Exact Window Heartbeat. Keep this deterministic and fail closed.\nconst contract = $('Freeze Trusted Cursor Window').first().json;\nconst start = new Date(contract.window_start);\nconst upper = new Date(contract.run_upper_bound);\nconst scanned = $input.all().map(item => item.json).filter(message => message?.id);\nif (scanned.length > contract.max_messages) {\n    throw new Error(`SOURCE_RESULT_LIMIT_EXCEEDED:${scanned.length}`);\n}\nconst messages = scanned\n    .filter(message => {\n    const sender = String(message.from?.emailAddress?.address\n        || message.sender?.emailAddress?.address\n        || '').toLowerCase();\n    const subject = String(message.subject || '').toLowerCase();\n    const received = new Date(message.receivedDateTime);\n    return contract.senders.includes(sender)\n        && contract.subjects.some(fragment => subject.includes(fragment.toLowerCase()))\n        && received >= start\n        && received < upper;\n})\n    .sort((left, right) => (String(left.receivedDateTime).localeCompare(String(right.receivedDateTime))\n    || String(left.id).localeCompare(String(right.id))));\nreturn [{\n        json: {\n            run_id: contract.run_id,\n            source_code: contract.source_code,\n            window_start: contract.window_start,\n            run_upper_bound: contract.run_upper_bound,\n            pagination_exhausted: true,\n            pages_fetched: null,\n            scanned_count: scanned.length,\n            matched_count: messages.length,\n            heartbeat: messages.length === 0,\n            messages,\n        },\n    }];\n"
       }
     },
     {
@@ -226,8 +226,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        600,
-        -220
+        -820,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -275,8 +275,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        800,
-        -220
+        -520,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -336,8 +336,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1000,
-        -220
+        -220,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -378,11 +378,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
-        -220
+        80,
+        380
       ],
       "parameters": {
-        "jsCode": "const e=$('Aggregate Exact Window Heartbeat').first().json,o=$json; for(const k of ['run_id','source_code','window_start','run_upper_bound','scanned_count','matched_count','heartbeat']) if(String(o[k])!==String(e[k])) throw new Error(`ACQUISITION_RECEIPT_MISMATCH:${k}`); if(o.pagination_exhausted!==true||o.cursor_commit_eligible!==false) throw new Error('ACQUISITION_RECEIPT_STATE_MISMATCH'); return [{json:{...e,receipt_readback_verified:true,cursor_commit_eligible:false}}];"
+        "jsCode": "// Purpose: Verify Receipt and Return Sweep. Keep this deterministic and fail closed.\nconst e = $('Aggregate Exact Window Heartbeat').first().json, o = $json;\nfor (const k of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'scanned_count', 'matched_count', 'heartbeat'])\n    if (String(o[k]) !== String(e[k]))\n        throw new Error(`ACQUISITION_RECEIPT_MISMATCH:${k}`);\nif (o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_RECEIPT_STATE_MISMATCH');\nreturn [{ json: { ...e, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
       }
     },
     {
@@ -391,8 +391,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -600,
-        220
+        380,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -433,11 +433,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -400,
-        220
+        680,
+        380
       ],
       "parameters": {
-        "jsCode": "const r=$('Validate Sweep or Commit').first().json,o=$json; if(o.run_upper_bound!==r.run_upper_bound||o.pagination_exhausted!==true||o.cursor_commit_eligible!==false) throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE'); return [{json:{...r,window_start:o.window_start,scanned_count:Number(o.scanned_count),matched_count:Number(o.matched_count),heartbeat:Boolean(o.heartbeat)}}];"
+        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nreturn [{ json: { ...r, window_start: o.window_start, scanned_count: Number(o.scanned_count), matched_count: Number(o.matched_count), heartbeat: Boolean(o.heartbeat) } }];\n"
       }
     },
     {
@@ -446,8 +446,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -200,
-        220
+        980,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -478,11 +478,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        220
+        -1120,
+        760
       ],
       "parameters": {
-        "jsCode": "const r=$('Verify Downstream Persistence Proof').first().json,o=$json,expected=Number(r.expected_cursor_version); if(!Number.isInteger(expected)||expected<0||Number(o.cursor_version)!==expected) throw new Error('SOURCE_CURSOR_VERSION_CONFLICT'); const next=new Date(r.run_upper_bound),prior=new Date(o.cursor_value); if(!Number.isFinite(next.valueOf())||!Number.isFinite(prior.valueOf())||next<=prior) throw new Error('SOURCE_CURSOR_NON_MONOTONIC'); return [{json:{...r,prior_cursor_version:expected,next_cursor_version:expected+1}}];"
+        "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $json, expected = Number(r.expected_cursor_version);\nif (!Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nreturn [{ json: { ...r, prior_cursor_version: expected, next_cursor_version: expected + 1 } }];\n"
       }
     },
     {
@@ -491,8 +491,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        200,
-        220
+        -820,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -545,8 +545,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        400,
-        220
+        -520,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -587,11 +587,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        600,
-        220
+        -220,
+        760
       ],
       "parameters": {
-        "jsCode": "const e=$('Build Cursor CAS Update').first().json,o=$json; if(o.cursor_value!==e.run_upper_bound||Number(o.cursor_version)!==e.next_cursor_version||o.committed_run_id!==e.run_id) throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH'); return [{json:e}];"
+        "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
       }
     },
     {
@@ -600,8 +600,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        800,
-        220
+        80,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -656,8 +656,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1000,
-        220
+        380,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -703,11 +703,59 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
-        220
+        680,
+        760
       ],
       "parameters": {
-        "jsCode": "const e=$('Build Cursor CAS Update').first().json,o=$json; if(o.downstream_receipt_sha256!==e.downstream_receipt_sha256||o.cursor_commit_eligible!==true) throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH'); return [{json:{status:'CURSOR_COMMITTED',run_id:e.run_id,source_code:e.source_code,cursor:e.run_upper_bound,cursor_version:e.next_cursor_version,downstream_receipt_sha256:e.downstream_receipt_sha256}}];"
+        "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.downstream_receipt_sha256 !== e.downstream_receipt_sha256 || o.cursor_commit_eligible !== true)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: e.run_id, source_code: e.source_code, cursor: e.run_upper_bound, cursor_version: e.next_cursor_version, downstream_receipt_sha256: e.downstream_receipt_sha256 } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-1",
+      "name": "Stage 1 · Called by Workflow to Exhaust Outlook Pagination",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Called by Workflow → Exhaust Outlook Pagination\n**Input:** Called by Workflow  ·  **Output:** Exhaust Outlook Pagination  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-2",
+      "name": "Stage 2 · Aggregate Exact Window Heartbeat to Read Authoritative Source Cursor",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Aggregate Exact Window Heartbeat → Read Authoritative Source Cursor\n**Input:** Aggregate Exact Window Heartbeat  ·  **Output:** Read Authoritative Source Cursor  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-3",
+      "name": "Stage 3 · Build Cursor CAS Update to Return Verified Cursor Commit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Build Cursor CAS Update → Return Verified Cursor Commit\n**Input:** Build Cursor CAS Update  ·  **Output:** Return Verified Cursor Commit  ·  **Nodes:** 17–23\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
       }
     }
   ],
@@ -963,5 +1011,67 @@
     "productionImportForbidden": true,
     "derivedFrom": "12-outlook-message-sweep.json",
     "externalNodeReplacement": "Exhaust Outlook Pagination only"
-  }
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Validate Sweep or Commit to Exhaust Outlook Pagination",
+      "nodeIds": [
+        "12002",
+        "12003",
+        "12004",
+        "12005",
+        "12006",
+        "12007",
+        "12008"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Exhaust Outlook Pagination."
+    },
+    {
+      "name": "Stage 2: Aggregate Exact Window Heartbeat to Verify Receipt and Return Sweep",
+      "nodeIds": [
+        "12009",
+        "12010",
+        "12011",
+        "12012",
+        "12013"
+      ],
+      "description": "Finance stage 2. Input starts at Aggregate Exact Window Heartbeat; verified output leaves through Verify Receipt and Return Sweep."
+    },
+    {
+      "name": "Stage 2: Read ENUMERATED Receipt for Commit to Read Authoritative Source Cursor",
+      "nodeIds": [
+        "12020",
+        "12021",
+        "12022"
+      ],
+      "description": "Finance stage 2. Input starts at Read ENUMERATED Receipt for Commit; verified output leaves through Read Authoritative Source Cursor."
+    },
+    {
+      "name": "Stage 3: Build Cursor CAS Update to Return Verified Cursor Commit",
+      "nodeIds": [
+        "12023",
+        "12024",
+        "12025",
+        "12026",
+        "12027",
+        "12028",
+        "12029"
+      ],
+      "description": "Finance stage 3. Input starts at Build Cursor CAS Update; verified output leaves through Return Verified Cursor Commit."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

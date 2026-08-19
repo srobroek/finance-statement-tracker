@@ -1,15 +1,16 @@
 {
   "$schema":"https://json-schema.org/draft/2020-12/schema",
   "$id":"https://vxsan.com/schemas/codex-agent-handoff-v1.json",
-  "title":"Bounded Codex finance proposal job",
+  "title":"Bounded subscription-agent finance proposal job",
   "type":"object",
   "additionalProperties":false,
-  "required":["schema_version","job_id","idempotency_key","operation_code","policy_id","policy_class","policy_sha256","config_sha256","output_schema_sha256","unresolved"],
+  "required":["schema_version","job_id","idempotency_key","operation_code","agent_provider","policy_id","policy_class","policy_sha256","config_sha256","output_schema_sha256","unresolved"],
   "properties":{
     "schema_version":{"const":1},
     "job_id":{"type":"string","pattern":"^finance-ai:[a-f0-9]{64}$"},
     "idempotency_key":{"type":"string","pattern":"^[a-f0-9]{64}$"},
     "operation_code":{"const":"FINANCE_AI_PROPOSAL"},
+    "agent_provider":{"enum":["CODEX_SUBSCRIPTION","CLAUDE_SUBSCRIPTION"]},
     "policy_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9:_-]{0,127}$"},
     "policy_class":{"enum":["NORMAL","EXCEPTION"]},
     "policy_sha256":{"$ref":"#/$defs/sha256"},

@@ -1,11 +1,113 @@
 {
-  "id":"10000000-0000-4000-8000-000000000007",
-  "name":"Finance · SC Monthly Statement · Paused",
-  "active":false,
-  "nodes":[
-    {"id":"7001","name":"Daily 20:20 Cycle Poll","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-500,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"20 20 * * *"}]}},"disabled":true},
-    {"id":"7002","name":"Block Until Adapter Verified","type":"n8n-nodes-base.stopAndError","typeVersion":1,"position":[-200,0],"parameters":{"errorMessage":"SC_PLATINUM_X requires a verified statement fixture, source contract, and active adapter before publication"}}
+  "id": "10000000-0000-4000-8000-000000000007",
+  "name": "Finance · SC Monthly Statement · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "7001",
+      "name": "Daily 20:20 Cycle Poll",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "20 20 * * *"
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "7002",
+      "name": "Block Until Adapter Verified",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "errorMessage": "SC_PLATINUM_X requires a verified statement fixture, source contract, and active adapter before publication"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000007-generated-note-1",
+      "name": "Stage 1 · Daily 20:20 Cycle Poll to Block Until Adapter Verified",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Daily 20:20 Cycle Poll → Block Until Adapter Verified\n**Input:** Daily 20:20 Cycle Poll  ·  **Output:** Block Until Adapter Verified  ·  **Nodes:** 1–2\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"Daily 20:20 Cycle Poll":{"main":[[{"node":"Block Until Adapter Verified","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},"meta":{"financeWorkflowCode":"SC_MONTHLY_STATEMENT","migrationStatus":"SPEC_ONLY","cyclePollingRequired":true,"cycleDay":6,"deadlineDays":5,"activationBlocked":true}
+  "connections": {
+    "Daily 20:20 Cycle Poll": {
+      "main": [
+        [
+          {
+            "node": "Block Until Adapter Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "SC_MONTHLY_STATEMENT",
+    "migrationStatus": "SPEC_ONLY",
+    "cyclePollingRequired": true,
+    "cycleDay": 6,
+    "deadlineDays": 5,
+    "activationBlocked": true,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000002",
+      "name": "02 Statements",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

@@ -1,35 +1,488 @@
 {
   "id": "10000000-0000-4000-8000-000000000002",
-  "name": "Finance · RAKBANK Live Cashback",
+  "name": "Finance · RAKBANK Live Cashback · Setup Required",
   "active": false,
   "nodes": [
-    {"id":"2001","name":"08:05 Dubai Daily","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-1100,-120],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"5 8 * * *"}]}}},
-    {"id":"2003","name":"Read Last Durable Cursor","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-850,0],"parameters":{"url":"http://cashback:5010/api/ingest-state","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ {source:'outlook:rakbank'} }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
-    {"id":"2004","name":"Freeze Cursor Minus Overlap Window","type":"n8n-nodes-base.code","typeVersion":2,"position":[-650,0],"parameters":{"jsCode":"const upper=new Date(); const saved=$json.ingest_state?.cursor; const cursor=saved?new Date(saved):new Date(upper.getTime()-26*3600000); if(cursor>upper) throw new Error('Durable cursor is after run upper bound'); const start=new Date(cursor.getTime()-2*3600000); const run_upper_bound=upper.toISOString(); return [{json:{run_id:`RAKBANK_CARD_TRANSACTION:${run_upper_bound}`,source_code:'RAKBANK_CARD_TRANSACTION',cursor_key:'outlook:rakbank',window_start:start.toISOString(),run_upper_bound}}];"}},
-    {"id":"2011","name":"Load Trusted Mail Contract","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-500,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_source_contracts","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"RAKBANK_CARD_TRANSACTION"},{"keyName":"enabled","condition":"eq","keyValue":true}]},"options":{}}},
-    {"id":"2012","name":"Assemble Trusted Sweep Contract","type":"n8n-nodes-base.code","typeVersion":2,"position":[-425,0],"parameters":{"jsCode":"const w=$('Freeze Cursor Minus Overlap Window').first().json,c=$json; return [{json:{...w,folder_id:c.folder_id,senders:JSON.parse(c.senders_json),subjects:JSON.parse(c.subjects_json)}}];"}},
-    {"id":"2005","name":"Sweep Exact Outlook Messages","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[-350,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000012","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"2006","name":"Build Frozen Mailbox Envelope","type":"n8n-nodes-base.code","typeVersion":2,"position":[-100,0],"parameters":{"jsCode":"const p=$('Freeze Cursor Minus Overlap Window').first().json,sweep=$input.first().json; if(sweep.pagination_exhausted!==true||sweep.run_upper_bound!==p.run_upper_bound) throw new Error('Sweep did not exhaust the frozen window'); const messages=Array.isArray(sweep.messages)?sweep.messages:[]; const ids=new Set(messages.map(m=>String(m.id||''))); if(ids.has('')||ids.size!==messages.length) throw new Error('Every swept message needs a unique exact id'); return [{json:{schema_version:1,run_id:p.run_id,source:p.cursor_key,source_code:p.source_code,window_start:p.window_start,completed_at:p.run_upper_bound,cursor:p.run_upper_bound,scanned_count:sweep.scanned_count,matched_count:sweep.matched_count,heartbeat:messages.length===0,messages}}];"}},
-    {"id":"2007","name":"Parse and Upsert Cashback Events","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[150,0],"parameters":{"url":"http://cashback:5010/api/outlook/messages","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
-    {"id":"2008","name":"Verify Service Receipt Before Cursor","type":"n8n-nodes-base.code","typeVersion":2,"position":[400,0],"parameters":{"jsCode":"const e=$('Build Frozen Mailbox Envelope').first().json; const r=$json; if(r.cursor_committed!==false) throw new Error('Companion must not commit the mailbox cursor'); if(String(r.cursor_candidate||'')!==e.cursor) throw new Error('Cursor candidate differs from frozen upper bound'); const scanned=Number(r.parse?.scanned_count); const accepted=Number(r.parse?.accepted_count); if(scanned!==e.messages.length || !Number.isInteger(accepted) || accepted<0 || accepted>scanned) throw new Error('Companion parse counts do not reconcile'); return [{json:{source:e.source,completed_at:e.completed_at,scanned_count:scanned,accepted_count:accepted,cursor:e.cursor}}];"}},
-    {"id":"2009","name":"Commit Sole Cursor Heartbeat","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[650,0],"parameters":{"url":"http://cashback:5010/api/ingest-runs","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
-    {"id":"2010","name":"Read Back Durable Cursor","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[850,0],"parameters":{"url":"http://cashback:5010/api/ingest-state","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ {source:'outlook:rakbank'} }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
-    {"id":"2013","name":"Verify Exact Cursor Readback","type":"n8n-nodes-base.code","typeVersion":2,"position":[1050,0],"parameters":{"jsCode":"const expected=$('Verify Service Receipt Before Cursor').first().json; const observed=String($json.ingest_state?.cursor||''); if(observed!==expected.cursor) throw new Error('Durable cursor readback mismatch'); return [{json:{status:'SUCCESS_VERIFIED',cursor:observed,scanned_count:expected.scanned_count,accepted_count:expected.accepted_count}}];"}}
+    {
+      "id": "2001",
+      "name": "08:05 Dubai Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2003",
+      "name": "Read Last Durable Cursor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/ingest-state",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {source:'outlook:rakbank'} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
+      }
+    },
+    {
+      "id": "2004",
+      "name": "Freeze Cursor Minus Overlap Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Freeze Cursor Minus Overlap Window. Keep this deterministic and fail closed.\nconst upper = new Date();\nconst saved = $json.ingest_state?.cursor;\nconst cursor = saved ? new Date(saved) : new Date(upper.getTime() - 26 * 3600000);\nif (cursor > upper)\n    throw new Error('Durable cursor is after run upper bound');\nconst start = new Date(cursor.getTime() - 2 * 3600000);\nconst run_upper_bound = upper.toISOString();\nreturn [{ json: { run_id: `RAKBANK_CARD_TRANSACTION:${run_upper_bound}`, source_code: 'RAKBANK_CARD_TRANSACTION', cursor_key: 'outlook:rakbank', window_start: start.toISOString(), run_upper_bound } }];\n"
+      }
+    },
+    {
+      "id": "2011",
+      "name": "Load Trusted Mail Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_contracts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "RAKBANK_CARD_TRANSACTION"
+            },
+            {
+              "keyName": "enabled",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2012",
+      "name": "Assemble Trusted Sweep Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Trusted Sweep Contract. Keep this deterministic and fail closed.\nconst w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;\nreturn [{ json: { ...w, folder_id: c.folder_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+      }
+    },
+    {
+      "id": "2005",
+      "name": "Sweep Exact Outlook Messages",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000012",
+          "mode": "list",
+          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "2006",
+      "name": "Build Frozen Mailbox Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Frozen Mailbox Envelope. Keep this deterministic and fail closed.\nconst p = $('Freeze Cursor Minus Overlap Window').first().json, sweep = $input.first().json;\nif (sweep.pagination_exhausted !== true || sweep.run_upper_bound !== p.run_upper_bound)\n    throw new Error('Sweep did not exhaust the frozen window');\nconst messages = Array.isArray(sweep.messages) ? sweep.messages : [];\nconst ids = new Set(messages.map(m => String(m.id || '')));\nif (ids.has('') || ids.size !== messages.length)\n    throw new Error('Every swept message needs a unique exact id');\nreturn [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, source_code: p.source_code, window_start: p.window_start, completed_at: p.run_upper_bound, cursor: p.run_upper_bound, scanned_count: sweep.scanned_count, matched_count: sweep.matched_count, heartbeat: messages.length === 0, messages } }];\n"
+      }
+    },
+    {
+      "id": "2007",
+      "name": "Parse and Upsert Cashback Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/outlook/messages",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
+      }
+    },
+    {
+      "id": "2008",
+      "name": "Verify Service Receipt Before Cursor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Service Receipt Before Cursor. Keep this deterministic and fail closed.\nconst e = $('Build Frozen Mailbox Envelope').first().json;\nconst r = $json;\nif (r.cursor_committed !== false)\n    throw new Error('Companion must not commit the mailbox cursor');\nif (String(r.cursor_candidate || '') !== e.cursor)\n    throw new Error('Cursor candidate differs from frozen upper bound');\nconst scanned = Number(r.parse?.scanned_count);\nconst accepted = Number(r.parse?.accepted_count);\nif (scanned !== e.messages.length || !Number.isInteger(accepted) || accepted < 0 || accepted > scanned)\n    throw new Error('Companion parse counts do not reconcile');\nreturn [{ json: { source: e.source, completed_at: e.completed_at, scanned_count: scanned, accepted_count: accepted, cursor: e.cursor } }];\n"
+      }
+    },
+    {
+      "id": "2009",
+      "name": "Commit Sole Cursor Heartbeat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/ingest-runs",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
+      }
+    },
+    {
+      "id": "2010",
+      "name": "Read Back Durable Cursor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/ingest-state",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {source:'outlook:rakbank'} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
+      }
+    },
+    {
+      "id": "2013",
+      "name": "Verify Exact Cursor Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Exact Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Verify Service Receipt Before Cursor').first().json;\nconst observed = String($json.ingest_state?.cursor || '');\nif (observed !== expected.cursor)\n    throw new Error('Durable cursor readback mismatch');\nreturn [{ json: { status: 'SUCCESS_VERIFIED', cursor: observed, scanned_count: expected.scanned_count, accepted_count: expected.accepted_count } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000002-generated-note-1",
+      "name": "Stage 1 · 08:05 Dubai Daily to Parse and Upsert Cashback Events",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · 08:05 Dubai Daily → Parse and Upsert Cashback Events\n**Input:** 08:05 Dubai Daily  ·  **Output:** Parse and Upsert Cashback Events  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000002-generated-note-2",
+      "name": "Stage 2 · Verify Service Receipt Before Cursor to Verify Exact Cursor Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Verify Service Receipt Before Cursor → Verify Exact Cursor Readback\n**Input:** Verify Service Receipt Before Cursor  ·  **Output:** Verify Exact Cursor Readback  ·  **Nodes:** 9–12\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
   "connections": {
-    "08:05 Dubai Daily":{"main":[[{"node":"Read Last Durable Cursor","type":"main","index":0}]]},
-    "Read Last Durable Cursor":{"main":[[{"node":"Freeze Cursor Minus Overlap Window","type":"main","index":0}]]},
-    "Freeze Cursor Minus Overlap Window":{"main":[[{"node":"Load Trusted Mail Contract","type":"main","index":0}]]},
-    "Load Trusted Mail Contract":{"main":[[{"node":"Assemble Trusted Sweep Contract","type":"main","index":0}]]},
-    "Assemble Trusted Sweep Contract":{"main":[[{"node":"Sweep Exact Outlook Messages","type":"main","index":0}]]},
-    "Sweep Exact Outlook Messages":{"main":[[{"node":"Build Frozen Mailbox Envelope","type":"main","index":0}]]},
-    "Build Frozen Mailbox Envelope":{"main":[[{"node":"Parse and Upsert Cashback Events","type":"main","index":0}]]},
-    "Parse and Upsert Cashback Events":{"main":[[{"node":"Verify Service Receipt Before Cursor","type":"main","index":0}]]},
-    "Verify Service Receipt Before Cursor":{"main":[[{"node":"Commit Sole Cursor Heartbeat","type":"main","index":0}]]},
-    "Commit Sole Cursor Heartbeat":{"main":[[{"node":"Read Back Durable Cursor","type":"main","index":0}]]},
-    "Read Back Durable Cursor":{"main":[[{"node":"Verify Exact Cursor Readback","type":"main","index":0}]]}
+    "08:05 Dubai Daily": {
+      "main": [
+        [
+          {
+            "node": "Read Last Durable Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Durable Cursor": {
+      "main": [
+        [
+          {
+            "node": "Freeze Cursor Minus Overlap Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freeze Cursor Minus Overlap Window": {
+      "main": [
+        [
+          {
+            "node": "Load Trusted Mail Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Trusted Mail Contract": {
+      "main": [
+        [
+          {
+            "node": "Assemble Trusted Sweep Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Trusted Sweep Contract": {
+      "main": [
+        [
+          {
+            "node": "Sweep Exact Outlook Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sweep Exact Outlook Messages": {
+      "main": [
+        [
+          {
+            "node": "Build Frozen Mailbox Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Frozen Mailbox Envelope": {
+      "main": [
+        [
+          {
+            "node": "Parse and Upsert Cashback Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Upsert Cashback Events": {
+      "main": [
+        [
+          {
+            "node": "Verify Service Receipt Before Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Service Receipt Before Cursor": {
+      "main": [
+        [
+          {
+            "node": "Commit Sole Cursor Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit Sole Cursor Heartbeat": {
+      "main": [
+        [
+          {
+            "node": "Read Back Durable Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Durable Cursor": {
+      "main": [
+        [
+          {
+            "node": "Verify Exact Cursor Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},
-  "pinData":{},
-  "meta":{"financeWorkflowCode":"RAKBANK_LIVE_CASHBACK","migrationStatus":"SPEC_ONLY","terminalReceiptReadbackRequired":true,"cursorCommitExactlyOnce":true}
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "RAKBANK_LIVE_CASHBACK",
+    "migrationStatus": "SPEC_ONLY",
+    "terminalReceiptReadbackRequired": true,
+    "cursorCommitExactlyOnce": true,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_CASHBACK_INGEST",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000006",
+      "name": "06 Cashback",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Read Last Durable Cursor to Parse and Upsert Cashback Events",
+      "nodeIds": [
+        "2003",
+        "2004",
+        "2011",
+        "2012",
+        "2005",
+        "2006",
+        "2007"
+      ],
+      "description": "Finance stage 1. Input starts at Read Last Durable Cursor; verified output leaves through Parse and Upsert Cashback Events."
+    },
+    {
+      "name": "Stage 2: Verify Service Receipt Before Cursor to Verify Exact Cursor Readback",
+      "nodeIds": [
+        "2008",
+        "2009",
+        "2010",
+        "2013"
+      ],
+      "description": "Finance stage 2. Input starts at Verify Service Receipt Before Cursor; verified output leaves through Verify Exact Cursor Readback."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

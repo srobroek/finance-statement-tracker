@@ -6,7 +6,7 @@
   "required": ["schema_version", "storage", "contract_status", "state_policies", "tables"],
   "properties": {
     "$schema": {"type": "string"},
-    "schema_version": {"const": 3},
+    "schema_version": {"const": 4},
     "storage": {"const": "n8n-data-tables-on-postgres"},
     "contract_status": {"const": "SPEC_ONLY"},
     "notes": {"type": "array", "items": {"type": "string"}},

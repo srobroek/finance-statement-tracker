@@ -96,6 +96,7 @@ function buildPrompt(request: ProposalRequest, resolved: ResolvedPolicy, receipt
     schema_version: 1,
     job_id: request.job_id,
     idempotency_key: request.idempotency_key,
+    agent_provider: request.agent_provider,
     policy_id: request.policy_id,
     policy_class: request.policy_class,
     policy_sha256: request.policy_sha256,

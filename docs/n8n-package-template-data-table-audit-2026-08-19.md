@@ -2,7 +2,7 @@
 
 Snapshot: 2026-08-19  
 Target: n8n 2.36.2, self-hosted, Postgres-backed, all finance workflows inactive and `SPEC_ONLY`  
-Method: read-only npm registry metadata, official n8n documentation/integration pages, official template library, package repositories, direct OSV package queries, and a structural scan of all 19 workflow exports. No package was installed and no production workflow or service was changed by the package/template research.
+Method: read-only npm registry metadata, exact npm tarball review, official n8n documentation/integration pages, official template library, package repositories, direct OSV package queries, and a structural scan of all 21 workflow exports. No package was installed and no production workflow or service was changed by the package/template research.
 
 ## Decision summary
 
@@ -10,7 +10,7 @@ Method: read-only npm registry metadata, official n8n documentation/integration 
 - Do not install a community Outlook, OneDrive, PDF cloud, OpenAI, MCP, or ETL package in the production finance plane.
 - Permit only two isolated pilots after a lockfile/SBOM/0-high/0-critical review: `n8n-nodes-actual@26.8.13` for read-only Actual comparison, and `@open-banking-io/n8n-nodes-open-banking-io@0.2.2` if UAE coverage, consent, residency, and deletion terms pass review.
 - Keep statement PDF validation/unlock/extraction in the existing networkless, resource-limited PDF utility and narrow custom nodes. Do not process untrusted financial PDFs in the main n8n process.
-- Keep Codex behind the fixed private HTTP runner. Native OpenAI credentials do not satisfy the required ChatGPT-subscription login contract.
+- Use the two reviewed, integrity-pinned subscription community nodes only inside the provider-neutral adapter workflow. They remain inactive until exact-image registration, subscription login, no-tool/no-write behavior, and schema-bound receipts are proven.
 - Reuse patterns from the official workflow library, not complete templates. The finance pipeline requires content hashes, immutable archive identity, exact readback, two-phase cursors, fenced Actual writes, and no spreadsheet second ledger.
 
 ## Built-in baseline
@@ -53,13 +53,13 @@ No credible current n8n community node for 1Password was found. Official package
 
 No community Web Push package improved on the current cashback service. Use built-in Pushover/Pushcut only for redacted n8n operational alerts. Bucket/routing push remains in the cashback app so there is one notification truth.
 
-### Codex authentication boundary
+### Subscription-agent authentication boundary
 
-[Official Codex authentication documentation](https://developers.openai.com/codex/auth/) supports ChatGPT-subscription login and cached CLI login state, including `forced_login_method="chatgpt"`; it also warns that cached login material is sensitive. The n8n OpenAI credential path is API-key based and does not satisfy this project’s subscription-auth requirement. The production design therefore remains:
+[Official Codex authentication documentation](https://developers.openai.com/codex/auth/) supports ChatGPT-subscription login and cached CLI login state, including `forced_login_method="chatgpt"`; it also warns that cached login material is sensitive. The n8n OpenAI credential path is API-key based and does not satisfy this project’s subscription-auth requirement.
 
-`n8n fixed HTTP node → private fixed-operation runner → Codex CLI with cached ChatGPT login → schema-validated proposal only`.
+The final adapter decision supersedes the earlier private-runner-only recommendation. `n8n-nodes-prodex@0.5.1` is selected for ChatGPT/Codex subscription execution because it provides device login and SDK `outputSchema`; `@ggomez91npm/n8n-nodes-claude-code@0.8.0` is selected for Claude Pro/Max execution followed by mandatory downstream JSON Schema validation. Exact npm integrity values live in `integrations/n8n/community-node-lock.json`. The main AI workflow never exposes community-node parameters: workflow 21 owns the fixed model, prompt template, sandbox, thread mode, timeout, and schema. Callers cannot select provider, model, prompt, command, path, credential, working directory, sandbox, or URL.
 
-The workflow cannot select a model, prompt, command, path, provider, credential, or URL. API-key fallback is forbidden.
+The package review also found material activation gates. ProDex exposes general coding-agent controls in its UI, so this project uses only its fixed read-only/new-thread/schema-bound configuration. The Claude package invokes the CLI as a subprocess and does not itself pass `--no-session-persistence` or native `--json-schema`; it therefore remains blocked until an exact runtime proves no retained session or a reviewed fork supplies that guarantee. Neither package may be installed into production merely because the export references its node type.
 
 ## Official workflow-template audit
 
@@ -96,7 +96,7 @@ No official template was found that safely implements the complete combination o
 - n8n Data Tables: redacted operational state, hashes, pointers, receipts, policy/config fingerprints, review state.
 - Fixed Postgres functions: process-independent Actual writer lease and fencing token. A Data Table upsert is not a substitute for atomic fencing.
 
-### 15-table v3 contract
+### 15-table v4 contract
 
 | Table | Durable purpose | Owner/use after audit |
 |---|---|---|
@@ -120,7 +120,7 @@ Every declared table is now referenced by at least one connected executable node
 
 ### Retention, idempotency, and indexes
 
-`integrations/n8n/data-tables.json` v3 carries an explicit policy for every table. Operational 400-day defaults are proposed for runs, acquisitions, failures, MCP jobs, and agent jobs. Active config/cursor/circuit rows are retained indefinitely. Evidence/outbox/verification/reconciliation rows default to co-retention with OneDrive evidence (provisionally seven years) and require owner/legal confirmation before production.
+`integrations/n8n/data-tables.json` v4 carries an explicit policy for every table. Operational 400-day defaults are proposed for runs, acquisitions, failures, MCP jobs, and agent jobs. Active config/cursor/circuit rows are retained indefinitely. Evidence/outbox/verification/reconciliation rows default to co-retention with OneDrive evidence (provisionally seven years) and require owner/legal confirmation before production.
 
 The `idempotency_key` and `index_semantics` entries are logical contracts. n8n Data Table filters do not themselves prove database uniqueness under concurrent writers. Production promotion therefore requires:
 
@@ -147,4 +147,3 @@ The `idempotency_key` and `index_semantics` entries are logical contracts. n8n D
 4. Prove Luna and gated Sol proposal artifact upload/download/hash plus `PENDING` review state.
 5. Run a read-only isolated `n8n-nodes-actual` comparison if useful; do not replace the fenced writer.
 6. Evaluate Open Banking IO only as a separate acquisition pilot. Its output must still enter the immutable archive/normalization/reconciliation path.
-

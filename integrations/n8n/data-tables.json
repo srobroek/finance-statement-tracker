@@ -1,6 +1,6 @@
 {
   "$schema": "./data-tables.schema.json",
-  "schema_version": 3,
+  "schema_version": 4,
   "storage": "n8n-data-tables-on-postgres",
   "contract_status": "SPEC_ONLY",
   "notes": [
@@ -58,7 +58,7 @@
       "name": "finance_document_operations",
       "purpose": "Redacted document state; never decrypted binary or extracted text.",
       "idempotency_key": ["source_sha256", "document_profile", "requested_schema_version"],
-      "columns": {"document_id":"string","source_sha256":"string","document_profile":"string","requested_schema_version":"string","onedrive_item_id":"string","source_message_id":"string","source_attachment_id":"string","state":"string","attempt_count":"number","last_execution_id":"string","parser_version":"string","output_sha256":"string","error_class":"string","error_detail_redacted":"string","updated_at":"date"},
+      "columns": {"document_id":"string","source_sha256":"string","document_profile":"string","requested_schema_version":"string","onedrive_item_id":"string","source_message_id":"string","source_attachment_id":"string","source_code":"string","config_version":"string","actual_file_id":"string","account_id":"string","period_key":"string","state":"string","attempt_count":"number","last_execution_id":"string","parser_version":"string","output_sha256":"string","error_class":"string","error_detail_redacted":"string","updated_at":"date"},
       "allowed_states": ["RECEIVED", "VALIDATED", "DECRYPTED_EPHEMERAL", "EXTRACTED_EPHEMERAL", "SCHEMA_VALIDATED", "READY_FOR_PARSE", "COMMITTED", "QUARANTINED", "UNSUPPORTED", "PASSWORD_FAILED"]
     },
     {
@@ -127,7 +127,7 @@
       "name": "finance_ai_policy_contracts",
       "purpose": "Active server-owned AI policy profile, hashes, fields, and resolved value domains.",
       "idempotency_key": ["policy_id", "policy_version"],
-      "columns": {"policy_id":"string","policy_version":"number","agent_profile":"string","policy_sha256":"string","config_sha256":"string","output_schema_sha256":"string","allowed_fields_json":"string","allowed_values_json":"string","state":"string","updated_at":"date"},
+      "columns": {"policy_id":"string","policy_version":"number","agent_profile":"string","agent_provider":"string","policy_sha256":"string","config_sha256":"string","output_schema_sha256":"string","allowed_fields_json":"string","allowed_values_json":"string","state":"string","updated_at":"date"},
       "allowed_states": ["STAGED", "ACTIVE", "RETIRED", "REVOKED"]
     }
   ]

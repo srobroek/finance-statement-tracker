@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "integrations" / "n8n" / "generated" / "config-versions.seed.json"
 SOURCES = (
     "config/ai-policies.json",
+    "config/agent-providers.json",
     "config/static-rules.seed.json",
     "config/transaction-email-sources.json",
     "config/statement-sources.json",

@@ -130,11 +130,14 @@ function parseUnresolved(value: unknown): UnresolvedItem {
 export function parseRequest(value: unknown): ProposalRequest {
   const source = record(value, "request");
   exactKeys(source, [
-    "schema_version", "job_id", "idempotency_key", "operation_code", "policy_id", "policy_class",
+    "schema_version", "job_id", "idempotency_key", "operation_code", "agent_provider", "policy_id", "policy_class",
     "policy_sha256", "config_sha256", "output_schema_sha256", "unresolved",
   ], "request");
   if (source.schema_version !== 1 || source.operation_code !== "FINANCE_AI_PROPOSAL") {
     throw new ContractError("INVALID_CONTRACT", "unsupported request schema or operation");
+  }
+  if (source.agent_provider !== "CODEX_SUBSCRIPTION") {
+    throw new ContractError("INVALID_CONTRACT", "this runner accepts only CODEX_SUBSCRIPTION");
   }
   const idempotencyKey = text(source.idempotency_key, "idempotency_key", 64);
   if (!HASH.test(idempotencyKey) || source.job_id !== `finance-ai:${idempotencyKey}`) {
@@ -162,6 +165,7 @@ export function parseRequest(value: unknown): ProposalRequest {
     job_id: String(source.job_id),
     idempotency_key: idempotencyKey,
     operation_code: "FINANCE_AI_PROPOSAL",
+    agent_provider: "CODEX_SUBSCRIPTION",
     policy_id: policyId,
     policy_class: source.policy_class,
     policy_sha256: String(source.policy_sha256),
@@ -304,7 +308,7 @@ function validateValue(proposal: Proposal, item: UnresolvedItem, policy: PolicyC
 export function validateResponse(value: unknown, request: ProposalRequest, resolved: ResolvedPolicy): ProposalResponse {
   const source = record(value, "response");
   exactKeys(source, [
-    "schema_version", "job_id", "idempotency_key", "policy_id", "policy_class", "policy_sha256",
+    "schema_version", "job_id", "idempotency_key", "agent_provider", "policy_id", "policy_class", "policy_sha256",
     "config_sha256", "output_schema_sha256", "runner_receipt_id", "runner_model",
     "runner_reasoning_effort", "auth_mode", "proposals",
   ], "response");
@@ -312,6 +316,7 @@ export function validateResponse(value: unknown, request: ProposalRequest, resol
     schema_version: 1,
     job_id: request.job_id,
     idempotency_key: request.idempotency_key,
+    agent_provider: request.agent_provider,
     policy_id: request.policy_id,
     policy_class: request.policy_class,
     policy_sha256: request.policy_sha256,

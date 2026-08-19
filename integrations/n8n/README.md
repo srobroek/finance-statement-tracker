@@ -44,9 +44,10 @@ workflow status can move beyond `SPEC_ONLY`, CI/disposable validation must:
 
 ## Durable operational state contract
 
-`data-tables.json` v3 assigns every declared Data Table an explicit retention,
-logical idempotency key, concurrency rule, and index/lookup contract. The 19
-workflows reference all 15 tables through connected executable nodes. Actual
+`data-tables.json` v4 assigns every declared Data Table an explicit retention,
+logical idempotency key, concurrency rule, and index/lookup contract. The 21
+workflows reference all 15 tables through connected executable nodes, including
+the single fenced Actual writer and the subscription-agent adapter. Actual
 remains the posted ledger, the cashback service remains authoritative for its
 live cursor/routing state, and OneDrive remains the immutable binary/artifact
 store; Data Tables contain only operational receipts, pointers, hashes, state,
@@ -73,16 +74,19 @@ hash-verified, and recorded as `PENDING` review in `finance_agent_jobs`.
 6. read back every terminal receipt directly from Postgres/Data Tables;
 7. leave all schedules and mutation workflows inactive until promotion gates.
 
-## Codex proposal handoff
+## Subscription-agent proposal handoff
 
-Workflow 09 uses only the bounded `CODEX_AGENT_HANDOFF` contract. A future narrow
-runner must use cached ChatGPT subscription login with
-`forced_login_method=chatgpt`; API-key fallback is forbidden. Normal policies
+Workflow 09 uses only the bounded provider-neutral handoff contract and calls
+workflow 21. The active server-side policy selects `CODEX_SUBSCRIPTION` or
+`CLAUDE_SUBSCRIPTION`; the caller cannot select the provider. Normal Codex policies
 map server-side to `gpt-5.6-luna`/`max`; exception policies map to
 `gpt-5.6-sol`/`xhigh`. Callers cannot select a model, prompt, command, path, URL,
 credential, or write flag. Requests are redacted/idempotent and output is
-proposal-only under checked-in schemas. The workflow stays blocked until the
-runner exact image and three consecutive receipts are verified.
+proposal-only under checked-in schemas. `community-node-lock.json` pins
+`n8n-nodes-prodex@0.5.1` and
+`@ggomez91npm/n8n-nodes-claude-code@0.8.0` by integrity. Both remain blocked
+until exact-image registration, subscription login, no-tool/no-write behavior,
+and three consecutive schema-valid receipts are verified.
 
 Callers supply only a policy ID, unresolved transaction IDs, requested fields,
 and redacted context. `finance_ai_policy_contracts` owns the single ACTIVE
@@ -91,14 +95,25 @@ domains. `compile_ai_policy_contracts.py` derives its seed from checked-in
 policies, Actual categories, properties, cashback programmes, and the output
 schema; caller-supplied profiles, hashes, and domains are rejected.
 
-The native n8n OpenAI credential is not used: the released node supports an API
-key, while the proposed ChatGPT account OAuth credential is not in the pinned
-n8n release. Execute Command is also excluded because it is an arbitrary-shell
-boundary and is disabled by default in current n8n. A fixed HTTP Request to the
-narrow runner is therefore the only specified subscription-auth handoff. Each
+The native n8n OpenAI credential is not used because it is API-key based. Execute
+Command is excluded, and API-key fallback is forbidden. The two version-locked subscription community nodes exist
+only inside workflow 21; changing provider implementation does not change the
+proposal schema or workflow 09. Each
 unresolved item carries bounded configured value domains, and both runner and
 workflow must reject invented category, property, channel, tag, or reward-bucket
 values. The request hash includes those domains.
+
+## Workflow organization
+
+`workflow-folders.json` assigns every workflow to one of eight numbered finance
+folders and applies the exact tags `finance`, `setup-required`, and `inactive`.
+Plain `import:workflow` supports a target project but cannot create/remap folders,
+so JSON exports deliberately omit `parentFolderId`. After inactive import, the
+reviewed placement reconciliation creates/reuses the folder identities and moves
+only the 21 inactive finance workflows, then performs direct durable readback.
+Each workflow also contains native `nodeGroups` plus finance-specific sticky
+notes. Execute Sub-workflow selectors use n8n's `From list` representation with
+the stable workflow ID and cached readable name.
 
 Instance-level n8n MCP is disabled. Workflow 15 specifies a dedicated MCP Server
 Trigger façade with exactly three fixed operation codes. It accepts no arbitrary

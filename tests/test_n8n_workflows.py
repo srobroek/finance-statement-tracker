@@ -4,6 +4,7 @@ import json
 import hashlib
 import subprocess
 import sys
+import re
 import unittest
 from pathlib import Path
 
@@ -86,6 +87,7 @@ class N8nWorkflowTests(unittest.TestCase):
             {
                 "@n8n/n8n-nodes-langchain.mcpTrigger",
                 "@n8n/n8n-nodes-langchain.toolWorkflow",
+                "n8n-nodes-base.stickyNote",
             },
         )
         self.assertEqual(
@@ -163,19 +165,24 @@ class N8nWorkflowTests(unittest.TestCase):
                 self.assertIn((short, operation), seen)
 
     def test_pdf_text_extraction_stays_inside_fixed_finance_node(self) -> None:
-        for filename in ("03-shared-statement-pipeline.json", "14-local-pdf-extraction.json"):
-            nodes = self.workflow(filename)["nodes"]
-            pdf_ops = [
-                node["parameters"]["operation"]
-                for node in nodes
-                if node["type"] == "n8n-nodes-finance.financePdf"
-            ]
-            self.assertEqual(pdf_ops[:3], ["validate", "unlock", "profile"])
-            self.assertFalse(any(
-                node["type"] == "n8n-nodes-base.extractFromFile"
-                and node.get("parameters", {}).get("operation") == "pdf"
-                for node in nodes
-            ))
+        nodes = self.workflow("14-local-pdf-extraction.json")["nodes"]
+        pdf_ops = [
+            node["parameters"]["operation"]
+            for node in nodes
+            if node["type"] == "n8n-nodes-finance.financePdf"
+        ]
+        self.assertEqual(pdf_ops[:3], ["validate", "unlock", "profile"])
+        shared = self.nodes("03-shared-statement-pipeline.json")
+        self.assertEqual(
+            shared["Run Isolated PDF Extraction"]["parameters"]["workflowId"]["value"],
+            self.workflow("14-local-pdf-extraction.json")["id"],
+        )
+        self.assertFalse(any(
+            node["type"] == "n8n-nodes-base.extractFromFile"
+            and node.get("parameters", {}).get("operation") == "pdf"
+            for workflow in self.workflows.values()
+            for node in workflow["nodes"]
+        ))
 
     def test_data_table_contract_is_postgres_and_schema_valid(self) -> None:
         self.assertEqual(self.tables["storage"], "n8n-data-tables-on-postgres")
@@ -246,8 +253,9 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertTrue(outlook["parameters"]["returnAll"])
         self.assertTrue(outlook["alwaysOutputData"])
         code = nodes["Freeze Trusted Cursor Window"]["parameters"]["jsCode"] + nodes["Aggregate Exact Window Heartbeat"]["parameters"]["jsCode"]
-        for term in ("run_upper_bound", "pagination_exhausted:true", "scanned_count", "heartbeat", "received>=start&&received<upper"):
-            self.assertIn(term, code)
+        compact = re.sub(r"\s+", "", code)
+        for term in ("run_upper_bound", "pagination_exhausted:true", "scanned_count", "heartbeat", "received>=start", "received<upper"):
+            self.assertIn(term, compact)
         self.assertTrue(workflow["meta"]["aggregateOutputAlwaysOne"])
         self.assertTrue(workflow["meta"]["cursorCommitExactlyOnce"])
         self.assertTrue(workflow["meta"]["cursorAdvanceRequiresDownstreamReceipt"])
@@ -288,27 +296,26 @@ class N8nWorkflowTests(unittest.TestCase):
     def test_shared_pipeline_archives_delta_before_prepared_and_reads_every_state(self) -> None:
         names = [node["name"] for node in self.workflow("03-shared-statement-pipeline.json")["nodes"]]
         self.assertLess(names.index("Verify Durable Canonical Delta"), names.index("Upsert PREPARED Actual Outbox"))
-        for state in ("PREPARED", "ACTUAL OBSERVED", "VERIFIED", "COMMITTED"):
-            self.assertIn(f"Upsert {state} {'Outbox' if state == 'ACTUAL OBSERVED' else 'Actual Outbox'}", names)
-            self.assertIn(f"Read Back {state} {'Outbox' if state == 'ACTUAL OBSERVED' else 'Actual Outbox'}", names)
+        self.assertIn("Apply Prepared Outbox Safely", names)
+        writer = set(self.nodes("20-actual-outbox-apply.json"))
         for name in (
-            "Download PREPARED Delta Artifact", "SHA-256 PREPARED Delta Artifact",
-            "Verify Recovered Delta Contract", "Acquire Fenced Writer Lease",
-            "Assert Writer Fence Before Import", "Release Exact Writer Fence",
+            "Download Immutable Delta Artifact", "SHA-256 Recovered Delta",
+            "Verify Recovery Contract", "Acquire Recovery Writer Fence",
+            "Assert Recovery Fence Before Import", "Release Recovery Writer Fence",
             "Upsert Exact Actual Verification Receipt",
             "Read Back Exact Actual Verification Receipt",
             "Compare Exact Actual Verification Receipt",
-            "Compare Terminal Receipt Readback", "Mark Terminal Readback Verified",
-            "Read Back Verified Terminal Receipt",
         ):
-            self.assertIn(name, names)
-        code = self.nodes("03-shared-statement-pipeline.json")["Build Exact Verification Contract"]["parameters"]["jsCode"]
+            self.assertIn(name, writer)
+        code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"]["parameters"]["jsCode"]
         self.assertIn("expected_transactions", code)
         self.assertIn("expected_account_balance", code)
         self.assertNotIn("imported_ids:", code)
 
     def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
-        names = set(self.nodes("17-actual-outbox-recovery.json"))
+        recovery = set(self.nodes("17-actual-outbox-recovery.json"))
+        self.assertIn("Apply Nonterminal Outbox Safely", recovery)
+        names = set(self.nodes("20-actual-outbox-apply.json"))
         for name in (
             "Download Immutable Delta Artifact", "SHA-256 Recovered Delta",
             "Verify Recovery Contract", "Acquire Recovery Writer Fence",
@@ -340,7 +347,10 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def test_error_workflow_redacts_then_upserts_reads_compares_and_marks(self) -> None:
         workflow = self.workflow("16-operations-error-handler.json")
-        names = [node["name"] for node in workflow["nodes"]]
+        names = [
+            node["name"] for node in workflow["nodes"]
+            if node["type"] != "n8n-nodes-base.stickyNote"
+        ]
         self.assertEqual(names[:7], [
             "Finance Workflow Failed", "Redact and Classify Failure",
             "Upsert Durable Failure Receipt", "Read Back Failure Receipt",
@@ -379,7 +389,14 @@ class N8nWorkflowTests(unittest.TestCase):
         unresolved = handoff["$defs"]["unresolved"]
         self.assertIn("allowed_values", unresolved["required"])
         self.assertEqual(unresolved["properties"]["allowed_values"]["maxProperties"], 10)
-        self.assertEqual(proposal["properties"]["auth_mode"]["const"], "CHATGPT_SUBSCRIPTION")
+        self.assertEqual(
+            set(proposal["properties"]["auth_mode"]["enum"]),
+            {"CHATGPT_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
+        )
+        self.assertEqual(
+            set(handoff["properties"]["agent_provider"]["enum"]),
+            {"CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
+        )
 
     def test_ai_workflow_derives_profile_enforces_domains_and_omits_internal_hash(self) -> None:
         nodes = self.nodes("09-ai-proposal.json")
@@ -389,15 +406,21 @@ class N8nWorkflowTests(unittest.TestCase):
         for forbidden in ("agent_profile", "policy_sha256", "config_sha256", "output_schema_sha256"):
             self.assertIn(f"'{forbidden}'", untrusted)
         self.assertIn("finance_ai_policy_contracts", json.dumps(nodes["Read Active Server AI Policy Contract"]))
-        self.assertIn("LUNA_MAX:'NORMAL'", validation)
-        self.assertIn("SOL_XHIGH:'EXCEPTION'", validation)
+        compact_validation = re.sub(r"\s+", "", validation)
+        self.assertIn("LUNA_MAX:'NORMAL'", compact_validation)
+        self.assertIn("SOL_XHIGH:'EXCEPTION'", compact_validation)
+        self.assertIn("agent_provider", validation)
         self.assertIn("Missing bounded server value domain", validation)
         self.assertIn("request_canonical", validation)
         self.assertIn("Proposal outside configured domain", response)
         self.assertIn("Duplicate proposal field", response)
         self.assertIn("Agent proposal envelope mismatch", response)
-        http_body = nodes["Invoke Fixed Codex Agent Runner"]["parameters"]["jsonBody"]
-        self.assertIn("key !== 'request_sha256'", http_body)
+        adapter = nodes["Invoke Subscription Agent Adapter"]
+        self.assertEqual(adapter["type"], "n8n-nodes-base.executeWorkflow")
+        self.assertEqual(
+            adapter["parameters"]["workflowId"]["value"],
+            self.workflow("21-subscription-agent-adapter.json")["id"],
+        )
 
     def test_ai_policy_targets_are_complete_and_profile_owned(self) -> None:
         policies = load_json(ROOT / "config" / "ai-policies.json")["policies"]
@@ -498,6 +521,7 @@ class N8nWorkflowTests(unittest.TestCase):
                 "n8n-nodes-base.manualTrigger",
                 "n8n-nodes-base.dataTable",
                 "n8n-nodes-base.code",
+                "n8n-nodes-base.stickyNote",
             },
         )
         self.assertFalse(any(
@@ -570,6 +594,7 @@ class N8nWorkflowTests(unittest.TestCase):
             [{"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}],
         )
         compare = nodes["Exact Compare AI Policy Seed Readback"]["parameters"]["jsCode"]
+        compact_compare = re.sub(r"\s+", "", compare)
         for marker in (
             "AI_POLICY_ACTIVE_COUNT_MISMATCH",
             "AI_POLICY_DUPLICATE_ACTIVE_VERSION",
@@ -579,17 +604,17 @@ class N8nWorkflowTests(unittest.TestCase):
             "finance_ledger_writes:false",
             "actual_writes:false",
         ):
-            self.assertIn(marker, compare)
+            self.assertIn(marker, compact_compare if ":false" in marker else compare)
         seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
-        self.assertIn(
-            json.dumps(seed["rows"], ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-            nodes["Emit Versioned AI Policy Seed"]["parameters"]["jsCode"],
-        )
+        policy_code = nodes["Emit Versioned AI Policy Seed"]["parameters"]["jsCode"]
+        for row in seed["rows"]:
+            for field in ("policy_id", "policy_sha256", "agent_profile", "agent_provider"):
+                self.assertIn(json.dumps(row[field]), policy_code)
         config_seed = load_json(N8N / "generated" / "config-versions.seed.json")
-        self.assertIn(
-            json.dumps(config_seed["rows"], ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-            nodes["Emit Versioned Config Fingerprints"]["parameters"]["jsCode"],
-        )
+        config_code = nodes["Emit Versioned Config Fingerprints"]["parameters"]["jsCode"]
+        for row in config_seed["rows"]:
+            for field in ("config_name", "version", "content_sha256"):
+                self.assertIn(json.dumps(row[field]), config_code)
         for node_name in ("Upsert AI Policy Contracts", "Upsert Config Version Fingerprints"):
             mappings = nodes[node_name]["parameters"]["columns"]["value"]
             for value in mappings.values():
@@ -753,6 +778,205 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(actual_keys | n8n_keys, owned_keys)
         self.assertTrue(all(row["execution_owner"] == "ACTUAL" and row["actual_representable"] for row in actual["rules"]))
         self.assertTrue(all(row["execution_owner"] == "N8N_ONLY" and not row["actual_representable"] for row in n8n_rules["rules"]))
+
+    def test_workflow_ui_renderer_is_current_readable_and_idempotent(self) -> None:
+        renderer = N8N / "refactor_workflow_ui.py"
+        before = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
+        result = subprocess.run(
+            [sys.executable, str(renderer), "--check"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        after = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
+        self.assertEqual(before, after)
+        for filename, workflow in self.workflows.items():
+            self.assertNotIn("SPEC ONLY", workflow["name"].upper())
+            self.assertTrue(workflow["name"].endswith("Setup Required"))
+            notes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.stickyNote"]
+            self.assertTrue(notes, filename)
+            for note in notes:
+                content = note["parameters"]["content"]
+                self.assertIn("**Input:**", content)
+                self.assertIn("**Output:**", content)
+                self.assertIn("failure", content.casefold())
+            for node in workflow["nodes"]:
+                if node["type"] != "n8n-nodes-base.code":
+                    continue
+                code = node["parameters"]["jsCode"]
+                self.assertEqual(code.count("// Purpose:"), 1, f"{filename}::{node['name']}")
+                self.assertGreaterEqual(len(code.splitlines()), 2, f"{filename}::{node['name']}")
+                self.assertLessEqual(max(map(len, code.splitlines())), 600, f"{filename}::{node['name']}")
+
+    def test_canvas_groups_are_native_valid_and_exclude_triggers(self) -> None:
+        trigger_types = {
+            "n8n-nodes-base.manualTrigger", "n8n-nodes-base.scheduleTrigger",
+            "n8n-nodes-base.executeWorkflowTrigger", "n8n-nodes-base.errorTrigger",
+            "@n8n/n8n-nodes-langchain.mcpTrigger",
+        }
+        grouped_workflows = 0
+        for filename, workflow in self.workflows.items():
+            by_id = {node["id"]: node for node in workflow["nodes"]}
+            groups = workflow.get("nodeGroups", [])
+            grouped_workflows += bool(groups)
+            seen: set[str] = set()
+            for group in groups:
+                self.assertEqual(set(group), {"name", "nodeIds", "description"})
+                self.assertGreaterEqual(len(group["nodeIds"]), 2)
+                self.assertTrue(group["description"].startswith("Finance stage"))
+                for node_id in group["nodeIds"]:
+                    self.assertIn(node_id, by_id, filename)
+                    self.assertNotIn(by_id[node_id]["type"], trigger_types)
+                    self.assertNotIn(node_id, seen, f"duplicate canvas group membership {filename}")
+                    seen.add(node_id)
+        self.assertGreaterEqual(grouped_workflows, 15)
+
+    def test_workflow_folder_manifest_is_complete_and_post_import_guarded(self) -> None:
+        contract = load_json(N8N / "workflow-folders.json")
+        self.assertEqual(contract["n8n_version"], "2.36.2")
+        self.assertEqual(len(contract["folders"]), 8)
+        mapped = [code for folder in contract["folders"] for code in folder["workflow_codes"]]
+        self.assertEqual(len(mapped), len(set(mapped)))
+        self.assertEqual(set(mapped), {row["code"] for row in self.registry["workflows"]})
+        by_code = {
+            code: folder for folder in contract["folders"] for code in folder["workflow_codes"]
+        }
+        for workflow in self.workflows.values():
+            code = workflow["meta"]["financeWorkflowCode"]
+            self.assertEqual(workflow["meta"]["workflowFolder"]["id"], by_code[code]["id"])
+            self.assertEqual(workflow["meta"]["workflowTags"], contract["tags"])
+            self.assertEqual([tag["name"] for tag in workflow["tags"]], contract["tags"])
+            self.assertEqual(len({tag["id"] for tag in workflow["tags"]}), len(contract["tags"]))
+            self.assertNotIn("parentFolderId", workflow)
+        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
+        for marker in (
+            "finance_project_id", "w.active = TRUE", "shared_workflow",
+            "WORKFLOW_FOLDER_MAP_COUNT_MISMATCH", "WORKFLOW_FOLDER_READBACK_MISMATCH",
+        ):
+            self.assertIn(marker, sql)
+
+    def test_execute_subworkflow_references_use_from_list(self) -> None:
+        workflow_names = {workflow["id"]: workflow["name"] for workflow in self.workflows.values()}
+        count = 0
+        for filename, workflow in self.workflows.items():
+            for node in workflow["nodes"]:
+                if node["type"] not in {
+                    "n8n-nodes-base.executeWorkflow",
+                    "@n8n/n8n-nodes-langchain.toolWorkflow",
+                }:
+                    continue
+                count += 1
+                reference = node["parameters"]["workflowId"]
+                self.assertEqual(reference["mode"], "list", f"{filename}::{node['name']}")
+                self.assertEqual(reference["cachedResultName"], workflow_names[reference["value"]])
+        self.assertGreaterEqual(count, 20)
+
+    def test_outlook_and_onedrive_nodes_use_exact_binary_and_server_filter_contracts(self) -> None:
+        for filename in ("01-outlook-finance-acquisition.json", "12-outlook-message-sweep.json"):
+            outlook_nodes = [
+                node for node in self.workflow(filename)["nodes"]
+                if node["type"] == "n8n-nodes-base.microsoftOutlook"
+                and node.get("parameters", {}).get("resource") == "folderMessage"
+                and node.get("parameters", {}).get("operation") == "getAll"
+            ]
+            self.assertEqual(len(outlook_nodes), 1)
+            params = outlook_nodes[0]["parameters"]
+            self.assertEqual(params["output"], "raw")
+            self.assertTrue(params["returnAll"])
+            values = params["filtersUI"]["values"]
+            self.assertEqual(values["filterBy"], "filters")
+            filters = values["filters"]
+            self.assertIn("receivedAfter", filters)
+            self.assertIn("receivedBefore", filters)
+            self.assertIn("custom", filters)
+            self.assertNotIn("filters", params)
+        uploads = []
+        for workflow in self.workflows.values():
+            uploads.extend(
+                node for node in workflow["nodes"]
+                if node["type"] == "n8n-nodes-base.microsoftOneDrive"
+                and node.get("parameters", {}).get("operation") == "upload"
+            )
+        self.assertTrue(uploads)
+        for node in uploads:
+            self.assertEqual(node["typeVersion"], 1.1)
+            self.assertTrue(node["parameters"]["binaryData"])
+            self.assertEqual(node["parameters"]["binaryPropertyName"], "data")
+
+        acquisition = self.workflow("01-outlook-finance-acquisition.json")
+        connections = acquisition["connections"]
+        self.assertEqual(
+            connections["Get Messages from Configured Folder"]["main"][0][0]["node"],
+            "Close Microsoft Graph Circuit",
+        )
+        self.assertEqual(
+            connections["Close Microsoft Graph Circuit"]["main"][0][0]["node"],
+            "Exact Sender Subject and Window Filter",
+        )
+        filter_code = self.nodes("01-outlook-finance-acquisition.json")[
+            "Exact Sender Subject and Window Filter"
+        ]["parameters"]["jsCode"]
+        self.assertIn("$('Get Messages from Configured Folder').all()", filter_code)
+
+    def test_interactive_statement_handoff_uses_only_durable_context(self) -> None:
+        table = next(
+            row for row in self.tables["tables"]
+            if row["name"] == "finance_document_operations"
+        )
+        required = {
+            "source_code", "config_version", "actual_file_id", "account_id", "period_key",
+        }
+        self.assertTrue(required.issubset(table["columns"]))
+        nodes = self.nodes("11-interactive-artifact-handoff.json")
+        verify = nodes["Verify Durable Artifact Contract"]["parameters"]["jsCode"]
+        for field in required:
+            self.assertIn(repr(field), verify)
+        self.assertIn("DURABLE_STATEMENT_CONTEXT_MISSING", verify)
+        self.assertIn("DURABLE_STATEMENT_NOT_READY", verify)
+        self.assertIn("trigger_kind: 'SUBWORKFLOW'", verify)
+        self.assertIn("document_sha256: observed", verify)
+        self.assertEqual(
+            nodes["Run Statement Pipeline"]["parameters"]["workflowId"]["mode"],
+            "list",
+        )
+
+    def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
+        lock = load_json(N8N / "community-node-lock.json")
+        self.assertEqual(
+            {(row["package"], row["version"]) for row in lock["packages"]},
+            {
+                ("n8n-nodes-prodex", "0.5.1"),
+                ("@ggomez91npm/n8n-nodes-claude-code", "0.8.0"),
+            },
+        )
+        nodes = self.nodes("21-subscription-agent-adapter.json")
+        codex = nodes["Run Codex Subscription Provider"]
+        self.assertEqual((codex["type"], codex["typeVersion"]), ("n8n-nodes-prodex.prodex", 2))
+        self.assertEqual(codex["parameters"]["sandbox"], "read_only")
+        self.assertEqual(codex["parameters"]["threadMode"], "new")
+        self.assertTrue(codex["parameters"]["options"]["outputSchema"])
+        claude = nodes["Run Claude Subscription Provider"]
+        self.assertEqual(
+            (claude["type"], claude["typeVersion"]),
+            ("@ggomez91npm/n8n-nodes-claude-code.claude", 1),
+        )
+        self.assertEqual(claude["parameters"]["responseFormat"], "json")
+        self.assertFalse(claude["parameters"]["options"]["useCache"])
+        build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"]["jsCode"]
+        for forbidden in ("command", "working_directory", "sandbox", "prompt"):
+            self.assertIn(forbidden, build)
+        self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
+        self.assertIn("gpt-5.6-sol", json.dumps(nodes["Subscription Provider Parameters"]))
+
+    def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:
+        contract = self.registry["custom_nodes"]
+        used = {
+            node["type"]: node["typeVersion"]
+            for workflow in self.workflows.values()
+            for node in workflow["nodes"]
+            if node["type"].startswith("n8n-nodes-finance.")
+        }
+        self.assertEqual(set(used), set(contract["full_node_types"].values()))
+        self.assertEqual(used, contract["type_versions"])
 
     def test_readme_does_not_claim_exports_are_executable(self) -> None:
         readme = (N8N / "README.md").read_text(encoding="utf-8")

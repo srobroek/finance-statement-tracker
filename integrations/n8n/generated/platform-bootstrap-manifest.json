@@ -4,11 +4,11 @@
   "n8n_version": "2.36.2",
   "sources": {
     "data_tables": "integrations/n8n/data-tables.json",
-    "data_tables_sha256": "918a0ba15163332142b0d3ead9edffd2d8a8215f22c6cf00d866a5033eda2fe6",
+    "data_tables_sha256": "56266e11f6e547179302d9243b77351ae804b6bcbc6442f53db79fcf6508c490",
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
-    "ai_policy_seed_sha256": "9d274755f8bdb5ae8ef2e398c609f2f603bf09fcb8647bbffbddee023b4baf67",
+    "ai_policy_seed_sha256": "bc97880149a1daa98da1c3d32158fb67c3df2e94880ea83a521d509b899efcad",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "4814a03e8418eb57ab87778da75b11cf970ed98955830d55210006da2addcffc"
+    "config_version_seed_sha256": "871bc662d825c3747cd8c066884e06beb3014c442225346eb56c775b7bd0a9ee"
   },
   "native_data_table_create_contract": {
     "node_type": "n8n-nodes-base.dataTable",
@@ -452,6 +452,10 @@
               "type": "string"
             },
             {
+              "name": "agent_provider",
+              "type": "string"
+            },
+            {
               "name": "policy_sha256",
               "type": "string"
             },
@@ -630,6 +634,26 @@
             },
             {
               "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
               "type": "string"
             },
             {
@@ -1045,9 +1069,10 @@
         "policy_id": "classify-unresolved",
         "policy_version": 2,
         "agent_profile": "LUNA_MAX",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"vendor\",\"category\",\"subcategory\",\"tags\"]",
         "allowed_values_json": "{\"category\":[\"Accommodation\",\"Bank Fees\",\"Card Payments\",\"Cashback & Rewards\",\"Charity\",\"Clothing\",\"Cloud Services\",\"Coffee & Snacks\",\"Dining Out\",\"District Cooling\",\"Education\",\"Electricity & Water\",\"Electronics\",\"Emergency Fund\",\"Events & Attractions\",\"Family Support\",\"Fitness\",\"Flights\",\"Food Delivery\",\"Foreign Fees\",\"Fuel\",\"Furniture & Appliances\",\"General Retail\",\"Gifts\",\"Groceries\",\"Hobbies & Entertainment\",\"Household Supplies\",\"Insurance\",\"Interest & Dividends\",\"Investments\",\"Maintenance & Repairs\",\"Media Subscriptions\",\"Medical\",\"Mobile & Internet\",\"Monthly Buffer\",\"Mortgage Interest\",\"Needs Review\",\"Online Shopping\",\"Other Income\",\"Parking & Tolls\",\"Personal Care\",\"Pharmacy\",\"Professional Services\",\"Public Transport\",\"Refunds & Reimbursements\",\"Rent & Mortgage\",\"Rental Income\",\"Retirement\",\"Ride Hailing\",\"Salary\",\"Savings Goals\",\"Service Charges\",\"Shipping & Delivery\",\"Software & App Subscriptions\",\"Taxes & Government\",\"Travel Activities\",\"Travel Transport\",\"Utilities Buffer\",\"Vehicle Maintenance\"],\"subcategory\":[\"Accommodation\",\"Bank Fees\",\"Card Payments\",\"Cashback & Rewards\",\"Charity\",\"Clothing\",\"Cloud Services\",\"Coffee & Snacks\",\"Dining Out\",\"District Cooling\",\"Education\",\"Electricity & Water\",\"Electronics\",\"Emergency Fund\",\"Events & Attractions\",\"Family Support\",\"Fitness\",\"Flights\",\"Food Delivery\",\"Foreign Fees\",\"Fuel\",\"Furniture & Appliances\",\"General Retail\",\"Gifts\",\"Groceries\",\"Hobbies & Entertainment\",\"Household Supplies\",\"Insurance\",\"Interest & Dividends\",\"Investments\",\"Maintenance & Repairs\",\"Media Subscriptions\",\"Medical\",\"Mobile & Internet\",\"Monthly Buffer\",\"Mortgage Interest\",\"Needs Review\",\"Online Shopping\",\"Other Income\",\"Parking & Tolls\",\"Personal Care\",\"Pharmacy\",\"Professional Services\",\"Public Transport\",\"Refunds & Reimbursements\",\"Rent & Mortgage\",\"Rental Income\",\"Retirement\",\"Ride Hailing\",\"Salary\",\"Savings Goals\",\"Service Charges\",\"Shipping & Delivery\",\"Software & App Subscriptions\",\"Taxes & Government\",\"Travel Activities\",\"Travel Transport\",\"Utilities Buffer\",\"Vehicle Maintenance\"],\"tags\":[\"home\",\"grocery\",\"dining\",\"transport\",\"travel\",\"online\",\"health\",\"education\",\"gift\",\"business\",\"shared\",\"review\"]}",
         "state": "ACTIVE"
@@ -1056,9 +1081,10 @@
         "policy_id": "recommend-category",
         "policy_version": 1,
         "agent_profile": "SOL_XHIGH",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"category_recommendation\"]",
         "allowed_values_json": "{}",
         "state": "ACTIVE"
@@ -1067,9 +1093,10 @@
         "policy_id": "detect-subscription",
         "policy_version": 1,
         "agent_profile": "LUNA_MAX",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"is_subscription\",\"tags\"]",
         "allowed_values_json": "{\"is_subscription\":[true],\"tags\":[\"subscription\",\"recurring\"]}",
         "state": "ACTIVE"
@@ -1078,9 +1105,10 @@
         "policy_id": "enrich-property",
         "policy_version": 2,
         "agent_profile": "SOL_XHIGH",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"property_code\",\"rental_unit\"]",
         "allowed_values_json": "{\"property_code\":[\"BLUEWATERS_B7_306\",\"INDIGO1414\",\"LT713\"],\"rental_unit\":[\"Indigo1414\",\"LT713\"]}",
         "state": "ACTIVE"
@@ -1089,9 +1117,10 @@
         "policy_id": "find-purchase-evidence",
         "policy_version": 2,
         "agent_profile": "LUNA_MAX",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"evidence_policy\"]",
         "allowed_values_json": "{\"evidence_policy\":[\"SEARCH_RELATED_EMAIL\",\"SEARCH_RECEIPT_BILL_WARRANTY\",\"MATCH_AMOUNT_AND_PERIOD\"]}",
         "state": "ACTIVE"
@@ -1100,9 +1129,10 @@
         "policy_id": "enrich-cashback-classification",
         "policy_version": 1,
         "agent_profile": "LUNA_MAX",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"channel\",\"reward_bucket\"]",
         "allowed_values_json": "{\"channel\":[\"ONLINE\",\"PHYSICAL_POS\",\"APPLE_PAY_POS\",\"UNKNOWN\"],\"reward_bucket\":[\"EI_AMAZON\",\"RAK_DINING\",\"RAK_EWALLET\",\"RAK_GROCERY\",\"RAK_STANDARD\",\"RAK_TRAVEL\",\"SC_FILLER\",\"SC_FOREIGN\",\"SC_ONLINE\",\"SC_WALLET\"]}",
         "state": "ACTIVE"
@@ -1111,9 +1141,10 @@
         "policy_id": "recommend-static-rule",
         "policy_version": 1,
         "agent_profile": "SOL_XHIGH",
+        "agent_provider": "CODEX_SUBSCRIPTION",
         "policy_sha256": "e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014",
         "config_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
-        "output_schema_sha256": "40f2ecc3524f03a09cf530c1cc7c898a158a529185280b717a1a1835fcb2d2ab",
+        "output_schema_sha256": "5011062c044bfa7c46c55ec9a0aace914c149637232688cf00833b5548c7c0d4",
         "allowed_fields_json": "[\"rule_recommendation\"]",
         "allowed_values_json": "{}",
         "state": "ACTIVE"
@@ -1123,6 +1154,7 @@
       "policy_id",
       "policy_version",
       "agent_profile",
+      "agent_provider",
       "policy_sha256",
       "config_sha256",
       "output_schema_sha256",
@@ -1143,6 +1175,15 @@
         "version": "1",
         "source_path": "config/ai-policies.json",
         "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+        "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+        "state": "ACTIVE",
+        "readback_verified": false
+      },
+      {
+        "config_name": "agent-providers",
+        "version": "1",
+        "source_path": "config/agent-providers.json",
+        "content_sha256": "d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c",
         "git_commit": "RUNTIME_BIND_GIT_COMMIT",
         "state": "ACTIVE",
         "readback_verified": false

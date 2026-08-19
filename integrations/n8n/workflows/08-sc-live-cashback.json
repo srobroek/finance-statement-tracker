@@ -1,11 +1,110 @@
 {
-  "id":"10000000-0000-4000-8000-000000000008",
-  "name":"Finance · SC Live Cashback · Paused",
-  "active":false,
-  "nodes":[
-    {"id":"8001","name":"08:25 Dubai Daily","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-500,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"25 8 * * *"}]}},"disabled":true},
-    {"id":"8002","name":"Block Until Notification Contract Verified","type":"n8n-nodes-base.stopAndError","typeVersion":1,"position":[-200,0],"parameters":{"errorMessage":"STANDARD_CHARTERED_CARD_TRANSACTION remains a placeholder until a real message fixture and parser pass tests"}}
+  "id": "10000000-0000-4000-8000-000000000008",
+  "name": "Finance · SC Live Cashback · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "8001",
+      "name": "08:25 Dubai Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "25 8 * * *"
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "8002",
+      "name": "Block Until Notification Contract Verified",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "errorMessage": "STANDARD_CHARTERED_CARD_TRANSACTION remains a placeholder until a real message fixture and parser pass tests"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000008-generated-note-1",
+      "name": "Stage 1 · 08:25 Dubai Daily to Block Until Notification Contract Verified",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · 08:25 Dubai Daily → Block Until Notification Contract Verified\n**Input:** 08:25 Dubai Daily  ·  **Output:** Block Until Notification Contract Verified  ·  **Nodes:** 1–2\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"08:25 Dubai Daily":{"main":[[{"node":"Block Until Notification Contract Verified","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},"meta":{"financeWorkflowCode":"SC_LIVE_CASHBACK","migrationStatus":"SPEC_ONLY","activationBlocked":true}
+  "connections": {
+    "08:25 Dubai Daily": {
+      "main": [
+        [
+          {
+            "node": "Block Until Notification Contract Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "SC_LIVE_CASHBACK",
+    "migrationStatus": "SPEC_ONLY",
+    "activationBlocked": true,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000006",
+      "name": "06 Cashback",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

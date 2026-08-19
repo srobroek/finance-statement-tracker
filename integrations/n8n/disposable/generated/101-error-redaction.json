@@ -33,11 +33,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -500,
+        -820,
         0
       ],
       "parameters": {
-        "jsCode": "const e=$json.execution||{},w=$json.workflow||{},last=String(e.lastNodeExecuted||''); const raw=String(e.error?.message||$json.error?.message||'Unknown workflow failure'),redacted=raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi,'$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g,'[REDACTED]').slice(0,500),status=Number(e.error?.httpCode||e.error?.statusCode||0),retryable=status===429||status>=500||/timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw); const provider_code=/Outlook|OneDrive|Microsoft/i.test(last)?'MICROSOFT_GRAPH':/Codex|Agent Runner/i.test(last)?'CODEX_AGENT_RUNNER':/Actual/i.test(last)?'ACTUAL_BUDGET':/Cashback/i.test(last)?'CASHBACK_COMPANION':/Finance Executions|n8n/i.test(last)?'N8N_API':''; return [{json:{execution_id:String(e.id||''),workflow_id:String(w.id||''),workflow_name:String(w.name||'').slice(0,200),workflow_code:String(w.financeWorkflowCode||''),run_id:String(e.id||''),provider_code,error_class:retryable?'TRANSIENT':'TERMINAL',error_message_redacted:redacted,first_seen_at:new Date().toISOString(),readback_verified:false}}];"
+        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 500), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Agent Runner/i.test(last) ? 'CODEX_AGENT_RUNNER' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
       }
     },
     {
@@ -46,7 +46,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -300,
+        -520,
         0
       ],
       "parameters": {
@@ -97,7 +97,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -100,
+        -220,
         0
       ],
       "parameters": {
@@ -129,11 +129,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        100,
+        80,
         0
       ],
       "parameters": {
-        "jsCode": "const expected=$('Redact and Classify Failure').first().json,observed=$json; if(observed.execution_id!==expected.execution_id||observed.workflow_id!==expected.workflow_id||observed.error_class!==expected.error_class||observed.error_message_redacted!==expected.error_message_redacted) throw new Error('FAILURE_RECEIPT_READBACK_MISMATCH'); return [{json:observed}];"
+        "jsCode": "// Purpose: Compare Failure Receipt Readback. Keep this deterministic and fail closed.\nconst expected = $('Redact and Classify Failure').first().json, observed = $json;\nif (observed.execution_id !== expected.execution_id || observed.workflow_id !== expected.workflow_id || observed.error_class !== expected.error_class || observed.error_message_redacted !== expected.error_message_redacted)\n    throw new Error('FAILURE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: observed }];\n"
       }
     },
     {
@@ -142,7 +142,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        300,
+        380,
         0
       ],
       "parameters": {
@@ -185,7 +185,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        500,
+        680,
         0
       ],
       "parameters": {
@@ -222,7 +222,7 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
-        700,
+        980,
         0
       ],
       "parameters": {
@@ -260,8 +260,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        900,
-        0
+        -1120,
+        380
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -293,11 +293,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
-        0
+        -820,
+        380
       ],
       "parameters": {
-        "jsCode": "const failure=$('Redact and Classify Failure').first().json,row=$json?.provider_code?$json:{},count=Math.min(12,Number(row.transient_failure_count||0)+1),seconds=Math.min(3600,60*(2**Math.min(count-1,6))),now=new Date(); return [{json:{provider_code:failure.provider_code,state:'OPEN',transient_failure_count:count,last_error_class:failure.error_class,opened_at:now.toISOString(),retry_after:new Date(now.getTime()+seconds*1000).toISOString(),readback_verified:false,updated_at:now.toISOString()}}];"
+        "jsCode": "// Purpose: Build OPEN Provider Circuit. Keep this deterministic and fail closed.\nconst failure = $('Redact and Classify Failure').first().json, row = $json?.provider_code ? $json : {}, count = Math.min(12, Number(row.transient_failure_count || 0) + 1), seconds = Math.min(3600, 60 * (2 ** Math.min(count - 1, 6))), now = new Date();\nreturn [{ json: { provider_code: failure.provider_code, state: 'OPEN', transient_failure_count: count, last_error_class: failure.error_class, opened_at: now.toISOString(), retry_after: new Date(now.getTime() + seconds * 1000).toISOString(), readback_verified: false, updated_at: now.toISOString() } }];\n"
       }
     },
     {
@@ -306,8 +306,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1300,
-        0
+        -520,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -355,8 +355,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1500,
-        0
+        -220,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -392,11 +392,43 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1700,
-        0
+        80,
+        380
       ],
       "parameters": {
-        "jsCode": "const e=$('Build OPEN Provider Circuit').first().json,o=$json; if(o.provider_code!==e.provider_code||o.state!=='OPEN'||Number(o.transient_failure_count)!==e.transient_failure_count||o.retry_after!==e.retry_after) throw new Error('PROVIDER_CIRCUIT_READBACK_MISMATCH'); return [{json:o}];"
+        "jsCode": "// Purpose: Verify OPEN Circuit Readback. Keep this deterministic and fail closed.\nconst e = $('Build OPEN Provider Circuit').first().json, o = $json;\nif (o.provider_code !== e.provider_code || o.state !== 'OPEN' || Number(o.transient_failure_count) !== e.transient_failure_count || o.retry_after !== e.retry_after)\n    throw new Error('PROVIDER_CIRCUIT_READBACK_MISMATCH');\nreturn [{ json: o }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000016-generated-note-1",
+      "name": "Stage 1 · Finance Workflow Failed to Route Retryable Provider Failure",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Finance Workflow Failed → Route Retryable Provider Failure\n**Input:** Finance Workflow Failed  ·  **Output:** Route Retryable Provider Failure  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000016-generated-note-2",
+      "name": "Stage 2 · Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Read Provider Circuit after Failure → Verify OPEN Circuit Readback\n**Input:** Read Provider Circuit after Failure  ·  **Output:** Verify OPEN Circuit Readback  ·  **Nodes:** 9–13\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
       }
     }
   ],
@@ -557,5 +589,45 @@
     "productionImportForbidden": true,
     "derivedFrom": "16-operations-error-handler.json",
     "externalNodeReplacement": "Error Trigger only"
-  }
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Redact and Classify Failure to Route Retryable Provider Failure",
+      "nodeIds": [
+        "16002",
+        "16003",
+        "16004",
+        "16005",
+        "16006",
+        "16007",
+        "16008"
+      ],
+      "description": "Finance stage 1. Input starts at Redact and Classify Failure; verified output leaves through Route Retryable Provider Failure."
+    },
+    {
+      "name": "Stage 2: Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
+      "nodeIds": [
+        "16009",
+        "16010",
+        "16011",
+        "16012",
+        "16013"
+      ],
+      "description": "Finance stage 2. Input starts at Read Provider Circuit after Failure; verified output leaves through Verify OPEN Circuit Readback."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

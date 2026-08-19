@@ -15,6 +15,7 @@ BOOTSTRAP = ROOT / "config" / "actual-bootstrap.json"
 PROPERTIES = ROOT / "config" / "properties.json"
 CASHBACK = ROOT / "config" / "cashback-programs.json"
 OUTPUT_SCHEMA = ROOT / "integrations" / "n8n" / "contracts" / "ai-proposal-v1.schema.json"
+AGENT_PROVIDERS = ROOT / "config" / "agent-providers.json"
 OUTPUT = ROOT / "integrations" / "n8n" / "generated" / "ai-policy-contracts.seed.json"
 
 
@@ -38,6 +39,7 @@ def compile_contracts() -> dict[str, Any]:
     properties = json.loads(PROPERTIES.read_text(encoding="utf-8"))
     cashback = json.loads(CASHBACK.read_text(encoding="utf-8"))
     output_schema_bytes = normalized_text_bytes(OUTPUT_SCHEMA)
+    provider_doc = json.loads(AGENT_PROVIDERS.read_text(encoding="utf-8"))
 
     categories = sorted({name for group in bootstrap["category_groups"] for name in group["categories"]})
     property_codes = sorted({row["property_code"] for row in properties["properties"] if row.get("property_code")})
@@ -53,8 +55,17 @@ def compile_contracts() -> dict[str, Any]:
     # Resolved domains are additionally included in the canonical request hash.
     config_sha256 = hashlib.sha256(policy_bytes).hexdigest()
     output_schema_sha256 = hashlib.sha256(output_schema_bytes).hexdigest()
+    provider_by_profile = {
+        profile: row["agent_provider"]
+        for profile, row in provider_doc["profiles"].items()
+    }
+    allowed_providers = set(provider_doc["providers"])
+    if set(provider_by_profile.values()) - allowed_providers:
+        raise ValueError("agent provider profile references an undefined provider")
     rows: list[dict[str, Any]] = []
     for policy in policy_doc["policies"]:
+        if policy["agent_profile"] not in provider_by_profile:
+            raise ValueError(f"no subscription agent provider owns {policy['agent_profile']}")
         fields = list(policy["target_fields"])
         domains: dict[str, list[Any]] = {
             field: list(values) for field, values in policy.get("allowed_values", {}).items()
@@ -78,6 +89,7 @@ def compile_contracts() -> dict[str, Any]:
             "policy_id": policy["policy_id"],
             "policy_version": policy["version"],
             "agent_profile": policy["agent_profile"],
+            "agent_provider": provider_by_profile[policy["agent_profile"]],
             "policy_sha256": sha(policy),
             "config_sha256": config_sha256,
             "output_schema_sha256": output_schema_sha256,
@@ -88,7 +100,7 @@ def compile_contracts() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
-        "authoring_source": "config/ai-policies.json",
+        "authoring_source": "config/ai-policies.json + config/agent-providers.json",
         "rows": rows,
         "warning": "Seed generation is not evidence that rows were imported into n8n Data Tables.",
     }

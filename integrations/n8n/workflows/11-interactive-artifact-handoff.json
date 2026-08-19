@@ -1,16 +1,363 @@
 {
-  "id":"10000000-0000-4000-8000-000000000011","name":"Finance · Interactive Artifact Handoff · SPEC ONLY","active":false,
-  "nodes":[
-    {"id":"11001","name":"Reviewed Artifact Input","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-700,0],"parameters":{"inputSource":"passthrough"}},
-    {"id":"11002","name":"Validate Reviewed Artifact","type":"n8n-nodes-base.code","typeVersion":2,"position":[-500,0],"parameters":{"jsCode":"const r=$json; if(!['FAB','SARWA','AMAZON'].includes(r.provider)) throw new Error('Unsupported interactive provider'); if(r.review_status!=='APPROVED'||!r.capture_schema||!/^[a-f0-9]{64}$/.test(String(r.source_sha256||''))) throw new Error('Artifact must be reviewed and content-addressed'); return [{json:r,binary:$binary}];"}},
-    {"id":"11007","name":"Load Trusted Browser Archive Contract","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[-300,0],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_source_contracts","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"INTERACTIVE_BROWSER_ARTIFACT"},{"keyName":"enabled","condition":"eq","keyValue":true}]},"options":{}}},
-    {"id":"11003","name":"Archive Reviewed Artifact","type":"n8n-nodes-base.microsoftOneDrive","typeVersion":1,"position":[-100,0],"parameters":{"resource":"file","operation":"upload","binaryPropertyName":"data","fileName":"={{ $('Validate Reviewed Artifact').item.json.source_sha256 + '.' + $('Validate Reviewed Artifact').item.json.extension }}","parentId":"={{ $json.onedrive_parent_id }}"},"credentials":{"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}},
-    {"id":"11004","name":"Route Artifact Type","type":"n8n-nodes-base.switch","typeVersion":3.2,"position":[100,0],"parameters":{"rules":{"values":[{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $('Validate Reviewed Artifact').item.json.artifact_type }}","rightValue":"statement_or_transaction_export","operator":{"type":"string","operation":"equals"}}]}},{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $('Validate Reviewed Artifact').item.json.artifact_type }}","rightValue":"wealth_snapshot","operator":{"type":"string","operation":"equals"}}]}}]},"options":{"fallbackOutput":"none"}}},
-    {"id":"11005","name":"Run Transaction Pipeline","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[300,-100],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000003","mode":"id"},"options":{"waitForSubWorkflow":true}}},
-    {"id":"11006","name":"Upsert Wealth Snapshot Staging Receipt","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[300,100],"parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_pipeline_runs","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"run_id","condition":"eq","keyValue":"={{ 'browser:' + $('Validate Reviewed Artifact').item.json.source_sha256 }}"},{"keyName":"workflow_code","condition":"eq","keyValue":"INTERACTIVE_ARTIFACT_HANDOFF"}]},"columns":{"mappingMode":"defineBelow","value":{"run_id":"={{ 'browser:' + $('Validate Reviewed Artifact').item.json.source_sha256 }}","workflow_code":"INTERACTIVE_ARTIFACT_HANDOFF","source_code":"={{ $('Validate Reviewed Artifact').item.json.provider }}","trigger_kind":"SUBWORKFLOW","config_version":"={{ $('Load Trusted Browser Archive Contract').item.json.config_version }}","state":"WAITING","receipt_sha256":"={{ $('Validate Reviewed Artifact').item.json.source_sha256 }}","terminal_readback_verified":false,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}},
-    {"id":"11008","name":"Read Back Wealth Snapshot Staging Receipt","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[500,100],"parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_pipeline_runs","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"run_id","condition":"eq","keyValue":"={{ 'browser:' + $('Validate Reviewed Artifact').item.json.source_sha256 }}"},{"keyName":"workflow_code","condition":"eq","keyValue":"INTERACTIVE_ARTIFACT_HANDOFF"}]},"options":{}}}
+  "id": "10000000-0000-4000-8000-000000000011",
+  "name": "Finance · Interactive Artifact Handoff · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "11001",
+      "name": "Reviewed Artifact Reference",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "11002",
+      "name": "Validate Reviewed Artifact Reference",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Reviewed Artifact Reference. Keep this deterministic and fail closed.\nconst request = $json;\nif (!request.artifact_id || !/^[a-f0-9]{64}$/i.test(String(request.expected_sha256 || ''))) {\n    throw new Error('artifact_id and expected_sha256 are required');\n}\nconst forbidden = ['provider', 'path', 'url', 'binary', 'capture_schema', 'review_status'];\nif (forbidden.some(field => Object.hasOwn(request, field))) {\n    throw new Error('Artifact metadata must be resolved from durable server state');\n}\nreturn [{ json: { artifact_id: String(request.artifact_id), expected_sha256: String(request.expected_sha256).toLowerCase() } }];\n"
+      }
+    },
+    {
+      "id": "11003",
+      "name": "Load Durable Document Record",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "document_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "11004",
+      "name": "Download Existing Reviewed Artifact",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.onedrive_item_id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "11005",
+      "name": "SHA-256 Reviewed Artifact",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "reviewed_sha256"
+      }
+    },
+    {
+      "id": "11006",
+      "name": "Verify Durable Artifact Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Durable Artifact Contract. Keep this deterministic and fail closed.\nconst expected = $('Validate Reviewed Artifact Reference').first().json;\nconst record = $('Load Durable Document Record').first().json;\nconst observed = String($json.reviewed_sha256 || '').toLowerCase();\nif (!record.document_id || !record.onedrive_item_id) {\n    throw new Error('DURABLE_ARTIFACT_RECORD_MISSING');\n}\nif (record.source_sha256 !== expected.expected_sha256 || observed !== expected.expected_sha256) {\n    throw new Error('REVIEWED_ARTIFACT_HASH_MISMATCH');\n}\nif (record.document_profile === 'STATEMENT_PDF_V1') {\n    const required = [\n        'source_code',\n        'config_version',\n        'actual_file_id',\n        'account_id',\n        'period_key',\n        'source_message_id',\n        'source_attachment_id',\n    ];\n    for (const field of required) {\n        if (!record[field]) {\n            throw new Error(`DURABLE_STATEMENT_CONTEXT_MISSING:${field}`);\n        }\n    }\n    if (record.state !== 'READY_FOR_PARSE') {\n        throw new Error(`DURABLE_STATEMENT_NOT_READY:${record.state || 'MISSING'}`);\n    }\n}\nreturn [{\n        json: {\n            ...record,\n            run_id: `reviewed:${record.document_id}`,\n            trigger_kind: 'SUBWORKFLOW',\n            message_id: record.source_message_id,\n            attachment_id: record.source_attachment_id,\n            document_sha256: observed,\n        },\n        binary: $binary,\n    }];\n"
+      }
+    },
+    {
+      "id": "11007",
+      "name": "Verified Statement PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.document_profile }}",
+              "rightValue": "STATEMENT_PDF_V1",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "11008",
+      "name": "Run Statement Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000003",
+          "mode": "list",
+          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "11009",
+      "name": "Require Typed Browser Capture Validator",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "errorMessage": "BROWSER_CAPTURE_VALIDATOR_REQUIRED: non-statement artifacts never enter the statement parser"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000011-generated-note-1",
+      "name": "Stage 1 · Reviewed Artifact Reference to Run Statement Pipeline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Reviewed Artifact Reference → Run Statement Pipeline\n**Input:** Reviewed Artifact Reference  ·  **Output:** Run Statement Pipeline  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000011-generated-note-2",
+      "name": "Stage 2 · Require Typed Browser Capture Validator to Require Typed Browser Capture Validator",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Require Typed Browser Capture Validator → Require Typed Browser Capture Validator\n**Input:** Require Typed Browser Capture Validator  ·  **Output:** Require Typed Browser Capture Validator  ·  **Nodes:** 9–9\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
   ],
-  "connections":{"Reviewed Artifact Input":{"main":[[{"node":"Validate Reviewed Artifact","type":"main","index":0}]]},"Validate Reviewed Artifact":{"main":[[{"node":"Load Trusted Browser Archive Contract","type":"main","index":0}]]},"Load Trusted Browser Archive Contract":{"main":[[{"node":"Archive Reviewed Artifact","type":"main","index":0}]]},"Archive Reviewed Artifact":{"main":[[{"node":"Route Artifact Type","type":"main","index":0}]]},"Route Artifact Type":{"main":[[{"node":"Run Transaction Pipeline","type":"main","index":0}],[{"node":"Upsert Wealth Snapshot Staging Receipt","type":"main","index":0}]]},"Upsert Wealth Snapshot Staging Receipt":{"main":[[{"node":"Read Back Wealth Snapshot Staging Receipt","type":"main","index":0}]]}},
-  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"none","saveDataSuccessExecution":"none","errorWorkflow":"10000000-0000-4000-8000-000000000016"},"pinData":{},
-  "meta":{"financeWorkflowCode":"INTERACTIVE_ARTIFACT_HANDOFF","mcpSafe":false,"migrationStatus":"SPEC_ONLY","terminalReceiptReadbackRequired":true,"importTested":false}
+  "connections": {
+    "Reviewed Artifact Reference": {
+      "main": [
+        [
+          {
+            "node": "Validate Reviewed Artifact Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reviewed Artifact Reference": {
+      "main": [
+        [
+          {
+            "node": "Load Durable Document Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Durable Document Record": {
+      "main": [
+        [
+          {
+            "node": "Download Existing Reviewed Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Existing Reviewed Artifact": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Reviewed Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Reviewed Artifact": {
+      "main": [
+        [
+          {
+            "node": "Verify Durable Artifact Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Durable Artifact Contract": {
+      "main": [
+        [
+          {
+            "node": "Verified Statement PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verified Statement PDF?": {
+      "main": [
+        [
+          {
+            "node": "Run Statement Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Require Typed Browser Capture Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "INTERACTIVE_ARTIFACT_HANDOFF",
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "terminalReceiptReadbackRequired": true,
+    "importTested": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "durableLookupRequired": true,
+    "reuploadForbidden": true,
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000003",
+      "name": "03 Documents & Evidence",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Validate Reviewed Artifact Reference to Run Statement Pipeline",
+      "nodeIds": [
+        "11002",
+        "11003",
+        "11004",
+        "11005",
+        "11006",
+        "11007",
+        "11008"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Reviewed Artifact Reference; verified output leaves through Run Statement Pipeline."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
 }

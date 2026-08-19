@@ -5,6 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from refactor_workflow_ui import format_code_nodes, layout
+
 
 ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
@@ -28,6 +30,32 @@ def sha256(path: Path) -> str:
 
 def canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def readable_js_literal(value: object, level: int = 0) -> str:
+    """Render generated configuration as reviewable JavaScript data.
+
+    Fields stored canonically as JSON strings are expressed as JSON.stringify
+    calls so their category/tag domains remain line-oriented in the Code editor.
+    """
+    indent = "  " * level
+    child_indent = "  " * (level + 1)
+    if isinstance(value, dict):
+        lines = []
+        for key in sorted(value):
+            item = value[key]
+            if key.endswith("_json") and isinstance(item, str):
+                rendered = f"JSON.stringify({readable_js_literal(json.loads(item), level + 1)})"
+            else:
+                rendered = readable_js_literal(item, level + 1)
+            lines.append(f"{child_indent}{json.dumps(key)}: {rendered}")
+        return "{\n" + ",\n".join(lines) + f"\n{indent}}}"
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        lines = [f"{child_indent}{readable_js_literal(item, level + 1)}" for item in value]
+        return "[\n" + ",\n".join(lines) + f"\n{indent}]"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def ordered_tables(contract: dict) -> list[dict]:
@@ -92,6 +120,7 @@ def build_manifest(tables: dict, seed: dict, config_seed: dict) -> dict:
                 "policy_id",
                 "policy_version",
                 "agent_profile",
+                "agent_provider",
                 "policy_sha256",
                 "config_sha256",
                 "output_schema_sha256",
@@ -167,7 +196,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
         }
         previous = name
 
-    embedded_seed = canonical_json(seed_rows)
+    embedded_seed = readable_js_literal(seed_rows)
     emit_name = "Emit Versioned AI Policy Seed"
     nodes.append(
         {
@@ -196,6 +225,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
             "policy_id",
             "policy_version",
             "agent_profile",
+            "agent_provider",
             "policy_sha256",
             "config_sha256",
             "output_schema_sha256",
@@ -312,7 +342,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
             "position": [2000, 0],
             "parameters": {
                 "jsCode": (
-                    f"const expected={embedded_seed}; const fields={canonical_json(fields)}; "
+                    f"const expected={embedded_seed}; const fields={readable_js_literal(fields)}; "
                     "const observed=$input.all().map(item=>item.json).filter(row=>row&&row.state==='ACTIVE'); "
                     "if(observed.length!==expected.length) throw new Error('AI_POLICY_ACTIVE_COUNT_MISMATCH'); "
                     "const key=row=>JSON.stringify([row.policy_id,Number(row.policy_version)]); "
@@ -335,7 +365,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
         "main": [[{"node": compare_name, "type": "main", "index": 0}]]
     }
 
-    embedded_config_seed = canonical_json(config_seed["rows"])
+    embedded_config_seed = readable_js_literal(config_seed["rows"])
     emit_config_name = "Emit Versioned Config Fingerprints"
     nodes.append({
         "id": "19055", "name": emit_config_name, "type": "n8n-nodes-base.code",
@@ -375,7 +405,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
     compare_config_name = "Exact Compare Config Fingerprint Readback"
     config_compare_fields = manifest["config_seed"]["exact_readback_fields"]
     nodes.append({"id": "19059", "name": compare_config_name, "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [3000, 0], "parameters": {"jsCode": (
-        f"const expected={embedded_config_seed},fields={canonical_json(config_compare_fields)}; "
+        f"const expected={embedded_config_seed},fields={readable_js_literal(config_compare_fields)}; "
         "const rows=$input.all().map(i=>i.json).filter(r=>r&&r.state==='ACTIVE'),byKey=new Map(rows.map(r=>[JSON.stringify([r.config_name,String(r.version)]),r])); "
         "for(const row of expected){const actual=byKey.get(JSON.stringify([row.config_name,String(row.version)])); if(!actual) throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`); for(const field of fields){const value=field==='git_commit'&&row[field]==='RUNTIME_BIND_GIT_COMMIT'?actual[field]:row[field]; if(String(actual[field])!==String(value)) throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);}} "
         f"return [{{json:{{status:'VERIFIED',tables_created_or_reused:{len(table_rows)},ai_policy_rows_verified:{len(seed_rows)},config_rows_verified:{len(config_seed['rows'])},finance_ledger_writes:false,actual_writes:false,contract_status:'SPEC_ONLY'}}}}];"
@@ -384,7 +414,7 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
 
     return {
         "id": WORKFLOW_ID,
-        "name": "Finance · Platform Data Table Bootstrap · SPEC ONLY",
+        "name": "Finance · Platform Data Table Bootstrap · Setup Required",
         "active": False,
         "nodes": nodes,
         "connections": connections,
@@ -410,6 +440,8 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
             "activationBlockers": manifest["activation_blockers"],
             "importTested": False,
             "fixtureExecuted": False,
+            "credentialBindings": [],
+            "setupRequired": True,
         },
     }
 
@@ -420,6 +452,8 @@ def render() -> tuple[str, str]:
     config_seed = load_json(CONFIG_SEED_PATH)
     manifest = build_manifest(tables, seed, config_seed)
     workflow = build_workflow(tables, seed, config_seed, manifest)
+    format_code_nodes([workflow])
+    layout(workflow)
     return (
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         json.dumps(workflow, indent=2, ensure_ascii=False) + "\n",

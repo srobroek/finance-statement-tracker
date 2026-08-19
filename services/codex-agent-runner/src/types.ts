@@ -44,6 +44,7 @@ export interface ProposalRequest {
   job_id: string;
   idempotency_key: string;
   operation_code: "FINANCE_AI_PROPOSAL";
+  agent_provider: "CODEX_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION";
   policy_id: string;
   policy_class: PolicyClass;
   policy_sha256: string;
@@ -64,6 +65,7 @@ export interface ProposalResponse {
   schema_version: 1;
   job_id: string;
   idempotency_key: string;
+  agent_provider: "CODEX_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION";
   policy_id: string;
   policy_class: PolicyClass;
   policy_sha256: string;
