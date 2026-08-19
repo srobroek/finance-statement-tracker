@@ -1,140 +1,207 @@
 {
-  "schema_version": 1,
-  "generated_at": "2026-08-19T06:20:00Z",
+  "schema_version": 2,
+  "generated_at": "2026-08-19T10:00:00Z",
+  "environment": {"id": "repository-planning", "git_commit": null, "actual_sync_id": null},
   "requirements": [
     {
       "id": "actual-authoritative-ledger",
-      "description": "Actual is the sole authoritative finance ledger and the cashback companion does not duplicate posted ledger state.",
-      "status": "VERIFIED",
+      "invariant": "Actual is the only posted finance ledger; n8n Postgres and cashback state contain no duplicate posted ledger.",
+      "status": "SPEC_ONLY",
       "production_gate": true,
-      "evidence": ["AGENTS.md", "config/deployment.json", "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"]
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require actual-authoritative-ledger", "expected": "Every posted identity enumerates exactly once in Actual and zero times in operational stores."},
+      "dependencies": ["actual-outbox-recovery"], "evidence": [], "blockers": ["RUNTIME_ENUMERATION_REQUIRED"]
     },
     {
       "id": "fab-complete-inventory",
-      "description": "Every FAB non-credit-card account found in the authenticated portal exists exactly once in Actual with a reconciled source balance.",
+      "invariant": "Every FAB non-credit-card account found in the authenticated portal exists once in Actual with an evidenced as-of balance.",
       "status": "BLOCKED",
       "production_gate": true,
-      "evidence": ["config/account-completeness.json", "runtime/browser-captures/fab-account-2001-2026-08-18.json"],
-      "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED"]
+      "verifier": {"kind": "MANUAL_REVIEW", "command": "python -m unittest tests.test_account_completeness -v", "expected": "Portal inventory, opening evidence, Actual IDs, and signed balances reconcile without omissions."},
+      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED"]
     },
     {
       "id": "sarwa-wealth-accounts",
-      "description": "Each included Sarwa portfolio is represented once as an off-budget valuation account using an immutable source and FX snapshot.",
+      "invariant": "Each included Sarwa portfolio is represented once as an off-budget valuation account from immutable holdings and FX snapshots.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "evidence": ["finance_tracker/wealth.py", "config/wealth-sources.json", "tests/test_wealth.py"],
-      "blockers": ["FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED", "FX_SNAPSHOT_REQUIRED", "REVIEWED_ACTUAL_DELTA_REQUIRED"]
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_wealth -v", "expected": "Fresh holdings plus FX reconcile positions, cash, portfolio totals, and Actual proposals exactly."},
+      "dependencies": ["wealth-net-worth"], "evidence": [], "blockers": ["FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED", "FX_SNAPSHOT_REQUIRED", "DISPOSABLE_REPLAY_REQUIRED"]
     },
     {
       "id": "adcb-closed-zero",
-      "description": "The closed ADCB credit card retains history, is excluded from active routing, and reconciles to AED 0 without a synthetic balancing entry.",
+      "invariant": "The closed ADCB card retains history, is excluded from routing, and reads AED 0 without a synthetic balancing row.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "evidence": ["config/account-completeness.json", "tests/test_account_completeness.py", "tests/test_transaction_semantics.py"],
-      "blockers": ["PRODUCTION_ADCB_BALANCE_READBACK_REQUIRED", "EVIDENCED_CLOSING_PAYMENT_RECONCILIATION_REQUIRED"]
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python -m unittest tests.test_account_completeness tests.test_transaction_semantics -v", "expected": "Closing payment is one incoming transfer and the closed account readback is exactly zero."},
+      "dependencies": ["refund-reward-transfer-correctness"], "evidence": [], "blockers": ["EVIDENCED_CLOSING_PAYMENT_REQUIRED", "PRODUCTION_READBACK_REQUIRED"]
     },
     {
       "id": "locked-transaction-semantics",
-      "description": "Source adapters finalize direction and topic before classification; later static and AI rules cannot mutate source amounts or finalized semantics.",
+      "invariant": "Adapters finalize source direction and topic before classification and later stages cannot mutate protected fields.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "evidence": ["finance_tracker/transaction_semantics.py", "tests/test_transaction_semantics.py", "integrations/actual/bootstrap-config.mjs"]
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_transaction_semantics -v", "expected": "All direction, topic, amount, and sign mutation regressions pass."},
+      "dependencies": [], "evidence": [], "blockers": ["FULL_CORPUS_REPLAY_REQUIRED"]
     },
     {
       "id": "refund-reward-transfer-correctness",
-      "description": "Merchant credits, refunds, reversals, card payments, transfers, and explicit rewards are separated without treating EI Amazon refunds as cashback.",
+      "invariant": "Refunds, reversals, card payments, transfers, and explicit rewards preserve their economic sign and never create balancing rows.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "evidence": ["finance_tracker/transaction_semantics.py", "tests/test_transaction_semantics.py", "tests/test_actual_pipeline.py"],
-      "blockers": ["FULL_CORPUS_EXCEPTION_REPORT_REQUIRED", "GUARDED_PRODUCTION_BACKFILL_REQUIRED"]
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_transaction_semantics tests.test_actual_pipeline -v", "expected": "EI Amazon credits are refunds unless explicit reward evidence exists and ADCB payments are transfers."},
+      "dependencies": ["locked-transaction-semantics"], "evidence": [], "blockers": ["FULL_CORPUS_EXCEPTION_REPORT_REQUIRED"]
     },
     {
       "id": "canonical-display-notes",
-      "description": "Transaction notes use the v2 tags-first grammar and omit routine source, message, FX, original amount, and derived cashback metadata.",
+      "invariant": "Notes use the v2 tags-first grammar and omit routine source, message, FX, original amount, browser-import, primary, and derived cashback metadata.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "evidence": ["config/actual-note-contract.json", "finance_tracker/actual_notes.py", "integrations/actual/note-contract.mjs"],
-      "blockers": ["V1_MANIFEST_REGENERATION_REQUIRED", "PRODUCTION_UI_SPOT_CHECK_REQUIRED"]
+      "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-project-acceptance.py --require canonical-display-notes", "expected": "Full-corpus scan reports zero grammar violations and reviewed UI samples match."},
+      "dependencies": ["disposable-idempotent-rebuild"], "evidence": [], "blockers": ["MANIFEST_V2_REGENERATION_REQUIRED", "FULL_CORPUS_SCAN_REQUIRED"]
     },
     {
       "id": "classification-review-coverage",
-      "description": "Every transaction is resolved or appears in one explicit review queue, with consistent category, tag, and property invariants.",
+      "invariant": "Every transaction is resolved or appears exactly once in a review queue with category, tag, owner, and property invariants.",
       "status": "PARTIAL",
       "production_gate": true,
-      "evidence": ["finance_tracker/classification_audit.py", "tests/test_transaction_semantics.py"],
-      "blockers": ["DISPOSABLE_CORPUS_CLASSIFICATION_AUDIT_REQUIRED", "PRODUCTION_REVIEW_QUEUE_BACKFILL_REQUIRED"]
+      "verifier": {"kind": "SCRIPT", "command": "python -m finance_tracker.classification_audit", "expected": "Unresolved count equals review-queue count and no row violates protected-field or property invariants."},
+      "dependencies": ["rule-ownership"], "evidence": [], "blockers": ["DISPOSABLE_CORPUS_AUDIT_REQUIRED", "PRODUCTION_REVIEW_QUEUE_REQUIRED"]
     },
     {
       "id": "manual-state-preservation",
-      "description": "Production corrections, reconciliations, splits, transfers, schedules, and manual notes survive any repair or explicitly block it.",
-      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "invariant": "Manual corrections, reconciliations, splits, transfers, schedules, and notes survive replay or explicitly block promotion.",
+      "status": "PARTIAL",
       "production_gate": true,
-      "evidence": ["integrations/actual/production-rebuild.mjs", "integrations/actual/manual-state-audit.mjs", "runtime/audit/manual-state-preservation-2026-08-19.json"],
-      "blockers": ["FORTY_TWO_MANUAL_FIELD_DIFFS_REQUIRE_REVIEW"]
+      "verifier": {"kind": "SCRIPT", "command": "node integrations/actual/manual-state-audit.mjs", "expected": "Before and after fingerprints are identical except for an approved reviewed delta."},
+      "dependencies": ["disposable-idempotent-rebuild"], "evidence": [], "blockers": ["KNOWN_MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW"]
     },
     {
       "id": "disposable-idempotent-rebuild",
-      "description": "The complete scoped corpus replays twice into a disposable Actual file with no duplicates, drift, balance mismatch, or semantic violations.",
+      "invariant": "The complete corpus replays twice into disposable Actual with no duplicates, drift, missing IDs, semantic errors, or lost manual state.",
       "status": "MISSING",
       "production_gate": true,
-      "evidence": ["runtime/full-restage/20260819T060427Z/summary.json"],
-      "blockers": ["N8N_FINANCE_CUSTOM_NODES_REQUIRED", "FULL_RESTAGE_NOT_EXECUTED"]
+      "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-project-acceptance.py --require disposable-idempotent-rebuild", "expected": "Two replay receipts have identical counts, balances, hashes, and zero violations."},
+      "dependencies": ["deterministic-n8n-orchestration", "actual-outbox-recovery"], "evidence": [], "blockers": ["CUSTOM_N8N_IMAGE_REQUIRED", "DISPOSABLE_REPLAY_NOT_RUN"]
     },
     {
       "id": "actual-ui-api-parity",
-      "description": "The production UI and API show the same Actual file, accounts, transaction identities, balances, and net worth.",
+      "invariant": "Actual UI and API identify the same file, accounts, transactions, signed balances, and net worth.",
       "status": "BLOCKED",
       "production_gate": true,
-      "evidence": ["docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"],
-      "blockers": ["CLIENT_SERVER_STATE_DIVERGENCE", "MISSING_FAB_AND_SARWA_ACCOUNTS"]
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require actual-ui-api-parity", "expected": "UI and API sync IDs match and every signed account and aggregate balance is equal."},
+      "dependencies": ["fab-complete-inventory", "sarwa-wealth-accounts"], "evidence": [], "blockers": ["CLIENT_SERVER_STATE_DIVERGENCE", "ACCOUNT_SCOPE_INCOMPLETE"]
     },
     {
       "id": "selective-evidence-pipeline",
-      "description": "High-value and durable purchases can acquire and link receipts, bills, warranties, and supporting email while low-value consumables are excluded.",
+      "invariant": "Durable and high-value purchases acquire exact evidence while excluded purchases do not, and all binaries reconcile to the catalogue.",
       "status": "PARTIAL",
       "production_gate": false,
-      "evidence": ["Finance Evidence/catalogue.json", "config/evidence-policies.json"],
-      "blockers": ["END_TO_END_WARRANTY_ACQUISITION_VALIDATION_REQUIRED"]
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_evidence -v", "expected": "Positive, negative, ambiguous, hash, path, and transaction-link fixtures pass end to end."},
+      "dependencies": ["resilient-document-extraction"], "evidence": [], "blockers": ["LIVE_WARRANTY_FIXTURE_REQUIRED"]
     },
     {
       "id": "budgets-schedules-owners-reports",
-      "description": "Approved budgets, recurring schedules, owner attribution, and all claimed dashboards are populated and validated against authoritative data.",
+      "invariant": "Approved budgets, schedules, owners, properties, savings, subscriptions, and named reports reconcile to authoritative data.",
       "status": "PARTIAL",
       "production_gate": false,
-      "evidence": ["config/actual-bootstrap.json", "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md"],
-      "blockers": ["USER_APPROVED_BUDGETS_REQUIRED", "SCHEDULES_NOT_POPULATED", "OWNER_MODEL_NOT_POPULATED", "SOURCE_DATA_NOT_YET_COMPLETE"]
+      "verifier": {"kind": "MANUAL_REVIEW", "command": "python scripts/verify-project-acceptance.py --require budgets-schedules-owners-reports", "expected": "All named functional inventory items exist, are populated, and pass equation and readback checks."},
+      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["USER_APPROVED_BUDGETS_REQUIRED", "COMPLETE_SOURCE_DATA_REQUIRED"]
     },
     {
       "id": "deterministic-n8n-orchestration",
-      "description": "n8n owns schedules, bounded Outlook acquisition, visible deterministic ETL stages, model handoff, retries, receipts, and run-state lookup without SSH or an opaque finance-worker container.",
-      "status": "PARTIAL",
-      "production_gate": false,
-      "evidence": ["docs/n8n-finance-orchestration-architecture-2026-08-19.md", "integrations/n8n/pipeline-registry.json", "tests/test_n8n_workflows.py"],
-      "blockers": ["FINANCE_CUSTOM_NODES_REQUIRED", "N8N_POSTGRES_STACK_NOT_DEPLOYED", "N8N_SHADOW_RUN_REQUIRED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
+      "invariant": "n8n alone owns schedules, cursor-safe acquisition, visible ETL, bounded AI handoff, durable receipts, and recovery without a bridge.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "The exact image imports and executes every non-placeholder flow with no unknown nodes or bridge dependencies."},
+      "dependencies": ["mail-cursor-completeness", "actual-outbox-recovery", "n8n-secrets"], "evidence": [], "blockers": ["CUSTOM_NODES_REQUIRED", "DISPOSABLE_N8N_REQUIRED"]
     },
     {
       "id": "resilient-document-extraction",
-      "description": "PDF processing uses an idempotent local-first state machine, narrow model-callable subflows, fail-closed quarantine, and explicitly approved external fallbacks only.",
-      "status": "IMPLEMENTED_NOT_DEPLOYED",
-      "production_gate": false,
-      "evidence": ["config/document-processing.json", "integrations/n8n/data-tables.json", "integrations/n8n/workflows/13-document-extraction-request.json", "integrations/n8n/workflows/14-local-pdf-extraction.json"],
-      "blockers": ["QPDF_CUSTOM_NODE_REQUIRED", "LIVE_PASSWORD_PROTECTED_FIXTURE_REQUIRED", "OPTIONAL_STIRLING_SECURITY_REVIEW_REQUIRED"]
+      "invariant": "Encrypted and plain PDFs use a fixed networkless resource-bounded utility and no decrypted content survives success or failure.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "Encrypted, corrupt, polyglot, oversize, timeout, OOM, network, and retention fixtures fail safely."},
+      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["PDF_UTILITY_IMAGE_REQUIRED", "LIVE_ENCRYPTED_FIXTURE_REQUIRED"]
     },
     {
       "id": "successful-task-lifecycle",
-      "description": "Successful scheduled scans do not accumulate visible tasks, while failures remain visible and auditable.",
+      "invariant": "Successful scheduled runs do not accumulate per-run Codex tasks while failed runs remain visible and auditable.",
       "status": "PARTIAL",
       "production_gate": false,
-      "evidence": ["docs/automation-lifecycle-audit-2026-08-19.md", "finance_tracker/automation_lifecycle.py"],
-      "blockers": ["PERSISTENT_CONTROLLER_NOT_DEPLOYED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python -m unittest tests.test_automation_lifecycle -v", "expected": "Three consecutive n8n-owned runs create durable receipts and no new per-run Codex tasks."},
+      "dependencies": ["deterministic-n8n-orchestration"], "evidence": [], "blockers": ["N8N_SCHEDULE_CUTOVER_REQUIRED"]
     },
     {
       "id": "operational-restore-and-restart",
-      "description": "Backups restore into a disposable environment and Actual, cashback, n8n Postgres, proxy, push, and Cloudflare paths survive controlled restarts.",
+      "invariant": "Actual, cashback, n8n, and Postgres restore into disposable environments and every independent service survives controlled restart.",
       "status": "PARTIAL",
       "production_gate": true,
-      "evidence": ["deploy/actual-poc/backup.sh", "deploy/actual-poc/verify-backup.py"],
-      "blockers": ["DISPOSABLE_RESTORE_DRILL_REQUIRED", "CONTROLLED_RESTART_VALIDATION_REQUIRED"]
+      "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-project-acceptance.py --require operational-restore-and-restart", "expected": "Restore hashes, credential decrypt, service health, and interrupted outbox and cursor recovery pass."},
+      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["DISPOSABLE_RESTORE_DRILL_REQUIRED"]
+    },
+    {
+      "id": "mail-cursor-completeness",
+      "invariant": "Every mail run freezes its upper bound, exhausts pagination, emits an empty heartbeat, and advances its cursor once after durable success.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "Zero, 101-plus, late, duplicate, out-of-order, and failure-boundary fixtures lose no messages."},
+      "dependencies": [], "evidence": [], "blockers": ["EXECUTABLE_MAIL_WORKFLOW_REQUIRED"]
+    },
+    {
+      "id": "actual-outbox-recovery",
+      "invariant": "One fenced writer advances PREPARED to COMMITTED only after Actual observation and verification, with deterministic IDs and crash recovery.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "Concurrent and kill-at-boundary tests yield one Actual row, one committed outbox, and one cursor advance."},
+      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["SINGLE_WRITER_WORKFLOW_REQUIRED", "DISPOSABLE_ACTUAL_REQUIRED"]
+    },
+    {
+      "id": "rule-ownership",
+      "invariant": "Each static action has exactly one owner: Actual when representable, otherwise deterministic n8n, with an empty overlap report.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_rules tests.test_actual_pipeline -v", "expected": "Compiler parity passes and the overlap report is empty."},
+      "dependencies": [], "evidence": [], "blockers": ["RULE_OWNERSHIP_COMPILER_REQUIRED"]
+    },
+    {
+      "id": "n8n-secrets",
+      "invariant": "Runtime secrets originate in a dedicated 1Password vault, never persist in env, workflow, log, execution, or backup data, and decrypt after restore.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-project-acceptance.py --require n8n-secrets", "expected": "Cold start, rotation, restore, inspect, log, execution, and repository scans reveal no secret values."},
+      "dependencies": [], "evidence": [], "blockers": ["DEDICATED_VAULT_REQUIRED", "DISPOSABLE_SECRET_AUDIT_REQUIRED"]
+    },
+    {
+      "id": "cloudflare-route-security",
+      "invariant": "Two tunnel containers reach allowlisted n8n routes over private Docker DNS; UI is AD-protected, MCP uses Service Auth, and no origin is LAN-published.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require cloudflare-route-security", "expected": "Authorized routes succeed, unauthorized routes fail, origin scan is empty, and callback and WebSocket tests pass."},
+      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["DISPOSABLE_TWO_TUNNEL_ROUTE_REQUIRED"]
+    },
+    {
+      "id": "bounded-mcp-facade",
+      "invariant": "Instance MCP is disabled and a dedicated trigger exposes only allowlisted status, reviewed-artifact, and document-request operations.",
+      "status": "SPEC_ONLY",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "Unknown, write-capable, caller-selected path or ID, and unauthenticated MCP requests are rejected."},
+      "dependencies": ["cloudflare-route-security"], "evidence": [], "blockers": ["MCP_FACADE_WORKFLOW_REQUIRED", "SERVICE_AUTH_TEST_REQUIRED"]
+    },
+    {
+      "id": "cashback-reusability-mobile-push",
+      "invariant": "Cashback supports arbitrary versioned cards, tiers, buckets, categories, rules, periods, alerts, and decision trees without user hardcoding.",
+      "status": "PARTIAL",
+      "production_gate": false,
+      "verifier": {"kind": "MANUAL_REVIEW", "command": "python scripts/verify-project-acceptance.py --require cashback-reusability-mobile-push", "expected": "Three fictional portfolios pass exhaustive routing plus iPhone layout, PWA, push, weekly pace, history, and close and reset tests."},
+      "dependencies": ["deterministic-n8n-orchestration"], "evidence": [], "blockers": ["FICTIONAL_PORTFOLIO_MATRIX_REQUIRED", "MOBILE_PUSH_ACCEPTANCE_REQUIRED"]
+    },
+    {
+      "id": "wealth-net-worth",
+      "invariant": "FAB cash and Sarwa holdings use source, price, and FX timestamps, stale indicators, signed balances, history, and exact net-worth equations.",
+      "status": "PARTIAL",
+      "production_gate": true,
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require wealth-net-worth", "expected": "Per-account and aggregate UI and API totals equal immutable source snapshots at their stated FX rates."},
+      "dependencies": ["fab-complete-inventory", "sarwa-wealth-accounts", "actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_INVENTORY_REQUIRED", "FRESH_SARWA_AND_FX_REQUIRED", "HISTORICAL_FEED_REQUIRED"]
     }
   ]
 }

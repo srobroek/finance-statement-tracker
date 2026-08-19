@@ -12,7 +12,7 @@ The current custom-report documentation lists category, group, payee, account, a
 
 ## Read-only fallback
 
-The Actual bridge provides a tested fallback without creating another ledger:
+The direct Actual integration provides a tested reporting path without creating another ledger:
 
 ```powershell
 $env:ACTUAL_SERVER_URL = 'http://127.0.0.1:15006'

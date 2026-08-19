@@ -24,7 +24,14 @@ Maintain a portable Actual-first finance tracker with a dedicated live cashback 
 6. Search and link supporting email/documents when requested by evidence policy.
 7. Persist authoritative rows to Actual, live operational state to the companion, and evidence links to the OneDrive catalogue.
 
-Browser acquisition follows the versioned provider and data recipes under `browser_adapters/`. The authenticated browser may download an official export or capture explicit visible data, but it must never write directly to Actual. Convert the artifact to `browser-capture-schema-v1`, stage it, review any provisional rows, and only then use the standard Actual bridge. The user completes MFA/OTP. Never persist browser cookies, session state, passwords, full card numbers, PINs, or CVVs.
+Browser acquisition follows the versioned provider and data recipes under `browser_adapters/`. The authenticated browser may download an official export or capture explicit visible data, but it must never write directly to Actual. Convert the artifact to `browser-capture-schema-v1`, archive the immutable source, validate it through the versioned n8n workflow, and submit any approved delta through the single fenced Actual-writer subworkflow. The user completes MFA/OTP. Never persist browser cookies, session state, passwords, full card numbers, PINs, or CVVs.
+
+The project is greenfield with respect to orchestration: there is no legacy
+HTTP ingestion bridge, SSH submission wrapper, finance-worker service, or
+compatibility path. n8n owns schedules, cursor-safe acquisition, visible ETL,
+durable receipts, and bounded AI handoff. All production workflows start
+inactive and write-disabled; only disposable double replay and reviewed
+readback evidence may unlock production promotion.
 
 Valid notification transactions count in live cashback buckets immediately and require no user approval. Recalculate pace, bucket headroom, warnings, and routing recommendations without waiting for a statement, but never mark `Cashback Finalized` from live notifications alone. Source and reconciliation markers are internal bookkeeping only.
 

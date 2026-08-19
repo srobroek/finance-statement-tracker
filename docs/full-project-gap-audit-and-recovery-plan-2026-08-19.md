@@ -4,7 +4,14 @@ Date: 2026-08-19
 
 ## Decision summary
 
-The project is not production-complete. The deterministic ingestion, rule engine, Actual bridge, cashback companion, evidence catalogue, Docker deployment, and most dashboard scaffolding exist and have meaningful automated coverage. The previous full-ingestion result was nevertheless too narrow: it proved parity for the manifests and accounts already in scope, not that the scope represented the user's complete finances.
+The project is not production-complete. Deterministic ingestion libraries, the
+rule engine, direct Actual integration, cashback companion, evidence catalogue,
+Docker deployment, and most dashboard scaffolding exist and have meaningful
+automated coverage. The legacy HTTP Actual bridge referenced by earlier audits
+was retired on 2026-08-19 and is not a supported runtime path. The previous
+full-ingestion result was nevertheless too narrow: it proved parity for the
+manifests and accounts already in scope, not that the scope represented the
+user's complete finances.
 
 The immediate recovery scope for accounts is deliberately limited to:
 
