@@ -59,7 +59,7 @@ jobs:
           ignore-unfixed: false
           exit-code: "1"
       - name: Generate custom n8n SBOM
-        uses: anchore/sbom-action@v0.20.6
+        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
         with:
           image: finance-n8n:${{ github.sha }}
           artifact-name: finance-n8n-${{ github.sha }}.spdx.json
@@ -70,6 +70,16 @@ jobs:
           image="ghcr.io/${{ github.repository_owner }}/finance-n8n:${{ github.sha }}"
           docker tag "finance-n8n:${{ github.sha }}" "$image"
           docker push "$image"
+          immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          test -n "$immutable_ref"
+          jq -n --arg image "$image" --arg immutable_ref "$immutable_ref" --arg source_sha "${{ github.sha }}" '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha}' > finance-n8n-image-receipt.json
+      - name: Upload custom n8n digest receipt
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finance-n8n-image-receipt-${{ github.sha }}
+          path: finance-n8n-image-receipt.json
+          if-no-files-found: error
 
   pdf-utility:
     runs-on: ubuntu-latest
@@ -105,7 +115,7 @@ jobs:
           ignore-unfixed: false
           exit-code: "1"
       - name: Generate PDF utility SBOM
-        uses: anchore/sbom-action@v0.20.6
+        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
         with:
           image: finance-pdf-utility:${{ github.sha }}
           artifact-name: finance-pdf-utility-${{ github.sha }}.spdx.json
@@ -116,6 +126,16 @@ jobs:
           image="ghcr.io/${{ github.repository_owner }}/finance-pdf-utility:${{ github.sha }}"
           docker tag "finance-pdf-utility:${{ github.sha }}" "$image"
           docker push "$image"
+          immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          test -n "$immutable_ref"
+          jq -n --arg image "$image" --arg immutable_ref "$immutable_ref" --arg source_sha "${{ github.sha }}" '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha}' > finance-pdf-utility-image-receipt.json
+      - name: Upload PDF utility digest receipt
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finance-pdf-utility-image-receipt-${{ github.sha }}
+          path: finance-pdf-utility-image-receipt.json
+          if-no-files-found: error
 
   codex-agent-runner:
     runs-on: ubuntu-latest
@@ -145,7 +165,7 @@ jobs:
           ignore-unfixed: false
           exit-code: "1"
       - name: Generate runner SBOM
-        uses: anchore/sbom-action@v0.20.6
+        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
         with:
           image: finance-codex-agent-runner:${{ github.sha }}
           artifact-name: finance-codex-agent-runner-${{ github.sha }}.spdx.json
@@ -156,3 +176,13 @@ jobs:
           image="ghcr.io/${{ github.repository_owner }}/finance-codex-agent-runner:${{ github.sha }}"
           docker tag "finance-codex-agent-runner:${{ github.sha }}" "$image"
           docker push "$image"
+          immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          test -n "$immutable_ref"
+          jq -n --arg image "$image" --arg immutable_ref "$immutable_ref" --arg source_sha "${{ github.sha }}" '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha}' > finance-codex-agent-runner-image-receipt.json
+      - name: Upload Codex runner digest receipt
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finance-codex-agent-runner-image-receipt-${{ github.sha }}
+          path: finance-codex-agent-runner-image-receipt.json
+          if-no-files-found: error

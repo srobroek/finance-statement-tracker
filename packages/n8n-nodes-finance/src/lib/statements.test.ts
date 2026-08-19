@@ -1,7 +1,25 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import { assertPreparedOutbox } from './contracts';
-import { parseStatement, projectStatementToActual } from './statements';
+import { ISSUER_PROFILES, parseStatement, projectStatementToActual } from './statements';
+
+test('packaged issuer profiles exactly match ACTIVE repository source contracts', () => {
+  const registryPath = path.resolve(process.cwd(), '../../config/statement-sources.json');
+  const registry = JSON.parse(readFileSync(registryPath, 'utf8')) as {
+    sources: Array<{ adapter_status: string; adapter: string | null; card_code: string }>;
+  };
+  const active = registry.sources
+    .filter(source => source.adapter_status === 'ACTIVE')
+    .map(source => source.adapter)
+    .filter((adapter): adapter is string => typeof adapter === 'string')
+    .sort();
+  assert.deepEqual([...ISSUER_PROFILES].sort(), active);
+  for (const placeholder of registry.sources.filter(source => source.adapter_status === 'PLACEHOLDER')) {
+    assert.equal(placeholder.adapter, null, `${placeholder.card_code} must remain unmatchable without verified evidence`);
+  }
+});
 
 test('EI credits are typed as payment and refund and statement ties', () => {
   const statement = parseStatement(`Statement of Card Account
