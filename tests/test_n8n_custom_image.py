@@ -41,6 +41,15 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FINANCE_EXTENSION_VERSION_MISMATCH", verifier)
         self.assertIn("FINANCE_EXTENSION_TREE_HASH_MISMATCH", verifier)
 
+    def test_ci_registration_smoke_uses_initialized_persistent_state(self):
+        workflow = (ROOT / ".github/workflows/phase1-finance-artifacts.yml").read_text(encoding="utf-8")
+        first_start = 'docker run --rm -v "$state_dir:/home/node/.n8n"'
+        registration = "/opt/finance-n8n/assert-runtime-registration.cjs export:nodes"
+        self.assertIn("finance extension registration verified: 4 nodes, 2 credentials", workflow)
+        self.assertIn("--entrypoint node", workflow)
+        self.assertIn('-v "$state_dir:/home/node/.n8n"', workflow)
+        self.assertLess(workflow.index(first_start), workflow.index(registration))
+
 
 if __name__ == "__main__":
     unittest.main()
