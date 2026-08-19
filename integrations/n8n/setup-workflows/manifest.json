@@ -14,6 +14,17 @@
       "credential_placeholder": "BIND_ONEDRIVE",
       "allowed_provider_mutation": "CREATE_SINGLE_ONEDRIVE_ROOT_FOLDER_IF_ABSENT",
       "receipt": "REDACTED"
+    },
+    {
+      "code": "MICROSOFT_OAUTH_REFRESH_PROOF",
+      "file": "23-microsoft-oauth-refresh-proof.json",
+      "manual_only": true,
+      "folder_id": "f1000000-0000-4000-8000-000000000090",
+      "folder_name": "90 Platform & Admin",
+      "credential_placeholders": ["BIND_OUTLOOK", "BIND_ONEDRIVE"],
+      "allowed_provider_mutation": "NONE",
+      "receipt": "REDACTED",
+      "restart_proof_required": true
     }
   ]
 }
