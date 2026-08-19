@@ -28,13 +28,23 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertNotIn("FROM n8nio/runners", dockerfile)
         self.assertIn("go test ./...", dockerfile)
         self.assertIn("CGO_ENABLED=0 go build", dockerfile)
-        self.assertIn("delete pkg.devDependencies", dockerfile)
-        self.assertIn("value.startsWith('catalog:')", dockerfile)
+        self.assertNotIn("pnpm add moment", dockerfile)
+        self.assertIn("javascript-extras/package-lock.json", dockerfile)
+        self.assertIn("node_modules/moment ./node_modules/moment", dockerfile)
+        self.assertIn("'@n8n/di'", dockerfile)
+        self.assertIn("require.resolve(name)", dockerfile)
         self.assertIn("golang.org/x/text v0.14.0", patcher)
         self.assertIn("golang.org/x/text v0.39.0", patcher)
         self.assertIn("SOURCE_SHA256", patcher)
         self.assertIn("PATCHED_SHA256", patcher)
         self.assertNotIn("subprocess", patcher)
+
+        extras_lock = json.loads(
+            (SERVICE / "javascript-extras" / "package-lock.json").read_text(encoding="utf-8")
+        )
+        moment = extras_lock["packages"]["node_modules/moment"]
+        self.assertEqual(moment["version"], "2.30.1")
+        self.assertRegex(moment["integrity"], r"^sha512-")
 
     def test_protocol_smoke_exercises_both_runners(self):
         workflow = json.loads((SERVICE / "protocol-smoke.json").read_text(encoding="utf-8"))

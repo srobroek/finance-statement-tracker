@@ -3,18 +3,21 @@ ARG NODE_IMAGE=docker.io/library/node@sha256:f70403e87646dc51b45295f4b8b70cdad0b
 ARG PYTHON_IMAGE=docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1
 ARG GO_IMAGE=docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69
 
+FROM ${NODE_IMAGE} AS javascript-extras
+WORKDIR /opt/javascript-extras
+COPY services/n8n-task-runners/javascript-extras/package.json \
+     services/n8n-task-runners/javascript-extras/package-lock.json ./
+RUN npm ci --ignore-scripts --omit=dev --fund=false --audit=false \
+    && test "$(node -p "require('./node_modules/moment/package.json').version")" = "2.30.1"
+
 FROM ${NODE_IMAGE} AS javascript-runner
-ARG PNPM_VERSION=10.32.1
 COPY .upstream/n8n/dist/task-runner-javascript /opt/runners/task-runner-javascript
 WORKDIR /opt/runners/task-runner-javascript
-RUN corepack enable pnpm \
-    && corepack prepare "pnpm@${PNPM_VERSION}" --activate
-RUN node -e "const fs=require('fs'); const pkg=require('./package.json'); for(const group of ['dependencies','devDependencies']) for(const key of Object.keys(pkg[group]||{})){const value=pkg[group][key]; if(value==='catalog:'||value.startsWith('catalog:')||value.startsWith('workspace:')) delete pkg[group][key];} delete pkg.devDependencies; fs.writeFileSync('./package.json',JSON.stringify(pkg,null,2));" \
-    && node -e "const pkg=require('./package.json'); for(const value of Object.values(pkg.dependencies||{})) if(value==='catalog:'||value.startsWith('catalog:')||value.startsWith('workspace:')) process.exit(1); if(pkg.devDependencies) process.exit(1);"
-RUN rm -f node_modules/.modules.yaml \
-    && pnpm add moment@2.30.1 --prod --no-lockfile \
-    && test "$(node -p "require('./package.json').version")" = "2.36.1" \
-    && test -f dist/start.js
+COPY --from=javascript-extras /opt/javascript-extras/node_modules/moment ./node_modules/moment
+RUN test "$(node -p "require('./package.json').version")" = "2.36.1" \
+    && test -f dist/start.js \
+    && node --check dist/start.js \
+    && node -e "for(const name of ['@n8n/config','@n8n/di','@n8n/errors','@n8n/utils','n8n-core','n8n-workflow','moment']) require.resolve(name);"
 
 FROM ${PYTHON_IMAGE} AS python-runner
 ARG UV_VERSION=0.8.14
