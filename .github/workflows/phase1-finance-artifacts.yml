@@ -240,6 +240,11 @@ jobs:
           test "$(node -p "require('./dist/task-runner-javascript/package.json').version")" = "2.36.1"
           test -f dist/task-runner-javascript/dist/start.js
           test -f dist/task-runner-javascript/node_modules/@n8n/di/package.json
+          closure=dist/task-runner-javascript
+          printf 'closure_symlink_count=%s\n' "$(find "$closure" -type l | wc -l)"
+          find "$closure" -type l -printf '%P -> %l\n' | LC_ALL=C sort | sed -n '1,80p'
+          printf 'closure_config_store_entries=%s\n' "$(find "$closure/node_modules/.pnpm" -path '*@n8n+config*' -type f 2>/dev/null | wc -l)"
+          find "$closure/node_modules/.pnpm" -path '*@n8n+config*' -type f -printf '%P\n' 2>/dev/null | LC_ALL=C sort | sed -n '1,20p'
       - name: Build source-reproduced task runners image
         run: docker build --file services/n8n-task-runners/Dockerfile --tag finance-n8n-task-runners:${{ github.sha }} .
       - name: Smoke exact runtime and n8n broker protocol
