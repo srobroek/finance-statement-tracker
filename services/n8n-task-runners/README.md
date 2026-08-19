@@ -6,7 +6,7 @@ from its tagged source with one explicit security-only dependency override:
 `golang.org/x/text` `v0.39.0`.
 
 The CI job checks out both upstream repositories by full commit, applies the
-versioned patch, builds the JavaScript dependency closure from the n8n lockfile,
+hash-locked source transformation, builds the JavaScript dependency closure from the n8n lockfile,
 runs the upstream launcher tests, builds the image from digest-pinned bases,
 and executes a JavaScript-to-Python workflow through a real n8n `2.36.2`
 external task broker. The image is scanned with no HIGH/CRITICAL waiver before

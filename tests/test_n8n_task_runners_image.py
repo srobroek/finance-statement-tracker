@@ -24,13 +24,15 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
 
     def test_launcher_is_source_built_with_a_narrow_auditable_patch(self):
         dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
-        patch = (SERVICE / "launcher-x-text-0.39.0.patch").read_text(encoding="utf-8")
+        patcher = (SERVICE / "patch_launcher.py").read_text(encoding="utf-8")
         self.assertNotIn("FROM n8nio/runners", dockerfile)
         self.assertIn("go test ./...", dockerfile)
         self.assertIn("CGO_ENABLED=0 go build", dockerfile)
-        self.assertIn("golang.org/x/text", patch)
-        self.assertIn("v0.39.0", patch)
-        self.assertEqual(set(re.findall(r"^diff --git a/(\S+) b/\S+", patch, re.MULTILINE)), {"go.mod", "go.sum"})
+        self.assertIn("golang.org/x/text v0.14.0", patcher)
+        self.assertIn("golang.org/x/text v0.39.0", patcher)
+        self.assertIn("SOURCE_SHA256", patcher)
+        self.assertIn("PATCHED_SHA256", patcher)
+        self.assertNotIn("subprocess", patcher)
 
     def test_protocol_smoke_exercises_both_runners(self):
         workflow = json.loads((SERVICE / "protocol-smoke.json").read_text(encoding="utf-8"))

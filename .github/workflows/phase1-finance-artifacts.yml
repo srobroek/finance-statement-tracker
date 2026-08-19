@@ -216,13 +216,12 @@ jobs:
           ref: fad71fc0dab52a6b6558765d1431c7846cfd816f
           path: .upstream/task-runner-launcher
           fetch-depth: 1
-      - name: Verify upstream commits and apply security-only patch
+      - name: Verify upstream commits and apply security-only source update
         shell: bash
         run: |
           test "$(git -C .upstream/n8n rev-parse HEAD)" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
           test "$(git -C .upstream/task-runner-launcher rev-parse HEAD)" = "fad71fc0dab52a6b6558765d1431c7846cfd816f"
-          git -C .upstream/task-runner-launcher apply --check "$GITHUB_WORKSPACE/services/n8n-task-runners/launcher-x-text-0.39.0.patch"
-          git -C .upstream/task-runner-launcher apply "$GITHUB_WORKSPACE/services/n8n-task-runners/launcher-x-text-0.39.0.patch"
+          python services/n8n-task-runners/patch_launcher.py .upstream/task-runner-launcher
           test "$(git -C .upstream/task-runner-launcher diff --name-only)" = $'go.mod\ngo.sum'
           grep -Fx $'\tgolang.org/x/text v0.39.0 // indirect' .upstream/task-runner-launcher/go.mod
       - uses: actions/setup-node@v5
