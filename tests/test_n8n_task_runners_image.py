@@ -88,6 +88,18 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("docker cp", workflow)
         self.assertIn("closure_sha256", workflow)
         self.assertIn("finance-workspace-packages.json", workflow)
+        self.assertIn("finance-n8n-task-runners-closure-sha256.txt", workflow)
+        self.assertIn("Disk budget before task-runner cleanup", workflow)
+        self.assertIn("docker builder prune --all --force", workflow)
+        self.assertIn(
+            "docker image inspect finance-n8n-task-runners:${{ github.sha }} >/dev/null",
+            workflow,
+        )
+        self.assertIn('test "$n8n_source" = "$workspace/.upstream/n8n"', workflow)
+        self.assertIn(
+            'test "$launcher_source" = "$workspace/.upstream/task-runner-launcher"',
+            workflow,
+        )
 
 
 if __name__ == "__main__":

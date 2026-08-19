@@ -275,16 +275,45 @@ jobs:
           docker run --rm --entrypoint python finance-n8n-task-runners:${{ github.sha }} -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not names.intersection({'pip','setuptools','msgpack'}), names"
           docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} /opt/runners/task-runner-javascript/finance-verify-workspace-packages.mjs /opt/runners/task-runner-javascript
           source_closure_sha="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"
-          copied_closure="$(mktemp -d)"
+          test "$source_closure_sha" != "null"
+          test -n "$source_closure_sha"
+          printf '%s\n' "$source_closure_sha" > finance-n8n-task-runners-closure-sha256.txt
+          copied_closure="$RUNNER_TEMP/finance-n8n-task-runners-image-closure"
+          test ! -e "$copied_closure"
+          mkdir -- "$copied_closure"
           closure_container="$(docker create finance-n8n-task-runners:${{ github.sha }})"
           docker cp "$closure_container:/opt/runners/task-runner-javascript/." "$copied_closure/"
           docker rm "$closure_container"
           image_closure_sha="$(python services/n8n-task-runners/validate_closure.py "$copied_closure" --manifest "$RUNNER_TEMP/image-closure-manifest.json" | jq -r .closure_sha256)"
           test "$image_closure_sha" = "$source_closure_sha"
+          test "$(realpath "$copied_closure")" = "$(realpath "$RUNNER_TEMP")/finance-n8n-task-runners-image-closure"
+          rm -rf -- "$copied_closure"
           test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.n8n.source_commit" }}')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
           sh services/n8n-task-runners/protocol-smoke.sh \
             finance-n8n-task-runners:${{ github.sha }} \
             ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
+      - name: Reclaim task-runner build space before security analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s finance-n8n-task-runners-closure-sha256.txt
+          workspace="$(pwd -P)"
+          n8n_source="$(realpath .upstream/n8n)"
+          launcher_source="$(realpath .upstream/task-runner-launcher)"
+          test "$n8n_source" = "$workspace/.upstream/n8n"
+          test "$launcher_source" = "$workspace/.upstream/task-runner-launcher"
+          echo "Disk budget before task-runner cleanup"
+          df -h / "$RUNNER_TEMP"
+          docker system df
+          docker image rm \
+            ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386 \
+            >/dev/null 2>&1 || true
+          rm -rf -- "$n8n_source" "$launcher_source"
+          docker builder prune --all --force
+          docker image inspect finance-n8n-task-runners:${{ github.sha }} >/dev/null
+          echo "Disk budget after task-runner cleanup"
+          df -h / "$RUNNER_TEMP"
+          docker system df
       - name: Scan task runners image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -308,7 +337,9 @@ jobs:
           docker push "$image"
           immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           test -n "$immutable_ref"
-          closure_sha256="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"
+          closure_sha256="$(cat finance-n8n-task-runners-closure-sha256.txt)"
+          test "$closure_sha256" != "null"
+          test -n "$closure_sha256"
           relinker_sha256="$(sha256sum services/n8n-task-runners/relink_closure.py | cut -d' ' -f1)"
           validator_sha256="$(sha256sum services/n8n-task-runners/validate_closure.py | cut -d' ' -f1)"
           workspace_manifest_builder_sha256="$(sha256sum services/n8n-task-runners/workspace_package_manifest.py | cut -d' ' -f1)"
