@@ -36,15 +36,23 @@ credentials, compares their identities before and after only in memory without
 printing or recording their IDs, creates a bound copy under `/dev/shm`, and
 performs this exact reviewed sequence:
 
-1. Run the workflow manually and retain its redacted terminal receipt.
-2. Capture a metadata-only readback for both bound credentials containing only
+1. Before any workflow import, OAuth metadata read, or provider call, run a
+   no-workflow/no-provider/no-database-initialization transport probe. It loads
+   the extensionless n8n 2.36.2 config entry point, resolves the official
+   `Execute` instance, and proves that its instance-owned output hook works.
+2. Capture the workflow and Finance Data Table baselines, then a metadata-only
+   readback for both bound credentials containing only
    credential type, `updatedAt`, token expiry time, and presence booleans. The
    readback deliberately omits credential IDs. Never print or persist encrypted
    credential data, access tokens, refresh tokens, client secrets, or response
    bodies.
-3. Restart only the n8n service and wait for its health check to pass.
-4. Run the same inactive workflow again and retain the second redacted receipt.
-5. Repeat the same metadata-only readback. Accept the proof only when both
+3. Import the bound workflow inactive, run it through a directly initialized
+   n8n `Execute` instance, and retain only its redacted terminal receipt.
+4. Repeat the metadata-only readback and require both expired token expiries to
+   have advanced to future, unexpired values.
+5. Restart only the n8n service and wait for its health check to pass.
+6. Run the same inactive workflow again and repeat the metadata-only readback.
+7. Remove WF23 and accept the proof only when both
    executions are `VERIFIED`, both provider reads succeeded, each Outlook count
    is at most one, and the credential types remain stable. Before the first
    execution, both access-token expiries must already be in the past. The first

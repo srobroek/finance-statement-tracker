@@ -39,7 +39,7 @@ git -C "${finance_repo}" merge-base --is-ancestor "${prior_promoted_commit}" "${
 [[ -f "${env_file}" && ! -L "${env_file}" && "$(stat -c '%a' "${env_file}")" == "600" ]] || { echo "Retained mode-600 environment required" >&2; exit 1; }
 [[ -f "${source_file}" && ! -L "${source_file}" ]] || { echo "Regular WF23 source required" >&2; exit 1; }
 [[ "$(sha256sum "${source_file}" | awk '{print $1}')" == "${source_sha256}" ]] || { echo "WF23 source SHA-256 mismatch" >&2; exit 1; }
-for helper in bind-microsoft-oauth-refresh-proof.py validate_microsoft_oauth_refresh_evidence.py build_microsoft_oauth_failure_receipt.py parse_n8n_redacted_wrapper_output.py n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs n8n-cli-microsoft-oauth-metadata-readback.cjs n8n-cli-finance-data-table-digest.cjs n8n-cli-remove-transient-microsoft-oauth-refresh-proof.cjs; do
+for helper in bind-microsoft-oauth-refresh-proof.py validate_microsoft_oauth_refresh_evidence.py build_microsoft_oauth_failure_receipt.py parse_n8n_redacted_wrapper_output.py n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs n8n-cli-wf23-direct-transport-probe.cjs n8n-cli-microsoft-oauth-metadata-readback.cjs n8n-cli-finance-data-table-digest.cjs n8n-cli-remove-transient-microsoft-oauth-refresh-proof.cjs; do
   [[ -f "${runner_dir}/${helper}" && ! -L "${runner_dir}/${helper}" ]] || { echo "Reviewed WF23 runner helper missing" >&2; exit 1; }
 done
 
@@ -61,6 +61,15 @@ postgres_container="$(docker compose ps -q postgres)"
 for container in "${n8n_container}" "${postgres_container}"; do
   [[ "$(docker inspect -f '{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${container}")" == "true|healthy" ]] || { echo "Retained service health failed" >&2; exit 1; }
 done
+
+direct_transport_probe() {
+  local raw expected
+  expected='WF23 direct transport probe verified:{"schema_version":1,"status":"VERIFIED","scope":"DIRECT_EXECUTE_INSTANCE_TRANSPORT","execute_instance_resolved":true,"instance_log_override_invoked":true,"workflow_loaded":false,"workflow_executed":false,"provider_calls":false,"database_initialized":false,"raw_irun_persisted":false,"provider_response_logged":false,"secret_values_recorded":false}'
+  raw="$(timeout --foreground --signal=TERM --kill-after=30s 120s docker exec -i -e FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE "${n8n_container}" node - < "${runner_dir}/n8n-cli-wf23-direct-transport-probe.cjs" 2>/dev/null | head -c 4097)" || return 1
+  [[ "${raw}" == "${expected}" ]]
+}
+
+direct_transport_probe || { echo "WF23 direct execution transport probe failed before metadata/provider access" >&2; exit 1; }
 
 psql_scalar() { docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -At -U "${N8N_POSTGRES_USER:-n8n}" -d "${N8N_POSTGRES_DATABASE:-n8n}" -c "$1"; }
 project_state() { psql_scalar "select count(*)||'|'||count(*) filter (where w.active)||'|'||count(*) filter (where w.\"activeVersionId\" is not null) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id where s.\"projectId\"='${expected_project_id}';"; }
@@ -91,7 +100,7 @@ validate_execution_receipt() {
 
 execute_probe() {
   local raw
-  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false -e N8N_RUNNERS_MODE=internal "${n8n_container}" node - execute --id="${workflow_id}" --rawOutput < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || return 1
+  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false -e N8N_RUNNERS_MODE=internal "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || return 1
   validate_execution_receipt "${raw}" || return 1
   printf '%s' "${raw#transient WF23 execution verified:}"
 }

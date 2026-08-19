@@ -149,9 +149,212 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS",
             "fs.writeSync(1",
             "payload = null",
+            "Container.get(Execute)",
+            "n8nRequire('@n8n/backend-common')",
+            "await Container.get(ModuleRegistry).loadModules()",
+            "command.flags = { id: WORKFLOW_ID, rawOutput: true }",
+            "await command.init()",
+            "await command.run()",
+            "await command.finally(sanitizedError)",
+            "command.log = function captureRawIRunInMemory",
+            "command.logger = new Proxy",
+            "if (isDirectEntrypoint(require.main, module))",
+            "const N8N_CONFIG_ENTRYPOINT = './dist/config';",
+            "const originalExit = process.exit.bind(process);",
+            "process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };",
+            "process.exit = originalExit;",
         ):
             self.assertIn(marker, shim)
         self.assertNotIn("writeFile", shim)
+        self.assertNotIn("Execute.prototype", shim)
+        self.assertNotIn("BaseCommand.prototype", shim)
+        self.assertNotIn("bin', 'n8n", shim)
+        self.assertNotIn("./dist/config.js", shim)
+        self.assertNotIn("process.once('exit'", shim)
+        lifecycle_markers = (
+            "n8nRequire(N8N_CONFIG_ENTRYPOINT)",
+            "n8nRequire('./dist/commands/execute.js')",
+            "n8nRequire('@n8n/backend-common')",
+            "await Container.get(ModuleRegistry).loadModules()",
+            "command = Container.get(Execute)",
+            "await command.init()",
+            "command.log = function captureRawIRunInMemory",
+            "await command.run()",
+            "await command.finally(sanitizedError)",
+        )
+        positions = [shim.index(marker) for marker in lifecycle_markers]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_production_shim_stdin_entrypoint_is_exact_and_require_import_is_inert(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        completed = subprocess.run(
+            ["node", "-"],
+            input=shim.read_text(encoding="utf-8"),
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(
+            "FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY",
+            completed.stderr,
+        )
+
+        extra_argument = subprocess.run(
+            ["node", "-", "extra"],
+            input=shim.read_text(encoding="utf-8"),
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(extra_argument.returncode, 0, extra_argument.stderr)
+        self.assertEqual(extra_argument.stdout, "")
+
+        imported = subprocess.run(
+            ["node", "-e", f"require({json.dumps(str(shim))});process.stdout.write('inert')"],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(imported.stdout, "inert")
+
+    def test_stdin_entrypoint_gate_and_direct_lifecycle_reject_adversarial_orders(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});"
+            f"const probe=require({json.dumps(str(probe))});"
+            "const imported={filename:'/runtime/imported.cjs'};"
+            "const stdin={filename:'/runtime/[stdin]'};"
+            "const direct={filename:'/runtime/direct.cjs'};"
+            "const checks=["
+            "shim.isDirectEntrypoint(direct,direct,['node','ignored']),"
+            "shim.isDirectEntrypoint(undefined,stdin,['node','-']),"
+            "!shim.isDirectEntrypoint(undefined,stdin,['node','-','extra']),"
+            "!shim.isDirectEntrypoint(undefined,imported,['node','-']),"
+            "probe.isDirectEntrypoint(undefined,stdin,['node','-']),"
+            "!probe.isDirectEntrypoint(undefined,stdin,['node','-','extra'])];"
+            "const valid=shim.directLifecycleGate();"
+            "for(const stage of shim.DIRECT_LIFECYCLE_ORDER)valid(stage);"
+            "let rejected=false;try{const invalid=shim.directLifecycleGate();invalid('command-loaded')}"
+            "catch(error){rejected=error.code==='WF23_DIRECT_LIFECYCLE_ORDER_INVALID'}"
+            "if(!checks.every(Boolean)||!rejected)process.exit(1);"
+            "process.stdout.write(JSON.stringify(shim.DIRECT_LIFECYCLE_ORDER));"
+        )
+        completed = subprocess.run(
+            ["node", "-"], input=code, text=True, capture_output=True, check=True
+        )
+        self.assertEqual(
+            json.loads(completed.stdout),
+            ["config-loaded", "command-loaded", "modules-loaded", "execute-resolved", "execute-initialized"],
+        )
+
+    def test_terminal_line_serializes_only_validated_redacted_receipt_and_safe_failure(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        payload = irun(terminal_result())
+        payload["data"]["resultData"]["runData"]["Read One Bounded Outlook Message"] = [{
+            "data": {"main": [[{"json": {"access_token": "fake-token", "subject": "fake-subject"}}]]},
+        }]
+        code = (
+            f"const shim=require({json.dumps(str(shim))});"
+            "let raw='';process.stdin.on('data',chunk=>raw+=chunk);process.stdin.on('end',()=>{"
+            "const receipt=shim.validateIRun(JSON.parse(raw));"
+            "process.stdout.write(shim.terminalLine(null,receipt));"
+            "process.stdout.write(shim.terminalLine({code:'NOT_ALLOWLISTED',access_token:'fake-token'},null));});"
+        )
+        completed = subprocess.run(
+            ["node", "-e", code],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(len(completed.stdout.splitlines()), 2)
+        self.assertIn("transient WF23 execution verified:", completed.stdout)
+        self.assertIn("WF23_REDACTED_EXECUTION_FAILED", completed.stdout)
+        self.assertNotIn("fake-token", completed.stdout + completed.stderr)
+        self.assertNotIn("fake-subject", completed.stdout + completed.stderr)
+
+    def test_direct_transport_probe_is_no_workflow_no_provider_and_exactly_redacted(self) -> None:
+        probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
+        probe_text = probe.read_text(encoding="utf-8")
+        for marker in (
+            "READ_ONLY_DIRECT_EXECUTE_INSTANCE",
+            "Container.get(Execute)",
+            "command instanceof Execute",
+            "command.log = () => { invoked = true; }",
+            "fs.writeSync(1",
+            "workflow_loaded: false",
+            "workflow_executed: false",
+            "provider_calls: false",
+            "database_initialized: false",
+            "raw_irun_persisted: false",
+            "provider_response_logged: false",
+            "secret_values_recorded: false",
+            "if (isDirectEntrypoint(require.main, module))",
+            "const N8N_CONFIG_ENTRYPOINT = './dist/config';",
+            "n8nRequire(N8N_CONFIG_ENTRYPOINT)",
+        ):
+            self.assertIn(marker, probe_text)
+        for forbidden in (
+            "./dist/config.js", "command.init(", "command.run(", "WorkflowRepository",
+            "WorkflowRunner", "microsoftOneDrive", "microsoftOutlook", "ModuleRegistry",
+            "loadModules(",
+        ):
+            self.assertNotIn(forbidden, probe_text)
+        code = (
+            f"const probe=require({json.dumps(str(probe))});"
+            "process.stdout.write(probe.PROBE_PREFIX+JSON.stringify(probe.exactProbeReceipt())+'\\n');"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        lines = completed.stdout.splitlines()
+        self.assertEqual(len(lines), 1)
+        payload = json.loads(lines[0].split(":", 1)[1])
+        self.assertEqual(payload["status"], "VERIFIED")
+        self.assertTrue(payload["execute_instance_resolved"])
+        self.assertTrue(payload["instance_log_override_invoked"])
+        self.assertFalse(any(payload[key] for key in (
+            "workflow_loaded", "workflow_executed", "provider_calls", "database_initialized",
+            "raw_irun_persisted", "provider_response_logged", "secret_values_recorded",
+        )))
+
+    def test_n8n_config_entrypoint_is_extensionless_and_resolves_directory_index(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
+        with tempfile.TemporaryDirectory() as tmp:
+            package_root = Path(tmp) / "n8n"
+            config_root = package_root / "dist" / "config"
+            config_root.mkdir(parents=True)
+            (package_root / "package.json").write_text('{"name":"n8n","version":"2.36.2"}\n', encoding="utf-8")
+            (config_root / "index.js").write_text("module.exports={};\n", encoding="utf-8")
+            code = (
+                "const {createRequire}=require('node:module');"
+                f"const shim=require({json.dumps(str(shim))});"
+                f"const probe=require({json.dumps(str(probe))});"
+                f"const req=createRequire({json.dumps(str(package_root / 'package.json'))});"
+                "const values=[shim.N8N_CONFIG_ENTRYPOINT,probe.N8N_CONFIG_ENTRYPOINT,"
+                "req.resolve(shim.N8N_CONFIG_ENTRYPOINT),req.resolve(probe.N8N_CONFIG_ENTRYPOINT)];"
+                "process.stdout.write(JSON.stringify(values));"
+            )
+            completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+            values = json.loads(completed.stdout)
+            self.assertEqual(values[:2], ["./dist/config", "./dist/config"])
+            self.assertEqual(
+                [Path(value).resolve() for value in values[2:]],
+                [(config_root / "index.js").resolve(), (config_root / "index.js").resolve()],
+            )
+
+    def test_transport_probe_stdin_entrypoint_runs_and_requires_ack(self) -> None:
+        probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
+        completed = subprocess.run(
+            ["node", "-"],
+            input=probe.read_text(encoding="utf-8"),
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(
+            "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
+            completed.stderr,
+        )
 
     def test_in_memory_shim_rejects_extra_provider_fields_without_echoing_values(self) -> None:
         result = terminal_result()
@@ -333,7 +536,6 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "EXECUTIONS_DATA_SAVE_ON_SUCCESS=none",
             "EXECUTIONS_DATA_SAVE_ON_ERROR=none",
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false",
-            "--rawOutput",
             "wf23_execution_count",
             "wf23_history_count",
             '[[ "$(wf23_execution_count)" == "0" ]] || return 1',
@@ -353,6 +555,10 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             'raw_irun_persisted":False',
             'finance_data_table_writes":False',
             'baseline_digest_restored":True',
+            "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
+            "n8n-cli-wf23-direct-transport-probe.cjs",
+            "WF23 direct execution transport probe failed before metadata/provider access",
+            '"${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"',
             "/dev/shm/",
         ):
             self.assertIn(marker, runner)
@@ -365,8 +571,13 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "N8N_API_KEY",
             "NcQo00WO7GQ3qYyA",
             "eSnL069pIlzjFj4B",
+            "node - execute --id=",
         ):
             self.assertNotIn(forbidden, runner)
+        transport_position = runner.index("direct_transport_probe ||")
+        self.assertLess(transport_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
+        self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
+        self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
     def test_all_runner_sources_are_syntactically_valid(self) -> None:
         subprocess.run(["bash", "-n", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")], check=True)

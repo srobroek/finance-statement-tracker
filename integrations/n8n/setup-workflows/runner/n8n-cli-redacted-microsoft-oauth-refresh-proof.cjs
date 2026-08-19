@@ -10,6 +10,41 @@ const EXPECTED_KEYS = new Set([
   'file_fields_recorded', 'credential_values_recorded', 'token_values_recorded',
   'production_workflows_activated', 'actual_writes', 'cashback_writes', 'verified_at',
 ]);
+const SAFE_FAILURE_CODES = new Set([
+  'WF23_EXECUTION_NOT_FINISHED_SUCCESS',
+  'WF23_LAST_NODE_MISMATCH',
+  'WF23_TERMINAL_RUN_INVALID',
+  'WF23_EXPECTED_ONE_TERMINAL_ITEM',
+  'WF23_TERMINAL_RESULT_INVALID',
+  'WF23_TERMINAL_RESULT_KEYS_MISMATCH',
+  'WF23_TERMINAL_STATUS_MISMATCH',
+  'WF23_EXECUTION_ID_INVALID',
+  'WF23_PROVIDER_READ_CONTRACT_MISMATCH',
+  'WF23_TERMINAL_RESULT_MISMATCH_PROVIDER_WRITES',
+  'WF23_TERMINAL_RESULT_MISMATCH_MESSAGE_FIELDS_RECORDED',
+  'WF23_TERMINAL_RESULT_MISMATCH_FILE_FIELDS_RECORDED',
+  'WF23_TERMINAL_RESULT_MISMATCH_CREDENTIAL_VALUES_RECORDED',
+  'WF23_TERMINAL_RESULT_MISMATCH_TOKEN_VALUES_RECORDED',
+  'WF23_TERMINAL_RESULT_MISMATCH_PRODUCTION_WORKFLOWS_ACTIVATED',
+  'WF23_TERMINAL_RESULT_MISMATCH_ACTUAL_WRITES',
+  'WF23_TERMINAL_RESULT_MISMATCH_CASHBACK_WRITES',
+  'WF23_TIMESTAMP_CONTRACT_MISMATCH',
+  'WF23_RAW_OUTPUT_INVALID',
+  'WF23_MULTIPLE_RAW_OUTPUTS',
+  'WF23_REDACTED_RECEIPT_NOT_CAPTURED',
+  'WF23_N8N_REQUESTED_EARLY_EXIT',
+  'WF23_DIRECT_LIFECYCLE_ORDER_INVALID',
+]);
+const SUCCESS_PREFIX = 'transient WF23 execution verified:';
+const FAILURE_PREFIX = 'transient WF23 execution failed:';
+const N8N_CONFIG_ENTRYPOINT = './dist/config';
+const DIRECT_LIFECYCLE_ORDER = Object.freeze([
+  'config-loaded',
+  'command-loaded',
+  'modules-loaded',
+  'execute-resolved',
+  'execute-initialized',
+]);
 
 function fail(code) {
   const error = new Error(code);
@@ -67,9 +102,52 @@ function validateIRun(payload) {
   return result;
 }
 
-module.exports = { validateIRun, WORKFLOW_ID, TERMINAL_NODE };
+function safeFailureCode(error) {
+  let code;
+  try { code = error?.code; } catch { return 'WF23_REDACTED_EXECUTION_FAILED'; }
+  return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
+    ? code
+    : 'WF23_REDACTED_EXECUTION_FAILED';
+}
 
-if (require.main === module) {
+function terminalLine(error, receipt) {
+  if (!error && receipt) return `${SUCCESS_PREFIX}${JSON.stringify(receipt)}\n`;
+  return `${FAILURE_PREFIX}${JSON.stringify({
+    schema_version: 1,
+    status: 'FAILED',
+    error_code: safeFailureCode(error),
+    provider_response_logged: false,
+    secret_values_recorded: false,
+  })}\n`;
+}
+
+function directLifecycleGate() {
+  let index = 0;
+  return function advance(stage) {
+    if (stage !== DIRECT_LIFECYCLE_ORDER[index]) fail('WF23_DIRECT_LIFECYCLE_ORDER_INVALID');
+    index += 1;
+    return index;
+  };
+}
+
+function isDirectEntrypoint(mainModule, currentModule, argv = process.argv) {
+  if (mainModule != null && currentModule != null && mainModule === currentModule) return true;
+  const filename = typeof currentModule?.filename === 'string'
+    ? currentModule.filename.replaceAll('\\', '/')
+    : '';
+  return mainModule == null
+    && Array.isArray(argv)
+    && argv.length === 2
+    && argv[1] === '-'
+    && filename.endsWith('/[stdin]');
+}
+
+module.exports = {
+  validateIRun, safeFailureCode, terminalLine, directLifecycleGate, isDirectEntrypoint,
+  DIRECT_LIFECYCLE_ORDER, N8N_CONFIG_ENTRYPOINT, WORKFLOW_ID, TERMINAL_NODE,
+};
+
+if (isDirectEntrypoint(require.main, module)) {
   if (process.env.FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK !== 'EXECUTE_WF23_REDACTED_ONLY') {
     throw new Error('FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY is required');
   }
@@ -84,7 +162,6 @@ if (require.main === module) {
   console.log = () => {};
   console.error = () => {};
 
-  let receipt = null;
   let emitted = false;
   const path = require('node:path');
   const { createRequire } = require('node:module');
@@ -92,33 +169,71 @@ if (require.main === module) {
   const n8nRoot = path.dirname(n8nPackageJson);
   process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
   const n8nRequire = createRequire(n8nPackageJson);
-  const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
-  const { Execute } = n8nRequire('./dist/commands/execute.js');
+  const originalExit = process.exit.bind(process);
 
-  BaseCommand.prototype.log = function captureRawIRunInMemory(message) {
-    if (receipt !== null || typeof message !== 'string' || Buffer.byteLength(message, 'utf8') > 16 * 1024 * 1024) {
-      fail('WF23_RAW_OUTPUT_INVALID');
+  function fixedError(code) {
+    return Object.assign(new Error(code), { code });
+  }
+
+  async function executeDirectly() {
+    let command = null;
+    let receipt = null;
+    let terminalError = null;
+    const advanceLifecycle = directLifecycleGate();
+    process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };
+    try {
+      n8nRequire('source-map-support').install();
+      n8nRequire('reflect-metadata');
+      if (process.env.E2E_TESTS !== 'true') n8nRequire('dotenv').config({ quiet: true });
+      n8nRequire(N8N_CONFIG_ENTRYPOINT);
+      advanceLifecycle('config-loaded');
+      const { Container } = n8nRequire('@n8n/di');
+      const { Execute } = n8nRequire('./dist/commands/execute.js');
+      advanceLifecycle('command-loaded');
+      const { ModuleRegistry } = n8nRequire('@n8n/backend-common');
+      await Container.get(ModuleRegistry).loadModules();
+      advanceLifecycle('modules-loaded');
+      command = Container.get(Execute);
+      advanceLifecycle('execute-resolved');
+      command.flags = { id: WORKFLOW_ID, rawOutput: true };
+      await command.init();
+      advanceLifecycle('execute-initialized');
+
+      // Install instance-owned sinks only after normal initialization. This
+      // prevents provider/error text from reaching n8n's logger and avoids
+      // relying on dynamic-import command constructor identity.
+      command.logger = new Proxy({}, { get: () => () => undefined });
+      command.log = function captureRawIRunInMemory(message) {
+        if (receipt !== null) fail('WF23_MULTIPLE_RAW_OUTPUTS');
+        if (typeof message !== 'string' || Buffer.byteLength(message, 'utf8') > 16 * 1024 * 1024) {
+          fail('WF23_RAW_OUTPUT_INVALID');
+        }
+        let payload;
+        try { payload = JSON.parse(message); } catch { fail('WF23_RAW_OUTPUT_INVALID'); }
+        receipt = validateIRun(payload);
+        payload = null;
+      };
+      await command.run();
+      if (receipt === null) throw fixedError('WF23_REDACTED_RECEIPT_NOT_CAPTURED');
+    } catch (error) {
+      terminalError = error;
     }
-    let payload;
-    try { payload = JSON.parse(message); } catch { fail('WF23_RAW_OUTPUT_INVALID'); }
-    receipt = validateIRun(payload);
-    payload = null;
-  };
-  const originalRun = Execute.prototype.run;
-  Execute.prototype.run = async function executeAndEmitRedactedReceipt(...args) {
-    const outcome = await originalRun.apply(this, args);
-    if (receipt === null || emitted) fail('WF23_REDACTED_RECEIPT_NOT_CAPTURED');
+
+    process.exit = originalExit;
+    fs.writeSync(1, terminalLine(terminalError, receipt));
     emitted = true;
-    fs.writeSync(1, `transient WF23 execution verified:${JSON.stringify(receipt)}\n`);
     receipt = null;
-    return outcome;
-  };
-  Execute.prototype.catch = async function emitRedactedExecutionFailure() {
-    if (!emitted) fs.writeSync(2, 'transient WF23 execution failure:REDACTED_EXECUTION_FAILED\n');
-    emitted = true;
-    process.exitCode = 1;
-  };
-  process.once('uncaughtException', () => { process.exitCode = 1; });
-  process.once('unhandledRejection', () => { process.exitCode = 1; });
-  require(path.join(n8nRoot, 'bin', 'n8n'));
+
+    if (command && typeof command.finally === 'function') {
+      const sanitizedError = terminalError ? fixedError(safeFailureCode(terminalError)) : undefined;
+      try { await command.finally(sanitizedError); } catch { originalExit(terminalError ? 1 : 0); }
+    }
+    originalExit(terminalError ? 1 : 0);
+  }
+
+  executeDirectly().catch(() => {
+    process.exit = originalExit;
+    if (!emitted) fs.writeSync(1, terminalLine(fixedError('WF23_REDACTED_EXECUTION_FAILED'), null));
+    originalExit(1);
+  });
 }
