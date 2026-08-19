@@ -48,6 +48,7 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("http://127.0.0.1:5678/webhook/finance-task-runners-protocol-smoke", smoke)
         self.assertIn("Connected: ws://broker:5679/", smoke)
         self.assertIn("sed \"s/$auth_token/[REDACTED]/g\"", smoke)
+        self.assertIn("until docker exec \"$broker\" node -e", smoke)
         self.assertIn("python_runner", smoke)
         self.assertIn("js_runner", smoke)
 
