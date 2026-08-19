@@ -17,6 +17,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+safe_logs() {
+  docker logs "$1" 2>&1 | sed "s/$auth_token/[REDACTED]/g"
+}
+
 docker network create "$network" >/dev/null
 docker volume create "$volume" >/dev/null
 docker run --rm \
@@ -26,6 +30,33 @@ docker run --rm \
   --env N8N_ENCRYPTION_KEY=finance-task-runners-protocol-smoke-only \
   "$n8n_image" import:workflow --input=/fixtures/protocol-smoke.json >/dev/null
 
+docker run --rm \
+  --volume "$volume:/home/node/.n8n" \
+  --env N8N_ENCRYPTION_KEY=finance-task-runners-protocol-smoke-only \
+  "$n8n_image" publish:workflow --id=finance-task-runners-protocol-smoke >/dev/null
+
+docker run --detach --name "$broker" \
+  --network "$network" \
+  --network-alias broker \
+  --volume "$volume:/home/node/.n8n" \
+  --env N8N_ENCRYPTION_KEY=finance-task-runners-protocol-smoke-only \
+  --env N8N_RUNNERS_ENABLED=true \
+  --env N8N_RUNNERS_MODE=external \
+  --env N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0 \
+  --env N8N_RUNNERS_AUTH_TOKEN="$auth_token" \
+  --env N8N_NATIVE_PYTHON_RUNNER=true \
+  "$n8n_image" start >/dev/null
+
+i=0
+until docker exec "$broker" node -e "Promise.all([fetch('http://127.0.0.1:5678/healthz'),fetch('http://127.0.0.1:5679/healthz')]).then(rs=>{if(rs.some(r=>!r.ok))process.exit(1)}).catch(()=>process.exit(1))"; do
+  i=$((i + 1))
+  if [ "$i" -ge 60 ]; then
+    safe_logs "$broker"
+    exit 1
+  fi
+  sleep 1
+done
+
 docker run --detach --name "$runner" \
   --network "$network" \
   --read-only \
@@ -33,32 +64,25 @@ docker run --detach --name "$runner" \
   --tmpfs /home/runner:size=16m,mode=0700,uid=1000,gid=1000 \
   --env N8N_RUNNERS_TASK_BROKER_URI=http://broker:5679 \
   --env N8N_RUNNERS_AUTH_TOKEN="$auth_token" \
+  --env N8N_RUNNERS_LAUNCHER_LOG_LEVEL=debug \
   "$runner_image" >/dev/null
 
 i=0
-until docker exec "$runner" node -e "fetch('http://127.0.0.1:5680/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; do
+until docker logs "$runner" 2>&1 | grep -F 'Connected: ws://broker:5679/' >/dev/null; do
   i=$((i + 1))
   if [ "$i" -ge 30 ]; then
-    docker logs "$runner"
+    safe_logs "$runner"
+    safe_logs "$broker"
     exit 1
   fi
   sleep 1
 done
 
-docker run --detach --name "$broker" \
-  --network "$network" \
-  --volume "$volume:/home/node/.n8n" \
-  --env N8N_ENCRYPTION_KEY=finance-task-runners-protocol-smoke-only \
-  --env N8N_RUNNERS_MODE=external \
-  --env N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0 \
-  --env N8N_RUNNERS_AUTH_TOKEN="$auth_token" \
-  --env N8N_NATIVE_PYTHON_RUNNER=true \
-  "$n8n_image" execute --id=finance-task-runners-protocol-smoke --rawOutput >/dev/null
-
-exit_code="$(docker wait "$broker")"
-docker logs "$broker" > /tmp/finance-task-runners-protocol-smoke.log 2>&1
-if [ "$exit_code" != "0" ]; then
+if ! docker exec "$broker" node -e "fetch('http://127.0.0.1:5678/webhook/finance-task-runners-protocol-smoke').then(async r=>{const body=await r.text(); console.log(body); if(!r.ok)process.exit(1)}).catch(e=>{console.error(e);process.exit(1)})" \
+  > /tmp/finance-task-runners-protocol-smoke.log 2>&1; then
   cat /tmp/finance-task-runners-protocol-smoke.log
+  safe_logs "$runner"
+  safe_logs "$broker"
   exit 1
 fi
 grep -F 'js_runner' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
