@@ -18,6 +18,11 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def git_canonical_sha256(path: Path) -> str:
+    """Hash the LF bytes that a normal Git checkout exposes on Linux."""
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 class N8nWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -399,14 +404,28 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(set(manifest["execution_evidence"].values()), {False})
         self.assertEqual(
             manifest["sources"]["data_tables_sha256"],
-            hashlib.sha256((N8N / "data-tables.json").read_bytes()).hexdigest(),
+            git_canonical_sha256(N8N / "data-tables.json"),
         )
         self.assertEqual(
             manifest["sources"]["ai_policy_seed_sha256"],
-            hashlib.sha256(
-                (N8N / "generated" / "ai-policy-contracts.seed.json").read_bytes()
-            ).hexdigest(),
+            git_canonical_sha256(
+                N8N / "generated" / "ai-policy-contracts.seed.json"
+            ),
         )
+
+    def test_generated_source_hashes_use_git_canonical_lf_bytes(self) -> None:
+        seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
+        policies_hash = git_canonical_sha256(ROOT / "config" / "ai-policies.json")
+        schema_hash = git_canonical_sha256(
+            N8N / "contracts" / "ai-proposal-v1.schema.json"
+        )
+        for row in seed["rows"]:
+            self.assertEqual(row["config_sha256"], policies_hash)
+            self.assertEqual(row["output_schema_sha256"], schema_hash)
+
+        fixture_manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
+        for filename, digest in fixture_manifest["source_workflow_sha256"].items():
+            self.assertEqual(digest, git_canonical_sha256(WORKFLOWS / filename))
 
     def test_platform_bootstrap_is_manual_only_native_and_nonfinancial(self) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")

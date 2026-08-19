@@ -27,6 +27,11 @@ def canonical(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
+def normalized_text_bytes(path: Path) -> bytes:
+    """Return the Git-canonical LF bytes used by Linux runtime checkouts."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def manual_node(node_id: str = "fixture-trigger") -> dict:
     return {
         "id": node_id,
@@ -424,7 +429,7 @@ def build_all() -> dict[str, dict]:
 
 def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict:
     source_hashes = {
-        name: hashlib.sha256((PRODUCTION / name).read_bytes()).hexdigest()
+        name: hashlib.sha256(normalized_text_bytes(PRODUCTION / name)).hexdigest()
         for name in (
             "09-ai-proposal.json",
             "12-outlook-message-sweep.json",

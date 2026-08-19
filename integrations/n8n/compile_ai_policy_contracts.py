@@ -26,13 +26,18 @@ def sha(value: Any) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
+def normalized_text_bytes(path: Path) -> bytes:
+    """Return the Git-canonical LF bytes used by Linux runtime checkouts."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def compile_contracts() -> dict[str, Any]:
-    policy_bytes = POLICIES.read_bytes()
+    policy_bytes = normalized_text_bytes(POLICIES)
     policy_doc = json.loads(policy_bytes)
     bootstrap = json.loads(BOOTSTRAP.read_text(encoding="utf-8"))
     properties = json.loads(PROPERTIES.read_text(encoding="utf-8"))
     cashback = json.loads(CASHBACK.read_text(encoding="utf-8"))
-    output_schema_bytes = OUTPUT_SCHEMA.read_bytes()
+    output_schema_bytes = normalized_text_bytes(OUTPUT_SCHEMA)
 
     categories = sorted({name for group in bootstrap["category_groups"] for name in group["categories"]})
     property_codes = sorted({row["property_code"] for row in properties["properties"] if row.get("property_code")})
