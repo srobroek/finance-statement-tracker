@@ -1,0 +1,179 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "name": "Finance · Acquire Outlook Documents",
+  "active": false,
+  "nodes": [
+    {
+      "id": "10000000-0000-4000-8000-000000000101",
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-900, -120],
+      "parameters": {}
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000102",
+      "name": "Called by Workflow or MCP",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-900, 120],
+      "parameters": {"inputSource": "passthrough"}
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000103",
+      "name": "Validate Bounded Source Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-650, 0],
+      "parameters": {
+        "jsCode": "const r = $json; const required = ['source_code','folder_id','senders','subjects','window_start','window_end']; for (const k of required) if (r[k] === undefined || r[k] === null || r[k] === '') throw new Error(`Missing ${k}`); if (!Array.isArray(r.senders) || !Array.isArray(r.subjects) || !r.senders.length || !r.subjects.length) throw new Error('Source contract requires sender and subject allowlists'); const start = new Date(r.window_start); const end = new Date(r.window_end); if (!(start < end) || end - start > 7 * 86400000) throw new Error('Acquisition window must be positive and at most seven days'); return [{json:{...r, senders:r.senders.map(v=>String(v).toLowerCase()), subjects:r.subjects.map(String)}}];"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000104",
+      "name": "Get Messages from Configured Folder",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [-400, 0],
+      "parameters": {
+        "resource": "folderMessage",
+        "operation": "getAll",
+        "folderId": "={{ $json.folder_id }}",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "receivedAfter": "={{ $json.window_start }}",
+          "receivedBefore": "={{ $json.window_end }}"
+        },
+        "options": {"output": "raw"}
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {"id": "BIND_OUTLOOK", "name": "Finance Outlook"}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000105",
+      "name": "Exact Sender Subject and Window Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-150, 0],
+      "parameters": {
+        "jsCode": "const c = $('Validate Bounded Source Request').first().json; return $input.all().filter(i => { const j=i.json; const sender=String(j.from?.emailAddress?.address || j.sender?.emailAddress?.address || '').toLowerCase(); const subject=String(j.subject || ''); const received=new Date(j.receivedDateTime); return c.senders.includes(sender) && c.subjects.includes(subject) && received >= new Date(c.window_start) && received < new Date(c.window_end); }).map(i=>({json:{...i.json, source_code:c.source_code, window_start:c.window_start, window_end:c.window_end}}));"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000106",
+      "name": "List Message Attachments",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [100, 0],
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "getAll",
+        "messageId": "={{ $json.id }}",
+        "returnAll": true
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {"id": "BIND_OUTLOOK", "name": "Finance Outlook"}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000107",
+      "name": "PDF Attachments Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [350, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": false, "typeValidation": "strict"},
+          "combinator": "and",
+          "conditions": [
+            {"leftValue": "={{ $json.name }}", "rightValue": ".pdf", "operator": {"type": "string", "operation": "endsWith"}},
+            {"leftValue": "={{ $json.isInline }}", "rightValue": false, "operator": {"type": "boolean", "operation": "false", "singleValue": true}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000108",
+      "name": "Download Original Attachment",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [600, 0],
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "download",
+        "messageId": "={{ $json.messageId }}",
+        "attachmentId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {"id": "BIND_OUTLOOK", "name": "Finance Outlook"}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000109",
+      "name": "SHA-256 Original",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [850, 0],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "document_sha256"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000110",
+      "name": "Archive Original in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [1100, 0],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "fileName": "={{ $json.document_sha256 + '.pdf' }}",
+        "parentId": "={{ $json.onedrive_parent_id }}"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000111",
+      "name": "Immutable Acquisition Receipt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1350, 0],
+      "parameters": {
+        "assignments": {"assignments": [
+          {"id": "r1", "name": "status", "type": "string", "value": "ARCHIVED"},
+          {"id": "r2", "name": "source_code", "type": "string", "value": "={{ $('Validate Bounded Source Request').first().json.source_code }}"},
+          {"id": "r3", "name": "message_id", "type": "string", "value": "={{ $('Exact Sender Subject and Window Filter').item.json.id }}"},
+          {"id": "r4", "name": "attachment_id", "type": "string", "value": "={{ $('PDF Attachments Only').item.json.id }}"},
+          {"id": "r5", "name": "document_sha256", "type": "string", "value": "={{ $('SHA-256 Original').item.json.document_sha256 }}"},
+          {"id": "r6", "name": "onedrive_item_id", "type": "string", "value": "={{ $json.id }}"}
+        ]},
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Manual Test": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
+    "Called by Workflow or MCP": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
+    "Validate Bounded Source Request": {"main": [[{"node": "Get Messages from Configured Folder", "type": "main", "index": 0}]]},
+    "Get Messages from Configured Folder": {"main": [[{"node": "Exact Sender Subject and Window Filter", "type": "main", "index": 0}]]},
+    "Exact Sender Subject and Window Filter": {"main": [[{"node": "List Message Attachments", "type": "main", "index": 0}]]},
+    "List Message Attachments": {"main": [[{"node": "PDF Attachments Only", "type": "main", "index": 0}]]},
+    "PDF Attachments Only": {"main": [[{"node": "Download Original Attachment", "type": "main", "index": 0}]]},
+    "Download Original Attachment": {"main": [[{"node": "SHA-256 Original", "type": "main", "index": 0}]]},
+    "SHA-256 Original": {"main": [[{"node": "Archive Original in OneDrive", "type": "main", "index": 0}]]},
+    "Archive Original in OneDrive": {"main": [[{"node": "Immutable Acquisition Receipt", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "none"},
+  "pinData": {},
+  "meta": {"financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION", "mcpSafe": true}
+}

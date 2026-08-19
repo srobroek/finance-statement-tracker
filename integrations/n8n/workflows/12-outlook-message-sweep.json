@@ -1,0 +1,21 @@
+{
+  "id": "10000000-0000-4000-8000-000000000012",
+  "name": "Finance · Sweep Outlook Messages",
+  "active": false,
+  "nodes": [
+    {"id":"12001","name":"Called by Workflow","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-600,0],"parameters":{"inputSource":"passthrough"}},
+    {"id":"12002","name":"Validate Bounded Mail Contract","type":"n8n-nodes-base.code","typeVersion":2,"position":[-350,0],"parameters":{"jsCode":"const r=$json; for(const k of ['source_code','folder_id','senders','subjects','window_start','window_end']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing ${k}`); if(!Array.isArray(r.senders)||!r.senders.length||!Array.isArray(r.subjects)||!r.subjects.length) throw new Error('Sender and subject allowlists are required'); const start=new Date(r.window_start), end=new Date(r.window_end); if(!(start<end)||end-start>7*86400000) throw new Error('Sweep window must be positive and at most seven days'); return [{json:{...r,senders:r.senders.map(v=>String(v).toLowerCase()),subjects:r.subjects.map(String)}}];"}},
+    {"id":"12003","name":"Get Messages from Configured Folder","type":"n8n-nodes-base.microsoftOutlook","typeVersion":2,"position":[-100,0],"parameters":{"resource":"folderMessage","operation":"getAll","folderId":"={{ $json.folder_id }}","returnAll":true,"filters":{"receivedAfter":"={{ $json.window_start }}","receivedBefore":"={{ $json.window_end }}"},"options":{"output":"raw"}},"credentials":{"microsoftOutlookOAuth2Api":{"id":"BIND_OUTLOOK","name":"Finance Outlook"}}},
+    {"id":"12004","name":"Exact Sender Subject and Window","type":"n8n-nodes-base.code","typeVersion":2,"position":[150,0],"parameters":{"jsCode":"const c=$('Validate Bounded Mail Contract').first().json; const start=new Date(c.window_start), end=new Date(c.window_end); return $input.all().filter(i=>{const j=i.json; const sender=String(j.from?.emailAddress?.address||j.sender?.emailAddress?.address||'').toLowerCase(); const received=new Date(j.receivedDateTime); return c.senders.includes(sender)&&c.subjects.includes(String(j.subject||''))&&received>=start&&received<end;}).map(i=>({json:{...i.json,source_code:c.source_code,window_start:c.window_start,window_end:c.window_end,run_upper_bound:c.run_upper_bound||c.window_end}}));"}},
+    {"id":"12005","name":"Stable Message Order","type":"n8n-nodes-base.sort","typeVersion":1,"position":[400,0],"parameters":{"sortFieldsUi":{"sortField":[{"fieldName":"receivedDateTime","order":"ascending"},{"fieldName":"id","order":"ascending"}]},"options":{}}}
+  ],
+  "connections":{
+    "Called by Workflow":{"main":[[{"node":"Validate Bounded Mail Contract","type":"main","index":0}]]},
+    "Validate Bounded Mail Contract":{"main":[[{"node":"Get Messages from Configured Folder","type":"main","index":0}]]},
+    "Get Messages from Configured Folder":{"main":[[{"node":"Exact Sender Subject and Window","type":"main","index":0}]]},
+    "Exact Sender Subject and Window":{"main":[[{"node":"Stable Message Order","type":"main","index":0}]]}
+  },
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},
+  "pinData":{},
+  "meta":{"financeWorkflowCode":"OUTLOOK_MESSAGE_SWEEP","mcpSafe":false}
+}

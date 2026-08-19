@@ -1,0 +1,13 @@
+{
+  "id":"10000000-0000-4000-8000-000000000010",
+  "name":"Finance · Operations Status",
+  "active":false,
+  "nodes":[
+    {"id":"10001","name":"08:45 Daily Health Summary","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-600,-100],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"45 8 * * *"}]}}},
+    {"id":"10002","name":"Called by MCP","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-600,100],"parameters":{"inputSource":"passthrough"}},
+    {"id":"10003","name":"Get Recent Finance Executions","type":"n8n-nodes-base.n8n","typeVersion":1,"position":[-340,0],"parameters":{"resource":"execution","operation":"getAll","returnAll":false,"limit":100,"filters":{"status":"all"}},"credentials":{"n8nApi":{"id":"BIND_N8N_API","name":"Local n8n Operations"}}},
+    {"id":"10004","name":"Summarize Terminal State","type":"n8n-nodes-base.code","typeVersion":2,"position":[-80,0],"parameters":{"jsCode":"const rows=$input.all().map(i=>i.json); const finance=rows.filter(r=>String(r.workflowData?.name||r.workflowName||'').startsWith('Finance ·')); const failed=finance.filter(r=>['error','crashed','canceled'].includes(String(r.status).toLowerCase())); const running=finance.filter(r=>['new','running','waiting'].includes(String(r.status).toLowerCase())); return [{json:{status:failed.length?'ATTENTION':running.length?'RUNNING':'OK',execution_count:finance.length,failed_count:failed.length,running_count:running.length,failures:failed.map(r=>({id:r.id,workflow:r.workflowData?.name||r.workflowName,status:r.status,startedAt:r.startedAt})),checked_at:new Date().toISOString()}}];"}}
+  ],
+  "connections":{"08:45 Daily Health Summary":{"main":[[{"node":"Get Recent Finance Executions","type":"main","index":0}]]},"Called by MCP":{"main":[[{"node":"Get Recent Finance Executions","type":"main","index":0}]]},"Get Recent Finance Executions":{"main":[[{"node":"Summarize Terminal State","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"FINANCE_OPERATIONS_STATUS","mcpSafe":true,"migrationStatus":"SHADOW"}
+}

@@ -1,0 +1,14 @@
+{
+  "id":"10000000-0000-4000-8000-000000000009",
+  "name":"Finance · Scoped AI Proposal",
+  "active":false,
+  "nodes":[
+    {"id":"9001","name":"AI Request Input","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-600,0],"parameters":{"inputSource":"passthrough"}},
+    {"id":"9002","name":"Validate Policy and Allowed Fields","type":"n8n-nodes-base.code","typeVersion":2,"position":[-360,0],"parameters":{"jsCode":"const r=$json; if(!r.policy_id || !r.instruction || !Array.isArray(r.allowed_fields) || !r.output_schema) throw new Error('Invalid AI proposal request'); const locked=['amount','source_id','imported_id','direction','topic','reconciliation_state','cashback_amount']; if(r.allowed_fields.some(f=>locked.includes(f))) throw new Error('AI request includes a locked field'); return [{json:r}];"}},
+    {"id":"9003","name":"Information Extractor","type":"@n8n/n8n-nodes-langchain.informationExtractor","typeVersion":1,"position":[-80,0],"parameters":{"text":"={{ JSON.stringify($json.transaction_context) }}","schemaType":"manual","inputSchema":"={{ JSON.stringify($json.output_schema) }}","options":{"systemPromptTemplate":"={{ $json.instruction }}"}}},
+    {"id":"9004","name":"OpenAI Chat Model","type":"@n8n/n8n-nodes-langchain.lmChatOpenAi","typeVersion":1.2,"position":[-80,220],"parameters":{"modelName":"gpt-5-mini","options":{"responseFormat":"json_object","temperature":0}},"credentials":{"openAiApi":{"id":"BIND_OPENAI","name":"Finance AI Provider"}}},
+    {"id":"9005","name":"Reject Locked or Invented Output","type":"n8n-nodes-base.code","typeVersion":2,"position":[220,0],"parameters":{"jsCode":"const req=$('Validate Policy and Allowed Fields').first().json; const proposals=Array.isArray($json.proposals)?$json.proposals:[]; for(const p of proposals){ if(!req.allowed_fields.includes(p.field)) throw new Error(`AI proposed forbidden field ${p.field}`); if(typeof p.confidence!=='number' || p.confidence<0 || p.confidence>1) throw new Error('Invalid AI confidence'); } return [{json:{policy_id:req.policy_id,transaction_id:req.transaction_id,provider:'n8n-openai',proposals}}];"}}
+  ],
+  "connections":{"AI Request Input":{"main":[[{"node":"Validate Policy and Allowed Fields","type":"main","index":0}]]},"Validate Policy and Allowed Fields":{"main":[[{"node":"Information Extractor","type":"main","index":0}]]},"OpenAI Chat Model":{"ai_languageModel":[[{"node":"Information Extractor","type":"ai_languageModel","index":0}]]},"Information Extractor":{"main":[[{"node":"Reject Locked or Invented Output","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"AI_PROPOSAL","migrationStatus":"SHADOW","provider":"OFFICIAL_OPENAI_NODE"}
+}

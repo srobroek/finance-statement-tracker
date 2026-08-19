@@ -1,0 +1,16 @@
+{
+  "id":"10000000-0000-4000-8000-000000000005",
+  "name":"Finance · Wio Monthly Statement",
+  "active":false,
+  "nodes":[
+    {"id":"5001","name":"Day 3 at 20:40","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-700,-100],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"40 20 3 * *"}]}}},
+    {"id":"5002","name":"Manual Shadow Run","type":"n8n-nodes-base.manualTrigger","typeVersion":1,"position":[-700,100],"parameters":{}},
+    {"id":"5003","name":"Wio Source Contract and Window","type":"n8n-nodes-base.code","typeVersion":2,"position":[-450,0],"parameters":{"jsCode":"const end=new Date(); const start=new Date(end.getTime()-7*86400000); return [{json:{source_code:'WIO_CREDIT',card_code:'WIO_CREDIT',adapter:'wio_credit_v1',folder_id:$env.WIO_MAIL_FOLDER_ID,senders:['communications@email.wio.io','communications@mail.wio.io'],subjects:['Your Wio Credit statement for this month'],window_start:start.toISOString(),window_end:end.toISOString(),onedrive_parent_id:$env.ONEDRIVE_STATEMENT_STAGING_ID,actual_mode:'STAGE',cashback_close_required:false}}];"}},
+    {"id":"5004","name":"Acquire and Archive Statement","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[-200,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000001","mode":"id"},"options":{"waitForSubWorkflow":true}}},
+    {"id":"5005","name":"Download Archived Source","type":"n8n-nodes-base.microsoftOneDrive","typeVersion":1,"position":[50,0],"parameters":{"resource":"file","operation":"download","fileId":"={{ $json.onedrive_item_id }}","binaryPropertyName":"data"},"credentials":{"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}},
+    {"id":"5006","name":"Assemble Immutable Pipeline Input","type":"n8n-nodes-base.code","typeVersion":2,"position":[300,0],"parameters":{"jsCode":"const contract=$('Wio Source Contract and Window').first().json; const receipt=$('Acquire and Archive Statement').item.json; return [{json:{...contract,...receipt},binary:$binary}];"}},
+    {"id":"5007","name":"Run Shared Statement Pipeline","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[550,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000003","mode":"id"},"options":{"waitForSubWorkflow":true}}}
+  ],
+  "connections":{"Day 3 at 20:40":{"main":[[{"node":"Wio Source Contract and Window","type":"main","index":0}]]},"Manual Shadow Run":{"main":[[{"node":"Wio Source Contract and Window","type":"main","index":0}]]},"Wio Source Contract and Window":{"main":[[{"node":"Acquire and Archive Statement","type":"main","index":0}]]},"Acquire and Archive Statement":{"main":[[{"node":"Download Archived Source","type":"main","index":0}]]},"Download Archived Source":{"main":[[{"node":"Assemble Immutable Pipeline Input","type":"main","index":0}]]},"Assemble Immutable Pipeline Input":{"main":[[{"node":"Run Shared Statement Pipeline","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"WIO_MONTHLY_STATEMENT","migrationStatus":"SHADOW"}
+}

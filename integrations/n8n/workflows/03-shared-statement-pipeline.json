@@ -1,0 +1,41 @@
+{
+  "id": "10000000-0000-4000-8000-000000000003",
+  "name": "Finance · Shared Deterministic Statement Pipeline",
+  "active": false,
+  "nodes": [
+    {"id":"3001","name":"Statement Input","type":"n8n-nodes-base.executeWorkflowTrigger","typeVersion":1.1,"position":[-900,0],"parameters":{"inputSource":"passthrough"}},
+    {"id":"3002","name":"Verify Archived Source Identity","type":"n8n-nodes-base.code","typeVersion":2,"position":[-680,0],"parameters":{"jsCode":"const r=$json; for(const k of ['card_code','adapter','message_id','attachment_id','document_sha256','onedrive_item_id']) if(!r[k]) throw new Error(`Missing immutable source field ${k}`); return [{json:r,binary:$binary}];"}},
+    {"id":"3003","name":"Unlock Protected PDF","type":"n8n-nodes-finance.financePdf","typeVersion":1,"position":[-460,0],"parameters":{"operation":"unlock","sourceBinaryProperty":"data","outputBinaryProperty":"unlocked","passwordCredentialField":"statementPassword"},"credentials":{"financeStatementPassword":{"id":"BIND_CARD_PASSWORD","name":"Issuer Statement Password"}}},
+    {"id":"3004","name":"Extract PDF Text","type":"n8n-nodes-base.extractFromFile","typeVersion":1,"position":[-240,0],"parameters":{"operation":"pdf","binaryPropertyName":"unlocked","options":{}}},
+    {"id":"3005","name":"Parse Issuer Statement","type":"n8n-nodes-finance.financeTransform","typeVersion":1,"position":[-20,0],"parameters":{"operation":"parseStatement","adapter":"={{ $('Verify Archived Source Identity').item.json.adapter }}"}},
+    {"id":"3006","name":"Normalize Direction and Vendor","type":"n8n-nodes-finance.financeTransform","typeVersion":1,"position":[200,0],"parameters":{"operation":"normalizeTransactions","lockSourceSemantics":true}},
+    {"id":"3007","name":"Apply Ordered Static Rules","type":"n8n-nodes-finance.financeTransform","typeVersion":1,"position":[420,0],"parameters":{"operation":"applyStaticRules","ruleSource":"dataTable","stopScope":"stage"}},
+    {"id":"3008","name":"Unresolved Fields?","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[640,0],"parameters":{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $json.ai_requests.length }}","rightValue":0,"operator":{"type":"number","operation":"gt"}}]}}},
+    {"id":"3009","name":"Request Scoped AI Proposals","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[860,-120],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000009","mode":"id"},"options":{"waitForSubWorkflow":true}}},
+    {"id":"3010","name":"Merge Accepted Proposals","type":"n8n-nodes-finance.financeTransform","typeVersion":1,"position":[1080,-120],"parameters":{"operation":"mergeAiProposals","manualOverridesWin":true}},
+    {"id":"3011","name":"Validate Statement and Reconciliation","type":"n8n-nodes-finance.financeTransform","typeVersion":1,"position":[1300,0],"parameters":{"operation":"validateStatement","failClosed":true}},
+    {"id":"3012","name":"Write and Verify Actual","type":"n8n-nodes-finance.actualBudget","typeVersion":1,"position":[1520,0],"parameters":{"operation":"importAndVerify","mode":"={{ $json.actual_mode || 'STAGE' }}","serializeWrites":true},"credentials":{"actualBudgetApi":{"id":"BIND_ACTUAL","name":"Finance Actual"}}},
+    {"id":"3013","name":"Cashback Close Required?","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[1740,0],"parameters":{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"combinator":"and","conditions":[{"leftValue":"={{ $('Verify Archived Source Identity').item.json.cashback_close_required === true && !!$json.cashback_finalization }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}]}}},
+    {"id":"3014","name":"Finalize Card Period When Eligible","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[1960,-100],"parameters":{"url":"={{ $env.CASHBACK_INTERNAL_URL + '/api/periods/finalize' }}","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $('Write and Verify Actual').item.json.cashback_finalization }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
+    {"id":"3015","name":"Durable Pipeline Receipt","type":"n8n-nodes-base.set","typeVersion":3.4,"position":[2180,0],"parameters":{"assignments":{"assignments":[{"id":"p1","name":"status","type":"string","value":"SUCCESS_VERIFIED"},{"id":"p2","name":"document_sha256","type":"string","value":"={{ $('Verify Archived Source Identity').item.json.document_sha256 }}"},{"id":"p3","name":"actual_result","type":"object","value":"={{ $('Write and Verify Actual').item.json }}"},{"id":"p4","name":"cashback_close_required","type":"boolean","value":"={{ $('Verify Archived Source Identity').item.json.cashback_close_required === true }}"}]},"options":{}}}
+  ],
+  "connections": {
+    "Statement Input":{"main":[[{"node":"Verify Archived Source Identity","type":"main","index":0}]]},
+    "Verify Archived Source Identity":{"main":[[{"node":"Unlock Protected PDF","type":"main","index":0}]]},
+    "Unlock Protected PDF":{"main":[[{"node":"Extract PDF Text","type":"main","index":0}]]},
+    "Extract PDF Text":{"main":[[{"node":"Parse Issuer Statement","type":"main","index":0}]]},
+    "Parse Issuer Statement":{"main":[[{"node":"Normalize Direction and Vendor","type":"main","index":0}]]},
+    "Normalize Direction and Vendor":{"main":[[{"node":"Apply Ordered Static Rules","type":"main","index":0}]]},
+    "Apply Ordered Static Rules":{"main":[[{"node":"Unresolved Fields?","type":"main","index":0}]]},
+    "Unresolved Fields?":{"main":[[{"node":"Request Scoped AI Proposals","type":"main","index":0}],[{"node":"Validate Statement and Reconciliation","type":"main","index":0}]]},
+    "Request Scoped AI Proposals":{"main":[[{"node":"Merge Accepted Proposals","type":"main","index":0}]]},
+    "Merge Accepted Proposals":{"main":[[{"node":"Validate Statement and Reconciliation","type":"main","index":0}]]},
+    "Validate Statement and Reconciliation":{"main":[[{"node":"Write and Verify Actual","type":"main","index":0}]]},
+    "Write and Verify Actual":{"main":[[{"node":"Cashback Close Required?","type":"main","index":0}]]},
+    "Cashback Close Required?":{"main":[[{"node":"Finalize Card Period When Eligible","type":"main","index":0}],[{"node":"Durable Pipeline Receipt","type":"main","index":0}]]},
+    "Finalize Card Period When Eligible":{"main":[[{"node":"Durable Pipeline Receipt","type":"main","index":0}]]}
+  },
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},
+  "pinData":{},
+  "meta":{"financeWorkflowCode":"SHARED_STATEMENT_PIPELINE","migrationStatus":"SHADOW","requiresFinanceNodes":true}
+}

@@ -1,0 +1,11 @@
+{
+  "id":"10000000-0000-4000-8000-000000000008",
+  "name":"Finance · SC Live Cashback · Paused",
+  "active":false,
+  "nodes":[
+    {"id":"8001","name":"08:25 Dubai Daily","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-500,0],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"25 8 * * *"}]}},"disabled":true},
+    {"id":"8002","name":"Block Until Notification Contract Verified","type":"n8n-nodes-base.stopAndError","typeVersion":1,"position":[-200,0],"parameters":{"errorMessage":"STANDARD_CHARTERED_CARD_TRANSACTION remains a placeholder until a real message fixture and parser pass tests"}}
+  ],
+  "connections":{"08:25 Dubai Daily":{"main":[[{"node":"Block Until Notification Contract Verified","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},"pinData":{},"meta":{"financeWorkflowCode":"SC_LIVE_CASHBACK","migrationStatus":"PAUSED"}
+}

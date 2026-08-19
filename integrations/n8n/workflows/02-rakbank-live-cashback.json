@@ -1,0 +1,31 @@
+{
+  "id": "10000000-0000-4000-8000-000000000002",
+  "name": "Finance · RAKBANK Live Cashback",
+  "active": false,
+  "nodes": [
+    {"id":"2001","name":"08:05 Dubai Daily","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-1100,-120],"parameters":{"rule":{"interval":[{"field":"cronExpression","expression":"5 8 * * *"}]}}},
+    {"id":"2002","name":"Manual Shadow Run","type":"n8n-nodes-base.manualTrigger","typeVersion":1,"position":[-1100,120],"parameters":{}},
+    {"id":"2003","name":"Read Last Durable Cursor","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[-850,0],"parameters":{"url":"={{ $env.CASHBACK_INTERNAL_URL + '/api/ingest-state' }}","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ {source:'outlook:rakbank'} }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
+    {"id":"2004","name":"Freeze Cursor Minus Overlap Window","type":"n8n-nodes-base.code","typeVersion":2,"position":[-600,0],"parameters":{"jsCode":"const end=new Date(); const saved=$json.ingest_state?.cursor; const cursor=saved ? new Date(saved) : new Date(end.getTime()-26*3600000); if (cursor > end) throw new Error('Durable cursor is after run upper bound'); const start=new Date(cursor.getTime()-2*3600000); return [{json:{source_code:'RAKBANK_CARD_TRANSACTION',cursor_key:'outlook:rakbank',folder_id:$env.RAK_MAIL_FOLDER_ID,senders:['alerts@rakbank.ae'],subjects:['An update on your Card transaction'],window_start:start.toISOString(),window_end:end.toISOString(),run_upper_bound:end.toISOString(),mail_contract_status:'ACTIVE'}}];"}},
+    {"id":"2005","name":"Sweep Exact Outlook Messages","type":"n8n-nodes-base.executeWorkflow","typeVersion":1.2,"position":[-350,0],"parameters":{"workflowId":{"__rl":true,"value":"10000000-0000-4000-8000-000000000012","mode":"id"},"options":{"waitForSubWorkflow":true}}},
+    {"id":"2006","name":"Build Frozen Mailbox Envelope","type":"n8n-nodes-base.code","typeVersion":2,"position":[-100,0],"parameters":{"jsCode":"const p=$('Freeze Cursor Minus Overlap Window').first().json; const messages=$input.all().map(i=>i.json); const ids=new Set(messages.map(m=>String(m.id||''))); if(ids.has('')||ids.size!==messages.length) throw new Error('Every swept message needs a unique exact id'); return [{json:{schema_version:1,source:p.cursor_key,source_code:p.source_code,window_start:p.window_start,completed_at:p.run_upper_bound,cursor:p.run_upper_bound,scanned_count:messages.length,messages}}];"}},
+    {"id":"2007","name":"Parse and Upsert Cashback Events","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[150,0],"parameters":{"url":"={{ $env.CASHBACK_INTERNAL_URL + '/api/outlook/messages' }}","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
+    {"id":"2008","name":"Verify Service Receipt Before Cursor","type":"n8n-nodes-base.code","typeVersion":2,"position":[400,0],"parameters":{"jsCode":"const e=$('Build Frozen Mailbox Envelope').first().json; const r=$json; if(r.cursor_committed!==false) throw new Error('Companion must not commit the mailbox cursor'); if(String(r.cursor_candidate||'')!==e.cursor) throw new Error('Cursor candidate differs from frozen upper bound'); const scanned=Number(r.parse?.scanned_count); const accepted=Number(r.parse?.accepted_count); if(scanned!==e.messages.length || !Number.isInteger(accepted) || accepted<0 || accepted>scanned) throw new Error('Companion parse counts do not reconcile'); return [{json:{source:e.source,completed_at:e.completed_at,scanned_count:scanned,accepted_count:accepted,cursor:e.cursor}}];"}},
+    {"id":"2009","name":"Commit Sole Cursor Heartbeat","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[650,0],"parameters":{"url":"={{ $env.CASHBACK_INTERNAL_URL + '/api/ingest-runs' }}","method":"POST","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json }}","options":{"timeout":30000}},"credentials":{"httpHeaderAuth":{"id":"BIND_CASHBACK_INGEST","name":"Cashback Ingest Bearer"}}},
+    {"id":"2010","name":"Daily Scan Receipt","type":"n8n-nodes-base.set","typeVersion":3.4,"position":[900,0],"parameters":{"assignments":{"assignments":[{"id":"s1","name":"status","type":"string","value":"SUCCESS_VERIFIED"},{"id":"s2","name":"cursor","type":"string","value":"={{ $('Verify Service Receipt Before Cursor').first().json.cursor }}"},{"id":"s3","name":"scanned_count","type":"number","value":"={{ $('Verify Service Receipt Before Cursor').first().json.scanned_count }}"},{"id":"s4","name":"accepted_count","type":"number","value":"={{ $('Verify Service Receipt Before Cursor').first().json.accepted_count }}"}]},"options":{}}}
+  ],
+  "connections": {
+    "08:05 Dubai Daily":{"main":[[{"node":"Read Last Durable Cursor","type":"main","index":0}]]},
+    "Manual Shadow Run":{"main":[[{"node":"Read Last Durable Cursor","type":"main","index":0}]]},
+    "Read Last Durable Cursor":{"main":[[{"node":"Freeze Cursor Minus Overlap Window","type":"main","index":0}]]},
+    "Freeze Cursor Minus Overlap Window":{"main":[[{"node":"Sweep Exact Outlook Messages","type":"main","index":0}]]},
+    "Sweep Exact Outlook Messages":{"main":[[{"node":"Build Frozen Mailbox Envelope","type":"main","index":0}]]},
+    "Build Frozen Mailbox Envelope":{"main":[[{"node":"Parse and Upsert Cashback Events","type":"main","index":0}]]},
+    "Parse and Upsert Cashback Events":{"main":[[{"node":"Verify Service Receipt Before Cursor","type":"main","index":0}]]},
+    "Verify Service Receipt Before Cursor":{"main":[[{"node":"Commit Sole Cursor Heartbeat","type":"main","index":0}]]},
+    "Commit Sole Cursor Heartbeat":{"main":[[{"node":"Daily Scan Receipt","type":"main","index":0}]]}
+  },
+  "settings":{"executionOrder":"v1","timezone":"Asia/Dubai","saveDataErrorExecution":"all","saveDataSuccessExecution":"none"},
+  "pinData":{},
+  "meta":{"financeWorkflowCode":"RAKBANK_LIVE_CASHBACK","migrationStatus":"SHADOW"}
+}

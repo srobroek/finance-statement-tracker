@@ -1,5 +1,11 @@
 # Deterministic statement-ingestion trigger architecture — 2026-08-19
 
+> **Superseded for orchestration.** The selected implementation is now the n8n
+> design in `docs/n8n-finance-orchestration-architecture-2026-08-19.md`.
+> Evidence, idempotency and verification invariants below remain useful, but
+> Power Automate and a separate finance-worker container are no longer the
+> primary implementation.
+
 ## Decision
 
 Use **Power Automate only as the Outlook-to-OneDrive acquisition trigger**, then let a **dedicated scheduled worker on the CI host** decrypt, parse, normalize, deduplicate, audit, and submit statements to the existing narrow Actual ingestion gateway.
@@ -106,4 +112,3 @@ Standard Outlook and OneDrive connectors can move the source file, but they cann
 
 - Add missed-statement reconciliation scans, alerting, retention, backup/restore evidence, and a dashboard for incoming/processing/quarantine/success counts.
 - Keep Sarwa, FAB, and Amazon browser capture explicitly interactive; their artifacts enter the same deterministic staging boundary after login/export.
-

@@ -105,12 +105,20 @@
       "blockers": ["USER_APPROVED_BUDGETS_REQUIRED", "SCHEDULES_NOT_POPULATED", "OWNER_MODEL_NOT_POPULATED", "SOURCE_DATA_NOT_YET_COMPLETE"]
     },
     {
-      "id": "deterministic-statement-worker",
-      "description": "Email statement acquisition lands encrypted source artifacts once and a dedicated deterministic host worker performs parsing, dedupe, audit, and guarded Actual submission.",
-      "status": "PARTIAL",
+      "id": "deterministic-n8n-orchestration",
+      "description": "n8n owns schedules, bounded Outlook acquisition, visible deterministic ETL stages, model handoff, retries, receipts, and run-state lookup without SSH or an opaque finance-worker container.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": false,
-      "evidence": ["docs/deterministic-statement-ingestion-architecture-2026-08-19.md", "apps/actual-ingestion/server.py"],
-      "blockers": ["POWER_AUTOMATE_ONEDRIVE_LANDING_POC_REQUIRED", "HOST_LANDING_WATCHER_REQUIRED"]
+      "evidence": ["docs/n8n-finance-orchestration-architecture-2026-08-19.md", "integrations/n8n/pipeline-registry.json", "tests/test_n8n_workflows.py"],
+      "blockers": ["PRIVATE_N8N_REPOSITORY_PUSH_REQUIRED", "FINANCE_CUSTOM_NODES_REQUIRED", "N8N_SHADOW_RUN_REQUIRED", "THREE_CONSECUTIVE_RUN_ACCEPTANCE_REQUIRED"]
+    },
+    {
+      "id": "resilient-document-extraction",
+      "description": "PDF processing uses an idempotent local-first state machine, narrow model-callable subflows, fail-closed quarantine, and explicitly approved external fallbacks only.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": false,
+      "evidence": ["config/document-processing.json", "integrations/n8n/sql/001-document-operations.sql", "integrations/n8n/workflows/13-document-extraction-request.json", "integrations/n8n/workflows/14-local-pdf-extraction.json"],
+      "blockers": ["QPDF_CUSTOM_NODE_REQUIRED", "LIVE_PASSWORD_PROTECTED_FIXTURE_REQUIRED", "OPTIONAL_STIRLING_SECURITY_REVIEW_REQUIRED"]
     },
     {
       "id": "successful-task-lifecycle",
