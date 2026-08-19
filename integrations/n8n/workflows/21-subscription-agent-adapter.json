@@ -209,7 +209,7 @@
         "personality": "pragmatic",
         "threadMode": "new",
         "sandbox": "read_only",
-        "workingDirectory": "",
+        "workingDirectory": "/tmp/finance-ai",
         "options": {
           "outputSchema": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"https://vxsan.com/schemas/finance-ai-proposal-v1.json\",\"title\":\"Finance AI proposal-only result\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"schema_version\",\"job_id\",\"idempotency_key\",\"agent_provider\",\"policy_id\",\"policy_class\",\"policy_sha256\",\"config_sha256\",\"output_schema_sha256\",\"runner_receipt_id\",\"runner_model\",\"runner_reasoning_effort\",\"auth_mode\",\"proposals\"],\"properties\":{\"schema_version\":{\"type\":\"integer\",\"const\":1},\"job_id\":{\"type\":\"string\",\"pattern\":\"^finance-ai:[a-f0-9]{64}$\"},\"idempotency_key\":{\"type\":\"string\",\"pattern\":\"^[a-f0-9]{64}$\"},\"agent_provider\":{\"type\":\"string\",\"enum\":[\"CODEX_SUBSCRIPTION\",\"CLAUDE_SUBSCRIPTION\"]},\"policy_id\":{\"type\":\"string\",\"pattern\":\"^[a-z0-9][a-z0-9:_-]{0,127}$\"},\"policy_class\":{\"type\":\"string\",\"enum\":[\"NORMAL\",\"EXCEPTION\"]},\"policy_sha256\":{\"type\":\"string\",\"pattern\":\"^[a-f0-9]{64}$\"},\"config_sha256\":{\"type\":\"string\",\"pattern\":\"^[a-f0-9]{64}$\"},\"output_schema_sha256\":{\"type\":\"string\",\"pattern\":\"^[a-f0-9]{64}$\"},\"runner_receipt_id\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256},\"runner_model\":{\"type\":\"string\",\"enum\":[\"gpt-5.6-luna\",\"gpt-5.6-sol\",\"claude-sonnet-4-6\"]},\"runner_reasoning_effort\":{\"type\":\"string\",\"enum\":[\"max\",\"xhigh\",\"default\"]},\"auth_mode\":{\"type\":\"string\",\"enum\":[\"CHATGPT_SUBSCRIPTION\",\"CLAUDE_SUBSCRIPTION\"]},\"proposals\":{\"type\":\"array\",\"maxItems\":600,\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"transaction_id\",\"field\",\"value\",\"confidence\",\"reason_code\"],\"properties\":{\"transaction_id\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256},\"field\":{\"type\":\"string\",\"enum\":[\"vendor\",\"category\",\"subcategory\",\"tags\",\"evidence_policy\",\"review_required\",\"category_recommendation\",\"is_subscription\",\"property_code\",\"rental_unit\",\"channel\",\"reward_bucket\",\"rule_recommendation\"]},\"value\":{},\"confidence\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1},\"reason_code\":{\"type\":\"string\",\"pattern\":\"^[A-Z0-9_:-]{0,128}$\"}},\"oneOf\":[{\"properties\":{\"field\":{\"enum\":[\"vendor\",\"category\",\"subcategory\",\"evidence_policy\",\"property_code\",\"rental_unit\",\"channel\",\"reward_bucket\"]},\"value\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128}}},{\"properties\":{\"field\":{\"const\":\"tags\"},\"value\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":12,\"uniqueItems\":true,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":64,\"pattern\":\"^[a-z0-9:_-]+$\"}}}},{\"properties\":{\"field\":{\"enum\":[\"review_required\",\"is_subscription\"]},\"value\":{\"type\":\"boolean\"}}},{\"properties\":{\"field\":{\"const\":\"category_recommendation\"},\"value\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"name\",\"group\",\"reason\"],\"properties\":{\"name\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":80},\"group\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":80},\"reason\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":300}}}}},{\"properties\":{\"field\":{\"const\":\"rule_recommendation\"},\"value\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"enabled\",\"evidence_count\"],\"properties\":{\"enabled\":{\"const\":false},\"evidence_count\":{\"type\":\"integer\",\"minimum\":3,\"maximum\":10000}}}}}]}}},\"allOf\":[{\"oneOf\":[{\"properties\":{\"agent_provider\":{\"const\":\"CODEX_SUBSCRIPTION\"},\"policy_class\":{\"const\":\"NORMAL\"},\"runner_model\":{\"const\":\"gpt-5.6-luna\"},\"runner_reasoning_effort\":{\"const\":\"max\"},\"auth_mode\":{\"const\":\"CHATGPT_SUBSCRIPTION\"}}},{\"properties\":{\"agent_provider\":{\"const\":\"CODEX_SUBSCRIPTION\"},\"policy_class\":{\"const\":\"EXCEPTION\"},\"runner_model\":{\"const\":\"gpt-5.6-sol\"},\"runner_reasoning_effort\":{\"const\":\"xhigh\"},\"auth_mode\":{\"const\":\"CHATGPT_SUBSCRIPTION\"}}},{\"properties\":{\"agent_provider\":{\"const\":\"CLAUDE_SUBSCRIPTION\"},\"policy_class\":{\"enum\":[\"NORMAL\",\"EXCEPTION\"]},\"runner_model\":{\"const\":\"claude-sonnet-4-6\"},\"runner_reasoning_effort\":{\"const\":\"default\"},\"auth_mode\":{\"const\":\"CLAUDE_SUBSCRIPTION\"}}}]}]}",
           "streamProgress": false,
@@ -241,7 +241,7 @@
     },
     {
       "id": "21007",
-      "name": "Normalize Community Provider Output",
+      "name": "Validate Claude Proposal Schema and Normalize Provider Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -249,7 +249,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Normalize Community Provider Output. Keep this deterministic and fail closed.\nconst invocation = $('Validate and Build Fixed Provider Invocation').item.json;\nconst provider = invocation.agent_provider;\nlet proposal;\nif (provider === 'CODEX_SUBSCRIPTION') {\n    proposal = typeof $json.output === 'string' ? JSON.parse($json.output) : $json.output;\n}\nelse {\n    if ($json.success !== true || $json.json?.ok !== true) {\n        throw new Error('CLAUDE_PROVIDER_JSON_OUTPUT_INVALID');\n    }\n    proposal = $json.json.value;\n}\nif (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {\n    throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');\n}\nreturn [{ json: {\n            ...proposal,\n            agent_provider: provider,\n            runner_model: invocation.provider_model,\n            runner_reasoning_effort: invocation.provider_reasoning_effort,\n            auth_mode: invocation.provider_auth_mode,\n        } }];\n"
+        "jsCode": "// Purpose: Validate Claude Proposal Schema and Normalize Provider Output. Keep this deterministic and fail closed.\nconst invocation = $('Validate and Build Fixed Provider Invocation').item.json;\nconst provider = invocation.agent_provider;\nconst FINANCE_AI_SCHEMA_V1 = new Set([\n    'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',\n    'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',\n    'runner_receipt_id', 'runner_model', 'runner_reasoning_effort', 'auth_mode',\n    'proposals',\n]);\nlet proposal;\nif (provider === 'CODEX_SUBSCRIPTION') {\n    proposal = typeof $json.output === 'string' ? JSON.parse($json.output) : $json.output;\n}\nelse {\n    if ($json.success !== true || $json.json?.ok !== true) {\n        throw new Error('CLAUDE_PROVIDER_JSON_OUTPUT_INVALID');\n    }\n    proposal = $json.json.value;\n}\nif (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {\n    throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');\n}\nconst normalized = {\n    ...proposal,\n    agent_provider: provider,\n    runner_model: invocation.provider_model,\n    runner_reasoning_effort: invocation.provider_reasoning_effort,\n    auth_mode: invocation.provider_auth_mode,\n};\nif (Object.keys(normalized).some(field => !FINANCE_AI_SCHEMA_V1.has(field))\n    || [...FINANCE_AI_SCHEMA_V1].some(field => normalized[field] === undefined)\n    || normalized.schema_version !== 1\n    || !Array.isArray(normalized.proposals)) {\n    throw new Error('FINANCE_AI_SCHEMA_V1_INVALID');\n}\nreturn [{ json: normalized }];\n"
       }
     },
     {
@@ -345,7 +345,7 @@
       "main": [
         [
           {
-            "node": "Normalize Community Provider Output",
+            "node": "Validate Claude Proposal Schema and Normalize Provider Output",
             "type": "main",
             "index": 0
           }
@@ -356,7 +356,7 @@
       "main": [
         [
           {
-            "node": "Normalize Community Provider Output",
+            "node": "Validate Claude Proposal Schema and Normalize Provider Output",
             "type": "main",
             "index": 0
           }

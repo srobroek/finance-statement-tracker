@@ -1018,8 +1018,21 @@ class N8nWorkflowTests(unittest.TestCase):
         nodes = self.nodes("21-subscription-agent-adapter.json")
         codex = nodes["Run Codex Subscription Provider"]
         self.assertEqual((codex["type"], codex["typeVersion"]), ("n8n-nodes-prodex.prodex", 2))
+        self.assertEqual(
+            set(codex["parameters"]),
+            {
+                "operation", "useN8nCredentials", "systemPrompt", "skills", "prompt",
+                "model", "reasoningEffort", "personality", "threadMode", "sandbox",
+                "workingDirectory", "options",
+            },
+        )
         self.assertEqual(codex["parameters"]["sandbox"], "read_only")
         self.assertEqual(codex["parameters"]["threadMode"], "new")
+        self.assertEqual(codex["parameters"]["workingDirectory"], "/tmp/finance-ai")
+        self.assertEqual(
+            set(codex["parameters"]["options"]),
+            {"outputSchema", "streamProgress", "timeoutSeconds"},
+        )
         self.assertTrue(codex["parameters"]["options"]["outputSchema"])
         claude = nodes["Run Claude Subscription Provider"]
         self.assertEqual(
@@ -1047,7 +1060,13 @@ class N8nWorkflowTests(unittest.TestCase):
             "provider_reasoning_effort", "provider_auth_mode", "Output JSON Schema",
         ):
             self.assertIn(expected, build)
-        normalizer = nodes["Normalize Community Provider Output"]["parameters"]["jsCode"]
+        validator_name = "Validate Claude Proposal Schema and Normalize Provider Output"
+        normalizer = nodes[validator_name]["parameters"]["jsCode"]
+        self.assertIn("FINANCE_AI_SCHEMA_V1", normalizer)
+        claude_targets = self.workflow("21-subscription-agent-adapter.json")["connections"][
+            "Run Claude Subscription Provider"
+        ]["main"]
+        self.assertEqual(claude_targets[0][0]["node"], validator_name)
         for expected in (
             "runner_model: invocation.provider_model",
             "runner_reasoning_effort: invocation.provider_reasoning_effort",

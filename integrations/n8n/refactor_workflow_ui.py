@@ -1506,7 +1506,7 @@ return [{ json: {
                 "personality": "pragmatic",
                 "threadMode": "new",
                 "sandbox": "read_only",
-                "workingDirectory": "",
+                "workingDirectory": "/tmp/finance-ai",
                 "options": {
                     "outputSchema": json.dumps(AI_PROPOSAL_SCHEMA, ensure_ascii=False, separators=(",", ":")),
                     "streamProgress": False,
@@ -1532,13 +1532,19 @@ return [{ json: {
         },
         {
             "id": "21007",
-            "name": "Normalize Community Provider Output",
+            "name": "Validate Claude Proposal Schema and Normalize Provider Output",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [350, 0],
             "parameters": {"jsCode": r"""
 const invocation = $('Validate and Build Fixed Provider Invocation').item.json;
 const provider = invocation.agent_provider;
+const FINANCE_AI_SCHEMA_V1 = new Set([
+  'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',
+  'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',
+  'runner_receipt_id', 'runner_model', 'runner_reasoning_effort', 'auth_mode',
+  'proposals',
+]);
 let proposal;
 if (provider === 'CODEX_SUBSCRIPTION') {
   proposal = typeof $json.output === 'string' ? JSON.parse($json.output) : $json.output;
@@ -1551,13 +1557,20 @@ if (provider === 'CODEX_SUBSCRIPTION') {
 if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
   throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
 }
-return [{ json: {
+const normalized = {
   ...proposal,
   agent_provider: provider,
   runner_model: invocation.provider_model,
   runner_reasoning_effort: invocation.provider_reasoning_effort,
   auth_mode: invocation.provider_auth_mode,
-} }];
+};
+if (Object.keys(normalized).some(field => !FINANCE_AI_SCHEMA_V1.has(field))
+    || [...FINANCE_AI_SCHEMA_V1].some(field => normalized[field] === undefined)
+    || normalized.schema_version !== 1
+    || !Array.isArray(normalized.proposals)) {
+  throw new Error('FINANCE_AI_SCHEMA_V1_INVALID');
+}
+return [{ json: normalized }];
 """.strip()},
         },
         {
@@ -1578,8 +1591,8 @@ return [{ json: {
             [{"node": "Run Claude Subscription Provider", "type": "main", "index": 0}],
             [{"node": "Reject Unknown Provider Route", "type": "main", "index": 0}],
         ]},
-        "Run Codex Subscription Provider": {"main": [[{"node": "Normalize Community Provider Output", "type": "main", "index": 0}]]},
-        "Run Claude Subscription Provider": {"main": [[{"node": "Normalize Community Provider Output", "type": "main", "index": 0}]]},
+        "Run Codex Subscription Provider": {"main": [[{"node": "Validate Claude Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
+        "Run Claude Subscription Provider": {"main": [[{"node": "Validate Claude Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
     }
     adapter["meta"].update({
         "communityNodeInstallationDeferred": False,
