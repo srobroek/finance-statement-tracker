@@ -8,8 +8,10 @@ ARG PNPM_VERSION=10.32.1
 COPY .upstream/n8n/dist/task-runner-javascript /opt/runners/task-runner-javascript
 WORKDIR /opt/runners/task-runner-javascript
 RUN corepack enable pnpm \
-    && corepack prepare "pnpm@${PNPM_VERSION}" --activate \
-    && rm -f node_modules/.modules.yaml \
+    && corepack prepare "pnpm@${PNPM_VERSION}" --activate
+RUN node -e "const fs=require('fs'); const pkg=require('./package.json'); for(const group of ['dependencies','devDependencies']) for(const key of Object.keys(pkg[group]||{})){const value=pkg[group][key]; if(value==='catalog:'||value.startsWith('catalog:')||value.startsWith('workspace:')) delete pkg[group][key];} delete pkg.devDependencies; fs.writeFileSync('./package.json',JSON.stringify(pkg,null,2));" \
+    && node -e "const pkg=require('./package.json'); for(const value of Object.values(pkg.dependencies||{})) if(value==='catalog:'||value.startsWith('catalog:')||value.startsWith('workspace:')) process.exit(1); if(pkg.devDependencies) process.exit(1);"
+RUN rm -f node_modules/.modules.yaml \
     && pnpm add moment@2.30.1 --prod --no-lockfile \
     && test "$(node -p "require('./package.json').version")" = "2.36.1" \
     && test -f dist/start.js

@@ -28,6 +28,8 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertNotIn("FROM n8nio/runners", dockerfile)
         self.assertIn("go test ./...", dockerfile)
         self.assertIn("CGO_ENABLED=0 go build", dockerfile)
+        self.assertIn("delete pkg.devDependencies", dockerfile)
+        self.assertIn("value.startsWith('catalog:')", dockerfile)
         self.assertIn("golang.org/x/text v0.14.0", patcher)
         self.assertIn("golang.org/x/text v0.39.0", patcher)
         self.assertIn("SOURCE_SHA256", patcher)
