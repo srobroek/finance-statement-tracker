@@ -24,7 +24,7 @@ MANIFEST = ROOT / "config" / "account-completeness.json"
 WEALTH_CONFIG = ROOT / "config" / "wealth-sources.json"
 SARWA_CAPTURE = ROOT / "tests" / "fixtures" / "sarwa-holdings.sample.json"
 FAB_INVENTORY = ROOT / "config" / "evidence" / "browser-captures" / "fab-non-credit-inventory-2026-08-19.json"
-FAB_ACTIVITY = ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json"
+ADCB_STATUS = ROOT / "config" / "evidence" / "adcb-closed-card-status-2026-08-19.json"
 
 
 class AccountCompletenessTests(unittest.TestCase):
@@ -180,29 +180,17 @@ class AccountCompletenessTests(unittest.TestCase):
         )
         self.assertEqual(
             fab_2001["opening_balance_anchor"]["balance_minor"],
-            11505473,
-        )
-        self.assertEqual(
-            fab_2001["opening_balance_anchor"]["source_as_of_balance_minor"],
             22501145,
-        )
-        self.assertEqual(
-            fab_2001["opening_balance_anchor"]["captured_activity_net_minor"],
-            10995672,
-        )
-        self.assertEqual(
-            fab_2001["inventory_balance_verification"]["balance_minor"],
-            22501145,
-        )
-        self.assertEqual(
-            fab_2001["inventory_balance_verification"]["freshness"],
-            "FRESH",
         )
         self.assertFalse(fab_2001["synthetic_balancing_row_allowed"])
-        self.assertIsNone(fab_2001["derived_adjustment"])
+        self.assertTrue(fab_2001["reconciliation_adjustment_allowed"])
         self.assertEqual(
-            fab_2001["transaction_boundary"]["captured_rows"],
-            "IMPORT_AFTER_OPENING_ANCHOR",
+            fab_2001["reconciliation_method"],
+            "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
+        )
+        self.assertEqual(
+            fab_2001["history_policy"],
+            "NO_HISTORY_REQUIRED_FOR_CURRENT_BALANCE",
         )
         mortgage = next(
             row for row in fab["accounts"]
@@ -210,7 +198,10 @@ class AccountCompletenessTests(unittest.TestCase):
         )
         self.assertTrue(mortgage["offbudget"])
         self.assertEqual(mortgage["opening_balance_anchor"]["balance_minor"], -260595200)
-        self.assertEqual(mortgage["history_policy"], "NO_HISTORY_FABRICATED")
+        self.assertEqual(
+            mortgage["history_policy"],
+            "NO_HISTORY_REQUIRED_FOR_CURRENT_BALANCE",
+        )
         self.assertFalse(mortgage["synthetic_balancing_row_allowed"])
         zero_accounts = [
             row for row in fab["accounts"]
@@ -268,10 +259,8 @@ class AccountCompletenessTests(unittest.TestCase):
     def test_complete_fab_inventory_proposal_rejects_set_or_sign_drift(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
         inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
-        activity = json.loads(FAB_ACTIVITY.read_text(encoding="utf-8"))
         proposal = build_fab_inventory_proposal(
             inventory,
-            activity,
             manifest,
             evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
         )
@@ -282,7 +271,7 @@ class AccountCompletenessTests(unittest.TestCase):
         missing["accounts"].pop()
         with self.assertRaisesRegex(ValueError, "account sets differ"):
             build_fab_inventory_proposal(
-                missing, activity, manifest,
+                missing, manifest,
                 evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
             )
         wrong_sign = json.loads(json.dumps(inventory))
@@ -293,7 +282,7 @@ class AccountCompletenessTests(unittest.TestCase):
         mortgage["actual_signed_balance_minor"] = 260595200
         with self.assertRaisesRegex(ValueError, "liability sign"):
             build_fab_inventory_proposal(
-                wrong_sign, activity, manifest,
+                wrong_sign, manifest,
                 evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
             )
 
@@ -329,18 +318,36 @@ class AccountCompletenessTests(unittest.TestCase):
             if row.provider_account_id == "adcb:credit:8833-6838"
         )
         blocked = build_adcb_closed_zero_assertion(account)
+        latest = json.loads(ADCB_STATUS.read_text(encoding="utf-8"))
+        observed = build_adcb_closed_zero_assertion(
+            account,
+            issuer_closing_balance_minor=latest["issuer_statement"]["closing_balance_minor"],
+            issuer_evidence_id=latest["issuer_statement"]["evidence_id"],
+        )
         passed = build_adcb_closed_zero_assertion(
             account,
             issuer_closing_balance_minor=0,
+            issuer_evidence_id="sha256:final-zero-statement",
             actual_balance_minor=0,
             actual_closed=True,
         )
 
         self.assertEqual(blocked["status"], "BLOCKED")
         self.assertIn("EVIDENCED_CLOSING_PAYMENT_REQUIRED", blocked["blockers"])
+        self.assertIn("ISSUER_CLOSING_BALANCE_NOT_ZERO", observed["blockers"])
+        self.assertEqual(observed["issuer_closing_balance_minor"], -23832)
+        self.assertEqual(
+            observed["issuer_evidence_id"],
+            "sha256:edf889f3dd86d1bb278605b72ea7906c48e572689fb79afeabf1297b22b7a4e1",
+        )
         self.assertEqual(passed["status"], "PASS")
         self.assertEqual(passed["blockers"], [])
         self.assertFalse(passed["synthetic_balancing_row_allowed"])
+        self.assertTrue(passed["reconciliation_adjustment_allowed"])
+        self.assertEqual(
+            passed["reconciliation_policy"],
+            "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
+        )
 
 
 if __name__ == "__main__":

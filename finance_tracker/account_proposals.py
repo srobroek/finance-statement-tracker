@@ -71,26 +71,7 @@ def build_fab_opening_anchor_proposal(
     elif freshness == "AS_OF_IN_FUTURE":
         blockers.append("FAB_BALANCE_AS_OF_IN_FUTURE")
 
-    rows = capture.get("rows")
-    if not isinstance(rows, list):
-        raise ValueError("FAB capture rows must be an array")
-    net_activity_minor = 0
-    transaction_dates: list[str] = []
-    for index, row in enumerate(rows):
-        if not isinstance(row, Mapping):
-            raise ValueError(f"FAB capture rows[{index}] must be an object")
-        direction = str(row.get("direction") or "").upper()
-        if direction not in {"CREDIT", "DEBIT"}:
-            raise ValueError(f"FAB capture rows[{index}] has invalid direction")
-        amount_minor = _minor(row.get("amount_aed"), f"rows[{index}].amount_aed")
-        if amount_minor < 0:
-            raise ValueError(f"FAB capture rows[{index}] amount must be unsigned")
-        net_activity_minor += amount_minor if direction == "CREDIT" else -amount_minor
-        transaction_dates.append(str(row.get("transaction_date") or ""))
-    if not transaction_dates or any(not value for value in transaction_dates):
-        raise ValueError("FAB capture requires dated activity to derive its opening anchor")
     source_balance_minor = _minor(account.get("balance"), "account.balance")
-    opening_balance_minor = source_balance_minor - net_activity_minor
     return {
         "schema_version": 1,
         "mode": "PROPOSAL_ONLY",
@@ -106,24 +87,17 @@ def build_fab_opening_anchor_proposal(
             "offbudget": False,
             "currency": "AED",
             "opening_balance_anchor": {
-                "balance_minor": opening_balance_minor,
-                "before_transaction_date": min(transaction_dates),
-                "source_as_of_balance_minor": source_balance_minor,
+                "balance_minor": source_balance_minor,
                 "source_as_of": as_of.isoformat(),
-                "captured_activity_net_minor": net_activity_minor,
-                "derivation": "source_as_of_balance_minor - captured_activity_net_minor",
                 "source_identity": f"browser-capture:{capture.get('capture_id')}",
                 "source_field": "account.balance",
                 "freshness": freshness,
                 "stale_after_seconds": stale_after_seconds,
             },
-            "transaction_boundary": {
-                "captured_rows": "IMPORT_AFTER_OPENING_ANCHOR",
-                "captured_row_count": len(rows),
-                "covered_through": max(transaction_dates),
-            },
+            "history_policy": "NO_HISTORY_REQUIRED_FOR_CURRENT_BALANCE",
+            "reconciliation_method": "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
+            "reconciliation_adjustment_allowed": True,
             "synthetic_balancing_row_allowed": False,
-            "derived_adjustment": None,
             "review_required": True,
         },
     }
@@ -131,7 +105,6 @@ def build_fab_opening_anchor_proposal(
 
 def build_fab_inventory_proposal(
     inventory_capture: Mapping[str, Any],
-    activity_capture: Mapping[str, Any],
     manifest: AccountCompletenessManifest,
     *,
     evaluated_at: datetime,
@@ -161,17 +134,8 @@ def build_fab_inventory_proposal(
     if set(expected) != set(observed):
         raise ValueError("FAB manifest and complete portal inventory account sets differ")
 
-    current_2001 = build_fab_opening_anchor_proposal(
-        activity_capture,
-        provider_account_id="fab:current:2001",
-        account_name=expected["fab:current:2001"].actual_account_name
-        or expected["fab:current:2001"].display_name,
-        inventory_complete=True,
-        evaluated_at=evaluated_at,
-        stale_after_seconds=stale_after_seconds,
-    )
     accounts: list[dict[str, Any]] = []
-    blockers: list[str] = list(current_2001["blockers"])
+    blockers: list[str] = []
     for identity in sorted(expected):
         contract = expected[identity]
         raw = observed[identity]
@@ -181,29 +145,6 @@ def build_fab_inventory_proposal(
             raise ValueError(f"FAB currency mismatch for {identity}")
         if str(raw.get("balance_sign") or "").upper() != contract.balance_sign:
             raise ValueError(f"FAB balance sign mismatch for {identity}")
-        if identity == "fab:current:2001":
-            if int(raw.get("observed_balance_minor")) != contract.expected_balance_minor:
-                raise ValueError("FAB 2001 inventory balance differs from captured account balance")
-            current_account = dict(current_2001["account"])
-            current_account["include_in_net_worth"] = contract.include_in_net_worth
-            current_account["fx_snapshot_required"] = False
-            inventory_as_of = _timestamp(raw.get("balance_as_of"), f"{identity}.balance_as_of")
-            inventory_freshness = _freshness(
-                inventory_as_of, evaluated_at, stale_after_seconds
-            )
-            if inventory_freshness == "STALE":
-                blockers.append(f"FAB_BALANCE_SNAPSHOT_STALE:{identity}")
-            elif inventory_freshness == "AS_OF_IN_FUTURE":
-                blockers.append(f"FAB_BALANCE_AS_OF_IN_FUTURE:{identity}")
-            current_account["inventory_balance_verification"] = {
-                "balance_minor": int(raw["observed_balance_minor"]),
-                "source_as_of": inventory_as_of.isoformat(),
-                "source_identity": f"browser-capture:{inventory_capture.get('capture_id')}",
-                "freshness": inventory_freshness,
-            }
-            accounts.append(current_account)
-            continue
-
         as_of = _timestamp(raw.get("balance_as_of"), f"{identity}.balance_as_of")
         freshness = _freshness(as_of, evaluated_at, stale_after_seconds)
         if freshness == "STALE":
@@ -234,7 +175,9 @@ def build_fab_inventory_proposal(
                 "stale_after_seconds": stale_after_seconds,
                 "balance_sign": contract.balance_sign,
             },
-            "history_policy": "NO_HISTORY_FABRICATED",
+            "history_policy": "NO_HISTORY_REQUIRED_FOR_CURRENT_BALANCE",
+            "reconciliation_method": "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
+            "reconciliation_adjustment_allowed": True,
             "synthetic_balancing_row_allowed": False,
             "fx_snapshot_required": contract.currency != "AED" and signed_balance != 0,
             "include_in_net_worth": contract.include_in_net_worth,
@@ -356,6 +299,7 @@ def build_adcb_closed_zero_assertion(
     account: AccountIdentity,
     *,
     issuer_closing_balance_minor: int | None = None,
+    issuer_evidence_id: str | None = None,
     actual_balance_minor: int | None = None,
     actual_closed: bool | None = None,
 ) -> dict[str, Any]:
@@ -369,6 +313,8 @@ def build_adcb_closed_zero_assertion(
         blockers.append("EVIDENCED_CLOSING_PAYMENT_REQUIRED")
     elif issuer_closing_balance_minor != 0:
         blockers.append("ISSUER_CLOSING_BALANCE_NOT_ZERO")
+    if issuer_closing_balance_minor is not None and not str(issuer_evidence_id or "").strip():
+        blockers.append("ISSUER_CLOSING_EVIDENCE_ID_REQUIRED")
     if actual_balance_minor is None or actual_closed is None:
         blockers.append("PRODUCTION_READBACK_REQUIRED")
     else:
@@ -389,8 +335,10 @@ def build_adcb_closed_zero_assertion(
         "retain_history": account.retain_history,
         "include_in_active_routing": account.include_in_active_routing,
         "issuer_closing_balance_minor": issuer_closing_balance_minor,
+        "issuer_evidence_id": issuer_evidence_id,
         "actual_balance_minor": actual_balance_minor,
         "actual_closed": actual_closed,
+        "reconciliation_adjustment_allowed": True,
         "synthetic_balancing_row_allowed": False,
-        "reconciliation_policy": "EVIDENCED_HISTORY_AND_CLOSING_PAYMENT_ONLY",
+        "reconciliation_policy": "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
     }

@@ -23,13 +23,13 @@ from finance_tracker.account_proposals import (  # noqa: E402
 from finance_tracker.wealth import parse_registered_wealth_capture  # noqa: E402
 
 
-FAB_CAPTURE = ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json"
 FAB_INVENTORY = ROOT / "config" / "evidence" / "browser-captures" / "fab-non-credit-inventory-2026-08-19.json"
 SARWA_CAPTURE = ROOT / "runtime" / "browser-captures" / "sarwa-holdings-2026-08-18.json"
 COMPLETENESS = ROOT / "config" / "account-completeness.json"
 WEALTH_CONFIG = ROOT / "config" / "wealth-sources.json"
 PROPOSAL = ROOT / "config" / "proposals" / "actual-accounts-fab-sarwa.json"
 SIDECAR = ROOT / "config" / "proposals" / "sarwa-position-sidecar.json"
+ADCB_STATUS = ROOT / "config" / "evidence" / "adcb-closed-card-status-2026-08-19.json"
 
 
 def _parse_timestamp(raw: str) -> datetime:
@@ -43,8 +43,8 @@ def build(evaluated_at: datetime) -> tuple[dict, dict]:
         row for row in manifest.accounts
         if row.provider_account_id == "adcb:credit:8833-6838"
     )
-    fab_capture = json.loads(FAB_CAPTURE.read_text(encoding="utf-8"))
     fab_inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+    adcb_status = json.loads(ADCB_STATUS.read_text(encoding="utf-8"))
     wealth = parse_registered_wealth_capture(
         "sarwa",
         "holdings",
@@ -54,12 +54,16 @@ def build(evaluated_at: datetime) -> tuple[dict, dict]:
     )
     fab = build_fab_inventory_proposal(
         fab_inventory,
-        fab_capture,
         manifest,
         evaluated_at=evaluated_at,
     )
     sarwa = build_sarwa_account_proposal(wealth, None, evaluated_at=evaluated_at)
-    adcb = build_adcb_closed_zero_assertion(adcb_account)
+    issuer_statement = adcb_status["issuer_statement"]
+    adcb = build_adcb_closed_zero_assertion(
+        adcb_account,
+        issuer_closing_balance_minor=int(issuer_statement["closing_balance_minor"]),
+        issuer_evidence_id=str(issuer_statement["evidence_id"]),
+    )
     blockers = list(dict.fromkeys(fab["blockers"] + sarwa["blockers"] + adcb["blockers"]))
     proposal = {
         "schema_version": 2,
@@ -69,8 +73,8 @@ def build(evaluated_at: datetime) -> tuple[dict, dict]:
         "evaluated_at": evaluated_at.isoformat(),
         "generated_from": [
             "config/account-completeness.json",
-            "runtime/browser-captures/fab-account-2001-2026-08-18.json",
             "config/evidence/browser-captures/fab-non-credit-inventory-2026-08-19.json",
+            "config/evidence/adcb-closed-card-status-2026-08-19.json",
             "runtime/browser-captures/sarwa-holdings-2026-08-18.json",
         ],
         "blockers": blockers,

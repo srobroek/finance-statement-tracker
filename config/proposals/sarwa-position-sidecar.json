@@ -15,15 +15,66 @@
       "include_in_net_worth": true,
       "position_feed_status": "AVAILABLE",
       "positions": [
-        {"allocation_pct": "45.5", "instrument_id": "ticker:VTI", "market_value": "567967.88", "name": "US Stocks", "performance_pct": "66.93", "ticker": "VTI", "unit_price": "382.129999", "units": "1486.3211"},
-        {"allocation_pct": "32.5", "instrument_id": "ticker:IEFA", "market_value": "406261.54", "name": "Developed Markets Stocks", "performance_pct": "43.27", "ticker": "IEFA", "unit_price": "101.029999", "units": "4021.1971"},
-        {"allocation_pct": "10.7", "instrument_id": "ticker:VWO", "market_value": "134027.54", "name": "Emerging Markets Stocks", "performance_pct": "28.17", "ticker": "VWO", "unit_price": "60.389999", "units": "2219.3665"},
-        {"allocation_pct": "5.0", "instrument_id": "ticker:IBIT", "market_value": "62207.20", "name": "Bitcoin", "performance_pct": "-7.99", "ticker": "IBIT", "unit_price": "36.419998", "units": "1708.0506"},
-        {"allocation_pct": "4.9", "instrument_id": "ticker:VNQ", "market_value": "61220.19", "name": "US Real Estate", "performance_pct": "13.38", "ticker": "VNQ", "unit_price": "97.980005", "units": "624.8233"}
+        {
+          "allocation_pct": "45.5",
+          "instrument_id": "ticker:VTI",
+          "market_value": "567967.88",
+          "name": "US Stocks",
+          "performance_pct": "66.93",
+          "ticker": "VTI",
+          "unit_price": "382.129999",
+          "units": "1486.3211"
+        },
+        {
+          "allocation_pct": "32.5",
+          "instrument_id": "ticker:IEFA",
+          "market_value": "406261.54",
+          "name": "Developed Markets Stocks",
+          "performance_pct": "43.27",
+          "ticker": "IEFA",
+          "unit_price": "101.029999",
+          "units": "4021.1971"
+        },
+        {
+          "allocation_pct": "10.7",
+          "instrument_id": "ticker:VWO",
+          "market_value": "134027.54",
+          "name": "Emerging Markets Stocks",
+          "performance_pct": "28.17",
+          "ticker": "VWO",
+          "unit_price": "60.389999",
+          "units": "2219.3665"
+        },
+        {
+          "allocation_pct": "5.0",
+          "instrument_id": "ticker:IBIT",
+          "market_value": "62207.20",
+          "name": "Bitcoin",
+          "performance_pct": "-7.99",
+          "ticker": "IBIT",
+          "unit_price": "36.419998",
+          "units": "1708.0506"
+        },
+        {
+          "allocation_pct": "4.9",
+          "instrument_id": "ticker:VNQ",
+          "market_value": "61220.19",
+          "name": "US Real Estate",
+          "performance_pct": "13.38",
+          "ticker": "VNQ",
+          "unit_price": "97.980005",
+          "units": "624.8233"
+        }
       ],
       "product_type": "INVEST",
       "provider_account_id": "sarwa:invest:personal",
-      "reconciliation": {"actual": "1249330.86", "difference": "0.04", "expected": "1249330.82", "status": "RECONCILED_WITH_ROUNDING", "tolerance": "0.05"},
+      "reconciliation": {
+        "actual": "1249330.86",
+        "difference": "0.04",
+        "expected": "1249330.82",
+        "status": "RECONCILED_WITH_ROUNDING",
+        "tolerance": "0.05"
+      },
       "total_value": "1249330.82"
     },
     {
@@ -37,7 +88,13 @@
       "positions": [],
       "product_type": "INVEST",
       "provider_account_id": "sarwa:invest:classic",
-      "reconciliation": {"actual": "0.00", "difference": "0.00", "expected": "0.00", "status": "RECONCILED", "tolerance": "0.05"},
+      "reconciliation": {
+        "actual": "0.00",
+        "difference": "0.00",
+        "expected": "0.00",
+        "status": "RECONCILED",
+        "tolerance": "0.05"
+      },
       "total_value": "0.00"
     },
     {
@@ -49,17 +106,86 @@
       "include_in_net_worth": true,
       "position_feed_status": "AVAILABLE",
       "positions": [
-        {"allocation_pct": "38.7", "instrument_id": "ticker:VTI", "market_value": "38264.21", "name": "US Stocks", "performance_pct": "14.40", "ticker": "VTI", "unit_price": "382.130046", "units": "100.134"},
-        {"allocation_pct": "34.3", "instrument_id": "ticker:IEFA", "market_value": "33898.43", "name": "Developed Markets Stocks", "performance_pct": "13.14", "ticker": "IEFA", "unit_price": "101.029987", "units": "335.5284"},
-        {"allocation_pct": "11.2", "instrument_id": "ticker:VWO", "market_value": "11074.14", "name": "Emerging Markets Stocks", "performance_pct": "10.69", "ticker": "VWO", "unit_price": "60.390016", "units": "183.377"},
-        {"allocation_pct": "4.8", "instrument_id": "ticker:IBIT", "market_value": "4720.62", "name": "Bitcoin", "performance_pct": "-22.88", "ticker": "IBIT", "unit_price": "36.419985", "units": "129.6162"},
-        {"allocation_pct": "4.6", "instrument_id": "ticker:VNQ", "market_value": "4537.14", "name": "US Real Estate", "performance_pct": "9.86", "ticker": "VNQ", "unit_price": "97.980206", "units": "46.3067"},
-        {"allocation_pct": "2.7", "instrument_id": "ticker:BNDX", "market_value": "2705.30", "name": "Global Bonds", "performance_pct": "-2.68", "ticker": "BNDX", "unit_price": "47.650081", "units": "56.7743"},
-        {"allocation_pct": "2.7", "instrument_id": "ticker:BND", "market_value": "2700.21", "name": "US Bonds", "performance_pct": "-2.51", "ticker": "BND", "unit_price": "72.160119", "units": "37.4197"}
+        {
+          "allocation_pct": "38.7",
+          "instrument_id": "ticker:VTI",
+          "market_value": "38264.21",
+          "name": "US Stocks",
+          "performance_pct": "14.40",
+          "ticker": "VTI",
+          "unit_price": "382.130046",
+          "units": "100.134"
+        },
+        {
+          "allocation_pct": "34.3",
+          "instrument_id": "ticker:IEFA",
+          "market_value": "33898.43",
+          "name": "Developed Markets Stocks",
+          "performance_pct": "13.14",
+          "ticker": "IEFA",
+          "unit_price": "101.029987",
+          "units": "335.5284"
+        },
+        {
+          "allocation_pct": "11.2",
+          "instrument_id": "ticker:VWO",
+          "market_value": "11074.14",
+          "name": "Emerging Markets Stocks",
+          "performance_pct": "10.69",
+          "ticker": "VWO",
+          "unit_price": "60.390016",
+          "units": "183.377"
+        },
+        {
+          "allocation_pct": "4.8",
+          "instrument_id": "ticker:IBIT",
+          "market_value": "4720.62",
+          "name": "Bitcoin",
+          "performance_pct": "-22.88",
+          "ticker": "IBIT",
+          "unit_price": "36.419985",
+          "units": "129.6162"
+        },
+        {
+          "allocation_pct": "4.6",
+          "instrument_id": "ticker:VNQ",
+          "market_value": "4537.14",
+          "name": "US Real Estate",
+          "performance_pct": "9.86",
+          "ticker": "VNQ",
+          "unit_price": "97.980206",
+          "units": "46.3067"
+        },
+        {
+          "allocation_pct": "2.7",
+          "instrument_id": "ticker:BNDX",
+          "market_value": "2705.30",
+          "name": "Global Bonds",
+          "performance_pct": "-2.68",
+          "ticker": "BNDX",
+          "unit_price": "47.650081",
+          "units": "56.7743"
+        },
+        {
+          "allocation_pct": "2.7",
+          "instrument_id": "ticker:BND",
+          "market_value": "2700.21",
+          "name": "US Bonds",
+          "performance_pct": "-2.51",
+          "ticker": "BND",
+          "unit_price": "72.160119",
+          "units": "37.4197"
+        }
       ],
       "product_type": "INVEST",
       "provider_account_id": "sarwa:invest:parents",
-      "reconciliation": {"actual": "98819.10", "difference": "-0.03", "expected": "98819.13", "status": "RECONCILED_WITH_ROUNDING", "tolerance": "0.05"},
+      "reconciliation": {
+        "actual": "98819.10",
+        "difference": "-0.03",
+        "expected": "98819.13",
+        "status": "RECONCILED_WITH_ROUNDING",
+        "tolerance": "0.05"
+      },
       "total_value": "98819.13"
     },
     {
@@ -71,15 +197,66 @@
       "include_in_net_worth": true,
       "position_feed_status": "AVAILABLE",
       "positions": [
-        {"allocation_pct": "46.5", "instrument_id": "ticker:VTI", "market_value": "7379.85", "name": "US Stocks", "performance_pct": "28.05", "ticker": "VTI", "unit_price": "382.130134", "units": "19.3124"},
-        {"allocation_pct": "32.8", "instrument_id": "ticker:IEFA", "market_value": "5204.10", "name": "Developed Markets Stocks", "performance_pct": "24.70", "ticker": "IEFA", "unit_price": "101.030083", "units": "51.5104"},
-        {"allocation_pct": "10.7", "instrument_id": "ticker:VWO", "market_value": "1694.41", "name": "Emerging Markets Stocks", "performance_pct": "30.14", "ticker": "VWO", "unit_price": "60.389981", "units": "28.0578"},
-        {"allocation_pct": "4.8", "instrument_id": "ticker:VNQ", "market_value": "756.97", "name": "US Real Estate", "performance_pct": "8.09", "ticker": "VNQ", "unit_price": "97.979497", "units": "7.7258"},
-        {"allocation_pct": "4.1", "instrument_id": "ticker:IBIT", "market_value": "645.97", "name": "Bitcoin", "performance_pct": "-23.86", "ticker": "IBIT", "unit_price": "36.420171", "units": "17.7366"}
+        {
+          "allocation_pct": "46.5",
+          "instrument_id": "ticker:VTI",
+          "market_value": "7379.85",
+          "name": "US Stocks",
+          "performance_pct": "28.05",
+          "ticker": "VTI",
+          "unit_price": "382.130134",
+          "units": "19.3124"
+        },
+        {
+          "allocation_pct": "32.8",
+          "instrument_id": "ticker:IEFA",
+          "market_value": "5204.10",
+          "name": "Developed Markets Stocks",
+          "performance_pct": "24.70",
+          "ticker": "IEFA",
+          "unit_price": "101.030083",
+          "units": "51.5104"
+        },
+        {
+          "allocation_pct": "10.7",
+          "instrument_id": "ticker:VWO",
+          "market_value": "1694.41",
+          "name": "Emerging Markets Stocks",
+          "performance_pct": "30.14",
+          "ticker": "VWO",
+          "unit_price": "60.389981",
+          "units": "28.0578"
+        },
+        {
+          "allocation_pct": "4.8",
+          "instrument_id": "ticker:VNQ",
+          "market_value": "756.97",
+          "name": "US Real Estate",
+          "performance_pct": "8.09",
+          "ticker": "VNQ",
+          "unit_price": "97.979497",
+          "units": "7.7258"
+        },
+        {
+          "allocation_pct": "4.1",
+          "instrument_id": "ticker:IBIT",
+          "market_value": "645.97",
+          "name": "Bitcoin",
+          "performance_pct": "-23.86",
+          "ticker": "IBIT",
+          "unit_price": "36.420171",
+          "units": "17.7366"
+        }
       ],
       "product_type": "INVEST",
       "provider_account_id": "sarwa:invest:shared-airbnb",
-      "reconciliation": {"actual": "15872.69", "difference": "0.02", "expected": "15872.67", "status": "RECONCILED_WITH_ROUNDING", "tolerance": "0.05"},
+      "reconciliation": {
+        "actual": "15872.69",
+        "difference": "0.02",
+        "expected": "15872.67",
+        "status": "RECONCILED_WITH_ROUNDING",
+        "tolerance": "0.05"
+      },
       "total_value": "15872.67"
     },
     {
@@ -93,7 +270,13 @@
       "positions": [],
       "product_type": "TRADE",
       "provider_account_id": "sarwa:trade:primary",
-      "reconciliation": {"actual": null, "difference": null, "expected": "207588.60", "status": "COMPONENTS_UNAVAILABLE", "tolerance": "0.05"},
+      "reconciliation": {
+        "actual": null,
+        "difference": null,
+        "expected": "207588.60",
+        "status": "COMPONENTS_UNAVAILABLE",
+        "tolerance": "0.05"
+      },
       "total_value": "207588.60"
     }
   ],

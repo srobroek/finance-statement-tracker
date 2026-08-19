@@ -6,6 +6,7 @@ import * as actual from "@actual-app/api";
 import { buildTagReport, csvTags } from "./tag-report.mjs";
 import { statementPaymentReminderSpec } from "./payment-reminder.mjs";
 import { validateCanonicalActualNotes } from "./note-contract.mjs";
+import { reconcileAccounts } from "./account-reconciliation.mjs";
 import {
   compileCanonicalRules,
   scheduleSignature,
@@ -1372,9 +1373,10 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
-  if (!command || !["budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
+  if (!command || !["account-reconciliation", "budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <account-reconciliation|budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
+  if (command === "account-reconciliation") assertCommitEnabled(Boolean(args.apply));
   if (command === "import") assertCommitEnabled(Boolean(args.commit));
   if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
   if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
@@ -1384,7 +1386,10 @@ async function main() {
   await openBudget();
   try {
     let result;
-    if (command === "doctor") {
+    if (command === "account-reconciliation") {
+      if (!args.plan) throw new Error("account-reconciliation requires --plan <file>");
+      result = await reconcileAccounts(actual, await readJson(args.plan), Boolean(args.apply));
+    } else if (command === "doctor") {
       result = await doctor();
     } else if (command === "budget-automation") {
       result = await budgetAutomation(args.config, Boolean(args.apply));
