@@ -14,10 +14,10 @@
     {
       "id": "fab-complete-inventory",
       "invariant": "Every FAB non-credit-card account found in the authenticated portal exists once in Actual with an evidenced as-of balance.",
-      "status": "BLOCKED",
+      "status": "PARTIAL",
       "production_gate": true,
       "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json --require fab-complete-inventory", "expected": "Hash-bound portal inventory and archive evidence enumerate every FAB non-credit account and match Actual signed balances exactly."},
-      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED"]
+      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["DISPOSABLE_REPLAY_REQUIRED", "PRODUCTION_READBACK_REQUIRED"]
     },
     {
       "id": "sarwa-wealth-accounts",

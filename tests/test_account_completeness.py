@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,6 +12,7 @@ from finance_tracker.account_completeness import (
 )
 from finance_tracker.account_proposals import (
     build_adcb_closed_zero_assertion,
+    build_fab_inventory_proposal,
     build_fab_opening_anchor_proposal,
     build_sarwa_position_sidecar,
 )
@@ -21,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "config" / "account-completeness.json"
 WEALTH_CONFIG = ROOT / "config" / "wealth-sources.json"
 SARWA_CAPTURE = ROOT / "tests" / "fixtures" / "sarwa-holdings.sample.json"
+FAB_INVENTORY = ROOT / "config" / "evidence" / "browser-captures" / "fab-non-credit-inventory-2026-08-19.json"
+FAB_ACTIVITY = ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json"
 
 
 class AccountCompletenessTests(unittest.TestCase):
@@ -30,22 +34,41 @@ class AccountCompletenessTests(unittest.TestCase):
         identities = [row.provider_account_id for row in manifest.accounts]
         self.assertEqual(len(identities), len(set(identities)))
         self.assertIn("fab:current:2001", identities)
+        self.assertIn("fab:loan:mortgage-0203", identities)
         self.assertIn("sarwa:invest:personal", identities)
         self.assertTrue(all(row.provider_account_id != row.display_name for row in manifest.accounts))
         self.assertTrue(all(not row.last4 or len(row.last4) == 4 for row in manifest.accounts))
 
-    def test_fab_inventory_is_deliberately_incomplete_until_portal_inventory(self) -> None:
+    def test_fab_inventory_is_complete_and_balances_match_portal_capture(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
+        capture = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+        balances = {
+            row["provider_account_id"]: int(
+                row.get("actual_signed_balance_minor", row.get("observed_balance_minor"))
+            )
+            for row in capture["accounts"]
+        }
         report = validate_account_completeness(
             manifest,
-            observed_provider_account_ids={"fab:current:2001"},
+            observed_provider_account_ids=set(balances),
+            observed_balances_minor=balances,
             provider_id="fab",
         )
 
-        self.assertEqual(report["status"], "INCOMPLETE_SOURCE_INVENTORY")
-        self.assertFalse(report["production_write_allowed"])
+        self.assertEqual(report["status"], "COMPLETE")
+        self.assertTrue(report["production_write_allowed"])
         self.assertEqual(report["missing"], [])
-        self.assertIn("FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", report["blockers"])
+        self.assertEqual(report["blockers"], [])
+
+    def test_fab_capture_is_redacted_and_retains_only_last_four(self) -> None:
+        capture = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+        rendered = json.dumps(capture)
+
+        self.assertTrue(capture["inventory_complete"])
+        self.assertEqual(len(capture["accounts"]), 6)
+        self.assertIsNone(re.search(r"\b[0-9]{12,}\b", rendered))
+        self.assertIsNone(re.search(r"\b[A-Z]{2}[0-9]{10}\b", rendered))
+        self.assertTrue(all(len(row["last4"]) == 4 for row in capture["accounts"]))
 
     def test_sarwa_capture_matches_expected_account_inventory(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
@@ -148,24 +171,53 @@ class AccountCompletenessTests(unittest.TestCase):
         self.assertEqual(proposal["status"], "BLOCKED")
         fab = proposal["fab"]
         self.assertFalse(fab["actual_writes_allowed"])
+        self.assertEqual(fab["inventory_status"], "COMPLETE")
+        self.assertEqual(fab["status"], "READY_FOR_REVIEW")
+        self.assertEqual(len(fab["accounts"]), 6)
+        fab_2001 = next(
+            row for row in fab["accounts"]
+            if row["provider_account_id"] == "fab:current:2001"
+        )
         self.assertEqual(
-            fab["account"]["opening_balance_anchor"]["balance_minor"],
+            fab_2001["opening_balance_anchor"]["balance_minor"],
             11505473,
         )
         self.assertEqual(
-            fab["account"]["opening_balance_anchor"]["source_as_of_balance_minor"],
+            fab_2001["opening_balance_anchor"]["source_as_of_balance_minor"],
             22501145,
         )
         self.assertEqual(
-            fab["account"]["opening_balance_anchor"]["captured_activity_net_minor"],
+            fab_2001["opening_balance_anchor"]["captured_activity_net_minor"],
             10995672,
         )
-        self.assertFalse(fab["account"]["synthetic_balancing_row_allowed"])
-        self.assertIsNone(fab["account"]["derived_adjustment"])
         self.assertEqual(
-            fab["account"]["transaction_boundary"]["captured_rows"],
+            fab_2001["inventory_balance_verification"]["balance_minor"],
+            22501145,
+        )
+        self.assertEqual(
+            fab_2001["inventory_balance_verification"]["freshness"],
+            "FRESH",
+        )
+        self.assertFalse(fab_2001["synthetic_balancing_row_allowed"])
+        self.assertIsNone(fab_2001["derived_adjustment"])
+        self.assertEqual(
+            fab_2001["transaction_boundary"]["captured_rows"],
             "IMPORT_AFTER_OPENING_ANCHOR",
         )
+        mortgage = next(
+            row for row in fab["accounts"]
+            if row["provider_account_id"] == "fab:loan:mortgage-0203"
+        )
+        self.assertTrue(mortgage["offbudget"])
+        self.assertEqual(mortgage["opening_balance_anchor"]["balance_minor"], -260595200)
+        self.assertEqual(mortgage["history_policy"], "NO_HISTORY_FABRICATED")
+        self.assertFalse(mortgage["synthetic_balancing_row_allowed"])
+        zero_accounts = [
+            row for row in fab["accounts"]
+            if row["provider_account_id"] not in {"fab:current:2001", "fab:loan:mortgage-0203"}
+        ]
+        self.assertEqual(len(zero_accounts), 4)
+        self.assertTrue(all(row["opening_balance_anchor"]["balance_minor"] == 0 for row in zero_accounts))
         self.assertTrue(
             all(row["initial_balance_minor"] is None for row in proposal["sarwa"]["accounts"])
         )
@@ -212,6 +264,38 @@ class AccountCompletenessTests(unittest.TestCase):
         self.assertIn("FAB_BALANCE_AS_OF_IN_FUTURE", future["blockers"])
         self.assertFalse(stale["actual_writes_allowed"])
         self.assertFalse(future["actual_writes_allowed"])
+
+    def test_complete_fab_inventory_proposal_rejects_set_or_sign_drift(self) -> None:
+        manifest = load_account_completeness_manifest(MANIFEST)
+        inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+        activity = json.loads(FAB_ACTIVITY.read_text(encoding="utf-8"))
+        proposal = build_fab_inventory_proposal(
+            inventory,
+            activity,
+            manifest,
+            evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
+        )
+        self.assertEqual(proposal["status"], "READY_FOR_REVIEW")
+        self.assertFalse(proposal["actual_writes_allowed"])
+
+        missing = json.loads(json.dumps(inventory))
+        missing["accounts"].pop()
+        with self.assertRaisesRegex(ValueError, "account sets differ"):
+            build_fab_inventory_proposal(
+                missing, activity, manifest,
+                evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
+            )
+        wrong_sign = json.loads(json.dumps(inventory))
+        mortgage = next(
+            row for row in wrong_sign["accounts"]
+            if row["provider_account_id"] == "fab:loan:mortgage-0203"
+        )
+        mortgage["actual_signed_balance_minor"] = 260595200
+        with self.assertRaisesRegex(ValueError, "liability sign"):
+            build_fab_inventory_proposal(
+                wrong_sign, activity, manifest,
+                evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
+            )
 
     def test_sarwa_position_sidecar_is_read_only_and_not_ledger_activity(self) -> None:
         snapshot = parse_registered_wealth_capture(

@@ -8,7 +8,8 @@ from typing import Any, Mapping
 
 
 _STABLE_ID = re.compile(r"^[a-z0-9]+(?::[a-z0-9-]+)+$")
-_ACCOUNT_TYPES = {"checking", "savings", "investment", "trade", "credit"}
+_ACCOUNT_TYPES = {"checking", "savings", "investment", "trade", "credit", "mortgage"}
+_BALANCE_SIGNS = {"ASSET_POSITIVE", "LIABILITY_NEGATIVE"}
 _INVENTORY_STATUSES = {"COMPLETE", "INCOMPLETE"}
 
 
@@ -24,7 +25,9 @@ class AccountIdentity:
     owner: str | None
     lifecycle_status: str
     include_in_actual: bool
+    actual_offbudget: bool
     include_in_net_worth: bool
+    balance_sign: str
     balance_source: str | None
     balance_as_of: str | None
     active: bool
@@ -113,7 +116,9 @@ def load_account_completeness_manifest(
             owner=str(raw.get("owner") or "").strip() or None,
             lifecycle_status=str(raw.get("lifecycle_status") or "ACTIVE").upper(),
             include_in_actual=bool(raw.get("include_in_actual", True)),
+            actual_offbudget=bool(raw.get("actual_offbudget", False)),
             include_in_net_worth=bool(raw.get("include_in_net_worth", True)),
+            balance_sign=str(raw.get("balance_sign") or "ASSET_POSITIVE").upper(),
             balance_source=str(raw.get("balance_source") or "").strip() or None,
             balance_as_of=str(raw.get("balance_as_of") or "").strip() or None,
             active=bool(raw.get("active", True)),
@@ -136,6 +141,10 @@ def load_account_completeness_manifest(
             and accounts[-1].expected_balance_minor is None
         ):
             raise ValueError(f"Reconciled account requires expected_balance_minor: {identity}")
+        if accounts[-1].balance_sign not in _BALANCE_SIGNS:
+            raise ValueError(f"Unsupported balance sign convention: {identity}")
+        if accounts[-1].account_type == "mortgage" and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Mortgage account must use liability-negative balances: {identity}")
 
     providers: list[ProviderInventory] = []
     provider_ids: set[str] = set()

@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 from finance_tracker.account_completeness import load_account_completeness_manifest  # noqa: E402
 from finance_tracker.account_proposals import (  # noqa: E402
     build_adcb_closed_zero_assertion,
-    build_fab_opening_anchor_proposal,
+    build_fab_inventory_proposal,
     build_sarwa_account_proposal,
     build_sarwa_position_sidecar,
 )
@@ -24,6 +24,7 @@ from finance_tracker.wealth import parse_registered_wealth_capture  # noqa: E402
 
 
 FAB_CAPTURE = ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json"
+FAB_INVENTORY = ROOT / "config" / "evidence" / "browser-captures" / "fab-non-credit-inventory-2026-08-19.json"
 SARWA_CAPTURE = ROOT / "runtime" / "browser-captures" / "sarwa-holdings-2026-08-18.json"
 COMPLETENESS = ROOT / "config" / "account-completeness.json"
 WEALTH_CONFIG = ROOT / "config" / "wealth-sources.json"
@@ -38,16 +39,12 @@ def _parse_timestamp(raw: str) -> datetime:
 
 def build(evaluated_at: datetime) -> tuple[dict, dict]:
     manifest = load_account_completeness_manifest(COMPLETENESS)
-    fab_inventory = manifest.provider("fab")
-    fab_account = next(
-        row for row in manifest.accounts
-        if row.provider_account_id == "fab:current:2001"
-    )
     adcb_account = next(
         row for row in manifest.accounts
         if row.provider_account_id == "adcb:credit:8833-6838"
     )
     fab_capture = json.loads(FAB_CAPTURE.read_text(encoding="utf-8"))
+    fab_inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
     wealth = parse_registered_wealth_capture(
         "sarwa",
         "holdings",
@@ -55,11 +52,10 @@ def build(evaluated_at: datetime) -> tuple[dict, dict]:
         WEALTH_CONFIG,
         adapters_root=ROOT / "browser_adapters",
     )
-    fab = build_fab_opening_anchor_proposal(
+    fab = build_fab_inventory_proposal(
+        fab_inventory,
         fab_capture,
-        provider_account_id=fab_account.provider_account_id,
-        account_name=fab_account.actual_account_name or fab_account.display_name,
-        inventory_complete=fab_inventory.inventory_status == "COMPLETE",
+        manifest,
         evaluated_at=evaluated_at,
     )
     sarwa = build_sarwa_account_proposal(wealth, None, evaluated_at=evaluated_at)
@@ -74,6 +70,7 @@ def build(evaluated_at: datetime) -> tuple[dict, dict]:
         "generated_from": [
             "config/account-completeness.json",
             "runtime/browser-captures/fab-account-2001-2026-08-18.json",
+            "config/evidence/browser-captures/fab-non-credit-inventory-2026-08-19.json",
             "runtime/browser-captures/sarwa-holdings-2026-08-18.json",
         ],
         "blockers": blockers,

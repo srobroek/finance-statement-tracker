@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Mapping
 
-from .account_completeness import AccountIdentity
+from .account_completeness import AccountCompletenessManifest, AccountIdentity
 from .wealth import FXSnapshot, WealthSnapshot, build_actual_wealth_proposal
 
 
@@ -126,6 +126,129 @@ def build_fab_opening_anchor_proposal(
             "derived_adjustment": None,
             "review_required": True,
         },
+    }
+
+
+def build_fab_inventory_proposal(
+    inventory_capture: Mapping[str, Any],
+    activity_capture: Mapping[str, Any],
+    manifest: AccountCompletenessManifest,
+    *,
+    evaluated_at: datetime,
+    stale_after_seconds: int = 604800,
+) -> dict[str, Any]:
+    source = inventory_capture.get("source")
+    raw_accounts = inventory_capture.get("accounts")
+    if not isinstance(source, Mapping) or not isinstance(raw_accounts, list):
+        raise ValueError("FAB inventory capture requires source and accounts")
+    if str(source.get("provider") or "").strip().casefold() != "fab":
+        raise ValueError("FAB inventory proposal received a different provider capture")
+    if inventory_capture.get("inventory_complete") is not True:
+        raise ValueError("FAB portal inventory is not marked complete")
+
+    expected = {
+        row.provider_account_id: row
+        for row in manifest.accounts if row.provider_id == "fab"
+    }
+    observed: dict[str, Mapping[str, Any]] = {}
+    for index, raw in enumerate(raw_accounts):
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"FAB inventory accounts[{index}] must be an object")
+        identity = str(raw.get("provider_account_id") or "")
+        if not identity.startswith("fab:") or identity in observed:
+            raise ValueError(f"Unsafe or duplicate FAB inventory identity: {identity}")
+        observed[identity] = raw
+    if set(expected) != set(observed):
+        raise ValueError("FAB manifest and complete portal inventory account sets differ")
+
+    current_2001 = build_fab_opening_anchor_proposal(
+        activity_capture,
+        provider_account_id="fab:current:2001",
+        account_name=expected["fab:current:2001"].actual_account_name
+        or expected["fab:current:2001"].display_name,
+        inventory_complete=True,
+        evaluated_at=evaluated_at,
+        stale_after_seconds=stale_after_seconds,
+    )
+    accounts: list[dict[str, Any]] = []
+    blockers: list[str] = list(current_2001["blockers"])
+    for identity in sorted(expected):
+        contract = expected[identity]
+        raw = observed[identity]
+        if str(raw.get("last4") or "") != (contract.last4 or ""):
+            raise ValueError(f"FAB last4 mismatch for {identity}")
+        if str(raw.get("currency") or "").upper() != contract.currency:
+            raise ValueError(f"FAB currency mismatch for {identity}")
+        if str(raw.get("balance_sign") or "").upper() != contract.balance_sign:
+            raise ValueError(f"FAB balance sign mismatch for {identity}")
+        if identity == "fab:current:2001":
+            if int(raw.get("observed_balance_minor")) != contract.expected_balance_minor:
+                raise ValueError("FAB 2001 inventory balance differs from captured account balance")
+            current_account = dict(current_2001["account"])
+            current_account["include_in_net_worth"] = contract.include_in_net_worth
+            current_account["fx_snapshot_required"] = False
+            inventory_as_of = _timestamp(raw.get("balance_as_of"), f"{identity}.balance_as_of")
+            inventory_freshness = _freshness(
+                inventory_as_of, evaluated_at, stale_after_seconds
+            )
+            if inventory_freshness == "STALE":
+                blockers.append(f"FAB_BALANCE_SNAPSHOT_STALE:{identity}")
+            elif inventory_freshness == "AS_OF_IN_FUTURE":
+                blockers.append(f"FAB_BALANCE_AS_OF_IN_FUTURE:{identity}")
+            current_account["inventory_balance_verification"] = {
+                "balance_minor": int(raw["observed_balance_minor"]),
+                "source_as_of": inventory_as_of.isoformat(),
+                "source_identity": f"browser-capture:{inventory_capture.get('capture_id')}",
+                "freshness": inventory_freshness,
+            }
+            accounts.append(current_account)
+            continue
+
+        as_of = _timestamp(raw.get("balance_as_of"), f"{identity}.balance_as_of")
+        freshness = _freshness(as_of, evaluated_at, stale_after_seconds)
+        if freshness == "STALE":
+            blockers.append(f"FAB_BALANCE_SNAPSHOT_STALE:{identity}")
+        elif freshness == "AS_OF_IN_FUTURE":
+            blockers.append(f"FAB_BALANCE_AS_OF_IN_FUTURE:{identity}")
+        if contract.balance_sign == "LIABILITY_NEGATIVE":
+            source_unsigned = int(raw.get("observed_outstanding_minor"))
+            signed_balance = int(raw.get("actual_signed_balance_minor"))
+            if source_unsigned < 0 or signed_balance != -source_unsigned:
+                raise ValueError(f"FAB liability sign is invalid for {identity}")
+        else:
+            signed_balance = int(raw.get("observed_balance_minor"))
+        if signed_balance != contract.expected_balance_minor:
+            raise ValueError(f"FAB evidenced balance differs from manifest for {identity}")
+        accounts.append({
+            "provider_account_id": identity,
+            "name": contract.actual_account_name or contract.display_name,
+            "action": "CREATE_OR_VERIFY_FROM_SOURCE_DATED_OPENING_ANCHOR",
+            "type": contract.account_type,
+            "offbudget": contract.actual_offbudget,
+            "currency": contract.currency,
+            "opening_balance_anchor": {
+                "balance_minor": signed_balance,
+                "source_as_of": as_of.isoformat(),
+                "source_identity": f"browser-capture:{inventory_capture.get('capture_id')}",
+                "freshness": freshness,
+                "stale_after_seconds": stale_after_seconds,
+                "balance_sign": contract.balance_sign,
+            },
+            "history_policy": "NO_HISTORY_FABRICATED",
+            "synthetic_balancing_row_allowed": False,
+            "fx_snapshot_required": contract.currency != "AED" and signed_balance != 0,
+            "include_in_net_worth": contract.include_in_net_worth,
+            "review_required": True,
+        })
+    return {
+        "schema_version": 1,
+        "mode": "PROPOSAL_ONLY",
+        "actual_writes_allowed": False,
+        "status": "BLOCKED" if blockers else "READY_FOR_REVIEW",
+        "blockers": list(dict.fromkeys(blockers)),
+        "inventory_status": "COMPLETE",
+        "inventory_capture_id": inventory_capture.get("capture_id"),
+        "accounts": accounts,
     }
 
 
