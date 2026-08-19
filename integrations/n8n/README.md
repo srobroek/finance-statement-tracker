@@ -42,6 +42,29 @@ operational cursors, receipts, outbox metadata, and fenced leases.
 The separate orchestrator is intended to mount `workflows` read-only. Before any
 workflow status can move beyond `SPEC_ONLY`, CI/disposable validation must:
 
+## Durable operational state contract
+
+`data-tables.json` v3 assigns every declared Data Table an explicit retention,
+logical idempotency key, concurrency rule, and index/lookup contract. The 19
+workflows reference all 15 tables through connected executable nodes. Actual
+remains the posted ledger, the cashback service remains authoritative for its
+live cursor/routing state, and OneDrive remains the immutable binary/artifact
+store; Data Tables contain only operational receipts, pointers, hashes, state,
+and bounded proposals.
+
+The Outlook sweep is two phase. `ENUMERATE` freezes and fully exhausts the
+window, persists an acquisition receipt, and returns exactly one aggregate
+heartbeat. `COMMIT` requires a downstream receipt SHA-256 and performs a
+`source_code + cursor_version` compare/update followed by exact readback. The
+cashback workflows continue to commit their own SQLite cursor and do not use
+the n8n cursor commit operation.
+
+The bounded MCP facade dispatches only through workflow 10, which writes an
+`ACCEPTED` request hash before execution and a redacted `COMPLETED` or `FAILED`
+result hash afterward, then verifies the terminal receipt. AI proposals are
+proposal-only: the exact validated JSON is archived to OneDrive, downloaded,
+hash-verified, and recorded as `PENDING` review in `finance_agent_jobs`.
+
 1. bind the Outlook and OneDrive credentials;
 2. seed the source/rule/cursor Data Tables from versioned configuration;
 3. install the reviewed finance custom nodes;

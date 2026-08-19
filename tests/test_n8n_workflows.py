@@ -198,6 +198,30 @@ class N8nWorkflowTests(unittest.TestCase):
             "finance_provider_circuits", "finance_execution_failures",
             "finance_mcp_requests", "finance_agent_jobs", "finance_ai_policy_contracts",
         }.issubset(names))
+        self.assertEqual(set(self.tables["state_policies"]), names)
+        for name, policy in self.tables["state_policies"].items():
+            with self.subTest(table=name):
+                self.assertTrue(policy["retention"])
+                self.assertTrue(policy["idempotency"])
+                self.assertTrue(policy["concurrency"])
+                self.assertTrue(policy["index_semantics"])
+
+    def test_every_declared_data_table_is_referenced_by_a_connected_executable_node(self) -> None:
+        referenced: set[str] = set()
+        for workflow in self.workflows.values():
+            connected = set(workflow["connections"])
+            for outputs in workflow["connections"].values():
+                for channel in outputs.values():
+                    for branch in channel:
+                        connected.update(edge["node"] for edge in branch)
+            for node in workflow["nodes"]:
+                if node["name"] not in connected or node["type"] != "n8n-nodes-base.dataTable":
+                    continue
+                value = node.get("parameters", {}).get("dataTableId", {}).get("value")
+                if value:
+                    referenced.add(value)
+        declared = {row["name"] for row in self.tables["tables"]}
+        self.assertEqual(referenced, declared)
 
     def test_outbox_holds_only_pointer_hash_and_state_metadata(self) -> None:
         table = next(row for row in self.tables["tables"] if row["name"] == "finance_actual_outbox")
@@ -225,7 +249,13 @@ class N8nWorkflowTests(unittest.TestCase):
         for term in ("run_upper_bound", "pagination_exhausted:true", "scanned_count", "heartbeat", "received>=start&&received<upper"):
             self.assertIn(term, code)
         self.assertTrue(workflow["meta"]["aggregateOutputAlwaysOne"])
-        self.assertTrue(workflow["meta"]["cursorMutationForbidden"])
+        self.assertTrue(workflow["meta"]["cursorCommitExactlyOnce"])
+        self.assertTrue(workflow["meta"]["cursorAdvanceRequiresDownstreamReceipt"])
+        self.assertIn("finance_acquisition_receipts", json.dumps(nodes["Upsert ENUMERATED Receipt"]))
+        self.assertEqual(nodes["CAS Update Source Cursor"]["parameters"]["operation"], "update")
+        cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
+        self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
+        self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
 
     def test_fixture_matrix_covers_zero_101_late_duplicates_and_failures(self) -> None:
         self.assertEqual(self.fixtures["contract_status"], "SPEC_ONLY")
@@ -311,14 +341,21 @@ class N8nWorkflowTests(unittest.TestCase):
     def test_error_workflow_redacts_then_upserts_reads_compares_and_marks(self) -> None:
         workflow = self.workflow("16-operations-error-handler.json")
         names = [node["name"] for node in workflow["nodes"]]
-        self.assertEqual(names, [
+        self.assertEqual(names[:7], [
             "Finance Workflow Failed", "Redact and Classify Failure",
             "Upsert Durable Failure Receipt", "Read Back Failure Receipt",
             "Compare Failure Receipt Readback", "Mark Failure Readback Verified",
             "Read Back Verified Failure Receipt",
         ])
+        self.assertEqual(names[7:], [
+            "Route Retryable Provider Failure", "Read Provider Circuit after Failure",
+            "Build OPEN Provider Circuit", "Upsert OPEN Provider Circuit",
+            "Read Back OPEN Provider Circuit", "Verify OPEN Circuit Readback",
+        ])
         code = self.nodes("16-operations-error-handler.json")["Redact and Classify Failure"]["parameters"]["jsCode"]
         self.assertIn("[REDACTED]", code)
+        self.assertIn("provider_code", code)
+        self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
         contract = load_json(N8N / "codex-agent-handoff.json")
@@ -412,6 +449,15 @@ class N8nWorkflowTests(unittest.TestCase):
                 N8N / "generated" / "ai-policy-contracts.seed.json"
             ),
         )
+        self.assertEqual(
+            manifest["sources"]["config_version_seed_sha256"],
+            git_canonical_sha256(N8N / "generated" / "config-versions.seed.json"),
+        )
+        result = subprocess.run(
+            [sys.executable, str(N8N / "compile_config_versions.py")],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_generated_source_hashes_use_git_canonical_lf_bytes(self) -> None:
         seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
@@ -494,7 +540,7 @@ class N8nWorkflowTests(unittest.TestCase):
             creates[0]["parameters"]["tableName"], "finance_execution_failures"
         )
 
-    def test_platform_bootstrap_only_seeds_and_exactly_reads_ai_policy_contracts(self) -> None:
+    def test_platform_bootstrap_seeds_and_exactly_reads_policy_and_config_contracts(self) -> None:
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         data_nodes = [
             node for node in nodes.values()
@@ -507,6 +553,8 @@ class N8nWorkflowTests(unittest.TestCase):
             [
                 ("upsert", "finance_ai_policy_contracts"),
                 ("get", "finance_ai_policy_contracts"),
+                ("upsert", "finance_config_versions"),
+                ("get", "finance_config_versions"),
             ],
         )
         upsert = nodes["Upsert AI Policy Contracts"]["parameters"]
@@ -537,6 +585,46 @@ class N8nWorkflowTests(unittest.TestCase):
             json.dumps(seed["rows"], ensure_ascii=False, separators=(",", ":"), sort_keys=True),
             nodes["Emit Versioned AI Policy Seed"]["parameters"]["jsCode"],
         )
+        config_seed = load_json(N8N / "generated" / "config-versions.seed.json")
+        self.assertIn(
+            json.dumps(config_seed["rows"], ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+            nodes["Emit Versioned Config Fingerprints"]["parameters"]["jsCode"],
+        )
+        for node_name in ("Upsert AI Policy Contracts", "Upsert Config Version Fingerprints"):
+            mappings = nodes[node_name]["parameters"]["columns"]["value"]
+            for value in mappings.values():
+                self.assertRegex(value, r"^=\{\{ \$json\.[a-z0-9_]+ \}\}$")
+        self.assertEqual(
+            nodes["Upsert AI Policy Contracts"]["parameters"]["columns"]["value"]["policy_version"],
+            "={{ $json.policy_version }}",
+        )
+
+    def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:
+        facade = self.nodes("15-finance-mcp-facade.json")
+        for name in ("finance.status", "artifact.submit_reviewed", "document.request"):
+            params = facade[name]["parameters"]
+            self.assertEqual(params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010")
+            self.assertIn("_mcp_request_id", params["workflowInputs"]["value"])
+        nodes = self.nodes("10-finance-operations-status.json")
+        for name in (
+            "Upsert ACCEPTED MCP Request", "Read Back ACCEPTED MCP Request",
+            "Upsert Terminal MCP Request", "Read Back Terminal MCP Request",
+            "Mark MCP Receipt Verified", "Read Verified MCP Receipt",
+        ):
+            self.assertIn("finance_mcp_requests", json.dumps(nodes[name]))
+        terminal = nodes["Build Redacted MCP Terminal Receipt"]["parameters"]["jsCode"]
+        self.assertIn("[REDACTED]", terminal)
+        self.assertIn("FAILED", terminal)
+
+    def test_ai_proposal_is_archived_hash_verified_and_left_pending_review(self) -> None:
+        nodes = self.nodes("09-ai-proposal.json")
+        self.assertEqual(nodes["Convert Proposal Artifact to File"]["type"], "n8n-nodes-base.convertToFile")
+        self.assertEqual(nodes["Archive Proposal Artifact in OneDrive"]["type"], "n8n-nodes-base.microsoftOneDrive")
+        self.assertEqual(nodes["Read Back Proposal Artifact"]["parameters"]["operation"], "download")
+        self.assertIn("AGENT_PROPOSAL_ARTIFACT_HASH_MISMATCH", nodes["Verify Proposal Artifact Readback"]["parameters"]["jsCode"])
+        values = nodes["Upsert SUCCEEDED Agent Job"]["parameters"]["columns"]["value"]
+        self.assertEqual(values["review_state"], "PENDING")
+        self.assertTrue({"proposal_artifact_item_id", "proposal_artifact_etag", "proposal_artifact_schema"}.issubset(values))
 
     def test_disposable_fixture_workflows_are_generated_current_and_hashed(self) -> None:
         disposable = N8N / "disposable"

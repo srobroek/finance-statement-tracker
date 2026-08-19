@@ -4,9 +4,9 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "d5fec36df00ae91f5ab88477994a0e71a1f0101343fa28f137501ac02c1073be",
-    "12-outlook-message-sweep.json": "e592f9763d85b4750292da957f335cb6a41cdc1df9dfb0b3e4cb1b45acd597d6",
-    "16-operations-error-handler.json": "28dd3d5ad2100037d7c4011da8f701200e3d23733b2e0126fe66cb933a2af4fb",
+    "09-ai-proposal.json": "bf9fd932de1f2e87749abeff1dfc625aeb268042f5762648f42b31cc864d9acb",
+    "12-outlook-message-sweep.json": "7b48eea128b234c499272c4117c6cd50ca2f243ff24fe38e4ad755486de460cc",
+    "16-operations-error-handler.json": "cc1e3aed19b52bef60715462ead19d7cd69f26a00369cc196665352131ad8c43",
     "17-actual-outbox-recovery.json": "de261ab89b69d50d3d2750fc7d5b1d3eebebd02bb5156f0e2f395419c61ad748",
     "18-finance-writer-lease.json": "a81c1647815f969ebc9e80e77b2f8feefb53918ebecd6970b85067c1aecfeef4"
   },
@@ -14,7 +14,7 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "8baf54fd1c5bfc2121619f3136eb79b1a3f5623ba7cab1d2b02dbc1950dca83d"
+      "sha256": "9e6144fa235ac5cbc3e09da72428cf328230224989ac298e7d0ced8a00ad086b"
     },
     {
       "file": "91-sweep-zero.json",
@@ -79,7 +79,7 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "ad0ae115946332e43699eb4ae568d5b608747ddd72713eae969006b9fc6dcfbf"
+      "sha256": "afcc191164ba123a1026ca441c0567afc41ccc6f4d8f2fa2cf09a9b69048d8d5"
     },
     {
       "file": "102-derived-recovery-core.json",

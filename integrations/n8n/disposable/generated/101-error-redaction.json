@@ -37,7 +37,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const e=$json.execution||{},w=$json.workflow||{}; const raw=String(e.error?.message||$json.error?.message||'Unknown workflow failure'); const redacted=raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi,'$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g,'[REDACTED]').slice(0,500); const status=Number(e.error?.httpCode||e.error?.statusCode||0); const retryable=status===429||status>=500||/timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw); return [{json:{execution_id:String(e.id||''),workflow_id:String(w.id||''),workflow_name:String(w.name||'').slice(0,200),workflow_code:String(w.financeWorkflowCode||''),run_id:String(e.id||''),error_class:retryable?'TRANSIENT':'TERMINAL',error_message_redacted:redacted,first_seen_at:new Date().toISOString(),readback_verified:false}}];"
+        "jsCode": "const e=$json.execution||{},w=$json.workflow||{},last=String(e.lastNodeExecuted||''); const raw=String(e.error?.message||$json.error?.message||'Unknown workflow failure'),redacted=raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi,'$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g,'[REDACTED]').slice(0,500),status=Number(e.error?.httpCode||e.error?.statusCode||0),retryable=status===429||status>=500||/timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw); const provider_code=/Outlook|OneDrive|Microsoft/i.test(last)?'MICROSOFT_GRAPH':/Codex|Agent Runner/i.test(last)?'CODEX_AGENT_RUNNER':/Actual/i.test(last)?'ACTUAL_BUDGET':/Cashback/i.test(last)?'CASHBACK_COMPANION':/Finance Executions|n8n/i.test(last)?'N8N_API':''; return [{json:{execution_id:String(e.id||''),workflow_id:String(w.id||''),workflow_name:String(w.name||'').slice(0,200),workflow_code:String(w.financeWorkflowCode||''),run_id:String(e.id||''),provider_code,error_class:retryable?'TRANSIENT':'TERMINAL',error_message_redacted:redacted,first_seen_at:new Date().toISOString(),readback_verified:false}}];"
       }
     },
     {
@@ -75,6 +75,7 @@
             "workflow_name": "={{ $json.workflow_name }}",
             "workflow_code": "={{ $json.workflow_code }}",
             "run_id": "={{ $json.run_id }}",
+            "provider_code": "={{ $json.provider_code }}",
             "error_class": "={{ $json.error_class }}",
             "error_message_redacted": "={{ $json.error_message_redacted }}",
             "first_seen_at": "={{ $json.first_seen_at }}",
@@ -214,6 +215,189 @@
         },
         "options": {}
       }
+    },
+    {
+      "id": "16008",
+      "name": "Route Retryable Provider Failure",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error_class }}",
+              "rightValue": "TRANSIENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.provider_code }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "16009",
+      "name": "Read Provider Circuit after Failure",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.provider_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16010",
+      "name": "Build OPEN Provider Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const failure=$('Redact and Classify Failure').first().json,row=$json?.provider_code?$json:{},count=Math.min(12,Number(row.transient_failure_count||0)+1),seconds=Math.min(3600,60*(2**Math.min(count-1,6))),now=new Date(); return [{json:{provider_code:failure.provider_code,state:'OPEN',transient_failure_count:count,last_error_class:failure.error_class,opened_at:now.toISOString(),retry_after:new Date(now.getTime()+seconds*1000).toISOString(),readback_verified:false,updated_at:now.toISOString()}}];"
+      }
+    },
+    {
+      "id": "16011",
+      "name": "Upsert OPEN Provider Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1300,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $json.provider_code }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "={{ $json.provider_code }}",
+            "state": "OPEN",
+            "transient_failure_count": "={{ $json.transient_failure_count }}",
+            "last_error_class": "={{ $json.last_error_class }}",
+            "opened_at": "={{ $json.opened_at }}",
+            "retry_after": "={{ $json.retry_after }}",
+            "readback_verified": false,
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16012",
+      "name": "Read Back OPEN Provider Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build OPEN Provider Circuit').item.json.provider_code }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "OPEN"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16013",
+      "name": "Verify OPEN Circuit Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const e=$('Build OPEN Provider Circuit').first().json,o=$json; if(o.provider_code!==e.provider_code||o.state!=='OPEN'||Number(o.transient_failure_count)!==e.transient_failure_count||o.retry_after!==e.retry_after) throw new Error('PROVIDER_CIRCUIT_READBACK_MISMATCH'); return [{json:o}];"
+      }
     }
   ],
   "connections": {
@@ -266,6 +450,72 @@
         [
           {
             "node": "Read Back Verified Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Route Retryable Provider Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Retryable Provider Failure": {
+      "main": [
+        [
+          {
+            "node": "Read Provider Circuit after Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Provider Circuit after Failure": {
+      "main": [
+        [
+          {
+            "node": "Build OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Upsert OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Read Back OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Verify OPEN Circuit Readback",
             "type": "main",
             "index": 0
           }

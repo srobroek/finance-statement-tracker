@@ -43,6 +43,31 @@
       }
     },
     {
+      "id": "10000000-0000-4000-8000-000000000113",
+      "name": "Read Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [-525, -180],
+      "alwaysOutputData": true,
+      "parameters": {"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"MICROSOFT_GRAPH"}]},"options":{}}
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000114",
+      "name": "Gate Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-350, -180],
+      "parameters": {"jsCode":"const now=new Date(),row=$json?.provider_code?$json:{state:'CLOSED',transient_failure_count:0},retry=row.retry_after?new Date(row.retry_after):null; if(row.state==='OPEN'&&retry&&retry>now) throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH'); return [{json:{provider_code:'MICROSOFT_GRAPH',state:row.state==='OPEN'?'HALF_OPEN':'CLOSED',transient_failure_count:Number(row.transient_failure_count||0),last_error_class:row.last_error_class||'',opened_at:row.opened_at||null,retry_after:row.retry_after||null,readback_verified:false,updated_at:now.toISOString()}}];"}
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000115",
+      "name": "Persist Microsoft Graph Circuit Gate",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [-175, -180],
+      "parameters": {"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"MICROSOFT_GRAPH"}]},"columns":{"mappingMode":"defineBelow","value":{"provider_code":"MICROSOFT_GRAPH","state":"={{ $json.state }}","transient_failure_count":"={{ $json.transient_failure_count }}","last_error_class":"={{ $json.last_error_class }}","opened_at":"={{ $json.opened_at }}","retry_after":"={{ $json.retry_after }}","readback_verified":false,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000105",
       "name": "Exact Sender Subject and Window Filter",
       "type": "n8n-nodes-base.code",
@@ -142,6 +167,14 @@
       "parameters": {"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_archive_receipts","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"={{ $('Validate Bounded Source Request').first().json.source_code }}"},{"keyName":"source_message_id","condition":"eq","keyValue":"={{ $('Exact Sender Subject and Window Filter').item.json.id }}"},{"keyName":"source_attachment_id","condition":"eq","keyValue":"={{ $('PDF Attachments Only').item.json.id }}"},{"keyName":"source_sha256","condition":"eq","keyValue":"={{ $('SHA-256 Original').item.json.document_sha256 }}"}]},"columns":{"mappingMode":"defineBelow","value":{"archive_receipt_id":"={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $('SHA-256 Original').item.json.document_sha256 }}","run_id":"={{ $('Validate Bounded Source Request').first().json.run_id }}","source_code":"={{ $('Validate Bounded Source Request').first().json.source_code }}","source_message_id":"={{ $('Exact Sender Subject and Window Filter').item.json.id }}","source_attachment_id":"={{ $('PDF Attachments Only').item.json.id }}","source_sha256":"={{ $('SHA-256 Original').item.json.document_sha256 }}","onedrive_item_id":"={{ $json.id }}","onedrive_etag":"={{ $json.eTag || $json.etag || '' }}","archive_state":"HASH_VERIFIED","verified_at":"={{ $now.toISO() }}","updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
     },
     {
+      "id": "10000000-0000-4000-8000-000000000116",
+      "name": "Close Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1275, -180],
+      "parameters": {"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"MICROSOFT_GRAPH"}]},"columns":{"mappingMode":"defineBelow","value":{"provider_code":"MICROSOFT_GRAPH","state":"CLOSED","transient_failure_count":0,"last_error_class":"","opened_at":null,"retry_after":null,"readback_verified":true,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000112",
       "name": "Read Back Archive Receipt",
       "type": "n8n-nodes-base.dataTable",
@@ -152,17 +185,21 @@
   ],
   "connections": {
     "Called by Trusted Workflow": {"main": [[{"node": "Validate Bounded Source Request", "type": "main", "index": 0}]]},
-    "Validate Bounded Source Request": {"main": [[{"node": "Get Messages from Configured Folder", "type": "main", "index": 0}]]},
+    "Validate Bounded Source Request": {"main": [[{"node": "Read Microsoft Graph Circuit", "type": "main", "index": 0}]]},
+    "Read Microsoft Graph Circuit": {"main": [[{"node": "Gate Microsoft Graph Circuit", "type": "main", "index": 0}]]},
+    "Gate Microsoft Graph Circuit": {"main": [[{"node": "Persist Microsoft Graph Circuit Gate", "type": "main", "index": 0}]]},
+    "Persist Microsoft Graph Circuit Gate": {"main": [[{"node": "Get Messages from Configured Folder", "type": "main", "index": 0}]]},
     "Get Messages from Configured Folder": {"main": [[{"node": "Exact Sender Subject and Window Filter", "type": "main", "index": 0}]]},
     "Exact Sender Subject and Window Filter": {"main": [[{"node": "List Message Attachments", "type": "main", "index": 0}]]},
     "List Message Attachments": {"main": [[{"node": "PDF Attachments Only", "type": "main", "index": 0}]]},
     "PDF Attachments Only": {"main": [[{"node": "Download Original Attachment", "type": "main", "index": 0}]]},
     "Download Original Attachment": {"main": [[{"node": "SHA-256 Original", "type": "main", "index": 0}]]},
     "SHA-256 Original": {"main": [[{"node": "Archive Original in OneDrive", "type": "main", "index": 0}]]},
-    "Archive Original in OneDrive": {"main": [[{"node": "Upsert Durable Archive Receipt", "type": "main", "index": 0}]]},
+    "Archive Original in OneDrive": {"main": [[{"node": "Close Microsoft Graph Circuit", "type": "main", "index": 0}]]},
+    "Close Microsoft Graph Circuit": {"main": [[{"node": "Upsert Durable Archive Receipt", "type": "main", "index": 0}]]},
     "Upsert Durable Archive Receipt": {"main": [[{"node": "Read Back Archive Receipt", "type": "main", "index": 0}]]}
   },
   "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "errorWorkflow":"10000000-0000-4000-8000-000000000016"},
   "pinData": {},
-  "meta": {"financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION", "mcpSafe": false, "migrationStatus":"SPEC_ONLY", "terminalReceiptTable":"finance_archive_receipts", "terminalReceiptReadback":true, "manualMutationForbidden":true}
+  "meta": {"financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION", "mcpSafe": false, "migrationStatus":"SPEC_ONLY", "terminalReceiptTable":"finance_archive_receipts", "terminalReceiptReadback":true, "providerCircuitTable":"finance_provider_circuits", "manualMutationForbidden":true}
 }

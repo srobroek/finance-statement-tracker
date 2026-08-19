@@ -110,6 +110,18 @@
       "credentials": {"httpHeaderAuth": {"id": "BIND_CODEX_AGENT_RUNNER", "name": "Finance Codex Agent Runner Bearer"}}
     },
     {
+      "id":"9027","name":"Read Codex Runner Circuit","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[350,-180],"alwaysOutputData":true,
+      "parameters":{"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"CODEX_AGENT_RUNNER"}]},"options":{}}
+    },
+    {
+      "id":"9028","name":"Gate Codex Runner Circuit","type":"n8n-nodes-base.code","typeVersion":2,"position":[475,-180],
+      "parameters":{"jsCode":"const now=new Date(),row=$json?.provider_code?$json:{state:'CLOSED',transient_failure_count:0},retry=row.retry_after?new Date(row.retry_after):null; if(row.state==='OPEN'&&retry&&retry>now) throw new Error('PROVIDER_CIRCUIT_OPEN:CODEX_AGENT_RUNNER'); return [{json:{provider_code:'CODEX_AGENT_RUNNER',state:row.state==='OPEN'?'HALF_OPEN':'CLOSED',transient_failure_count:Number(row.transient_failure_count||0),last_error_class:row.last_error_class||'',opened_at:row.opened_at||null,retry_after:row.retry_after||null,readback_verified:false,updated_at:now.toISOString()}}];"}
+    },
+    {
+      "id":"9029","name":"Persist Codex Runner Circuit Gate","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[575,-180],
+      "parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"CODEX_AGENT_RUNNER"}]},"columns":{"mappingMode":"defineBelow","value":{"provider_code":"CODEX_AGENT_RUNNER","state":"={{ $json.state }}","transient_failure_count":"={{ $json.transient_failure_count }}","last_error_class":"={{ $json.last_error_class }}","opened_at":"={{ $json.opened_at }}","retry_after":"={{ $json.retry_after }}","readback_verified":false,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
+    },
+    {
       "id": "9008",
       "name": "Validate Proposal Schema and Policy Boundary",
       "type": "n8n-nodes-base.code",
@@ -120,27 +132,97 @@
       }
     },
     {
+      "id":"9030","name":"Close Codex Runner Circuit","type":"n8n-nodes-base.dataTable","typeVersion":1.1,"position":[700,-180],
+      "parameters":{"resource":"row","operation":"upsert","dataTableId":{"__rl":true,"value":"finance_provider_circuits","mode":"name"},"matchType":"allConditions","filters":{"conditions":[{"keyName":"provider_code","condition":"eq","keyValue":"CODEX_AGENT_RUNNER"}]},"columns":{"mappingMode":"defineBelow","value":{"provider_code":"CODEX_AGENT_RUNNER","state":"CLOSED","transient_failure_count":0,"last_error_class":"","opened_at":null,"retry_after":null,"readback_verified":true,"updated_at":"={{ $now.toISO() }}"},"matchingColumns":[],"schema":[],"attemptToConvertTypes":false,"convertFieldsToString":false},"options":{"dryRun":false}}
+    },
+    {
       "id": "9009",
-      "name": "SHA-256 Validated Proposal",
+      "name": "Build Canonical Proposal Artifact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 0],
+      "parameters": {"jsCode": "const proposal=$('Validate Proposal Schema and Policy Boundary').first().json,artifact_text=JSON.stringify(proposal); return [{json:{...proposal,artifact_text,artifact_schema:'finance-ai-proposal-v1'}}];"}
+    },
+    {
+      "id": "9019",
+      "name": "SHA-256 Canonical Proposal Artifact",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
-      "position": [800, 0],
-      "parameters": {"action": "hash", "type": "SHA256", "value": "={{ JSON.stringify($json) }}", "dataPropertyName": "proposal_sha256"}
+      "position": [950, 0],
+      "parameters": {"action": "hash", "type": "SHA256", "value": "={{ $json.artifact_text }}", "dataPropertyName": "proposal_sha256"}
+    },
+    {
+      "id": "9020",
+      "name": "Convert Proposal Artifact to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [1100, 0],
+      "parameters": {"operation":"toText","sourceProperty":"artifact_text","binaryPropertyName":"data","options":{"fileName":"={{ $json.job_id + '.finance-ai-proposal-v1.json' }}","encoding":"utf8"}}
+    },
+    {
+      "id": "9026",
+      "name": "Attach Trusted Proposal Archive Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1325, 0],
+      "parameters": {"jsCode":"const contract=$json,artifact=$('SHA-256 Canonical Proposal Artifact').first().json; if(!contract.onedrive_parent_id) throw new Error('AI_PROPOSAL_ARCHIVE_PARENT_MISSING'); return [{json:{...artifact,onedrive_parent_id:contract.onedrive_parent_id}}];"}
+    },
+    {
+      "id": "9021",
+      "name": "Load Trusted Proposal Archive Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1250, 0],
+      "parameters": {"resource":"row","operation":"get","dataTableId":{"__rl":true,"value":"finance_source_contracts","mode":"name"},"returnAll":false,"limit":1,"matchType":"allConditions","filters":{"conditions":[{"keyName":"source_code","condition":"eq","keyValue":"AI_PROPOSAL_ARCHIVE"},{"keyName":"enabled","condition":"eq","keyValue":true}]},"options":{}}
+    },
+    {
+      "id": "9022",
+      "name": "Archive Proposal Artifact in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [1400, 0],
+      "parameters": {"resource":"file","operation":"upload","binaryPropertyName":"data","fileName":"={{ $('Build Idempotent Agent Handoff').item.json.job_id + '.finance-ai-proposal-v1.json' }}","parentId":"={{ $json.onedrive_parent_id }}"},
+      "credentials": {"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}
+    },
+    {
+      "id": "9023",
+      "name": "Read Back Proposal Artifact",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [1550, 0],
+      "parameters": {"resource":"file","operation":"download","fileId":"={{ $('Archive Proposal Artifact in OneDrive').item.json.id }}","binaryPropertyName":"data"},
+      "credentials": {"microsoftOneDriveOAuth2Api":{"id":"BIND_ONEDRIVE","name":"Finance OneDrive"}}
+    },
+    {
+      "id": "9024",
+      "name": "SHA-256 Proposal Artifact Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [1700, 0],
+      "parameters": {"action":"hash","type":"SHA256","binaryData":true,"binaryPropertyName":"data","dataPropertyName":"proposal_readback_sha256"}
+    },
+    {
+      "id": "9025",
+      "name": "Verify Proposal Artifact Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 0],
+      "parameters": {"jsCode":"const expected=$('SHA-256 Canonical Proposal Artifact').first().json.proposal_sha256,observed=$json.proposal_readback_sha256; if(observed!==expected) throw new Error('AGENT_PROPOSAL_ARTIFACT_HASH_MISMATCH'); const uploaded=$('Archive Proposal Artifact in OneDrive').first().json; if(!uploaded.id||!(uploaded.eTag||uploaded.etag)) throw new Error('AGENT_PROPOSAL_ARTIFACT_IDENTITY_MISSING'); return [{json:{proposal_sha256:expected,proposal_artifact_item_id:uploaded.id,proposal_artifact_etag:uploaded.eTag||uploaded.etag,proposal_artifact_schema:'finance-ai-proposal-v1'}}];"}
     },
     {
       "id": "9010",
       "name": "Upsert SUCCEEDED Agent Job",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [1000, 0],
-      "parameters": {"resource": "row", "operation": "upsert", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}]}, "columns": {"mappingMode": "defineBelow", "value": {"job_id": "={{ $('Build Idempotent Agent Handoff').item.json.job_id }}", "idempotency_key": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}", "state": "SUCCEEDED", "runner_receipt_id": "={{ $('Validate Proposal Schema and Policy Boundary').item.json.runner_receipt_id }}", "proposal_sha256": "={{ $json.proposal_sha256 }}", "terminal_readback_verified": false, "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false}, "options": {"dryRun": false}}
+      "position": [2000, 0],
+      "parameters": {"resource": "row", "operation": "upsert", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}]}, "columns": {"mappingMode": "defineBelow", "value": {"job_id": "={{ $('Build Idempotent Agent Handoff').item.json.job_id }}", "idempotency_key": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}", "state": "SUCCEEDED", "runner_receipt_id": "={{ $('Validate Proposal Schema and Policy Boundary').item.json.runner_receipt_id }}", "proposal_sha256": "={{ $json.proposal_sha256 }}", "proposal_artifact_item_id":"={{ $json.proposal_artifact_item_id }}","proposal_artifact_etag":"={{ $json.proposal_artifact_etag }}","proposal_artifact_schema":"={{ $json.proposal_artifact_schema }}","review_state":"PENDING","review_decision":"","reviewed_by_hash":"","reviewed_at":null,"terminal_readback_verified": false, "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false}, "options": {"dryRun": false}}
     },
     {
       "id": "9011",
       "name": "Read Back SUCCEEDED Agent Job",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [1200, 0],
+      "position": [2200, 0],
       "parameters": {"resource": "row", "operation": "get", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "returnAll": false, "limit": 1, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}, {"keyName": "state", "condition": "eq", "keyValue": "SUCCEEDED"}]}, "options": {}}
     },
     {
@@ -148,15 +230,15 @@
       "name": "Compare SUCCEEDED Agent Job Readback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 0],
-      "parameters": {"jsCode": "const request=$('Build Idempotent Agent Handoff').first().json,proposal=$('Validate Proposal Schema and Policy Boundary').first().json,hashed=$('SHA-256 Validated Proposal').first().json,observed=$json; if(observed.job_id!==request.job_id||observed.idempotency_key!==request.idempotency_key||observed.runner_receipt_id!==proposal.runner_receipt_id||observed.proposal_sha256!==hashed.proposal_sha256) throw new Error('AGENT_SUCCEEDED_RECEIPT_MISMATCH'); return [{json:observed}];"}
+      "position": [2400, 0],
+      "parameters": {"jsCode": "const request=$('Build Idempotent Agent Handoff').first().json,proposal=$('Validate Proposal Schema and Policy Boundary').first().json,artifact=$('Verify Proposal Artifact Readback').first().json,observed=$json; if(observed.job_id!==request.job_id||observed.idempotency_key!==request.idempotency_key||observed.runner_receipt_id!==proposal.runner_receipt_id||observed.proposal_sha256!==artifact.proposal_sha256||observed.proposal_artifact_item_id!==artifact.proposal_artifact_item_id||observed.proposal_artifact_etag!==artifact.proposal_artifact_etag||observed.review_state!=='PENDING') throw new Error('AGENT_SUCCEEDED_RECEIPT_MISMATCH'); return [{json:observed}];"}
     },
     {
       "id": "9012",
       "name": "Mark Agent Receipt Readback Verified",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [1400, 0],
+      "position": [2600, 0],
       "parameters": {"resource": "row", "operation": "upsert", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $json.idempotency_key }}"}]}, "columns": {"mappingMode": "defineBelow", "value": {"idempotency_key": "={{ $json.idempotency_key }}", "terminal_readback_verified": true, "updated_at": "={{ $now.toISO() }}"}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": false}, "options": {"dryRun": false}}
     },
     {
@@ -164,7 +246,7 @@
       "name": "Read Back Verified Agent Receipt",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [1600, 0],
+      "position": [2800, 0],
       "parameters": {"resource": "row", "operation": "get", "dataTableId": {"__rl": true, "value": "finance_agent_jobs", "mode": "name"}, "returnAll": false, "limit": 1, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"}, {"keyName": "terminal_readback_verified", "condition": "eq", "keyValue": true}]}, "options": {}}
     },
     {
@@ -172,7 +254,7 @@
       "name": "Return Proposal Only",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, 0],
+      "position": [3000, 0],
       "parameters": {"jsCode": "const p=$('Validate Proposal Schema and Policy Boundary').first().json; return [{json:{policy_id:p.policy_id,job_id:p.job_id,idempotency_key:p.idempotency_key,proposals:p.proposals}}];"}
     }
   ],
@@ -185,10 +267,22 @@
     "Build Idempotent Agent Handoff": {"main": [[{"node": "Upsert SUBMITTED Agent Job", "type": "main", "index": 0}]]},
     "Upsert SUBMITTED Agent Job": {"main": [[{"node": "Read Back SUBMITTED Agent Job", "type": "main", "index": 0}]]},
     "Read Back SUBMITTED Agent Job": {"main": [[{"node": "Compare SUBMITTED Agent Job Readback", "type": "main", "index": 0}]]},
-    "Compare SUBMITTED Agent Job Readback": {"main": [[{"node": "Invoke Fixed Codex Agent Runner", "type": "main", "index": 0}]]},
+    "Compare SUBMITTED Agent Job Readback": {"main": [[{"node": "Read Codex Runner Circuit", "type": "main", "index": 0}]]},
+    "Read Codex Runner Circuit": {"main": [[{"node": "Gate Codex Runner Circuit", "type": "main", "index": 0}]]},
+    "Gate Codex Runner Circuit": {"main": [[{"node": "Persist Codex Runner Circuit Gate", "type": "main", "index": 0}]]},
+    "Persist Codex Runner Circuit Gate": {"main": [[{"node": "Invoke Fixed Codex Agent Runner", "type": "main", "index": 0}]]},
     "Invoke Fixed Codex Agent Runner": {"main": [[{"node": "Validate Proposal Schema and Policy Boundary", "type": "main", "index": 0}]]},
-    "Validate Proposal Schema and Policy Boundary": {"main": [[{"node": "SHA-256 Validated Proposal", "type": "main", "index": 0}]]},
-    "SHA-256 Validated Proposal": {"main": [[{"node": "Upsert SUCCEEDED Agent Job", "type": "main", "index": 0}]]},
+    "Validate Proposal Schema and Policy Boundary": {"main": [[{"node": "Close Codex Runner Circuit", "type": "main", "index": 0}]]},
+    "Close Codex Runner Circuit": {"main": [[{"node": "Build Canonical Proposal Artifact", "type": "main", "index": 0}]]},
+    "Build Canonical Proposal Artifact": {"main": [[{"node": "SHA-256 Canonical Proposal Artifact", "type": "main", "index": 0}]]},
+    "SHA-256 Canonical Proposal Artifact": {"main": [[{"node": "Load Trusted Proposal Archive Contract", "type": "main", "index": 0}]]},
+    "Load Trusted Proposal Archive Contract": {"main": [[{"node": "Attach Trusted Proposal Archive Payload", "type": "main", "index": 0}]]},
+    "Attach Trusted Proposal Archive Payload": {"main": [[{"node": "Convert Proposal Artifact to File", "type": "main", "index": 0}]]},
+    "Convert Proposal Artifact to File": {"main": [[{"node": "Archive Proposal Artifact in OneDrive", "type": "main", "index": 0}]]},
+    "Archive Proposal Artifact in OneDrive": {"main": [[{"node": "Read Back Proposal Artifact", "type": "main", "index": 0}]]},
+    "Read Back Proposal Artifact": {"main": [[{"node": "SHA-256 Proposal Artifact Readback", "type": "main", "index": 0}]]},
+    "SHA-256 Proposal Artifact Readback": {"main": [[{"node": "Verify Proposal Artifact Readback", "type": "main", "index": 0}]]},
+    "Verify Proposal Artifact Readback": {"main": [[{"node": "Upsert SUCCEEDED Agent Job", "type": "main", "index": 0}]]},
     "Upsert SUCCEEDED Agent Job": {"main": [[{"node": "Read Back SUCCEEDED Agent Job", "type": "main", "index": 0}]]},
     "Read Back SUCCEEDED Agent Job": {"main": [[{"node": "Compare SUCCEEDED Agent Job Readback", "type": "main", "index": 0}]]},
     "Compare SUCCEEDED Agent Job Readback": {"main": [[{"node": "Mark Agent Receipt Readback Verified", "type": "main", "index": 0}]]},
@@ -197,5 +291,5 @@
   },
   "settings": {"executionOrder": "v1", "timezone": "Asia/Dubai", "saveDataErrorExecution": "none", "saveDataSuccessExecution": "none", "errorWorkflow": "10000000-0000-4000-8000-000000000016"},
   "pinData": {},
-  "meta": {"financeWorkflowCode": "AI_PROPOSAL", "migrationStatus": "SPEC_ONLY", "provider": "CODEX_AGENT_HANDOFF", "authMode": "CHATGPT_SUBSCRIPTION", "normalModel": "gpt-5.6-luna", "exceptionModel": "gpt-5.6-sol", "requestSchema": "contracts/codex-agent-handoff-v1.schema.json", "outputSchema": "contracts/ai-proposal-v1.schema.json", "policyContractTable": "finance_ai_policy_contracts", "terminalReceiptTable": "finance_agent_jobs", "terminalReceiptReadback": true, "activationBlockers": ["CODEX_AGENT_RUNNER_REQUIRED", "CHATGPT_SUBSCRIPTION_LOGIN_REQUIRED", "AI_POLICY_CONTRACT_SEED_REQUIRED", "RUNNER_EXACT_IMAGE_REQUIRED", "THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"], "importTested": false, "fixtureExecuted": false}
+  "meta": {"financeWorkflowCode": "AI_PROPOSAL", "migrationStatus": "SPEC_ONLY", "provider": "CODEX_AGENT_HANDOFF", "authMode": "CHATGPT_SUBSCRIPTION", "normalModel": "gpt-5.6-luna", "exceptionModel": "gpt-5.6-sol", "requestSchema": "contracts/codex-agent-handoff-v1.schema.json", "outputSchema": "contracts/ai-proposal-v1.schema.json", "policyContractTable": "finance_ai_policy_contracts", "terminalReceiptTable": "finance_agent_jobs", "terminalReceiptReadback": true, "proposalArtifactStore":"OneDrive","proposalReviewRequired":true,"activationBlockers": ["CODEX_AGENT_RUNNER_REQUIRED", "CHATGPT_SUBSCRIPTION_LOGIN_REQUIRED", "AI_POLICY_CONTRACT_SEED_REQUIRED", "AI_PROPOSAL_ARCHIVE_CONTRACT_REQUIRED", "RUNNER_EXACT_IMAGE_REQUIRED", "THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"], "importTested": false, "fixtureExecuted": false}
 }

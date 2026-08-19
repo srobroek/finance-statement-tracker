@@ -9,7 +9,7 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -600,
+        -1200,
         0
       ],
       "parameters": {
@@ -18,55 +18,696 @@
     },
     {
       "id": "12002",
-      "name": "Freeze Trusted Cursor Window",
+      "name": "Validate Sweep or Commit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -350,
+        -1000,
         0
       ],
       "parameters": {
-        "jsCode": "const r=$json; for(const k of ['run_id','source_code','folder_id','senders','subjects','window_start']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing trusted contract field ${k}`); if(!Array.isArray(r.senders)||!r.senders.length||!Array.isArray(r.subjects)||!r.subjects.length) throw new Error('Trusted sender and subject allowlists are required'); const start=new Date(r.window_start); const upper=r.run_upper_bound?new Date(r.run_upper_bound):new Date(); if(!Number.isFinite(start.valueOf())||!Number.isFinite(upper.valueOf())||!(start<upper)||upper>new Date()) throw new Error('Invalid frozen cursor window'); return [{json:{...r,run_upper_bound:upper.toISOString(),senders:r.senders.map(v=>String(v).toLowerCase()),subjects:r.subjects.map(String)}}];"
+        "jsCode": "const r=$json,operation=String(r.operation||'ENUMERATE'); if(!['ENUMERATE','COMMIT'].includes(operation)) throw new Error('INVALID_SWEEP_OPERATION'); for(const k of ['run_id','source_code']) if(!r[k]) throw new Error(`Missing ${k}`); if(operation==='COMMIT'){for(const k of ['run_upper_bound','downstream_receipt_sha256','expected_cursor_version']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing ${k}`); if(!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256))) throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');} return [{json:{...r,operation}}];"
       }
     },
     {
       "id": "12003",
+      "name": "Route Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -800,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "ENUMERATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "COMMIT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
+      "id": "12004",
+      "name": "Freeze Trusted Cursor Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        -220
+      ],
+      "parameters": {
+        "jsCode": "const r=$json; for(const k of ['folder_id','senders','subjects','window_start']) if(r[k]===undefined||r[k]===null||r[k]==='') throw new Error(`Missing ${k}`); if(!Array.isArray(r.senders)||!r.senders.length||!Array.isArray(r.subjects)||!r.subjects.length) throw new Error('Trusted allowlists required'); const start=new Date(r.window_start),upper=r.run_upper_bound?new Date(r.run_upper_bound):new Date(); if(!Number.isFinite(start.valueOf())||!Number.isFinite(upper.valueOf())||!(start<upper)||upper>new Date()) throw new Error('Invalid frozen cursor window'); return [{json:{...r,run_upper_bound:upper.toISOString(),senders:r.senders.map(v=>String(v).toLowerCase()),subjects:r.subjects.map(String)}}];"
+      }
+    },
+    {
+      "id": "12005",
+      "name": "Read Outlook Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -400,
+        -220
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12006",
+      "name": "Gate Outlook Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -220
+      ],
+      "parameters": {
+        "jsCode": "const now=new Date(),row=$json?.provider_code?$json:{state:'CLOSED',transient_failure_count:0},retry=row.retry_after?new Date(row.retry_after):null; if(row.state==='OPEN'&&retry&&retry>now) throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH'); return [{json:{provider_code:'MICROSOFT_GRAPH',state:row.state==='OPEN'?'HALF_OPEN':'CLOSED',transient_failure_count:Number(row.transient_failure_count||0),last_error_class:row.last_error_class||'',opened_at:row.opened_at||null,retry_after:row.retry_after||null,readback_verified:false,updated_at:now.toISOString()}}];"
+      }
+    },
+    {
+      "id": "12007",
+      "name": "Persist Outlook Circuit Gate",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        -220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "MICROSOFT_GRAPH",
+            "state": "={{ $json.state }}",
+            "transient_failure_count": "={{ $json.transient_failure_count }}",
+            "last_error_class": "={{ $json.last_error_class }}",
+            "opened_at": "={{ $json.opened_at }}",
+            "retry_after": "={{ $json.retry_after }}",
+            "readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12008",
       "name": "Exhaust Outlook Pagination",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -100,
-        0
+        200,
+        -220
       ],
       "parameters": {
         "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); if(kind==='zero') return [{json:{}}]; const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
       }
     },
     {
-      "id": "12004",
+      "id": "12009",
       "name": "Aggregate Exact Window Heartbeat",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        150,
-        0
+        400,
+        -220
       ],
       "parameters": {
-        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json; const start=new Date(c.window_start), upper=new Date(c.run_upper_bound); const enumerated=$input.all().map(i=>i.json).filter(j=>j&&j.id); const messages=enumerated.filter(j=>{const sender=String(j.from?.emailAddress?.address||j.sender?.emailAddress?.address||'').toLowerCase(); const received=new Date(j.receivedDateTime); return c.senders.includes(sender)&&c.subjects.includes(String(j.subject||''))&&received>=start&&received<upper;}).sort((a,b)=>String(a.receivedDateTime).localeCompare(String(b.receivedDateTime))||String(a.id).localeCompare(String(b.id))); return [{json:{run_id:c.run_id,source_code:c.source_code,window_start:c.window_start,run_upper_bound:c.run_upper_bound,pagination_exhausted:true,pages_fetched:null,scanned_count:enumerated.length,matched_count:messages.length,heartbeat:messages.length===0,messages}}];"
+        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,start=new Date(c.window_start),upper=new Date(c.run_upper_bound),all=$input.all().map(i=>i.json).filter(j=>j&&j.id); const messages=all.filter(j=>{const sender=String(j.from?.emailAddress?.address||j.sender?.emailAddress?.address||'').toLowerCase(),received=new Date(j.receivedDateTime); return c.senders.includes(sender)&&c.subjects.includes(String(j.subject||''))&&received>=start&&received<upper;}).sort((a,b)=>String(a.receivedDateTime).localeCompare(String(b.receivedDateTime))||String(a.id).localeCompare(String(b.id))); return [{json:{run_id:c.run_id,source_code:c.source_code,window_start:c.window_start,run_upper_bound:c.run_upper_bound,pagination_exhausted:true,pages_fetched:null,scanned_count:all.length,matched_count:messages.length,heartbeat:messages.length===0,messages}}];"
       }
     },
     {
-      "id": "12005",
-      "name": "Shape Aggregate Sweep Contract",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "id": "12010",
+      "name": "Close Outlook Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [
-        400,
-        0
+        600,
+        -220
       ],
       "parameters": {
-        "includeOtherFields": true,
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "MICROSOFT_GRAPH",
+            "state": "CLOSED",
+            "transient_failure_count": 0,
+            "last_error_class": "",
+            "opened_at": null,
+            "retry_after": null,
+            "readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12011",
+      "name": "Upsert ENUMERATED Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        -220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}",
+            "source_code": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}",
+            "window_start": "={{ $('Aggregate Exact Window Heartbeat').item.json.window_start }}",
+            "run_upper_bound": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_upper_bound }}",
+            "pages_fetched": "={{ $('Aggregate Exact Window Heartbeat').item.json.pages_fetched }}",
+            "pagination_exhausted": true,
+            "scanned_count": "={{ $('Aggregate Exact Window Heartbeat').item.json.scanned_count }}",
+            "matched_count": "={{ $('Aggregate Exact Window Heartbeat').item.json.matched_count }}",
+            "heartbeat": "={{ $('Aggregate Exact Window Heartbeat').item.json.heartbeat }}",
+            "terminal_state": "ENUMERATED",
+            "cursor_commit_eligible": false,
+            "downstream_receipt_sha256": "",
+            "readback_verified": false,
+            "created_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12012",
+      "name": "Read Back ENUMERATED Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        -220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ENUMERATED"
+            }
+          ]
+        },
         "options": {}
+      }
+    },
+    {
+      "id": "12013",
+      "name": "Verify Receipt and Return Sweep",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -220
+      ],
+      "parameters": {
+        "jsCode": "const e=$('Aggregate Exact Window Heartbeat').first().json,o=$json; for(const k of ['run_id','source_code','window_start','run_upper_bound','scanned_count','matched_count','heartbeat']) if(String(o[k])!==String(e[k])) throw new Error(`ACQUISITION_RECEIPT_MISMATCH:${k}`); if(o.pagination_exhausted!==true||o.cursor_commit_eligible!==false) throw new Error('ACQUISITION_RECEIPT_STATE_MISMATCH'); return [{json:{...e,receipt_readback_verified:true,cursor_commit_eligible:false}}];"
+      }
+    },
+    {
+      "id": "12020",
+      "name": "Read ENUMERATED Receipt for Commit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -600,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ENUMERATED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12021",
+      "name": "Verify Downstream Persistence Proof",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const r=$('Validate Sweep or Commit').first().json,o=$json; if(o.run_upper_bound!==r.run_upper_bound||o.pagination_exhausted!==true||o.cursor_commit_eligible!==false) throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE'); return [{json:{...r,window_start:o.window_start,scanned_count:Number(o.scanned_count),matched_count:Number(o.matched_count),heartbeat:Boolean(o.heartbeat)}}];"
+      }
+    },
+    {
+      "id": "12022",
+      "name": "Read Authoritative Source Cursor",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -200,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12023",
+      "name": "Build Cursor CAS Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const r=$('Verify Downstream Persistence Proof').first().json,o=$json,expected=Number(r.expected_cursor_version); if(!Number.isInteger(expected)||expected<0||Number(o.cursor_version)!==expected) throw new Error('SOURCE_CURSOR_VERSION_CONFLICT'); const next=new Date(r.run_upper_bound),prior=new Date(o.cursor_value); if(!Number.isFinite(next.valueOf())||!Number.isFinite(prior.valueOf())||next<=prior) throw new Error('SOURCE_CURSOR_NON_MONOTONIC'); return [{json:{...r,prior_cursor_version:expected,next_cursor_version:expected+1}}];"
+      }
+    },
+    {
+      "id": "12024",
+      "name": "CAS Update Source Cursor",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $json.source_code }}"
+            },
+            {
+              "keyName": "cursor_version",
+              "condition": "eq",
+              "keyValue": "={{ $json.prior_cursor_version }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cursor_value": "={{ $json.run_upper_bound }}",
+            "committed_run_id": "={{ $json.run_id }}",
+            "run_upper_bound": "={{ $json.run_upper_bound }}",
+            "scanned_count": "={{ $json.scanned_count }}",
+            "matched_count": "={{ $json.matched_count }}",
+            "cursor_version": "={{ $json.next_cursor_version }}",
+            "readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12025",
+      "name": "Read Back CAS Cursor",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.source_code }}"
+            },
+            {
+              "keyName": "cursor_version",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.next_cursor_version }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.run_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12026",
+      "name": "Compare CAS Cursor Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const e=$('Build Cursor CAS Update').first().json,o=$json; if(o.cursor_value!==e.run_upper_bound||Number(o.cursor_version)!==e.next_cursor_version||o.committed_run_id!==e.run_id) throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH'); return [{json:e}];"
+      }
+    },
+    {
+      "id": "12027",
+      "name": "Mark Acquisition DOWNSTREAM_VERIFIED",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ENUMERATED"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "terminal_state": "DOWNSTREAM_VERIFIED",
+            "cursor_commit_eligible": true,
+            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}",
+            "readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12028",
+      "name": "Read Back Terminal Acquisition Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        220
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "DOWNSTREAM_VERIFIED"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12029",
+      "name": "Return Verified Cursor Commit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const e=$('Build Cursor CAS Update').first().json,o=$json; if(o.downstream_receipt_sha256!==e.downstream_receipt_sha256||o.cursor_commit_eligible!==true) throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH'); return [{json:{status:'CURSOR_COMMITTED',run_id:e.run_id,source_code:e.source_code,cursor:e.run_upper_bound,cursor_version:e.next_cursor_version,downstream_receipt_sha256:e.downstream_receipt_sha256}}];"
       }
     }
   ],
@@ -75,7 +716,36 @@
       "main": [
         [
           {
+            "node": "Validate Sweep or Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Sweep or Commit": {
+      "main": [
+        [
+          {
+            "node": "Route Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Operation": {
+      "main": [
+        [
+          {
             "node": "Freeze Trusted Cursor Window",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read ENUMERATED Receipt for Commit",
             "type": "main",
             "index": 0
           }
@@ -83,6 +753,39 @@
       ]
     },
     "Freeze Trusted Cursor Window": {
+      "main": [
+        [
+          {
+            "node": "Read Outlook Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Outlook Circuit": {
+      "main": [
+        [
+          {
+            "node": "Gate Outlook Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Outlook Circuit": {
+      "main": [
+        [
+          {
+            "node": "Persist Outlook Circuit Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Outlook Circuit Gate": {
       "main": [
         [
           {
@@ -108,7 +811,139 @@
       "main": [
         [
           {
-            "node": "Shape Aggregate Sweep Contract",
+            "node": "Close Outlook Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close Outlook Circuit": {
+      "main": [
+        [
+          {
+            "node": "Upsert ENUMERATED Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert ENUMERATED Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back ENUMERATED Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back ENUMERATED Receipt": {
+      "main": [
+        [
+          {
+            "node": "Verify Receipt and Return Sweep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ENUMERATED Receipt for Commit": {
+      "main": [
+        [
+          {
+            "node": "Verify Downstream Persistence Proof",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Downstream Persistence Proof": {
+      "main": [
+        [
+          {
+            "node": "Read Authoritative Source Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Authoritative Source Cursor": {
+      "main": [
+        [
+          {
+            "node": "Build Cursor CAS Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cursor CAS Update": {
+      "main": [
+        [
+          {
+            "node": "CAS Update Source Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CAS Update Source Cursor": {
+      "main": [
+        [
+          {
+            "node": "Read Back CAS Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back CAS Cursor": {
+      "main": [
+        [
+          {
+            "node": "Compare CAS Cursor Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare CAS Cursor Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark Acquisition DOWNSTREAM_VERIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Acquisition DOWNSTREAM_VERIFIED": {
+      "main": [
+        [
+          {
+            "node": "Read Back Terminal Acquisition Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Terminal Acquisition Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Commit",
             "type": "main",
             "index": 0
           }

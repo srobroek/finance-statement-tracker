@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
 TABLES_PATH = N8N / "data-tables.json"
 SEED_PATH = N8N / "generated" / "ai-policy-contracts.seed.json"
+CONFIG_SEED_PATH = N8N / "generated" / "config-versions.seed.json"
 MANIFEST_PATH = N8N / "generated" / "platform-bootstrap-manifest.json"
 WORKFLOW_PATH = N8N / "workflows" / "19-platform-data-table-bootstrap.json"
 
@@ -54,7 +55,7 @@ def create_parameters(table: dict) -> dict:
     }
 
 
-def build_manifest(tables: dict, seed: dict) -> dict:
+def build_manifest(tables: dict, seed: dict, config_seed: dict) -> dict:
     return {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
@@ -64,6 +65,8 @@ def build_manifest(tables: dict, seed: dict) -> dict:
             "data_tables_sha256": sha256(TABLES_PATH),
             "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
             "ai_policy_seed_sha256": sha256(SEED_PATH),
+            "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
+            "config_version_seed_sha256": sha256(CONFIG_SEED_PATH),
         },
         "native_data_table_create_contract": {
             "node_type": "n8n-nodes-base.dataTable",
@@ -97,6 +100,15 @@ def build_manifest(tables: dict, seed: dict) -> dict:
                 "state",
             ],
         },
+        "config_seed": {
+            "table_name": "finance_config_versions",
+            "idempotency_key": ["config_name", "version"],
+            "rows": config_seed["rows"],
+            "exact_readback_fields": [
+                "config_name", "version", "source_path", "content_sha256",
+                "git_commit", "state",
+            ],
+        },
         "execution_evidence": {
             "exact_image_import_tested": False,
             "disposable_create_reuse_tested": False,
@@ -125,7 +137,7 @@ def data_table_node(node_id: str, name: str, position: list[int], parameters: di
     }
 
 
-def build_workflow(tables: dict, seed: dict, manifest: dict) -> dict:
+def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) -> dict:
     table_rows = ordered_tables(tables)
     seed_rows = seed["rows"]
     nodes: list[dict] = [
@@ -179,7 +191,7 @@ def build_workflow(tables: dict, seed: dict, manifest: dict) -> dict:
 
     upsert_name = "Upsert AI Policy Contracts"
     upsert_value = {
-        field: f"={{ $json.{field} }}"
+        field: f"={{{{ $json.{field} }}}}"
         for field in (
             "policy_id",
             "policy_version",
@@ -323,6 +335,53 @@ def build_workflow(tables: dict, seed: dict, manifest: dict) -> dict:
         "main": [[{"node": compare_name, "type": "main", "index": 0}]]
     }
 
+    embedded_config_seed = canonical_json(config_seed["rows"])
+    emit_config_name = "Emit Versioned Config Fingerprints"
+    nodes.append({
+        "id": "19055", "name": emit_config_name, "type": "n8n-nodes-base.code",
+        "typeVersion": 2, "position": [2200, 0],
+        "parameters": {"jsCode": (
+            f"const rows={embedded_config_seed}; const activated_at=new Date().toISOString(); "
+            "return rows.map(row=>({json:{...row,activated_at}}));"
+        )},
+    })
+    connections[compare_name] = {"main": [[{"node": emit_config_name, "type": "main", "index": 0}]]}
+
+    config_upsert_name = "Upsert Config Version Fingerprints"
+    config_fields = ("config_name", "version", "source_path", "content_sha256", "git_commit", "state", "readback_verified", "activated_at")
+    nodes.append(data_table_node("19056", config_upsert_name, [2400, 0], {
+        "resource": "row", "operation": "upsert",
+        "dataTableId": {"__rl": True, "value": "finance_config_versions", "mode": "name"},
+        "matchType": "allConditions",
+        "filters": {"conditions": [
+            {"keyName": "config_name", "condition": "eq", "keyValue": "={{ $json.config_name }}"},
+            {"keyName": "version", "condition": "eq", "keyValue": "={{ $json.version }}"},
+        ]},
+        "columns": {"mappingMode": "defineBelow", "value": {field: f"={{{{ $json.{field} }}}}" for field in config_fields}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": False, "convertFieldsToString": False},
+        "options": {"dryRun": False},
+    }))
+    connections[emit_config_name] = {"main": [[{"node": config_upsert_name, "type": "main", "index": 0}]]}
+
+    collapse_config_name = "Collapse Config Writes to One Readback"
+    nodes.append({"id": "19057", "name": collapse_config_name, "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2600, 0], "parameters": {"jsCode": f"const rows=$input.all(); if(rows.length!=={len(config_seed['rows'])}) throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH'); return [{{json:{{config_write_count:rows.length}}}}];"}})
+    connections[config_upsert_name] = {"main": [[{"node": collapse_config_name, "type": "main", "index": 0}]]}
+
+    config_read_name = "Read Back ACTIVE Config Fingerprints"
+    config_read = data_table_node("19058", config_read_name, [2800, 0], {"resource": "row", "operation": "get", "dataTableId": {"__rl": True, "value": "finance_config_versions", "mode": "name"}, "returnAll": True, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}]}, "options": {}})
+    config_read["alwaysOutputData"] = True
+    nodes.append(config_read)
+    connections[collapse_config_name] = {"main": [[{"node": config_read_name, "type": "main", "index": 0}]]}
+
+    compare_config_name = "Exact Compare Config Fingerprint Readback"
+    config_compare_fields = manifest["config_seed"]["exact_readback_fields"]
+    nodes.append({"id": "19059", "name": compare_config_name, "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [3000, 0], "parameters": {"jsCode": (
+        f"const expected={embedded_config_seed},fields={canonical_json(config_compare_fields)}; "
+        "const rows=$input.all().map(i=>i.json).filter(r=>r&&r.state==='ACTIVE'),byKey=new Map(rows.map(r=>[JSON.stringify([r.config_name,String(r.version)]),r])); "
+        "for(const row of expected){const actual=byKey.get(JSON.stringify([row.config_name,String(row.version)])); if(!actual) throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`); for(const field of fields){const value=field==='git_commit'&&row[field]==='RUNTIME_BIND_GIT_COMMIT'?actual[field]:row[field]; if(String(actual[field])!==String(value)) throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);}} "
+        f"return [{{json:{{status:'VERIFIED',tables_created_or_reused:{len(table_rows)},ai_policy_rows_verified:{len(seed_rows)},config_rows_verified:{len(config_seed['rows'])},finance_ledger_writes:false,actual_writes:false,contract_status:'SPEC_ONLY'}}}}];"
+    )}})
+    connections[config_read_name] = {"main": [[{"node": compare_config_name, "type": "main", "index": 0}]]}
+
     return {
         "id": WORKFLOW_ID,
         "name": "Finance · Platform Data Table Bootstrap · SPEC ONLY",
@@ -346,6 +405,7 @@ def build_workflow(tables: dict, seed: dict, manifest: dict) -> dict:
             "actualMutationForbidden": True,
             "sourceContract": "integrations/n8n/data-tables.json",
             "seedContract": "integrations/n8n/generated/ai-policy-contracts.seed.json",
+            "configSeedContract": "integrations/n8n/generated/config-versions.seed.json",
             "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
             "activationBlockers": manifest["activation_blockers"],
             "importTested": False,
@@ -357,8 +417,9 @@ def build_workflow(tables: dict, seed: dict, manifest: dict) -> dict:
 def render() -> tuple[str, str]:
     tables = load_json(TABLES_PATH)
     seed = load_json(SEED_PATH)
-    manifest = build_manifest(tables, seed)
-    workflow = build_workflow(tables, seed, manifest)
+    config_seed = load_json(CONFIG_SEED_PATH)
+    manifest = build_manifest(tables, seed, config_seed)
+    workflow = build_workflow(tables, seed, config_seed, manifest)
     return (
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         json.dumps(workflow, indent=2, ensure_ascii=False) + "\n",
