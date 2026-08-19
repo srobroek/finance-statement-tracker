@@ -195,11 +195,11 @@
     },
     {
       "id": "cloudflare-route-security",
-      "invariant": "Two tunnel containers reach allowlisted n8n routes over private Docker DNS; UI is AD-protected, MCP uses Service Auth, and no origin is LAN-published.",
+      "invariant": "The two existing external Cloudflare tunnels reach only the exact n8n LAN origin 172.20.10.20:5678; UI is AD-protected, MCP uses Service Auth, and no wildcard, localhost, public-IP, or additional service port is published.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require cloudflare-route-security", "expected": "Authorized routes succeed, unauthorized routes fail, origin scan is empty, and callback and WebSocket tests pass."},
-      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["DISPOSABLE_TWO_TUNNEL_ROUTE_REQUIRED"]
+      "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require cloudflare-route-security", "expected": "The exact LAN listener succeeds only on 172.20.10.20:5678, every other service port is absent, the existing UI route passes AD and WebSocket tests, and the exact-path MCP route passes Service Auth positive and negative tests."},
+      "dependencies": ["n8n-secrets"], "evidence": [], "blockers": ["DISPOSABLE_EXISTING_TUNNEL_ROUTE_REQUIRED", "MCP_SERVICE_AUTH_ROUTE_NOT_CONFIGURED"]
     },
     {
       "id": "bounded-mcp-facade",
@@ -223,7 +223,7 @@
       "status": "PARTIAL",
       "production_gate": true,
       "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json --require wealth-net-worth", "expected": "Immutable FAB, Sarwa, FX, and Actual UI/API evidence agrees at the stated as-of timestamps and exact signed net-worth equation."},
-      "dependencies": ["fab-complete-inventory", "sarwa-wealth-accounts", "actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_INVENTORY_REQUIRED", "FRESH_SARWA_AND_FX_REQUIRED", "HISTORICAL_FEED_REQUIRED"]
+      "dependencies": ["fab-complete-inventory", "sarwa-wealth-accounts", "actual-ui-api-parity"], "evidence": [], "blockers": ["DISPOSABLE_REPLAY_REQUIRED", "FRESH_SARWA_AND_FX_REQUIRED", "HISTORICAL_FEED_REQUIRED", "PRODUCTION_READBACK_REQUIRED"]
     }
   ]
 }

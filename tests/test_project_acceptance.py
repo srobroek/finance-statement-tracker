@@ -84,6 +84,27 @@ class ProjectAcceptanceTests(unittest.TestCase):
             "wealth-net-worth",
         }.issubset(identities))
 
+    def test_cloudflare_acceptance_uses_existing_lan_origin_tunnels(self) -> None:
+        payload = json.loads(
+            (ROOT / "config" / "project-acceptance.json").read_text(encoding="utf-8")
+        )
+        requirements = {row["id"]: row for row in payload["requirements"]}
+        route = requirements["cloudflare-route-security"]
+        self.assertIn("existing external Cloudflare tunnels", route["invariant"])
+        self.assertIn("172.20.10.20:5678", route["invariant"])
+        self.assertNotIn("tunnel containers", route["invariant"].lower())
+        self.assertNotIn("DISPOSABLE_TWO_TUNNEL_ROUTE_REQUIRED", route["blockers"])
+        self.assertIn("MCP_SERVICE_AUTH_ROUTE_NOT_CONFIGURED", route["blockers"])
+
+    def test_fab_inventory_blocker_is_not_stale(self) -> None:
+        payload = json.loads(
+            (ROOT / "config" / "project-acceptance.json").read_text(encoding="utf-8")
+        )
+        requirements = {row["id"]: row for row in payload["requirements"]}
+        wealth = requirements["wealth-net-worth"]
+        self.assertNotIn("FAB_INVENTORY_REQUIRED", wealth["blockers"])
+        self.assertIn("DISPOSABLE_REPLAY_REQUIRED", wealth["blockers"])
+
 
 if __name__ == "__main__":
     unittest.main()
