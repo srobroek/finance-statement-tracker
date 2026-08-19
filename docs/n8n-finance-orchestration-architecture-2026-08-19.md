@@ -132,15 +132,17 @@ node.
 
 ### Extraction resilience
 
-`integrations/n8n/sql/001-document-operations.sql` records a durable state
-machine outside n8n execution history:
+`integrations/n8n/data-tables.json` defines a durable Data Table state machine
+separate from n8n execution history:
 
 `RECEIVED → VALIDATED → DECRYPTED → EXTRACTED → SCHEMA_VALIDATED → READY_FOR_PARSE → COMMITTED`
 
 Fail-closed terminal states are `QUARANTINED`, `UNSUPPORTED`, and
-`PASSWORD_FAILED`. The unique source-hash/profile/schema key makes replays
-idempotent. Every transition records the n8n execution ID, parser version,
-input/output hash and a redacted error class.
+`PASSWORD_FAILED`. Data Table upserts use the source-hash/profile/schema tuple
+as the idempotency key. Production execution concurrency is limited to one to
+prevent competing upserts in this single-main deployment. Every transition
+records the n8n execution ID, parser version, input/output hash and a redacted
+error class.
 
 - Retry only timeouts, connection failures, 429 and 5xx responses, with bounded
   exponential backoff and jitter.
@@ -201,7 +203,11 @@ session.
 
 ## Community-edition boundaries
 
-- Regular mode with Postgres is sufficient for this low-volume deployment.
+- Regular mode with pooled-WAL SQLite is sufficient for this low-volume,
+  single-main deployment. Finance records live in Actual, cashback SQLite, and
+  OneDrive; n8n Data Tables hold only compact operational state. Move to
+  PostgreSQL if queue mode, multiple mains, or higher write concurrency is
+  introduced.
 - External task runners are used only for Code nodes and must match the n8n
   version. They are not general service or CLI runners.
 - Keep Execute Command and SSH nodes excluded.

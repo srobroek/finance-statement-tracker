@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "storage": "n8n-data-tables-on-pooled-wal-sqlite",
+  "tables": [
+    {
+      "name": "finance_document_operations",
+      "idempotency_key": ["source_sha256", "document_profile", "requested_schema_version"],
+      "columns": {
+        "document_id": "string",
+        "source_sha256": "string",
+        "document_profile": "string",
+        "requested_schema_version": "string",
+        "onedrive_item_id": "string",
+        "source_message_id": "string",
+        "source_attachment_id": "string",
+        "state": "string",
+        "attempt_count": "number",
+        "last_execution_id": "string",
+        "parser_version": "string",
+        "output_sha256": "string",
+        "error_class": "string",
+        "error_detail_redacted": "string",
+        "updated_at": "date"
+      },
+      "allowed_states": [
+        "RECEIVED",
+        "VALIDATED",
+        "DECRYPTED",
+        "EXTRACTED",
+        "SCHEMA_VALIDATED",
+        "READY_FOR_PARSE",
+        "COMMITTED",
+        "QUARANTINED",
+        "UNSUPPORTED",
+        "PASSWORD_FAILED"
+      ]
+    },
+    {
+      "name": "finance_provider_circuits",
+      "idempotency_key": ["provider_code"],
+      "columns": {
+        "provider_code": "string",
+        "state": "string",
+        "transient_failure_count": "number",
+        "opened_at": "date",
+        "retry_after": "date",
+        "updated_at": "date"
+      },
+      "allowed_states": ["CLOSED", "OPEN", "HALF_OPEN"]
+    },
+    {
+      "name": "finance_execution_failures",
+      "idempotency_key": ["execution_id"],
+      "columns": {
+        "execution_id": "string",
+        "workflow_id": "string",
+        "workflow_name": "string",
+        "error_class": "string",
+        "error_message_redacted": "string",
+        "execution_url": "string",
+        "first_seen_at": "date",
+        "acknowledged_at": "date",
+        "replay_execution_id": "string"
+      }
+    }
+  ]
+}

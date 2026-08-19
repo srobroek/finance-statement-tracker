@@ -107,8 +107,15 @@ class N8nWorkflowTests(unittest.TestCase):
             self.assertTrue(providers[provider]["requires_explicit_document_approval"])
 
     def test_document_state_machine_has_fail_closed_terminal_states(self) -> None:
-        sql = (ROOT / "integrations" / "n8n" / "sql" / "001-document-operations.sql").read_text(
-            encoding="utf-8"
+        tables = json.loads(
+            (ROOT / "integrations" / "n8n" / "data-tables.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        documents = next(
+            row
+            for row in tables["tables"]
+            if row["name"] == "finance_document_operations"
         )
         for state in (
             "RECEIVED",
@@ -122,8 +129,20 @@ class N8nWorkflowTests(unittest.TestCase):
             "UNSUPPORTED",
             "PASSWORD_FAILED",
         ):
-            self.assertIn(f"'{state}'", sql)
-        self.assertIn("UNIQUE (source_sha256, document_profile, requested_schema_version)", sql)
+            self.assertIn(state, documents["allowed_states"])
+        self.assertEqual(
+            documents["idempotency_key"],
+            ["source_sha256", "document_profile", "requested_schema_version"],
+        )
+
+    def test_workflows_do_not_require_a_postgres_node(self) -> None:
+        for path in WORKFLOWS.glob("*.json"):
+            workflow = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "n8n-nodes-base.postgres",
+                {node["type"] for node in workflow["nodes"]},
+                path.name,
+            )
 
 
 if __name__ == "__main__":

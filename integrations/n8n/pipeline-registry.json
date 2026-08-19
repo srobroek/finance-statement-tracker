@@ -2,7 +2,7 @@
   "schema_version": 1,
   "n8n_version": "2.35.3",
   "timezone": "Asia/Dubai",
-  "deployment_mode": "regular-postgres-external-runners",
+  "deployment_mode": "regular-sqlite-wal-external-runners",
   "mcp": {
     "enabled": true,
     "allowed_workflow_codes": [

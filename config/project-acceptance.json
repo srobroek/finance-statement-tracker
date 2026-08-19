@@ -117,7 +117,7 @@
       "description": "PDF processing uses an idempotent local-first state machine, narrow model-callable subflows, fail-closed quarantine, and explicitly approved external fallbacks only.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": false,
-      "evidence": ["config/document-processing.json", "integrations/n8n/sql/001-document-operations.sql", "integrations/n8n/workflows/13-document-extraction-request.json", "integrations/n8n/workflows/14-local-pdf-extraction.json"],
+      "evidence": ["config/document-processing.json", "integrations/n8n/data-tables.json", "integrations/n8n/workflows/13-document-extraction-request.json", "integrations/n8n/workflows/14-local-pdf-extraction.json"],
       "blockers": ["QPDF_CUSTOM_NODE_REQUIRED", "LIVE_PASSWORD_PROTECTED_FIXTURE_REQUIRED", "OPTIONAL_STIRLING_SECURITY_REVIEW_REQUIRED"]
     },
     {
