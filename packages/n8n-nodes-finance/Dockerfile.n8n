@@ -25,7 +25,7 @@ ADD --checksum=sha256:ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe
     /tmp/nodemailer-9.0.1.tgz
 RUN mkdir -p /tmp/nodemailer-9.0.1 \
     && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
-    && test "$(node -p \"require('/tmp/nodemailer-9.0.1/package.json').version\")" = "9.0.1"
+    && node -e "if(require('/tmp/nodemailer-9.0.1/package.json').version!=='9.0.1') process.exit(1)"
 
 FROM ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
 
@@ -34,8 +34,7 @@ RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10
     && rm -rf /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
     && mkdir -p /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer
 COPY --from=nodemailer-security-patch /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
-RUN test "$(node -p \"require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json').version\")" = "9.0.1" \
-    && node -e "const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const t=n.createTransport({jsonTransport:true}); if(typeof t.sendMail!=='function') process.exit(1)"
+RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const t=n.createTransport({jsonTransport:true}); if(p.version!=='9.0.1'||typeof t.sendMail!=='function') process.exit(1)"
 RUN mkdir -p /home/node/.n8n/nodes/node_modules/n8n-nodes-finance
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/package.json
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /home/node/.n8n/nodes/node_modules/n8n-nodes-finance/CONTRACT.md
