@@ -1,0 +1,229 @@
+{
+  "schema_version": "implementation-status-v1",
+  "generated_at": "2026-08-19",
+  "audit_basis": {
+    "repository_head": "f4436d8",
+    "working_tree": "DIRTY_N8N_REFACTOR",
+    "transcript_requirements_artifact": "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md",
+    "production_mutated": false
+  },
+  "overall": {
+    "implemented_state": "PARTIAL",
+    "verification_state": "FAIL",
+    "risk": "CRITICAL",
+    "blocked_by": [
+      "CURRENT_TEST_SUITE_FAILURES",
+      "N8N_REFACTOR_UNCOMMITTED_AND_NOT_RUNTIME_PROVEN",
+      "ACTUAL_UI_API_PARITY_UNPROVEN",
+      "SARWA_AND_FAB_PRODUCTION_READBACK_INCOMPLETE",
+      "ADCB_ZERO_LACKS_ISSUER_EVIDENCE",
+      "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED"
+    ]
+  },
+  "items": [
+    {
+      "id": "architecture.actual-authoritative-ledger",
+      "implemented_state": "PARTIAL",
+      "verification_state": "NOT_RUNTIME_VERIFIED",
+      "evidence_paths": ["AGENTS.md", "config/project-acceptance.json", "integrations/actual/actualctl.mjs"],
+      "tests": ["integrations/actual: 48/48 passing"],
+      "live_readback": "The last checked snapshot predates the current refactor and enumerates only seven accounts.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Enumerate every posted identity across Actual and operational stores and prove Actual is the sole posted ledger.",
+      "risk": "HIGH",
+      "blocked_by": ["RUNTIME_ENUMERATION_REQUIRED"]
+    },
+    {
+      "id": "accounts.fab-non-credit",
+      "implemented_state": "IMPLEMENTED_NOT_DEPLOYED",
+      "verification_state": "REPOSITORY_AND_RECEIPT_ONLY",
+      "evidence_paths": ["config/account-completeness.json", "config/evidence/browser-captures/fab-non-credit-inventory-2026-08-19.json", "runtime/account-reconciliation-production-2026-08-19.json", "config/evidence/production-account-reconciliation-receipt-2026-08-19.json"],
+      "tests": ["tests/test_account_completeness.py passing in full-suite run"],
+      "live_readback": "Receipt says guarded apply/readback passed for the planned FAB accounts, but UI readback remains PENDING_USER_CLOUDFLARE_AUTH and no current independent live query was possible.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Prove current Actual API and authenticated UI contain exactly the complete FAB non-credit inventory with source-matching signed balances.",
+      "risk": "HIGH",
+      "blocked_by": ["PRODUCTION_UI_READBACK_REQUIRED", "ACTUAL_UI_API_PARITY"]
+    },
+    {
+      "id": "accounts.sarwa",
+      "implemented_state": "PARTIAL",
+      "verification_state": "FIXTURE_AND_CAPTURE_VERIFIED",
+      "evidence_paths": ["runtime/browser-captures/sarwa-holdings-2026-08-18.json", "config/wealth-sources.json", "finance_tracker/wealth.py", "config/proposals/actual-accounts-fab-sarwa.json"],
+      "tests": ["tests/test_wealth.py passing", "tests/test_wealth_acceptance.py passing", "tests/test_account_completeness.py passing"],
+      "live_readback": "No fresh authenticated Sarwa capture, FX snapshot, or current Actual UI/API account readback is bound to the proposed state.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Acquire fresh interactive holdings and FX, run disposable idempotent projection, then guardedly create/read back each included off-budget portfolio account.",
+      "risk": "HIGH",
+      "blocked_by": ["FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED", "FX_SNAPSHOT_REQUIRED", "DISPOSABLE_REPLAY_REQUIRED"]
+    },
+    {
+      "id": "accounts.adcb-closed-zero",
+      "implemented_state": "PARTIAL",
+      "verification_state": "BLOCKED",
+      "evidence_paths": ["config/account-completeness.json", "finance_tracker/transaction_semantics.py", "tests/test_transaction_semantics.py", "runtime/account-reconciliation-production-2026-08-19.json"],
+      "tests": ["No-balancing-row and closing-payment regressions pass"],
+      "live_readback": "A repository receipt targets zero and closed state, but the acceptance ledger correctly still requires issuer-evidenced closing payment history and current production readback.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Obtain closing statement/payment evidence, reconcile naturally to AED 0, retain history, and prove closed UI/API state without a synthetic row.",
+      "risk": "CRITICAL",
+      "blocked_by": ["EVIDENCED_CLOSING_PAYMENT_REQUIRED", "PRODUCTION_READBACK_REQUIRED"]
+    },
+    {
+      "id": "transactions.note-contract-v2",
+      "implemented_state": "IMPLEMENTED_NOT_DEPLOYED",
+      "verification_state": "FULL_CORPUS_DRY_RUN_VERIFIED",
+      "evidence_paths": ["config/actual-note-contract.json", "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json", "finance_tracker/actual_notes.py", "finance_tracker/corpus_migration.py", "scripts/plan-actual-corpus-migration.py", "integrations/actual/note-contract.mjs", "tests/test_actual_notes.py", "tests/test_corpus_migration.py", "docs/actual-note-contract.md", "runtime/audit/actual-corpus-semantics-audit-2026-08-19.json", "runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json", "runtime/audit/actual-corpus-migration-audit-2026-08-19.json"],
+      "tests": ["Note-contract tests pass in Python and Actual Node suites", "Full corpus regeneration is byte-deterministic and the exact-state dry-run preflight passes with zero amount mutations"],
+      "live_readback": "The 45-manifest dry run scanned 3,927 stable identities and proposed 400 exact-state changes while preserving current memos, documents, reviews, and 28 manual category choices. No production write was performed; authenticated UI verification remains open.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Review the 28 preserved manual-category conflicts and 15 corpus identities absent from the snapshot, replay the guarded plan in disposable Actual, then separately authorize any production delta and verify authenticated UI samples.",
+      "risk": "HIGH",
+      "blocked_by": ["MANUAL_CATEGORY_CONFLICT_REVIEW_REQUIRED", "DISPOSABLE_MIGRATION_REPLAY_REQUIRED", "PRODUCTION_BACKFILL_NOT_AUTHORIZED", "UI_IDENTITY_DIFF_REQUIRED"]
+    },
+    {
+      "id": "transactions.refund-reward-transfer-semantics",
+      "implemented_state": "IMPLEMENTED_NOT_DEPLOYED",
+      "verification_state": "FULL_CORPUS_DRY_RUN_VERIFIED",
+      "evidence_paths": ["finance_tracker/transaction_semantics.py", "finance_tracker/corpus_migration.py", "scripts/plan-actual-corpus-migration.py", "tests/test_transaction_semantics.py", "tests/test_actual_pipeline.py", "tests/test_corpus_migration.py", "config/rules.json", "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json", "runtime/audit/actual-corpus-semantics-audit-2026-08-19.json", "runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json", "runtime/audit/actual-corpus-migration-audit-2026-08-19.json"],
+      "tests": ["EI Amazon refund, explicit non-cash Amazon-credit reward, generic positive merchant credit, immutable amount, ADCB closing-payment, stable-ID guard drift, manual-state preservation, and corpus determinism regressions pass"],
+      "live_readback": "The read-only 45-manifest audit classified 3,927 stable identities: 3,400 purchases, 47 refunds, 5 reversals, 115 explicit rewards, 120 transfers, 207 fees, 3 incomes, and 30 unresolved deposit credits. The two known EI positive Amazon statement rows are refunds. The guarded snapshot plan has zero amount mutations; no production backfill occurred.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Review the 877 reported semantic/note exceptions and 28 manual-category conflicts, replay the exact plan in disposable Actual, then separately authorize any stable-ID production delta.",
+      "risk": "HIGH",
+      "blocked_by": ["EXCEPTION_REVIEW_REQUIRED", "DISPOSABLE_MIGRATION_REPLAY_REQUIRED", "PRODUCTION_BACKFILL_NOT_AUTHORIZED"]
+    },
+    {
+      "id": "transactions.classification-review-coverage",
+      "implemented_state": "PARTIAL",
+      "verification_state": "SCAFFOLD_VERIFIED",
+      "evidence_paths": ["finance_tracker/classification_audit.py", "tests/test_transaction_semantics.py", "config/rules.json"],
+      "tests": ["Review/category and home/rental invariants have unit coverage"],
+      "live_readback": "No current production exception report proves every unresolved transaction appears exactly once in review.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Run classification audit over the full disposable corpus and authenticated production readback; resolve owner/property/payee exceptions.",
+      "risk": "HIGH",
+      "blocked_by": ["DISPOSABLE_CORPUS_AUDIT_REQUIRED", "PRODUCTION_REVIEW_QUEUE_REQUIRED"]
+    },
+    {
+      "id": "orchestration.n8n-greenfield",
+      "implemented_state": "PARTIAL",
+      "verification_state": "FAILING_WORKTREE",
+      "evidence_paths": ["integrations/n8n/pipeline-registry.json", "integrations/n8n/workflows", "integrations/n8n/data-tables.json", "tests/test_n8n_workflows.py"],
+      "tests": ["tests.test_n8n_workflows: 35/36 passing; platform bootstrap seed/readback assertion fails"],
+      "live_readback": "The refactor is uncommitted (36 tracked modifications plus new workflows 20 and 21) and has no disposable runtime execution receipt for the current bytes.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Stabilize generated/bootstrap contracts, make all tests green, import the exact custom image into disposable n8n, execute double replay and failure-boundary fixtures, then review receipts.",
+      "risk": "CRITICAL",
+      "blocked_by": ["CURRENT_TEST_FAILURE", "UNCOMMITTED_REFACTOR", "DISPOSABLE_N8N_REQUIRED", "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"]
+    },
+    {
+      "id": "orchestration.codex-agent-handoff",
+      "implemented_state": "PARTIAL",
+      "verification_state": "FAILING_WORKTREE",
+      "evidence_paths": ["services/codex-agent-runner", "docs/bellwether-onepassword-runner-validation-2026-08-19.md", "integrations/n8n/contracts/ai-proposal-v1.schema.json"],
+      "tests": ["services/codex-agent-runner: 14/16 passing; two agent_provider envelope tests fail"],
+      "live_readback": "An older disposable validation exists, but the current contract bytes fail their local suite and are not production promoted.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Repair provider-envelope contract/test parity, rerun malicious/protected-field cases through the full n8n wrapper, and promote only after reviewed disposable receipts.",
+      "risk": "CRITICAL",
+      "blocked_by": ["CURRENT_TEST_FAILURES", "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"]
+    },
+    {
+      "id": "ingestion.browser",
+      "implemented_state": "PARTIAL",
+      "verification_state": "ADAPTER_TESTED_NOT_END_TO_END",
+      "evidence_paths": ["config/browser-sources.json", "finance_tracker/browser_ingestion.py", "runtime/browser-adapters-status.json", "docs/browser-ingestion.md"],
+      "tests": ["Browser recipe/export/ingestion/CLI tests pass in full-suite run"],
+      "live_readback": "ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
+      "risk": "HIGH",
+      "blocked_by": ["RAK_SC_STATEMENT_ADAPTERS_REQUIRED", "DISPOSABLE_BROWSER_E2E_REQUIRED"]
+    },
+    {
+      "id": "ingestion.documents-and-evidence",
+      "implemented_state": "PARTIAL",
+      "verification_state": "UNIT_VERIFIED_ONLY",
+      "evidence_paths": ["Finance Evidence/catalogue.json", "integrations/n8n/workflows/13-document-extraction-request.json", "integrations/n8n/workflows/14-local-pdf-extraction.json", "tests/test_evidence.py"],
+      "tests": ["Evidence tests pass; n8n structural extraction checks pass except unrelated bootstrap failure"],
+      "live_readback": "No accepted live warranty/receipt acquisition fixture or Linux UDS encrypted-PDF runtime proof for current orchestration.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage.",
+      "risk": "MEDIUM",
+      "blocked_by": ["LIVE_WARRANTY_FIXTURE_REQUIRED", "LINUX_UDS_RUNTIME_PROOF_REQUIRED"]
+    },
+    {
+      "id": "cashback.production",
+      "implemented_state": "PARTIAL",
+      "verification_state": "HISTORICALLY_ACCEPTED_CURRENTLY_UNREACHABLE_FROM_AUDIT_HOST",
+      "evidence_paths": ["apps/cashback-control", "config/cashback-programs.json", "deploy/cashback/compose.yaml", ".github/workflows/cashback-image.yml", "runtime/deployment-e2e.json"],
+      "tests": ["Cashback Python tests pass in full-suite run", "CI profile matrix is defined"],
+      "live_readback": "Prior interaction accepted routing/push behavior, but HTTPS health could not be independently queried from this audit environment (Schannel credentials error), and the current n8n live-ingestion cutover is not proven.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover.",
+      "risk": "MEDIUM",
+      "blocked_by": ["LIVE_HEALTH_READBACK_REQUIRED", "FICTIONAL_PROFILE_MATRIX_REQUIRED", "N8N_CUTOVER_REQUIRED"]
+    },
+    {
+      "id": "automation.schedules-and-task-archival",
+      "implemented_state": "PARTIAL",
+      "verification_state": "LEGACY_TASKS_AUDITED_N8N_CUTOVER_PENDING",
+      "evidence_paths": ["config/codex-automations.json", "docs/automation-lifecycle-audit-2026-08-19.md", "finance_tracker/automation_lifecycle.py", "integrations/n8n/pipeline-registry.json"],
+      "tests": ["Automation manifest/lifecycle tests pass in full-suite run"],
+      "live_readback": "Six legacy Codex schedules were previously observed; self-archive failed, external exact-ID archival worked. No ephemeral task mode is evidenced. n8n schedules are exported inactive and not cut over.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats.",
+      "risk": "HIGH",
+      "blocked_by": ["N8N_SCHEDULE_CUTOVER_REQUIRED", "CURRENT_N8N_TEST_FAILURE"]
+    },
+    {
+      "id": "security.credentials",
+      "implemented_state": "IMPLEMENTED_NOT_DEPLOYED",
+      "verification_state": "DESIGN_ONLY_FOR_CURRENT_STACK",
+      "evidence_paths": ["deploy/finance-runtime/render-env.sh", "deploy/finance-runtime/finance.env.tpl", "docs/bellwether-onepassword-runner-validation-2026-08-19.md", "config/project-acceptance.json"],
+      "tests": ["Static secret/config tests pass in full-suite run"],
+      "live_readback": "No current cold-start, rotation, restore, log, execution, and backup scan proves dedicated-vault runtime injection for the n8n stack.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Create/verify the dedicated vault, perform one batched injection, rotate in disposable, scan all persistence/log surfaces, and prove restore decryption.",
+      "risk": "CRITICAL",
+      "blocked_by": ["DEDICATED_VAULT_REQUIRED", "DISPOSABLE_SECRET_AUDIT_REQUIRED"]
+    },
+    {
+      "id": "deployment.ci-containers-cloudflare",
+      "implemented_state": "PARTIAL",
+      "verification_state": "CI_DEFINED_LIVE_STATE_UNVERIFIED",
+      "evidence_paths": [".github/workflows/cashback-image.yml", ".github/workflows/phase1-finance-artifacts.yml", "deploy/actual-poc/compose.yaml", "deploy/cashback/compose.yaml", "config/deployment.json"],
+      "tests": ["Actual Node suite 48/48 passing", "Deployment script tests pass in full-suite run"],
+      "live_readback": "Cashback and Actual are separate compose projects in repository. Exact current container digests, restart state, Cloudflare route security, backup restore, and n8n deployment are not independently proven in this audit.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Record immutable image digests, verify independent restarts, execute restore drill, validate tunnel origin/headers and AD/Service Auth boundaries, and deploy reviewed n8n candidate.",
+      "risk": "HIGH",
+      "blocked_by": ["DISPOSABLE_RESTORE_DRILL_REQUIRED", "LIVE_DEPLOYMENT_READBACK_REQUIRED", "MCP_SERVICE_AUTH_ROUTE_NOT_CONFIGURED"]
+    },
+    {
+      "id": "actual.budgets-schedules-dashboards-owners",
+      "implemented_state": "PARTIAL",
+      "verification_state": "CONFIG_SCAFFOLD_ONLY",
+      "evidence_paths": ["config/actual-bootstrap.json", "config/actual-budget-automation.json", "integrations/actual/dashboard-export.mjs", "integrations/actual/budget-automation.mjs"],
+      "tests": ["Budget, schedule, dashboard, tag-report, and mortgage formula tests pass in Actual Node suite"],
+      "live_readback": "Earlier production snapshot had one schedule and incomplete account data; no current evidence proves owner/person views, valid net worth, approved budgets, subscriptions, savings, retirement, or complete reports.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Populate only after account/UI parity; obtain approved budget values and verify every named report against authoritative source data.",
+      "risk": "MEDIUM",
+      "blocked_by": ["COMPLETE_SOURCE_DATA_REQUIRED", "USER_APPROVED_BUDGETS_REQUIRED", "ACTUAL_UI_API_PARITY"]
+    },
+    {
+      "id": "verification.full-corpus-and-production-promotion",
+      "implemented_state": "MISSING",
+      "verification_state": "FAIL",
+      "evidence_paths": ["config/project-acceptance.json", "runtime/audit/disposable-full-rebuild-audit.json", "runtime/audit/production-post-replay-audit.json"],
+      "tests": ["Python full suite: 350 passed, 1 failed, 6 skipped", "Actual Node: 48 passed", "Codex runner: 14 passed, 2 failed"],
+      "live_readback": "Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
+      "last_verified": "2026-08-19",
+      "remaining_work": "Reach a clean tree and green suites, hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts/balances/notes/manual state, run restore/failure drills, then produce reviewed promotion evidence.",
+      "risk": "CRITICAL",
+      "blocked_by": ["CURRENT_TEST_SUITE_FAILURES", "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED", "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW"]
+    }
+  ]
+}

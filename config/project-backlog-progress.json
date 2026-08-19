@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-19",
+  "evidence_commit": "3a6acc625abe99d977d2b225eaae63f8ffe02c65",
+  "evidence_commits": [
+    "3a6acc625abe99d977d2b225eaae63f8ffe02c65",
+    "da6b0c128210b2cd44a7a2c5a120b08e942de9ce",
+    "b845ccf2694ce8931814785522bacfe16abe4c01",
+    "fa8fd58bdc6cf098792cde3ff7416a0780647b5a"
+  ],
+  "snapshot_notes": [
+    "da6b0c1 closes the stale n8n contract failures: 21 inactive exports, 20 of 20 Execute Sub-workflow references using From list, eight declared folders, 17 semantic groups, readable notes and code, and one typed provider-neutral proposal schema.",
+    "The rootless fa8fd58 local image imported 21 inactive and unpublished workflows, bootstrapped 15 Data Tables, passed health, registered eight community nodes and three credential types, scanned at zero HIGH or CRITICAL findings, and produced an SPDX SBOM. It is local disposable evidence, not production evidence.",
+    "Both n8n OAuth credentials now show Account connected for Outlook Mail.Read and OneDrive Files.ReadWrite. Persistent workflow binding, bounded mailbox and root-folder readback, and token-refresh evidence remain in progress; identifiers and secret values are intentionally excluded.",
+    "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
+    "Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.",
+    "b845ccf records a guarded 45-manifest, 3,927-identity Actual dry run with 400 proposed exact-state changes, zero amount mutations, 28 preserved manual-category conflicts, and 15 snapshot-absent identities. No disposable Actual replay or production write occurred.",
+    "The independent 3a6acc6 readiness audit keeps ADCB issuer-balance contradiction, duplicated Finance Evidence paths, missing warranty and property metadata, missing fresh wealth and FX evidence, and runtime commit drift open. CI-host SSH is unavailable and production deployment or activation remains forbidden.",
+    "One batched 1Password update to FinanceAutomation/n8n-runtime preserved existing fields, concealed the secret, and left Bellwether untouched. Cold-start injection, rotation, persistence/log scanning, restore, and the retained-mount mismatch still block runtime promotion."
+  ],
+  "resolved_blockers": [
+    "CURRENT_TEST_FAILURE",
+    "CURRENT_TEST_FAILURES",
+    "CURRENT_TEST_SUITE_FAILURES",
+    "CURRENT_N8N_TEST_FAILURE",
+    "UNCOMMITTED_REFACTOR",
+    "DISPOSABLE_N8N_REQUIRED"
+  ],
+  "superseded_text_markers": [
+    "35/36 passing",
+    "350 passed, 1 failed",
+    "14/16 passing",
+    "The refactor is uncommitted",
+    "Stabilize generated/bootstrap contracts",
+    "Repair provider-envelope contract/test parity",
+    "current contract bytes fail their local suite"
+  ],
+  "updates": [
+    {
+      "id": "N8N-001", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "REPOSITORY_TESTED_LOCAL_IMPORT_BOOTSTRAP_VERIFIED",
+      "evidence_paths": ["integrations/n8n/pipeline-registry.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json"],
+      "tests": ["n8n workflow, runner-closure, and task-runner-image focus: 50 run, 6 skipped", "codex-agent-runner npm: 16 of 16 pass", "full Python: 381 run, 6 skipped"],
+      "live_readback": "Local n8n 2.36.2 imported 21 inactive and unpublished workflows, bootstrapped 15 Data Tables, and passed health. OAuth binding, fixture replay, schedule cutover, and production import were not run.",
+      "remaining_work": "Bind connected OAuth credentials, resolve runtime commit drift, execute the fixture matrix twice, and prove issuer schedules before promotion.",
+      "blockers_remove": [], "blockers_add": ["OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED", "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED", "DISPOSABLE_DOUBLE_REPLAY_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Bind both connected credentials to inactive workflows and retain bounded mailbox and root-folder readback."
+    },
+    {
+      "id": "N8N-002", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "REPOSITORY_TESTED_IMPORTED_CANVAS_REVIEW_PENDING",
+      "evidence_paths": ["integrations/n8n/refactor_workflow_ui.py", "integrations/n8n/workflow-folders.json"],
+      "tests": ["workflow renderer, group, folder, readability, and idempotence tests pass"],
+      "live_readback": "All workflows imported inactive. Eight folders and 17 groups are repository-defined; folder reconciliation, Tidy Workflow, and human canvas review remain pending.",
+      "remaining_work": "Apply folders, use Tidy Workflow, and review readable node names, code, notes, and section boundaries; manual coordinate optimization is out of scope.",
+      "blockers_remove": [], "blockers_add": ["IMPORTED_FOLDER_AND_CANVAS_REVIEW_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Apply the folder manifest and Tidy Workflow, then record human readability review."
+    },
+    {
+      "id": "N8N-003", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "REPOSITORY_TESTED_OAUTH_CONNECTED_BINDING_PENDING",
+      "evidence_paths": ["integrations/n8n/workflows/01-shared-outlook-acquisition.json", "tests/test_n8n_workflows.py"],
+      "tests": ["Outlook server-filter, From-list subworkflow, attachment, and OneDrive binary-upload contracts pass"],
+      "live_readback": "Both OAuth credential records show Account connected. Server and exact sender/subject/window filters, attachment preservation, original-email JSON archive, hash, and readback nodes are structurally tested; workflow binding, refresh, live filtering, and inline-email PDF rendering are not proven.",
+      "remaining_work": "Bind both credentials, prove token refresh and bounded filtered pagination, archive every attachment and original email, and add the fixed inline-email PDF renderer.",
+      "blockers_remove": [], "blockers_add": ["OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED", "OAUTH_TOKEN_REFRESH_PROOF_REQUIRED", "EMAIL_TO_PDF_RENDERER_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Run a bounded filtered mailbox and root-folder readback after binding, without recording credential identifiers."
+    },
+    {
+      "id": "N8N-004", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "LOCAL_DATA_TABLE_BOOTSTRAP_VERIFIED_ACTUAL_READBACK_PENDING",
+      "evidence_paths": ["integrations/n8n/data-tables.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json"],
+      "tests": ["WF19 local bootstrap passed with 15 finance Data Tables"],
+      "live_readback": "All 15 operational Data Tables exist locally. Actual-authoritative ledger equality and the fenced writer were not exercised.",
+      "remaining_work": "Prove operational-only table state and one fenced disposable Actual commit with exact readback.",
+      "blockers_remove": [], "blockers_add": ["ACTUAL_DISPOSABLE_READBACK_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Run the sole writer in disposable Actual and compare every economic field and balance."
+    },
+    {
+      "id": "N8N-006", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "LOCAL_INACTIVE_IMPORT_VERIFIED_PRODUCTION_PENDING",
+      "evidence_paths": ["integrations/n8n/workflows", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json"],
+      "tests": ["local receipt: 21 imported, 0 active, 0 published"],
+      "live_readback": "The disposable database reports all 21 workflows inactive and unpublished. Production was untouched.",
+      "remaining_work": "Complete current-byte double replay, conflict review, and explicit promotion authorization while workflows remain inactive.",
+      "blockers_remove": [], "blockers_add": ["PRODUCTION_PROMOTION_AND_ACTIVATION_NOT_AUTHORIZED", "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Reconcile runtime bytes and keep all workflows inactive through acceptance review."
+    },
+    {
+      "id": "N8N-008", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "LOCAL_REGISTRATION_VERIFIED_AUTH_EXECUTION_PENDING",
+      "evidence_paths": ["integrations/n8n/community-node-lock.json", "integrations/n8n/workflows/21-subscription-agent-adapter.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json"],
+      "tests": ["20 of 20 Execute Sub-workflow references use From list", "local registration passed for 8 nodes and 3 credential types"],
+      "live_readback": "Pinned ProDex 0.5.1 and Claude 0.8.0 register locally. Claude cache is recognized; Codex auth startup fails; neither provider has a schema-bound execution receipt.",
+      "remaining_work": "Use an isolated compatible ProDex auth home, then prove both provider branches preserve identical typed output and protected-field policy.",
+      "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Repair isolated Codex login and execute one schema-bound proposal per provider."
+    },
+    {
+      "id": "AGENT-003", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "REPOSITORY_TESTED_PROVIDER_AUTH_BLOCKED",
+      "evidence_paths": ["services/codex-agent-runner", "integrations/n8n/contracts/ai-proposal-v1.schema.json"],
+      "tests": ["codex-agent-runner: 16 of 16 pass", "provider envelope and protected-field tests pass"],
+      "live_readback": "Runner contracts pass; Claude cache discovery succeeds, Codex subscription startup fails, and no full n8n proposal or credential-surface receipt exists.",
+      "remaining_work": "Repair isolated Codex auth, prove process isolation and redaction, and execute malicious protected-field cases through n8n.",
+      "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Run one schema-bound proposal per provider after isolated authentication succeeds."
+    },
+    {
+      "id": "AGENT-005", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING",
+      "evidence_paths": ["config/agent-providers.json", "integrations/n8n/community-node-lock.json", "integrations/n8n/workflows/21-subscription-agent-adapter.json"],
+      "tests": ["typed contract, server-owned model/reasoning/auth, and both provider branches pass repository tests"],
+      "live_readback": "Both branches are enabled behind one typed contract and packages register, but Codex auth fails and neither branch has structured execution evidence.",
+      "remaining_work": "Resolve Codex auth compatibility and execute locked Codex and Claude branches with malicious caller fields.",
+      "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Prove identical provider boundaries in the disposable runtime."
+    },
+    {
+      "id": "DOC-001", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "REPOSITORY_TESTED_ARCHIVE_NORMALIZATION_PENDING",
+      "evidence_paths": ["Finance Evidence/catalogue.json", "integrations/n8n/workflows/01-shared-outlook-acquisition.json"],
+      "tests": ["evidence and n8n OneDrive archive contracts pass"],
+      "live_readback": "Archive nodes preserve attachments and original email, but current evidence has duplicated Finance Evidence paths and missing warranty/property metadata; no accepted live archive fixture exists.",
+      "remaining_work": "Deduplicate canonical evidence paths, populate required warranty/property metadata, and prove immutable upload/hash/readback with a live fixture.",
+      "blockers_remove": [], "blockers_add": ["DUPLICATED_FINANCE_EVIDENCE_PATHS", "WARRANTY_PROPERTY_METADATA_INCOMPLETE"],
+      "last_verified": "2026-08-19", "next_action": "Produce a no-write deduplication and metadata repair plan before changing the archive."
+    },
+    {
+      "id": "ACTUAL-002", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "FAB_RECEIPT_ONLY_SARWA_FX_PARITY_PENDING",
+      "evidence_paths": ["config/account-completeness.json", "config/wealth-sources.json", "config/proposals/actual-accounts-fab-sarwa.json"],
+      "tests": ["account completeness and wealth tests pass"],
+      "live_readback": "FAB has repository/receipt evidence only; fresh Sarwa holdings, FX, and authenticated Actual UI/API parity are absent.",
+      "remaining_work": "Acquire fresh wealth and FX evidence, run disposable projection, then prove exact account and signed-balance UI/API parity.",
+      "blockers_remove": [], "blockers_add": ["FRESH_WEALTH_BUNDLE_AND_FX_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Capture fresh Sarwa holdings and FX before any guarded Actual account change."
+    },
+    {
+      "id": "ACTUAL-003", "status": "BLOCKED",
+      "implementation_state": "PARTIAL", "verification_state": "TESTS_GREEN_LIVE_UI_API_PARITY_BLOCKED",
+      "evidence_paths": ["config/account-completeness.json", "config/wealth-sources.json"],
+      "tests": ["full Python: 381 run, 6 skipped"],
+      "live_readback": "No current authenticated UI/API account-set, signed-balance, or net-worth parity; fresh Sarwa and FX are absent.",
+      "remaining_work": "Bind fresh FAB, Sarwa, and FX evidence to one sync identity and compare full API and UI state after disposable replay.",
+      "blockers_remove": [], "blockers_add": ["FRESH_WEALTH_BUNDLE_AND_FX_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Obtain fresh wealth inputs and authenticated UI access, then prove exact parity."
+    },
+    {
+      "id": "ACTUAL-010", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "FULL_CORPUS_DRY_RUN_VERIFIED_RUNTIME_REPLAY_PENDING",
+      "evidence_paths": ["config/evidence/actual-corpus-migration-dry-run-2026-08-19.json", "finance_tracker/corpus_migration.py"],
+      "tests": ["b845ccf guarded corpus migration and semantic tests pass"],
+      "live_readback": "The 45-manifest dry run classified 3,927 identities and proposed 400 exact-state changes with zero amount mutations; no replay or production write occurred.",
+      "remaining_work": "Review exceptions and 28 manual conflicts, double replay in disposable Actual, then separately authorize any production delta.",
+      "blockers_remove": [], "blockers_add": [],
+      "last_verified": "2026-08-19", "next_action": "Review exceptions and double replay the guarded plan in disposable Actual."
+    },
+    {
+      "id": "ACTUAL-011", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "FULL_CORPUS_DRY_RUN_VERIFIED_RUNTIME_REPLAY_PENDING",
+      "evidence_paths": ["config/actual-note-contract.json", "docs/actual-note-contract.md", "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json"],
+      "tests": ["b845ccf exact-state note migration tests pass"],
+      "live_readback": "The plan preserves memos, documents, reviews, and 28 manual categories; 15 identities are snapshot-absent. No write or UI check occurred.",
+      "remaining_work": "Review conflicts and absent identities, replay in disposable Actual, then separately authorize and UI-verify any production delta.",
+      "blockers_remove": [], "blockers_add": [],
+      "last_verified": "2026-08-19", "next_action": "Complete conflict review and disposable exact-state replay."
+    },
+    {
+      "id": "ACTUAL-019", "status": "BLOCKED",
+      "implementation_state": "PARTIAL", "verification_state": "GUARDED_PLAN_VERIFIED_DOUBLE_REPLAY_PENDING",
+      "evidence_paths": ["config/evidence/actual-corpus-migration-dry-run-2026-08-19.json", "runtime/audit/disposable-full-rebuild-audit.json"],
+      "tests": ["b845ccf guarded dry-run tests and full Python suite pass"],
+      "live_readback": "Current plan is deterministic and amount-safe, but older receipts cannot certify current workflows, account scope, semantics, notes, or runtime bytes.",
+      "remaining_work": "Replay all current inputs twice through n8n into disposable Actual, compare exact state, and run restore/failure drills.",
+      "blockers_remove": [], "blockers_add": ["CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED", "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Execute the current corpus twice through the inactive n8n writer."
+    },
+    {
+      "id": "ACTUAL-021", "status": "BLOCKED",
+      "implementation_state": "PARTIAL", "verification_state": "ISSUER_BALANCE_CONTRADICTION_OPEN",
+      "evidence_paths": ["config/account-completeness.json", "config/project-acceptance.json"],
+      "tests": ["account completeness tests pass but do not resolve issuer evidence conflict"],
+      "live_readback": "Current audit found contradictory ADCB issuer-balance evidence; closed, historical, and reconciled-to-zero acceptance is not proven.",
+      "remaining_work": "Obtain authoritative closing evidence, reconcile signed balance to zero, and verify API/UI state without deleting history.",
+      "blockers_remove": [], "blockers_add": ["ADCB_ISSUER_BALANCE_CONTRADICTION"],
+      "last_verified": "2026-08-19", "next_action": "Resolve the ADCB issuer evidence contradiction before changing account state."
+    },
+    {
+      "id": "CASHBACK-014", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "SEMANTICS_DRY_RUN_VERIFIED_LIVE_FINALIZATION_PENDING",
+      "evidence_paths": ["finance_tracker/transaction_semantics.py", "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json"],
+      "tests": ["EI Amazon refund and immutable-amount regressions pass"],
+      "live_readback": "EI positive Amazon rows classify as refunds and amounts remain immutable; live statement-only finalization, reset, and n8n cutover are unverified.",
+      "remaining_work": "Complete exception review and disposable replay, then verify live statement-only finalization and period reset after cutover.",
+      "blockers_remove": [], "blockers_add": [],
+      "last_verified": "2026-08-19", "next_action": "Finish disposable semantic replay before live cashback acceptance."
+    },
+    {
+      "id": "AUTO-001", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "INACTIVE_N8N_IMPORT_VERIFIED_CUTOVER_PENDING",
+      "evidence_paths": ["config/codex-automations.json", "integrations/n8n/pipeline-registry.json"],
+      "tests": ["automation lifecycle and n8n schedule contracts pass"],
+      "live_readback": "n8n schedules remain inactive and legacy Codex schedules remain current; no issuer shadow run or cutover occurred.",
+      "remaining_work": "Prove each issuer schedule and durable receipt, then atomically disable the matching legacy task only after acceptance.",
+      "blockers_remove": [], "blockers_add": ["OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Prove one issuer schedule end to end while inactive."
+    },
+    {
+      "id": "PLATFORM-003", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "BATCH_SECRET_METADATA_UPDATE_CONFIRMED_RUNTIME_INJECTION_PENDING",
+      "evidence_paths": ["deploy/finance-runtime/render-env.sh", "deploy/finance-runtime/finance.env.tpl", "docs/bellwether-onepassword-runner-validation-2026-08-19.md"],
+      "tests": ["static secret and configuration tests pass"],
+      "live_readback": "FinanceAutomation/n8n-runtime was updated once in a batch; existing fields were preserved, the secret was concealed, and Bellwether was untouched. Cold-start injection, rotation, log/persistence scan, and restore were not proven.",
+      "remaining_work": "Prove dedicated-vault cold start, rotation, zero secret persistence, backup restoration, and stable n8n encryption-key behavior in disposable runtime.",
+      "blockers_remove": [], "blockers_add": ["DISPOSABLE_SECRET_COLD_START_ROTATION_RESTORE_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Run one disposable cold start and rotation with persistence, execution, log, and backup scans."
+    },
+    {
+      "id": "PLATFORM-001", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "LOCAL_DISPOSABLE_VERIFIED_CI_HOST_PENDING",
+      "evidence_paths": ["runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json"],
+      "tests": ["nested platform tests: 30 of 30", "local health and inactive import pass"],
+      "live_readback": "Exact image runs rootless and healthy locally. CI-host SSH, deployed digest, restart, route, and restore evidence are absent.",
+      "remaining_work": "Restore host access and prove immutable digests, independent restarts, protected routes, restore, and inactive deployment.",
+      "blockers_remove": [], "blockers_add": ["CI_HOST_SSH_UNAVAILABLE"],
+      "last_verified": "2026-08-19", "next_action": "Collect read-only CI-host state before any deployment."
+    },
+    {
+      "id": "PLATFORM-002", "status": "IMPLEMENTED_UNVERIFIED",
+      "implementation_state": "IMPLEMENTED_NOT_DEPLOYED", "verification_state": "LOCAL_IMAGE_SCAN_SBOM_VERIFIED_CI_PENDING",
+      "evidence_paths": ["integrations/n8n/Dockerfile", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/trivy.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/sbom.spdx.json"],
+      "tests": ["rootless exact image build passes", "Trivy: 0 HIGH and 0 CRITICAL"],
+      "live_readback": "The fa8fd58 image built locally with the locked runtime and passed registration and scanning; CI did not build or attest it.",
+      "remaining_work": "Build and attest the pinned image in CI and prove the deployed digest matches.",
+      "blockers_remove": [], "blockers_add": ["CI_IMAGE_BUILD_AND_ATTESTATION_REQUIRED"],
+      "last_verified": "2026-08-19", "next_action": "Run exact image build and provenance attestation in CI after access returns."
+    },
+    {
+      "id": "PLATFORM-006", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "LOCAL_RECEIPTS_VERIFIED_DEPLOY_RESTORE_PENDING",
+      "evidence_paths": ["runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json"],
+      "tests": ["local registration, import, bootstrap, health, scan, and SBOM receipts pass"],
+      "live_readback": "Local receipts exist; no CI-host digest, deploy, restart, backup restore, full corpus replay, or production readback exists.",
+      "remaining_work": "Reconcile runtime commit drift, complete disposable Actual double replay and restore drills, then prove host deployment after authorization.",
+      "blockers_remove": [], "blockers_add": ["CI_HOST_SSH_UNAVAILABLE", "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED", "RETAINED_MOUNT_MISMATCH_BLOCKS_RUNTIME_PROMOTION"],
+      "last_verified": "2026-08-19", "next_action": "Complete current-byte disposable replay and restore evidence while production remains untouched."
+    }
+  ]
+}
