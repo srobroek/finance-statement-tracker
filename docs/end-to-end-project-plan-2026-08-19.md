@@ -130,16 +130,19 @@ statement finalizes/resets a cashback period.
 
 | Host/path | Audience | Authentication | Origin |
 |---|---|---|---|
-| `n8n.vxsan.com` | interactive UI/OAuth callback | AD + n8n login | dedicated UI tunnel container to private Docker DNS/proxy |
-| `n8n-mcp.vxsan.com` | bounded MCP façade | Cloudflare Service Auth + façade auth | dedicated MCP tunnel container to private Docker DNS/proxy |
+| `n8n.vxsan.com` | interactive UI/OAuth callback | AD + n8n login | existing `Home-beachhead` tunnel to `http://172.20.10.20:5678` |
+| `n8n-mcp.vxsan.com/mcp/finance-operations-v1` | bounded MCP façade | Cloudflare Service Auth + façade auth | existing `Home-beachhead` tunnel to `http://172.20.10.20:5678` |
 | public webhooks | none by default | source-specific only when introduced | no blanket bypass |
 
-The host publishes neither n8n nor Postgres. Both Cloudflare tunnel containers
-join a purpose-built private proxy network and reach allowlisted routes through
-Docker DNS; n8n's application network remains internal. Leave the origin
-Host-header override unset unless a tested origin requirement proves otherwise.
-Verify forwarded headers, no-cache, WebSockets, OAuth callback, policy order,
-network membership, route isolation, and origin LAN denial.
+The existing external `Home-beachhead` tunnel has two active connector replicas
+for availability. Both n8n hostnames route through that one logical tunnel to the
+single exact LAN listener `172.20.10.20:5678`; the Compose stack does not run a
+cloudflared sidecar. Postgres, PDF utility, task runners, and the Codex runner do
+not publish host ports. Leave the origin Host-header override unset unless a
+tested origin requirement proves otherwise. Verify forwarded headers, no-cache,
+WebSockets, OAuth callback, Access policy order, positive and negative Service
+Auth, route isolation, and the absence of wildcard, localhost, or public-IP
+listeners.
 
 ## 5. Mandatory cross-cutting invariants
 

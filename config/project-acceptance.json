@@ -195,7 +195,7 @@
     },
     {
       "id": "cloudflare-route-security",
-      "invariant": "The two existing external Cloudflare tunnels reach only the exact n8n LAN origin 172.20.10.20:5678; UI is AD-protected, MCP uses Service Auth, and no wildcard, localhost, public-IP, or additional service port is published.",
+      "invariant": "The existing external Cloudflare tunnel has two active connector replicas and routes both n8n hostnames only to the exact LAN origin 172.20.10.20:5678; UI is AD-protected, MCP uses Service Auth, and no wildcard, localhost, public-IP, or additional service port is published.",
       "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
       "verifier": {"kind": "RUNTIME_READBACK", "command": "python scripts/verify-project-acceptance.py --require cloudflare-route-security", "expected": "The exact LAN listener succeeds only on 172.20.10.20:5678, every other service port is absent, the existing UI route passes AD and WebSocket tests, and the exact-path MCP route passes Service Auth positive and negative tests."},

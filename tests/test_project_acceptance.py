@@ -84,13 +84,14 @@ class ProjectAcceptanceTests(unittest.TestCase):
             "wealth-net-worth",
         }.issubset(identities))
 
-    def test_cloudflare_acceptance_uses_existing_lan_origin_tunnels(self) -> None:
+    def test_cloudflare_acceptance_uses_existing_ha_lan_origin_tunnel(self) -> None:
         payload = json.loads(
             (ROOT / "config" / "project-acceptance.json").read_text(encoding="utf-8")
         )
         requirements = {row["id"]: row for row in payload["requirements"]}
         route = requirements["cloudflare-route-security"]
-        self.assertIn("existing external Cloudflare tunnels", route["invariant"])
+        self.assertIn("existing external Cloudflare tunnel", route["invariant"])
+        self.assertIn("two active connector replicas", route["invariant"])
         self.assertIn("172.20.10.20:5678", route["invariant"])
         self.assertNotIn("tunnel containers", route["invariant"].lower())
         self.assertNotIn("DISPOSABLE_TWO_TUNNEL_ROUTE_REQUIRED", route["blockers"])
