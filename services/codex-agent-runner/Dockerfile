@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-ARG NODE_IMAGE=node:22.22.3-bookworm-slim@sha256:e21fc383b50d5347dc7a9f1cae45b8f4e2f0d39f7ade28e4eef7d2934522b752
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22.22.3-bookworm-slim@sha256:16d364eebf6b62da439dc993d9b80940c78b0ca38438452f011ab9a25c752644
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /src
@@ -28,12 +28,13 @@ ENV NODE_ENV=production \
     PORT=5090 \
     CODEX_BIN=/usr/local/bin/codex \
     CODEX_HOME=/home/node/.codex \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     AI_POLICY_CONFIG_PATH=/app/config/ai-policies.json \
     AI_POLICY_CONTRACT_PATH=/app/contracts/ai-policy-contracts.seed.json \
-    AI_OUTPUT_SCHEMA_PATH=/app/contracts/ai-proposal-v1.schema.json \
-    RUNNER_BEARER_TOKEN_FILE=/run/secrets/codex_agent_runner_bearer
+    AI_OUTPUT_SCHEMA_PATH=/app/contracts/ai-proposal-v1.schema.json
 WORKDIR /app
 COPY --from=codex-download /usr/local/bin/codex /usr/local/bin/codex
+COPY --from=codex-download /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /src/dist ./dist
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/package.json ./package.json

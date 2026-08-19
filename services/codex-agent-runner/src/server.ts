@@ -15,6 +15,24 @@ interface ServiceConfig {
   runner: CodexRunnerOptions;
 }
 
+export async function loadBearerToken(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<Buffer> {
+  const inlineToken = environment.RUNNER_BEARER_TOKEN?.trim();
+  const configuredPath = environment.RUNNER_BEARER_TOKEN_FILE?.trim();
+  if (inlineToken && configuredPath) {
+    throw new Error("configure exactly one of RUNNER_BEARER_TOKEN or RUNNER_BEARER_TOKEN_FILE");
+  }
+
+  const rawToken = inlineToken
+    ?? (await readFile(configuredPath ?? "/run/secrets/codex_agent_runner_bearer", "utf8")).trim();
+  if (!/^[0-9a-f]{64}$/.test(rawToken)) {
+    throw new Error("runner bearer token must be 64 lowercase hexadecimal characters");
+  }
+  const bearerToken = Buffer.from(rawToken, "utf8");
+  return bearerToken;
+}
+
 function respond(response: ServerResponse, status: number, value: unknown): void {
   const body = JSON.stringify(value);
   response.writeHead(status, {
@@ -82,9 +100,7 @@ export async function main(): Promise<void> {
   const policyPath = process.env.AI_POLICY_CONFIG_PATH ?? "/app/config/ai-policies.json";
   const schemaPath = process.env.AI_OUTPUT_SCHEMA_PATH ?? "/app/contracts/ai-proposal-v1.schema.json";
   const policyContractPath = process.env.AI_POLICY_CONTRACT_PATH ?? "/app/contracts/ai-policy-contracts.seed.json";
-  const tokenPath = process.env.RUNNER_BEARER_TOKEN_FILE ?? "/run/secrets/codex_agent_runner_bearer";
-  const bearerToken = Buffer.from((await readFile(tokenPath, "utf8")).trim(), "utf8");
-  if (bearerToken.length < 32) throw new Error("runner bearer token must be at least 32 bytes");
+  const bearerToken = await loadBearerToken();
   const config: ServiceConfig = {
     port: Number(process.env.PORT ?? "5090"),
     bearerToken,
@@ -92,7 +108,7 @@ export async function main(): Promise<void> {
     runner: {
       codexBin: process.env.CODEX_BIN ?? "/usr/local/bin/codex",
       outputSchemaPath: schemaPath,
-      timeoutMs: Number(process.env.CODEX_TIMEOUT_MS ?? "120000"),
+      timeoutMs: Number(process.env.CODEX_TIMEOUT_MS ?? "300000"),
       home: process.env.HOME ?? "/home/node",
       codexHome: process.env.CODEX_HOME ?? "/home/node/.codex",
     },

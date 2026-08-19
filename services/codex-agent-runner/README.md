@@ -10,10 +10,19 @@ classification, cashback, or Actual logic.
 - One health endpoint: `GET /healthz`.
 - No host port in production; n8n reaches it as `codex-agent-runner:5090` on an
   internal Docker network.
-- Bearer token comes from a Docker secret file.
+- The production bearer is rendered from a refs-only 1Password template on the
+  host and passed as `RUNNER_BEARER_TOKEN`, matching the proven Bellwether
+  service-account deployment pattern. A file source remains supported for
+  non-rootless test environments, but configuring both sources fails closed.
+  Generate it as printable HTTP-header-safe text with
+  `openssl rand -hex 32`; the runner requires exactly 64 lowercase hex
+  characters.
 - ChatGPT credentials come from a writable bind or named volume at
   `/home/node/.codex`; they are never embedded in the image or workflow.
 - `OPENAI_API_KEY`, `CODEX_API_KEY`, and `CODEX_ACCESS_TOKEN` are rejected.
+- The pinned Debian CA bundle is copied into the slim runtime and exposed via
+  `SSL_CERT_FILE`; without it Codex subscription traffic fails closed with
+  `UnknownIssuer` while the local login cache still appears valid.
 - Models are fixed by the versioned policy profile: `LUNA_MAX` maps to
   `gpt-5.6-luna`/`max`; `SOL_XHIGH` maps to `gpt-5.6-sol`/`xhigh`.
 - The runner embeds `generated/ai-policy-contracts.seed.json` and rejects any

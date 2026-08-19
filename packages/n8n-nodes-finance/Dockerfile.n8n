@@ -1,16 +1,20 @@
-FROM docker.n8n.io/n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401 AS node-builder
+FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
 
 USER root
+RUN apk add --no-cache \
+      g++=15.2.0-r5 \
+      make=4.4.1-r4 \
+      python3=3.14.7-r1
 WORKDIR /tmp/n8n-nodes-finance
 COPY packages/n8n-nodes-finance/package.json packages/n8n-nodes-finance/package-lock.json packages/n8n-nodes-finance/tsconfig.json packages/n8n-nodes-finance/tsconfig.build.json ./
-RUN npm ci
+RUN npm ci --include=dev
 COPY packages/n8n-nodes-finance/src ./src
 COPY packages/n8n-nodes-finance/CONTRACT.md ./
 RUN npm run build \
-    && npm prune --omit=dev \
+    && npm prune --omit=dev --omit=peer \
     && npm cache clean --force
 
-FROM docker.n8n.io/n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401
+FROM ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
 
 USER root
 RUN mkdir -p /home/node/.n8n/nodes/node_modules/n8n-nodes-finance

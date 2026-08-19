@@ -106,7 +106,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [400, 0],
-      "parameters": {"url": "http://codex-agent-runner:5090/v1/jobs/finance-ai-proposal", "method": "POST", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ Object.fromEntries(Object.entries($('Build Idempotent Agent Handoff').item.json).filter(([key]) => key !== 'request_sha256')) }}", "options": {"timeout": 120000}},
+      "parameters": {"url": "http://codex-agent-runner:5090/v1/jobs/finance-ai-proposal", "method": "POST", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ Object.fromEntries(Object.entries($('Build Idempotent Agent Handoff').item.json).filter(([key]) => key !== 'request_sha256')) }}", "options": {"timeout": 300000}},
       "credentials": {"httpHeaderAuth": {"id": "BIND_CODEX_AGENT_RUNNER", "name": "Finance Codex Agent Runner Bearer"}}
     },
     {

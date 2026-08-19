@@ -79,9 +79,16 @@ async function invoke(
 
 export async function assertChatGptLogin(options: CodexRunnerOptions): Promise<void> {
   const result = await invoke(options, ["login", "status"], "", 16_384);
-  if (!/Logged in using ChatGPT/i.test(result.stdout)) {
+  if (!isChatGptLoginStatus(result.stdout, result.stderr)) {
     throw new ContractError("CHATGPT_LOGIN_REQUIRED", "Codex runner is not authenticated with ChatGPT");
   }
+}
+
+export function isChatGptLoginStatus(stdout: string, stderr: string): boolean {
+  // Codex CLI 0.148.0 emits this status on stderr. Accept either stream so a
+  // harmless CLI presentation change cannot make a valid subscription login
+  // look unauthenticated.
+  return /Logged in using ChatGPT/i.test(`${stdout}\n${stderr}`);
 }
 
 function buildPrompt(request: ProposalRequest, resolved: ResolvedPolicy, receiptId: string): string {
@@ -103,6 +110,7 @@ function buildPrompt(request: ProposalRequest, resolved: ResolvedPolicy, receipt
     "You are a bounded finance proposal engine. Return only the JSON object required by the supplied output schema.",
     "Never change source facts, amounts, dates, direction, transaction topic, deduplication identity, reconciliation state, or cashback arithmetic.",
     "Propose at most one value for each requested transaction_id and allowed field. Omit uncertain proposals. Do not add fields or prose.",
+    "For every proposal, put the proposed value in value_json as canonical JSON text (for example, a string is quoted JSON, a boolean is true/false, and arrays/objects are JSON). Use an empty reason_code when no reason code applies.",
     `Policy instruction: ${resolved.policy.instruction}`,
     `The response envelope must exactly equal: ${JSON.stringify(envelope)}`,
     `Proposal input: ${JSON.stringify(request.unresolved)}`,
@@ -121,6 +129,7 @@ export function buildCodexExecArgs(
     "--ignore-user-config",
     "--ignore-rules",
     "--disable", "code_mode",
+    "--disable", "code_mode_host",
     "--sandbox", "read-only",
     "--model", resolved.profile.model,
     "-c", `model_reasoning_effort=\"${resolved.profile.reasoningEffort}\"`,
