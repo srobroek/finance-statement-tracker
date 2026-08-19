@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
-ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22.22.3-bookworm-slim@sha256:16d364eebf6b62da439dc993d9b80940c78b0ca38438452f011ab9a25c752644
+ARG NODE_IMAGE=docker.io/library/node@sha256:46825fbbd4e996a78b7a2cdc08d75e38a5a505bdab95dcda55605359bf124bc6
+ARG RUNTIME_IMAGE=docker.io/library/alpine@sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /src
@@ -12,9 +13,7 @@ RUN npm run build && npm prune --omit=dev
 FROM ${NODE_IMAGE} AS codex-download
 ARG CODEX_VERSION=0.148.0
 ARG CODEX_ARCHIVE_SHA256=1a36f762f6b3bef533bb86345ad9517661c2d84d53996a250cf2ca89d2cfee5a
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates curl
 RUN curl --fail --show-error --location --proto '=https' --tlsv1.2 \
       "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-x86_64-unknown-linux-musl.tar.gz" \
       --output /tmp/codex.tar.gz \
@@ -23,7 +22,7 @@ RUN curl --fail --show-error --location --proto '=https' --tlsv1.2 \
     && install -m 0755 /tmp/codex-x86_64-unknown-linux-musl /usr/local/bin/codex \
     && /usr/local/bin/codex --version | grep -Fx "codex-cli ${CODEX_VERSION}"
 
-FROM ${NODE_IMAGE} AS runtime
+FROM ${RUNTIME_IMAGE} AS runtime
 ENV NODE_ENV=production \
     PORT=5090 \
     CODEX_BIN=/usr/local/bin/codex \
@@ -33,6 +32,11 @@ ENV NODE_ENV=production \
     AI_POLICY_CONTRACT_PATH=/app/contracts/ai-policy-contracts.seed.json \
     AI_OUTPUT_SCHEMA_PATH=/app/contracts/ai-proposal-v1.schema.json
 WORKDIR /app
+RUN addgroup -g 1000 node \
+    && adduser -D -u 1000 -G node node
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+COPY --from=build /usr/lib/libstdc++.so.6* /usr/lib/
+COPY --from=build /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
 COPY --from=codex-download /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=codex-download /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /src/dist ./dist
