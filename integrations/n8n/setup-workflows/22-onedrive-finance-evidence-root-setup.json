@@ -158,13 +158,12 @@
     "executionOrder": "v1",
     "timezone": "Asia/Dubai",
     "saveDataErrorExecution": "none",
-    "saveDataSuccessExecution": "none",
-    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+    "saveDataSuccessExecution": "none"
   },
   "pinData": {},
   "meta": {
     "financeWorkflowCode": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP",
-    "migrationStatus": "SPEC_ONLY",
+    "migrationStatus": "READY_FOR_REVIEWED_MANUAL_IMPORT",
     "manualOnly": true,
     "setupOnly": true,
     "activationForbidden": true,
