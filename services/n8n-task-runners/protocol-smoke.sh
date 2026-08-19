@@ -78,8 +78,19 @@ until docker logs "$runner" 2>&1 | grep -F 'Connected: ws://broker:5679/' >/dev/
 done
 
 i=0
-until docker exec "$broker" node -e "fetch('http://127.0.0.1:5678/webhook/finance-task-runners-protocol-smoke').then(async r=>{const body=await r.text(); console.log(body); if(!r.ok)process.exit(1)}).catch(e=>{console.error(e);process.exit(1)})" \
-  > /tmp/finance-task-runners-protocol-smoke.log 2>&1; do
+while :; do
+  if docker exec "$broker" node -e "fetch('http://127.0.0.1:5678/webhook/finance-task-runners-protocol-smoke').then(async r=>{const body=await r.text(); console.log(body); if(r.status===404)process.exit(44); if(!r.ok)process.exit(1)}).catch(e=>{console.error(e);process.exit(1)})" \
+    > /tmp/finance-task-runners-protocol-smoke.log 2>&1; then
+    break
+  else
+    request_status=$?
+  fi
+  if [ "$request_status" -ne 44 ]; then
+    cat /tmp/finance-task-runners-protocol-smoke.log
+    safe_logs "$runner"
+    safe_logs "$broker"
+    exit 1
+  fi
   i=$((i + 1))
   if [ "$i" -ge 30 ]; then
     cat /tmp/finance-task-runners-protocol-smoke.log
