@@ -7,7 +7,9 @@ WORKDIR /build
 COPY requirements.txt ./
 RUN python -m venv /venv \
     && /venv/bin/python -m pip install --no-cache-dir --requirement requirements.txt \
-    && /venv/bin/python -m pip check
+    && /venv/bin/python -m pip check \
+    && /venv/bin/python -m pip uninstall --yes pip setuptools msgpack \
+    && /venv/bin/python -c "import lxml, pikepdf, PIL, pypdf"
 
 FROM ${PYTHON_RUNTIME_IMAGE}
 
