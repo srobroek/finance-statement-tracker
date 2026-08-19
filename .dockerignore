@@ -2,6 +2,8 @@
 .actual-cache
 **/.actual-cache
 **/node_modules
+!.upstream/n8n/dist/task-runner-javascript/node_modules
+!.upstream/n8n/dist/task-runner-javascript/node_modules/**
 **/__pycache__
 .upstream/**/.git
 runtime

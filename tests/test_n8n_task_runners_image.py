@@ -24,13 +24,13 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
 
     def test_launcher_is_source_built_with_a_narrow_auditable_patch(self):
         dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
         patcher = (SERVICE / "patch_launcher.py").read_text(encoding="utf-8")
         self.assertNotIn("FROM n8nio/runners", dockerfile)
         self.assertIn("go test ./...", dockerfile)
         self.assertIn("CGO_ENABLED=0 go build", dockerfile)
         self.assertNotIn("pnpm add moment", dockerfile)
-        self.assertIn("javascript-extras/package-lock.json", dockerfile)
-        self.assertIn("node_modules/moment ./node_modules/moment", dockerfile)
+        self.assertNotIn("npm ci", dockerfile)
         self.assertIn("finance-closure-manifest.json", dockerfile)
         self.assertIn("'@n8n/di'", dockerfile)
         self.assertIn("require.resolve(name)", dockerfile)
@@ -39,6 +39,10 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("SOURCE_SHA256", patcher)
         self.assertIn("PATCHED_SHA256", patcher)
         self.assertNotIn("subprocess", patcher)
+        self.assertIn(
+            "!.upstream/n8n/dist/task-runner-javascript/node_modules/**",
+            dockerignore.splitlines(),
+        )
 
         extras_lock = json.loads(
             (SERVICE / "javascript-extras" / "package-lock.json").read_text(encoding="utf-8")
@@ -77,6 +81,8 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         )
         self.assertIn("relink_closure.py", workflow)
         self.assertIn("validate_closure.py", workflow)
+        self.assertIn("javascript-extras/package-lock.json", workflow)
+        self.assertIn("docker cp", workflow)
         self.assertIn("closure_sha256", workflow)
         self.assertIn("'./dist/start.js'", workflow)
 

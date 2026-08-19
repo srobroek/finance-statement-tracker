@@ -3,17 +3,9 @@ ARG NODE_IMAGE=docker.io/library/node@sha256:f70403e87646dc51b45295f4b8b70cdad0b
 ARG PYTHON_IMAGE=docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1
 ARG GO_IMAGE=docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69
 
-FROM ${NODE_IMAGE} AS javascript-extras
-WORKDIR /opt/javascript-extras
-COPY services/n8n-task-runners/javascript-extras/package.json \
-     services/n8n-task-runners/javascript-extras/package-lock.json ./
-RUN npm ci --ignore-scripts --omit=dev --fund=false --audit=false \
-    && test "$(node -p "require('./node_modules/moment/package.json').version")" = "2.30.1"
-
 FROM ${NODE_IMAGE} AS javascript-runner
 COPY .upstream/n8n/dist/task-runner-javascript /opt/runners/task-runner-javascript
 WORKDIR /opt/runners/task-runner-javascript
-COPY --from=javascript-extras /opt/javascript-extras/node_modules/moment ./node_modules/moment
 RUN test "$(node -p "require('./package.json').version")" = "2.36.1" \
     && test -f dist/start.js \
     && test -f finance-closure-manifest.json \
