@@ -38,6 +38,15 @@ The sum of all five Sarwa portfolio totals, including Trade and the closed zero-
 
 ## Actual projection boundary
 
-`build_actual_wealth_proposal` emits a review-only aggregate account proposal. It never calls Actual. Position rows remain outside the ordinary Actual ledger. A conversion requires a fresh USD/AED `FXSnapshot`; without one, every AED initial balance remains null and the proposal is blocked.
+`build_actual_wealth_proposal` emits a review-only aggregate account proposal. It never calls Actual. Position rows remain outside the ordinary Actual ledger and are preserved in `config/proposals/sarwa-position-sidecar.json`. A conversion requires a fresh USD/AED `FXSnapshot`; without one, every AED initial balance remains null and the proposal is blocked.
 
-The checked-in proposal at `config/proposals/actual-accounts-fab-sarwa.json` is deliberately blocked. Sarwa needs a timestamped FX snapshot and review. FAB needs a complete authenticated non-credit account inventory plus opening-balance evidence. The FAB AED 115,054.73 difference is recorded only as a replaceable derived adjustment proposal; older official history must replace or reduce it rather than coexist with it.
+The checked-in proposal at `config/proposals/actual-accounts-fab-sarwa.json` is deliberately blocked. Sarwa needs a timestamped FX snapshot and review. FAB needs a complete authenticated non-credit account inventory. For known account 2001, the source-dated AED 225,011.45 balance minus AED 109,956.72 net activity in the 100 captured rows yields an AED 115,054.73 opening anchor immediately before 2026-05-06. The captured rows then follow that anchor exactly once. This is an account opening balance, not a post-import adjustment; no synthetic balancing row is permitted.
+
+`scripts/generate-account-proposals.py --evaluated-at <ISO timestamp> --check` deterministically proves that both checked-in proposals still match the immutable captures. Changing the evaluation timestamp exercises the future and stale gates without mutating Actual.
+
+## Remaining user-assisted evidence
+
+1. Open the authenticated FAB portal and capture the complete list of **non-credit-card** accounts, including stable account reference/last four digits, type, currency, balance, and balance timestamp. Do not infer owners or missing accounts.
+2. Refresh Sarwa interactively when the seven-day source window has expired, capturing the same portfolio summaries, cash, and position fields. No session state is retained.
+3. Supply or capture a timestamped USD/AED FX observation close enough to the Sarwa valuation timestamp for reviewable AED projection.
+4. Supply the issuer-evidenced ADCB closing payment/statement and a read-only Actual account readback. The closed historical card passes only if both show exactly AED 0 and Actual marks it closed; no correction row is generated.

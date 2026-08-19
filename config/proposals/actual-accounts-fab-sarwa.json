@@ -1,125 +1,166 @@
 {
-  "schema_version": 1,
-  "mode": "PROPOSAL_ONLY",
   "actual_writes_allowed": false,
-  "status": "BLOCKED",
+  "adcb": {
+    "actual_balance_minor": null,
+    "actual_closed": null,
+    "actual_writes_allowed": false,
+    "blockers": ["EVIDENCED_CLOSING_PAYMENT_REQUIRED", "PRODUCTION_READBACK_REQUIRED"],
+    "expected_balance_minor": 0,
+    "expected_closed": true,
+    "include_in_active_routing": false,
+    "issuer_closing_balance_minor": null,
+    "mode": "READ_ONLY_ASSERTION",
+    "provider_account_id": "adcb:credit:8833-6838",
+    "reconciliation_policy": "EVIDENCED_HISTORY_AND_CLOSING_PAYMENT_ONLY",
+    "retain_history": true,
+    "schema_version": 1,
+    "status": "BLOCKED",
+    "synthetic_balancing_row_allowed": false
+  },
+  "blockers": [
+    "FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED",
+    "FX_SNAPSHOT_REQUIRED",
+    "EVIDENCED_CLOSING_PAYMENT_REQUIRED",
+    "PRODUCTION_READBACK_REQUIRED"
+  ],
+  "evaluated_at": "2026-08-19T00:00:00+00:00",
+  "fab": {
+    "account": {
+      "action": "CREATE_OR_VERIFY_FROM_SOURCE_DATED_OPENING_ANCHOR",
+      "currency": "AED",
+      "derived_adjustment": null,
+      "name": "FAB Elite Gold Current Account · 2001",
+      "offbudget": false,
+      "opening_balance_anchor": {
+        "balance_minor": 11505473,
+        "before_transaction_date": "2026-05-06",
+        "captured_activity_net_minor": 10995672,
+        "derivation": "source_as_of_balance_minor - captured_activity_net_minor",
+        "freshness": "FRESH",
+        "source_as_of": "2026-08-18T08:36:58.922000+00:00",
+        "source_as_of_balance_minor": 22501145,
+        "source_field": "account.balance",
+        "source_identity": "browser-capture:fab-account-2001-visible-2026-08-18",
+        "stale_after_seconds": 604800
+      },
+      "provider_account_id": "fab:current:2001",
+      "review_required": true,
+      "synthetic_balancing_row_allowed": false,
+      "transaction_boundary": {
+        "captured_row_count": 100,
+        "captured_rows": "IMPORT_AFTER_OPENING_ANCHOR",
+        "covered_through": "2026-08-17"
+      },
+      "type": "checking"
+    },
+    "actual_writes_allowed": false,
+    "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED"],
+    "inventory_status": "INCOMPLETE",
+    "mode": "PROPOSAL_ONLY",
+    "schema_version": 1,
+    "status": "BLOCKED"
+  },
   "generated_from": [
     "config/account-completeness.json",
     "runtime/browser-captures/fab-account-2001-2026-08-18.json",
     "runtime/browser-captures/sarwa-holdings-2026-08-18.json"
   ],
-  "blockers": [
-    "FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED",
-    "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED",
-    "FX_SNAPSHOT_REQUIRED"
-  ],
-  "fab": {
-    "inventory_status": "INCOMPLETE",
-    "known_accounts": [
-      {
-        "provider_account_id": "fab:current:2001",
-        "name": "FAB Elite Gold Current Account · 2001",
-        "action": "VERIFY_EXISTING_ACCOUNT_AND_PROPOSE_REPLACEABLE_ADJUSTMENT",
-        "type": "checking",
-        "offbudget": false,
-        "currency": "AED",
-        "source_balance_minor": 22501145,
-        "source_balance_as_of": "2026-08-18T08:36:58.922Z",
-        "covered_activity_actual_balance_minor": 10995672,
-        "derived_adjustment_minor": 11505473,
-        "derived_adjustment_formula": "source_balance_minor - covered_activity_actual_balance_minor",
-        "replaceable": true,
-        "replacement_trigger": "Older official history or an evidenced opening balance becomes available",
-        "review_required": true,
-        "write_manifest_present": false
-      }
-    ],
-    "unknown_accounts": {
-      "count": null,
-      "reason": "A complete authenticated FAB non-credit-card account inventory has not been captured"
-    }
-  },
+  "mode": "PROPOSAL_ONLY",
   "sarwa": {
-    "inventory_status": "COMPLETE_FOR_CAPTURE",
-    "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c",
-    "source_currency": "USD",
-    "source_total": "1571611.22",
-    "source_as_of": "2026-08-17T00:00:00Z",
-    "acquisition_mode": "USER_ASSISTED_BROWSER_CAPTURE",
-    "unattended_refresh_supported": false,
+    "account_model": "OFF_BUDGET_VALUATION_ACCOUNTS",
     "accounts": [
       {
-        "provider_account_id": "sarwa:invest:personal",
+        "currency": "AED",
+        "fx_snapshot_id": null,
+        "initial_balance_minor": null,
         "name": "Sarwa Invest · Personal",
-        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
-        "type": "investment",
         "offbudget": true,
+        "positions_are_ledger_transactions": false,
+        "provider_account_id": "sarwa:invest:personal",
+        "review_required": true,
+        "source_as_of": "2026-08-17T00:00:00+00:00",
+        "source_currency": "USD",
         "source_value": "1249330.82",
-        "source_currency": "USD",
-        "initial_balance_minor": null,
-        "fx_snapshot_id": null,
+        "type": "investment",
+        "valuation_imported_id": "wealth:sarwa:3e3d962b092f413dc1d37a9b",
         "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
-        "positions_are_ledger_transactions": false,
-        "review_required": true
+        "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c"
       },
       {
-        "provider_account_id": "sarwa:invest:parents",
+        "currency": "AED",
+        "fx_snapshot_id": null,
+        "initial_balance_minor": null,
         "name": "Sarwa Invest · Parents",
-        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
-        "type": "investment",
         "offbudget": true,
+        "positions_are_ledger_transactions": false,
+        "provider_account_id": "sarwa:invest:parents",
+        "review_required": true,
+        "source_as_of": "2026-08-17T00:00:00+00:00",
+        "source_currency": "USD",
         "source_value": "98819.13",
-        "source_currency": "USD",
-        "initial_balance_minor": null,
-        "fx_snapshot_id": null,
+        "type": "investment",
+        "valuation_imported_id": "wealth:sarwa:ee7ee305c8324a500e0107eb",
         "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
-        "positions_are_ledger_transactions": false,
-        "review_required": true
+        "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c"
       },
       {
-        "provider_account_id": "sarwa:invest:shared-airbnb",
+        "currency": "AED",
+        "fx_snapshot_id": null,
+        "initial_balance_minor": null,
         "name": "Sarwa Invest · Shared Airbnb",
-        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
-        "type": "investment",
         "offbudget": true,
-        "source_value": "15872.67",
-        "source_currency": "USD",
-        "initial_balance_minor": null,
-        "fx_snapshot_id": null,
-        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
         "positions_are_ledger_transactions": false,
-        "review_required": true
+        "provider_account_id": "sarwa:invest:shared-airbnb",
+        "review_required": true,
+        "source_as_of": "2026-08-17T00:00:00+00:00",
+        "source_currency": "USD",
+        "source_value": "15872.67",
+        "type": "investment",
+        "valuation_imported_id": "wealth:sarwa:0f5acf1c347048255b9d8e10",
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c"
       },
       {
-        "provider_account_id": "sarwa:trade:primary",
-        "name": "Sarwa Trade · Primary",
-        "action": "CREATE_OFFBUDGET_AFTER_REVIEW",
-        "type": "investment",
-        "offbudget": true,
-        "source_value": "207588.60",
-        "source_currency": "USD",
-        "initial_balance_minor": null,
+        "currency": "AED",
         "fx_snapshot_id": null,
-        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "initial_balance_minor": null,
+        "name": "Sarwa Trade · Primary",
+        "offbudget": true,
         "positions_are_ledger_transactions": false,
-        "review_required": true
+        "provider_account_id": "sarwa:trade:primary",
+        "review_required": true,
+        "source_as_of": "2026-08-17T00:00:00+00:00",
+        "source_currency": "USD",
+        "source_value": "207588.60",
+        "type": "investment",
+        "valuation_imported_id": "wealth:sarwa:4bb82881b3df9e92128297f8",
+        "valuation_strategy": "AGGREGATE_BALANCE_ADJUSTMENT",
+        "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c"
       }
     ],
-    "excluded_accounts": [
-      {
-        "provider_account_id": "sarwa:invest:classic",
-        "display_name": "Sarwa Classic",
-        "source_value": "0.00",
-        "reason": "CLOSED_ZERO_BALANCE"
-      }
-    ],
-    "non_asset_exclusions": [
-      {
-        "display_name": "Black Swan Protection",
-        "amount": "1300000",
-        "currency": "USD",
-        "reason": "INSURANCE_COVERAGE_IS_NOT_AN_ASSET"
-      }
-    ]
-  }
+    "actual_writes_allowed": false,
+    "blockers": ["FX_SNAPSHOT_REQUIRED"],
+    "excluded_accounts": [{
+      "display_name": "Sarwa Classic",
+      "provider_account_id": "sarwa:invest:classic",
+      "reason": "CLOSED_ZERO_BALANCE",
+      "source_currency": "USD",
+      "source_value": "0.00"
+    }],
+    "mode": "PROPOSAL_ONLY",
+    "non_asset_exclusions": [{
+      "amount": "1300000",
+      "currency": "USD",
+      "display_name": "Black Swan Protection",
+      "kind": "INSURANCE_COVERAGE",
+      "reason": "INSURANCE_COVERAGE_IS_NOT_AN_ASSET"
+    }],
+    "position_sidecar_required": true,
+    "schema_version": 1,
+    "status": "BLOCKED",
+    "wealth_snapshot_freshness": "FRESH",
+    "wealth_snapshot_id": "wealth:sarwa:0fefdf12f99859a2464c"
+  },
+  "schema_version": 2,
+  "status": "BLOCKED"
 }

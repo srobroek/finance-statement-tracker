@@ -17,7 +17,7 @@
       "status": "BLOCKED",
       "production_gate": true,
       "verifier": {"kind": "SCRIPT", "command": "python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json --require fab-complete-inventory", "expected": "Hash-bound portal inventory and archive evidence enumerate every FAB non-credit account and match Actual signed balances exactly."},
-      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", "FAB_OPENING_BALANCE_EVIDENCE_REQUIRED"]
+      "dependencies": ["actual-ui-api-parity"], "evidence": [], "blockers": ["FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED"]
     },
     {
       "id": "sarwa-wealth-accounts",

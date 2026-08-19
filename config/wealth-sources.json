@@ -47,7 +47,6 @@
           "provider_account_id": "sarwa:trade:primary",
           "capture_labels": ["Sarwa Trade"],
           "actual_account_name": "Sarwa Trade · Primary",
-          "ownership": "Personal",
           "include_in_net_worth": true,
           "closed": false
         }
