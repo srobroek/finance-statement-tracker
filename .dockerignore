@@ -3,6 +3,7 @@
 **/.actual-cache
 **/node_modules
 **/__pycache__
+.upstream/**/.git
 runtime
 data/private
 Finance Evidence

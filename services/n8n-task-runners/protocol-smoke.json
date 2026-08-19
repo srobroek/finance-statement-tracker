@@ -1,0 +1,48 @@
+{
+  "id": "finance-task-runners-protocol-smoke",
+  "name": "Finance task runners protocol smoke",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "javascript",
+      "name": "JavaScript Runner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{json:{js_runner:'ok',value:21}}];"
+      }
+    },
+    {
+      "id": "python",
+      "name": "Python Runner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "parameters": {
+        "language": "pythonNative",
+        "mode": "runOnceForAllItems",
+        "pythonCode": "return [{'json': {'js_runner': _items[0]['json']['js_runner'], 'python_runner': 'ok', 'value': _items[0]['json']['value'] * 2}}]"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "JavaScript Runner", "type": "main", "index": 0 }]]
+    },
+    "JavaScript Runner": {
+      "main": [[{ "node": "Python Runner", "type": "main", "index": 0 }]]
+    }
+  }
+}
