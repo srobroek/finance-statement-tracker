@@ -280,13 +280,17 @@ cleanup_current() {
   local cleanup_ok=true
   local inspect_status
   local inspect_error
+  local post_inspect_error
   if [[ -n "${current_container}" && "${runtime_available}" == true ]]; then
     inspect_error="${temp_dir}/inspect-${current_container}.stderr"
+    post_inspect_error="${temp_dir}/post-inspect-${current_container}.stderr"
     if "${RUNTIME}" inspect "${current_container}" >/dev/null 2>"${inspect_error}"; then
       if ! "${RUNTIME}" rm -f "${current_container}" >/dev/null 2>&1; then
         cleanup_ok=false
       fi
-      if ! inspect_status="$(inspect_result "${current_container}" "${inspect_error}")" || [[ "${inspect_status}" != absent ]]; then
+      if "${RUNTIME}" inspect "${current_container}" >/dev/null 2>"${post_inspect_error}"; then
+        cleanup_ok=false
+      elif ! inspect_status="$(inspect_result "${current_container}" "${post_inspect_error}")" || [[ "${inspect_status}" != absent ]]; then
         cleanup_ok=false
       fi
     elif ! inspect_status="$(inspect_result "${current_container}" "${inspect_error}")" || [[ "${inspect_status}" != absent ]]; then

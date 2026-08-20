@@ -235,6 +235,48 @@ class CashbackRestoreContractTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("restore_receipt_write_failed", result.stderr)
+            self.assertTrue((root / "rm-called").is_file())
+            self.assertFalse((root / "retained-marker").exists())
+
+    def test_happy_path_runs_twice_and_cleans_each_exact_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            runtime = fake_runtime(root, inspect_fault=False)
+            receipt = root / "passed.json"
+            result = subprocess.run(
+                [
+                    str(SCRIPT),
+                    "--backup-root",
+                    str(root),
+                    "--receipt",
+                    str(receipt),
+                    "--runtime",
+                    str(runtime),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+            schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+            self.assertEqual(list(Draft202012Validator(schema).iter_errors(payload)), [])
+            self.assertEqual(payload["status"], "passed")
+            self.assertEqual(payload["requested_runs"], 2)
+            self.assertEqual(len(payload["runs"]), 2)
+            self.assertEqual({run["status"] for run in payload["runs"]}, {"passed"})
+            self.assertEqual(len({run["sidecar_id"] for run in payload["runs"]}), 2)
+            for run in payload["runs"]:
+                self.assertEqual(run["pre_state_sha256"], run["post_state_sha256"])
+                self.assertTrue(run["exact_state_match"])
+                self.assertTrue(run["health_authorized"])
+                self.assertTrue(run["restart_verified"])
+                self.assertTrue(run["cleanup_verified"])
+            self.assertTrue((root / "rm-called").is_file())
+            self.assertFalse((root / "retained-marker").exists())
+            self.assertTrue(payload["cleanup_verified"])
 
     def test_repeat_requires_two_and_passed_schema_requires_all_invariants(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
