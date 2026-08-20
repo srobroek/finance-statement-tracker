@@ -624,10 +624,13 @@ const attachmentId = String(r.attachment_id || r.source_attachment_id || '').tri
 if (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {
   throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');
 }
-for (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key']) {
+for (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'manifest_onedrive_parent_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key']) {
   if (!r[k]) throw new Error(`Missing trusted immutable field ${k}`);
 }
 if (!attachmentId) throw new Error('Missing trusted immutable field attachment_id');
+if (typeof r.cashback_close_required !== 'boolean') {
+  throw new Error('Missing trusted immutable field cashback_close_required');
+}
 if (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {
   throw new Error('Manual and MCP mutation are forbidden');
 }
@@ -638,9 +641,12 @@ return [{
     message_id: r.message_id,
     document_sha256: r.document_sha256,
     onedrive_item_id: r.onedrive_item_id,
+    manifest_onedrive_parent_id: r.manifest_onedrive_parent_id,
     config_version: r.config_version,
     actual_file_id: r.actual_file_id,
     account_id: r.account_id,
+    card_code: r.card_code,
+    cashback_close_required: r.cashback_close_required,
     period_key: r.period_key,
     trigger_kind: r.trigger_kind,
     attachment_id: attachmentId,
@@ -2338,7 +2344,7 @@ return [{
             ("actual_writer_workflow", "string", "ACTUAL_OUTBOX_APPLY"),
             ("source_mutation_forbidden", "boolean", True),
         ],
-        [("run_id", "string"), ("source_code", "string"), ("message_id", "string"), ("document_sha256", "string"), ("onedrive_item_id", "string"), ("config_version", "string"), ("actual_file_id", "string"), ("account_id", "string"), ("period_key", "string"), ("trigger_kind", "string"), ("attachment_id", "string"), ("source_attachment_id", "string")],
+        [("run_id", "string"), ("source_code", "string"), ("message_id", "string"), ("document_sha256", "string"), ("onedrive_item_id", "string"), ("manifest_onedrive_parent_id", "string"), ("config_version", "string"), ("actual_file_id", "string"), ("account_id", "string"), ("card_code", "string"), ("cashback_close_required", "boolean"), ("period_key", "string"), ("trigger_kind", "string"), ("attachment_id", "string"), ("source_attachment_id", "string")],
     )
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     insert_config(

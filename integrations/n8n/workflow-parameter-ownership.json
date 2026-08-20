@@ -108,7 +108,7 @@
     "03-shared-statement-pipeline.json": {
       "nodes": {
         "Statement Pipeline Parameters": {
-          "caller_fields": {"run_id": "string", "source_code": "string", "message_id": "string", "document_sha256": "string", "onedrive_item_id": "string", "config_version": "string", "actual_file_id": "string", "account_id": "string", "period_key": "string", "trigger_kind": "string", "attachment_id": "string", "source_attachment_id": "string"},
+          "caller_fields": {"run_id": "string", "source_code": "string", "message_id": "string", "document_sha256": "string", "onedrive_item_id": "string", "manifest_onedrive_parent_id": "string", "config_version": "string", "actual_file_id": "string", "account_id": "string", "card_code": "string", "cashback_close_required": "boolean", "period_key": "string", "trigger_kind": "string", "attachment_id": "string", "source_attachment_id": "string"},
           "fields": {
             "actual_writer_workflow": {"category": "workflow_local_constant", "type": "string"},
             "pipeline_contract": {"category": "workflow_local_constant", "type": "string"},

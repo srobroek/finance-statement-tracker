@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const k of ['run_id', 'source_code', 'message_id', 'attachment_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key'])\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind))\n    throw new Error('Manual and MCP mutation are forbidden');\nreturn [{ json: r, binary: $binary }];\n"
+        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nconst sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();\nconst attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();\nif (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {\n    throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');\n}\nfor (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'manifest_onedrive_parent_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key']) {\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\n}\nif (!attachmentId)\n    throw new Error('Missing trusted immutable field attachment_id');\nif (typeof r.cashback_close_required !== 'boolean') {\n    throw new Error('Missing trusted immutable field cashback_close_required');\n}\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {\n    throw new Error('Manual and MCP mutation are forbidden');\n}\nreturn [{\n        json: {\n            run_id: r.run_id,\n            source_code: r.source_code,\n            message_id: r.message_id,\n            document_sha256: r.document_sha256,\n            onedrive_item_id: r.onedrive_item_id,\n            manifest_onedrive_parent_id: r.manifest_onedrive_parent_id,\n            config_version: r.config_version,\n            actual_file_id: r.actual_file_id,\n            account_id: r.account_id,\n            card_code: r.card_code,\n            cashback_close_required: r.cashback_close_required,\n            period_key: r.period_key,\n            trigger_kind: r.trigger_kind,\n            attachment_id: attachmentId,\n            source_attachment_id: sourceAttachmentId,\n            pipeline_contract: r.pipeline_contract,\n            actual_writer_workflow: r.actual_writer_workflow,\n            source_mutation_forbidden: r.source_mutation_forbidden,\n        },\n        binary: $binary,\n    }];\n"
       }
     },
     {
@@ -1064,25 +1064,115 @@
           "assignments": [
             {
               "id": "config-1",
+              "name": "run_id",
+              "type": "string",
+              "value": "={{ $json.run_id }}"
+            },
+            {
+              "id": "config-2",
+              "name": "source_code",
+              "type": "string",
+              "value": "={{ $json.source_code }}"
+            },
+            {
+              "id": "config-3",
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $json.message_id }}"
+            },
+            {
+              "id": "config-4",
+              "name": "document_sha256",
+              "type": "string",
+              "value": "={{ $json.document_sha256 }}"
+            },
+            {
+              "id": "config-5",
+              "name": "onedrive_item_id",
+              "type": "string",
+              "value": "={{ $json.onedrive_item_id }}"
+            },
+            {
+              "id": "config-6",
+              "name": "manifest_onedrive_parent_id",
+              "type": "string",
+              "value": "={{ $json.manifest_onedrive_parent_id }}"
+            },
+            {
+              "id": "config-7",
+              "name": "config_version",
+              "type": "string",
+              "value": "={{ $json.config_version }}"
+            },
+            {
+              "id": "config-8",
+              "name": "actual_file_id",
+              "type": "string",
+              "value": "={{ $json.actual_file_id }}"
+            },
+            {
+              "id": "config-9",
+              "name": "account_id",
+              "type": "string",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "id": "config-10",
+              "name": "card_code",
+              "type": "string",
+              "value": "={{ $json.card_code }}"
+            },
+            {
+              "id": "config-11",
+              "name": "cashback_close_required",
+              "type": "boolean",
+              "value": "={{ $json.cashback_close_required }}"
+            },
+            {
+              "id": "config-12",
+              "name": "period_key",
+              "type": "string",
+              "value": "={{ $json.period_key }}"
+            },
+            {
+              "id": "config-13",
+              "name": "trigger_kind",
+              "type": "string",
+              "value": "={{ $json.trigger_kind }}"
+            },
+            {
+              "id": "config-14",
+              "name": "attachment_id",
+              "type": "string",
+              "value": "={{ $json.attachment_id }}"
+            },
+            {
+              "id": "config-15",
+              "name": "source_attachment_id",
+              "type": "string",
+              "value": "={{ $json.source_attachment_id }}"
+            },
+            {
+              "id": "config-16",
               "name": "pipeline_contract",
               "type": "string",
               "value": "STATEMENT_PIPELINE_V1"
             },
             {
-              "id": "config-2",
+              "id": "config-17",
               "name": "actual_writer_workflow",
               "type": "string",
               "value": "ACTUAL_OUTBOX_APPLY"
             },
             {
-              "id": "config-3",
+              "id": "config-18",
               "name": "source_mutation_forbidden",
               "type": "boolean",
               "value": true
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },
