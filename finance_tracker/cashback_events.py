@@ -207,6 +207,18 @@ def _merchant_key(value: object) -> str:
     return _MERCHANT_TOKEN.sub(" ", str(value or "").upper()).strip()
 
 
+def _merchant_match_score(candidate: object, statement: object) -> int:
+    candidate_key = _merchant_key(candidate)
+    statement_key = _merchant_key(statement)
+    if not candidate_key or not statement_key:
+        return 0
+    if candidate_key == statement_key:
+        return 2
+    if candidate_key in statement_key or statement_key in candidate_key:
+        return 1
+    return 0
+
+
 def _event_polarity(value: object) -> str:
     return "CREDIT" if str(value).upper() in {"REFUND", "REVERSAL"} else "DEBIT"
 
@@ -595,32 +607,42 @@ class CashbackEventStore:
                 statement_only = 0
                 for event in statement_events:
                     event_date = date.fromisoformat(event["occurred_at"][:10])
-                    event_merchant = _merchant_key(event["merchant"])
                     ranked = []
                     for candidate in remaining.values():
                         if candidate["amount_aed_minor"] != event["amount_aed_minor"]:
                             continue
-                        if _event_polarity(candidate["event_type"]) != _event_polarity(event["event_type"]):
+                        if (
+                            str(candidate["currency"] or "").strip().upper()
+                            != event["currency"]
+                        ):
                             continue
-                        candidate_date = date.fromisoformat(str(candidate["occurred_at"])[:10])
+                        if _event_polarity(candidate["event_type"]) != _event_polarity(
+                            event["event_type"]
+                        ):
+                            continue
+                        candidate_date = date.fromisoformat(
+                            str(candidate["occurred_at"])[:10]
+                        )
                         day_gap = abs((event_date - candidate_date).days)
                         if day_gap > 3:
                             continue
-                        candidate_merchant = _merchant_key(candidate["merchant"])
-                        merchant_score = 2 if candidate_merchant == event_merchant else 0
-                        if (
-                            merchant_score == 0
-                            and candidate_merchant
-                            and event_merchant
-                            and (candidate_merchant in event_merchant or event_merchant in candidate_merchant)
-                        ):
-                            merchant_score = 1
-                        ranked.append((merchant_score, -day_gap, str(candidate["source_event_id"])))
+                        merchant_score = _merchant_match_score(
+                            candidate["merchant"], event["merchant"]
+                        )
+                        if merchant_score == 0:
+                            continue
+                        ranked.append(
+                            (
+                                merchant_score,
+                                -day_gap,
+                                str(candidate["source_event_id"]),
+                            )
+                        )
                     ranked.sort(reverse=True)
                     unique_match = bool(
                         ranked
                         and (len(ranked) == 1 or ranked[0][:2] != ranked[1][:2])
-                        and (ranked[0][0] > 0 or (len(ranked) == 1 and ranked[0][1] == 0))
+                        and ranked[0][0] > 0
                     )
                     if unique_match:
                         source_event_id = ranked[0][2]
