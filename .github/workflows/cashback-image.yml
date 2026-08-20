@@ -11,11 +11,15 @@ on:
       - ".dockerignore"
       - "apps/cashback-control/**"
       - "deploy/cashback/**"
+      - "deploy/actual-poc/backup.sh"
+      - "deploy/actual-poc/sanitize-cashback-backup.py"
+      - "deploy/actual-poc/verify-backup.py"
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/actual-note-contract.json"
       - "config/cashback-programs.json"
       - "config/cashback-profile-schema-v1.json"
+      - "config/cashback-profile-schema-v2.json"
       - "config/static-rules.seed.json"
       - "config/transaction-email-sources.json"
       - "examples/cashback-profiles/**"
@@ -72,12 +76,14 @@ jobs:
           for profile in flat-rate-usd tiered-gbp rotating-eur requirements-cad; do
             cleanup
             docker run -d --name cashback-profile-test-run \
+              -e CASHBACK_HOST=127.0.0.1 \
+              -e CASHBACK_PUBLIC_URL=http://127.0.0.1:5010 \
+              -e CASHBACK_INGEST_TOKEN=profile-test-token \
               -e CASHBACK_PROGRAM_CONFIG_PATH=/etc/cashback/profile.json \
               -v "$PWD/examples/cashback-profiles/${profile}.json:/etc/cashback/profile.json:ro" \
               cashback-profile-test >/dev/null
             for attempt in $(seq 1 30); do
-              if docker exec cashback-profile-test-run python -c \
-                "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=2)"; then
+              if docker exec cashback-profile-test-run python apps/cashback-control/probe_health.py; then
                 break
               fi
               if [ "$attempt" -eq 30 ]; then
@@ -87,7 +93,7 @@ jobs:
               sleep 1
             done
             docker exec cashback-profile-test-run python -c \
-              "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:5010/api/dashboard')); assert d['cards']; assert d['routing_graphs']; assert d['currency'] != 'AED'"
+              "import json; d=json.load(open('/var/lib/cashback-control/cashback-dashboard.json')); assert d['cards']; assert d['routing_graphs']; assert d['currency'] != 'AED'"
           done
 
   publish:
@@ -166,6 +172,9 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-cashback
+          sanitizer=/opt/stacks/finance-actual-poc/sanitize-cashback-backup.py
+          sudo install -m 0750 deploy/actual-poc/sanitize-cashback-backup.py "$sanitizer"
+          sudo test -x "$sanitizer"
           sudo install -d "$stack"
           sudo install -d -m 0700 /opt/stacks/finance-runtime
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
@@ -184,6 +193,10 @@ jobs:
           elif sudo test -f /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3; then
             sudo cp --preserve=mode,timestamps \
               /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3 \
+              "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
+          fi
+          if sudo test -f "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"; then
+            sudo "$sanitizer" \
               "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
           fi
 
@@ -216,7 +229,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"'; then
+            if sudo docker exec finance-cashback-control python apps/cashback-control/probe_health.py >/dev/null; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
@@ -228,5 +241,6 @@ jobs:
           done
           image="$(sudo docker inspect finance-cashback-control --format '{{.Config.Image}}')"
           test "$image" = "$IMAGE_NAME:main"
-          curl -fsS http://127.0.0.1:5010/api/dashboard >/dev/null
+          sudo docker exec finance-cashback-control python -c \
+            "import json; d=json.load(open('/var/lib/cashback-control/cashback-dashboard.json')); assert d['cards']; assert d['routing_graphs']"
           curl -fsS http://127.0.0.1:5006/ >/dev/null

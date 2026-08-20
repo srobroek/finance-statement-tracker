@@ -39,17 +39,23 @@ fi
 probe() {
   local url="$1"
   local required="${2:-}"
+  local container="${3:-}"
   local response
-  response="$(curl --connect-timeout 3 --max-time 10 -fsS "${url}" 2>/dev/null)" || return 1
+  if [[ -n "${container}" ]]; then
+    response="$(docker exec "${container}" python apps/cashback-control/probe_health.py 2>/dev/null)" || return 1
+  else
+    response="$(curl --connect-timeout 3 --max-time 10 -fsS "${url}" 2>/dev/null)" || return 1
+  fi
   [[ -z "${required}" || "${response}" == *"${required}"* ]]
 }
 
 probe_twice() {
   local url="$1"
   local required="${2:-}"
-  probe "${url}" "${required}" && return 0
+  local container="${3:-}"
+  probe "${url}" "${required}" "${container}" && return 0
   sleep 3
-  probe "${url}" "${required}"
+  probe "${url}" "${required}" "${container}"
 }
 
 container_running() {
@@ -76,8 +82,9 @@ ensure_service() {
   local service="$4"
   local url="$5"
   local required="${6:-}"
+  local container="${7:-}"
 
-  if container_running "${name}" && probe_twice "${url}" "${required}"; then
+  if container_running "${name}" && probe_twice "${url}" "${required}" "${container}"; then
     log info service_healthy "${name}"
     return 0
   fi
@@ -85,7 +92,7 @@ ensure_service() {
   log warning service_unhealthy "${name}" >&2
   recover_container "${name}" "${stack_dir}" "${project}" "${service}"
   for _ in $(seq 1 60); do
-    if container_running "${name}" && probe "${url}" "${required}"; then
+    if container_running "${name}" && probe "${url}" "${required}" "${container}"; then
       log info service_verified "${name}"
       return 0
     fi
@@ -112,7 +119,7 @@ if ! ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-po
 fi
 
 ensure_service finance-cashback-control "${CASHBACK_STACK_DIR}" finance-cashback cashback-control \
-  http://127.0.0.1:5010/api/health '"status": "ok"' || failed=1
+  http://127.0.0.1:5010/api/health '"status":"ok"' finance-cashback-control || failed=1
 latest_backup="$(find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 || true)"
 if [[ -z "${latest_backup}" ]]; then
   log error backup_missing finance-backup >&2

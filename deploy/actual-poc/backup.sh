@@ -9,6 +9,7 @@ RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
 ACTUAL_DATA_DIR="${FINANCE_ACTUAL_DATA_DIR:-${ACTUAL_STACK_DIR}/data}"
 CASHBACK_DATA_DIR="${FINANCE_CASHBACK_DATA_DIR:-${ACTUAL_STACK_DIR}/cashback-data}"
 VERIFY_SCRIPT="${FINANCE_BACKUP_VERIFY_SCRIPT:-${ACTUAL_STACK_DIR}/verify-backup.py}"
+SANITIZE_SCRIPT="${FINANCE_CASHBACK_BACKUP_SANITIZE_SCRIPT:-${ACTUAL_STACK_DIR}/sanitize-cashback-backup.py}"
 
 fail() {
   printf '{"level":"error","event":"backup_refused","reason":"%s"}\n' "$1" >&2
@@ -27,7 +28,9 @@ backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
 [[ "$(resolved "${ACTUAL_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/data" ]] || fail "unexpected_actual_data_path"
 [[ "$(resolved "${CASHBACK_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/cashback-data" ]] || fail "unexpected_cashback_data_path"
 [[ "$(resolved "${VERIFY_SCRIPT}")" == "${ACTUAL_STACK_DIR}/verify-backup.py" ]] || fail "unexpected_verify_script_path"
+[[ "$(resolved "${SANITIZE_SCRIPT}")" == "${ACTUAL_STACK_DIR}/sanitize-cashback-backup.py" ]] || fail "unexpected_sanitize_script_path"
 [[ -f "${VERIFY_SCRIPT}" ]] || fail "missing_verify_script"
+[[ -f "${SANITIZE_SCRIPT}" ]] || fail "missing_sanitize_script"
 for required_dir in "${ACTUAL_DATA_DIR}" "${CASHBACK_DATA_DIR}"; do
   [[ -d "${required_dir}" ]] || fail "missing_data_directory"
 done
@@ -62,7 +65,13 @@ wait_for_url() {
   local label="$1"
   local url="$2"
   for _ in $(seq 1 90); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then return 0; fi
+    if [[ "${label}" == "cashback" ]]; then
+      if docker exec finance-cashback-control python apps/cashback-control/probe_health.py >/dev/null 2>&1; then
+        return 0
+      fi
+    elif curl -fsS "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
     sleep 1
   done
   printf '{"level":"error","event":"backup_resume_unhealthy","service":"%s"}\n' "${label}" >&2
@@ -80,7 +89,15 @@ if [[ "${cashback_running}" == "running" ]]; then docker pause finance-cashback-
 sync
 
 cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"
-cp -a "${CASHBACK_DATA_DIR}/." "${payload}/cashback-data/"
+# Disposable pre-deploy snapshots are rollback material, not restore input.
+# Exclude them before they enter the archive so an old copy cannot bypass the
+# sanitizer or leak push credentials through a historical filename.
+tar -C "${CASHBACK_DATA_DIR}" \
+  --exclude='pre-deploy-*.sqlite3*' \
+  -cf - . | tar -C "${payload}/cashback-data" -xf -
+while IFS= read -r -d '' database; do
+  python3 "${SANITIZE_SCRIPT}" "${database}"
+done < <(find "${payload}" -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) -print0)
 
 install -m 0644 "${ACTUAL_STACK_DIR}/compose.yaml" "${payload}/configuration/actual-compose.yaml"
 install -m 0644 "${CASHBACK_STACK_DIR}/compose.yaml" "${payload}/configuration/cashback-compose.yaml"
@@ -101,7 +118,7 @@ rm -rf -- "${payload}"
   sha256sum -c SHA256SUMS >/dev/null
 )
 cat > "${working}/manifest.json" <<EOF
-{"schema_version":3,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
+{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3*"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 
 resume_services

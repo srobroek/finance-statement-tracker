@@ -64,6 +64,8 @@ Host and Origin checks are request-boundary checks; the JWT remains the authenti
 
 Public mode requires `CASHBACK_ACCESS_ISSUER`, `CASHBACK_ACCESS_AUDIENCE`, and `CASHBACK_ACCESS_JWKS_URL` at startup. The local JWT exemption applies only when `CASHBACK_HOST`, the request client, and `CASHBACK_PUBLIC_URL` are all loopback. The Compose deployment publishes port 5010 on `127.0.0.1` so the Cloudflare Tunnel remains the public entry point.
 
+Public `GET /api/dashboard`, `/api/periods`, `/api/health`, and `/api/push/config` requests require the same Cloudflare Access assertion and public `Host` boundary. `GET /api/health` also accepts the ingest bearer token for the private container health probe. Push subscription credentials and subscription counts are not returned by any API response.
+
 The scheduled Codex worker does not need the browser Access assertion. It sends its raw Outlook envelope over SSH and invokes `submit_local.py` inside the container, where the ingest token is already available:
 
 ```powershell

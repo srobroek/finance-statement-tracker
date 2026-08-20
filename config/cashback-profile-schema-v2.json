@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/srobroek/finance-statement-tracker/schemas/cashback-profile-v1.json",
-  "title": "Cashback Control profile",
+  "$id": "https://github.com/srobroek/finance-statement-tracker/schemas/cashback-profile-v2.json",
+  "title": "Cashback Control profile v2",
   "type": "object",
   "required": ["schema_version", "currency", "route_policies", "programs", "payment_intents", "routing_profiles"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
     "status": {"type": "string"},
     "notes": {"type": "string"},
@@ -185,7 +185,7 @@
     },
     "program": {
       "type": "object",
-      "required": ["card", "name", "tiers", "buckets"],
+      "required": ["card", "name", "tiers", "buckets", "provenance"],
       "properties": {
         "card": {"type": "string", "minLength": 1},
         "name": {"type": "string", "minLength": 1},
@@ -228,7 +228,7 @@
     },
     "issuerEvidenceReference": {
       "type": "object",
-      "required": ["label", "url"],
+      "required": ["id", "label", "url", "effective_start", "effective_end", "authority"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
         "label": {"type": "string", "minLength": 1},
@@ -240,11 +240,22 @@
         "fixture": {"type": "string", "pattern": "^tests/fixtures/cashback-provenance/[a-z0-9._-]+$"},
         "retrieved_at": {"type": "string", "format": "date-time"}
       },
+      "allOf": [
+        {
+          "if": {"properties": {"authority": {"const": "AUTHORITATIVE"}}},
+          "then": {
+            "required": ["sha256", "fixture"],
+            "properties": {
+              "effective_start": {"type": "string", "format": "date"}
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "provenanceClaim": {
       "type": "object",
-      "required": ["kind", "path", "reference_ids"],
+      "required": ["kind", "path", "reference_ids", "effective_start", "effective_end"],
       "properties": {
         "kind": {"enum": ["PROGRAMME", "RATE", "CAP", "EXCLUSION", "TIER"]},
         "path": {"type": "string", "minLength": 1},
@@ -270,6 +281,12 @@
           "items": {"$ref": "#/$defs/provenanceClaim"}
         }
       },
+      "allOf": [
+        {
+          "if": {"properties": {"authority": {"const": "AUTHORITATIVE"}}},
+          "then": {"properties": {"claims": {"minItems": 1}}}
+        }
+      ],
       "additionalProperties": false
     },
     "paymentIntent": {
