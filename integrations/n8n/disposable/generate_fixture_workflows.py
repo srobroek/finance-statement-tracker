@@ -130,8 +130,8 @@ def build_sweep_core() -> dict:
             "jsCode": (
                 "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); "
                 "if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); "
-                "if(kind==='zero') return [{json:{}}]; "
-                "const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); "
+                "const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); "
+                "if(kind==='zero') return [mk('m001',1000)]; "
                 "if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); "
                 "if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; "
                 "throw new Error('UNKNOWN_SWEEP_FIXTURE');"
@@ -465,7 +465,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             for name, workflow in workflows.items()
         ],
         "scenario_contract": {
-            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
+            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
             "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101}},
             "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
             "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},

@@ -14,7 +14,7 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "7ed4f8e9e7b0f2e3a118fa249c19b54e8ceb6a47069d06c3b31479022be24047"
+      "sha256": "cf483ec878aa90ce859cc7652b3620d8ee713265e8910e2da1a425777ab6d6e6"
     },
     {
       "file": "91-sweep-zero.json",
@@ -107,8 +107,9 @@
       "workflow_id": "90000000-0000-4000-8000-000000000901",
       "expected_exit": 0,
       "expected": {
-        "scanned_count": 0,
-        "heartbeat": true
+        "scanned_count": 1,
+        "matched_count": 1,
+        "attachment_identity_keys": []
       }
     },
     "sweep_101": {

@@ -451,6 +451,222 @@ try {
         self.assertEqual(output["attachment_identity_keys"], ["message-1:attachment-001"])
         self.assertEqual(output["email_evidence_receipts_verified"], 1)
 
+    def test_executable_mixed_inline_and_non_pdf_disposition(self):
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        expanded = self.execute_code_node(
+            w01,
+            "Expand Enumerated Attachment Items",
+            json_value={
+                "message_id": "message-mixed",
+                "source_code": "FIXTURE",
+                "onedrive_parent_id": "parent",
+                "attachment_inventory": [
+                    {"id": "inline-image", "name": "inline.png", "isInline": True},
+                    {"id": "receipt-csv", "name": "receipt.csv", "isInline": False},
+                ],
+            },
+        )
+        self.assertTrue(expanded["ok"], expanded)
+        rows = [item["json"] for item in expanded["output"]]
+        self.assertEqual(
+            [(row["source_attachment_id"], row["is_inline"], row["is_pdf"]) for row in rows],
+            [("inline-image", True, False), ("receipt-csv", False, False)],
+        )
+        self.assertEqual(
+            ["INLINE_ATTACHMENT_ARCHIVED_ONLY", "NON_PDF_ARCHIVED_ONLY"],
+            [
+                "INLINE_ATTACHMENT_ARCHIVED_ONLY" if row["is_inline"]
+                else "NON_PDF_ARCHIVED_ONLY"
+                for row in rows
+            ],
+        )
+
+        request = {
+            "run_id": "fixture:mixed-disposition",
+            "source_code": "FIXTURE",
+            "folder_id": "folder",
+            "senders": ["sender@example.test"],
+            "subjects": ["Fixture"],
+            "onedrive_parent_id": "parent",
+            "window_start": "2026-08-19T00:00:00.000Z",
+            "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "messages": [{
+                "message_id": "message-mixed",
+                "attachment_inventory": [
+                    {"id": "inline-image"},
+                    {"id": "receipt-csv"},
+                ],
+            }],
+        }
+        barrier = self.execute_code_node(
+            w01,
+            "Attachment Verification Barrier",
+            refs={
+                "Validate Bounded Source Request": request,
+                "Verify Enumerated Attachment Archive": [
+                    {
+                        "attachment_verified": True,
+                        "attachment_identity": f"message-mixed:{attachment_id}",
+                        "source_message_id": "message-mixed",
+                        "source_attachment_id": attachment_id,
+                    }
+                    for attachment_id in ("inline-image", "receipt-csv")
+                ],
+                "Verify Durable Email Evidence Receipt": {
+                    "email_evidence_receipt_verified": True,
+                    "email_evidence_identity": "message-mixed:INLINE_BODY",
+                },
+            },
+        )
+        self.assertTrue(barrier["ok"], barrier)
+        self.assertEqual(barrier["output"][0]["json"]["attachments_verified"], 2)
+
+    def test_executable_101_attachment_barrier_all_new_then_all_replay(self):
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        messages = [
+            {
+                "message_id": f"message-{index:03d}",
+                "attachment_inventory": [{"id": f"attachment-{index:03d}"}],
+            }
+            for index in range(1, 102)
+        ]
+        identities = [
+            f"message-{index:03d}:attachment-{index:03d}"
+            for index in range(1, 102)
+        ]
+        archive_receipts = {}
+        email_receipts = {}
+        provider_calls = []
+
+        for mode in ("all-new", "all-replay"):
+            attachment_rows = []
+            email_rows = []
+            for index, identity in enumerate(identities, start=1):
+                message_id, attachment_id = identity.split(":")
+                attachment_sha256 = f"{index:064x}"
+                email_sha256 = f"{index + 1000:064x}"
+                if mode == "all-new":
+                    provider_calls.append(identity)
+                    archive_receipts[identity] = {
+                        "archive_state": "HASH_VERIFIED",
+                        "source_message_id": message_id,
+                        "source_attachment_id": attachment_id,
+                        "source_sha256": attachment_sha256,
+                    }
+                    email_receipts[message_id] = {
+                        "archive_state": "HASH_VERIFIED",
+                        "source_message_id": message_id,
+                        "source_attachment_id": "INLINE_BODY",
+                        "source_sha256": email_sha256,
+                    }
+                    if index == 1:
+                        new_attachment = self.execute_code_node(
+                            w01,
+                            "Verify Enumerated Attachment Archive",
+                            json_value={"archive_readback_sha256": attachment_sha256},
+                            refs={
+                                "SHA-256 Enumerated Attachment": {
+                                    "document_sha256": attachment_sha256,
+                                    "source_message_id": message_id,
+                                    "source_attachment_id": attachment_id,
+                                },
+                                "Archive Enumerated Attachment in OneDrive": {"id": "drive-item"},
+                            },
+                        )
+                        self.assertTrue(new_attachment["ok"], new_attachment)
+                        attachment_rows.append(new_attachment["output"][0]["json"])
+                        new_email = self.execute_code_node(
+                            w01,
+                            "Verify Durable Email Evidence Receipt",
+                            json_value=email_receipts[message_id] | {
+                                "onedrive_item_id": "drive-email",
+                            },
+                            refs={
+                                "Verify Email Evidence Readback": {
+                                    "source_message_id": message_id,
+                                    "email_evidence_sha256": email_sha256,
+                                },
+                            },
+                        )
+                        self.assertTrue(new_email["ok"], new_email)
+                        email_rows.append(new_email["output"][0]["json"])
+                    else:
+                        attachment_rows.append({
+                            "attachment_verified": True,
+                            "attachment_identity": identity,
+                            "source_message_id": message_id,
+                            "source_attachment_id": attachment_id,
+                        })
+                        email_rows.append({
+                            "email_evidence_receipt_verified": True,
+                            "email_evidence_identity": f"{message_id}:INLINE_BODY",
+                        })
+                else:
+                    archive = archive_receipts[identity]
+                    email = email_receipts[message_id]
+                    attachment_replay = self.execute_code_node(
+                        w01,
+                        "Verify Existing Enumerated Archive Receipt",
+                        json_value={
+                            "source_message_id": message_id,
+                            "source_attachment_id": attachment_id,
+                            "existing_archive_receipt": archive,
+                        },
+                    )
+                    self.assertTrue(attachment_replay["ok"], attachment_replay)
+                    email_replay = self.execute_code_node(
+                        w01,
+                        "Verify Existing Email Evidence Receipt",
+                        json_value={
+                            "source_message_id": message_id,
+                            "email_evidence_sha256": email["source_sha256"],
+                            "existing_email_receipt": email,
+                        },
+                    )
+                    self.assertTrue(email_replay["ok"], email_replay)
+                    attachment_rows.append(attachment_replay["output"][0]["json"])
+                    email_rows.append(email_replay["output"][0]["json"])
+
+            request = {
+                "run_id": f"fixture:{mode}",
+                "source_code": "FIXTURE",
+                "folder_id": "folder",
+                "senders": ["sender@example.test"],
+                "subjects": ["Fixture"],
+                "onedrive_parent_id": "parent",
+                "window_start": "2026-08-19T00:00:00.000Z",
+                "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                "messages": messages,
+            }
+            barrier = self.execute_code_node(
+                w01,
+                "Attachment Verification Barrier",
+                refs={
+                    "Validate Bounded Source Request": request,
+                    "Verify Enumerated Attachment Archive": (
+                        attachment_rows if mode == "all-new" else []
+                    ),
+                    "Verify Existing Enumerated Archive Receipt": (
+                        attachment_rows if mode == "all-replay" else []
+                    ),
+                    "Verify Durable Email Evidence Receipt": (
+                        email_rows if mode == "all-new" else []
+                    ),
+                    "Verify Existing Email Evidence Receipt": (
+                        email_rows if mode == "all-replay" else []
+                    ),
+                },
+            )
+            self.assertTrue(barrier["ok"], barrier)
+            output = barrier["output"][0]["json"]
+            self.assertEqual(output["attachments_verified"], 101)
+            self.assertEqual(output["email_evidence_receipts_verified"], 101)
+            self.assertEqual(output["attachment_identity_keys"], identities)
+
+        self.assertEqual(provider_calls, identities)
+        self.assertEqual(len(archive_receipts), 101)
+        self.assertEqual(len(email_receipts), 101)
+
 
 if __name__ == "__main__":
     unittest.main()
