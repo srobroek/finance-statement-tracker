@@ -29,6 +29,11 @@ FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding=
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
 )
+BROWSER_CAPTURE_SCHEMA = json.loads(
+    (N8N.parent.parent / "config" / "browser-capture-schema-v1.json").read_text(
+        encoding="utf-8"
+    )
+)
 FOLDER_BY_CODE = {
     code: folder
     for folder in FOLDER_CONTRACT["folders"]
@@ -357,6 +362,221 @@ return [{
     # Shared statement processing delegates the isolated PDF boundary to the
     # dedicated reusable extraction workflow instead of duplicating the chain.
     statement = by_code["SHARED_STATEMENT_PIPELINE"]
+    browser_generated_names = {
+        "Browser Capture?",
+        "Parse Browser Capture Adapter",
+        "Match Browser Capture Rows and Bound Retry",
+        "Browser Capture Write?",
+        "Complete Browser Capture Headless Receipt",
+    }
+    if any(node["name"] in browser_generated_names for node in statement["nodes"]):
+        statement["nodes"] = [
+            node for node in statement["nodes"] if node["name"] not in browser_generated_names
+        ]
+        for name in browser_generated_names:
+            statement.get("connections", {}).pop(name, None)
+    if not any(node["name"] == "Browser Capture?" for node in statement["nodes"]):
+        statement["nodes"].extend([
+            {
+                "id": "3021-browser-capture-if",
+                "name": "Browser Capture?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [-300, 0],
+                "parameters": {"conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [{
+                        "leftValue": "={{ $json.document_profile }}",
+                        "rightValue": "BROWSER_CAPTURE_V1",
+                        "operator": {"type": "string", "operation": "equals"},
+                    }],
+                }},
+            },
+            {
+                "id": "3022-browser-capture-adapter",
+                "name": "Parse Browser Capture Adapter",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [-50, 180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+const capture = input.browser_capture;
+if (!capture || capture.schema_version !== 1 || !capture.source?.provider || !capture.account?.label) {
+  throw new Error('BROWSER_CAPTURE_ADAPTER_CONTEXT_MISSING');
+}
+if (!['ACCOUNT_SNAPSHOT', 'STATEMENT_ROWS', 'TRANSACTION_ROWS', 'STATEMENT_PDF'].includes(String(capture.artifact?.kind || ''))) {
+  throw new Error('BROWSER_CAPTURE_ADAPTER_KIND_INVALID');
+}
+if (capture.artifact.kind === 'STATEMENT_PDF') {
+  throw new Error('BROWSER_CAPTURE_PDF_MUST_USE_PDF_PIPELINE');
+}
+if (capture.artifact.kind === 'ACCOUNT_SNAPSHOT') {
+  return [{ json: {
+    ...input,
+    adapter: 'browser_capture_v1_snapshot',
+    transactions: [],
+    period_start: capture.source.date_range?.start || null,
+    period_end: capture.source.date_range?.end || null,
+    reconciliation: { balanced: true, browser_capture: true, balance_tied: false },
+    browser_match_status: 'SNAPSHOT_REVIEW_ONLY',
+    browser_retry: { attempt: 0, max_attempts: 3, exhausted: true },
+    actual_mutation: false,
+    cashback_mutation: false,
+  } }];
+}
+const rows = capture.rows;
+if (!Array.isArray(rows) || rows.length === 0 || rows.length > 10000) {
+  throw new Error('BROWSER_CAPTURE_ROWS_INVALID');
+}
+const ids = new Set();
+const transactions = rows.map((row, index) => {
+  const transactionDate = String(row.transaction_date || '');
+  const description = String(row.description || '').trim();
+  const amount = String(row.amount_aed || '').trim();
+  const direction = String(row.direction || '').toUpperCase();
+  const sourceId = String(row.source_id || row.reference || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate) || !description || !amount || !/^\d+(?:\.\d{1,2})?$/.test(amount) || direction === '') {
+    throw new Error(`BROWSER_CAPTURE_ROW_INVALID:${index}`);
+  }
+  if (!['DEBIT', 'CREDIT'].includes(direction)) {
+    throw new Error(`BROWSER_CAPTURE_DIRECTION_INVALID:${index}`);
+  }
+  if (sourceId) {
+    if (ids.has(sourceId)) throw new Error(`BROWSER_CAPTURE_DUPLICATE_SOURCE_ID:${sourceId}`);
+    ids.add(sourceId);
+  }
+  const transactionId = `browser:${capture.capture_id}:${sourceId || index}`;
+  return {
+    transaction_id: transactionId,
+    transaction_date: transactionDate,
+    post_date: row.post_date || null,
+    card_last4: row.account_last4 || capture.account.account_last4 || null,
+    description,
+    amount_aed: amount,
+    signed_amount_aed: direction === 'CREDIT' ? `-${amount}` : amount,
+    direction,
+    source_direction: direction,
+    transaction_type: row.transaction_type || undefined,
+    amount_original: row.amount_original ?? null,
+    currency_original: row.currency || capture.account.currency || 'AED',
+    exchange_rate: null,
+    source_line: index + 1,
+    review_required: row.review_required === true || capture.source.capture_method === 'VISIBLE_ROWS',
+    source_id: sourceId || null,
+    source_type: 'browser_capture',
+    browser_provider: capture.source.provider,
+    browser_account_label: capture.account.label,
+  };
+});
+return [{ json: {
+  ...input,
+  adapter: 'browser_capture_v1',
+  transactions,
+  period_start: capture.source.date_range?.start || null,
+  period_end: capture.source.date_range?.end || null,
+  reconciliation: { balanced: true, browser_capture: true, balance_tied: false },
+  browser_match_status: 'READY_FOR_MATCH',
+  browser_retry: { attempt: 0, max_attempts: 3, exhausted: false },
+  actual_mutation: false,
+  cashback_mutation: false,
+} }];
+""".strip()},
+            },
+            {
+                "id": "3023-browser-match-retry",
+                "name": "Match Browser Capture Rows and Bound Retry",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1320, 180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+if (!String(input.adapter || '').startsWith('browser_capture_v1')) return [{ json: input }];
+const rows = Array.isArray(input.transactions) ? input.transactions : [];
+if (input.adapter === 'browser_capture_v1_snapshot') {
+  return [{ json: { ...input, browser_match_status: 'SNAPSHOT_REVIEW_ONLY' } }];
+}
+const ids = rows.map(row => String(row.transaction_id || ''));
+if (!rows.length || ids.some(id => !id) || new Set(ids).size !== ids.length) {
+  throw new Error('BROWSER_CAPTURE_MATCH_IDS_INVALID');
+}
+const retry = input.browser_retry || { attempt: 0, max_attempts: 3, exhausted: false };
+if (Number(retry.attempt) > Number(retry.max_attempts)) {
+  throw new Error('BROWSER_CAPTURE_RETRY_EXHAUSTED');
+}
+return [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser_retry: { ...retry, exhausted: true } } }];
+""".strip()},
+            },
+            {
+                "id": "3024-browser-write-if",
+                "name": "Browser Capture Write?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [2280, 0],
+                "parameters": {"conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [{
+                        "leftValue": "={{ $json.document_profile }}",
+                        "rightValue": "BROWSER_CAPTURE_V1",
+                        "operator": {"type": "string", "operation": "equals"},
+                    }],
+                }},
+            },
+            {
+                "id": "3025-browser-terminal",
+                "name": "Complete Browser Capture Headless Receipt",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [2530, -180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+if (!String(input.adapter || '').startsWith('browser_capture_v1') || input.actual_mutation !== false || input.cashback_mutation !== false) {
+  throw new Error('BROWSER_CAPTURE_WRITE_BOUNDARY_FAILED');
+}
+return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', actual_mutation: false, cashback_mutation: false, direct_actual_writer: false, direct_cashback_writer: false } }];
+""".strip()},
+            },
+        ])
+    verify_context = node_by_name(statement, "Verify Archive and Execution Context")
+    statement["connections"][verify_context["name"]] = {
+        "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Browser Capture?"] = {"main": [
+        [{"node": "Parse Browser Capture Adapter", "type": "main", "index": 0}],
+        [{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}],
+    ]}
+    statement["connections"]["Parse Browser Capture Adapter"] = {
+        "main": [[{"node": "Normalize Locked Source Semantics", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Apply N8N Only Rules"] = {
+        "main": [[{"node": "Match Browser Capture Rows and Bound Retry", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Match Browser Capture Rows and Bound Retry"] = {
+        "main": [[{"node": "Unresolved Fields", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Validate Statement Reconciliation and IDs"] = {
+        "main": [[{"node": "Browser Capture Write?", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Browser Capture Write?"] = {"main": [
+        [{"node": "Complete Browser Capture Headless Receipt", "type": "main", "index": 0}],
+        [{"node": "Project Actual Import Rows", "type": "main", "index": 0}],
+    ]}
+    validation = node_by_name(statement, "Validate Statement Reconciliation and IDs")
+    validation["parameters"]["jsCode"] = r"""
+const r = $json;
+if (r.document_profile === 'BROWSER_CAPTURE_V1' && r.adapter === 'browser_capture_v1_snapshot') {
+  return [{ json: { ...r, browser_match_status: 'MATCHED_REVIEW_ONLY', actual_mutation: false, cashback_mutation: false } }];
+}
+if (!Array.isArray(r.transactions) || !r.transactions.length)
+  throw new Error('EMPTY_STATEMENT');
+const ids = r.transactions.map(t => t.transaction_id);
+if (ids.some(x => !x) || new Set(ids).size !== ids.length)
+  throw new Error('INVALID_OR_DUPLICATE_SOURCE_TRANSACTION_ID');
+if (r.reconciliation?.balanced !== true)
+  throw new Error('STATEMENT_RECONCILIATION_FAILED');
+return [{ json: r }];
+""".strip()
     replaced_pdf_nodes = {
         "Validate PDF in Isolated Utility",
         "Unlock Protected PDF in Isolated Utility",
@@ -385,7 +605,7 @@ return [{
     for old in replaced_pdf_nodes:
         statement.get("connections", {}).pop(old, None)
     statement["connections"]["Verify Archive and Execution Context"] = {
-        "main": [[{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}]]
+        "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
     }
     statement["connections"]["Run Isolated PDF Extraction"] = {
         "main": [[{"node": "Parse Verified Statement Profile", "type": "main", "index": 0}]]
@@ -420,10 +640,14 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
     ready["parameters"]["includeOtherFields"] = True
     local_pdf["meta"]["reusableBoundary"] = "PDF_VALIDATE_UNLOCK_PROFILE_QUALITY"
 
-    # Interactive handoff resolves an already archived durable document. It no
-    # longer expects an MCP caller to provide binary data or trusted metadata,
-    # and it never re-uploads an artifact that already has a OneDrive identity.
+    # Interactive handoff archives the binary capture once, then validates the
+    # hash-bound readback before dispatching to the existing headless route.
     handoff = by_code["INTERACTIVE_ARTIFACT_HANDOFF"]
+    browser_schema_literal = json.dumps(
+        BROWSER_CAPTURE_SCHEMA,
+        ensure_ascii=False,
+        indent=2,
+    )
     handoff["nodes"] = [
         {
             "id": "11001",
@@ -441,14 +665,51 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
             "position": [-750, 0],
             "parameters": {"jsCode": r"""
 const request = $json;
-if (!request.artifact_id || !/^[a-f0-9]{64}$/i.test(String(request.expected_sha256 || ''))) {
-  throw new Error('artifact_id and expected_sha256 are required');
+if (!request.artifact_id || !/^[A-Za-z0-9:_-]{1,128}$/.test(String(request.artifact_id))) {
+  throw new Error('artifact_id is required');
 }
-const forbidden = ['provider', 'path', 'url', 'binary', 'capture_schema', 'review_status'];
+const forbidden = ['provider', 'path', 'url', 'capture_payload', 'capture_schema', 'review_status'];
 if (forbidden.some(field => Object.hasOwn(request, field))) {
   throw new Error('Artifact metadata must be resolved from durable server state');
 }
-return [{ json: { artifact_id: String(request.artifact_id), expected_sha256: String(request.expected_sha256).toLowerCase() } }];
+const mcpMode = request.operation_code === 'artifact.submit_reviewed';
+if (mcpMode) {
+  const allowed = new Set(['_mcp_request_id', 'operation_code', 'artifact_id', 'expected_sha256', 'expected_source_sha256', 'expected_capture_sha256']);
+  if (Object.keys(request).some(field => !allowed.has(field))) {
+    throw new Error('MCP_REVIEWED_FIELDS_FORBIDDEN');
+  }
+  if ($binary?.data) throw new Error('MCP_REVIEWED_BINARY_FORBIDDEN');
+  if (Object.hasOwn(request, 'expected_sha256')
+      || Object.hasOwn(request, 'expected_source_sha256')
+      || Object.hasOwn(request, 'expected_capture_sha256')) {
+    throw new Error('MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED');
+  }
+  return [{ json: { handoff_mode: 'MCP_REVIEWED', artifact_id: String(request.artifact_id) } }];
+}
+if (Object.hasOwn(request, 'operation_code')) {
+  throw new Error('BROWSER_CAPTURE_OPERATION_CODE_FORBIDDEN');
+}
+if (Object.hasOwn(request, 'expected_sha256')) {
+  throw new Error('EXPECTED_SHA256_LEGACY_FORBIDDEN');
+}
+if (!/^[a-f0-9]{64}$/i.test(String(request.expected_source_sha256 || ''))) {
+  throw new Error('expected_source_sha256 must be a SHA-256 digest');
+}
+if (!/^[a-f0-9]{64}$/i.test(String(request.expected_capture_sha256 || ''))) {
+  throw new Error('expected_capture_sha256 must be a SHA-256 digest');
+}
+if (!$binary?.data) {
+  throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
+}
+return [{
+  json: {
+    handoff_mode: 'HEADED_CAPTURE',
+    artifact_id: String(request.artifact_id),
+    expected_source_sha256: String(request.expected_source_sha256).toLowerCase(),
+    expected_capture_sha256: String(request.expected_capture_sha256).toLowerCase(),
+  },
+  binary: $binary,
+}];
 """.strip()},
         },
         {
@@ -516,7 +777,7 @@ const observed = String($json.reviewed_sha256 || '').toLowerCase();
 if (!record.document_id || !record.onedrive_item_id) {
   throw new Error('DURABLE_ARTIFACT_RECORD_MISSING');
 }
-if (record.source_sha256 !== expected.expected_sha256 || observed !== expected.expected_sha256) {
+if (record.source_sha256 !== expected.expected_source_sha256 || observed !== expected.expected_source_sha256) {
   throw new Error('REVIEWED_ARTIFACT_HASH_MISMATCH');
 }
 if (record.document_profile === 'STATEMENT_PDF_V1') {
@@ -587,20 +848,586 @@ return [{
             "parameters": {"errorMessage": "BROWSER_CAPTURE_VALIDATOR_REQUIRED: non-statement artifacts never enter the statement parser"},
         },
     ]
+    input_hash = node_by_name(handoff, "Load Durable Document Record")
+    input_hash.update({
+        "name": "SHA-256 Browser Capture Input",
+        "type": "n8n-nodes-base.crypto",
+        "typeVersion": 1,
+        "parameters": {
+            "action": "hash",
+            "type": "SHA256",
+            "binaryData": True,
+            "binaryPropertyName": "data",
+            "dataPropertyName": "input_sha256",
+        },
+    })
+    input_hash.pop("alwaysOutputData", None)
+    archive = node_by_name(handoff, "Download Existing Reviewed Artifact")
+    archive.update({
+        "name": "Archive Browser Capture in OneDrive",
+        "type": "n8n-nodes-base.microsoftOneDrive",
+        "typeVersion": 1.1,
+        "parameters": {
+            "resource": "file",
+            "operation": "upload",
+            "binaryPropertyName": "data",
+            "binaryData": True,
+            "fileName": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id + '.browser-capture-v1.json' }}",
+            "parentId": "={{ $vars.FINANCE_BROWSER_ARCHIVE_PARENT_ID }}",
+        },
+    })
+    upsert = node_by_name(handoff, "SHA-256 Reviewed Artifact")
+    upsert.update({
+        "name": "Upsert Durable Browser Archive Receipt",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "parameters": {
+            "resource": "row",
+            "operation": "upsert",
+            "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+            "matchType": "allConditions",
+            "filters": {"conditions": [
+                {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
+            ]},
+            "columns": {
+                "mappingMode": "defineBelow",
+                "value": {
+                    "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                    "source_sha256": "={{ $('Resolve Capture Hash Contract').first().json.expected_source_sha256 }}",
+                    "document_profile": "BROWSER_CAPTURE_V1",
+                    "requested_schema_version": "browser-capture-schema-v1",
+                    "onedrive_item_id": "={{ $json.id }}",
+                    "source_code": "BROWSER_CAPTURE",
+                    "state": "RECEIVED",
+                    "attempt_count": 0,
+                    "output_sha256": "={{ $('SHA-256 Browser Capture Input').first().json.input_sha256 }}",
+                    "error_class": "",
+                    "error_detail_redacted": "",
+                    "updated_at": "={{ $now.toISO() }}",
+                },
+                "matchingColumns": [],
+                "schema": [],
+                "attemptToConvertTypes": False,
+                "convertFieldsToString": False,
+            },
+            "options": {"dryRun": False},
+        },
+    })
+    readback = node_by_name(handoff, "Verify Durable Artifact Contract")
+    readback.update({
+        "name": "Read Back Durable Browser Archive Receipt",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": True,
+        "parameters": {
+            "resource": "row",
+            "operation": "get",
+            "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+            "returnAll": False,
+            "limit": 1,
+            "matchType": "allConditions",
+            "filters": {"conditions": [
+                {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
+            ]},
+            "options": {},
+        },
+    })
+    download = node_by_name(handoff, "Verified Statement PDF?")
+    download.update({
+        "name": "Download Archived Browser Capture",
+        "type": "n8n-nodes-base.microsoftOneDrive",
+        "typeVersion": 1.1,
+        "parameters": {
+            "resource": "file",
+            "operation": "download",
+            "fileId": "={{ $json.onedrive_item_id }}",
+            "binaryPropertyName": "data",
+        },
+    })
+    archive_hash = node_by_name(handoff, "Run Statement Pipeline")
+    archive_hash.update({
+        "name": "SHA-256 Archived Browser Capture",
+        "type": "n8n-nodes-base.crypto",
+        "typeVersion": 1,
+        "parameters": {
+            "action": "hash",
+            "type": "SHA256",
+            "binaryData": True,
+            "binaryPropertyName": "data",
+            "dataPropertyName": "archived_sha256",
+        },
+    })
+    verify = node_by_name(handoff, "Require Typed Browser Capture Validator")
+    verify.update({
+        "name": "Verify Browser Archive Receipt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {"jsCode": r"""
+const request = $('Resolve Capture Hash Contract').first().json;
+const input = $('SHA-256 Browser Capture Input').first().json;
+const receipt = $('Read Back Durable Browser Archive Receipt').first().json;
+const observed = String($json.archived_sha256 || '').toLowerCase();
+if (!receipt.document_id || !receipt.onedrive_item_id || receipt.source_sha256 !== request.expected_source_sha256
+    || receipt.output_sha256 !== input.input_sha256) {
+  throw new Error('BROWSER_ARCHIVE_RECEIPT_INVALID');
+}
+if (!/^[a-f0-9]{64}$/.test(observed) || observed !== receipt.output_sha256) {
+  throw new Error('BROWSER_ARCHIVE_HASH_INVALID');
+}
+return [{ json: { receipt, source_content_sha256: request.expected_source_sha256, capture_binary_sha256: observed }, binary: $binary }];
+""".strip()},
+    })
+    handoff["nodes"].extend([
+        {
+            "id": "11010-mode-if",
+            "name": "MCP Reviewed Artifact?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [-500, -180],
+            "parameters": {"conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "strict"},
+                "combinator": "and",
+                "conditions": [{
+                    "leftValue": "={{ $json.handoff_mode }}",
+                    "rightValue": "MCP_REVIEWED",
+                    "operator": {"type": "string", "operation": "equals"},
+                }],
+            }},
+        },
+        {
+            "id": "11010-mcp-load",
+            "name": "Load MCP Reviewed Document Record",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "position": [-250, -180],
+            "parameters": {
+                "resource": "row",
+                "operation": "get",
+                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "returnAll": False,
+                "limit": 1,
+                "matchType": "allConditions",
+                "filters": {"conditions": [{
+                    "keyName": "document_id",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                }]},
+                "options": {},
+            },
+        },
+        {
+            "id": "11010-mcp-validate",
+            "name": "Validate MCP Durable Document Reference",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [0, -180],
+            "parameters": {"jsCode": r"""
+const request = $('Validate Reviewed Artifact Reference').first().json;
+const record = $json;
+if (!record.document_id || String(record.document_id) !== request.artifact_id) {
+  throw new Error('MCP_REVIEWED_DOCUMENT_NOT_FOUND');
+}
+if (record.document_profile !== 'BROWSER_CAPTURE_V1' || !record.onedrive_item_id) {
+  throw new Error('MCP_REVIEWED_DOCUMENT_PROFILE_INVALID');
+}
+if (!/^[a-f0-9]{64}$/i.test(String(record.source_sha256 || ''))) {
+  throw new Error('MCP_REVIEWED_SOURCE_HASH_MISSING');
+}
+if (['QUARANTINED', 'UNSUPPORTED', 'PASSWORD_FAILED'].includes(String(record.state || ''))) {
+  throw new Error(`MCP_REVIEWED_DOCUMENT_TERMINAL:${record.state}`);
+}
+return [{ json: {
+  handoff_mode: 'MCP_REVIEWED',
+  artifact_id: request.artifact_id,
+  onedrive_item_id: String(record.onedrive_item_id),
+  server_source_sha256: String(record.source_sha256).toLowerCase(),
+  durable_state: String(record.state || ''),
+} }];
+""".strip()},
+        },
+        {
+            "id": "11010-mcp-download",
+            "name": "Download MCP Reviewed Capture",
+            "type": "n8n-nodes-base.microsoftOneDrive",
+            "typeVersion": 1.1,
+            "position": [250, -180],
+            "parameters": {
+                "resource": "file",
+                "operation": "download",
+                "fileId": "={{ $json.onedrive_item_id }}",
+                "binaryPropertyName": "data",
+            },
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+            },
+        },
+        {
+            "id": "11010-hash-contract",
+            "name": "Resolve Capture Hash Contract",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [250, 180],
+            "parameters": {"jsCode": r"""
+const request = $('Validate Reviewed Artifact Reference').first().json;
+const inputHash = String($json.input_sha256 || '').toLowerCase();
+if (!/^[a-f0-9]{64}$/.test(inputHash)) throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISSING');
+if (request.handoff_mode === 'MCP_REVIEWED') {
+  const durable = $('Validate MCP Durable Document Reference').first().json;
+  return [{ json: { ...$json, expected_source_sha256: durable.server_source_sha256, expected_capture_sha256: inputHash }, binary: $binary }];
+}
+return [{ json: { ...$json, expected_source_sha256: request.expected_source_sha256, expected_capture_sha256: request.expected_capture_sha256 }, binary: $binary }];
+""".strip()},
+        },
+        {
+            "id": "11010-preparse",
+            "name": "Parse Browser Capture JSON Before Archive",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [250, 0],
+            "parameters": {"jsCode": r"""
+const encoded = $binary?.data?.data;
+if (typeof encoded !== 'string' || !encoded) throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
+let capture;
+try {
+  const text = Buffer.from(encoded, 'base64').toString('utf8');
+  if (!text || text.length > 10_000_000) throw new Error('size');
+  capture = JSON.parse(text);
+} catch {
+  throw new Error('BROWSER_CAPTURE_JSON_INVALID');
+}
+if (!capture || typeof capture !== 'object' || Array.isArray(capture)) {
+  throw new Error('BROWSER_CAPTURE_JSON_OBJECT_REQUIRED');
+}
+return [{ json: capture, binary: $binary }];
+""".strip()},
+        },
+        {
+            "id": "11010-existing",
+            "name": "Load Existing Browser Archive Receipt",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "position": [700, 0],
+            "parameters": {
+                "resource": "row",
+                "operation": "get",
+                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "returnAll": False,
+                "limit": 1,
+                "matchType": "allConditions",
+                "filters": {"conditions": [{
+                    "keyName": "document_id",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                }]},
+                "options": {},
+            },
+        },
+        {
+            "id": "11010-idempotency",
+            "name": "Check Existing Browser Artifact",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [950, 0],
+            "parameters": {"jsCode": r"""
+const existing = $json;
+const request = $('Resolve Capture Hash Contract').first().json;
+const captureBinary = $('Validate Browser Capture Schema').first().binary;
+const captureBinarySha256 = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
+if (!existing.document_id) {
+  return [{ json: { idempotency_action: 'CREATE', artifact_id: request.artifact_id, expected_source_sha256: request.expected_source_sha256, capture_binary_sha256: captureBinarySha256 }, binary: captureBinary }];
+}
+if (String(existing.document_id) !== request.artifact_id) throw new Error('BROWSER_ARTIFACT_RECORD_ID_MISMATCH');
+if (String(existing.source_sha256 || '').toLowerCase() !== request.expected_source_sha256
+    || String(existing.output_sha256 || '').toLowerCase() !== captureBinarySha256) {
+  throw new Error('BROWSER_ARTIFACT_ID_HASH_CONFLICT');
+}
+if (!existing.onedrive_item_id || existing.document_profile !== 'BROWSER_CAPTURE_V1') {
+  throw new Error('BROWSER_ARTIFACT_IDEMPOTENCY_RECORD_INVALID');
+}
+return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.artifact_id, expected_source_sha256: request.expected_source_sha256, capture_binary_sha256: captureBinarySha256 }, binary: captureBinary }];
+""".strip()},
+        },
+        {
+            "id": "11010-idempotency-if",
+            "name": "New Browser Artifact?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [1200, 0],
+            "parameters": {"conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "strict"},
+                "combinator": "and",
+                "conditions": [{
+                    "leftValue": "={{ $json.idempotency_action }}",
+                    "rightValue": "CREATE",
+                    "operator": {"type": "string", "operation": "equals"},
+                }],
+            }},
+        },
+        {
+            "id": "11010",
+            "name": "Extract Browser Capture JSON",
+            "type": "n8n-nodes-base.extractFromFile",
+            "typeVersion": 1,
+            "position": [1250, 0],
+            "parameters": {"operation": "fromJson", "binaryPropertyName": "data", "options": {}},
+        },
+        {
+            "id": "11011",
+            "name": "Validate Browser Capture Schema",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1500, 0],
+            "parameters": {"jsCode": (r"""
+let Ajv;
+try {
+  Ajv = require('ajv');
+} catch (error) {
+  throw new Error('BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE');
+}
+const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
+  type: 'object',
+  additionalProperties: false,
+  required: ['schema_version', 'capture_id', 'capture_contract', 'provenance', 'source', 'artifact', 'account'],
+  properties: {
+    schema_version: { const: 1 },
+    capture_id: { type: 'string', minLength: 1 },
+    capture_contract: {
+      type: 'object', additionalProperties: false,
+      required: ['capture_mode', 'redaction', 'immutability', 'handoff_workflow', 'actual_mutation', 'cashback_mutation'],
+      properties: {
+        capture_mode: { const: 'HEADED_ON_DEMAND' }, redaction: { const: 'REDACTED' },
+        immutability: { const: 'SHA256_ARCHIVED' }, handoff_workflow: { const: 'INTERACTIVE_ARTIFACT_HANDOFF' },
+        actual_mutation: { const: false }, cashback_mutation: { const: false },
+      },
+    },
+    provenance: {
+      type: 'object', additionalProperties: false,
+      required: ['capture_id', 'captured_at', 'source_content_sha256', 'hash_algorithm'],
+      properties: {
+        capture_id: { type: 'string', minLength: 1 }, captured_at: { type: 'string', minLength: 1 },
+        source_content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, hash_algorithm: { const: 'SHA-256' },
+      },
+    },
+    source: {
+      type: 'object', additionalProperties: false,
+      required: ['provider', 'captured_at', 'capture_method'],
+      properties: {
+        provider: { type: 'string', minLength: 1 }, site: { type: 'string' }, url: { type: 'string' },
+        page_context: { type: 'string' }, captured_at: { type: 'string', minLength: 1 },
+        capture_method: { enum: ['ACCOUNT_OVERVIEW', 'OFFICIAL_EXPORT', 'STATEMENT_DOWNLOAD', 'VISIBLE_ROWS'] },
+        date_range: { type: 'object', additionalProperties: false, properties: { start: { type: 'string' }, end: { type: 'string' } } },
+        limitations: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    artifact: {
+      type: 'object', additionalProperties: false,
+      required: ['kind', 'source_content_sha256'],
+      properties: {
+        kind: { enum: ['ACCOUNT_SNAPSHOT', 'STATEMENT_PDF', 'STATEMENT_ROWS', 'TRANSACTION_ROWS'] },
+        source_content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, local_path: { type: 'string' },
+        file_name: { type: 'string' }, mime_type: { type: 'string' }, download_reference: { type: 'string' },
+      },
+    },
+    account: {
+      type: 'object', additionalProperties: false,
+      required: ['label'],
+      properties: {
+        label: { type: 'string', minLength: 1 }, actual_account: { type: 'string' }, card_code: { type: 'string' },
+        account_last4: { type: 'string', pattern: '^[0-9]{4}$' }, currency: { type: 'string' },
+        balance: {}, available_balance: {}, balance_as_of: { type: 'string' },
+      },
+    },
+    approval: {
+      type: 'object', additionalProperties: false,
+      required: ['status', 'scope', 'capture_id', 'approved_by', 'approved_at'],
+      properties: {
+        status: { const: 'OWNER_APPROVED' }, scope: { const: 'ALL_VISIBLE_ROWS' },
+        capture_id: { type: 'string', minLength: 1 }, approved_by: { const: 'OWNER' },
+        approved_at: { type: 'string', minLength: 1 },
+      },
+    },
+    statement: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        statement_reference: { type: 'string' }, period_start: { type: 'string' }, period_end: { type: 'string' },
+        payment_due_date: { type: 'string' }, opening_balance_aed: {}, closing_balance_aed: {},
+        balance_convention: { enum: ['ASSET', 'LIABILITY'] },
+      },
+    },
+    rows: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['transaction_date', 'description', 'amount_aed', 'direction'],
+        properties: {
+          source_id: { type: 'string' }, reference: { type: 'string' }, transaction_date: { type: 'string' },
+          post_date: { type: 'string' }, description: { type: 'string', minLength: 1 }, amount_aed: {},
+          amount_original: {}, currency: { type: 'string' }, direction: { enum: ['DEBIT', 'CREDIT'] },
+          transaction_type: { type: 'string' }, channel: { type: 'string' },
+          account_last4: { type: 'string', pattern: '^[0-9]{4}$' },
+          card_role: { enum: ['primary', 'supplementary'] }, status: { type: 'string' }, review_required: { type: 'boolean' },
+        },
+      },
+    },
+  },
+}; */
+const AjvCtor = Ajv.default || Ajv;
+const validatorEngine = new AjvCtor({ allErrors: true, strict: true });
+delete schema.$schema;
+delete schema.$id;
+validatorEngine.addFormat('date', value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)));
+validatorEngine.addFormat('date-time', value => !Number.isNaN(Date.parse(value)) && /T/.test(value));
+validatorEngine.addFormat('uri', value => { try { new URL(value); return true; } catch { return false; } });
+const validator = validatorEngine.compile(schema);
+const capture = $json;
+const inputHash = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
+const forbidden = new Set(['access_token', 'authorization', 'cookie', 'cookies', 'cvv', 'full_card_number', 'mfa_code', 'otp', 'passcode', 'password', 'pin', 'recovery_code', 'refresh_token', 'secret', 'session', 'session_token']);
+const rejectForbidden = (value, path = 'capture') => {
+  if (Array.isArray(value)) value.forEach((child, index) => rejectForbidden(child, `${path}[${index}]`));
+  else if (value && typeof value === 'object') Object.entries(value).forEach(([key, child]) => {
+    const normalized = key.trim().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().replaceAll('-', '_');
+    if (forbidden.has(normalized)) throw new Error(`BROWSER_CAPTURE_FORBIDDEN_FIELD:${path}.${key}`);
+    rejectForbidden(child, `${path}.${key}`);
+  });
+};
+rejectForbidden(capture);
+if (capture.source?.url) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(capture.source.url);
+  } catch {
+    throw new Error('BROWSER_CAPTURE_SOURCE_URL_INVALID');
+  }
+  if (parsedUrl.username || parsedUrl.password) throw new Error('BROWSER_CAPTURE_SOURCE_URL_CREDENTIALS_FORBIDDEN');
+  if (parsedUrl.search || parsedUrl.hash) throw new Error('BROWSER_CAPTURE_SOURCE_URL_QUERY_FORBIDDEN');
+}
+if (!validator(capture)) {
+  throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
+}
+const request = $('Resolve Capture Hash Contract').first().json;
+if (inputHash !== request.expected_capture_sha256) {
+  throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISMATCH');
+}
+if (capture.capture_id !== capture.provenance.capture_id
+    || capture.artifact.source_content_sha256 !== capture.provenance.source_content_sha256
+    || capture.provenance.source_content_sha256 !== request.expected_source_sha256) {
+  throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');
+}
+return [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];
+""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal).strip())},
+        },
+        {
+            "id": "11012",
+            "name": "Build Browser Headless Handoff",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1750, 0],
+            "parameters": {"jsCode": r"""
+const capture = $json;
+const archive = $('Verify Browser Archive Receipt').first().json;
+const provider = String(capture.source.provider || '').replaceAll(/[^A-Za-z0-9]+/g, '_').toUpperCase();
+if (!provider || !capture.account?.label || !capture.artifact?.kind) {
+  throw new Error('BROWSER_HEADLESS_HANDOFF_CONTEXT_MISSING');
+}
+return [{
+  json: {
+    run_id: `browser:${capture.capture_id}`,
+    source_code: `BROWSER_${provider}`,
+    message_id: capture.capture_id,
+    attachment_id: capture.capture_id,
+    document_sha256: capture.provenance.source_content_sha256,
+    source_content_sha256: capture.provenance.source_content_sha256,
+    capture_binary_sha256: archive.capture_binary_sha256,
+    onedrive_item_id: archive.receipt.onedrive_item_id,
+    document_profile: 'BROWSER_CAPTURE_V1',
+    requested_schema_version: 'browser-capture-schema-v1',
+    config_version: 'browser-sources-v1',
+    actual_file_id: 'BROWSER_CAPTURE_HEADLESS_ROUTE',
+    account_id: capture.account.label,
+    period_key: capture.source.date_range?.start && capture.source.date_range?.end
+      ? `${capture.source.date_range.start}:${capture.source.date_range.end}`
+      : String(capture.provenance.captured_at).slice(0, 10),
+    trigger_kind: 'SUBWORKFLOW',
+    browser_capture: capture,
+    headless_owner: 'N8N',
+    actual_mutation: false,
+    cashback_mutation: false,
+  },
+  binary: $binary,
+}];
+""".strip()},
+        },
+        {
+            "id": "11013",
+            "name": "Dispatch Browser Capture to Headless Pipeline",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.2,
+            "position": [2000, 0],
+            "parameters": {
+                "workflowId": {"__rl": True, "value": "10000000-0000-4000-8000-000000000003", "mode": "id"},
+                "options": {"waitForSubWorkflow": True},
+            },
+        },
+    ])
     handoff["connections"] = {
         "Reviewed Artifact Reference": {"main": [[{"node": "Validate Reviewed Artifact Reference", "type": "main", "index": 0}]]},
-        "Validate Reviewed Artifact Reference": {"main": [[{"node": "Load Durable Document Record", "type": "main", "index": 0}]]},
-        "Load Durable Document Record": {"main": [[{"node": "Download Existing Reviewed Artifact", "type": "main", "index": 0}]]},
-        "Download Existing Reviewed Artifact": {"main": [[{"node": "SHA-256 Reviewed Artifact", "type": "main", "index": 0}]]},
-        "SHA-256 Reviewed Artifact": {"main": [[{"node": "Verify Durable Artifact Contract", "type": "main", "index": 0}]]},
-        "Verify Durable Artifact Contract": {"main": [[{"node": "Verified Statement PDF?", "type": "main", "index": 0}]]},
-        "Verified Statement PDF?": {"main": [
-            [{"node": "Run Statement Pipeline", "type": "main", "index": 0}],
-            [{"node": "Require Typed Browser Capture Validator", "type": "main", "index": 0}],
+        "Validate Reviewed Artifact Reference": {"main": [[{"node": "MCP Reviewed Artifact?", "type": "main", "index": 0}]]},
+        "MCP Reviewed Artifact?": {"main": [
+            [{"node": "Load MCP Reviewed Document Record", "type": "main", "index": 0}],
+            [{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}],
         ]},
+        "Load MCP Reviewed Document Record": {"main": [[{"node": "Validate MCP Durable Document Reference", "type": "main", "index": 0}]]},
+        "Validate MCP Durable Document Reference": {"main": [[{"node": "Download MCP Reviewed Capture", "type": "main", "index": 0}]]},
+        "Download MCP Reviewed Capture": {"main": [[{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]]},
+        "SHA-256 Browser Capture Input": {"main": [[{"node": "Resolve Capture Hash Contract", "type": "main", "index": 0}]]},
+        "Resolve Capture Hash Contract": {"main": [[{"node": "Parse Browser Capture JSON Before Archive", "type": "main", "index": 0}]]},
+        "Parse Browser Capture JSON Before Archive": {"main": [[{"node": "Validate Browser Capture Schema", "type": "main", "index": 0}]]},
+        "Validate Browser Capture Schema": {"main": [[{"node": "Load Existing Browser Archive Receipt", "type": "main", "index": 0}]]},
+        "Load Existing Browser Archive Receipt": {"main": [[{"node": "Check Existing Browser Artifact", "type": "main", "index": 0}]]},
+        "Check Existing Browser Artifact": {"main": [[{"node": "New Browser Artifact?", "type": "main", "index": 0}]]},
+        "New Browser Artifact?": {"main": [
+            [{"node": "Archive Browser Capture in OneDrive", "type": "main", "index": 0}],
+            [{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}],
+        ]},
+        "Archive Browser Capture in OneDrive": {"main": [[{"node": "Upsert Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
+        "Upsert Durable Browser Archive Receipt": {"main": [[{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
+        "Read Back Durable Browser Archive Receipt": {"main": [[{"node": "Download Archived Browser Capture", "type": "main", "index": 0}]]},
+        "Download Archived Browser Capture": {"main": [[{"node": "SHA-256 Archived Browser Capture", "type": "main", "index": 0}]]},
+        "SHA-256 Archived Browser Capture": {"main": [[{"node": "Verify Browser Archive Receipt", "type": "main", "index": 0}]]},
+        "Verify Browser Archive Receipt": {"main": [[{"node": "Extract Browser Capture JSON", "type": "main", "index": 0}]]},
+        "Extract Browser Capture JSON": {"main": [[{"node": "Build Browser Headless Handoff", "type": "main", "index": 0}]]},
+        "Build Browser Headless Handoff": {"main": [[{"node": "Dispatch Browser Capture to Headless Pipeline", "type": "main", "index": 0}]]},
     }
     handoff["meta"]["durableLookupRequired"] = True
     handoff["meta"]["reuploadForbidden"] = True
+    handoff["meta"]["artifactIdHashConflict"] = "BROWSER_ARTIFACT_ID_HASH_CONFLICT"
+    handoff["meta"]["exactDuplicate"] = "DETERMINISTIC_NOOP"
+    handoff["meta"]["browserHandoff"] = {
+        "document_profile": "BROWSER_CAPTURE_V1",
+        "capture_schema": "browser-capture-schema-v1",
+        "headed_browser": "USER_ASSISTED_ONLY",
+        "archive_owner": "N8N",
+        "archive_mode": "BOUNDED_BINARY_UPLOAD",
+        "archive_parent_binding": "FINANCE_BROWSER_ARCHIVE_PARENT_ID",
+        "archive_receipt_table": "finance_document_operations",
+        "validation_runtime": "AJV_REQUIRED_FAIL_CLOSED",
+        "headless_owner": "N8N",
+        "headless_workflow_code": "SHARED_STATEMENT_PIPELINE",
+        "headless_workflow_id": "10000000-0000-4000-8000-000000000003",
+        "stages": ["ARCHIVE", "VALIDATE", "ENRICH", "MATCH", "RETRY"],
+        "actual_writer": "ACTUAL_OUTBOX_APPLY",
+        "actual_mutation_forbidden": True,
+        "cashback_mutation_forbidden": True,
+        "workflow_state": "INACTIVE",
+        "handoff_modes": ["HEADED_CAPTURE", "MCP_REVIEWED"],
+        "headed_capture_contract": ["artifact_id", "expected_source_sha256", "expected_capture_sha256", "binary.data"],
+        "mcp_reviewed_contract": ["artifact_id"],
+        "mcp_server_owned_reference": "finance_document_operations.document_id",
+        "mcp_client_binary_forbidden": True,
+        "mcp_client_hashes_forbidden": True,
+    }
 
     agent = by_code["AI_PROPOSAL"]
     agent["name"] = "Finance · Subscription Agent Proposal · SPEC ONLY"

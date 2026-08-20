@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import base64
 import json
 import hashlib
 import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import re
 import unittest
 from unittest import mock
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from jsonschema import Draft202012Validator, ValidationError
 
@@ -44,6 +49,62 @@ def load_bootstrap_generator():
         sys.path.pop(0)
 
 
+def validate_fixture_against_schema(schema: dict, value: object, path: str = "$") -> None:
+    """Execute the JSON-schema subset used by the browser capture contract."""
+    expected_type = schema.get("type")
+    if expected_type:
+        types = expected_type if isinstance(expected_type, list) else [expected_type]
+        matches = any(
+            kind == "object" and isinstance(value, dict)
+            or kind == "array" and isinstance(value, list)
+            or kind == "string" and isinstance(value, str)
+            or kind == "boolean" and isinstance(value, bool)
+            or kind == "number" and isinstance(value, (int, float)) and not isinstance(value, bool)
+            for kind in types
+        )
+        if not matches:
+            raise AssertionError(f"{path}: expected {expected_type}")
+    if "const" in schema and value != schema["const"]:
+        raise AssertionError(f"{path}: const mismatch")
+    if "enum" in schema and value not in schema["enum"]:
+        raise AssertionError(f"{path}: enum mismatch")
+    if isinstance(value, str):
+        if len(value) < schema.get("minLength", 0):
+            raise AssertionError(f"{path}: minLength")
+        if "pattern" in schema:
+            if not re.search(schema["pattern"], value):
+                raise AssertionError(f"{path}: pattern")
+        if schema.get("format") == "date":
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError as error:
+                raise AssertionError(f"{path}: date") from error
+        elif schema.get("format") == "date-time":
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise AssertionError(f"{path}: date-time") from error
+        elif schema.get("format") == "uri":
+            parsed = urlparse(value)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise AssertionError(f"{path}: uri")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                raise AssertionError(f"{path}: missing {key}")
+        properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            unknown = set(value) - set(properties)
+            if unknown:
+                raise AssertionError(f"{path}: forbidden {sorted(unknown)}")
+        for key, child in value.items():
+            if key in properties:
+                validate_fixture_against_schema(properties[key], child, f"{path}.{key}")
+    if isinstance(value, list) and "items" in schema:
+        for index, child in enumerate(value):
+            validate_fixture_against_schema(schema["items"], child, f"{path}[{index}]")
+
+
 class N8nWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -59,6 +120,45 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def nodes(self, filename: str) -> dict[str, dict]:
         return {node["name"]: node for node in self.workflow(filename)["nodes"]}
+
+    def run_exported_node(
+        self,
+        node_name: str,
+        json_input: dict,
+        binary: dict,
+        references: dict[str, dict],
+    ) -> dict:
+        code = self.nodes("11-interactive-artifact-handoff.json")[node_name]["parameters"]["jsCode"]
+        script = f"""
+const code = {json.dumps(code)};
+const jsonInput = {json.dumps(json_input)};
+const binary = {json.dumps(binary)};
+const references = {json.dumps(references)};
+const lookup = name => ({{ first: () => references[name] }});
+try {{
+  const output = new Function('$json', '$binary', '$', 'require', code)(jsonInput, binary, lookup, require);
+  process.stdout.write(JSON.stringify({{ ok: true, output }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
+        environment = os.environ.copy()
+        ajv_modules = Path("/home/sjors/.cache/typescript/5.9/node_modules")
+        if ajv_modules.is_dir():
+            environment["NODE_PATH"] = str(ajv_modules)
+        result = subprocess.run(
+            [node, "-e", script],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
 
     def test_registry_maps_every_existing_codex_automation(self) -> None:
         automations = load_json(ROOT / "config" / "codex-automations.json")
@@ -868,6 +968,10 @@ class N8nWorkflowTests(unittest.TestCase):
             params = facade[name]["parameters"]
             self.assertEqual(params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010")
             self.assertIn("_mcp_request_id", params["workflowInputs"]["value"])
+        artifact_inputs = facade["artifact.submit_reviewed"]["parameters"]["workflowInputs"]["value"]
+        self.assertEqual(set(artifact_inputs), {"_mcp_request_id", "operation_code", "artifact_id"})
+        self.assertNotIn("expected_sha256", artifact_inputs)
+        self.assertIn("server-owned", facade["artifact.submit_reviewed"]["parameters"]["description"])
         nodes = self.nodes("10-finance-operations-status.json")
         for name in (
             "Upsert ACCEPTED MCP Request", "Read Back ACCEPTED MCP Request",
@@ -878,6 +982,12 @@ class N8nWorkflowTests(unittest.TestCase):
         terminal = nodes["Build Redacted MCP Terminal Receipt"]["parameters"]["jsCode"]
         self.assertIn("[REDACTED]", terminal)
         self.assertIn("FAILED", terminal)
+        dispatch_validation = nodes["Validate Bounded MCP Dispatch"]["parameters"]["jsCode"]
+        self.assertIn("'artifact.submit_reviewed': ['artifact_id']", dispatch_validation)
+        self.assertNotIn("'artifact.submit_reviewed': ['artifact_id', 'expected_sha256']", dispatch_validation)
+        dispatch_inputs = nodes["Dispatch Reviewed Artifact"]["parameters"]["workflowInputs"]["value"]
+        self.assertEqual(set(dispatch_inputs), {"operation_code", "artifact_id"})
+        self.assertNotIn("expected_sha256", dispatch_inputs)
 
     def test_ai_proposal_is_archived_hash_verified_and_left_pending_review(self) -> None:
         nodes = self.nodes("09-ai-proposal.json")
@@ -1155,27 +1265,288 @@ class N8nWorkflowTests(unittest.TestCase):
         ]["parameters"]["jsCode"]
         self.assertIn("$('Get Messages from Configured Folder').all()", filter_code)
 
-    def test_interactive_statement_handoff_uses_only_durable_context(self) -> None:
+    def test_interactive_browser_handoff_validates_before_archive_and_is_idempotent(self) -> None:
         table = next(
             row for row in self.tables["tables"]
             if row["name"] == "finance_document_operations"
         )
-        required = {
-            "source_code", "config_version", "actual_file_id", "account_id", "period_key",
-        }
-        self.assertTrue(required.issubset(table["columns"]))
         nodes = self.nodes("11-interactive-artifact-handoff.json")
-        verify = nodes["Verify Durable Artifact Contract"]["parameters"]["jsCode"]
-        for field in required:
-            self.assertIn(repr(field), verify)
-        self.assertIn("DURABLE_STATEMENT_CONTEXT_MISSING", verify)
-        self.assertIn("DURABLE_STATEMENT_NOT_READY", verify)
-        self.assertIn("trigger_kind: 'SUBWORKFLOW'", verify)
-        self.assertIn("document_sha256: observed", verify)
+        self.assertTrue({"source_code", "config_version", "actual_file_id", "account_id", "period_key"}.issubset(table["columns"]))
+        connections = self.workflow("11-interactive-artifact-handoff.json")["connections"]
         self.assertEqual(
-            nodes["Run Statement Pipeline"]["parameters"]["workflowId"]["mode"],
+            connections["Validate Browser Capture Schema"]["main"][0][0]["node"],
+            "Load Existing Browser Archive Receipt",
+        )
+        self.assertEqual(
+            connections["Check Existing Browser Artifact"]["main"][0][0]["node"],
+            "New Browser Artifact?",
+        )
+        self.assertEqual(
+            connections["New Browser Artifact?"]["main"][0][0]["node"],
+            "Archive Browser Capture in OneDrive",
+        )
+        self.assertEqual(
+            nodes["New Browser Artifact?"]["parameters"]["conditions"]["conditions"][0]["leftValue"],
+            "={{ $json.idempotency_action }}",
+        )
+        idempotency = nodes["Check Existing Browser Artifact"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_ARTIFACT_ID_HASH_CONFLICT", idempotency)
+        self.assertIn("existing.output_sha256", idempotency)
+        self.assertIn("idempotency_action: 'NOOP'", idempotency)
+        verify = nodes["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_ARCHIVE_HASH_INVALID", verify)
+        self.assertTrue(nodes["Parse Browser Capture JSON Before Archive"]["type"] == "n8n-nodes-base.code")
+        validate = nodes["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_CAPTURE_BINARY_HASH_MISMATCH", validate)
+        self.assertIn("expected_source_sha256", validate)
+        self.assertIn("expected_capture_sha256", validate)
+        self.assertTrue(self.workflow("11-interactive-artifact-handoff.json")["meta"]["reuploadForbidden"])
+        self.assertEqual(
+            self.workflow("11-interactive-artifact-handoff.json")["meta"]["artifactIdHashConflict"],
+            "BROWSER_ARTIFACT_ID_HASH_CONFLICT",
+        )
+        self.assertEqual(
+            nodes["Dispatch Browser Capture to Headless Pipeline"]["parameters"]["workflowId"]["mode"],
             "list",
         )
+
+        self.assertIn("MCP Reviewed Artifact?", nodes)
+        self.assertIn("Load MCP Reviewed Document Record", nodes)
+        self.assertIn("Validate MCP Durable Document Reference", nodes)
+        self.assertIn("Download MCP Reviewed Capture", nodes)
+        self.assertIn("Resolve Capture Hash Contract", nodes)
+        reference = nodes["Validate Reviewed Artifact Reference"]["parameters"]["jsCode"]
+        self.assertIn("MCP_REVIEWED_BINARY_FORBIDDEN", reference)
+        self.assertIn("MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED", reference)
+        self.assertIn("MCP_REVIEWED_FIELDS_FORBIDDEN", reference)
+        self.assertIn("expected_source_sha256", reference)
+        self.assertIn("expected_capture_sha256", reference)
+        durable = nodes["Validate MCP Durable Document Reference"]["parameters"]["jsCode"]
+        self.assertIn("MCP_REVIEWED_DOCUMENT_NOT_FOUND", durable)
+        self.assertIn("server_source_sha256", durable)
+        self.assertEqual(
+            connections["Validate Reviewed Artifact Reference"]["main"][0][0]["node"],
+            "MCP Reviewed Artifact?",
+        )
+        self.assertEqual(
+            connections["MCP Reviewed Artifact?"]["main"][0][0]["node"],
+            "Load MCP Reviewed Document Record",
+        )
+        self.assertEqual(
+            connections["MCP Reviewed Artifact?"]["main"][1][0]["node"],
+            "SHA-256 Browser Capture Input",
+        )
+        self.assertEqual(
+            connections["Validate MCP Durable Document Reference"]["main"][0][0]["node"],
+            "Download MCP Reviewed Capture",
+        )
+        self.assertEqual(
+            connections["SHA-256 Browser Capture Input"]["main"][0][0]["node"],
+            "Resolve Capture Hash Contract",
+        )
+        self.assertEqual(
+            set(self.workflow("11-interactive-artifact-handoff.json")["meta"]["browserHandoff"]["handoff_modes"]),
+            {"HEADED_CAPTURE", "MCP_REVIEWED"},
+        )
+        self.assertEqual(
+            self.workflow("11-interactive-artifact-handoff.json")["meta"]["browserHandoff"]["mcp_reviewed_contract"],
+            ["artifact_id"],
+        )
+
+    def test_browser_capture_fixtures_execute_against_embedded_canonical_schema(self) -> None:
+        schema = load_json(ROOT / "config" / "browser-capture-schema-v1.json")
+        code = self.nodes("11-interactive-artifact-handoff.json")["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        embedded, _ = json.JSONDecoder().raw_decode(code.split("const schema = ", 1)[1])
+        self.assertEqual(embedded, schema)
+
+        valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
+        validate_fixture_against_schema(embedded, valid)
+        capture_binary = json.dumps(
+            valid,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        capture_binary_sha256 = hashlib.sha256(capture_binary).hexdigest()
+        source_content_sha256 = valid["artifact"]["source_content_sha256"]
+        self.assertNotEqual(capture_binary_sha256, source_content_sha256)
+        self.assertEqual(valid, json.loads(capture_binary))
+
+        invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
+        durable_storage: list[dict] = []
+
+        def archive_if_valid(capture: dict, expected_source: str, expected_binary: str) -> None:
+            validate_fixture_against_schema(embedded, capture)
+            self.assertEqual(capture["artifact"]["source_content_sha256"], expected_source)
+            actual_binary = hashlib.sha256(json.dumps(
+                capture,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            self.assertEqual(actual_binary, expected_binary)
+            durable_storage.append(capture)
+
+        with self.assertRaises(AssertionError):
+            archive_if_valid(invalid, source_content_sha256, capture_binary_sha256)
+        self.assertEqual(durable_storage, [])
+
+        archive_if_valid(valid, source_content_sha256, capture_binary_sha256)
+        self.assertEqual([row["capture_id"] for row in durable_storage], [valid["capture_id"]])
+
+        receipt = {
+            "document_id": valid["capture_id"],
+            "source_sha256": source_content_sha256,
+            "output_sha256": capture_binary_sha256,
+        }
+
+        def replay(source_hash: str, binary_hash: str) -> str:
+            if receipt["source_sha256"] != source_hash or receipt["output_sha256"] != binary_hash:
+                raise ValueError("BROWSER_ARTIFACT_ID_HASH_CONFLICT")
+            return "NOOP"
+
+        self.assertEqual(replay(source_content_sha256, capture_binary_sha256), "NOOP")
+        with self.assertRaisesRegex(ValueError, "BROWSER_ARTIFACT_ID_HASH_CONFLICT"):
+            replay(source_content_sha256, "c" * 64)
+        with self.assertRaisesRegex(ValueError, "BROWSER_ARTIFACT_ID_HASH_CONFLICT"):
+            replay("d" * 64, capture_binary_sha256)
+
+    def test_exported_w11_validator_and_idempotency_execute_real_fixture_bytes(self) -> None:
+        valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
+        capture_binary = json.dumps(
+            valid,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        capture_binary_sha256 = hashlib.sha256(capture_binary).hexdigest()
+        source_content_sha256 = valid["artifact"]["source_content_sha256"]
+        # n8n binary data is base64; keep the bytes exact while making this
+        # harness independent of n8n's runtime item wrappers.
+        binary = {"data": {"data": base64.b64encode(capture_binary).decode("ascii")}}
+        contract = {
+            "handoff_mode": "HEADED_CAPTURE",
+            "artifact_id": valid["capture_id"],
+            "expected_source_sha256": source_content_sha256,
+            "expected_capture_sha256": capture_binary_sha256,
+        }
+        mcp_request = {
+            "_mcp_request_id": "mcp-fixture-1",
+            "operation_code": "artifact.submit_reviewed",
+            "artifact_id": valid["capture_id"],
+        }
+        result = self.run_exported_node("Validate Reviewed Artifact Reference", mcp_request, {}, {})
+        self.assertEqual(result["output"][0]["json"]["handoff_mode"], "MCP_REVIEWED")
+        result = self.run_exported_node("Validate Reviewed Artifact Reference", mcp_request, binary, {})
+        self.assertEqual(result, {"ok": False, "error": "MCP_REVIEWED_BINARY_FORBIDDEN"})
+        result = self.run_exported_node(
+            "Validate Reviewed Artifact Reference",
+            {**mcp_request, "expected_capture_sha256": capture_binary_sha256},
+            {},
+            {},
+        )
+        self.assertEqual(result, {"ok": False, "error": "MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED"})
+        result = self.run_exported_node(
+            "Validate Reviewed Artifact Reference",
+            {**mcp_request, "url": "https://client-controlled.example.test"},
+            {},
+            {},
+        )
+        self.assertEqual(result, {"ok": False, "error": "Artifact metadata must be resolved from durable server state"})
+        result = self.run_exported_node(
+            "Validate Reviewed Artifact Reference",
+            {"artifact_id": valid["capture_id"], "expected_sha256": source_content_sha256,
+             "expected_source_sha256": source_content_sha256, "expected_capture_sha256": capture_binary_sha256},
+            binary,
+            {},
+        )
+        self.assertEqual(result, {"ok": False, "error": "EXPECTED_SHA256_LEGACY_FORBIDDEN"})
+        references = {
+            "SHA-256 Browser Capture Input": {"json": {"input_sha256": capture_binary_sha256}},
+            "Resolve Capture Hash Contract": {"json": contract, "binary": binary},
+        }
+        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, references)
+        self.assertTrue(result["ok"], result)
+
+        invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
+        invalid_bytes = json.dumps(
+            invalid,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        invalid_binary = {"data": {"data": base64.b64encode(invalid_bytes).decode("ascii")}}
+        invalid_hash = hashlib.sha256(invalid_bytes).hexdigest()
+        invalid_refs = {
+            "SHA-256 Browser Capture Input": {"json": {"input_sha256": invalid_hash}},
+            "Resolve Capture Hash Contract": {"json": {
+                **contract,
+                "artifact_id": invalid["capture_id"],
+                "expected_source_sha256": invalid["artifact"]["source_content_sha256"],
+                "expected_capture_sha256": invalid_hash,
+            }, "binary": invalid_binary},
+        }
+        result = self.run_exported_node("Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs)
+        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_FORBIDDEN_FIELD:capture.password"})
+        durable_storage: list[dict] = []
+        if result["ok"]:
+            durable_storage.append(invalid)
+        self.assertEqual(durable_storage, [])
+
+        source_mismatch = {**contract, "expected_source_sha256": "d" * 64}
+        mismatch_refs = {
+            **references,
+            "Resolve Capture Hash Contract": {"json": source_mismatch, "binary": binary},
+        }
+        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, mismatch_refs)
+        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_PROVENANCE_MISMATCH"})
+
+        binary_mismatch = {**contract, "expected_capture_sha256": "c" * 64}
+        mismatch_refs["Resolve Capture Hash Contract"] = {"json": binary_mismatch, "binary": binary}
+        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, mismatch_refs)
+        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_BINARY_HASH_MISMATCH"})
+
+        existing = {
+            "document_id": valid["capture_id"],
+            "source_sha256": source_content_sha256,
+            "output_sha256": capture_binary_sha256,
+            "onedrive_item_id": "one-drive-item",
+            "document_profile": "BROWSER_CAPTURE_V1",
+        }
+        idempotency_references = {
+            "Resolve Capture Hash Contract": {"json": contract, "binary": binary},
+            "Validate Browser Capture Schema": {"json": valid, "binary": binary},
+            "SHA-256 Browser Capture Input": {"json": {"input_sha256": capture_binary_sha256}},
+        }
+        result = self.run_exported_node("Check Existing Browser Artifact", existing, binary, idempotency_references)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["output"][0]["json"]["idempotency_action"], "NOOP")
+
+        source_conflict = {**existing, "source_sha256": "d" * 64}
+        result = self.run_exported_node("Check Existing Browser Artifact", source_conflict, binary, idempotency_references)
+        self.assertEqual(result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"})
+
+        binary_conflict = {**existing, "output_sha256": "c" * 64}
+        result = self.run_exported_node("Check Existing Browser Artifact", binary_conflict, binary, idempotency_references)
+        self.assertEqual(result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"})
+
+    def test_browser_capture_pipeline_is_write_disabled_and_skips_pdf_and_cashback(self) -> None:
+        workflow = self.workflow("03-shared-statement-pipeline.json")
+        nodes = self.nodes("03-shared-statement-pipeline.json")
+        connections = workflow["connections"]
+
+        self.assertEqual(
+            connections["Browser Capture?"]["main"][0][0]["node"],
+            "Parse Browser Capture Adapter",
+        )
+        self.assertEqual(
+            connections["Browser Capture Write?"]["main"][0][0]["node"],
+            "Complete Browser Capture Headless Receipt",
+        )
+        self.assertFalse(any(node["type"] == "n8n-nodes-finance.actualBudget" for node in workflow["nodes"]))
+        terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"]["jsCode"]
+        self.assertIn("direct_actual_writer", terminal)
+        self.assertIn("direct_cashback_writer", terminal)
 
     def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
         lock = load_json(N8N / "community-node-lock.json")

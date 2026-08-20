@@ -35,7 +35,7 @@
       "type": "n8n-nodes-finance.financeStatement",
       "typeVersion": 1,
       "position": [
-        80,
+        380,
         0
       ],
       "parameters": {
@@ -48,7 +48,7 @@
       "type": "n8n-nodes-finance.financeRules",
       "typeVersion": 1,
       "position": [
-        380,
+        980,
         0
       ],
       "parameters": {
@@ -61,8 +61,8 @@
       "type": "n8n-nodes-finance.financeRules",
       "typeVersion": 1,
       "position": [
-        680,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "operation": "applyNonRepresentableRules"
@@ -74,8 +74,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        980,
-        0
+        -520,
+        380
       ],
       "parameters": {
         "conditions": {
@@ -103,7 +103,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         380
       ],
       "parameters": {
@@ -116,7 +116,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -820,
+        80,
         380
       ],
       "parameters": {
@@ -137,7 +137,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        380,
         380
       ],
       "parameters": {
@@ -150,11 +150,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        680,
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Statement Reconciliation and IDs. Keep this deterministic and fail closed.\nconst r = $json;\nif (!Array.isArray(r.transactions) || !r.transactions.length)\n    throw new Error('EMPTY_STATEMENT');\nconst ids = r.transactions.map(t => t.transaction_id);\nif (ids.some(x => !x) || new Set(ids).size !== ids.length)\n    throw new Error('INVALID_OR_DUPLICATE_SOURCE_TRANSACTION_ID');\nif (r.reconciliation?.balanced !== true)\n    throw new Error('STATEMENT_RECONCILIATION_FAILED');\nreturn [{ json: r }];\n"
+        "jsCode": "// Purpose: Validate Statement Reconciliation and IDs. Keep this deterministic and fail closed.\nconst r = $json;\nif (r.document_profile === 'BROWSER_CAPTURE_V1' && r.adapter === 'browser_capture_v1_snapshot') {\n    return [{ json: { ...r, browser_match_status: 'MATCHED_REVIEW_ONLY', actual_mutation: false, cashback_mutation: false } }];\n}\nif (!Array.isArray(r.transactions) || !r.transactions.length)\n    throw new Error('EMPTY_STATEMENT');\nconst ids = r.transactions.map(t => t.transaction_id);\nif (ids.some(x => !x) || new Set(ids).size !== ids.length)\n    throw new Error('INVALID_OR_DUPLICATE_SOURCE_TRANSACTION_ID');\nif (r.reconciliation?.balanced !== true)\n    throw new Error('STATEMENT_RECONCILIATION_FAILED');\nreturn [{ json: r }];\n"
       }
     },
     {
@@ -163,8 +163,8 @@
       "type": "n8n-nodes-finance.financeRules",
       "typeVersion": 1,
       "position": [
-        80,
-        380
+        -1120,
+        760
       ],
       "parameters": {
         "operation": "projectActualImport"
@@ -176,8 +176,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        380
+        -820,
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = { schema_version: 'actual-delta-v1', source_code: s.source_code, document_sha256: s.document_sha256, config_version: s.config_version, parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0', actual_file_id: s.actual_file_id, account_id: s.account_id, period_start: r.period_start, period_end: r.period_end, expected_statement_balance_minor: r.reconciliation?.ending_balance_minor, transactions: r.actual_transactions };\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
@@ -189,8 +189,8 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [
-        680,
-        380
+        -520,
+        760
       ],
       "parameters": {
         "operation": "toJson",
@@ -206,8 +206,8 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        980,
-        380
+        -220,
+        760
       ],
       "parameters": {
         "action": "hash",
@@ -223,7 +223,7 @@
       "type": "n8n-nodes-base.microsoftOneDrive",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        80,
         760
       ],
       "parameters": {
@@ -247,7 +247,7 @@
       "type": "n8n-nodes-base.microsoftOneDrive",
       "typeVersion": 1,
       "position": [
-        -820,
+        380,
         760
       ],
       "parameters": {
@@ -269,7 +269,7 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        -520,
+        680,
         760
       ],
       "parameters": {
@@ -286,7 +286,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        980,
         760
       ],
       "parameters": {
@@ -299,8 +299,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        760
+        -1120,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nreturn [{ json: { outbox_id: `${source.run_id}:${source.document_sha256}`, run_id: source.run_id, imported_id: `statement:${source.document_sha256}`, actual_file_id: source.actual_file_id, payload_sha256: a.artifact_sha256, artifact_item_id: a.artifact_item_id, artifact_etag: a.artifact_etag, artifact_schema_version: a.artifact_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
@@ -312,8 +312,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        760
+        -820,
+        1140
       ],
       "parameters": {
         "resource": "row",
@@ -366,8 +366,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        760
+        -520,
+        1140
       ],
       "parameters": {
         "resource": "row",
@@ -403,8 +403,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
-        1140
+        -1120,
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -459,8 +459,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        1140
+        -820,
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -501,8 +501,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        1140
+        -520,
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Compare Terminal Receipt Readback. Keep this deterministic and fail closed.\nconst expected = $('Upsert Terminal Pipeline Receipt').first().json, observed = $json;\nif (observed.run_id !== expected.run_id || observed.workflow_code !== 'SHARED_STATEMENT_PIPELINE' || observed.state !== 'SUCCEEDED' || observed.receipt_sha256 !== expected.receipt_sha256)\n    throw new Error('TERMINAL_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: observed }];\n"
@@ -514,8 +514,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        1140
+        -220,
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -564,7 +564,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        80,
         1520
       ],
       "parameters": {
@@ -606,7 +606,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -220,
+        80,
         0
       ],
       "parameters": {
@@ -627,8 +627,8 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        980,
-        760
+        -220,
+        1140
       ],
       "parameters": {
         "workflowId": {
@@ -648,7 +648,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1120,
+        80,
         1140
       ],
       "parameters": {
@@ -678,7 +678,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -820,
+        380,
         1140
       ],
       "parameters": {
@@ -706,7 +706,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        680,
         1140
       ],
       "parameters": {
@@ -767,7 +767,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        980,
         1140
       ],
       "parameters": {
@@ -840,8 +840,105 @@
       }
     },
     {
+      "id": "3021-browser-capture-if",
+      "name": "Browser Capture?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.document_profile }}",
+              "rightValue": "BROWSER_CAPTURE_V1",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3022-browser-capture-adapter",
+      "name": "Parse Browser Capture Adapter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Parse Browser Capture Adapter. Keep this deterministic and fail closed.\nconst input = $json;\nconst capture = input.browser_capture;\nif (!capture || capture.schema_version !== 1 || !capture.source?.provider || !capture.account?.label) {\n    throw new Error('BROWSER_CAPTURE_ADAPTER_CONTEXT_MISSING');\n}\nif (!['ACCOUNT_SNAPSHOT', 'STATEMENT_ROWS', 'TRANSACTION_ROWS', 'STATEMENT_PDF'].includes(String(capture.artifact?.kind || ''))) {\n    throw new Error('BROWSER_CAPTURE_ADAPTER_KIND_INVALID');\n}\nif (capture.artifact.kind === 'STATEMENT_PDF') {\n    throw new Error('BROWSER_CAPTURE_PDF_MUST_USE_PDF_PIPELINE');\n}\nif (capture.artifact.kind === 'ACCOUNT_SNAPSHOT') {\n    return [{ json: {\n                ...input,\n                adapter: 'browser_capture_v1_snapshot',\n                transactions: [],\n                period_start: capture.source.date_range?.start || null,\n                period_end: capture.source.date_range?.end || null,\n                reconciliation: { balanced: true, browser_capture: true, balance_tied: false },\n                browser_match_status: 'SNAPSHOT_REVIEW_ONLY',\n                browser_retry: { attempt: 0, max_attempts: 3, exhausted: true },\n                actual_mutation: false,\n                cashback_mutation: false,\n            } }];\n}\nconst rows = capture.rows;\nif (!Array.isArray(rows) || rows.length === 0 || rows.length > 10000) {\n    throw new Error('BROWSER_CAPTURE_ROWS_INVALID');\n}\nconst ids = new Set();\nconst transactions = rows.map((row, index) => {\n    const transactionDate = String(row.transaction_date || '');\n    const description = String(row.description || '').trim();\n    const amount = String(row.amount_aed || '').trim();\n    const direction = String(row.direction || '').toUpperCase();\n    const sourceId = String(row.source_id || row.reference || '').trim();\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(transactionDate) || !description || !amount || !/^\\d+(?:\\.\\d{1,2})?$/.test(amount) || direction === '') {\n        throw new Error(`BROWSER_CAPTURE_ROW_INVALID:${index}`);\n    }\n    if (!['DEBIT', 'CREDIT'].includes(direction)) {\n        throw new Error(`BROWSER_CAPTURE_DIRECTION_INVALID:${index}`);\n    }\n    if (sourceId) {\n        if (ids.has(sourceId))\n            throw new Error(`BROWSER_CAPTURE_DUPLICATE_SOURCE_ID:${sourceId}`);\n        ids.add(sourceId);\n    }\n    const transactionId = `browser:${capture.capture_id}:${sourceId || index}`;\n    return {\n        transaction_id: transactionId,\n        transaction_date: transactionDate,\n        post_date: row.post_date || null,\n        card_last4: row.account_last4 || capture.account.account_last4 || null,\n        description,\n        amount_aed: amount,\n        signed_amount_aed: direction === 'CREDIT' ? `-${amount}` : amount,\n        direction,\n        source_direction: direction,\n        transaction_type: row.transaction_type || undefined,\n        amount_original: row.amount_original ?? null,\n        currency_original: row.currency || capture.account.currency || 'AED',\n        exchange_rate: null,\n        source_line: index + 1,\n        review_required: row.review_required === true || capture.source.capture_method === 'VISIBLE_ROWS',\n        source_id: sourceId || null,\n        source_type: 'browser_capture',\n        browser_provider: capture.source.provider,\n        browser_account_label: capture.account.label,\n    };\n});\nreturn [{ json: {\n            ...input,\n            adapter: 'browser_capture_v1',\n            transactions,\n            period_start: capture.source.date_range?.start || null,\n            period_end: capture.source.date_range?.end || null,\n            reconciliation: { balanced: true, browser_capture: true, balance_tied: false },\n            browser_match_status: 'READY_FOR_MATCH',\n            browser_retry: { attempt: 0, max_attempts: 3, exhausted: false },\n            actual_mutation: false,\n            cashback_mutation: false,\n        } }];\n"
+      }
+    },
+    {
+      "id": "3023-browser-match-retry",
+      "name": "Match Browser Capture Rows and Bound Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Match Browser Capture Rows and Bound Retry. Keep this deterministic and fail closed.\nconst input = $json;\nif (!String(input.adapter || '').startsWith('browser_capture_v1'))\n    return [{ json: input }];\nconst rows = Array.isArray(input.transactions) ? input.transactions : [];\nif (input.adapter === 'browser_capture_v1_snapshot') {\n    return [{ json: { ...input, browser_match_status: 'SNAPSHOT_REVIEW_ONLY' } }];\n}\nconst ids = rows.map(row => String(row.transaction_id || ''));\nif (!rows.length || ids.some(id => !id) || new Set(ids).size !== ids.length) {\n    throw new Error('BROWSER_CAPTURE_MATCH_IDS_INVALID');\n}\nconst retry = input.browser_retry || { attempt: 0, max_attempts: 3, exhausted: false };\nif (Number(retry.attempt) > Number(retry.max_attempts)) {\n    throw new Error('BROWSER_CAPTURE_RETRY_EXHAUSTED');\n}\nreturn [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser_retry: { ...retry, exhausted: true } } }];\n"
+      }
+    },
+    {
+      "id": "3024-browser-write-if",
+      "name": "Browser Capture Write?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.document_profile }}",
+              "rightValue": "BROWSER_CAPTURE_V1",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3025-browser-terminal",
+      "name": "Complete Browser Capture Headless Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        1520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Complete Browser Capture Headless Receipt. Keep this deterministic and fail closed.\nconst input = $json;\nif (!String(input.adapter || '').startsWith('browser_capture_v1') || input.actual_mutation !== false || input.cashback_mutation !== false) {\n    throw new Error('BROWSER_CAPTURE_WRITE_BOUNDARY_FAILED');\n}\nreturn [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', actual_mutation: false, cashback_mutation: false, direct_actual_writer: false, direct_cashback_writer: false } }];\n"
+      }
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000003-generated-note-1",
-      "name": "Stage 1 · Trusted Statement Input to Unresolved Fields",
+      "name": "Stage 1 · Trusted Statement Input to Normalize Locked Source Semantics",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -849,7 +946,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Trusted Statement Input → Unresolved Fields\n**Input:** Trusted Statement Input  ·  **Output:** Unresolved Fields  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Trusted Statement Input → Normalize Locked Source Semantics\n**Input:** Trusted Statement Input  ·  **Output:** Normalize Locked Source Semantics  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -857,7 +954,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000003-generated-note-2",
-      "name": "Stage 2 · Build Bounded AI Policy Requests to SHA-256 Canonical Delta",
+      "name": "Stage 2 · Apply N8N Only Rules to Browser Capture Write?",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -865,7 +962,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Build Bounded AI Policy Requests → SHA-256 Canonical Delta\n**Input:** Build Bounded AI Policy Requests  ·  **Output:** SHA-256 Canonical Delta  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Apply N8N Only Rules → Browser Capture Write?\n**Input:** Apply N8N Only Rules  ·  **Output:** Browser Capture Write?  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -873,7 +970,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000003-generated-note-3",
-      "name": "Stage 3 · Archive Canonical Delta in OneDrive to Apply Prepared Outbox Safely",
+      "name": "Stage 3 · Project Actual Import Rows to Verify Durable Canonical Delta",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -881,7 +978,7 @@
         580
       ],
       "parameters": {
-        "content": "## Stage 3 · Archive Canonical Delta in OneDrive → Apply Prepared Outbox Safely\n**Input:** Archive Canonical Delta in OneDrive  ·  **Output:** Apply Prepared Outbox Safely  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 3 · Project Actual Import Rows → Verify Durable Canonical Delta\n**Input:** Project Actual Import Rows  ·  **Output:** Verify Durable Canonical Delta  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -889,7 +986,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000003-generated-note-4",
-      "name": "Stage 4 · Cashback Close Required to Mark Terminal Readback Verified",
+      "name": "Stage 4 · Prepare Outbox Intent to Read Back Reconciliation Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -897,7 +994,7 @@
         960
       ],
       "parameters": {
-        "content": "## Stage 4 · Cashback Close Required → Mark Terminal Readback Verified\n**Input:** Cashback Close Required  ·  **Output:** Mark Terminal Readback Verified  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 4 · Prepare Outbox Intent → Read Back Reconciliation Receipt\n**Input:** Prepare Outbox Intent  ·  **Output:** Read Back Reconciliation Receipt  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -905,7 +1002,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000003-generated-note-5",
-      "name": "Stage 5 · Read Back Verified Terminal Receipt to Read Back Verified Terminal Receipt",
+      "name": "Stage 5 · Upsert Terminal Pipeline Receipt to Complete Browser Capture Headless Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -913,7 +1010,7 @@
         1340
       ],
       "parameters": {
-        "content": "## Stage 5 · Read Back Verified Terminal Receipt → Read Back Verified Terminal Receipt\n**Input:** Read Back Verified Terminal Receipt  ·  **Output:** Read Back Verified Terminal Receipt  ·  **Nodes:** 33–33\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 5 · Upsert Terminal Pipeline Receipt → Complete Browser Capture Headless Receipt\n**Input:** Upsert Terminal Pipeline Receipt  ·  **Output:** Complete Browser Capture Headless Receipt  ·  **Nodes:** 33–38\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -936,7 +1033,7 @@
       "main": [
         [
           {
-            "node": "Run Isolated PDF Extraction",
+            "node": "Browser Capture?",
             "type": "main",
             "index": 0
           }
@@ -969,7 +1066,7 @@
       "main": [
         [
           {
-            "node": "Unresolved Fields",
+            "node": "Match Browser Capture Rows and Bound Retry",
             "type": "main",
             "index": 0
           }
@@ -1031,7 +1128,7 @@
       "main": [
         [
           {
-            "node": "Project Actual Import Rows",
+            "node": "Browser Capture Write?",
             "type": "main",
             "index": 0
           }
@@ -1286,6 +1383,64 @@
           }
         ]
       ]
+    },
+    "Browser Capture?": {
+      "main": [
+        [
+          {
+            "node": "Parse Browser Capture Adapter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Isolated PDF Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Browser Capture Adapter": {
+      "main": [
+        [
+          {
+            "node": "Normalize Locked Source Semantics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Browser Capture Rows and Bound Retry": {
+      "main": [
+        [
+          {
+            "node": "Unresolved Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browser Capture Write?": {
+      "main": [
+        [
+          {
+            "node": "Complete Browser Capture Headless Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Project Actual Import Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1339,59 +1494,70 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Statement Pipeline Parameters to Unresolved Fields",
+      "name": "Stage 1: Statement Pipeline Parameters to Normalize Locked Source Semantics",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000003-config",
         "3002",
+        "3021-browser-capture-if",
         "3020-pdf-subworkflow",
         "3006",
-        "3007",
-        "3008",
-        "3009"
+        "3022-browser-capture-adapter",
+        "3007"
       ],
-      "description": "Finance stage 1. Input starts at Statement Pipeline Parameters; verified output leaves through Unresolved Fields."
+      "description": "Finance stage 1. Input starts at Statement Pipeline Parameters; verified output leaves through Normalize Locked Source Semantics."
     },
     {
-      "name": "Stage 2: Build Bounded AI Policy Requests to SHA-256 Canonical Delta",
+      "name": "Stage 2: Apply N8N Only Rules to Browser Capture Write?",
       "nodeIds": [
+        "3008",
+        "3023-browser-match-retry",
+        "3009",
         "3059",
         "3010",
         "3011",
         "3012",
+        "3024-browser-write-if"
+      ],
+      "description": "Finance stage 2. Input starts at Apply N8N Only Rules; verified output leaves through Browser Capture Write?."
+    },
+    {
+      "name": "Stage 3: Project Actual Import Rows to Verify Durable Canonical Delta",
+      "nodeIds": [
         "3048",
         "3030",
         "3031",
-        "3032"
-      ],
-      "description": "Finance stage 2. Input starts at Build Bounded AI Policy Requests; verified output leaves through SHA-256 Canonical Delta."
-    },
-    {
-      "name": "Stage 3: Archive Canonical Delta in OneDrive to Apply Prepared Outbox Safely",
-      "nodeIds": [
+        "3032",
         "3033",
         "3034",
         "3035",
-        "3036",
+        "3036"
+      ],
+      "description": "Finance stage 3. Input starts at Project Actual Import Rows; verified output leaves through Verify Durable Canonical Delta."
+    },
+    {
+      "name": "Stage 4: Prepare Outbox Intent to Read Back Reconciliation Receipt",
+      "nodeIds": [
         "3013",
         "3014",
         "3015",
-        "3060"
-      ],
-      "description": "Finance stage 3. Input starts at Archive Canonical Delta in OneDrive; verified output leaves through Apply Prepared Outbox Safely."
-    },
-    {
-      "name": "Stage 4: Cashback Close Required to Mark Terminal Readback Verified",
-      "nodeIds": [
+        "3060",
         "3024",
         "3025",
         "3026",
-        "3027",
+        "3027"
+      ],
+      "description": "Finance stage 4. Input starts at Prepare Outbox Intent; verified output leaves through Read Back Reconciliation Receipt."
+    },
+    {
+      "name": "Stage 5: Upsert Terminal Pipeline Receipt to Read Back Verified Terminal Receipt",
+      "nodeIds": [
         "3028",
         "3029",
         "3045",
-        "3046"
+        "3046",
+        "3047"
       ],
-      "description": "Finance stage 4. Input starts at Cashback Close Required; verified output leaves through Mark Terminal Readback Verified."
+      "description": "Finance stage 5. Input starts at Upsert Terminal Pipeline Receipt; verified output leaves through Read Back Verified Terminal Receipt."
     }
   ],
   "tags": [

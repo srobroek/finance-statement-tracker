@@ -1,3 +1,8 @@
-1. NOTE Sarwa exposes no clean web export. For each Invest account, capture positions, cash, activity, and the account summary from the authenticated dashboard.
-2. NOTE Store only an approved account label or last four digits. Values are USD, and the capture must include its as-of timestamp and any omitted history.
-3. UPLOAD as: "sarwa_holdings_capture.json"
+1. SELECT field: portfolio_ref, option: "<portfolio_ref>"
+2. SELECT field: as_of_date, option: "<as_of_date>"
+3. NOTE Sarwa exposes no clean web export. Capture only the selected portfolio's positions, cash, activity, and summary from the authenticated dashboard.
+4. NOTE Store only the approved portfolio label or last four digits. Values are USD. Include the selected as-of date and every omitted-history limitation.
+5. ASSERT condition: "pagination_exhausted == true"
+6. NOTE Page only the selected portfolio. Stop at 100 pages, or earlier when Next is disabled or a page adds no new stable instrument IDs; record pagination_exhausted.
+7. ASSERT condition: "duplicate stable instrument IDs are rejected"
+8. UPLOAD as: "sarwa_holdings_<portfolio_ref>_<as_of_date>.json"

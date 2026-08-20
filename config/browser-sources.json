@@ -1,6 +1,33 @@
 {
   "schema_version": 1,
   "adapters_root": "browser_adapters",
+  "browser_contract": {
+    "capture_schema": "browser-capture-schema-v1",
+    "capture_mode": "HEADED_ON_DEMAND",
+    "authentication": "USER_COMPLETED",
+    "session_persistence": false,
+    "redaction": "REDACTED",
+    "immutability": "SHA256_ARCHIVED",
+    "handoff_workflow": "INTERACTIVE_ARTIFACT_HANDOFF",
+    "handoff_state": "INACTIVE",
+    "archive_owner": "N8N",
+    "archive_parent_binding": "FINANCE_BROWSER_ARCHIVE_PARENT_ID",
+    "archive_receipt_table": "finance_document_operations",
+    "headless_owner": "N8N",
+    "headless_workflow_code": "SHARED_STATEMENT_PIPELINE",
+    "actual_writer": "ACTUAL_OUTBOX_APPLY",
+    "actual_mutation": false,
+    "cashback_mutation": false,
+    "prohibited_fields": [
+      "credentials",
+      "otp",
+      "cookies",
+      "session_state",
+      "pin",
+      "cvv",
+      "full_account_number"
+    ]
+  },
   "accounts": [
     {
       "actual_account": "ADCB Credit Card · 8833 / 6838",

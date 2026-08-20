@@ -8,7 +8,7 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "4ad2e1381484dc1a053ecad4ad3a8cbc54b817a754ed451cfdde8290cb983af3",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "b77acd28f05247bd2243408f4415e44d4e529a2c1577098a4b13ffa0a07e4eb7",
+    "config_version_seed_sha256": "cdeefd4d7888f705e17888792e94163e5145103ce4ebd5859e7275512968463f",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
     "application_contract_bundle_sha256": "d618bd4eaa285ef244e8bf231ef434a0e3c02feeec731ef3efdd22bdc467c58a",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
@@ -1223,7 +1223,7 @@
         "config_name": "browser-sources",
         "version": "1",
         "source_path": "config/browser-sources.json",
-        "content_sha256": "d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47",
+        "content_sha256": "0fa7b28a4233845941de15cdbe40f0ac380df1b732f7df9fe565141f2096d271",
         "git_commit": "RUNTIME_BIND_GIT_COMMIT",
         "state": "ACTIVE",
         "readback_verified": false
