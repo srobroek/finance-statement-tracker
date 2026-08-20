@@ -89,6 +89,29 @@ test('mutation-disabled credential cannot import', async () => {
   await assert.rejects(session(fakeApi()).import({ ...credential, mutationEnabled: false }, envelope()), /disabled/);
 });
 
+test('doctor and account reads expose safe account health without provider IDs', async () => {
+  const balanceIds: string[] = [];
+  const api = fakeApi({
+    async getServerVersion() { return { version: 'test' }; },
+    async getAccounts() { return [{ id: 'account-1', name: 'Card', closed: false, offbudget: true }]; },
+    async getAccountBalance(id) { balanceIds.push(id); return -1000; },
+  });
+  const expected = {
+    status: 'ok', server: { version: 'test' }, counts: { accounts: 1, categories: 1 },
+    accounts: [{ name: 'Card', closed: false, offbudget: true, balance: -1000 }],
+  };
+
+  const doctor = await session(api).doctor(credential);
+  const accounts = await session(api).read(credential, { shape: 'accounts' });
+
+  assert.deepEqual(doctor, expected);
+  assert.deepEqual(accounts, expected);
+  assert.deepEqual(balanceIds, ['account-1', 'account-1']);
+  const serialized = JSON.stringify({ doctor, accounts });
+  assert.equal(serialized.includes('account-1'), false);
+  assert.equal(serialized.includes('sync'), false);
+});
+
 test('manual, MCP-like, chat, agent, and evaluation modes cannot mutate', () => {
   for (const mode of ['manual', 'webhook', 'chat', 'agent', 'evaluation', 'cli', 'error']) {
     assert.throws(() => assertActualMutationMode(mode), /forbidden/);
