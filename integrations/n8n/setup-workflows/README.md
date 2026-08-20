@@ -164,6 +164,33 @@ with `on`, and reaches `COMMIT` only for that exact positive value. Real psql
 16.14 fixtures cover absent, malformed, `off`, and `on` inputs; only `on`
 persists the probe row.
 
+If n8n pruning has already hard-deleted incident execution `15` and its
+`execution_data` row, the orphan-state contract above is intentionally
+inapplicable. Use the separate
+`runner/run-remediate-execution-free-wf23.sh` contract. It requires the same
+complete canonical workflow/history, project, folder, owner, tag, credential,
+dependency, corpus, and Data Table proofs, but accepts only zero WF23
+executions of every status and zero incident execution-data rows. Its SQL
+expects `execution_entity` to contribute zero workflow references, copies no
+execution data, and deletes only the exact history, three tag edges, owner
+share, and workflow. A reappearing execution or incident data row fails before
+the first delete.
+
+This execution-free path retains the two-step rollback rehearsal and recent
+receipt binding. Both modes cleanly stop the sole retained n8n writer,
+revalidate the zero-execution state immediately before the same serializable
+SQL body, and hold workflow/execution/history/share/tag tables through its
+exact checks. The container stop/start, host SQL invocation, PostgreSQL lock
+wait, and PostgreSQL statement all have independent bounds; stopping releases
+in-flight database connections instead of freezing their locks.
+Only the exact positive `commit_authorized=on` branch can commit. The commit
+readback must restore `21/0/0`, 21 placements, 63 tag edges, and zero WF23
+workflow/history/execution rows while preserving the full retained workflow
+and history surface, credential corpus, and official Finance Data Table
+digest. The older stranded
+runner remains pinned to `ORPHANED_SOFT_DELETED_EXECUTION` and must not be used
+after pruning changes that signature.
+
 Because n8n's `ActiveExecutions` registry is process-local and WF23 ran in a
 short-lived `docker exec ... node -` process, the checked-in process proof
 requires that exact stdin Node process to be absent without printing any

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import base64
+import hashlib
 import json
 import importlib.util
 import os
@@ -22,6 +24,8 @@ SOURCE_SHA = "2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
 PSQL_GATE_FIXTURE = ROOT / "tests" / "fixtures" / "psql-wf23-exact-commit-gate.sql"
 PSQL_GATE_RESULTS = ROOT / "tests" / "fixtures" / "psql-wf23-exact-commit-gate-results.json"
+PSQL_EXECUTION_FREE_HARNESS = ROOT / "tests" / "fixtures" / "psql-wf23-execution-free-production-harness.sql"
+PSQL_EXECUTION_FREE_RESULTS = ROOT / "tests" / "fixtures" / "psql-wf23-execution-free-production-results.json"
 
 
 def load_module(name: str, path: Path):
@@ -867,6 +871,173 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertFalse(receipt["provider_calls"])
         self.assertFalse(receipt["secret_values_recorded"])
 
+    def test_execution_free_wf23_remediation_is_separate_exact_and_fail_closed(self) -> None:
+        runner = (RUNNER / "run-remediate-execution-free-wf23.sh").read_text(encoding="utf-8")
+        sql = (RUNNER / "remediate-execution-free-wf23.sql").read_text(encoding="utf-8")
+
+        for marker in (
+            "FINANCE_WF23_EXECUTION_FREE_REMEDIATION_MODE",
+            "REHEARSE_EXECUTION_FREE_WF23_TRANSACTION_AND_ROLL_BACK",
+            "REMOVE_EXACT_EXECUTION_FREE_WF23",
+            "validate-wf23-execution-free-rehearsal-receipt.py",
+            "WF23_EXECUTION_FREE_REHEARSAL_RECEIPT_VERIFIED",
+            '"$(wf23_execution_count)" == "0"',
+            '"$(wf23_execution_data_count)" == "0"',
+            '"22|0|0"',
+            '"21|0|0"',
+            '"$(tag_edge_count)" == "66"',
+            '"$(tag_edge_count)" == "63"',
+            "workflow_corpus_digest",
+            "corpus_digest_without_wf23",
+            "credential_digest_before",
+            "data_table_digest_before",
+            'docker compose stop -t 30 n8n',
+            'docker compose start n8n',
+            'timeout --foreground --signal=TERM --kill-after=30s 180s docker compose exec',
+            "EXECUTION_FREE_INACTIVE_WORKFLOW_WITH_EXACT_HISTORY",
+            '"provider_calls": False',
+        ):
+            self.assertIn(marker, runner)
+        self.assertEqual(runner.count('< "${sql_file}"'), 1)
+        self.assertLess(runner.index("receipt_validation="), runner.index('docker compose stop -t 30 n8n'))
+        self.assertLess(runner.index('docker compose stop -t 30 n8n'), runner.index('< "${sql_file}"'))
+        retained_digest = runner[runner.index("corpus_digest_without_wf23()") : runner.index("credential_digest()")]
+        for surface in (
+            r'w.\"versionId\"', r'w.\"isArchived\"', r'w.\"triggerCount\"',
+            r'w.\"sourceWorkflowId\"', r'w.\"staticData\"', r'w.\"nodeGroups\"',
+            "from workflow_history h", r'h.\"versionId\"', "h.authors", "h.autosaved",
+        ):
+            self.assertIn(surface, retained_digest)
+
+        for marker in (
+            "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+            "SET LOCAL search_path = pg_catalog, pg_temp, public",
+            "SET LOCAL lock_timeout = '15s'",
+            "SET LOCAL statement_timeout = '120s'",
+            "LOCK TABLE workflow_entity, execution_entity, execution_data, workflow_history",
+            "WF23_EXECUTION_FREE_REMEDIATION_EXECUTION_REFERENCE_PRESENT",
+            'EXISTS (SELECT 1 FROM execution_entity e WHERE e."workflowId" = scope.workflow_id)',
+            'EXISTS (SELECT 1 FROM execution_data d WHERE d."executionId" = scope.incident_execution_id)',
+            "WHEN 'execution_entity' THEN 0",
+            "WF23_EXECUTION_FREE_REMEDIATION_UNEXPECTED_WORKFLOW_REFERENCE",
+            "WF23_EXECUTION_FREE_REMEDIATION_CANONICAL_WORKFLOW_MISMATCH",
+            "WF23_EXECUTION_FREE_REMEDIATION_CANONICAL_HISTORY_MISMATCH",
+            "DELETE FROM workflow_history WHERE \"workflowId\" = target_workflow",
+            "DELETE FROM workflows_tags WHERE \"workflowId\" = target_workflow",
+            "DELETE FROM shared_workflow WHERE \"workflowId\" = target_workflow",
+            "DELETE FROM workflow_entity WHERE id = target_workflow",
+            "WF23_EXECUTION_FREE_REMEDIATION_DELETE_READBACK_MISMATCH",
+        ):
+            self.assertIn(marker, sql)
+        for forbidden in (
+            "DELETE FROM execution_entity",
+            "wf23_backup_execution",
+            "wf23_backup_execution_data",
+            "execute_probe",
+            "DELETE FROM credentials_entity",
+            "UPDATE credentials_entity",
+        ):
+            self.assertNotIn(forbidden, runner + sql)
+        self.assertTrue(sql.rstrip().endswith(PSQL_GATE_FIXTURE.read_text(encoding="utf-8").strip()))
+        self.assertLess(sql.index("$remediation_preflight$;"), sql.index("DELETE FROM workflow_history"))
+        self.assertLess(sql.index("WF23_EXECUTION_FREE_REMEDIATION_DELETE_READBACK_MISMATCH"), sql.index("\\if :{?commit_authorized}"))
+        self.assertGreaterEqual(runner.count('with path.open("x", encoding="utf-8")'), 2)
+
+        old_runner = (RUNNER / "run-remediate-stranded-wf23.sh").read_text(encoding="utf-8")
+        self.assertIn('"$(wf23_execution_count)" == "1"', old_runner)
+        self.assertIn("ORPHANED_SOFT_DELETED_EXECUTION", old_runner)
+        self.assertNotIn("REMOVE_EXACT_EXECUTION_FREE_WF23", old_runner)
+
+    def test_execution_free_wf23_rehearsal_receipt_is_exact_and_recent(self) -> None:
+        validator = load_module(
+            "wf23_execution_free_rehearsal_validator",
+            RUNNER / "validate-wf23-execution-free-rehearsal-receipt.py",
+        )
+        now = dt.datetime(2026, 8, 20, 12, 0, tzinfo=dt.timezone.utc)
+        hashes = {key: value * 64 for key, value in {
+            "source": "1", "sql": "2", "workflow": "3", "credential": "4", "data_table": "5"
+        }.items()}
+        receipt = {
+            "schema_version": 1,
+            "status": "VERIFIED",
+            "scope": "WF23_EXECUTION_FREE_POSTGRESQL_ROLLBACK_REHEARSAL",
+            "recorded_at_utc": "2026-08-20T11:50:00+00:00",
+            "commits": {"finance": "a" * 40, "orchestrator": "b" * 40},
+            "workflow_source_sha256": hashes["source"],
+            "sql_sha256": hashes["sql"],
+            "live_pre_state": {
+                "project_id": "gT5rxq26L0PoNUWX",
+                "workflow_id": "10000000-0000-4000-8000-000000000023",
+                "incident_execution_id": 15,
+                "project_state": "22|0|0",
+                "folder_placements": 22,
+                "tag_edges": 66,
+                "bad_tag_sets": 0,
+                "setup_ids": 1,
+                "wf23_workflows": 1,
+                "wf23_executions": 0,
+                "wf23_execution_data_rows": 0,
+                "wf23_histories": 1,
+                "workflow_corpus_sha256": hashes["workflow"],
+                "credential_corpus_sha256": hashes["credential"],
+                "finance_data_table_sha256": hashes["data_table"],
+                "execution_free_signature": "EXECUTION_FREE_INACTIVE_WORKFLOW_WITH_EXACT_HISTORY",
+            },
+            "transaction_outcome": "ROLLED_BACK",
+            "production_sql_body_completed": True,
+            "post_state_unchanged": True,
+            "services_healthy": True,
+            "provider_calls": False,
+            "secret_values_recorded": False,
+        }
+
+        def validate(value: dict, observed_now: dt.datetime = now) -> None:
+            validator.validate_receipt(
+                value,
+                finance_commit="a" * 40,
+                orchestrator_commit="b" * 40,
+                source_sha256=hashes["source"],
+                sql_sha256=hashes["sql"],
+                workflow_corpus_sha256=hashes["workflow"],
+                credential_corpus_sha256=hashes["credential"],
+                data_table_sha256=hashes["data_table"],
+                now=observed_now,
+            )
+
+        validate(receipt)
+        for label, mutate in {
+            "execution reappeared": lambda value: value["live_pre_state"].update(wf23_executions=1),
+            "execution data reappeared": lambda value: value["live_pre_state"].update(wf23_execution_data_rows=1),
+            "old orphan scope": lambda value: value.update(scope="WF23_POSTGRESQL_ROLLBACK_REHEARSAL"),
+            "wrong SQL": lambda value: value.update(sql_sha256="6" * 64),
+            "provider call": lambda value: value.update(provider_calls=True),
+            "bool zero": lambda value: value["live_pre_state"].update(wf23_executions=False),
+        }.items():
+            with self.subTest(label=label):
+                invalid = copy.deepcopy(receipt)
+                mutate(invalid)
+                with self.assertRaises(ValueError):
+                    validate(invalid)
+        with self.assertRaisesRegex(ValueError, "TIMESTAMP_NOT_RECENT"):
+            validate(receipt, now + dt.timedelta(minutes=16))
+
+        validator_path = RUNNER / "validate-wf23-execution-free-rehearsal-receipt.py"
+        with tempfile.TemporaryDirectory() as temporary:
+            duplicate = Path(temporary) / "duplicate.json"
+            duplicate.write_text(
+                '{"status":"BOGUS","status":"VERIFIED","token":"SECRET_ACCESS_TOKENZ"}',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(validator_path), str(duplicate), *("a" * 40 for _ in range(2)), *("1" * 64 for _ in range(5))],
+                text=True,
+                capture_output=True,
+            )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "")
+        self.assertEqual(completed.stderr.strip(), "WF23_EXECUTION_FREE_REHEARSAL_RECEIPT_REJECTED")
+        self.assertNotIn("SECRET_ACCESS_TOKENZ", completed.stdout + completed.stderr)
+
     def test_real_psql_gate_fixture_covers_absent_malformed_false_and_true(self) -> None:
         harness = (ROOT / "tests" / "fixtures" / "psql-wf23-exact-commit-gate-harness.sql").read_text(
             encoding="utf-8"
@@ -905,6 +1076,78 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             completed = subprocess.run(command, text=True, capture_output=True)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(completed.stdout.strip(), str(case["persisted_rows"]))
+
+    def test_execution_free_production_sql_has_recorded_real_postgres_rehearsal(self) -> None:
+        harness = PSQL_EXECUTION_FREE_HARNESS.read_text(encoding="utf-8")
+        self.assertIn("remediate-execution-free-wf23.sql", harness)
+        self.assertNotIn("DELETE FROM workflow_entity", harness)
+        results = json.loads(PSQL_EXECUTION_FREE_RESULTS.read_text(encoding="utf-8"))
+        self.assertEqual(results["schema_version"], 1)
+        self.assertEqual(results["psql_version"], "16.14")
+        self.assertEqual(
+            results["production_sql_sha256"],
+            hashlib.sha256((RUNNER / "remediate-execution-free-wf23.sql").read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            {case["name"]: (case["outcome"], case["row_counts"]) for case in results["cases"]},
+            {
+                "rehearsal": ("ROLLBACK", "1|1|1|3|0|0"),
+                "commit": ("COMMIT", "0|0|0|0|0|0"),
+            },
+        )
+
+    def test_execution_free_production_sql_against_ephemeral_postgres_when_configured(self) -> None:
+        psql = os.environ.get("WF23_TEST_PSQL")
+        dsn = os.environ.get("WF23_TEST_POSTGRES_DSN")
+        ack = os.environ.get("WF23_TEST_EPHEMERAL_SCHEMA_RESET_ACK")
+        if not psql or not dsn or ack != "DROP_AND_RECREATE_WF23_TEST_TABLES":
+            self.skipTest("configure disposable PostgreSQL and exact schema-reset acknowledgement")
+
+        canonicalizer = load_module(
+            "wf23_execution_free_pg_canonicalizer", RUNNER / "canonicalize-wf23-source.py"
+        )
+        source = json.loads(SOURCE.read_text(encoding="utf-8"))
+        version_id = "12345678-1234-4123-8123-123456789abc"
+        expected_workflow = canonicalizer.workflow_projection(source)
+        expected_history = canonicalizer.history_projection(source, version_id)
+        runtime_workflow = copy.deepcopy(expected_workflow)
+        for node in runtime_workflow["nodes"]:
+            if node["type"] == "n8n-nodes-base.microsoftOutlook":
+                node["credentials"]["microsoftOutlookOAuth2Api"]["id"] = "outlookCred123"
+            elif node["type"] == "n8n-nodes-base.microsoftOneDrive":
+                node["credentials"]["microsoftOneDriveOAuth2Api"]["id"] = "onedriveCred123"
+        for binding in runtime_workflow["meta"]["credentialBindings"]:
+            binding.update(configured=True, action_required=False)
+        runtime_history = copy.deepcopy(expected_history)
+        runtime_history["nodes"] = copy.deepcopy(runtime_workflow["nodes"])
+
+        def encoded(value: object) -> str:
+            return base64.b64encode(canonicalizer.canonical_json(value).encode("utf-8")).decode("ascii")
+
+        common_variables = {
+            "workflow_id": source["id"],
+            "project_id": "gT5rxq26L0PoNUWX",
+            "folder_id": "f1000000-0000-4000-8000-000000000090",
+            "workflow_name": source["name"],
+            "incident_execution_id": "15",
+            "version_id": version_id,
+            "expected_workflow_b64": encoded(expected_workflow),
+            "expected_history_b64": encoded(expected_history),
+            "runtime_workflow_b64": encoded(runtime_workflow),
+            "runtime_history_b64": encoded(runtime_history),
+        }
+        recorded = json.loads(PSQL_EXECUTION_FREE_RESULTS.read_text(encoding="utf-8"))
+        version = subprocess.run([psql, "--version"], text=True, capture_output=True, check=True)
+        self.assertIn(f" {recorded['psql_version']} ", f" {version.stdout.strip()} ")
+        for case in recorded["cases"]:
+            command = [psql, dsn, "-XqAt", "-v", "ON_ERROR_STOP=1"]
+            for key, value in common_variables.items():
+                command.extend(["-v", f"{key}={value}"])
+            command.extend(["-v", f"commit_authorized={case['commit_authorized']}"])
+            command.extend(["-f", str(PSQL_EXECUTION_FREE_HARNESS)])
+            completed = subprocess.run(command, text=True, capture_output=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+            self.assertEqual(completed.stdout.strip(), case["row_counts"])
 
     def test_wf23_rehearsal_receipt_is_recent_exact_and_fail_closed(self) -> None:
         validator = load_module(
@@ -1203,6 +1446,105 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         before = snapshot(delete_fault)
         with self.assertRaisesRegex(RuntimeError, "DELETE_COUNT_MISMATCH"):
             remediate(delete_fault, inject_delete_count_fault=True)
+        self.assertEqual(snapshot(delete_fault), before)
+
+    def test_execution_free_transaction_model_rejects_reappearing_execution_and_rolls_back(self) -> None:
+        workflow_id = "10000000-0000-4000-8000-000000000023"
+
+        def create_database() -> sqlite3.Connection:
+            connection = sqlite3.connect(":memory:")
+            connection.executescript(
+                """
+                CREATE TABLE workflow (id TEXT PRIMARY KEY, canonical TEXT NOT NULL);
+                CREATE TABLE history (workflow_id TEXT PRIMARY KEY);
+                CREATE TABLE execution (id INTEGER PRIMARY KEY, workflow_id TEXT NOT NULL);
+                CREATE TABLE execution_data (execution_id INTEGER PRIMARY KEY);
+                CREATE TABLE share (workflow_id TEXT PRIMARY KEY);
+                CREATE TABLE tag_edge (workflow_id TEXT NOT NULL, tag TEXT NOT NULL, PRIMARY KEY(workflow_id, tag));
+                CREATE TABLE dependency_ref (workflow_id TEXT NOT NULL);
+                """
+            )
+            connection.execute("INSERT INTO workflow VALUES (?, 'EXACT')", (workflow_id,))
+            connection.execute("INSERT INTO history VALUES (?)", (workflow_id,))
+            connection.execute("INSERT INTO share VALUES (?)", (workflow_id,))
+            connection.executemany(
+                "INSERT INTO tag_edge VALUES (?,?)",
+                [(workflow_id, tag) for tag in ("finance", "inactive", "setup-required")],
+            )
+            connection.commit()
+            return connection
+
+        def snapshot(connection: sqlite3.Connection) -> dict[str, list[tuple]]:
+            return {
+                table: sorted(connection.execute(f"SELECT * FROM {table}").fetchall())
+                for table in (
+                    "workflow", "history", "execution", "execution_data", "share", "tag_edge",
+                    "dependency_ref",
+                )
+            }
+
+        def remediate(connection: sqlite3.Connection, *, delete_fault: bool = False) -> None:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                if connection.execute(
+                    "SELECT canonical FROM workflow WHERE id=?", (workflow_id,)
+                ).fetchone() != ("EXACT",):
+                    raise RuntimeError("CANONICAL_MISMATCH")
+                if connection.execute(
+                    "SELECT count(*) FROM execution WHERE workflow_id=?", (workflow_id,)
+                ).fetchone() != (0,):
+                    raise RuntimeError("EXECUTION_REFERENCE_PRESENT")
+                if connection.execute(
+                    "SELECT count(*) FROM execution_data WHERE execution_id=15"
+                ).fetchone() != (0,):
+                    raise RuntimeError("EXECUTION_REFERENCE_PRESENT")
+                if connection.execute(
+                    "SELECT count(*) FROM dependency_ref WHERE workflow_id=?", (workflow_id,)
+                ).fetchone() != (0,):
+                    raise RuntimeError("UNEXPECTED_REFERENCE")
+                if delete_fault:
+                    connection.execute("DELETE FROM history WHERE workflow_id=?", (workflow_id,))
+                for table, expected_count in (
+                    ("history", 1), ("tag_edge", 3), ("share", 1), ("workflow", 1)
+                ):
+                    cursor = connection.execute(
+                        f"DELETE FROM {table} WHERE {'id' if table == 'workflow' else 'workflow_id'}=?",
+                        (workflow_id,),
+                    )
+                    if cursor.rowcount != expected_count:
+                        raise RuntimeError("DELETE_COUNT_MISMATCH")
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+        exact = create_database()
+        remediate(exact)
+        self.assertEqual(snapshot(exact), {table: [] for table in snapshot(exact)})
+
+        for label, mutate in {
+            "source drift": lambda db: db.execute("UPDATE workflow SET canonical='DRIFT'"),
+            "execution reappeared": lambda db: db.execute(
+                "INSERT INTO execution VALUES (16,?)", (workflow_id,)
+            ),
+            "incident data reappeared": lambda db: db.execute("INSERT INTO execution_data VALUES (15)"),
+            "unexpected reference": lambda db: db.execute(
+                "INSERT INTO dependency_ref VALUES (?)", (workflow_id,)
+            ),
+        }.items():
+            with self.subTest(label=label):
+                connection = create_database()
+                mutate(connection)
+                connection.commit()
+                before = snapshot(connection)
+                with self.assertRaises(RuntimeError):
+                    remediate(connection)
+                self.assertEqual(snapshot(connection), before)
+
+        delete_fault = create_database()
+        before = snapshot(delete_fault)
+        with self.assertRaisesRegex(RuntimeError, "DELETE_COUNT_MISMATCH"):
+            remediate(delete_fault, delete_fault=True)
         self.assertEqual(snapshot(delete_fault), before)
 
     def test_runner_enforces_transient_restart_and_restoration_contract(self) -> None:
