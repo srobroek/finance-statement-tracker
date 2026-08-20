@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Bounded Source Request. Keep this deterministic and fail closed.\nconst request = $json;\nconst required = [\n    'run_id',\n    'source_code',\n    'folder_id',\n    'senders',\n    'subjects',\n    'window_start',\n    'run_upper_bound',\n    'onedrive_parent_id',\n];\nfor (const field of required) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing trusted contract field ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst windowStart = new Date(request.window_start);\nconst runUpperBound = new Date(request.run_upper_bound);\nif (!(windowStart < runUpperBound) || runUpperBound > new Date()) {\n    throw new Error('Acquisition window must be positive and frozen no later than now');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders\n    .map(sender => `from/emailAddress/address eq ${quoteOData(sender)}`)\n    .join(' or ');\nconst subjectFilter = subjects\n    .map(subject => `contains(subject,${quoteOData(subject)})`)\n    .join(' or ');\nreturn [{\n        json: {\n            ...request,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            window_end: runUpperBound.toISOString(),\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
+        "jsCode": "// Purpose: Validate Bounded Source Request. Keep this deterministic and fail closed.\nconst request = $json;\nconst required = [\n    'run_id',\n    'source_code',\n    'folder_id',\n    'senders',\n    'subjects',\n    'window_start',\n    'run_upper_bound',\n    'onedrive_parent_id',\n];\nfor (const field of required) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing trusted contract field ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst windowStart = new Date(request.window_start);\nconst runUpperBound = new Date(request.run_upper_bound);\nif (!(windowStart < runUpperBound) || runUpperBound > new Date()) {\n    throw new Error('Acquisition window must be positive and frozen no later than now');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders\n    .map(sender => `from/emailAddress/address eq ${quoteOData(sender)}`)\n    .join(' or ');\nconst subjectFilter = subjects\n    .map(subject => `contains(subject,${quoteOData(subject)})`)\n    .join(' or ');\nreturn [{\n        json: {\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            window_start: request.window_start,\n            run_upper_bound: runUpperBound.toISOString(),\n            window_end: runUpperBound.toISOString(),\n            onedrive_parent_id: request.onedrive_parent_id,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            subject_match: request.subject_match,\n            archive_readback_required: request.archive_readback_required,\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
       }
     },
     {
@@ -229,25 +229,73 @@
           "assignments": [
             {
               "id": "config-1",
-              "name": "max_messages",
-              "type": "number",
-              "value": "={{ $json.max_messages ?? 500 }}"
+              "name": "run_id",
+              "type": "string",
+              "value": "={{ $json.run_id }}"
             },
             {
               "id": "config-2",
+              "name": "source_code",
+              "type": "string",
+              "value": "={{ $json.source_code }}"
+            },
+            {
+              "id": "config-3",
+              "name": "folder_id",
+              "type": "string",
+              "value": "={{ $json.folder_id }}"
+            },
+            {
+              "id": "config-4",
+              "name": "senders",
+              "type": "array",
+              "value": "={{ $json.senders }}"
+            },
+            {
+              "id": "config-5",
+              "name": "subjects",
+              "type": "array",
+              "value": "={{ $json.subjects }}"
+            },
+            {
+              "id": "config-6",
+              "name": "window_start",
+              "type": "string",
+              "value": "={{ $json.window_start }}"
+            },
+            {
+              "id": "config-7",
+              "name": "run_upper_bound",
+              "type": "string",
+              "value": "={{ $json.run_upper_bound }}"
+            },
+            {
+              "id": "config-8",
+              "name": "onedrive_parent_id",
+              "type": "string",
+              "value": "={{ $json.onedrive_parent_id }}"
+            },
+            {
+              "id": "config-9",
+              "name": "max_messages",
+              "type": "number",
+              "value": "={{ $json.max_messages }}"
+            },
+            {
+              "id": "config-10",
               "name": "subject_match",
               "type": "string",
               "value": "PARTIAL_CASE_INSENSITIVE"
             },
             {
-              "id": "config-3",
+              "id": "config-11",
               "name": "archive_readback_required",
               "type": "boolean",
               "value": true
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

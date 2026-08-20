@@ -29,7 +29,7 @@ def set_workflow(
                 "name": node_name,
                 "type": "n8n-nodes-base.set",
                 "parameters": {
-                    "includeOtherFields": True,
+                    "includeOtherFields": False,
                     "assignments": {
                         "assignments": [
                             {"name": field, "type": field_type, "value": value}
@@ -94,18 +94,47 @@ class N8nWorkflowParameterTests(unittest.TestCase):
                 with self.subTest(workflow=workflow_name, node=node_name):
                     node = by_name[node_name]
                     parameters = node["parameters"]
-                    self.assertIs(parameters["includeOtherFields"], True)
+                    self.assertIs(parameters["includeOtherFields"], False)
                     caller = {
                         field: {"caller": field}
                         for field in node_spec["caller_fields"]
                     }
-                    merged = dict(caller)
+                    caller.update({
+                        "password": "must-not-forward",
+                        "credential": "must-not-forward",
+                        "arbitrary_extra": "must-not-forward",
+                    })
+                    merged = {}
                     assignments = parameters["assignments"]["assignments"]
+                    caller_assignments = {
+                        assignment["name"]: assignment
+                        for assignment in assignments
+                        if assignment["name"] in node_spec["caller_fields"]
+                    }
+                    self.assertEqual(
+                        set(caller_assignments), set(node_spec["caller_fields"]),
+                        f"{workflow_name}::{node_name} must project the exact caller allowlist",
+                    )
+                    for field, assignment in caller_assignments.items():
+                        self.assertEqual(assignment["type"], node_spec["caller_fields"][field])
+                        self.assertEqual(assignment["value"], "={{ $json." + field + " }}")
                     for assignment in assignments:
-                        merged[assignment["name"]] = assignment["value"]
+                        value = assignment["value"]
+                        if isinstance(value, str) and value.startswith("={{ $json."):
+                            source_field = value.removeprefix("={{ $json.").split(" ", 1)[0].rstrip("}")
+                            merged[assignment["name"]] = caller.get(source_field)
+                        else:
+                            merged[assignment["name"]] = value
                     self.assertTrue(
                         set(node_spec["caller_fields"]).issubset(merged),
                         f"{workflow_name}::{node_name} dropped caller JSON",
+                    )
+                    self.assertNotIn("password", merged)
+                    self.assertNotIn("credential", merged)
+                    self.assertNotIn("arbitrary_extra", merged)
+                    self.assertLessEqual(
+                        set(merged),
+                        set(node_spec["caller_fields"]) | set(node_spec["fields"]),
                     )
 
         # These are the high-risk boundaries called out by the workflow
@@ -134,6 +163,22 @@ class N8nWorkflowParameterTests(unittest.TestCase):
             consumer_text = json.dumps(consumer, sort_keys=True)
             for field in fields:
                 self.assertIn(field, consumer_text, f"{workflow_name}::{parameter_name}->{consumer_name}")
+
+        explicit_projectors = {
+            "01-outlook-finance-acquisition.json": "Validate Bounded Source Request",
+            "03-shared-statement-pipeline.json": "Verify Archive and Execution Context",
+            "09-ai-proposal.json": "Validate Untrusted Proposal Request",
+            "21-subscription-agent-adapter.json": "Validate and Build Fixed Provider Invocation",
+        }
+        for workflow_name, node_name in explicit_projectors.items():
+            workflow = load_json(workflow_paths[workflow_name])
+            consumer = next(node for node in workflow["nodes"] if node["name"] == node_name)
+            consumer_text = consumer["parameters"].get("jsCode", "")
+            self.assertNotIn("...r", consumer_text, workflow_name)
+            self.assertNotIn("...request", consumer_text, workflow_name)
+            self.assertNotIn("Object.fromEntries", consumer_text, workflow_name)
+            if workflow_name == "21-subscription-agent-adapter.json":
+                self.assertNotIn("Object.entries(job)", consumer_text)
 
     def test_model_and_reasoning_values_are_source_selected_not_literal_allowlisted(self) -> None:
         contract = load_json(CONTRACT_PATH)
@@ -323,6 +368,40 @@ class N8nWorkflowParameterTests(unittest.TestCase):
         codes = {row["code"] for row in report["findings"]}
         self.assertIn("PARAMETER_FIELD_UNALLOWLISTED", codes)
         self.assertIn("PARAMETER_NODE_UNALLOWLISTED", codes)
+
+    def test_unrestricted_projector_and_sensitive_extras_fail_closed(self) -> None:
+        contract = deepcopy(load_json(CONTRACT_PATH))
+        contract["workflows"] = {
+            "synthetic.json": {
+                "nodes": {
+                    "Workflow Parameters": {
+                        "caller_fields": {"safe": "string"},
+                        "fields": {
+                            "local": {"category": "workflow_local_constant", "type": "string"},
+                            "account_id": {
+                                "category": "workflow_local_input",
+                                "type": "string",
+                                "expression_allowed": True,
+                            },
+                        },
+                    }
+                }
+            }
+        }
+        document = set_workflow("synthetic.json", "safe", "={{ $json.safe }}")[1]
+        node = document["nodes"][0]
+        node["parameters"]["includeOtherFields"] = True
+        node["parameters"]["assignments"]["assignments"].extend([
+            {"name": "password", "type": "string", "value": "={{ $json.password }}"},
+            {"name": "arbitrary_extra", "type": "string", "value": "={{ $json.arbitrary_extra }}"},
+            {"name": "account_id", "type": "string", "value": "={{ $json.account_id }}"},
+        ])
+        report = scan(contract=contract, documents=[("synthetic.json", document)])
+        codes = {row["code"] for row in report["findings"]}
+        self.assertIn("CALLER_PROJECTOR_UNRESTRICTED", codes)
+        self.assertIn("PARAMETER_FIELD_UNALLOWLISTED", codes)
+        self.assertIn("CREDENTIAL_OR_SECRET_FIELD", codes)
+        self.assertIn("PROTECTED_CALLER_INPUT", codes)
 
     def test_repeated_global_literal_in_local_nodes_is_reported(self) -> None:
         contract = deepcopy(load_json(CONTRACT_PATH))

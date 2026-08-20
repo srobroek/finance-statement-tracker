@@ -30,12 +30,12 @@
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "b7837774445eae75c7f1912c9915545c3e3bbae496cbe72d82535e31823b2ce9"
+    "sha256": "6ea0cde6521b59671415d3ce244344d39de00379757158c1c1d0520ccb4c34e9"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 21,
-    "sha256": "c411fd4cbfeee0c24c4e96c076854e9cd5ae442ccb01cc4fd935cadff9ef6a34",
+    "sha256": "e8a18e7e2805c3888453dafc11ef2951564b3d75681491da0834151f38703224",
     "required_state": {
       "active": false,
       "published": false,

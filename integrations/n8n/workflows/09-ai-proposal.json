@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Untrusted Proposal Request. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const forbidden of ['policy_class', 'agent_profile', 'policy_sha256', 'config_sha256', 'output_schema_sha256', 'allowed_values', 'instruction', 'prompt', 'model', 'reasoning_effort', 'auth_mode', 'api_key', 'command', 'path', 'url', 'provider', 'credential'])\n    if (Object.hasOwn(r, forbidden))\n        throw new Error(`Forbidden agent input ${forbidden}`);\nif (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(r.policy_id || '')))\n    throw new Error('Invalid policy id');\nif (!Array.isArray(r.unresolved) || !r.unresolved.length || r.unresolved.length > 100)\n    throw new Error('Invalid unresolved batch');\nconst allowed = new Set(['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'category_recommendation', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket', 'rule_recommendation']), locked = new Set(['amount', 'date', 'source_id', 'imported_id', 'direction', 'topic', 'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount']), ids = new Set();\nconst unresolved = r.unresolved.map(x => {\n    const id = String(x.transaction_id || '');\n    if (!id || id.length > 256 || ids.has(id))\n        throw new Error('Invalid or duplicate transaction id');\n    ids.add(id);\n    if (!Array.isArray(x.allowed_fields) || !x.allowed_fields.length || new Set(x.allowed_fields).size !== x.allowed_fields.length || x.allowed_fields.some(f => locked.has(f) || !allowed.has(f)))\n        throw new Error('Forbidden proposal field');\n    const context = x.redacted_context || {};\n    if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).length > 24)\n        throw new Error('Invalid redacted context');\n    const redacted_context = {};\n    for (const [k, v] of Object.entries(context)) {\n        if (locked.has(k) || /message|email|account|card_number|password|token/i.test(k))\n            continue;\n        if (v === null || ['string', 'number', 'boolean'].includes(typeof v))\n            redacted_context[k] = typeof v === 'string' ? v.slice(0, 500) : v;\n    }\n    return { transaction_id: id, requested_fields: [...x.allowed_fields].sort(), redacted_context };\n});\nreturn [{ json: { policy_id: String(r.policy_id), unresolved } }];\n"
+        "jsCode": "// Purpose: Validate Untrusted Proposal Request. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const forbidden of [\n    'policy_class', 'agent_profile', 'policy_sha256', 'config_sha256',\n    'output_schema_sha256', 'allowed_values', 'instruction', 'prompt', 'model',\n    'reasoning_effort', 'auth_mode', 'api_key', 'command', 'path', 'url',\n    'provider', 'credential',\n]) {\n    if (Object.hasOwn(r, forbidden))\n        throw new Error(`Forbidden agent input ${forbidden}`);\n}\nconst policyId = String(r.policy_id || '');\nif (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(policyId)) {\n    throw new Error('Invalid policy id');\n}\nif (!Array.isArray(r.unresolved) || !r.unresolved.length || r.unresolved.length > 100) {\n    throw new Error('Invalid unresolved batch');\n}\nconst allowed = new Set([\n    'vendor', 'category', 'subcategory', 'tags', 'evidence_policy',\n    'review_required', 'category_recommendation', 'is_subscription',\n    'property_code', 'rental_unit', 'channel', 'reward_bucket',\n    'rule_recommendation',\n]);\nconst locked = new Set([\n    'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',\n    'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',\n]);\nconst ids = new Set();\nconst unresolved = r.unresolved.map(item => {\n    const id = String(item.transaction_id || '');\n    if (!id || id.length > 256 || ids.has(id))\n        throw new Error('Invalid or duplicate transaction id');\n    ids.add(id);\n    if (!Array.isArray(item.allowed_fields)\n        || !item.allowed_fields.length\n        || new Set(item.allowed_fields).size !== item.allowed_fields.length\n        || item.allowed_fields.some(field => locked.has(field) || !allowed.has(field)))\n        throw new Error('Forbidden proposal field');\n    const context = item.redacted_context || {};\n    if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).length > 24) {\n        throw new Error('Invalid redacted context');\n    }\n    const redactedContext = {};\n    for (const [key, value] of Object.entries(context)) {\n        if (locked.has(key) || /message|email|account|card_number|password|token/i.test(key))\n            continue;\n        if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {\n            redactedContext[key] = typeof value === 'string' ? value.slice(0, 500) : value;\n        }\n    }\n    return {\n        transaction_id: id,\n        requested_fields: [...item.allowed_fields].sort(),\n        redacted_context: redactedContext,\n    };\n});\nreturn [{ json: { policy_id: policyId, unresolved } }];\n"
       }
     },
     {
@@ -777,25 +777,37 @@
           "assignments": [
             {
               "id": "config-1",
+              "name": "policy_id",
+              "type": "string",
+              "value": "={{ $json.policy_id }}"
+            },
+            {
+              "id": "config-2",
+              "name": "unresolved",
+              "type": "array",
+              "value": "={{ $json.unresolved }}"
+            },
+            {
+              "id": "config-3",
               "name": "provider_selection",
               "type": "string",
               "value": "SERVER_AI_POLICY_CONTRACT"
             },
             {
-              "id": "config-2",
+              "id": "config-4",
               "name": "supported_providers",
               "type": "string",
               "value": "CODEX_SUBSCRIPTION|CLAUDE_SUBSCRIPTION"
             },
             {
-              "id": "config-3",
+              "id": "config-5",
               "name": "proposal_only",
               "type": "boolean",
               "value": true
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

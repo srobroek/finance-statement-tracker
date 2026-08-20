@@ -748,25 +748,55 @@
           "assignments": [
             {
               "id": "config-1",
+              "name": "outbox_row",
+              "type": "object",
+              "value": "={{ $json.outbox_row }}"
+            },
+            {
+              "id": "config-2",
+              "name": "manifest",
+              "type": "object",
+              "value": "={{ $json.manifest }}"
+            },
+            {
+              "id": "config-3",
+              "name": "verification",
+              "type": "object",
+              "value": "={{ $json.verification }}"
+            },
+            {
+              "id": "config-4",
+              "name": "artifact_item_id",
+              "type": "string",
+              "value": "={{ $json.artifact_item_id }}"
+            },
+            {
+              "id": "config-5",
+              "name": "artifact_etag",
+              "type": "string",
+              "value": "={{ $json.artifact_etag }}"
+            },
+            {
+              "id": "config-6",
               "name": "writer_contract",
               "type": "string",
               "value": "FENCED_ACTUAL_COMMIT_VERIFY_V1"
             },
             {
-              "id": "config-2",
+              "id": "config-7",
               "name": "lease_required",
               "type": "boolean",
               "value": true
             },
             {
-              "id": "config-3",
+              "id": "config-8",
               "name": "exact_readback_required",
               "type": "boolean",
               "value": true
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

@@ -127,7 +127,7 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
         "identity_derivations": [
             {
                 "source_table": "finance_archive_receipts",
-                "strategy": "hash_concat",
+                "strategy": "versioned_length_prefixed_sha256",
                 "target_key": ["document_id"],
                 "source_fields": [
                     "source_code",
@@ -135,8 +135,8 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                     "source_attachment_id",
                     "source_sha256",
                 ],
-                "prefix": "finance-document-v1",
-                "separator": "|",
+                "version": "finance-document-v1",
+                "length_prefix": "uint64_be",
             },
             {
                 "source_table": "finance_document_operations",
@@ -214,6 +214,7 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "source_table": "finance_actual_verifications",
                 "strategy": "join",
                 "target_key": ["idempotency_key"],
+                "cardinality": "exactly_one",
                 "join_steps": [
                     {
                         "table": "finance_actual_outbox",
@@ -227,6 +228,19 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "source_table": "finance_reconciliations",
                 "strategy": "join",
                 "target_key": ["idempotency_key"],
+                "cardinality": "exactly_one",
+                "join_key": {
+                    "source_fields": [
+                        "source_code",
+                        "period_key",
+                        "actual_verification_sha256",
+                    ],
+                    "target_fields": [
+                        "source_code",
+                        "period_key",
+                        "verification_artifact_sha256",
+                    ],
+                },
                 "join_steps": [
                     {
                         "table": "finance_actual_verifications",
@@ -852,23 +866,68 @@ def validate_identity_derivations(
                     raise MatrixError(f"{target}.{source_table} direct identity fields are incomplete")
                 if any(field not in source_columns[source_table] for field in source_fields):
                     raise MatrixError(f"{target}.{source_table} direct identity references an unknown source field")
-            elif strategy == "hash_concat":
+            elif strategy == "versioned_length_prefixed_sha256":
                 source_fields = derivation.get("source_fields")
                 if not isinstance(source_fields, list) or len(source_fields) < 2:
-                    raise MatrixError(f"{target}.{source_table} hash identity needs at least two source fields")
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash needs at least two source fields"
+                    )
                 if logical_key != ["document_id"]:
-                    raise MatrixError(f"{target}.{source_table} hash identity may only produce document_id")
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash may only produce document_id"
+                    )
                 if any(source_columns[source_table].get(field) != "string" for field in source_fields):
-                    raise MatrixError(f"{target}.{source_table} hash identity requires string source fields")
-                if not isinstance(derivation.get("prefix"), str) or not derivation["prefix"]:
-                    raise MatrixError(f"{target}.{source_table} hash identity needs a non-empty prefix")
-                if not isinstance(derivation.get("separator"), str) or not derivation["separator"]:
-                    raise MatrixError(f"{target}.{source_table} hash identity needs a non-empty separator")
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash requires string source fields"
+                    )
+                if not isinstance(derivation.get("version"), str) or not derivation["version"]:
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash needs a non-empty version"
+                    )
+                if derivation.get("length_prefix") != "uint64_be":
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash must use uint64_be length prefixes"
+                    )
+                if "separator" in derivation or "prefix" in derivation:
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash must not use delimiters or raw prefixes"
+                    )
             elif strategy == "join":
                 steps = derivation.get("join_steps")
                 terminal_fields = derivation.get("terminal_fields")
-                if not isinstance(steps, list) or not steps or not isinstance(terminal_fields, list):
+                if (
+                    not isinstance(steps, list)
+                    or not steps
+                    or not isinstance(terminal_fields, list)
+                    or derivation.get("cardinality") != "exactly_one"
+                ):
                     raise MatrixError(f"{target}.{source_table} join identity is incomplete")
+                join_key = derivation.get("join_key")
+                if join_key is not None:
+                    if not isinstance(join_key, dict):
+                        raise MatrixError(f"{target}.{source_table} join key is malformed")
+                    source_fields = join_key.get("source_fields")
+                    target_fields = join_key.get("target_fields")
+                    target_columns = target_schemas[target]["columns"]
+                    if (
+                        not isinstance(source_fields, list)
+                        or not source_fields
+                        or not isinstance(target_fields, list)
+                        or len(source_fields) != len(target_fields)
+                        or len(set(source_fields)) != len(source_fields)
+                        or len(set(target_fields)) != len(target_fields)
+                        or any(field not in source_columns[source_table] for field in source_fields)
+                        or any(field not in target_columns for field in target_fields)
+                    ):
+                        raise MatrixError(f"{target}.{source_table} join key fields are invalid")
+                    for source_field, target_field in zip(source_fields, target_fields, strict=True):
+                        source_type = source_columns[source_table][source_field]
+                        target_type = target_columns[target_field]["type"]
+                        if source_type != target_type:
+                            raise MatrixError(
+                                f"{target}.{source_table} join key type {source_type!r} cannot populate "
+                                f"{target_field} ({target_type!r})"
+                            )
                 current_table = source_table
                 for step in steps:
                     if not isinstance(step, dict) or step.get("table") not in source_columns:

@@ -117,6 +117,30 @@
         "assignments": {
           "assignments": [
             {
+              "id": "caller-1",
+              "name": "document_id",
+              "type": "string",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "id": "caller-2",
+              "name": "source_sha256",
+              "type": "string",
+              "value": "={{ $json.source_sha256 }}"
+            },
+            {
+              "id": "caller-3",
+              "name": "extracted_text",
+              "type": "string",
+              "value": "={{ $json.extracted_text }}"
+            },
+            {
+              "id": "caller-4",
+              "name": "validation_status",
+              "type": "string",
+              "value": "={{ $json.validation_status }}"
+            },
+            {
               "id": "l1",
               "name": "parser",
               "type": "string",
@@ -127,12 +151,6 @@
               "name": "parser_version",
               "type": "string",
               "value": "n8n-nodes-finance@0.1.0"
-            },
-            {
-              "id": "l3",
-              "name": "validation_status",
-              "type": "string",
-              "value": "passed"
             },
             {
               "id": "l4",
@@ -149,7 +167,7 @@
           ]
         },
         "options": {},
-        "includeOtherFields": true
+        "includeOtherFields": false
       }
     },
     {
@@ -179,25 +197,37 @@
           "assignments": [
             {
               "id": "config-1",
+              "name": "document_id",
+              "type": "string",
+              "value": "={{ $json.document_id }}"
+            },
+            {
+              "id": "config-2",
+              "name": "source_sha256",
+              "type": "string",
+              "value": "={{ $json.source_sha256 }}"
+            },
+            {
+              "id": "config-3",
               "name": "document_profile",
               "type": "string",
               "value": "STATEMENT_PDF_V1"
             },
             {
-              "id": "config-2",
+              "id": "config-4",
               "name": "minimum_characters",
               "type": "number",
               "value": 200
             },
             {
-              "id": "config-3",
+              "id": "config-5",
               "name": "minimum_printable_ratio",
               "type": "number",
               "value": 0.75
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

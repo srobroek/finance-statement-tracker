@@ -96,7 +96,7 @@
     "01-outlook-finance-acquisition.json": {
       "nodes": {
         "Acquisition Parameters": {
-          "caller_fields": ["run_id", "source_code", "folder_id", "senders", "subjects", "window_start", "run_upper_bound", "onedrive_parent_id"],
+          "caller_fields": {"run_id": "string", "source_code": "string", "folder_id": "string", "senders": "array", "subjects": "array", "window_start": "string", "run_upper_bound": "string", "onedrive_parent_id": "string", "max_messages": "number"},
           "fields": {
             "archive_readback_required": {"category": "workflow_local_constant", "type": "boolean"},
             "max_messages": {"category": "workflow_local_input", "type": "number", "expression_allowed": true},
@@ -108,7 +108,7 @@
     "03-shared-statement-pipeline.json": {
       "nodes": {
         "Statement Pipeline Parameters": {
-          "caller_fields": ["run_id", "source_code", "message_id", "document_sha256", "onedrive_item_id", "config_version", "actual_file_id", "account_id", "period_key", "trigger_kind", "attachment_id", "source_attachment_id"],
+          "caller_fields": {"run_id": "string", "source_code": "string", "message_id": "string", "document_sha256": "string", "onedrive_item_id": "string", "config_version": "string", "actual_file_id": "string", "account_id": "string", "period_key": "string", "trigger_kind": "string", "attachment_id": "string", "source_attachment_id": "string"},
           "fields": {
             "actual_writer_workflow": {"category": "workflow_local_constant", "type": "string"},
             "pipeline_contract": {"category": "workflow_local_constant", "type": "string"},
@@ -120,7 +120,7 @@
     "09-ai-proposal.json": {
       "nodes": {
         "Agent Proposal Parameters": {
-          "caller_fields": ["policy_id", "unresolved"],
+          "caller_fields": {"policy_id": "string", "unresolved": "array"},
           "fields": {
             "proposal_only": {"category": "workflow_local_constant", "type": "boolean"},
             "provider_selection": {"category": "workflow_local_constant", "type": "string"},
@@ -132,7 +132,7 @@
     "14-local-pdf-extraction.json": {
       "nodes": {
         "PDF Extraction Parameters": {
-          "caller_fields": ["document_id", "source_sha256"],
+          "caller_fields": {"document_id": "string", "source_sha256": "string"},
           "fields": {
             "document_profile": {"category": "workflow_local_constant", "type": "string"},
             "minimum_characters": {"category": "workflow_local_constant", "type": "number"},
@@ -140,7 +140,7 @@
           }
         },
         "Ready for Deterministic Parser": {
-          "caller_fields": ["document_id", "source_sha256", "text", "validation_status"],
+          "caller_fields": {"document_id": "string", "source_sha256": "string", "extracted_text": "string", "validation_status": "string"},
           "fields": {
             "parser": {"category": "workflow_local_constant", "type": "string"},
             "parser_version": {"category": "workflow_local_constant", "type": "string"},
@@ -154,7 +154,7 @@
     "20-actual-outbox-apply.json": {
       "nodes": {
         "Actual Writer Parameters": {
-          "caller_fields": ["outbox_row", "manifest", "verification", "artifact_item_id", "artifact_etag"],
+          "caller_fields": {"outbox_row": "object", "manifest": "object", "verification": "object", "artifact_item_id": "string", "artifact_etag": "string"},
           "fields": {
             "exact_readback_required": {"category": "workflow_local_constant", "type": "boolean"},
             "lease_required": {"category": "workflow_local_constant", "type": "boolean"},
@@ -166,7 +166,7 @@
     "21-subscription-agent-adapter.json": {
       "nodes": {
         "Subscription Provider Parameters": {
-          "caller_fields": ["agent_provider", "policy_class", "job_id", "idempotency_key", "unresolved"],
+          "caller_fields": {"agent_provider": "string", "policy_class": "string", "job_id": "string", "idempotency_key": "string", "unresolved": "array"},
           "fields": {
             "adapter_contract": {"category": "workflow_local_constant", "type": "string"},
             "claude_auth_mode": {"category": "workflow_local_constant", "type": "string"},
@@ -236,7 +236,7 @@
     "22-onedrive-finance-evidence-root-setup.json": {
       "nodes": {
         "Setup Parameters": {
-          "caller_fields": ["root_folder_id", "run_id"],
+          "caller_fields": {"root_folder_id": "string", "run_id": "string"},
           "fields": {
             "contract_version": {"category": "workflow_local_constant", "type": "string"},
             "create_if_absent": {"category": "workflow_local_constant", "type": "boolean"},

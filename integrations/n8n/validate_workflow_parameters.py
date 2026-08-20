@@ -285,6 +285,7 @@ def scan(
             spec = node_specs.get(node_name)
             assignments = _parameter_assignments(node)
             fields = spec.get("fields", {}) if isinstance(spec, dict) else {}
+            caller_fields = spec.get("caller_fields", {}) if isinstance(spec, dict) else {}
             inventory = {
                 "workflow": workflow,
                 "node": node_name,
@@ -295,8 +296,8 @@ def scan(
             if node.get("credentials"):
                 findings.append(_finding("CREDENTIAL_BINDING_ON_PARAMETER_NODE", workflow=workflow, node=node_name, detail="parameter nodes cannot own n8n credential bindings"))
             parameters = node.get("parameters")
-            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not True:
-                findings.append(_finding("CALLER_FIELDS_NOT_PRESERVED", workflow=workflow, node=node_name, detail="parameter nodes must explicitly merge allowlisted assignments with caller JSON"))
+            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not False:
+                findings.append(_finding("CALLER_PROJECTOR_UNRESTRICTED", workflow=workflow, node=node_name, detail="parameter nodes must preserve caller JSON only through exact assignments"))
             if spec is None:
                 findings.append(_finding("PARAMETER_NODE_UNALLOWLISTED", workflow=workflow, node=node_name, detail="Set/Edit Fields node is not in the ownership contract"))
             assignment_names: set[str] = set()
@@ -307,6 +308,12 @@ def scan(
                     continue
                 assignment_names.add(field)
                 field_spec = fields.get(field)
+                if field in caller_fields:
+                    field_spec = {
+                        "category": "caller_passthrough",
+                        "type": caller_fields[field],
+                        "expression_allowed": True,
+                    }
                 category = field_spec.get("category") if isinstance(field_spec, dict) else ""
                 inventory["fields"].append({"name": field, "category": category, "type": assignment.get("type", "")})
                 value = assignment.get("value")
@@ -336,6 +343,16 @@ def scan(
                             node=node_name,
                             field=field,
                             detail=f"expression reads protected field(s) {protected_fields} from named parameter node(s) {sorted(named_nodes)}",
+                        ))
+                if category == "caller_passthrough":
+                    expected_reference = "={{ $json." + field + " }}"
+                    if value != expected_reference:
+                        findings.append(_finding(
+                            "CALLER_PROJECTOR_NOT_EXACT",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail=f"caller field must be projected only from {expected_reference}",
                         ))
                 if category == "global_generated_contract":
                     source = field_spec.get("source")
@@ -380,9 +397,10 @@ def scan(
                         "duplicate_literal_allowed": bool(field_spec.get("duplicate_literal_allowed", False)),
                     })
             if spec is not None:
-                caller_fields = spec.get("caller_fields", [])
                 if not caller_fields:
                     findings.append(_finding("CALLER_FIELDS_UNDECLARED", workflow=workflow, node=node_name, detail="parameter node must declare the caller fields preserved by its validated merge"))
+                for missing_field in sorted(set(caller_fields) - assignment_names):
+                    findings.append(_finding("CALLER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="caller field is not projected by the parameter node"))
                 for missing_field in sorted(set(fields) - assignment_names):
                     findings.append(_finding("PARAMETER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="allowlisted field is absent from export"))
         for missing_node in sorted(set(node_specs) - seen_nodes):

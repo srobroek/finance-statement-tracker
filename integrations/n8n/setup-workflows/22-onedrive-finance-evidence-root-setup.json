@@ -33,6 +33,8 @@
       "parameters": {
         "assignments": {
           "assignments": [
+            {"id": "22002-caller-1", "name": "root_folder_id", "type": "string", "value": "={{ $json.root_folder_id }}"},
+            {"id": "22002-caller-2", "name": "run_id", "type": "string", "value": "={{ $json.run_id }}"},
             {"id": "22002-a", "name": "contract_version", "type": "string", "value": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP_V1"},
             {"id": "22002-b", "name": "root_folder_name", "type": "string", "value": "Finance Evidence"},
             {"id": "22002-c", "name": "expected_parent_scope", "type": "string", "value": "root"},
@@ -40,7 +42,7 @@
             {"id": "22002-e", "name": "receipt_mode", "type": "string", "value": "REDACTED"}
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

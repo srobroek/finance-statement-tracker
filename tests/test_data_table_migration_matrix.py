@@ -215,10 +215,13 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         )
 
         document_identities = self.matrix["target_schemas"]["finance_documents"]["identity_derivations"]
-        self.assertEqual(
-            next(row for row in document_identities if row["source_table"] == "finance_archive_receipts")["strategy"],
-            "hash_concat",
+        archive_identity = next(
+            row for row in document_identities if row["source_table"] == "finance_archive_receipts"
         )
+        self.assertEqual(archive_identity["strategy"], "versioned_length_prefixed_sha256")
+        self.assertEqual(archive_identity["version"], "finance-document-v1")
+        self.assertEqual(archive_identity["length_prefix"], "uint64_be")
+        self.assertNotIn("separator", archive_identity)
         batch_identities = self.matrix["target_schemas"]["finance_actual_batches"]["identity_derivations"]
         verification_identity = next(
             row for row in batch_identities
@@ -228,6 +231,15 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         reconciliation_identity = next(
             row for row in batch_identities
             if row["source_table"] == "finance_reconciliations"
+        )
+        self.assertEqual(reconciliation_identity["cardinality"], "exactly_one")
+        self.assertEqual(
+            reconciliation_identity["join_key"]["source_fields"],
+            ["source_code", "period_key", "actual_verification_sha256"],
+        )
+        self.assertEqual(
+            reconciliation_identity["join_key"]["target_fields"],
+            ["source_code", "period_key", "verification_artifact_sha256"],
         )
         self.assertEqual(
             reconciliation_identity["join_steps"][0]["right_fields"],
@@ -258,6 +270,17 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
                         column["target_field"] = "verification_artifact_sha256"
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_matrix(duplicate_target)
+
+        # A SHA-256 source is still a string and must never be silently
+        # coerced into the numeric verification version column.
+        wrong_type = deepcopy(self.matrix)
+        for table in wrong_type["tables"]:
+            if table["source_table"] == "finance_reconciliations":
+                for column in table["columns"]:
+                    if column["source_column"] == "actual_verification_sha256":
+                        column["target_field"] = "verification_version"
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(wrong_type)
 
         missing_target = deepcopy(self.matrix)
         del missing_target["target_schemas"]["finance_ai_reviews"]
