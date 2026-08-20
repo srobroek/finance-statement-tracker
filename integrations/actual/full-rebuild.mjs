@@ -45,14 +45,27 @@ function transactionKey(row, index = 0) {
   return importedId || `unimported:${index}`;
 }
 
+function canonicalTransactionIdentity(row) {
+  if (!row) return null;
+  return {
+    account: String(row.account_name ?? ""),
+    date: String(row.date ?? ""),
+    amount: Number(row.amount ?? 0),
+    imported_payee: String(row.imported_payee ?? ""),
+    payee: String(row.payee_name ?? ""),
+    category: String(row.category_name ?? ""),
+    cleared: Boolean(row.cleared),
+  };
+}
+
 function canonicalSubtransaction(child) {
   return {
     amount: Number(child.amount ?? 0),
     date: String(child.date ?? ""),
     notes: String(child.notes ?? ""),
     imported_payee: String(child.imported_payee ?? ""),
-    payee: String(child.payee_name ?? ""),
-    category: String(child.category_name ?? ""),
+    payee: String(child.payee_name ?? child.payee_name_display ?? ""),
+    category: String(child.category_name ?? child.category_name_display ?? ""),
     cleared: Boolean(child.cleared),
     reconciled: Boolean(child.reconciled),
     is_parent: Boolean(child.is_parent),
@@ -79,17 +92,26 @@ function canonicalEconomicRecord(row, index) {
   };
 }
 
-function canonicalManualRecord(row, index) {
+function canonicalManualRecord(row, index, { rowsById = new Map(), schedulesById = new Map() } = {}) {
+  const transferPeer = row.transfer_id ? rowsById.get(row.transfer_id) : undefined;
+  const parent = row.parent_id ? rowsById.get(row.parent_id) : undefined;
+  const schedule = row.schedule ? schedulesById.get(row.schedule) : undefined;
   return {
     key: transactionKey(row, index),
     notes: String(row.notes ?? ""),
     cleared: Boolean(row.cleared),
     reconciled: Boolean(row.reconciled),
-    transfer_linked: Boolean(row.transfer_id),
-    schedule_linked: Boolean(row.schedule),
+    transfer: row.transfer_id
+      ? { present: true, peer: canonicalTransactionIdentity(transferPeer) }
+      : null,
+    schedule: row.schedule
+      ? { present: true, semantic: canonicalSchedule(schedule), missing: !schedule }
+      : null,
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
-    parent_linked: Boolean(row.parent_id),
+    parent: row.parent_id
+      ? { present: true, semantic: canonicalTransactionIdentity(parent), missing: !parent }
+      : null,
     subtransactions: semanticSubtransactions(row.subtransactions),
   };
 }
@@ -99,6 +121,9 @@ function canonicalSchedule(schedule) {
     Object.entries(schedule ?? {})
       .filter(([key]) => !["id", "account", "payee", "category"].includes(key)),
   );
+  semantic.account = String(schedule?.account_name ?? schedule?.account_name_display ?? "");
+  semantic.payee = String(schedule?.payee_name ?? schedule?.payee_name_display ?? "");
+  semantic.category = String(schedule?.category_name ?? schedule?.category_name_display ?? "");
   return stable(semantic);
 }
 
@@ -115,16 +140,27 @@ export function summarizeRebuildState(snapshotDocument, {
   accounts = [],
   balances = [],
   schedules = [],
+  manualCorrectionStatus = "unverified",
 } = {}) {
   const transactions = Array.isArray(snapshotDocument?.transactions)
     ? snapshotDocument.transactions
     : [];
   const active = transactions.filter(row => !row.tombstone);
+  const rowsById = new Map(active.filter(row => row.id).map(row => [row.id, row]));
+  const schedulesById = new Map(schedules.filter(row => row.id).map(row => [row.id, row]));
   const economic = sortByKey(active.map(canonicalEconomicRecord));
-  const manual = sortByKey(active.map(canonicalManualRecord));
+  const manual = sortByKey(active.map((row, index) =>
+    canonicalManualRecord(row, index, { rowsById, schedulesById })));
   const notes = manual.filter(row => row.notes.length > 0);
   const splits = manual.filter(row =>
-    row.is_parent || row.is_child || row.parent_id || row.subtransactions.length > 0);
+    row.is_parent || row.is_child || row.parent || row.subtransactions.length > 0);
+  const splitSemantics = splits.map(row => ({
+    key: row.key,
+    is_parent: row.is_parent,
+    is_child: row.is_child,
+    parent: row.parent,
+    subtransactions: row.subtransactions,
+  }));
   const scheduleRows = schedules
     .filter(row => !row.tombstone)
     .map(canonicalSchedule)
@@ -134,19 +170,16 @@ export function summarizeRebuildState(snapshotDocument, {
     offbudget: Boolean(account.offbudget),
     closed: Boolean(account.closed),
     balance: Number(balances[index] ?? 0),
-  }));
+  })).sort((left, right) => JSON.stringify(stable(left)).localeCompare(JSON.stringify(stable(right))));
   const transactionRows = sortByKey(active.map((row, index) => ({
     ...canonicalEconomicRecord(row, index),
     notes: String(row.notes ?? ""),
     reconciled: Boolean(row.reconciled),
-    transfer_linked: Boolean(row.transfer_id),
-    schedule_linked: Boolean(row.schedule),
+    ...canonicalManualRecord(row, index, { rowsById, schedulesById }),
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
-    parent_linked: Boolean(row.parent_id),
-    subtransactions: semanticSubtransactions(row.subtransactions),
   })));
-  const splitChildren = splits.reduce(
+  const nestedSplitChildren = splits.reduce(
     (total, row) => total + row.subtransactions.length,
     0,
   );
@@ -157,6 +190,10 @@ export function summarizeRebuildState(snapshotDocument, {
   const negativeAmountSum = economic
     .filter(row => row.amount < 0)
     .reduce((total, row) => total + row.amount, 0);
+  const transferLinks = active.filter(row => row.transfer_id).length;
+  const scheduleLinks = active.filter(row => row.schedule).length;
+  const splitParents = active.filter(row => row.is_parent || row.subtransactions?.length).length;
+  const splitChildRows = active.filter(row => row.is_child || row.parent_id).length;
 
   return {
     schema_version: "actual-disposable-replay-state-v1",
@@ -165,9 +202,12 @@ export function summarizeRebuildState(snapshotDocument, {
       tombstones: transactions.length - active.length,
       accounts: accountRows.length,
       schedules: scheduleRows.length,
+      transfer_links: transferLinks,
+      schedule_links: scheduleLinks,
       notes: notes.length,
-      split_parents: splits.filter(row => row.is_parent).length,
-      split_children: splitChildren,
+      reconciled: active.filter(row => row.reconciled).length,
+      split_parents: splitParents,
+      split_children: nestedSplitChildren + splitChildRows,
     },
     economics: {
       amount_sum_minor: amountSum,
@@ -184,8 +224,15 @@ export function summarizeRebuildState(snapshotDocument, {
       economic_fields_sha256: sha256(economic),
       manual_state_sha256: sha256(manual),
       notes_sha256: sha256(notes),
-      splits_sha256: sha256(splits),
+      splits_sha256: sha256(splitSemantics),
       schedules_sha256: sha256(scheduleRows),
+    },
+    coverage: {
+      manual_correction: manualCorrectionStatus,
+      transfers: transferLinks ? "verified" : "not-applicable",
+      splits: splitParents || splitChildRows ? "verified" : "not-applicable",
+      schedules: scheduleLinks ? "verified" : "not-applicable",
+      manual_state: active.length ? "verified" : "not-applicable",
     },
   };
 }
@@ -195,7 +242,10 @@ const replayChecks = [
   ["counts.tombstones", state => state.counts.tombstones],
   ["counts.accounts", state => state.counts.accounts],
   ["counts.schedules", state => state.counts.schedules],
+  ["counts.transfer_links", state => state.counts.transfer_links],
+  ["counts.schedule_links", state => state.counts.schedule_links],
   ["counts.notes", state => state.counts.notes],
+  ["counts.reconciled", state => state.counts.reconciled],
   ["counts.split_parents", state => state.counts.split_parents],
   ["counts.split_children", state => state.counts.split_children],
   ["economics.amount_sum_minor", state => state.economics.amount_sum_minor],
@@ -212,7 +262,7 @@ const replayChecks = [
   ["hashes.schedules_sha256", state => state.hashes.schedules_sha256],
 ];
 
-export function compareRebuildStates(first, replay) {
+export function compareRebuildStates(first, replay, { enforceCoverage = false } = {}) {
   if (!first || !replay) throw new Error("Both first and replay rebuild states are required");
   const differences = [];
   for (const [field, read] of replayChecks) {
@@ -220,18 +270,73 @@ export function compareRebuildStates(first, replay) {
     const observed = read(replay);
     if (expected !== observed) differences.push({ field, expected, observed });
   }
+  const blockers = [];
+  if (enforceCoverage) {
+    for (const dimension of ["manual_correction", "transfers", "splits", "schedules", "manual_state"]) {
+      const firstCoverage = first.coverage?.[dimension] ?? "missing";
+      const replayCoverage = replay.coverage?.[dimension] ?? "missing";
+      if (firstCoverage === "not-applicable" || replayCoverage === "not-applicable") {
+        blockers.push(`${dimension}:not-applicable`);
+      } else if (firstCoverage !== "verified" || replayCoverage !== "verified") {
+        blockers.push(`${dimension}:unverified`);
+      }
+    }
+  }
   return {
-    status: differences.length ? "FAIL" : "PASS",
+    status: differences.length ? "FAIL" : blockers.length ? "BLOCKED" : "PASS",
     checked: replayChecks.map(([field]) => field),
     differences,
+    blockers,
   };
 }
 
-export async function captureRebuildState(snapshotDocument, api = actual) {
-  const accounts = await api.getAccounts();
+async function enrichSnapshotChildSemantics(snapshotDocument, api, references = {}) {
+  const [categories, payees] = await Promise.all([
+    references.categories ?? (typeof api.getCategories === "function" ? api.getCategories() : []),
+    references.payees ?? (typeof api.getPayees === "function" ? api.getPayees() : []),
+  ]);
+  const categoryNames = new Map((categories ?? []).map(row => [row.id, row.name]));
+  const payeeNames = new Map((payees ?? []).map(row => [row.id, row.name]));
+  return {
+    ...snapshotDocument,
+    transactions: (snapshotDocument?.transactions ?? []).map(row => ({
+      ...row,
+      subtransactions: (row.subtransactions ?? []).map(child => ({
+        ...child,
+        payee_name: child.payee_name ?? payeeNames.get(child.payee) ?? "",
+        category_name: child.category_name ?? categoryNames.get(child.category) ?? "",
+      })),
+    })),
+  };
+}
+
+function enrichScheduleSemantics(schedules, accounts, categories, payees) {
+  const accountNames = new Map((accounts ?? []).map(row => [row.id, row.name]));
+  const categoryNames = new Map((categories ?? []).map(row => [row.id, row.name]));
+  const payeeNames = new Map((payees ?? []).map(row => [row.id, row.name]));
+  return (schedules ?? []).map(schedule => ({
+    ...schedule,
+    account_name: schedule.account_name ?? accountNames.get(schedule.account) ?? "",
+    category_name: schedule.category_name ?? categoryNames.get(schedule.category) ?? "",
+    payee_name: schedule.payee_name ?? payeeNames.get(schedule.payee) ?? "",
+  }));
+}
+
+export async function captureRebuildState(snapshotDocument, api = actual, options = {}) {
+  const [accounts, categories, payees, schedules] = await Promise.all([
+    api.getAccounts(),
+    typeof api.getCategories === "function" ? api.getCategories() : [],
+    typeof api.getPayees === "function" ? api.getPayees() : [],
+    api.getSchedules(),
+  ]);
+  const enrichedSnapshot = await enrichSnapshotChildSemantics(snapshotDocument, api, { categories, payees });
   const balances = await Promise.all(accounts.map(account => api.getAccountBalance(account.id)));
-  const schedules = await api.getSchedules();
-  return summarizeRebuildState(snapshotDocument, { accounts, balances, schedules });
+  return summarizeRebuildState(enrichedSnapshot, {
+    accounts,
+    balances,
+    schedules: enrichScheduleSemantics(schedules, accounts, categories, payees),
+    ...options,
+  });
 }
 
 function assertWithinRoot(root, candidate) {
@@ -340,9 +445,12 @@ export function validateRebuildManifestCorpus(manifestPayloads) {
   return [...importedIds.keys()];
 }
 
+const disposableManualCorrectionNote = "#manual | Memo: disposable manual correction";
+
 export async function applyDisposableManualCorrections(snapshotDocument, api = actual) {
   const target = (snapshotDocument?.transactions ?? [])
-    .find(row => !row.tombstone && row.id && row.imported_id);
+    .find(row => !row.tombstone && row.id && row.imported_id &&
+      (String(row.notes ?? "") !== disposableManualCorrectionNote || !row.reconciled));
   if (!target) {
     return {
       status: "not-applicable",
@@ -355,7 +463,7 @@ export async function applyDisposableManualCorrections(snapshotDocument, api = a
     };
   }
   const fields = {
-    notes: "#manual | Memo: disposable manual correction",
+    notes: disposableManualCorrectionNote,
     reconciled: true,
   };
   if (target.transfer_id) fields.transfer_id = target.transfer_id;
@@ -364,6 +472,26 @@ export async function applyDisposableManualCorrections(snapshotDocument, api = a
     fields.subtransactions = target.subtransactions;
   }
   await api.updateTransaction(target.id, fields);
+  if (typeof api.getTransactions !== "function") {
+    throw new Error("Disposable manual correction lacks authoritative readback support");
+  }
+  const rows = await api.getTransactions(target.account, target.date, target.date);
+  const observed = (rows ?? []).find(row =>
+    (target.imported_id && row.imported_id === target.imported_id) || row.id === target.id);
+  if (!observed) throw new Error("Disposable manual correction authoritative readback was empty");
+  const readbackDifferences = [];
+  if (String(observed.notes ?? "") !== fields.notes) readbackDifferences.push("notes");
+  if (Boolean(observed.reconciled) !== true) readbackDifferences.push("reconciled");
+  for (const field of ["transfer_id", "schedule"]) {
+    if (Boolean(observed[field]) !== Boolean(target[field])) readbackDifferences.push(field);
+  }
+  if (JSON.stringify(semanticSubtransactions(observed.subtransactions)) !==
+      JSON.stringify(semanticSubtransactions(target.subtransactions))) {
+    readbackDifferences.push("subtransactions");
+  }
+  if (readbackDifferences.length) {
+    throw new Error(`Disposable manual correction readback drift: ${readbackDifferences.join(",")}`);
+  }
   return {
     status: "applied",
     changed: 1,
@@ -372,6 +500,50 @@ export async function applyDisposableManualCorrections(snapshotDocument, api = a
     transfer_links: target.transfer_id ? 1 : 0,
     split_states: target.subtransactions?.length ? 1 : 0,
     schedule_links: target.schedule ? 1 : 0,
+    readback: { status: "PASS", checked: ["notes", "reconciled", "transfer", "schedule", "subtransactions"] },
+  };
+}
+
+export function verifyManualCorrectionDelta(baseline, corrected, manualCorrections) {
+  const differences = [];
+  const blockers = [];
+  if (manualCorrections?.status !== "applied") {
+    blockers.push("manual_correction:not-applied");
+  }
+  for (const field of [
+    "counts.transactions",
+    "counts.tombstones",
+    "counts.accounts",
+    "counts.schedules",
+    "counts.transfer_links",
+    "counts.schedule_links",
+    "counts.split_parents",
+    "counts.split_children",
+    "economics.amount_sum_minor",
+    "economics.positive_amount_sum_minor",
+    "economics.negative_amount_sum_minor",
+    "balances.account_count",
+    "balances.balance_sum_minor",
+    "balances.balances_sha256",
+    "hashes.economic_fields_sha256",
+    "hashes.splits_sha256",
+    "hashes.schedules_sha256",
+  ]) {
+    const read = field.split(".").reduce((value, key) => value?.[key], baseline);
+    const observed = field.split(".").reduce((value, key) => value?.[key], corrected);
+    if (read !== observed) differences.push({ field, expected: read, observed });
+  }
+  if (baseline.hashes.manual_state_sha256 === corrected.hashes.manual_state_sha256) {
+    differences.push({ field: "hashes.manual_state_sha256", expected: "changed", observed: "unchanged" });
+  }
+  if (baseline.hashes.notes_sha256 === corrected.hashes.notes_sha256) {
+    differences.push({ field: "hashes.notes_sha256", expected: "changed", observed: "unchanged" });
+  }
+  return {
+    status: differences.length ? "FAIL" : blockers.length ? "BLOCKED" : "PASS",
+    checked: ["authoritative_readback", "manual_delta", "economic_invariants", "link_invariants"],
+    differences,
+    blockers,
   };
 }
 
@@ -435,7 +607,14 @@ export async function runDisposableFullRebuild({
     const baselineState = await captureRebuildState(firstSnapshot);
     const manualCorrections = await applyDisposableManualCorrections(firstSnapshot);
     const correctedSnapshot = await snapshot(start, end);
-    const correctedState = await captureRebuildState(correctedSnapshot);
+    const correctedState = await captureRebuildState(correctedSnapshot, actual, {
+      manualCorrectionStatus: manualCorrections.status === "applied" ? "verified" : "not-applicable",
+    });
+    const manualDelta = verifyManualCorrectionDelta(
+      baselineState,
+      correctedState,
+      manualCorrections,
+    );
     for (const [index, manifest] of manifestPayloads.entries()) {
       const payload = manifest.payload;
       if (isVerifiedEmptyManifest(payload)) continue;
@@ -446,8 +625,17 @@ export async function runDisposableFullRebuild({
       imports[index].replay_verification = replay.verification;
     }
     const rebuiltSnapshot = await snapshot(start, end);
-    const replayState = await captureRebuildState(rebuiltSnapshot);
-    const replayVerification = compareRebuildStates(correctedState, replayState);
+    const replayState = await captureRebuildState(rebuiltSnapshot, actual, {
+      manualCorrectionStatus: manualCorrections.status === "applied" ? "verified" : "not-applicable",
+    });
+    const replayVerification = compareRebuildStates(correctedState, replayState, {
+      enforceCoverage: true,
+    });
+    if (manualDelta.status !== "PASS") {
+      replayVerification.status = manualDelta.status === "FAIL" ? "FAIL" : "BLOCKED";
+      replayVerification.blockers.push(...manualDelta.blockers);
+      replayVerification.differences.push(...manualDelta.differences);
+    }
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
     await fs.writeFile(snapshotPath, `${JSON.stringify(rebuiltSnapshot, null, 2)}\n`, "utf8");
     result = {
@@ -461,6 +649,7 @@ export async function runDisposableFullRebuild({
         first: correctedState,
         baseline: baselineState,
         manual_corrections: manualCorrections,
+        manual_delta: manualDelta,
         replay: replayState,
         verification: replayVerification,
       },
@@ -469,7 +658,10 @@ export async function runDisposableFullRebuild({
     await fs.mkdir(path.dirname(resultPath), { recursive: true });
     await fs.writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
     if (replayVerification.status !== "PASS") {
-      throw new Error(`Disposable replay drift: ${JSON.stringify(replayVerification.differences)}`);
+      throw new Error(`Disposable replay drift: ${JSON.stringify({
+        differences: replayVerification.differences,
+        blockers: replayVerification.blockers,
+      })}`);
     }
     return result;
   } finally {

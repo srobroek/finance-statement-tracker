@@ -11,6 +11,7 @@ import {
   loadFullRebuildManifests,
   applyDisposableManualCorrections,
   summarizeRebuildState,
+  verifyManualCorrectionDelta,
   validateRebuildManifestCorpus,
   validateRebuildManifestPayload,
 } from "./full-rebuild.mjs";
@@ -68,30 +69,55 @@ test("full rebuild accepts only balance-tied review-free empty statements", () =
 function replayFixture() {
   return {
     snapshot: {
-      transactions: [{
-        id: "provider-row-first",
-        account_name: "Provider Card",
-        date: "2026-08-01",
-        amount: -12500,
-        imported_id: "provider:transaction:1",
-        imported_payee: "Merchant",
-        payee_name: "Merchant",
-        category_name: "Shopping",
-        notes: "source:statement | #manual",
-        cleared: true,
-        reconciled: true,
-        transfer_id: "provider-transfer-1",
-        schedule: "provider-schedule-1",
-        is_parent: true,
-        is_child: false,
-        parent_id: null,
-        subtransactions: [{
-          id: "provider-child-1",
-          amount: -10000,
-          notes: "source:statement | #manual",
+      transactions: [
+        {
+          id: "provider-row-first",
+          account: "provider-account-first",
+          account_name: "Provider Card",
+          date: "2026-08-01",
+          amount: -12500,
+          imported_id: "provider:transaction:1",
+          imported_payee: "Merchant",
+          payee_name: "Merchant",
           category_name: "Shopping",
-        }],
-      }],
+          notes: "source:statement | #manual",
+          cleared: true,
+          reconciled: true,
+          transfer_id: "provider-transfer-peer-first",
+          schedule: "provider-schedule-1",
+          is_parent: true,
+          is_child: false,
+          parent_id: null,
+          subtransactions: [{
+            id: "provider-child-1",
+            amount: -10000,
+            notes: "source:statement | #manual",
+            imported_payee: "Merchant",
+            payee_name: "Merchant",
+            category_name: "Shopping",
+          }],
+        },
+        {
+          id: "provider-transfer-peer-first",
+          account: "provider-account-first",
+          account_name: "Provider Card",
+          date: "2026-08-01",
+          amount: 12500,
+          imported_id: "provider:transaction:transfer-peer",
+          imported_payee: "Transfer",
+          payee_name: "Transfer",
+          category_name: "",
+          notes: "source:statement",
+          cleared: true,
+          reconciled: false,
+          transfer_id: "provider-row-first",
+          schedule: null,
+          is_parent: false,
+          is_child: false,
+          parent_id: null,
+          subtransactions: [],
+        },
+      ],
     },
     accounts: [{ id: "provider-account-first", name: "Provider Card", offbudget: false, closed: false }],
     balances: [-12500],
@@ -101,7 +127,10 @@ function replayFixture() {
 
 test("full rebuild exact replay passes with changed provider row identifiers", () => {
   const fixture = replayFixture();
-  const first = summarizeRebuildState(fixture.snapshot, fixture);
+  const first = summarizeRebuildState(fixture.snapshot, {
+    ...fixture,
+    manualCorrectionStatus: "verified",
+  });
   const replayInput = {
     ...fixture,
     accounts: [{ ...fixture.accounts[0], id: "provider-account-replay" }],
@@ -109,11 +138,16 @@ test("full rebuild exact replay passes with changed provider row identifiers", (
       transactions: [{
         ...fixture.snapshot.transactions[0],
         id: "provider-row-replay",
+        transfer_id: "provider-transfer-peer-replay",
         schedule: "provider-schedule-replay",
         subtransactions: [{
           ...fixture.snapshot.transactions[0].subtransactions[0],
           id: "provider-child-replay",
         }],
+      }, {
+        ...fixture.snapshot.transactions[1],
+        id: "provider-transfer-peer-replay",
+        transfer_id: "provider-row-replay",
       }],
     },
     schedules: [{
@@ -122,12 +156,70 @@ test("full rebuild exact replay passes with changed provider row identifiers", (
       account: "provider-account-replay",
     }],
   };
-  const replay = summarizeRebuildState(replayInput.snapshot, replayInput);
+  const replay = summarizeRebuildState(replayInput.snapshot, {
+    ...replayInput,
+    manualCorrectionStatus: "verified",
+  });
   assert.equal(compareRebuildStates(first, replay).status, "PASS");
+  assert.equal(compareRebuildStates(first, replay, { enforceCoverage: true }).status, "PASS");
   const receipt = JSON.stringify(first);
   assert.ok(!receipt.includes("provider-account-first"));
   assert.ok(!receipt.includes("provider-row-first"));
   assert.ok(!receipt.includes("provider:transaction:1"));
+});
+
+test("full rebuild uses semantic link endpoints and child fields, not provider IDs", () => {
+  const fixture = replayFixture();
+  const first = summarizeRebuildState(fixture.snapshot, fixture);
+  const rawIdOnly = structuredClone(fixture.snapshot);
+  rawIdOnly.transactions[0].subtransactions[0].id = "provider-child-another-id";
+  assert.equal(compareRebuildStates(first, summarizeRebuildState(rawIdOnly, fixture)).status, "PASS");
+
+  const rewired = structuredClone(fixture.snapshot);
+  rewired.transactions[0].transfer_id = "provider-transfer-missing";
+  const transferVerification = compareRebuildStates(first, summarizeRebuildState(rewired, fixture));
+  assert.equal(transferVerification.status, "FAIL");
+  assert.ok(transferVerification.differences.some(row => row.field === "hashes.manual_state_sha256"));
+
+  const scheduleRewired = structuredClone(fixture);
+  scheduleRewired.schedules.push({
+    id: "provider-schedule-other",
+    name: "Different schedule",
+    account: "provider-account-first",
+  });
+  scheduleRewired.snapshot.transactions[0].schedule = "provider-schedule-other";
+  const scheduleVerification = compareRebuildStates(
+    first,
+    summarizeRebuildState(scheduleRewired.snapshot, scheduleRewired),
+  );
+  assert.equal(scheduleVerification.status, "FAIL");
+  assert.ok(scheduleVerification.differences.some(row => row.field === "hashes.manual_state_sha256"));
+
+  const parentRewired = structuredClone(fixture.snapshot);
+  parentRewired.transactions[0].parent_id = "provider-transfer-peer-first";
+  parentRewired.transactions[0].is_child = true;
+  const parentVerification = compareRebuildStates(
+    first,
+    summarizeRebuildState(parentRewired, fixture),
+  );
+  assert.equal(parentVerification.status, "FAIL");
+  assert.ok(parentVerification.differences.some(row => row.field === "hashes.splits_sha256"));
+
+  const childChanged = structuredClone(fixture.snapshot);
+  childChanged.transactions[0].subtransactions[0].category_name = "Travel";
+  const childVerification = compareRebuildStates(first, summarizeRebuildState(childChanged, fixture));
+  assert.equal(childVerification.status, "FAIL");
+  assert.ok(childVerification.differences.some(row => row.field === "hashes.splits_sha256"));
+});
+
+test("full rebuild blocks acceptance when required dimensions are not applicable", () => {
+  const empty = summarizeRebuildState({ transactions: [] }, { accounts: [], balances: [], schedules: [] });
+  const verification = compareRebuildStates(empty, empty, { enforceCoverage: true });
+  assert.equal(verification.status, "BLOCKED");
+  assert.ok(verification.blockers.includes("transfers:not-applicable"));
+  assert.ok(verification.blockers.includes("splits:not-applicable"));
+  assert.ok(verification.blockers.includes("schedules:not-applicable"));
+  assert.ok(verification.blockers.includes("manual_state:not-applicable"));
 });
 
 test("full rebuild rejects missing and duplicate imported IDs before any import", () => {
@@ -222,13 +314,42 @@ test("capture rebuild state reads account balances and schedules through the can
   assert.deepEqual(calls, ["balance:provider-account-first"]);
 });
 
+test("capture rebuild state enriches child payee and category semantics", async () => {
+  const fixture = replayFixture();
+  const raw = structuredClone(fixture.snapshot);
+  const child = raw.transactions[0].subtransactions[0];
+  delete child.payee_name;
+  delete child.category_name;
+  child.payee = "provider-payee-1";
+  child.category = "provider-category-1";
+  const api = {
+    getAccounts: async () => fixture.accounts,
+    getAccountBalance: async () => fixture.balances[0],
+    getSchedules: async () => fixture.schedules,
+    getPayees: async () => [{ id: "provider-payee-1", name: "Merchant" }],
+    getCategories: async () => [{ id: "provider-category-1", name: "Shopping" }],
+  };
+  const first = await captureRebuildState(raw, api);
+  const replayRaw = structuredClone(raw);
+  replayRaw.transactions[0].subtransactions[0].payee = "provider-payee-replay";
+  replayRaw.transactions[0].subtransactions[0].category = "provider-category-replay";
+  const replay = await captureRebuildState(replayRaw, {
+    ...api,
+    getPayees: async () => [{ id: "provider-payee-replay", name: "Merchant" }],
+    getCategories: async () => [{ id: "provider-category-replay", name: "Shopping" }],
+  });
+  assert.equal(compareRebuildStates(first, replay).status, "PASS");
+});
+
 test("full rebuild applies executable manual corrections while retaining links", async () => {
   const fixture = replayFixture();
   let updated;
   const result = await applyDisposableManualCorrections(fixture.snapshot, {
     updateTransaction: async (id, fields) => {
       updated = { id, fields };
+      Object.assign(fixture.snapshot.transactions[0], fields);
     },
+    getTransactions: async () => [fixture.snapshot.transactions[0]],
   });
   assert.equal(result.status, "applied");
   assert.equal(result.notes, 1);
@@ -239,7 +360,24 @@ test("full rebuild applies executable manual corrections while retaining links",
   assert.equal(updated.id, "provider-row-first");
   assert.equal(updated.fields.notes, "#manual | Memo: disposable manual correction");
   assert.equal(updated.fields.reconciled, true);
-  assert.equal(updated.fields.transfer_id, "provider-transfer-1");
+  assert.equal(updated.fields.transfer_id, "provider-transfer-peer-first");
   assert.equal(updated.fields.schedule, "provider-schedule-1");
   assert.equal(updated.fields.subtransactions.length, 1);
+  assert.equal(result.readback.status, "PASS");
+});
+
+test("full rebuild proves manual correction delta preserves economics and links", () => {
+  const fixture = replayFixture();
+  const baseline = summarizeRebuildState(fixture.snapshot, fixture);
+  const correctedSnapshot = structuredClone(fixture.snapshot);
+  correctedSnapshot.transactions[0].notes = "#manual | Memo: disposable manual correction";
+  const corrected = summarizeRebuildState(correctedSnapshot, {
+    ...fixture,
+    manualCorrectionStatus: "verified",
+  });
+  const delta = verifyManualCorrectionDelta(baseline, corrected, {
+    status: "applied",
+    readback: { status: "PASS" },
+  });
+  assert.equal(delta.status, "PASS");
 });
