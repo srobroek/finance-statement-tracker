@@ -226,6 +226,9 @@ def scan(
             parameter_nodes.append(inventory)
             if node.get("credentials"):
                 findings.append(_finding("CREDENTIAL_BINDING_ON_PARAMETER_NODE", workflow=workflow, node=node_name, detail="parameter nodes cannot own n8n credential bindings"))
+            parameters = node.get("parameters")
+            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not False:
+                findings.append(_finding("PARAMETER_PASSTHROUGH_ENABLED", workflow=workflow, node=node_name, detail="parameter nodes must emit only their allowlisted assignments"))
             if spec is None:
                 findings.append(_finding("PARAMETER_NODE_UNALLOWLISTED", workflow=workflow, node=node_name, detail="Set/Edit Fields node is not in the ownership contract"))
             assignment_names: set[str] = set()
