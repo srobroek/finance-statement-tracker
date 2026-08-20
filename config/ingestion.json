@@ -27,7 +27,16 @@
     "statement_pdfs": {
       "mode": "CARD_SPECIFIC_MONTHLY_JOB",
       "source_registry": "config/statement-sources.json",
-      "selection": "LATEST_PER_CARD_AND_EXPECTED_CYCLE"
+      "selection": "LATEST_PER_CARD_AND_EXPECTED_CYCLE",
+      "mail_acquisition": {
+        "enumeration_workflow": "OUTLOOK_MESSAGE_SWEEP",
+        "archive_workflow": "OUTLOOK_FINANCE_ACQUISITION",
+        "enumerate_once": true,
+        "immutable_identity": ["message_id", "attachment_id"],
+        "attachment_verification_barrier": "REQUIRED",
+        "inline_non_pdf_disposition": "ARCHIVED_ONLY",
+        "replay_disposition": "NO_OP"
+      }
     }
   },
   "browser": {

@@ -1,5 +1,7 @@
 import unittest
 from datetime import datetime
+import json
+from pathlib import Path
 
 from finance_tracker.mail_ingestion import (
     build_ingest_commit_payload,
@@ -9,6 +11,15 @@ from finance_tracker.mail_ingestion import (
 
 
 class MailIngestionTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def workflow(self, name):
+        return json.loads(
+            (self.ROOT / "integrations" / "n8n" / "workflows" / name).read_text(
+                encoding="utf-8"
+            )
+        )
+
     def config(self):
         return {
             "outlook": {
@@ -93,6 +104,76 @@ class MailIngestionTests(unittest.TestCase):
                     "cursor_committed": False,
                 },
             )
+
+    def test_w12_enumerates_once_and_hands_immutable_inventory_to_w01(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        self.assertTrue(workflow["meta"]["enumerateExactlyOnce"])
+        self.assertEqual(
+            workflow["meta"]["immutableMessageAttachmentIdentity"],
+            ["message_id", "attachment_id"],
+        )
+        self.assertEqual(
+            nodes["List Immutable Message Attachments"]["parameters"]["resource"],
+            "messageAttachment",
+        )
+        self.assertIn("IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE", nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"])
+        self.assertIn("DUPLICATE_ATTACHMENT_ID", nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"])
+        self.assertEqual(
+            workflow["connections"]["Verify Receipt and Return Sweep"]["main"][0][0]["node"],
+            "Attach Immutable Inventory to Sweep",
+        )
+        self.assertEqual(
+            workflow["connections"]["Attach Immutable Inventory to Sweep"]["main"][0][0]["node"],
+            "Archive Enumerated Messages in W01",
+        )
+
+    def test_w01_archive_barrier_covers_zero_one_and_many_attachments(self):
+        workflow = self.workflow("01-outlook-finance-acquisition.json")
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        connections = workflow["connections"]
+        self.assertTrue(workflow["meta"]["immutableEnumerationInputRequired"])
+        self.assertEqual(
+            connections["Has Immutable Enumeration"]["main"][0][0]["node"],
+            "Shape Immutable Archive Input",
+        )
+        self.assertEqual(
+            connections["Has Immutable Enumeration"]["main"][1][0]["node"],
+            "Read Microsoft Graph Circuit",
+        )
+        self.assertIn("attachment_inventory", nodes["Expand Enumerated Attachment Items"]["parameters"]["jsCode"])
+        self.assertIn("ARCHIVED_ONLY", nodes["Record Enumerated Attachment Disposition"]["parameters"]["columns"]["value"]["error_class"])
+        self.assertIn("source_message_id", nodes["Upsert Enumerated Archive Receipt"]["parameters"]["filters"]["conditions"][1]["keyValue"])
+        self.assertIn("replay_noop_key", nodes["Verify Enumerated Archive Receipt"]["parameters"]["jsCode"])
+        barrier_code = nodes["Attachment Verification Barrier"]["parameters"]["jsCode"]
+        self.assertIn("ATTACHMENT_ARCHIVE_MISSING", barrier_code)
+        self.assertIn("ATTACHMENT_ARCHIVE_COUNT_MISMATCH", barrier_code)
+        self.assertEqual(
+            connections["Record Enumerated Attachment Disposition"]["main"][0][0]["node"],
+            "Merge Archive Verification Inputs",
+        )
+        self.assertEqual(
+            connections["Record Email PDF Render Requirement"]["main"][0][0]["node"],
+            "Merge Archive Verification Inputs",
+        )
+
+    def test_replay_and_failure_barriers_keep_cursor_after_archive_proof(self):
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        w12_nodes = {node["name"]: node for node in w12["nodes"]}
+        w01_nodes = {node["name"]: node for node in w01["nodes"]}
+        self.assertEqual(w12["meta"]["attachmentVerificationBarrier"], "REQUIRED_BEFORE_CURSOR_COMMIT")
+        self.assertEqual(
+            w12["connections"]["Verify Downstream Persistence Proof"]["main"][0][0]["node"],
+            "Require Verified Attachment Barrier",
+        )
+        self.assertIn("DOWNSTREAM_ARCHIVE_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
+        self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
+        cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
+        self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
+        self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
+        self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
+        self.assertIn("Archive Enumerated Attachment in OneDrive", w01["connections"])
 
 
 if __name__ == "__main__":
