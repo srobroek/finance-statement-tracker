@@ -10,6 +10,7 @@ readonly workflow_scope="${FINANCE_MCP_WORKFLOW_SCOPE:-}"
 readonly mutation_gate="${FINANCE_MCP_N8N_MUTATION_GATE:-}"
 readonly probe_gate="${FINANCE_MCP_PROBE_GATE:-}"
 readonly tmp_root="${FINANCE_MCP_PROOF_TMPDIR:-/dev/shm}"
+readonly simulated="${FINANCE_MCP_SIMULATED:-false}"
 
 [[ "${FINANCE_N8N_MCP_DISPOSABLE_ACK:-}" == "${required_ack}" ]] || {
   echo "FINANCE_N8N_MCP_DISPOSABLE_ACK=${required_ack} is required" >&2
@@ -66,23 +67,56 @@ run_probe() {
   }
 }
 
+verify_clean_readback() {
+  python3 - "${run_root}/readback-clean.status" <<'PY'
+import json
+import pathlib
+import sys
+
+expected = {
+    "status": "CLEAN",
+    "scope": "W15_DISPOSABLE_ONLY",
+    "counts": {"credentials": 0, "owners": 0, "workflows": 0, "webhooks": 0, "executions": 0},
+    "idsRecorded": False,
+    "secretValueRecorded": False,
+}
+try:
+    observed = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+except (FileNotFoundError, json.JSONDecodeError) as error:
+    raise SystemExit(f"teardown readback is missing or invalid: {error}")
+if observed != expected:
+    raise SystemExit("teardown readback did not prove the exact zero boundary")
+PY
+}
+
 cleanup() {
   local status=$?
-  trap - EXIT
+  local teardown_ok=true
+  trap - EXIT INT TERM
   set +e
   if [[ "${activation_started}" == "true" ]]; then
-    if ! run_gate deactivate; then status=1; fi
-    if ! run_gate unpublish; then status=1; fi
-    if ! run_gate remove-webhook; then status=1; fi
-    if ! run_gate remove-disposable-rows; then status=1; fi
-    if ! run_gate readback-clean; then status=1; fi
-    cleanup_verified=true
+    if ! run_gate deactivate; then teardown_ok=false; status=1; fi
+    if ! run_gate unpublish; then teardown_ok=false; status=1; fi
+    if ! run_gate remove-webhook; then teardown_ok=false; status=1; fi
+    if ! run_gate remove-disposable-rows; then teardown_ok=false; status=1; fi
+    if ! run_gate readback-clean || ! verify_clean_readback; then
+      teardown_ok=false
+      status=1
+    fi
+    if [[ "${teardown_ok}" == "true" ]]; then cleanup_verified=true; fi
   fi
-  rm -f -- "${run_root}"/*
-  rmdir -- "${run_root}" 2>/dev/null || true
+  if ! rm -f -- "${run_root}"/*; then status=1; fi
+  if ! rmdir -- "${run_root}" 2>/dev/null; then status=1; fi
   unset FINANCE_MCP_PROBE_CASE FINANCE_MCP_ACTION FINANCE_MCP_OUTPUT
   if [[ "${cleanup_verified}" != "true" && "${status}" == "0" ]]; then
     status=1
+  fi
+  if [[ "${status}" == "0" ]]; then
+    if [[ "${simulated}" == "true" ]]; then
+      printf '%s\n' '{"status":"SIMULATED","runtimeEvidence":false,"scope":"W15_SPEC_ONLY","path_match":true,"mcp_auth":"accepted","negative_probes":"rejected","cleanup":"READBACK_VERIFIED","values":"REDACTED","ids":"REDACTED"}'
+    else
+      printf '%s\n' '{"status":"VERIFIED","runtimeEvidence":true,"scope":"W15_DISPOSABLE_ONLY","path_match":true,"mcp_auth":"accepted","negative_probes":"rejected","cleanup":"READBACK_VERIFIED","values":"REDACTED","ids":"REDACTED"}'
+    fi
   fi
   exit "${status}"
 }
@@ -96,6 +130,3 @@ run_probe positive 0
 run_probe wrong-mcp-secret 1
 run_probe wrong-cloudflare-authority 1
 run_probe runner-bearer 1
-
-# The EXIT trap performs every teardown mutation, including interrupted probes.
-printf '%s\n' '{"status":"VERIFIED","scope":"W15_DISPOSABLE_ONLY","path_match":true,"mcp_auth":"accepted","negative_probes":"rejected","cleanup":"REQUIRED_ON_EXIT","values":"REDACTED","ids":"REDACTED"}'
