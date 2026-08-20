@@ -126,6 +126,9 @@ class BrowserRecipeTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('SELECT field: portfolio_ref, option: "<portfolio_ref>"', recipe)
         self.assertIn('SELECT field: as_of_date, option: "<as_of_date>"', recipe)
+        self.assertIn("Stop at 100 pages", recipe)
+        self.assertIn("pagination_exhausted", recipe)
+        self.assertIn("duplicate stable instrument IDs are rejected", recipe)
         self.assertNotIn("For each Invest account", recipe)
 
     def test_account_last4_must_be_exactly_four_digits(self) -> None:

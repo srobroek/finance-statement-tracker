@@ -44,10 +44,15 @@ Each registered provider declares `HEADED_ON_DEMAND` execution,
 8. Send the capture JSON as binary `data` with an envelope containing only
    `artifact_id` and the source `expected_sha256` from the capture artifact to the inactive
    `INTERACTIVE_ARTIFACT_HANDOFF` workflow.
-9. n8n uploads the bounded binary to the configured Finance Evidence root,
-   writes and reads back `finance_document_operations`, validates with AJV,
-   then dispatches to the inactive `SHARED_STATEMENT_PIPELINE` route.
-10. Review n8n validation, enrichment, transaction matching, retry state,
+9. n8n parses the binary, rejects forbidden fields, validates the canonical
+   schema with AJV, and checks the artifact identity before any upload.
+10. A new artifact is uploaded to the configured Finance Evidence root. An
+    exact duplicate reuses its durable receipt without uploading again. A
+    changed hash for an existing `artifact_id` fails with an exact conflict.
+11. n8n writes and reads back `finance_document_operations`, verifies the
+    archived hash, and dispatches to the inactive `SHARED_STATEMENT_PIPELINE`
+    route.
+12. Review n8n validation, enrichment, transaction matching, retry state,
     archive receipt, and writer preflight before any production promotion.
 
 The handoff envelope contains only `artifact_id` and the source

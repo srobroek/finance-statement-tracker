@@ -67,10 +67,12 @@ Capture contract:
    do not pass local paths, URLs, capture payloads, credentials, or session
    metadata as envelope fields.
 8. Call `INTERACTIVE_ARTIFACT_HANDOFF` with `artifact_id` and the matching
-   source `expected_sha256`. n8n uploads the bounded binary to the configured
-   Finance Evidence root, computes a separate archived-binary hash, writes and
-   reads back its durable receipt, validates with runtime AJV, then dispatches
-   to the existing inactive headless route.
+   source `expected_sha256`. n8n parses and validates the binary with runtime
+   AJV before upload. An exact duplicate is a deterministic no-op, while a
+   changed hash for the same artifact ID is rejected.
+9. n8n uploads a new capture to the configured Finance Evidence root, computes
+   a separate archived-binary hash, writes and reads back its durable receipt,
+   then dispatches to the existing inactive headless route.
 
 Source tasks:
 - FAB_DEBIT: use provider fab and current-account-transactions with the exact

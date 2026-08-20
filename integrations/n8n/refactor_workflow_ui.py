@@ -29,6 +29,11 @@ FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding=
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
 )
+BROWSER_CAPTURE_SCHEMA = json.loads(
+    (N8N.parent.parent / "config" / "browser-capture-schema-v1.json").read_text(
+        encoding="utf-8"
+    )
+)
 FOLDER_BY_CODE = {
     code: folder
     for folder in FOLDER_CONTRACT["folders"]
@@ -357,6 +362,221 @@ return [{
     # Shared statement processing delegates the isolated PDF boundary to the
     # dedicated reusable extraction workflow instead of duplicating the chain.
     statement = by_code["SHARED_STATEMENT_PIPELINE"]
+    browser_generated_names = {
+        "Browser Capture?",
+        "Parse Browser Capture Adapter",
+        "Match Browser Capture Rows and Bound Retry",
+        "Browser Capture Write?",
+        "Complete Browser Capture Headless Receipt",
+    }
+    if any(node["name"] in browser_generated_names for node in statement["nodes"]):
+        statement["nodes"] = [
+            node for node in statement["nodes"] if node["name"] not in browser_generated_names
+        ]
+        for name in browser_generated_names:
+            statement.get("connections", {}).pop(name, None)
+    if not any(node["name"] == "Browser Capture?" for node in statement["nodes"]):
+        statement["nodes"].extend([
+            {
+                "id": "3021-browser-capture-if",
+                "name": "Browser Capture?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [-300, 0],
+                "parameters": {"conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [{
+                        "leftValue": "={{ $json.document_profile }}",
+                        "rightValue": "BROWSER_CAPTURE_V1",
+                        "operator": {"type": "string", "operation": "equals"},
+                    }],
+                }},
+            },
+            {
+                "id": "3022-browser-capture-adapter",
+                "name": "Parse Browser Capture Adapter",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [-50, 180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+const capture = input.browser_capture;
+if (!capture || capture.schema_version !== 1 || !capture.source?.provider || !capture.account?.label) {
+  throw new Error('BROWSER_CAPTURE_ADAPTER_CONTEXT_MISSING');
+}
+if (!['ACCOUNT_SNAPSHOT', 'STATEMENT_ROWS', 'TRANSACTION_ROWS', 'STATEMENT_PDF'].includes(String(capture.artifact?.kind || ''))) {
+  throw new Error('BROWSER_CAPTURE_ADAPTER_KIND_INVALID');
+}
+if (capture.artifact.kind === 'STATEMENT_PDF') {
+  throw new Error('BROWSER_CAPTURE_PDF_MUST_USE_PDF_PIPELINE');
+}
+if (capture.artifact.kind === 'ACCOUNT_SNAPSHOT') {
+  return [{ json: {
+    ...input,
+    adapter: 'browser_capture_v1_snapshot',
+    transactions: [],
+    period_start: capture.source.date_range?.start || null,
+    period_end: capture.source.date_range?.end || null,
+    reconciliation: { balanced: true, browser_capture: true, balance_tied: false },
+    browser_match_status: 'SNAPSHOT_REVIEW_ONLY',
+    browser_retry: { attempt: 0, max_attempts: 3, exhausted: true },
+    actual_mutation: false,
+    cashback_mutation: false,
+  } }];
+}
+const rows = capture.rows;
+if (!Array.isArray(rows) || rows.length === 0 || rows.length > 10000) {
+  throw new Error('BROWSER_CAPTURE_ROWS_INVALID');
+}
+const ids = new Set();
+const transactions = rows.map((row, index) => {
+  const transactionDate = String(row.transaction_date || '');
+  const description = String(row.description || '').trim();
+  const amount = String(row.amount_aed || '').trim();
+  const direction = String(row.direction || '').toUpperCase();
+  const sourceId = String(row.source_id || row.reference || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate) || !description || !amount || !/^\d+(?:\.\d{1,2})?$/.test(amount) || direction === '') {
+    throw new Error(`BROWSER_CAPTURE_ROW_INVALID:${index}`);
+  }
+  if (!['DEBIT', 'CREDIT'].includes(direction)) {
+    throw new Error(`BROWSER_CAPTURE_DIRECTION_INVALID:${index}`);
+  }
+  if (sourceId) {
+    if (ids.has(sourceId)) throw new Error(`BROWSER_CAPTURE_DUPLICATE_SOURCE_ID:${sourceId}`);
+    ids.add(sourceId);
+  }
+  const transactionId = `browser:${capture.capture_id}:${sourceId || index}`;
+  return {
+    transaction_id: transactionId,
+    transaction_date: transactionDate,
+    post_date: row.post_date || null,
+    card_last4: row.account_last4 || capture.account.account_last4 || null,
+    description,
+    amount_aed: amount,
+    signed_amount_aed: direction === 'CREDIT' ? `-${amount}` : amount,
+    direction,
+    source_direction: direction,
+    transaction_type: row.transaction_type || undefined,
+    amount_original: row.amount_original ?? null,
+    currency_original: row.currency || capture.account.currency || 'AED',
+    exchange_rate: null,
+    source_line: index + 1,
+    review_required: row.review_required === true || capture.source.capture_method === 'VISIBLE_ROWS',
+    source_id: sourceId || null,
+    source_type: 'browser_capture',
+    browser_provider: capture.source.provider,
+    browser_account_label: capture.account.label,
+  };
+});
+return [{ json: {
+  ...input,
+  adapter: 'browser_capture_v1',
+  transactions,
+  period_start: capture.source.date_range?.start || null,
+  period_end: capture.source.date_range?.end || null,
+  reconciliation: { balanced: true, browser_capture: true, balance_tied: false },
+  browser_match_status: 'READY_FOR_MATCH',
+  browser_retry: { attempt: 0, max_attempts: 3, exhausted: false },
+  actual_mutation: false,
+  cashback_mutation: false,
+} }];
+""".strip()},
+            },
+            {
+                "id": "3023-browser-match-retry",
+                "name": "Match Browser Capture Rows and Bound Retry",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1320, 180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+if (!String(input.adapter || '').startsWith('browser_capture_v1')) return [{ json: input }];
+const rows = Array.isArray(input.transactions) ? input.transactions : [];
+if (input.adapter === 'browser_capture_v1_snapshot') {
+  return [{ json: { ...input, browser_match_status: 'SNAPSHOT_REVIEW_ONLY' } }];
+}
+const ids = rows.map(row => String(row.transaction_id || ''));
+if (!rows.length || ids.some(id => !id) || new Set(ids).size !== ids.length) {
+  throw new Error('BROWSER_CAPTURE_MATCH_IDS_INVALID');
+}
+const retry = input.browser_retry || { attempt: 0, max_attempts: 3, exhausted: false };
+if (Number(retry.attempt) > Number(retry.max_attempts)) {
+  throw new Error('BROWSER_CAPTURE_RETRY_EXHAUSTED');
+}
+return [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser_retry: { ...retry, exhausted: true } } }];
+""".strip()},
+            },
+            {
+                "id": "3024-browser-write-if",
+                "name": "Browser Capture Write?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [2280, 0],
+                "parameters": {"conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [{
+                        "leftValue": "={{ $json.document_profile }}",
+                        "rightValue": "BROWSER_CAPTURE_V1",
+                        "operator": {"type": "string", "operation": "equals"},
+                    }],
+                }},
+            },
+            {
+                "id": "3025-browser-terminal",
+                "name": "Complete Browser Capture Headless Receipt",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [2530, -180],
+                "parameters": {"jsCode": r"""
+const input = $json;
+if (!String(input.adapter || '').startsWith('browser_capture_v1') || input.actual_mutation !== false || input.cashback_mutation !== false) {
+  throw new Error('BROWSER_CAPTURE_WRITE_BOUNDARY_FAILED');
+}
+return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', actual_mutation: false, cashback_mutation: false, direct_actual_writer: false, direct_cashback_writer: false } }];
+""".strip()},
+            },
+        ])
+    verify_context = node_by_name(statement, "Verify Archive and Execution Context")
+    statement["connections"][verify_context["name"]] = {
+        "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Browser Capture?"] = {"main": [
+        [{"node": "Parse Browser Capture Adapter", "type": "main", "index": 0}],
+        [{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}],
+    ]}
+    statement["connections"]["Parse Browser Capture Adapter"] = {
+        "main": [[{"node": "Normalize Locked Source Semantics", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Apply N8N Only Rules"] = {
+        "main": [[{"node": "Match Browser Capture Rows and Bound Retry", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Match Browser Capture Rows and Bound Retry"] = {
+        "main": [[{"node": "Unresolved Fields", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Validate Statement Reconciliation and IDs"] = {
+        "main": [[{"node": "Browser Capture Write?", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Browser Capture Write?"] = {"main": [
+        [{"node": "Complete Browser Capture Headless Receipt", "type": "main", "index": 0}],
+        [{"node": "Project Actual Import Rows", "type": "main", "index": 0}],
+    ]}
+    validation = node_by_name(statement, "Validate Statement Reconciliation and IDs")
+    validation["parameters"]["jsCode"] = r"""
+const r = $json;
+if (r.document_profile === 'BROWSER_CAPTURE_V1' && r.adapter === 'browser_capture_v1_snapshot') {
+  return [{ json: { ...r, browser_match_status: 'MATCHED_REVIEW_ONLY', actual_mutation: false, cashback_mutation: false } }];
+}
+if (!Array.isArray(r.transactions) || !r.transactions.length)
+  throw new Error('EMPTY_STATEMENT');
+const ids = r.transactions.map(t => t.transaction_id);
+if (ids.some(x => !x) || new Set(ids).size !== ids.length)
+  throw new Error('INVALID_OR_DUPLICATE_SOURCE_TRANSACTION_ID');
+if (r.reconciliation?.balanced !== true)
+  throw new Error('STATEMENT_RECONCILIATION_FAILED');
+return [{ json: r }];
+""".strip()
     replaced_pdf_nodes = {
         "Validate PDF in Isolated Utility",
         "Unlock Protected PDF in Isolated Utility",
@@ -385,7 +605,7 @@ return [{
     for old in replaced_pdf_nodes:
         statement.get("connections", {}).pop(old, None)
     statement["connections"]["Verify Archive and Execution Context"] = {
-        "main": [[{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}]]
+        "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
     }
     statement["connections"]["Run Isolated PDF Extraction"] = {
         "main": [[{"node": "Parse Verified Statement Profile", "type": "main", "index": 0}]]
@@ -423,6 +643,11 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
     # Interactive handoff archives the binary capture once, then validates the
     # hash-bound readback before dispatching to the existing headless route.
     handoff = by_code["INTERACTIVE_ARTIFACT_HANDOFF"]
+    browser_schema_literal = json.dumps(
+        BROWSER_CAPTURE_SCHEMA,
+        ensure_ascii=False,
+        indent=2,
+    )
     handoff["nodes"] = [
         {
             "id": "11001",
@@ -638,7 +863,6 @@ return [{
             "matchType": "allConditions",
             "filters": {"conditions": [
                 {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
-                {"keyName": "source_sha256", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}"},
             ]},
             "columns": {
                 "mappingMode": "defineBelow",
@@ -679,8 +903,6 @@ return [{
             "matchType": "allConditions",
             "filters": {"conditions": [
                 {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
-                {"keyName": "source_sha256", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}"},
-                {"keyName": "state", "condition": "eq", "keyValue": "RECEIVED"},
             ]},
             "options": {},
         },
@@ -732,6 +954,90 @@ return [{ json: { receipt, document_sha256: request.expected_sha256, archive_sha
     })
     handoff["nodes"].extend([
         {
+            "id": "11010-preparse",
+            "name": "Parse Browser Capture JSON Before Archive",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [250, 0],
+            "parameters": {"jsCode": r"""
+const encoded = $binary?.data?.data;
+if (typeof encoded !== 'string' || !encoded) throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
+let capture;
+try {
+  const text = Buffer.from(encoded, 'base64').toString('utf8');
+  if (!text || text.length > 10_000_000) throw new Error('size');
+  capture = JSON.parse(text);
+} catch {
+  throw new Error('BROWSER_CAPTURE_JSON_INVALID');
+}
+if (!capture || typeof capture !== 'object' || Array.isArray(capture)) {
+  throw new Error('BROWSER_CAPTURE_JSON_OBJECT_REQUIRED');
+}
+return [{ json: capture, binary: $binary }];
+""".strip()},
+        },
+        {
+            "id": "11010-existing",
+            "name": "Load Existing Browser Archive Receipt",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "position": [700, 0],
+            "parameters": {
+                "resource": "row",
+                "operation": "get",
+                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "returnAll": False,
+                "limit": 1,
+                "matchType": "allConditions",
+                "filters": {"conditions": [{
+                    "keyName": "document_id",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                }]},
+                "options": {},
+            },
+        },
+        {
+            "id": "11010-idempotency",
+            "name": "Check Existing Browser Artifact",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [950, 0],
+            "parameters": {"jsCode": r"""
+const existing = $json;
+const request = $('Validate Reviewed Artifact Reference').first().json;
+const captureBinary = $('Validate Browser Capture Schema').first().binary;
+if (!existing.document_id) {
+  return [{ json: { idempotency_action: 'CREATE', artifact_id: request.artifact_id, expected_sha256: request.expected_sha256 }, binary: captureBinary }];
+}
+if (String(existing.document_id) !== request.artifact_id) throw new Error('BROWSER_ARTIFACT_RECORD_ID_MISMATCH');
+if (String(existing.source_sha256 || '').toLowerCase() !== request.expected_sha256) {
+  throw new Error('BROWSER_ARTIFACT_ID_HASH_CONFLICT');
+}
+if (!existing.onedrive_item_id || existing.document_profile !== 'BROWSER_CAPTURE_V1') {
+  throw new Error('BROWSER_ARTIFACT_IDEMPOTENCY_RECORD_INVALID');
+}
+return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.artifact_id, expected_sha256: request.expected_sha256 }, binary: captureBinary }];
+""".strip()},
+        },
+        {
+            "id": "11010-idempotency-if",
+            "name": "New Browser Artifact?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [1200, 0],
+            "parameters": {"conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "strict"},
+                "combinator": "and",
+                "conditions": [{
+                    "leftValue": "={{ $json.idempotency_action }}",
+                    "rightValue": "CREATE",
+                    "operator": {"type": "string", "operation": "equals"},
+                }],
+            }},
+        },
+        {
             "id": "11010",
             "name": "Extract Browser Capture JSON",
             "type": "n8n-nodes-base.extractFromFile",
@@ -745,14 +1051,14 @@ return [{ json: { receipt, document_sha256: request.expected_sha256, archive_sha
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [1500, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {"jsCode": (r"""
 let Ajv;
 try {
   Ajv = require('ajv');
 } catch (error) {
   throw new Error('BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE');
 }
-const schema = {
+const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
   type: 'object',
   additionalProperties: false,
   required: ['schema_version', 'capture_id', 'capture_contract', 'provenance', 'source', 'artifact', 'account'],
@@ -838,20 +1144,51 @@ const schema = {
       },
     },
   },
-};
-const validator = new (Ajv.default || Ajv)({ allErrors: true, strict: true }).compile(schema);
+}; */
+const AjvCtor = Ajv.default || Ajv;
+const validatorEngine = new AjvCtor({ allErrors: true, strict: true });
+delete schema.$schema;
+delete schema.$id;
+validatorEngine.addFormat('date', value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)));
+validatorEngine.addFormat('date-time', value => !Number.isNaN(Date.parse(value)) && /T/.test(value));
+validatorEngine.addFormat('uri', value => { try { new URL(value); return true; } catch { return false; } });
+const validator = validatorEngine.compile(schema);
 const capture = $json;
+const inputHash = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
+const forbidden = new Set(['access_token', 'authorization', 'cookie', 'cookies', 'cvv', 'full_card_number', 'mfa_code', 'otp', 'passcode', 'password', 'pin', 'recovery_code', 'refresh_token', 'secret', 'session', 'session_token']);
+const rejectForbidden = (value, path = 'capture') => {
+  if (Array.isArray(value)) value.forEach((child, index) => rejectForbidden(child, `${path}[${index}]`));
+  else if (value && typeof value === 'object') Object.entries(value).forEach(([key, child]) => {
+    const normalized = key.trim().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().replaceAll('-', '_');
+    if (forbidden.has(normalized)) throw new Error(`BROWSER_CAPTURE_FORBIDDEN_FIELD:${path}.${key}`);
+    rejectForbidden(child, `${path}.${key}`);
+  });
+};
+rejectForbidden(capture);
+if (capture.source?.url) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(capture.source.url);
+  } catch {
+    throw new Error('BROWSER_CAPTURE_SOURCE_URL_INVALID');
+  }
+  if (parsedUrl.username || parsedUrl.password) throw new Error('BROWSER_CAPTURE_SOURCE_URL_CREDENTIALS_FORBIDDEN');
+  if (parsedUrl.search || parsedUrl.hash) throw new Error('BROWSER_CAPTURE_SOURCE_URL_QUERY_FORBIDDEN');
+}
 if (!validator(capture)) {
   throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
 }
-const archive = $('Verify Browser Archive Receipt').first().json;
+const request = $('Validate Reviewed Artifact Reference').first().json;
+if (inputHash !== request.expected_sha256) {
+  throw new Error('BROWSER_CAPTURE_INPUT_HASH_MISMATCH');
+}
 if (capture.capture_id !== capture.provenance.capture_id
     || capture.artifact.content_sha256 !== capture.provenance.content_sha256
-    || capture.provenance.content_sha256 !== archive.document_sha256) {
+    || capture.provenance.content_sha256 !== request.expected_sha256) {
   throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');
 }
 return [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];
-""".strip()},
+""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal).strip())},
         },
         {
             "id": "11012",
@@ -907,19 +1244,28 @@ return [{
     handoff["connections"] = {
         "Reviewed Artifact Reference": {"main": [[{"node": "Validate Reviewed Artifact Reference", "type": "main", "index": 0}]]},
         "Validate Reviewed Artifact Reference": {"main": [[{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]]},
-        "SHA-256 Browser Capture Input": {"main": [[{"node": "Archive Browser Capture in OneDrive", "type": "main", "index": 0}]]},
+        "SHA-256 Browser Capture Input": {"main": [[{"node": "Parse Browser Capture JSON Before Archive", "type": "main", "index": 0}]]},
+        "Parse Browser Capture JSON Before Archive": {"main": [[{"node": "Validate Browser Capture Schema", "type": "main", "index": 0}]]},
+        "Validate Browser Capture Schema": {"main": [[{"node": "Load Existing Browser Archive Receipt", "type": "main", "index": 0}]]},
+        "Load Existing Browser Archive Receipt": {"main": [[{"node": "Check Existing Browser Artifact", "type": "main", "index": 0}]]},
+        "Check Existing Browser Artifact": {"main": [[{"node": "New Browser Artifact?", "type": "main", "index": 0}]]},
+        "New Browser Artifact?": {"main": [
+            [{"node": "Archive Browser Capture in OneDrive", "type": "main", "index": 0}],
+            [{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}],
+        ]},
         "Archive Browser Capture in OneDrive": {"main": [[{"node": "Upsert Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
         "Upsert Durable Browser Archive Receipt": {"main": [[{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
         "Read Back Durable Browser Archive Receipt": {"main": [[{"node": "Download Archived Browser Capture", "type": "main", "index": 0}]]},
         "Download Archived Browser Capture": {"main": [[{"node": "SHA-256 Archived Browser Capture", "type": "main", "index": 0}]]},
         "SHA-256 Archived Browser Capture": {"main": [[{"node": "Verify Browser Archive Receipt", "type": "main", "index": 0}]]},
         "Verify Browser Archive Receipt": {"main": [[{"node": "Extract Browser Capture JSON", "type": "main", "index": 0}]]},
-        "Extract Browser Capture JSON": {"main": [[{"node": "Validate Browser Capture Schema", "type": "main", "index": 0}]]},
-        "Validate Browser Capture Schema": {"main": [[{"node": "Build Browser Headless Handoff", "type": "main", "index": 0}]]},
+        "Extract Browser Capture JSON": {"main": [[{"node": "Build Browser Headless Handoff", "type": "main", "index": 0}]]},
         "Build Browser Headless Handoff": {"main": [[{"node": "Dispatch Browser Capture to Headless Pipeline", "type": "main", "index": 0}]]},
     }
     handoff["meta"]["durableLookupRequired"] = True
-    handoff["meta"]["reuploadForbidden"] = False
+    handoff["meta"]["reuploadForbidden"] = True
+    handoff["meta"]["artifactIdHashConflict"] = "BROWSER_ARTIFACT_ID_HASH_CONFLICT"
+    handoff["meta"]["exactDuplicate"] = "DETERMINISTIC_NOOP"
     handoff["meta"]["browserHandoff"] = {
         "document_profile": "BROWSER_CAPTURE_V1",
         "capture_schema": "browser-capture-schema-v1",

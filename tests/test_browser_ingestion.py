@@ -40,7 +40,7 @@ class BrowserIngestionTests(TestCase):
         self.assertNotIn("Require Typed Browser Capture Validator", names)
         self.assertNotIn("stopAndError", {node["type"] for node in workflow["nodes"]})
         handoff = workflow["connections"]["Validate Browser Capture Schema"]["main"][0][0]
-        self.assertEqual("Build Browser Headless Handoff", handoff["node"])
+        self.assertEqual("Load Existing Browser Archive Receipt", handoff["node"])
         dispatch = workflow["connections"]["Build Browser Headless Handoff"]["main"][0][0]
         self.assertEqual("Dispatch Browser Capture to Headless Pipeline", dispatch["node"])
         receipt = names["Upsert Durable Browser Archive Receipt"]["parameters"]

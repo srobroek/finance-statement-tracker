@@ -6,7 +6,9 @@ import subprocess
 import sys
 import re
 import unittest
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +24,62 @@ def load_json(path: Path) -> dict:
 def git_canonical_sha256(path: Path) -> str:
     """Hash the LF bytes that a normal Git checkout exposes on Linux."""
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def validate_fixture_against_schema(schema: dict, value: object, path: str = "$") -> None:
+    """Execute the JSON-schema subset used by the browser capture contract."""
+    expected_type = schema.get("type")
+    if expected_type:
+        types = expected_type if isinstance(expected_type, list) else [expected_type]
+        matches = any(
+            kind == "object" and isinstance(value, dict)
+            or kind == "array" and isinstance(value, list)
+            or kind == "string" and isinstance(value, str)
+            or kind == "boolean" and isinstance(value, bool)
+            or kind == "number" and isinstance(value, (int, float)) and not isinstance(value, bool)
+            for kind in types
+        )
+        if not matches:
+            raise AssertionError(f"{path}: expected {expected_type}")
+    if "const" in schema and value != schema["const"]:
+        raise AssertionError(f"{path}: const mismatch")
+    if "enum" in schema and value not in schema["enum"]:
+        raise AssertionError(f"{path}: enum mismatch")
+    if isinstance(value, str):
+        if len(value) < schema.get("minLength", 0):
+            raise AssertionError(f"{path}: minLength")
+        if "pattern" in schema:
+            if not re.search(schema["pattern"], value):
+                raise AssertionError(f"{path}: pattern")
+        if schema.get("format") == "date":
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError as error:
+                raise AssertionError(f"{path}: date") from error
+        elif schema.get("format") == "date-time":
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise AssertionError(f"{path}: date-time") from error
+        elif schema.get("format") == "uri":
+            parsed = urlparse(value)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise AssertionError(f"{path}: uri")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                raise AssertionError(f"{path}: missing {key}")
+        properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            unknown = set(value) - set(properties)
+            if unknown:
+                raise AssertionError(f"{path}: forbidden {sorted(unknown)}")
+        for key, child in value.items():
+            if key in properties:
+                validate_fixture_against_schema(properties[key], child, f"{path}.{key}")
+    if isinstance(value, list) and "items" in schema:
+        for index, child in enumerate(value):
+            validate_fixture_against_schema(schema["items"], child, f"{path}[{index}]")
 
 
 class N8nWorkflowTests(unittest.TestCase):
@@ -1008,27 +1066,87 @@ class N8nWorkflowTests(unittest.TestCase):
         ]["parameters"]["jsCode"]
         self.assertIn("$('Get Messages from Configured Folder').all()", filter_code)
 
-    def test_interactive_statement_handoff_uses_only_durable_context(self) -> None:
+    def test_interactive_browser_handoff_validates_before_archive_and_is_idempotent(self) -> None:
         table = next(
             row for row in self.tables["tables"]
             if row["name"] == "finance_document_operations"
         )
-        required = {
-            "source_code", "config_version", "actual_file_id", "account_id", "period_key",
-        }
-        self.assertTrue(required.issubset(table["columns"]))
         nodes = self.nodes("11-interactive-artifact-handoff.json")
-        verify = nodes["Verify Durable Artifact Contract"]["parameters"]["jsCode"]
-        for field in required:
-            self.assertIn(repr(field), verify)
-        self.assertIn("DURABLE_STATEMENT_CONTEXT_MISSING", verify)
-        self.assertIn("DURABLE_STATEMENT_NOT_READY", verify)
-        self.assertIn("trigger_kind: 'SUBWORKFLOW'", verify)
-        self.assertIn("document_sha256: observed", verify)
+        self.assertTrue({"source_code", "config_version", "actual_file_id", "account_id", "period_key"}.issubset(table["columns"]))
+        connections = self.workflow("11-interactive-artifact-handoff.json")["connections"]
         self.assertEqual(
-            nodes["Run Statement Pipeline"]["parameters"]["workflowId"]["mode"],
+            connections["Validate Browser Capture Schema"]["main"][0][0]["node"],
+            "Load Existing Browser Archive Receipt",
+        )
+        self.assertEqual(
+            connections["Check Existing Browser Artifact"]["main"][0][0]["node"],
+            "New Browser Artifact?",
+        )
+        self.assertEqual(
+            connections["New Browser Artifact?"]["main"][0][0]["node"],
+            "Archive Browser Capture in OneDrive",
+        )
+        self.assertEqual(
+            nodes["New Browser Artifact?"]["parameters"]["conditions"]["conditions"][0]["leftValue"],
+            "={{ $json.idempotency_action }}",
+        )
+        idempotency = nodes["Check Existing Browser Artifact"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_ARTIFACT_ID_HASH_CONFLICT", idempotency)
+        self.assertIn("idempotency_action: 'NOOP'", idempotency)
+        verify = nodes["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_ARCHIVE_HASH_INVALID", verify)
+        self.assertTrue(nodes["Parse Browser Capture JSON Before Archive"]["type"] == "n8n-nodes-base.code")
+        validate = nodes["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        self.assertIn("BROWSER_CAPTURE_INPUT_HASH_MISMATCH", validate)
+        self.assertTrue(self.workflow("11-interactive-artifact-handoff.json")["meta"]["reuploadForbidden"])
+        self.assertEqual(
+            self.workflow("11-interactive-artifact-handoff.json")["meta"]["artifactIdHashConflict"],
+            "BROWSER_ARTIFACT_ID_HASH_CONFLICT",
+        )
+        self.assertEqual(
+            nodes["Dispatch Browser Capture to Headless Pipeline"]["parameters"]["workflowId"]["mode"],
             "list",
         )
+
+    def test_browser_capture_fixtures_execute_against_embedded_canonical_schema(self) -> None:
+        schema = load_json(ROOT / "config" / "browser-capture-schema-v1.json")
+        code = self.nodes("11-interactive-artifact-handoff.json")["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        embedded, _ = json.JSONDecoder().raw_decode(code.split("const schema = ", 1)[1])
+        self.assertEqual(embedded, schema)
+
+        valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
+        validate_fixture_against_schema(embedded, valid)
+
+        invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
+        durable_storage: list[dict] = []
+
+        def archive_if_valid(capture: dict) -> None:
+            validate_fixture_against_schema(embedded, capture)
+            durable_storage.append(capture)
+
+        with self.assertRaises(AssertionError):
+            archive_if_valid(invalid)
+        self.assertEqual(durable_storage, [])
+        archive_if_valid(valid)
+        self.assertEqual([row["capture_id"] for row in durable_storage], [valid["capture_id"]])
+
+    def test_browser_capture_pipeline_is_write_disabled_and_skips_pdf_and_cashback(self) -> None:
+        workflow = self.workflow("03-shared-statement-pipeline.json")
+        nodes = self.nodes("03-shared-statement-pipeline.json")
+        connections = workflow["connections"]
+
+        self.assertEqual(
+            connections["Browser Capture?"]["main"][0][0]["node"],
+            "Parse Browser Capture Adapter",
+        )
+        self.assertEqual(
+            connections["Browser Capture Write?"]["main"][0][0]["node"],
+            "Complete Browser Capture Headless Receipt",
+        )
+        self.assertFalse(any(node["type"] == "n8n-nodes-finance.actualBudget" for node in workflow["nodes"]))
+        terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"]["jsCode"]
+        self.assertIn("direct_actual_writer", terminal)
+        self.assertIn("direct_cashback_writer", terminal)
 
     def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
         lock = load_json(N8N / "community-node-lock.json")

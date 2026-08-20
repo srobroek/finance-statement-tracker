@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "capture_id": "fixture-browser-2026-08-20",
+  "capture_contract": {
+    "capture_mode": "HEADED_ON_DEMAND",
+    "redaction": "REDACTED",
+    "immutability": "SHA256_ARCHIVED",
+    "handoff_workflow": "INTERACTIVE_ARTIFACT_HANDOFF",
+    "actual_mutation": false,
+    "cashback_mutation": false
+  },
+  "provenance": {
+    "capture_id": "fixture-browser-2026-08-20",
+    "captured_at": "2026-08-20T08:00:00Z",
+    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "hash_algorithm": "SHA-256"
+  },
+  "source": {
+    "provider": "FAB",
+    "site": "FAB",
+    "captured_at": "2026-08-20T08:00:00Z",
+    "capture_method": "VISIBLE_ROWS",
+    "date_range": {
+      "start": "2026-08-01",
+      "end": "2026-08-20"
+    },
+    "limitations": ["Fixture contains one visible row"]
+  },
+  "artifact": {
+    "kind": "TRANSACTION_ROWS",
+    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "file_name": "fixture-browser-capture.json",
+    "mime_type": "application/json"
+  },
+  "account": {
+    "label": "FAB Current ending 6031",
+    "account_last4": "6031",
+    "currency": "AED"
+  },
+  "rows": [
+    {
+      "source_id": "fixture-row-1",
+      "transaction_date": "2026-08-15",
+      "description": "FIXTURE MERCHANT",
+      "amount_aed": "25.50",
+      "direction": "DEBIT",
+      "currency": "AED",
+      "account_last4": "6031",
+      "review_required": false
+    }
+  ]
+}
