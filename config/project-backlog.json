@@ -718,7 +718,7 @@
       "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "agent_runtime",
-      "next_action": "Prove server-owned normal and exception model routing, including the gated high-reasoning path, in disposable n8n.",
+      "next_action": "Prove server-owned normal and exception model routing, including the gated medium-reasoning exception path, in disposable n8n.",
       "blocked_by": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
       ]
@@ -1838,7 +1838,7 @@
         "The n8n AI exception path uses Sol medium, which is separate from monthly deterministic reconciliation"
       ],
       "last_verified": "2026-08-19",
-      "next_action": "Prove server-owned normal and exception model routing, including the gated high-reasoning path, in disposable n8n."
+      "next_action": "Prove server-owned normal and exception model routing, including the gated medium-reasoning exception path, in disposable n8n."
     },
     {
       "id": "AGENT-003",
@@ -2709,7 +2709,7 @@
     {
       "id": "ACTUAL-016",
       "domain": "Actual accounts, ledger, rules, budgets and reports",
-      "title": "Comprehensive filterable dashboards and saved reports",
+      "title": "Filterable dashboards and saved reports",
       "requirement": "Provide compact custom dashboards and saved reports for overview, transactions/review, spending and trends, shared/person, properties/rentals, bills/subscriptions, budgets/savings, category spend, and Sankey.",
       "priority": "P1",
       "status": "PARTIAL",

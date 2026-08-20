@@ -483,7 +483,7 @@
     },
     {
       "id": "ACTUAL-016",
-      "title": "Comprehensive filterable dashboards and saved reports",
+      "title": "Filterable dashboards and saved reports",
       "requirement": "Provide compact custom dashboards and saved reports for overview, transactions/review, spending and trends, shared/person, properties/rentals, bills/subscriptions, budgets/savings, category spend, and Sankey.",
       "expected_state": "Dashboards use appropriate chart, number, formula-query, list and Sankey widgets; every custom report is saved and filterable by date/account/category/payee/notes-tags/owner/reconciled/transfer.",
       "status_from_transcript": "MIXED",

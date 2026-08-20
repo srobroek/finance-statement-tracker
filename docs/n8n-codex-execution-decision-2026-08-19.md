@@ -49,7 +49,7 @@ weakens the workflow boundary.
    rejected.
 5. The runner invokes an exact argument array with no shell: ephemeral session,
    read-only sandbox, rules ignored, code mode disabled, fixed Luna/max or
-   Sol/xhigh model profile, JSONL events, and a fixed JSON output schema.
+   Sol/medium model profile, JSONL events, and a fixed JSON output schema.
 6. The runner and n8n independently validate identity hashes, proposal fields,
    value constraints, model, reasoning effort, authentication mode, duplicates,
    and protected fields.
