@@ -28,25 +28,36 @@ class TopicSemantics:
     allowed_directions: frozenset[str]
     actual_sign: int | None
     spend_factor: int
-    cashback_event: str | None = None
+    cashback_eligible: bool = False
+    topic_tag: str | None = None
 
 
 TOPIC_SEMANTICS: dict[str, TopicSemantics] = {
-    "PURCHASE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, "PURCHASE"),
-    "REFUND": TopicSemantics(frozenset({"CREDIT"}), 1, -1, "REFUND"),
-    "REVERSAL": TopicSemantics(frozenset({"CREDIT"}), 1, -1, "REVERSAL"),
-    "REWARD_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
-    "INCOME": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
-    "TRANSFER": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
-    "FEE": TopicSemantics(frozenset({"DEBIT"}), -1, 1),
-    "INTEREST": TopicSemantics(frozenset({"DEBIT"}), -1, 1),
-    "INVESTMENT": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
+    "PURCHASE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, True),
+    "REFUND": TopicSemantics(frozenset({"CREDIT"}), 1, -1, True, "refund"),
+    "REVERSAL": TopicSemantics(frozenset({"CREDIT"}), 1, -1, True, "reversal"),
+    "REWARD_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0, False, "reward"),
+    "INCOME": TopicSemantics(frozenset({"CREDIT"}), 1, 0, False, "income"),
+    "TRANSFER": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0, False, "transfer"),
+    "FEE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, False, "fee"),
+    "INTEREST": TopicSemantics(frozenset({"DEBIT"}), -1, 1, False, "interest"),
+    "INVESTMENT": TopicSemantics(
+        frozenset(SOURCE_DIRECTIONS), None, 0, False, "investment"
+    ),
     # Browser acquisition uses this provisional topic until source evidence or
     # a normalization rule resolves it. It must never count as spend.
     "UNRESOLVED_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
     # Provisional source labels are valid before normalization/finalization.
     "CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
     "PAYMENT": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
+}
+CASHBACK_TOPICS = frozenset(
+    topic for topic, semantics in TOPIC_SEMANTICS.items() if semantics.cashback_eligible
+)
+TOPIC_BY_TAG = {
+    semantics.topic_tag: topic
+    for topic, semantics in TOPIC_SEMANTICS.items()
+    if semantics.topic_tag is not None
 }
 
 
@@ -209,10 +220,16 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     transaction.transaction_type = topic
     transaction.is_refund = topic in REFUND_TOPICS
     if transaction.is_refund:
-        transaction.tags.add("refund")
+        transaction.tags.add(semantics.topic_tag or "refund")
+        if topic == "REVERSAL":
+            # Keep legacy refund economics while persisting the canonical topic.
+            transaction.tags.add("refund")
         transaction.tags.discard("reward")
     elif topic == "REWARD_CREDIT":
         transaction.tags.add("reward")
+        transaction.tags.discard("refund")
+    elif semantics.topic_tag:
+        transaction.tags.add(semantics.topic_tag)
         transaction.tags.discard("refund")
 
     locked = set(transaction.metadata.get("locked_fields", []))

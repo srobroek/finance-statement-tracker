@@ -9,10 +9,15 @@ from unittest import TestCase
 from jsonschema import Draft202012Validator
 
 from finance_tracker.actual_pipeline import load_compiled_rules
+from finance_tracker.actual_snapshot import transactions_from_actual_snapshot
 from finance_tracker.models import Transaction
 from finance_tracker.platforms import ActualBudgetAdapter
 from finance_tracker.rules import RuleEngine
-from finance_tracker.transaction_semantics import TOPIC_SEMANTICS, finalize_transaction_topic
+from finance_tracker.transaction_semantics import (
+    TOPIC_SEMANTICS,
+    actual_amount_minor,
+    finalize_transaction_topic,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +48,14 @@ class ActualEconomicSemanticsTests(TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(self.fixture["account_taxonomy"], "config/actual-account-taxonomy.json")
         self.assertEqual(self.fixture["rules"], "config/static-rules.seed.json")
-        self.assertEqual(len(self.fixture["cases"]), len({case["case_id"] for case in self.fixture["cases"]}))
+        self.assertEqual(
+            len(self.fixture["cases"]),
+            len({case["case_id"] for case in self.fixture["cases"]}),
+        )
+        replay_ids = {case["source_case_id"] for case in self.fixture["replay_cases"]}
+        self.assertTrue(replay_ids <= {case["case_id"] for case in self.fixture["cases"]})
+        negative_ids = {case["case_id"] for case in self.fixture["negative_cases"]}
+        self.assertEqual(len(negative_ids), len(self.fixture["negative_cases"]))
 
     def _transaction(self, case: dict) -> Transaction:
         initial_topic = {
@@ -109,6 +121,114 @@ class ActualEconomicSemanticsTests(TestCase):
         fixture_account_keys = {case["account_key"] for case in self.fixture["cases"]}
         self.assertTrue(fixture_account_keys <= set(self.accounts))
         self.assertTrue(all("provider_account_id" not in case for case in self.fixture["cases"]))
+
+    def _snapshot_config(self) -> dict[str, object]:
+        names = sorted({case["account_name"] for case in self.fixture["cases"]})
+        return {
+            "accounts": [
+                {"name": name, "card_code": f"FIXTURE_{index}"}
+                for index, name in enumerate(names, start=1)
+            ]
+        }
+
+    def test_actual_notes_round_trip_preserves_canonical_topics(self) -> None:
+        by_case = {case["case_id"]: case for case in self.fixture["cases"]}
+        config = self._snapshot_config()
+        source_transactions = []
+        for replay in self.fixture["replay_cases"]:
+            source_transactions.append(self._transaction(by_case[replay["source_case_id"]]))
+
+        envelopes = ActualBudgetAdapter().serialize_import(source_transactions)
+        snapshot_rows = [
+            {
+                "id": record["imported_id"],
+                "imported_id": record["imported_id"],
+                "account_name": envelope.account,
+                "date": record["date"],
+                "amount": record["amount"],
+                "imported_payee": record["imported_payee"],
+                "payee_name": record["payee_name"],
+                "category_name": record.get("category_name"),
+                "notes": record["notes"],
+            }
+            for envelope in envelopes
+            for record in envelope.records
+        ]
+        notes_by_id = {row["id"]: row["notes"] for row in snapshot_rows}
+        self.assertIn("#reversal", notes_by_id["fixture:merchant-reversal"])
+        self.assertIn("#refund", notes_by_id["fixture:merchant-reversal"])
+        for case_id, topic_tag in (
+            ("bank-fee", "#fee"),
+            ("interest-charge", "#interest"),
+            ("investment-contribution", "#investment"),
+            ("investment-distribution", "#investment"),
+        ):
+            self.assertIn(topic_tag, notes_by_id[f"fixture:{case_id}"])
+        replayed = transactions_from_actual_snapshot(
+            {"transactions": snapshot_rows}, config
+        )
+        expected = [replay["expected_topic"] for replay in self.fixture["replay_cases"]]
+        self.assertEqual(
+            {transaction.transaction_type for transaction in replayed}, set(expected)
+        )
+        self.assertEqual(
+            {
+                transaction.transaction_id: transaction.transaction_type
+                for transaction in replayed
+            },
+            {
+                f"fixture:{replay['source_case_id']}": replay["expected_topic"]
+                for replay in self.fixture["replay_cases"]
+            },
+        )
+        expected_spend = {
+            case_id: Decimal(by_case[case_id]["expected_spend_aed"])
+            for case_id in {
+                replay["source_case_id"] for replay in self.fixture["replay_cases"]
+            }
+        }
+        for transaction in replayed:
+            case_id = transaction.transaction_id.removeprefix("fixture:")
+            self.assertEqual(transaction.spend_aed, expected_spend[case_id])
+            if case_id in {
+                "bank-fee",
+                "interest-charge",
+                "investment-contribution",
+                "investment-distribution",
+            }:
+                self.assertNotEqual(transaction.transaction_type, "PURCHASE")
+
+    def test_negative_topic_boundaries_fail_closed(self) -> None:
+        for case in self.fixture["negative_cases"]:
+            transaction = Transaction(
+                transaction_id=f"negative:{case['case_id']}",
+                transaction_at=datetime(2026, 8, 20),
+                card="FIXTURE",
+                merchant_raw="boundary",
+                amount_aed=Decimal(case["amount_aed"]),
+                transaction_type=case["transaction_type"],
+                source_direction=case.get("source_direction"),
+            )
+            with self.assertRaisesRegex(ValueError, case["expected_error"]):
+                actual_amount_minor(transaction)
+
+        account_name = self.fixture["cases"][0]["account_name"]
+        with self.assertRaisesRegex(ValueError, "Conflicting canonical Actual topic tags"):
+            transactions_from_actual_snapshot(
+                {
+                    "transactions": [
+                        {
+                            "id": "negative:conflicting-tags",
+                            "account_name": account_name,
+                            "date": "2026-08-20",
+                            "amount": -100,
+                            "imported_payee": "Boundary",
+                            "notes": "#fee #investment",
+                        }
+                    ]
+                },
+                self._snapshot_config(),
+            )
 
     def test_topics_and_unsupported_actions_stay_worker_owned(self) -> None:
         ownership = {

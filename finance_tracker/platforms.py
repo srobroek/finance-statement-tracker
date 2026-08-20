@@ -7,7 +7,7 @@ from typing import Iterable, Protocol
 from .actual_notes import format_actual_notes, normalize_actual_tag
 from .classification_audit import enforce_transaction_invariants
 from .models import Transaction
-from .transaction_semantics import actual_amount_minor
+from .transaction_semantics import actual_amount_minor, topic_semantics
 
 
 class PlatformKind(str, Enum):
@@ -150,6 +150,11 @@ class ActualBudgetAdapter:
             # ingestion manifest. Actual notes stay human-facing: tags first,
             # then only compact facts that are useful in the ledger.
             semantic_tags: list[str] = []
+            topic_tag = topic_semantics(transaction.transaction_type).topic_tag
+            if topic_tag:
+                semantic_tags.append(topic_tag)
+                if transaction.transaction_type.upper() == "REVERSAL":
+                    semantic_tags.append("refund")
             if transaction.channel != "UNKNOWN":
                 semantic_tags.append(f"channel-{_actual_tag(transaction.channel)}")
             if transaction.tags:

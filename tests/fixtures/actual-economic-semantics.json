@@ -143,5 +143,27 @@
       "expected_actual_amount_minor": 2500,
       "expected_spend_aed": "0"
     }
+  ],
+  "replay_cases": [
+    {"source_case_id": "liability-card-payment", "expected_topic": "TRANSFER"},
+    {"source_case_id": "merchant-reversal", "expected_topic": "REVERSAL"},
+    {"source_case_id": "bank-fee", "expected_topic": "FEE"},
+    {"source_case_id": "interest-charge", "expected_topic": "INTEREST"},
+    {"source_case_id": "investment-contribution", "expected_topic": "INVESTMENT"},
+    {"source_case_id": "investment-distribution", "expected_topic": "INVESTMENT"}
+  ],
+  "negative_cases": [
+    {
+      "case_id": "missing-investment-direction",
+      "transaction_type": "INVESTMENT",
+      "amount_aed": "1.00",
+      "expected_error": "requires source direction"
+    },
+    {
+      "case_id": "unsupported-topic",
+      "transaction_type": "NOT_A_TOPIC",
+      "amount_aed": "1.00",
+      "expected_error": "Unsupported transaction topic"
+    }
   ]
 }

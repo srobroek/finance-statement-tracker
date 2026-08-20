@@ -20,11 +20,12 @@ from .cashback import (
     statement_period,
 )
 from .models import Transaction, money
+from .transaction_semantics import CASHBACK_TOPICS
 
 
 ACTIVE_STATUSES = frozenset({"ACTIVE"})
 VALID_STATUSES = ACTIVE_STATUSES | {"IGNORED", "REVERSED"}
-VALID_EVENT_TYPES = frozenset({"PURCHASE", "REFUND", "REVERSAL"})
+VALID_EVENT_TYPES = CASHBACK_TOPICS
 VALID_RECONCILIATION_STATUSES = frozenset({"UNMATCHED", "MATCHED", "VARIANCE", "RECONCILED"})
 CORRECTABLE_EVENT_FIELDS = frozenset(
     {
