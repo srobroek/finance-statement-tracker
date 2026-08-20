@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "USER_CONFIRMED",
   "currency": "AED",
   "profile": {
@@ -102,10 +102,10 @@
       "routing_priority": 20,
       "exclusions": ["Money transfers", "Cash advances", "Credit-card cheques", "Bank fees and charges", "Interest", "Cancelled or reversed transactions", "Other issuer-designated ineligible transactions"],
       "source_references": [
-        {"id": "rak-key-fact-statement", "label": "Key Fact Statement", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-key-fact-statement/1483-key-fact-statement.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE", "sha256": "daa82f3814246fe5f16fd49473644595421acb27060ceabb4589bc22eed4f6ac", "retrieved_at": "2026-08-20T10:00:54Z"},
-        {"id": "rak-service-price-guide", "label": "Service and Price Guide", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-service-and-price-guide/1483-service-and-price-guide.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE", "sha256": "e2bf59d24b493790f6f5f5493519e07e1f771f0ca12702139a60ec26cb798f6f", "retrieved_at": "2026-08-20T10:00:54Z"},
-        {"id": "rak-terms-conditions", "label": "Terms and Conditions", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-terms--conditions/1483-terms--conditions.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE", "sha256": "8dde8c0397781e94b823e67aa2da8a63ef5ae6d76617c3f939b11a9cae1653c8", "retrieved_at": "2026-08-20T10:00:56Z"},
-        {"id": "rak-world-card-terms", "label": "World Credit Card Terms", "url": "https://www.rakbank.ae/en/help-centre/product-terms-kfs/terms-and-conditions/world-cc", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE", "sha256": "08ddf5ebfe1d395fb21c181947d99ddfc1bca1abd3f8cd7ce7800c1fcb713859", "retrieved_at": "2026-08-20T10:00:56Z"}
+        {"id": "rak-key-fact-statement", "label": "Key Fact Statement", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-key-fact-statement/1483-key-fact-statement.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-service-price-guide", "label": "Service and Price Guide", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-service-and-price-guide/1483-service-and-price-guide.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-terms-conditions", "label": "Terms and Conditions", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-terms--conditions/1483-terms--conditions.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-world-card-terms", "label": "World Credit Card Terms", "url": "https://www.rakbank.ae/en/help-centre/product-terms-kfs/terms-and-conditions/world-cc", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"}
       ],
       "provenance": {
         "authority": "NON_AUTHORITATIVE",

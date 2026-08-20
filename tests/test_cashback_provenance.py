@@ -9,10 +9,13 @@ from unittest import TestCase
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from finance_tracker.cashback import validate_program_configuration
+
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config" / "cashback-programs.json"
-SCHEMA_PATH = ROOT / "config" / "cashback-profile-schema-v1.json"
+SCHEMA_PATH = ROOT / "config" / "cashback-profile-schema-v2.json"
+LEGACY_SCHEMA_PATH = ROOT / "config" / "cashback-profile-schema-v1.json"
 FIXTURE_PATH = "tests/fixtures/cashback-provenance/issuer-evidence.txt"
 FIXTURE_SHA256 = "d5da1c52b660e399c37e5e8a7faf353cf63bef3963cdd49c0c87b9ea2d32e56d"
 
@@ -36,6 +39,12 @@ def authoritative_claim_paths(program: dict[str, Any]) -> set[str]:
         for field in ("cashback_cap", "cashback_cap_aed", "spend_cap", "spend_cap_aed"):
             if field in bucket and bucket[field] is not None:
                 paths.add(f"buckets.{code}.{field}")
+        for field in ("excluded_categories", "excluded_channels"):
+            paths.update(
+                f"buckets.{code}.{field}[{index}]"
+                for index, value in enumerate(bucket.get(field, []))
+                if value
+            )
     paths.update(
         f"exclusions[{index}]" for index, value in enumerate(program.get("exclusions", [])) if value
     )
@@ -54,9 +63,24 @@ def claim_kind(path: str) -> str:
         return "CAP"
     if path.startswith("exclusions["):
         return "EXCLUSION"
+    if ".excluded_categories[" in path or ".excluded_channels[" in path:
+        return "EXCLUSION"
     if path.startswith("tiers."):
         return "TIER"
     return "PROGRAMME"
+
+
+def authoritative_claims(program: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "kind": claim_kind(path),
+            "path": path,
+            "reference_ids": ["test-issuer-evidence"],
+            "effective_start": "2026-08-01",
+            "effective_end": None,
+        }
+        for path in sorted(authoritative_claim_paths(program))
+    ]
 
 
 def validate_provenance(source: dict[str, Any]) -> None:
@@ -116,6 +140,8 @@ def validate_provenance(source: dict[str, Any]) -> None:
         for reference in references:
             fixture = reference.get("fixture")
             if not fixture:
+                if reference["authority"] == "AUTHORITATIVE":
+                    raise ValueError(f"Cashback program {card} authoritative evidence requires content")
                 continue
             fixture_path = ROOT / fixture
             observed = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
@@ -124,6 +150,7 @@ def validate_provenance(source: dict[str, Any]) -> None:
                     f"Cashback program {card} evidence digest drift for {reference['id']}: "
                     f"expected {reference.get('sha256')}, observed {observed}"
                 )
+    validate_program_configuration(source)
 
 
 def authoritative_fixture_reference() -> dict[str, Any]:
@@ -156,34 +183,46 @@ class CashbackProgrammeProvenanceTests(TestCase):
     def test_authoritative_claims_cover_rates_caps_exclusions_and_tiers(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
+        program["buckets"][0]["excluded_categories"] = ["TEST_ONLY_EXCLUSION"]
         program["source_references"] = [authoritative_fixture_reference()]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises the authoritative provenance contract.",
-            "claims": [
-                {"kind": claim_kind(path), "path": path, "reference_ids": ["test-issuer-evidence"]}
-                for path in sorted(authoritative_claim_paths(program))
-            ],
+            "claims": authoritative_claims(program),
         }
 
         validate_provenance(source)
+        self.assertIn(
+            "buckets.RAK_GROCERY.excluded_categories[0]",
+            {claim["path"] for claim in program["provenance"]["claims"]},
+        )
 
     def test_authoritative_claim_missing_path_is_rejected(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         program["source_references"] = [authoritative_fixture_reference()]
-        expected_paths = sorted(authoritative_claim_paths(program))
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises incomplete claim coverage.",
-            "claims": [
-                {"kind": claim_kind(path), "path": path, "reference_ids": ["test-issuer-evidence"]}
-                for path in expected_paths[1:]
-            ],
+            "claims": authoritative_claims(program)[1:],
         }
 
         with self.assertRaisesRegex(ValueError, "incomplete provenance claims"):
             validate_provenance(source)
+
+    def test_authoritative_duplicate_claim_path_is_rejected(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        program["source_references"] = [authoritative_fixture_reference()]
+        claims = authoritative_claims(program)
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises duplicate claim rejection.",
+            "claims": claims + [copy.deepcopy(claims[0])],
+        }
+
+        with self.assertRaisesRegex(ValueError, "duplicate provenance claims"):
+            validate_program_configuration(source)
 
     def test_authoritative_reference_requires_sha256_and_effective_start(self) -> None:
         source = copy.deepcopy(self.config)
@@ -195,10 +234,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises missing evidence metadata.",
-            "claims": [
-                {"kind": claim_kind(path), "path": path, "reference_ids": ["test-issuer-evidence"]}
-                for path in sorted(authoritative_claim_paths(program))
-            ],
+            "claims": authoritative_claims(program),
         }
 
         with self.assertRaisesRegex(ValueError, "schema error"):
@@ -213,13 +249,84 @@ class CashbackProgrammeProvenanceTests(TestCase):
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises digest drift detection.",
-            "claims": [
-                {"kind": claim_kind(path), "path": path, "reference_ids": ["test-issuer-evidence"]}
-                for path in sorted(authoritative_claim_paths(program))
-            ],
+            "claims": authoritative_claims(program),
         }
 
         with self.assertRaisesRegex(ValueError, "evidence digest drift"):
+            validate_provenance(source)
+
+    def test_v2_requires_provenance_but_v1_profiles_remain_compatible(self) -> None:
+        source = copy.deepcopy(self.config)
+        del source["programs"][0]["provenance"]
+        with self.assertRaisesRegex(ValueError, "schema error"):
+            validate_provenance(source)
+
+        legacy = load_json(ROOT / "examples" / "cashback-profiles" / "flat-rate-usd.json")
+        legacy_schema = load_json(LEGACY_SCHEMA_PATH)
+        Draft202012Validator(legacy_schema, format_checker=FormatChecker()).validate(legacy)
+        validate_program_configuration(legacy)
+
+    def test_runtime_rejects_authoritative_programme_without_claims(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        program["source_references"] = [authoritative_fixture_reference()]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises runtime empty-claim rejection.",
+            "claims": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "schema error"):
+            validate_provenance(source)
+        with self.assertRaisesRegex(ValueError, "requires authoritative provenance claims"):
+            validate_program_configuration(source)
+
+    def test_claim_interval_must_be_covered_by_issuer_interval(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_start"] = "2026-09-01"
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises non-overlapping evidence.",
+            "claims": authoritative_claims(program),
+        }
+
+        with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
+            validate_program_configuration(source)
+
+    def test_claim_interval_cannot_extend_beyond_issuer_end(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_end"] = "2026-08-31"
+        program["source_references"] = [reference]
+        claims = authoritative_claims(program)
+        claims[0]["effective_start"] = "2026-09-01"
+        claims[0]["effective_end"] = None
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises evidence interval end coverage.",
+            "claims": claims,
+        }
+
+        with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
+            validate_program_configuration(source)
+
+    def test_authoritative_reference_without_fixture_content_is_rejected(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        del reference["fixture"]
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises content readback requirement.",
+            "claims": authoritative_claims(program),
+        }
+
+        with self.assertRaisesRegex(ValueError, "schema error"):
             validate_provenance(source)
 
 
