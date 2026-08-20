@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .models import Transaction, money
+from .transaction_semantics import CASHBACK_TOPICS
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,7 +244,8 @@ def total_spend(transactions: Iterable[Transaction], card: str) -> Decimal:
         (
             transaction.spend_aed
             for transaction in transactions
-            if transaction.card == card and transaction.transaction_type in {"PURCHASE", "REFUND"}
+            if transaction.card == card
+            and transaction.transaction_type in CASHBACK_TOPICS
         ),
         Decimal("0"),
     )
@@ -254,7 +256,7 @@ def bucket_spend(transactions: Iterable[Transaction], card: str) -> dict[str, De
     for transaction in transactions:
         if (
             transaction.card != card
-            or transaction.transaction_type not in {"PURCHASE", "REFUND"}
+            or transaction.transaction_type not in CASHBACK_TOPICS
             or not transaction.reward_bucket
         ):
             continue

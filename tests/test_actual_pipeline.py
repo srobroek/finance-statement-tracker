@@ -409,6 +409,30 @@ Closing balance (Total to pay) -25.00
         self.assertEqual(row.owner, "Owner A")
         self.assertNotIn("owner-owner-a", row.tags)
 
+    def test_snapshot_preserves_tagged_reversal_topic(self) -> None:
+        snapshot = {
+            "transactions": [
+                {
+                    "id": "actual-reversal",
+                    "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+                    "date": "2026-07-03",
+                    "amount": 355,
+                    "imported_payee": "AMAZON.AE DUBAI ARE",
+                    "payee_name": "Amazon",
+                    "category_name": "Online Shopping",
+                    "notes": "source:statement | #reversal | #refund",
+                    "cleared": True,
+                    "reconciled": False,
+                    "transfer_id": None,
+                }
+            ]
+        }
+
+        row = transactions_from_actual_snapshot(snapshot, self.config())[0]
+
+        self.assertEqual(row.transaction_type, "REVERSAL")
+        self.assertTrue(row.is_refund)
+
     def test_late_cycle_does_not_assume_an_unreachable_target_tier(self) -> None:
         dashboard = cashback_dashboard(
             poc_programs(),

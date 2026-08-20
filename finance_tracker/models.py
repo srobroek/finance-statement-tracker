@@ -66,8 +66,9 @@ class Transaction:
 
     @property
     def spend_aed(self) -> Decimal:
-        amount = abs(self.amount_aed)
-        return -amount if self.is_refund or self.transaction_type == "REFUND" else amount
+        from .transaction_semantics import spend_amount
+
+        return spend_amount(self)
 
     @property
     def is_foreign(self) -> bool:

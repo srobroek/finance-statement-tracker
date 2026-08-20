@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "account_taxonomy": "config/actual-account-taxonomy.json",
+  "rules": "config/static-rules.seed.json",
+  "cases": [
+    {
+      "case_id": "liability-purchase",
+      "account_key": "actual:ei:credit:0082",
+      "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+      "direction": "DEBIT",
+      "description": "AMAZON.AE DUBAI ARE",
+      "amount_aed": "3.55",
+      "topic": "PURCHASE",
+      "expected_actual_amount_minor": -355,
+      "expected_spend_aed": "3.55"
+    },
+    {
+      "case_id": "liability-card-payment",
+      "account_key": "actual:adcb:credit:8833-6838",
+      "account_name": "ADCB Credit Card · 8833 / 6838",
+      "direction": "DEBIT",
+      "description": "TRANSFER PAYMENT RECEIVED THANK YOU",
+      "topic": "TRANSFER",
+      "tags": ["transfer", "card-payment"],
+      "account_balance_convention": "LIABILITY",
+      "amount_aed": "3.55",
+      "expected_actual_amount_minor": 355,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "asset-card-payment",
+      "account_key": "actual:fab:current:2001",
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "direction": "CREDIT",
+      "description": "TRANSFER PAYMENT RECEIVED THANK YOU",
+      "topic": "TRANSFER",
+      "tags": ["transfer", "card-payment"],
+      "account_balance_convention": "ASSET",
+      "amount_aed": "3.55",
+      "expected_actual_amount_minor": -355,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "asset-transfer-credit",
+      "account_key": "actual:fab:current:2001",
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "direction": "CREDIT",
+      "description": "TRANSFER BETWEEN OWN ACCOUNTS",
+      "topic": "TRANSFER",
+      "tags": ["transfer"],
+      "amount_aed": "100.00",
+      "expected_actual_amount_minor": 10000,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "merchant-refund",
+      "account_key": "actual:ei:credit:0082",
+      "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+      "direction": "CREDIT",
+      "description": "AMAZON.AE DUBAI ARE",
+      "amount_aed": "3.55",
+      "topic": "REFUND",
+      "expected_actual_amount_minor": 355,
+      "expected_spend_aed": "-3.55"
+    },
+    {
+      "case_id": "merchant-reversal",
+      "account_key": "actual:ei:credit:0082",
+      "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+      "direction": "CREDIT",
+      "description": "AMAZON PURCHASE REVERSED",
+      "amount_aed": "3.55",
+      "topic": "REVERSAL",
+      "expected_actual_amount_minor": 355,
+      "expected_spend_aed": "-3.55"
+    },
+    {
+      "case_id": "explicit-reward-credit",
+      "account_key": "actual:ei:credit:0082",
+      "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+      "direction": "CREDIT",
+      "description": "MONTHLY CASHBACK REWARD CREDIT",
+      "amount_aed": "3.55",
+      "topic": "REWARD_CREDIT",
+      "tags": ["reward"],
+      "expected_actual_amount_minor": 355,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "salary-income",
+      "account_key": "actual:fab:current:2001",
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "direction": "CREDIT",
+      "description": "SALARY TRANSFER",
+      "amount_aed": "1000.00",
+      "topic": "INCOME",
+      "expected_actual_amount_minor": 100000,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "bank-fee",
+      "account_key": "actual:fab:current:2001",
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "direction": "DEBIT",
+      "description": "FUND TRANSFER CHARGES",
+      "amount_aed": "0.49",
+      "topic": "FEE",
+      "tags": ["fee"],
+      "expected_actual_amount_minor": -49,
+      "expected_spend_aed": "0.49"
+    },
+    {
+      "case_id": "interest-charge",
+      "account_key": "actual:ei:credit:0082",
+      "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+      "direction": "DEBIT",
+      "description": "INTEREST CHARGE",
+      "amount_aed": "12.00",
+      "topic": "INTEREST",
+      "expected_actual_amount_minor": -1200,
+      "expected_spend_aed": "12.00"
+    },
+    {
+      "case_id": "investment-contribution",
+      "account_key": "actual:fab:current:2001",
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "direction": "DEBIT",
+      "description": "DEBIT CARD PURCHASE-WWW.GETSTAKE.COM DUBAI",
+      "amount_aed": "700.00",
+      "topic": "INVESTMENT",
+      "vendor": "Stake",
+      "expected_actual_amount_minor": -70000,
+      "expected_spend_aed": "0"
+    },
+    {
+      "case_id": "investment-distribution",
+      "account_key": "actual:sarwa:invest:personal",
+      "account_name": "Sarwa Invest · Personal",
+      "direction": "CREDIT",
+      "description": "INVESTMENT DISTRIBUTION",
+      "amount_aed": "25.00",
+      "topic": "INVESTMENT",
+      "expected_actual_amount_minor": 2500,
+      "expected_spend_aed": "0"
+    }
+  ],
+  "replay_cases": [
+    {"source_case_id": "liability-card-payment", "expected_topic": "TRANSFER"},
+    {"source_case_id": "merchant-reversal", "expected_topic": "REVERSAL"},
+    {"source_case_id": "bank-fee", "expected_topic": "FEE"},
+    {"source_case_id": "interest-charge", "expected_topic": "INTEREST"},
+    {"source_case_id": "investment-contribution", "expected_topic": "INVESTMENT"},
+    {"source_case_id": "investment-distribution", "expected_topic": "INVESTMENT"}
+  ],
+  "negative_cases": [
+    {
+      "case_id": "missing-investment-direction",
+      "transaction_type": "INVESTMENT",
+      "amount_aed": "1.00",
+      "expected_error": "requires source direction"
+    },
+    {
+      "case_id": "unsupported-topic",
+      "transaction_type": "NOT_A_TOPIC",
+      "amount_aed": "1.00",
+      "expected_error": "Unsupported transaction topic"
+    }
+  ]
+}

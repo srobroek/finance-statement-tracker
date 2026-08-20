@@ -51,8 +51,10 @@ class AccountCompletenessTests(unittest.TestCase):
     def test_manifest_uses_unique_safe_stable_identities(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
 
-        identities = [row.provider_account_id for row in manifest.accounts]
+        identities = [row.provider_account_id for row in manifest.accounts if row.provider_account_id]
         self.assertEqual(len(identities), len(set(identities)))
+        self.assertEqual(manifest.account_count, 18)
+        self.assertEqual(len(manifest.provider_identity_candidates()), 12)
         self.assertIn("fab:current:2001", identities)
         self.assertIn("fab:loan:mortgage-0203", identities)
         self.assertIn("sarwa:invest:personal", identities)

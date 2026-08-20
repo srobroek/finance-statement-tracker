@@ -7,16 +7,20 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-_STABLE_ID = re.compile(r"^[a-z0-9]+(?::[a-z0-9-]+)+$")
+_STABLE_ID = re.compile(r"^[a-z0-9-]+(?::[a-z0-9-]+)+$")
 _ACCOUNT_TYPES = {"checking", "savings", "investment", "trade", "credit", "mortgage"}
 _BALANCE_SIGNS = {"ASSET_POSITIVE", "LIABILITY_NEGATIVE"}
+_BALANCE_EVIDENCE_STATUS = {"EVIDENCED", "UNAVAILABLE", "PLANNED"}
 _INVENTORY_STATUSES = {"COMPLETE", "INCOMPLETE"}
 
 
 @dataclass(frozen=True, slots=True)
 class AccountIdentity:
     provider_id: str
-    provider_account_id: str
+    account_key: str
+    provider_account_id: str | None
+    provider_identity_status: str
+    provider_identity_source: str | None
     display_name: str
     actual_account_name: str | None
     account_type: str
@@ -28,6 +32,7 @@ class AccountIdentity:
     actual_offbudget: bool
     include_in_net_worth: bool
     balance_sign: str
+    balance_evidence_status: str
     balance_source: str | None
     balance_as_of: str | None
     active: bool
@@ -58,6 +63,18 @@ class AccountCompletenessManifest:
             raise ValueError(f"Provider inventory not found uniquely: {provider_id}")
         return matches[0]
 
+    @property
+    def account_count(self) -> int:
+        return len(self.accounts)
+
+    def provider_identity_candidates(self, provider_id: str | None = None) -> tuple[AccountIdentity, ...]:
+        """Return only rows with authoritative provider identities for reconciliation."""
+        return tuple(
+            row for row in self.accounts
+            if row.provider_account_id is not None
+            and (provider_id is None or row.provider_id == provider_id)
+        )
+
 
 def _load_payload(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(source, Mapping):
@@ -86,17 +103,29 @@ def load_account_completeness_manifest(
             raise ValueError("Account entries must be objects")
         provider_id = str(raw.get("provider_id") or "").strip().casefold()
         identity = str(raw.get("provider_account_id") or "").strip()
+        provider_identity = identity or None
+        account_key = str(raw.get("account_key") or "").strip()
+        identity_status = str(raw.get("provider_identity_status") or "").strip().upper()
+        identity_source = str(raw.get("provider_identity_source") or "").strip() or None
         display_name = str(raw.get("display_name") or "").strip()
         account_type = str(raw.get("account_type") or "").strip().casefold()
         currency = str(raw.get("currency") or "").strip().upper()
         last4 = str(raw.get("last4") or "").strip() or None
-        if not provider_id or not display_name:
-            raise ValueError("Account provider_id and display_name are required")
-        if not _STABLE_ID.fullmatch(identity) or not identity.startswith(f"{provider_id}:"):
-            raise ValueError(f"Unsafe or provider-mismatched account identity: {identity}")
-        if identity in identities:
+        if not provider_id or not display_name or not _STABLE_ID.fullmatch(account_key):
+            raise ValueError("Account provider_id, account_key, and display_name are required")
+        if identity_status == "EVIDENCED":
+            if not _STABLE_ID.fullmatch(identity) or not identity.startswith(f"{provider_id}:"):
+                raise ValueError(f"Unsafe or provider-mismatched account identity: {identity}")
+            if not identity_source:
+                raise ValueError(f"Evidence-backed account identity has no source: {account_key}")
+        elif identity_status == "UNAVAILABLE":
+            if identity or identity_source:
+                raise ValueError(f"Unavailable account identity has provider metadata: {account_key}")
+        else:
+            raise ValueError(f"Unsupported provider identity status: {identity_status}")
+        if provider_identity and provider_identity in identities:
             raise ValueError(f"Duplicate provider_account_id: {identity}")
-        if identity == display_name:
+        if provider_identity and identity == display_name:
             raise ValueError("Display names must not be used as stable account identities")
         if account_type not in _ACCOUNT_TYPES:
             raise ValueError(f"Unsupported account type: {account_type}")
@@ -104,10 +133,16 @@ def load_account_completeness_manifest(
             raise ValueError(f"Invalid account currency: {currency}")
         if last4 and (len(last4) != 4 or not last4.isdigit()):
             raise ValueError(f"Account last4 must be exactly four digits: {identity}")
-        identities.add(identity)
+        if identity_status == "UNAVAILABLE" and account_type in {"credit", "mortgage"} and str(raw.get("balance_sign") or "ASSET_POSITIVE").upper() != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {account_key}")
+        if provider_identity:
+            identities.add(identity)
         accounts.append(AccountIdentity(
             provider_id=provider_id,
-            provider_account_id=identity,
+            account_key=account_key,
+            provider_account_id=provider_identity,
+            provider_identity_status=identity_status,
+            provider_identity_source=identity_source,
             display_name=display_name,
             actual_account_name=str(raw.get("actual_account_name") or "").strip() or None,
             account_type=account_type,
@@ -119,6 +154,7 @@ def load_account_completeness_manifest(
             actual_offbudget=bool(raw.get("actual_offbudget", False)),
             include_in_net_worth=bool(raw.get("include_in_net_worth", True)),
             balance_sign=str(raw.get("balance_sign") or "ASSET_POSITIVE").upper(),
+            balance_evidence_status=str(raw.get("balance_evidence_status") or "UNAVAILABLE").upper(),
             balance_source=str(raw.get("balance_source") or "").strip() or None,
             balance_as_of=str(raw.get("balance_as_of") or "").strip() or None,
             active=bool(raw.get("active", True)),
@@ -133,18 +169,26 @@ def load_account_completeness_manifest(
             ),
         ))
         if accounts[-1].lifecycle_status == "CLOSED" and accounts[-1].active:
-            raise ValueError(f"Closed account cannot be active: {identity}")
+            raise ValueError(f"Closed account cannot be active: {account_key}")
         if accounts[-1].lifecycle_status == "CLOSED" and accounts[-1].include_in_active_routing:
-            raise ValueError(f"Closed account cannot participate in active routing: {identity}")
+            raise ValueError(f"Closed account cannot participate in active routing: {account_key}")
         if (
             accounts[-1].balance_reconciliation_required
             and accounts[-1].expected_balance_minor is None
         ):
-            raise ValueError(f"Reconciled account requires expected_balance_minor: {identity}")
+            raise ValueError(f"Reconciled account requires expected_balance_minor: {account_key}")
         if accounts[-1].balance_sign not in _BALANCE_SIGNS:
-            raise ValueError(f"Unsupported balance sign convention: {identity}")
-        if accounts[-1].account_type == "mortgage" and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
-            raise ValueError(f"Mortgage account must use liability-negative balances: {identity}")
+            raise ValueError(f"Unsupported balance sign convention: {account_key}")
+        if accounts[-1].balance_evidence_status not in _BALANCE_EVIDENCE_STATUS:
+            raise ValueError(f"Unsupported balance evidence status: {account_key}")
+        if accounts[-1].lifecycle_status not in {"ACTIVE", "CLOSED", "PLANNED"}:
+            raise ValueError(f"Unsupported lifecycle status: {account_key}")
+        if accounts[-1].lifecycle_status == "PLANNED" and (
+            accounts[-1].active or accounts[-1].include_in_active_routing
+        ):
+            raise ValueError(f"Planned account cannot be active or routed: {account_key}")
+        if accounts[-1].account_type in {"credit", "mortgage"} and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {account_key}")
 
     providers: list[ProviderInventory] = []
     provider_ids: set[str] = set()
@@ -180,8 +224,7 @@ def validate_account_completeness(
     inventory = manifest.provider(provider_id)
     expected = {
         row.provider_account_id
-        for row in manifest.accounts
-        if row.provider_id == provider_id
+        for row in manifest.provider_identity_candidates(provider_id)
     }
     missing = sorted(expected - observed_provider_account_ids)
     unexpected = sorted(observed_provider_account_ids - expected)
