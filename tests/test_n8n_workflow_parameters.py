@@ -143,6 +143,40 @@ class N8nWorkflowParameterTests(unittest.TestCase):
         )
         self.assertIn("PROTECTED_CALLER_INPUT", {row["code"] for row in report["findings"]})
 
+    def test_protected_local_inputs_reject_dynamic_webhook_and_n8n_forms(self) -> None:
+        contract = deepcopy(load_json(CONTRACT_PATH))
+        contract["workflows"] = {
+            "synthetic.json": {
+                "nodes": {
+                    "Workflow Parameters": {
+                        "fields": {
+                            "account_id": {
+                                "category": "workflow_local_input",
+                                "type": "string",
+                                "expression_allowed": True,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        forms = (
+            "={{ $('Webhook').first().json.account_id }}",
+            '={{ $("Webhook").item.json["account_id"] }}',
+            '={{ $node["Webhook"].json.account_id }}',
+            '={{ $items("Webhook")[0].json.account_id }}',
+            '={{ $item(0).$node["Webhook"].json.account_id }}',
+            "={{ $('Webhook').all()[0].json.account_id }}",
+            "={{ $input.item.json.account_id }}",
+        )
+        for expression in forms:
+            with self.subTest(expression=expression):
+                report = scan(
+                    contract=contract,
+                    documents=[set_workflow("synthetic.json", "account_id", expression)],
+                )
+                self.assertIn("PROTECTED_CALLER_INPUT", {row["code"] for row in report["findings"]})
+
     def test_named_node_protected_inputs_fail_for_supported_n8n_forms(self) -> None:
         contract = deepcopy(load_json(CONTRACT_PATH))
         contract["workflows"] = {
