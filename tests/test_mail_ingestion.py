@@ -239,6 +239,44 @@ try {
                     target["cachedResultName"], w12["name"]
                 )
                 self.assertTrue(acquire["parameters"]["options"]["waitForSubWorkflow"])
+                for node_name in (
+                    "Read Source Cursor Before Commit",
+                    "Build W12 COMMIT Request",
+                    "Commit Source Cursor via W12",
+                    "Verify W12 COMMIT Terminal Readback",
+                ):
+                    self.assertIn(node_name, nodes)
+                self.assertEqual(
+                    workflow["connections"]["Run Shared Statement Pipeline"]["main"][0][0]["node"],
+                    "Read Source Cursor Before Commit",
+                )
+                self.assertEqual(
+                    workflow["connections"]["Read Source Cursor Before Commit"]["main"][0][0]["node"],
+                    "Build W12 COMMIT Request",
+                )
+                self.assertEqual(
+                    workflow["connections"]["Build W12 COMMIT Request"]["main"][0][0]["node"],
+                    "Commit Source Cursor via W12",
+                )
+                self.assertEqual(
+                    workflow["connections"]["Commit Source Cursor via W12"]["main"][0][0]["node"],
+                    "Verify W12 COMMIT Terminal Readback",
+                )
+                commit = nodes["Commit Source Cursor via W12"]
+                self.assertEqual(commit["parameters"]["workflowId"]["value"], w12["id"])
+                commit_inputs = commit["parameters"]["workflowInputs"]["value"]
+                for field in (
+                    "operation",
+                    "downstream_receipt_sha256",
+                    "expected_cursor_version",
+                    "attachment_verification_barrier",
+                    "email_evidence_receipt_barrier",
+                    "receipt_readback_verified",
+                ):
+                    self.assertIn(field, commit_inputs)
+                self.assertIn("DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED", nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"])
+                self.assertIn("ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT", nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"])
+                self.assertIn("SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH", nodes["Verify W12 COMMIT Terminal Readback"]["parameters"]["jsCode"])
                 self.assertEqual(
                     workflow["settings"]["errorWorkflow"],
                     "10000000-0000-4000-8000-000000000016",
@@ -823,23 +861,59 @@ try {
                             pagination_exhausted=True,
                             scanned_count=len(messages),
                             heartbeat=not messages,
+                            archive_ready=True,
+                            receipt_readback_verified=True,
                         )
-                        commit_request = {
-                            **frozen,
-                            "operation": "COMMIT",
-                            "expected_cursor_version": 0,
-                            "downstream_receipt_sha256": "c" * 64,
+                        pipeline_receipt = {
+                            "run_id": frozen["run_id"],
+                            "source_code": source_code,
+                            "state": "SUCCEEDED",
+                            "receipt_sha256": "c" * 64,
+                            "terminal_readback_verified": True,
                         }
+                        built_commit = self.execute_code_node(
+                            workflow,
+                            "Build W12 COMMIT Request",
+                            json_value={
+                                "source_code": source_code,
+                                "cursor_version": 0,
+                                "cursor_value": "2026-08-18T00:00:00.000Z",
+                                "committed_run_id": None,
+                            },
+                            refs={
+                                "Assemble Trusted Acquisition Contract": request,
+                                "Acquire Archive and Read Back": downstream,
+                                "Run Shared Statement Pipeline": pipeline_receipt,
+                            },
+                        )
+                        self.assertTrue(built_commit["ok"], built_commit)
+                        commit_request = built_commit["output"][0]["json"]
                         validated_commit = self.execute_code_node(
                             w12,
                             "Validate Sweep or Commit",
                             json_value=commit_request,
                         )
                         self.assertTrue(validated_commit["ok"], validated_commit)
+                        merged_commit = self.execute_code_node(
+                            w12,
+                            "Merge Commit Evidence Readback",
+                            json_value={
+                                **commit_request,
+                                "terminal_state": "ENUMERATED",
+                                "immutable_inventory_json": json.dumps(
+                                    persisted, separators=(",", ":")
+                                ),
+                                "pagination_exhausted": True,
+                                "cursor_commit_eligible": False,
+                                "matched_count": len(messages),
+                            },
+                            refs={"Validate Sweep or Commit": commit_request},
+                        )
+                        self.assertTrue(merged_commit["ok"], merged_commit)
                         proof = self.execute_code_node(
                             w12,
                             "Verify Downstream Persistence Proof",
-                            json_value=downstream,
+                            json_value=merged_commit["output"][0]["json"],
                             refs={"Validate Sweep or Commit": validated_commit["output"][0]["json"]},
                         )
                         self.assertTrue(proof["ok"], proof)
@@ -920,27 +994,63 @@ try {
                     },
                 )
                 self.assertTrue(replay_barrier["ok"], replay_barrier)
-                replay_commit = self.execute_code_node(
-                    w12,
-                    "Validate Sweep or Commit",
-                    json_value={
-                        **frozen,
-                        "operation": "COMMIT",
-                        "expected_cursor_version": 1,
-                        "downstream_receipt_sha256": "c" * 64,
-                    },
-                )
-                self.assertTrue(replay_commit["ok"], replay_commit)
                 replay_downstream = replay_barrier["output"][0]["json"]
                 replay_downstream.update(
                     pagination_exhausted=True,
                     scanned_count=101,
                     heartbeat=False,
+                    archive_ready=True,
+                    receipt_readback_verified=True,
                 )
+                replay_built_commit = self.execute_code_node(
+                    workflow,
+                    "Build W12 COMMIT Request",
+                    json_value={
+                        "source_code": source_code,
+                        "cursor_version": 1,
+                        "cursor_value": frozen["run_upper_bound"],
+                        "committed_run_id": frozen["run_id"],
+                    },
+                    refs={
+                        "Assemble Trusted Acquisition Contract": request,
+                        "Acquire Archive and Read Back": replay_downstream,
+                        "Run Shared Statement Pipeline": {
+                            "run_id": frozen["run_id"],
+                            "source_code": source_code,
+                            "state": "SUCCEEDED",
+                            "receipt_sha256": "c" * 64,
+                            "terminal_readback_verified": True,
+                        },
+                    },
+                )
+                self.assertTrue(replay_built_commit["ok"], replay_built_commit)
+                replay_commit_request = replay_built_commit["output"][0]["json"]
+                replay_commit = self.execute_code_node(
+                    w12,
+                    "Validate Sweep or Commit",
+                    json_value=replay_commit_request,
+                )
+                self.assertTrue(replay_commit["ok"], replay_commit)
+                replay_merged_commit = self.execute_code_node(
+                    w12,
+                    "Merge Commit Evidence Readback",
+                    json_value={
+                        **replay_commit_request,
+                        "terminal_state": "ENUMERATED",
+                        "immutable_inventory_json": json.dumps(
+                            persisted, separators=(",", ":")
+                        ),
+                        "pagination_exhausted": True,
+                        "cursor_commit_eligible": False,
+                        "matched_count": 101,
+                    },
+                    refs={"Validate Sweep or Commit": replay_commit_request},
+                )
+                self.assertTrue(replay_merged_commit["ok"], replay_merged_commit)
                 replay_proof = self.execute_code_node(
                     w12,
                     "Verify Downstream Persistence Proof",
-                    json_value=replay_downstream,
+                    json_value=replay_merged_commit["output"][0]["json"],
                     refs={"Validate Sweep or Commit": replay_commit["output"][0]["json"]},
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)
@@ -972,6 +1082,7 @@ try {
                 sum(
                     node["type"] == "n8n-nodes-base.dataTable"
                     and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
+                    and node["parameters"].get("operation") == "update"
                     for node in self.workflow(filename)["nodes"]
                 ),
                 0,
@@ -1030,6 +1141,18 @@ try {
         self.assertEqual(
             w12["connections"]["Verify Downstream Persistence Proof"]["main"][0][0]["node"],
             "Require Verified Attachment Barrier",
+        )
+        self.assertEqual(
+            w12["connections"]["Read ENUMERATED Receipt for Commit"]["main"][0][0]["node"],
+            "Merge Commit Evidence Readback",
+        )
+        self.assertEqual(
+            w12["connections"]["Merge Commit Evidence Readback"]["main"][0][0]["node"],
+            "Verify Downstream Persistence Proof",
+        )
+        self.assertIn(
+            "COMMIT_ARCHIVE_BARRIER_READBACK_MISMATCH",
+            w12_nodes["Merge Commit Evidence Readback"]["parameters"]["jsCode"],
         )
         self.assertIn("DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
         self.assertIn("EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH", w12_nodes["Verify Attachment Archive Barrier"]["parameters"]["jsCode"])

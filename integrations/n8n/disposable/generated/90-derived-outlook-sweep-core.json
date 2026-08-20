@@ -105,7 +105,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -520,
         760
       ],
       "alwaysOutputData": true,
@@ -138,7 +138,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        -220,
         760
       ],
       "parameters": {
@@ -151,7 +151,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        80,
         760
       ],
       "parameters": {
@@ -200,7 +200,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        380,
         760
       ],
       "parameters": {
@@ -213,7 +213,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         760
       ],
       "parameters": {
@@ -226,7 +226,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        380,
         1140
       ],
       "parameters": {
@@ -275,7 +275,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        680,
         1140
       ],
       "parameters": {
@@ -337,7 +337,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
+        980,
         1140
       ],
       "parameters": {
@@ -379,8 +379,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        1140
+        -1120,
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Receipt and Return Sweep. Keep this deterministic and fail closed.\nconst e = $('Aggregate Immutable Archive Inventory').first().json, o = $json;\nfor (const k of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'scanned_count', 'matched_count', 'heartbeat'])\n    if (String(o[k]) !== String(e[k]))\n        throw new Error('ACQUISITION_RECEIPT_MISMATCH:' + k);\nif (o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_RECEIPT_STATE_MISMATCH');\nconst expectedInventory = JSON.stringify({ messages: e.messages, attachment_identity_keys: e.attachment_identity_keys || [], empty_inventory: e.empty_inventory === true, immutable_inventory: true, attachment_ids_verified: true });\nif (typeof o.immutable_inventory_json !== 'string' || o.immutable_inventory_json !== expectedInventory)\n    throw new Error('ACQUISITION_INVENTORY_READBACK_MISMATCH');\nlet persisted;\ntry {\n    persisted = JSON.parse(o.immutable_inventory_json);\n}\ncatch {\n    throw new Error('ACQUISITION_INVENTORY_READBACK_INVALID');\n}\nif (!Array.isArray(persisted.messages) || persisted.messages.length !== Number(e.matched_count))\n    throw new Error('ACQUISITION_INVENTORY_READBACK_COUNT_MISMATCH');\nreturn [{ json: { ...e, folder_id: e.folder_id, senders: e.senders, subjects: e.subjects, onedrive_parent_id: e.onedrive_parent_id, immutable_inventory_json: o.immutable_inventory_json, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
@@ -429,12 +429,25 @@
       }
     },
     {
+      "id": "12031",
+      "name": "Merge Commit Evidence Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Merge Commit Evidence Readback. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nif (receipt.run_id !== request.run_id || receipt.source_code !== request.source_code || receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.cursor_commit_eligible !== false || typeof receipt.immutable_inventory_json !== 'string' || !receipt.immutable_inventory_json)\n    throw new Error('ENUMERATED_RECEIPT_COMMIT_READBACK_MISMATCH');\nif (Number(receipt.matched_count) !== Number(request.matched_count) || request.archive_ready !== true || request.attachment_verification_barrier !== 'VERIFIED' || request.email_evidence_receipt_barrier !== 'VERIFIED' || Number(request.email_evidence_receipts_verified) !== Number(request.matched_count) || request.receipt_readback_verified !== true || request.cursor_commit_eligible !== false)\n    throw new Error('COMMIT_ARCHIVE_BARRIER_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, ...request, immutable_inventory_json: receipt.immutable_inventory_json, terminal_state: receipt.terminal_state } }];\n"
+      }
+    },
+    {
       "id": "12021",
       "name": "Verify Downstream Persistence Proof",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         0
       ],
       "parameters": {
@@ -447,8 +460,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -479,7 +492,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         380
       ],
       "parameters": {
@@ -492,7 +505,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -520,
         380
       ],
       "parameters": {
@@ -546,7 +559,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        -220,
         380
       ],
       "parameters": {
@@ -588,7 +601,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         380
       ],
       "parameters": {
@@ -601,7 +614,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        380,
         380
       ],
       "parameters": {
@@ -657,7 +670,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        680,
         380
       ],
       "parameters": {
@@ -704,7 +717,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         380
       ],
       "parameters": {
@@ -717,7 +730,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         760
       ],
       "parameters": {
@@ -730,7 +743,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         1140
       ],
       "parameters": {
@@ -743,7 +756,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         1140
       ],
       "parameters": {
@@ -756,7 +769,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         1140
       ],
       "parameters": {
@@ -769,7 +782,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -520,
+        -220,
         1520
       ],
       "parameters": {
@@ -790,7 +803,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         1520
       ],
       "parameters": {
@@ -803,7 +816,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         0
       ],
       "parameters": {
@@ -816,8 +829,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        980,
-        760
+        -1120,
+        1140
       ],
       "parameters": {
         "conditions": {
@@ -846,7 +859,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        -220,
         1140
       ],
       "parameters": {
@@ -859,7 +872,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         1520
       ],
       "parameters": {
@@ -872,8 +885,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        380
+        -1120,
+        760
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -915,7 +928,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1120,
+        -820,
         760
       ],
       "parameters": {
@@ -945,7 +958,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         1520
       ],
       "parameters": {
@@ -954,7 +967,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-1",
-      "name": "Stage 1 · Called by Workflow to Read Authoritative Source Cursor",
+      "name": "Stage 1 · Called by Workflow to Require Verified Attachment Barrier",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -962,7 +975,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Called by Workflow → Read Authoritative Source Cursor\n**Input:** Called by Workflow  ·  **Output:** Read Authoritative Source Cursor  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Called by Workflow → Require Verified Attachment Barrier\n**Input:** Called by Workflow  ·  **Output:** Require Verified Attachment Barrier  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -970,7 +983,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-2",
-      "name": "Stage 2 · Build Cursor CAS Update to Read Existing ENUMERATED Receipt",
+      "name": "Stage 2 · Read Authoritative Source Cursor to Return Verified Cursor Commit",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -978,7 +991,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Build Cursor CAS Update → Read Existing ENUMERATED Receipt\n**Input:** Build Cursor CAS Update  ·  **Output:** Read Existing ENUMERATED Receipt  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Read Authoritative Source Cursor → Return Verified Cursor Commit\n**Input:** Read Authoritative Source Cursor  ·  **Output:** Return Verified Cursor Commit  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -986,7 +999,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-3",
-      "name": "Stage 3 · Existing ENUMERATED Receipt Present to Message Inventory Present",
+      "name": "Stage 3 · Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -994,7 +1007,7 @@
         580
       ],
       "parameters": {
-        "content": "## Stage 3 · Existing ENUMERATED Receipt Present → Message Inventory Present\n**Input:** Existing ENUMERATED Receipt Present  ·  **Output:** Message Inventory Present  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 3 · Read Existing ENUMERATED Receipt → Shape Immutable Message Inventory\n**Input:** Read Existing ENUMERATED Receipt  ·  **Output:** Shape Immutable Message Inventory  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1002,7 +1015,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-4",
-      "name": "Stage 4 · List Immutable Message Attachments to Verify Receipt and Return Sweep",
+      "name": "Stage 4 · Message Inventory Present to Read Back ENUMERATED Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1010,7 +1023,7 @@
         960
       ],
       "parameters": {
-        "content": "## Stage 4 · List Immutable Message Attachments → Verify Receipt and Return Sweep\n**Input:** List Immutable Message Attachments  ·  **Output:** Verify Receipt and Return Sweep  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 4 · Message Inventory Present → Read Back ENUMERATED Receipt\n**Input:** Message Inventory Present  ·  **Output:** Read Back ENUMERATED Receipt  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1018,7 +1031,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-5",
-      "name": "Stage 5 · Attach Immutable Inventory to Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 5 · Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1026,7 +1039,7 @@
         1340
       ],
       "parameters": {
-        "content": "## Stage 5 · Attach Immutable Inventory to Sweep → Verify Attachment Archive Barrier\n**Input:** Attach Immutable Inventory to Sweep  ·  **Output:** Verify Attachment Archive Barrier  ·  **Nodes:** 33–36\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 5 · Verify Receipt and Return Sweep → Verify Attachment Archive Barrier\n**Input:** Verify Receipt and Return Sweep  ·  **Output:** Verify Attachment Archive Barrier  ·  **Nodes:** 33–37\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1283,6 +1296,17 @@
       "main": [
         [
           {
+            "node": "Merge Commit Evidence Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Commit Evidence Readback": {
+      "main": [
+        [
+          {
             "node": "Verify Downstream Persistence Proof",
             "type": "main",
             "index": 0
@@ -1445,21 +1469,22 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Validate Sweep or Commit to Read Authoritative Source Cursor",
+      "name": "Stage 1: Validate Sweep or Commit to Require Verified Attachment Barrier",
       "nodeIds": [
         "12002",
         "12003",
         "12004",
         "12020",
+        "12031",
         "12021",
-        "12030",
-        "12022"
+        "12030"
       ],
-      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Read Authoritative Source Cursor."
+      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Require Verified Attachment Barrier."
     },
     {
-      "name": "Stage 2: Build Cursor CAS Update to Return Verified Cursor Commit",
+      "name": "Stage 2: Read Authoritative Source Cursor to Return Verified Cursor Commit",
       "nodeIds": [
+        "12022",
         "12023",
         "12024",
         "12025",
@@ -1468,45 +1493,46 @@
         "12028",
         "12029"
       ],
-      "description": "Finance stage 2. Input starts at Build Cursor CAS Update; verified output leaves through Return Verified Cursor Commit."
+      "description": "Finance stage 2. Input starts at Read Authoritative Source Cursor; verified output leaves through Return Verified Cursor Commit."
     },
     {
-      "name": "Stage 3: Existing ENUMERATED Receipt Present to Message Inventory Present",
+      "name": "Stage 3: Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
       "nodeIds": [
+        "12036",
         "12037",
         "12005",
         "12006",
         "12007",
         "12008",
         "12009",
-        "12014",
-        "12033"
+        "12014"
       ],
-      "description": "Finance stage 3. Input starts at Existing ENUMERATED Receipt Present; verified output leaves through Message Inventory Present."
+      "description": "Finance stage 3. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Shape Immutable Message Inventory."
     },
     {
-      "name": "Stage 4: List Immutable Message Attachments to Verify Receipt and Return Sweep",
+      "name": "Stage 4: Message Inventory Present to Read Back ENUMERATED Receipt",
       "nodeIds": [
+        "12033",
         "12015",
         "12016",
         "12034",
         "12017",
         "12010",
         "12011",
-        "12012",
-        "12013"
+        "12012"
       ],
-      "description": "Finance stage 4. Input starts at List Immutable Message Attachments; verified output leaves through Verify Receipt and Return Sweep."
+      "description": "Finance stage 4. Input starts at Message Inventory Present; verified output leaves through Read Back ENUMERATED Receipt."
     },
     {
-      "name": "Stage 5: Attach Immutable Inventory to Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 5: Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
       "nodeIds": [
+        "12013",
         "12035",
         "12038",
         "12018",
         "12019"
       ],
-      "description": "Finance stage 5. Input starts at Attach Immutable Inventory to Sweep; verified output leaves through Verify Attachment Archive Barrier."
+      "description": "Finance stage 5. Input starts at Verify Receipt and Return Sweep; verified output leaves through Verify Attachment Archive Barrier."
     }
   ],
   "tags": [
