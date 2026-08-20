@@ -4,10 +4,11 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "d4df1881ce505ec431f93efb1bb82a06eb8cd420",
+    "finance_commit": "80b21fc9d0cf9b404ebb10c0f781f22d9418f1d8",
     "data_tables_sha256": "56266e11f6e547179302d9243b77351ae804b6bcbc6442f53db79fcf6508c490",
     "node_scan_corpus_sha256": "faeb89f4a8db63fe99eef37516454a40cdf745f460cd1e80d3eed3fbb7ea1312",
-    "node_scan_digest_method": "From the finance repository root, hash each JSON file under scan_roots with sha256sum, sort the complete hash-and-relative-path lines bytewise, then hash that stream with sha256sum."
+    "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
+    "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
   "scan_roots": [
     "integrations/n8n/workflows/*.json",

@@ -27,12 +27,14 @@
         "finance_commit",
         "data_tables_sha256",
         "node_scan_corpus_sha256",
+        "source_ref_selection",
         "node_scan_digest_method"
       ],
       "properties": {
         "finance_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "data_tables_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "node_scan_corpus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_ref_selection": {"type": "string", "minLength": 32},
         "node_scan_digest_method": {"type": "string", "minLength": 32}
       }
     },
