@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assertCommitEnabled,
+  doctor,
   enrichTransactions,
   exportDashboardDocument,
   partitionCrossSourceStatementDuplicates,
@@ -110,6 +111,47 @@ test("Actual write gate is case insensitive but rejects other values", () => {
     () => assertCommitEnabled(true, { ALLOW_ACTUAL_WRITES: "1" }),
     /Actual commits are disabled/,
   );
+});
+
+test("doctor redacts sync and provider account identifiers while retaining health data", async () => {
+  const syncId = "sync-secret-123";
+  const providerAccountId = "account-provider-secret-456";
+  const previousSyncId = process.env.ACTUAL_SYNC_ID;
+  process.env.ACTUAL_SYNC_ID = syncId;
+  try {
+    const result = await doctor({
+      getServerVersion: async () => ({ version: "26.8.1" }),
+      getAccounts: async () => [{
+        id: providerAccountId,
+        name: "FAB Current",
+        offbudget: false,
+        closed: false,
+      }],
+      getCategories: async () => [{ id: "category-1" }],
+      getCategoryGroups: async () => [{ id: "group-1" }],
+      getTags: async () => [{ id: "tag-1" }],
+      getRules: async () => [{ id: "rule-1" }],
+      getSchedules: async () => [{ id: "schedule-1" }],
+      getAccountBalance: async id => {
+        assert.equal(id, providerAccountId);
+        return -4200;
+      },
+    });
+
+    const serialized = JSON.stringify(result);
+    assert.equal(result.sync_id_present, true);
+    assert.equal(result.counts.accounts, 1);
+    assert.equal(result.accounts[0].id, "[REDACTED]");
+    assert.equal(result.accounts[0].name, "FAB Current");
+    assert.equal(result.accounts[0].balance, -4200);
+    assert.equal(result.accounts[0].closed, false);
+    assert.equal(result.accounts[0].offbudget, false);
+    assert.ok(!serialized.includes(syncId));
+    assert.ok(!serialized.includes(providerAccountId));
+  } finally {
+    if (previousSyncId === undefined) delete process.env.ACTUAL_SYNC_ID;
+    else process.env.ACTUAL_SYNC_ID = previousSyncId;
+  }
 });
 
 test("unique statement rows already captured by a browser export are suppressed", () => {
