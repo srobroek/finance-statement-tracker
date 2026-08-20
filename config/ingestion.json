@@ -33,6 +33,10 @@
         "archive_workflow": "OUTLOOK_FINANCE_ACQUISITION",
         "enumerate_once": true,
         "immutable_identity": ["message_id", "attachment_id"],
+        "composite_identity": ["source_message_id", "source_attachment_id"],
+        "enumeration_receipt_preread": true,
+        "archive_receipt_preread": true,
+        "durable_email_evidence_barrier": "REQUIRED",
         "attachment_verification_barrier": "REQUIRED",
         "inline_non_pdf_disposition": "ARCHIVED_ONLY",
         "replay_disposition": "NO_OP"

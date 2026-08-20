@@ -114,11 +114,28 @@ class MailIngestionTests(unittest.TestCase):
             ["message_id", "attachment_id"],
         )
         self.assertEqual(
+            workflow["meta"]["immutableCompositeIdentity"],
+            ["source_message_id", "source_attachment_id"],
+        )
+        self.assertTrue(workflow["meta"]["enumerationReceiptPreRead"])
+        self.assertIn(
+            "folder_id: sweep.folder_id",
+            nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"],
+        )
+        self.assertEqual(
             nodes["List Immutable Message Attachments"]["parameters"]["resource"],
             "messageAttachment",
         )
         self.assertIn("IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE", nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"])
-        self.assertIn("DUPLICATE_ATTACHMENT_ID", nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"])
+        self.assertIn("DUPLICATE_MESSAGE_ATTACHMENT_ID", nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"])
+        self.assertEqual(
+            workflow["connections"]["Freeze Trusted Cursor Window"]["main"][0][0]["node"],
+            "Read Existing ENUMERATED Receipt",
+        )
+        self.assertEqual(
+            workflow["connections"]["Existing ENUMERATED Receipt Present"]["main"][0][0]["node"],
+            "Return Existing ENUMERATED Receipt",
+        )
         self.assertEqual(
             workflow["connections"]["Verify Receipt and Return Sweep"]["main"][0][0]["node"],
             "Attach Immutable Inventory to Sweep",
@@ -133,13 +150,26 @@ class MailIngestionTests(unittest.TestCase):
         nodes = {node["name"]: node for node in workflow["nodes"]}
         connections = workflow["connections"]
         self.assertTrue(workflow["meta"]["immutableEnumerationInputRequired"])
+        self.assertTrue(workflow["meta"]["immutableEnumerationFailClosed"])
+        self.assertFalse(workflow["meta"]["secondGraphEnumeration"])
+        self.assertTrue(workflow["meta"]["archiveReceiptPreRead"])
+        self.assertEqual(workflow["meta"]["emailEvidenceReceiptBarrier"], "REQUIRED")
         self.assertEqual(
             connections["Has Immutable Enumeration"]["main"][0][0]["node"],
             "Shape Immutable Archive Input",
         )
         self.assertEqual(
             connections["Has Immutable Enumeration"]["main"][1][0]["node"],
-            "Read Microsoft Graph Circuit",
+            "Reject Missing Immutable Enumeration",
+        )
+        self.assertNotIn("Get Messages from Configured Folder", nodes)
+        self.assertEqual(
+            connections["Enumerated Attachment Present"]["main"][0][0]["node"],
+            "Read Existing Enumerated Archive Receipt",
+        )
+        self.assertEqual(
+            connections["Existing Email Evidence Receipt Present"]["main"][0][0]["node"],
+            "Verify Existing Email Evidence Receipt",
         )
         self.assertIn("attachment_inventory", nodes["Expand Enumerated Attachment Items"]["parameters"]["jsCode"])
         self.assertIn("ARCHIVED_ONLY", nodes["Record Enumerated Attachment Disposition"]["parameters"]["columns"]["value"]["error_class"])
@@ -156,6 +186,8 @@ class MailIngestionTests(unittest.TestCase):
             connections["Record Email PDF Render Requirement"]["main"][0][0]["node"],
             "Merge Archive Verification Inputs",
         )
+        self.assertIn("EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH", barrier_code)
+        self.assertIn("source_message_id + ':' + row.source_attachment_id", barrier_code)
 
     def test_replay_and_failure_barriers_keep_cursor_after_archive_proof(self):
         w12 = self.workflow("12-outlook-message-sweep.json")
@@ -167,12 +199,16 @@ class MailIngestionTests(unittest.TestCase):
             w12["connections"]["Verify Downstream Persistence Proof"]["main"][0][0]["node"],
             "Require Verified Attachment Barrier",
         )
-        self.assertIn("DOWNSTREAM_ARCHIVE_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
+        self.assertIn("DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
+        self.assertIn("EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH", w12_nodes["Verify Attachment Archive Barrier"]["parameters"]["jsCode"])
         self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
+        self.assertIn("SOURCE_CURSOR_ALREADY_COMMITTED", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
         cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
         self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
         self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
+        self.assertIn("ARCHIVE_RECEIPT_REPLAY_NOT_SAFE", w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"]["jsCode"])
+        self.assertIn("EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH", w01_nodes["Verify Durable Email Evidence Receipt"]["parameters"]["jsCode"])
         self.assertIn("Archive Enumerated Attachment in OneDrive", w01["connections"])
 
 
