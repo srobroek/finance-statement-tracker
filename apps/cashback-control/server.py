@@ -243,6 +243,14 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlsplit(self.path).path
+        if path in {
+            "/api/dashboard",
+            "/api/periods",
+            "/api/health",
+            "/api/push/config",
+        } and not self._authorize_operational_read(allow_ingest_token=path == "/api/health"):
+            self._json(HTTPStatus.FORBIDDEN, {"error": "Operational read authorization required"})
+            return
         if path == "/api/health":
             self._json(
                 HTTPStatus.OK,
@@ -327,7 +335,13 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                     raise ValueError("subscription must be an object")
                 if action == "unsubscribe":
                     result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
-                    self._json(HTTPStatus.OK, {"subscription": result, "push": PUSH_DISPATCHER.config()})
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "subscription": {"removed": bool(result["removed"])},
+                            "push": PUSH_DISPATCHER.config(),
+                        },
+                    )
                     return
                 if action != "subscribe":
                     raise ValueError("action must be subscribe or unsubscribe")
@@ -338,7 +352,11 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                 delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
                 self._json(
                     HTTPStatus.OK,
-                    {"subscription": result, "test_delivery": delivery, "push": PUSH_DISPATCHER.config()},
+                    {
+                        "subscription": {"enabled": bool(result["enabled"])},
+                        "test_delivery": delivery,
+                        "push": PUSH_DISPATCHER.config(),
+                    },
                 )
                 return
             if path == "/api/alerts/ack":
@@ -438,6 +456,27 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             or self.headers.get("Authorization")
         ):
             return False
+        return self._verify_access_session()
+
+    def _authorize_operational_read(self, *, allow_ingest_token: bool = False) -> bool:
+        """Require the Access session for dashboard and operational metadata reads."""
+        if (
+            allow_ingest_token
+            and INGEST_TOKEN
+            and hmac.compare_digest(
+                self.headers.get("Authorization") or "",
+                f"Bearer {INGEST_TOKEN}",
+            )
+        ):
+            return True
+        if not hmac.compare_digest(
+            (self.headers.get("Host") or "").casefold(),
+            PUBLIC_ORIGIN.netloc.casefold(),
+        ):
+            return False
+        return self._verify_access_session()
+
+    def _verify_access_session(self) -> bool:
         if local_access_exemption(BIND_HOST, self.client_address[0], PUBLIC_URL):
             return True
         if ACCESS_VERIFIER is None:

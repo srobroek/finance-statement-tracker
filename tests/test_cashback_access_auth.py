@@ -381,6 +381,27 @@ class BrowserMutationServerTests(unittest.TestCase):
             return error.code
 
     @staticmethod
+    def _get(
+        port: int,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}",
+            headers={"Host": "cashback.example", **(headers or {})},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=2) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            try:
+                return error.code, json.loads(error.read())
+            finally:
+                error.close()
+
+    @staticmethod
     def _counts(database: Path) -> tuple[int, int]:
         with sqlite3.connect(database) as connection:
             return tuple(
@@ -399,7 +420,13 @@ class BrowserMutationServerTests(unittest.TestCase):
                 health_url = f"http://127.0.0.1:{port}/api/health"
                 for _ in range(50):
                     try:
-                        with urllib.request.urlopen(health_url, timeout=0.2):
+                        with urllib.request.urlopen(
+                            urllib.request.Request(
+                                health_url,
+                                headers={"Authorization": "Bearer machine-token"},
+                            ),
+                            timeout=0.2,
+                        ):
                             break
                     except (OSError, urllib.error.URLError):
                         time.sleep(0.05)
@@ -495,6 +522,96 @@ class BrowserMutationServerTests(unittest.TestCase):
             if process.poll() is None:
                 process.kill()
                 process.wait(timeout=5)
+
+    def test_operational_reads_require_access_and_redact_push_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            port = self._free_port()
+            process = self._start_app(temporary, port)
+            try:
+                health_url = f"http://127.0.0.1:{port}/api/health"
+                for _ in range(50):
+                    try:
+                        with urllib.request.urlopen(
+                            urllib.request.Request(
+                                health_url,
+                                headers={"Authorization": "Bearer machine-token"},
+                            ),
+                            timeout=0.2,
+                        ):
+                            break
+                    except (OSError, urllib.error.URLError):
+                        time.sleep(0.05)
+                else:
+                    self.fail("Cashback server did not become ready")
+
+                paths = ("/api/dashboard", "/api/periods", "/api/health", "/api/push/config")
+                for path in paths:
+                    with self.subTest(path=path):
+                        status, body = self._get(port, path)
+                        self.assertEqual(status, 403)
+                        self.assertEqual(body, {"error": "Operational read authorization required"})
+
+                token = self._token()
+                for path in paths:
+                    with self.subTest(path=path, authorized=True):
+                        status, body = self._get(
+                            port,
+                            path,
+                            headers={"Cf-Access-Jwt-Assertion": token},
+                        )
+                        self.assertEqual(status, 200)
+                        serialized = json.dumps(body)
+                        self.assertNotIn("subscription_count", serialized)
+                        self.assertNotIn("sent_count", serialized)
+                        self.assertNotIn("p256dh", serialized)
+                        self.assertNotIn("auth", serialized)
+
+                status, body = self._get(
+                    port,
+                    "/api/health",
+                    headers={"Authorization": "Bearer machine-token"},
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(body["status"], "ok")
+                status, _ = self._get(
+                    port,
+                    "/api/dashboard",
+                    headers={"Authorization": "Bearer machine-token"},
+                )
+                self.assertEqual(status, 403)
+
+                push = {
+                    "action": "subscribe",
+                    "subscription": {
+                        "endpoint": "https://push.example/private-endpoint",
+                        "keys": {"p256dh": "private-p256dh", "auth": "private-auth"},
+                    },
+                }
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/push/subscriptions",
+                    data=json.dumps(push).encode("utf-8"),
+                    headers={
+                        "Host": "cashback.example",
+                        "Content-Type": "application/json",
+                        "Origin": "https://cashback.example",
+                        "Cf-Access-Jwt-Assertion": token,
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    payload = json.loads(response.read())
+                serialized = json.dumps(payload)
+                self.assertNotIn("private-p256dh", serialized)
+                self.assertNotIn("private-auth", serialized)
+                self.assertNotIn("subscription_count", serialized)
+                self.assertNotIn("sent_count", serialized)
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
 
 
 if __name__ == "__main__":
