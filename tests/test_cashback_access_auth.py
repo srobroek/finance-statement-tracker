@@ -43,8 +43,14 @@ def _public_jwk(private_key: Any, kid: str) -> dict[str, Any]:
 
 class _JWKSHandler(BaseHTTPRequestHandler):
     payload: dict[str, Any] = {"keys": []}
+    request_count = 0
+    failure = False
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+        type(self).request_count += 1
+        if type(self).failure:
+            self.send_error(503)
+            return
         body = json.dumps(self.payload).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -54,6 +60,22 @@ class _JWKSHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         return
+
+
+class _StaticJWKClient:
+    def __init__(self, keys: list[dict[str, Any]]) -> None:
+        self._keys = {
+            key["kid"]: jwt.PyJWK.from_dict(key)
+            for key in keys
+            if isinstance(key.get("kid"), str)
+        }
+
+    def get_signing_key_from_jwt(self, token: str) -> jwt.PyJWK:
+        kid = jwt.get_unverified_header(token).get("kid")
+        key = self._keys.get(kid)
+        if key is None:
+            raise jwt.PyJWKClientError(f"unknown kid: {kid}")
+        return key
 
 
 class CloudflareAccessVerifierTests(unittest.TestCase):
@@ -83,7 +105,7 @@ class CloudflareAccessVerifierTests(unittest.TestCase):
     def _verifier(self, payload: dict[str, Any] | None = None) -> CloudflareAccessVerifier:
         return CloudflareAccessVerifier(
             self.settings,
-            fetch_jwks=lambda *_: payload or {"keys": [self.jwk]},
+            jwks_client=_StaticJWKClient((payload or {"keys": [self.jwk]})["keys"]),
         )
 
     def test_valid_assertion_requires_exact_claims_and_signature(self) -> None:
@@ -131,51 +153,85 @@ class CloudflareAccessVerifierTests(unittest.TestCase):
     def test_unknown_key_refreshes_once_for_rotation(self) -> None:
         rotated_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rotated_jwk = _public_jwk(rotated_key, "rotated")
-        responses = [{"keys": [self.jwk]}, {"keys": [rotated_jwk]}]
-        calls: list[int] = []
-
-        def fetch(*_: Any) -> dict[str, Any]:
-            calls.append(1)
-            return responses[min(len(calls) - 1, 1)]
-
-        verifier = CloudflareAccessVerifier(self.settings, fetch_jwks=fetch)
-        self.assertEqual(verifier.verify(self._token())["sub"], "user-1")
-        rotated = jwt.encode(
-            {
-                "iss": self.issuer,
-                "aud": self.audience,
-                "exp": int(time.time()) + 300,
-                "sub": "rotated-user",
-            },
-            rotated_key,
-            algorithm="RS256",
-            headers={"kid": "rotated"},
-        )
-        self.assertEqual(verifier.verify(rotated)["sub"], "rotated-user")
-        self.assertEqual(len(calls), 2)
-
-    def test_expired_cache_does_not_use_stale_key_after_refresh_failure(self) -> None:
-        now = [100.0]
-
-        def fetch(*_: Any) -> dict[str, Any]:
-            if now[0] > 100:
-                raise AccessVerificationError("network failure")
-            return {"keys": [self.jwk]}
-
-        verifier = CloudflareAccessVerifier(
-            AccessSettings(
+        _JWKSHandler.payload = {"keys": [self.jwk]}
+        _JWKSHandler.request_count = 0
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _JWKSHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            settings = AccessSettings(
                 self.issuer,
                 self.audience,
-                self.settings.jwks_url,
-                cache_ttl_seconds=10,
-            ),
-            fetch_jwks=fetch,
-            clock=lambda: now[0],
-        )
-        self.assertEqual(verifier.verify(self._token())["sub"], "user-1")
-        now[0] = 111
-        with self.assertRaises(AccessVerificationError):
-            verifier.verify(self._token())
+                f"http://127.0.0.1:{server.server_port}/certs",
+            )
+            verifier = CloudflareAccessVerifier(settings)
+            self.assertEqual(verifier.verify(self._token())["sub"], "user-1")
+            _JWKSHandler.payload = {"keys": [rotated_jwk]}
+            rotated = jwt.encode(
+                {
+                    "iss": self.issuer,
+                    "aud": self.audience,
+                    "exp": int(time.time()) + 300,
+                    "sub": "rotated-user",
+                },
+                rotated_key,
+                algorithm="RS256",
+                headers={"kid": "rotated"},
+            )
+            self.assertEqual(verifier.verify(rotated)["sub"], "rotated-user")
+            self.assertEqual(_JWKSHandler.request_count, 2)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_expired_cache_does_not_use_stale_key_after_refresh_failure(self) -> None:
+        _JWKSHandler.payload = {"keys": [self.jwk]}
+        _JWKSHandler.request_count = 0
+        _JWKSHandler.failure = False
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _JWKSHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            verifier = CloudflareAccessVerifier(
+                AccessSettings(
+                    self.issuer,
+                    self.audience,
+                    f"http://127.0.0.1:{server.server_port}/certs",
+                    cache_ttl_seconds=0.01,
+                )
+            )
+            self.assertEqual(verifier.verify(self._token())["sub"], "user-1")
+            _JWKSHandler.failure = True
+            time.sleep(0.05)
+            with self.assertRaises(AccessVerificationError):
+                verifier.verify(self._token())
+        finally:
+            _JWKSHandler.failure = False
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_jwks_response_size_is_bounded(self) -> None:
+        _JWKSHandler.payload = {"keys": [self.jwk], "padding": "x" * 256}
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _JWKSHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            verifier = CloudflareAccessVerifier(
+                AccessSettings(
+                    self.issuer,
+                    self.audience,
+                    f"http://127.0.0.1:{server.server_port}/certs",
+                    max_jwks_bytes=128,
+                )
+            )
+            with self.assertRaises(AccessVerificationError):
+                verifier.verify(self._token())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
     def test_public_mode_requires_all_access_settings(self) -> None:
         with self.assertRaises(AccessConfigurationError):
@@ -191,6 +247,52 @@ class CloudflareAccessVerifierTests(unittest.TestCase):
                 environ={},
             )
         )
+
+    def test_non_loopback_http_urls_are_rejected(self) -> None:
+        environment = {
+            "CASHBACK_ACCESS_ISSUER": self.issuer,
+            "CASHBACK_ACCESS_AUDIENCE": self.audience,
+            "CASHBACK_ACCESS_JWKS_URL": "https://access.example/certs",
+        }
+        cases = (
+            ("CASHBACK_ACCESS_ISSUER", "http://access.example"),
+            ("CASHBACK_ACCESS_JWKS_URL", "http://access.example/certs"),
+        )
+        for name, value in cases:
+            with self.subTest(name=name):
+                with self.assertRaises(AccessConfigurationError):
+                    AccessSettings.from_environment({**environment, name: value})
+        with self.assertRaises(AccessConfigurationError):
+            build_access_verifier(
+                bind_host="0.0.0.0",
+                public_url="http://cashback.example",
+                environ=environment,
+            )
+
+    def test_non_finite_cache_and_timeout_values_are_rejected(self) -> None:
+        environment = {
+            "CASHBACK_ACCESS_ISSUER": self.issuer,
+            "CASHBACK_ACCESS_AUDIENCE": self.audience,
+            "CASHBACK_ACCESS_JWKS_URL": "https://access.example/certs",
+        }
+        for name in (
+            "CASHBACK_ACCESS_JWKS_CACHE_SECONDS",
+            "CASHBACK_ACCESS_JWKS_TIMEOUT_SECONDS",
+        ):
+            for value in ("nan", "inf", "-inf"):
+                with self.subTest(name=name, value=value):
+                    with self.assertRaises(AccessConfigurationError):
+                        AccessSettings.from_environment({**environment, name: value})
+        for field in ("cache_ttl_seconds", "timeout_seconds"):
+            with self.subTest(field=field, value="nan-direct"):
+                values = {
+                    "issuer": self.issuer,
+                    "audience": self.audience,
+                    "jwks_url": "https://access.example/certs",
+                    field: float("nan"),
+                }
+                with self.assertRaises(AccessConfigurationError):
+                    AccessSettings(**values)  # type: ignore[arg-type]
 
     def test_local_exemption_requires_loopback_bind_client_and_public_url(self) -> None:
         self.assertTrue(local_access_exemption("127.0.0.1", "127.0.0.1", "http://127.0.0.1:5010"))

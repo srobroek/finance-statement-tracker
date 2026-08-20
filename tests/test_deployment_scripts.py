@@ -67,6 +67,16 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('fetch --no-tags --depth 1 origin "$GITHUB_SHA"', deploy)
         self.assertIn('test "$(git -C "$source_dir" rev-parse HEAD)" = "$GITHUB_SHA"', deploy)
 
+    def test_cashback_build_and_ci_use_the_reviewed_uv_lock(self) -> None:
+        dockerfile = Path("apps/cashback-control/Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("COPY pyproject.toml uv.lock README.md ./", dockerfile)
+        self.assertIn("uv sync --frozen --no-dev --no-cache", dockerfile)
+        self.assertNotIn("pip install", dockerfile)
+        workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        self.assertIn('"uv.lock"', workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
+        self.assertIn("uv run --frozen python -m unittest", workflow)
+
     def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
