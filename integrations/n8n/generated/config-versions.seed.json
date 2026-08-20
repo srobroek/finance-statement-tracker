@@ -58,9 +58,9 @@
     },
     {
       "config_name": "cashback-programs",
-      "version": "1",
+      "version": "2",
       "source_path": "config/cashback-programs.json",
-      "content_sha256": "fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253",
+      "content_sha256": "6cf341b7173a24a5373a5da8b658e8bd3a876c6121e734589126352938277b4c",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

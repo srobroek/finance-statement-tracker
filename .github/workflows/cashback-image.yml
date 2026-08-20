@@ -16,6 +16,7 @@ on:
       - "config/actual-note-contract.json"
       - "config/cashback-programs.json"
       - "config/cashback-profile-schema-v1.json"
+      - "config/cashback-profile-schema-v2.json"
       - "config/static-rules.seed.json"
       - "config/transaction-email-sources.json"
       - "examples/cashback-profiles/**"

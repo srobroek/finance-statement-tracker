@@ -14,6 +14,8 @@ COPY pyproject.toml uv.lock README.md ./
 COPY finance_tracker ./finance_tracker
 COPY config/actual-note-contract.json ./config/actual-note-contract.json
 COPY config/cashback-programs.json ./config/cashback-programs.json
+COPY config/cashback-profile-schema-v1.json ./config/cashback-profile-schema-v1.json
+COPY config/cashback-profile-schema-v2.json ./config/cashback-profile-schema-v2.json
 COPY config/actual-bootstrap.json ./config/actual-bootstrap.json
 COPY config/static-rules.seed.json ./config/static-rules.seed.json
 COPY config/transaction-email-sources.json ./config/transaction-email-sources.json

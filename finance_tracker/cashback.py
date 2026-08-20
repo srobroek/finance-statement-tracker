@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
+
+from jsonschema import Draft202012Validator, FormatChecker
 
 from .models import Transaction, money
 
@@ -550,7 +553,211 @@ def _merged_policy(
     return {**base, **override}
 
 
+def _provenance_claim_paths(program: dict[str, object]) -> dict[str, str]:
+    paths = {"programme": "PROGRAMME"}
+    for tier in program.get("tiers") or []:
+        if not isinstance(tier, dict):
+            continue
+        code = str(tier.get("code") or "")
+        if not code:
+            continue
+        paths[f"tiers.{code}"] = "TIER"
+        for bucket in (tier.get("rates") or {}):
+            paths[f"tiers.{code}.rates.{bucket}"] = "RATE"
+        for bucket, value in (tier.get("cashback_caps_aed") or {}).items():
+            if value is not None:
+                paths[f"tiers.{code}.cashback_caps_aed.{bucket}"] = "CAP"
+    for bucket in program.get("buckets") or []:
+        if not isinstance(bucket, dict):
+            continue
+        code = str(bucket.get("code") or "")
+        if not code:
+            continue
+        for field in ("cashback_cap", "cashback_cap_aed", "spend_cap", "spend_cap_aed"):
+            if bucket.get(field) is not None:
+                paths[f"buckets.{code}.{field}"] = "CAP"
+        for field in ("excluded_categories", "excluded_channels"):
+            for index, value in enumerate(bucket.get(field) or []):
+                if value:
+                    paths[f"buckets.{code}.{field}[{index}]"] = "EXCLUSION"
+    for index, value in enumerate(program.get("exclusions") or []):
+        if value:
+            paths[f"exclusions[{index}]"] = "EXCLUSION"
+    return paths
+
+
+def _provenance_interval_covers(
+    reference_start: date,
+    reference_end: date | None,
+    claim_start: date,
+    claim_end: date | None,
+) -> bool:
+    return (
+        reference_start <= claim_start
+        and (reference_end is None or (claim_end is not None and claim_end <= reference_end))
+    )
+
+
+def _profile_schema_path(schema_version: int) -> Path:
+    return Path(__file__).resolve().parent.parent / "config" / f"cashback-profile-schema-v{schema_version}.json"
+
+
+def _validate_profile_schema(source: dict[str, object], schema_version: int) -> None:
+    schema_path = _profile_schema_path(schema_version)
+    if not schema_path.is_file():
+        raise ValueError(f"Cashback profile schema is missing for version {schema_version}")
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cashback profile schema cannot be loaded for version {schema_version}") from exc
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    errors = sorted(validator.iter_errors(source), key=lambda error: list(error.absolute_path))
+    if errors:
+        location = ".".join(str(part) for part in errors[0].absolute_path) or "$"
+        raise ValueError(f"Cashback profile schema error at {location}: {errors[0].message}")
+
+
+def validate_program_provenance(source: dict[str, object]) -> None:
+    if int(source.get("schema_version", 1)) < 2:
+        return
+    programs = source.get("programs") or []
+    evidence_root = Path(__file__).resolve().parent.parent
+    for item in programs:
+        if not isinstance(item, dict):
+            continue
+        card = str(item.get("card") or "")
+        provenance = item.get("provenance")
+        if not isinstance(provenance, dict):
+            raise ValueError(f"Cashback program {card} requires provenance in schema version 2")
+        authority = str(provenance.get("authority") or "")
+        if authority not in {"AUTHORITATIVE", "NON_AUTHORITATIVE"}:
+            raise ValueError(f"Cashback program {card} has invalid provenance authority")
+        references = item.get("source_references") or []
+        if not isinstance(references, list):
+            raise ValueError(f"Cashback program {card} source_references must be a list")
+        references_by_id: dict[str, dict[str, object]] = {}
+        for reference in references:
+            if not isinstance(reference, dict):
+                raise ValueError(f"Cashback program {card} contains invalid provenance evidence")
+            reference_id = str(reference.get("id") or "")
+            if not reference_id or reference_id in references_by_id:
+                raise ValueError(f"Cashback program {card} contains duplicate provenance reference ids")
+            reference_authority = str(reference.get("authority") or "")
+            if reference_authority not in {"AUTHORITATIVE", "NON_AUTHORITATIVE"}:
+                raise ValueError(f"Cashback program {card} has invalid evidence authority")
+            if "effective_start" not in reference or "effective_end" not in reference:
+                raise ValueError(f"Cashback program {card} evidence requires an effective interval")
+            try:
+                reference_start = _iso_date(reference.get("effective_start"))
+                reference_end = _iso_date(reference.get("effective_end"))
+            except ValueError as exc:
+                raise ValueError(f"Cashback program {card} evidence has invalid dates") from exc
+            if reference_start and reference_end and reference_end < reference_start:
+                raise ValueError(f"Cashback program {card} evidence has an invalid date range")
+            references_by_id[reference_id] = reference
+        claims = provenance.get("claims")
+        if not isinstance(claims, list):
+            raise ValueError(f"Cashback program {card} provenance claims must be a list")
+        expected_paths = _provenance_claim_paths(item)
+        if authority == "AUTHORITATIVE":
+            if not claims:
+                raise ValueError(f"Cashback program {card} requires authoritative provenance claims")
+            actual_paths = {str(claim.get("path") or "") for claim in claims if isinstance(claim, dict)}
+            if len(actual_paths) != len(claims):
+                raise ValueError(f"Cashback program {card} contains duplicate provenance claims")
+            if actual_paths != set(expected_paths):
+                missing = ", ".join(sorted(set(expected_paths) - actual_paths))
+                extra = ", ".join(sorted(actual_paths - set(expected_paths)))
+                detail = (f"; missing={missing}" if missing else "") + (f"; extra={extra}" if extra else "")
+                raise ValueError(f"Cashback program {card} has incomplete provenance claims{detail}")
+        program_start = _iso_date(item.get("effective_start") or source.get("effective_from"))
+        configured_program_end = _iso_date(item.get("effective_end") or source.get("effective_end"))
+        # An open-ended current programme is only applicable through this validation
+        # instant. Without this boundary, a current seed could attest to arbitrary
+        # future rates or issuer evidence that has not been observed yet.
+        program_end = configured_program_end or date.today()
+        if program_start and program_end and program_end < program_start:
+            raise ValueError(f"Cashback program {card} has an invalid effective interval")
+        if authority == "AUTHORITATIVE" and program_start is None:
+            raise ValueError(f"Cashback program {card} requires an effective programme start")
+        for claim in claims:
+            if not isinstance(claim, dict):
+                raise ValueError(f"Cashback program {card} contains invalid provenance claim")
+            path = str(claim.get("path") or "")
+            if path not in expected_paths:
+                raise ValueError(f"Cashback program {card} references an unknown provenance path {path}")
+            if str(claim.get("kind") or "") != expected_paths[path]:
+                raise ValueError(f"Cashback program {card} claim {path} has an invalid kind")
+            claim_start = _iso_date(claim.get("effective_start"))
+            claim_end = _iso_date(claim.get("effective_end"))
+            if claim_start is None:
+                raise ValueError(f"Cashback program {card} claim {path} is undated")
+            if claim_end and claim_end < claim_start:
+                raise ValueError(f"Cashback program {card} claim {path} has an invalid date range")
+            if program_start and claim_start < program_start:
+                raise ValueError(f"Cashback program {card} claim {path} starts before the programme")
+            if program_end and claim_start > program_end:
+                raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            if configured_program_end and (claim_end is None or claim_end > configured_program_end):
+                raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            if not configured_program_end and claim_end and claim_end > program_end:
+                raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            claim_coverage_end = claim_end
+            if authority == "AUTHORITATIVE":
+                if claim_start != program_start:
+                    raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                if configured_program_end:
+                    if claim_end != configured_program_end:
+                        raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                elif claim_end not in (None, program_end):
+                    raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                claim_coverage_end = claim_end or program_end
+            reference_ids = claim.get("reference_ids")
+            if not isinstance(reference_ids, list) or not reference_ids:
+                raise ValueError(f"Cashback program {card} claim {path} requires evidence references")
+            covered = False
+            for reference_id in reference_ids:
+                reference = references_by_id.get(str(reference_id))
+                if reference is None:
+                    raise ValueError(f"Cashback program {card} claim {path} references unknown evidence")
+                if authority == "AUTHORITATIVE" and reference.get("authority") != "AUTHORITATIVE":
+                    raise ValueError(f"Cashback program {card} claim {path} uses non-authoritative evidence")
+                reference_start = _iso_date(reference.get("effective_start"))
+                reference_end = _iso_date(reference.get("effective_end"))
+                if reference_start and reference_end and reference_end < reference_start:
+                    raise ValueError(f"Cashback program {card} evidence has an invalid date range")
+                if reference_start and _provenance_interval_covers(
+                    reference_start, reference_end, claim_start, claim_coverage_end
+                ):
+                    covered = True
+            if authority == "AUTHORITATIVE" and not covered:
+                raise ValueError(f"Cashback program {card} evidence does not cover claim interval {path}")
+        for reference in references:
+            if reference.get("authority") != "AUTHORITATIVE":
+                continue
+            reference_start = _iso_date(reference.get("effective_start"))
+            if reference_start is None:
+                raise ValueError(f"Cashback program {card} authoritative evidence is undated")
+            sha256 = str(reference.get("sha256") or "")
+            fixture = str(reference.get("fixture") or "")
+            if len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256):
+                raise ValueError(f"Cashback program {card} authoritative evidence requires a SHA-256")
+            if not fixture:
+                raise ValueError(f"Cashback program {card} authoritative evidence requires content")
+            fixture_path = (evidence_root / fixture).resolve()
+            try:
+                fixture_path.relative_to(evidence_root.resolve())
+            except ValueError as exc:
+                raise ValueError(f"Cashback program {card} evidence fixture escapes repository") from exc
+            if not fixture_path.is_file():
+                raise ValueError(f"Cashback program {card} evidence fixture is missing")
+            observed = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+            if observed != sha256:
+                raise ValueError(f"Cashback program {card} evidence digest drift for {reference['id']}")
+
+
 def validate_program_configuration(source: dict[str, object]) -> None:
+    validate_program_provenance(source)
     programs = source.get("programs") or []
     if not isinstance(programs, list) or not programs:
         raise ValueError("Cashback configuration must define at least one program")
@@ -944,8 +1151,13 @@ def payment_intents_from_config(source: dict[str, object]) -> tuple[PaymentInten
 def load_program_configuration(path: Path | None = None) -> dict[str, object]:
     resolved = path or Path(__file__).resolve().parent.parent / "config" / "cashback-programs.json"
     source = json.loads(resolved.read_text(encoding="utf-8"))
-    if int(source.get("schema_version", 0)) != 1:
+    try:
+        schema_version = int(source.get("schema_version", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Unsupported cashback program schema version") from exc
+    if schema_version not in {1, 2}:
         raise ValueError("Unsupported cashback program schema version")
+    _validate_profile_schema(source, schema_version)
     validate_program_configuration(source)
     return source
 

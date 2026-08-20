@@ -1,12 +1,12 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "USER_CONFIRMED",
   "currency": "AED",
   "profile": {
     "name": "Cashback Control",
     "locale": "en-AE"
   },
-  "notes": "Card cycles, reward thresholds, bucket caps, routing behavior and eligibility were confirmed by the cardholder on 2026-08-17. RAKBANK references are recorded on the programme; issuer changes still require a new effective-dated version.",
+  "notes": "Card cycles, reward thresholds, bucket caps, routing behavior and eligibility were confirmed by the cardholder on 2026-08-17. These programme claims remain non-authoritative until each rate, cap, exclusion and tier is mapped to dated issuer evidence with a content digest.",
   "defaults": {
     "pace": {
       "basis": "WEEKLY",
@@ -102,11 +102,16 @@
       "routing_priority": 20,
       "exclusions": ["Money transfers", "Cash advances", "Credit-card cheques", "Bank fees and charges", "Interest", "Cancelled or reversed transactions", "Other issuer-designated ineligible transactions"],
       "source_references": [
-        {"label": "Key Fact Statement", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-key-fact-statement/1483-key-fact-statement.pdf"},
-        {"label": "Service and Price Guide", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-service-and-price-guide/1483-service-and-price-guide.pdf"},
-        {"label": "Terms and Conditions", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-terms--conditions/1483-terms--conditions.pdf"},
-        {"label": "World Credit Card Terms", "url": "https://www.rakbank.ae/en/help-centre/product-terms-kfs/terms-and-conditions/world-cc"}
+        {"id": "rak-key-fact-statement", "label": "Key Fact Statement", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-key-fact-statement/1483-key-fact-statement.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-service-price-guide", "label": "Service and Price Guide", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-service-and-price-guide/1483-service-and-price-guide.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-terms-conditions", "label": "Terms and Conditions", "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-terms--conditions/1483-terms--conditions.pdf", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"},
+        {"id": "rak-world-card-terms", "label": "World Credit Card Terms", "url": "https://www.rakbank.ae/en/help-centre/product-terms-kfs/terms-and-conditions/world-cc", "effective_start": null, "effective_end": null, "authority": "NON_AUTHORITATIVE"}
       ],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Cardholder-confirmed seed; individual issuer claims have not been mapped to immutable effective-dated evidence.",
+        "claims": []
+      },
       "safety_target_aed": "10300",
       "fx_cost_rate": "0",
       "tiers": [
@@ -135,6 +140,12 @@
       "rounding_behavior": "CURRENCY_MINOR_UNIT",
       "routing_priority": 10,
       "exclusions": ["Issuer-designated ineligible transactions"],
+      "source_references": [],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Cardholder-confirmed seed; issuer evidence is unavailable for claim-level verification.",
+        "claims": []
+      },
       "safety_target_aed": "15300",
       "fx_cost_rate": "0.0299",
       "tiers": [
@@ -170,6 +181,12 @@
       "rounding_behavior": "CURRENCY_MINOR_UNIT",
       "routing_priority": 5,
       "exclusions": [],
+      "source_references": [],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Cardholder-confirmed seed; issuer evidence is unavailable for claim-level verification.",
+        "claims": []
+      },
       "safety_target_aed": null,
       "fx_cost_rate": "0",
       "tiers": [
