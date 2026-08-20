@@ -31,18 +31,40 @@ reject_parent_secrets() {
 reject_parent_secrets || exit 1
 [[ "${1:-}" == "codex" ]] || { echo "The child must be the approved Codex binary" >&2; exit 1; }
 shift
-[[ -x "$(command -v "${op_bin}" || true)" ]] || { echo "Approved 1Password CLI is unavailable" >&2; exit 1; }
-case "${op_bin}" in
-  op|op.exe|*/op|*/op.exe) ;;
-  *) echo "OP_BIN must identify the approved 1Password CLI" >&2; exit 1 ;;
-esac
-case "${codex_bin}" in
-  codex|*/codex|codex-cli|*/codex-cli) ;;
-  *) echo "CODEX_BIN must identify the approved Codex binary" >&2; exit 1 ;;
-esac
-codex_path="$(command -v "${codex_bin}" || true)"
+resolve_trusted_binary() {
+  local label="$1"
+  local configured="$2"
+  local candidate canonical
+  if [[ "${configured}" == /* ]]; then
+    candidate="${configured}"
+  else
+    case "${configured}" in
+      op|codex|codex-cli) candidate="$(command -v "${configured}" || true)" ;;
+      *) echo "${label} must identify a trusted executable path" >&2; return 1 ;;
+    esac
+  fi
+  [[ -f "${candidate}" && -x "${candidate}" ]] || {
+    echo "${label} executable is unavailable" >&2
+    return 1
+  }
+  canonical="$(readlink -f -- "${candidate}" 2>/dev/null || true)"
+  [[ -n "${canonical}" && -f "${canonical}" && -x "${canonical}" ]] || {
+    echo "${label} executable cannot be canonicalized" >&2
+    return 1
+  }
+  # Environment overrides are accepted only after canonical paths land in a trusted install root.
+  case "${label}:${canonical}" in
+    OP_BIN:/usr/bin/op|OP_BIN:/usr/local/bin/op|OP_BIN:/home/*/.local/bin/op|OP_BIN:/home/*/.local/share/mise/installs/*/bin/op|OP_BIN:/home/*/.local/share/mise/installs/*/bin/op.exe|OP_BIN:/mnt/c/Users/*/AppData/Local/Microsoft/WinGet/Packages/AgileBits.1Password.CLI_Microsoft.Winget.Source_8wekyb3d8bbwe/op.exe) ;;
+    CODEX_BIN:/usr/bin/codex|CODEX_BIN:/usr/local/bin/codex|CODEX_BIN:/home/*/.local/bin/codex|CODEX_BIN:/home/*/.local/bin/codex-cli|CODEX_BIN:/home/*/.local/share/mise/installs/*/bin/codex|CODEX_BIN:/home/*/.local/share/mise/installs/*/bin/codex-cli|CODEX_BIN:/home/*/.local/share/mise/installs/npm-openai-codex/*/lib/node_modules/@openai/codex/bin/codex.js) ;;
+    *) echo "${label} must identify a trusted executable path" >&2; return 1 ;;
+  esac
+  printf '%s\n' "${canonical}"
+}
+
+op_path="$(resolve_trusted_binary OP_BIN "${op_bin}")" || exit 1
+readonly op_path
+codex_path="$(resolve_trusted_binary CODEX_BIN "${codex_bin}")" || exit 1
 readonly codex_path
-[[ -x "${codex_path}" ]] || { echo "Approved Codex binary is unavailable" >&2; exit 1; }
 [[ "$(stat -fc '%T' "${template_root}")" == "tmpfs" ]] || {
   echo "Launcher template root must be tmpfs" >&2
   exit 1
@@ -90,7 +112,7 @@ trap cleanup EXIT INT TERM
 # `op run --env-file` resolves the reference in its own short-lived child
 # environment. The template contains only an op:// reference and is removed.
 set +e
-"${op_bin}" run --env-file="${env_file}" -- "${codex_path}" "$@"
+"${op_path}" run --env-file="${env_file}" -- "${codex_path}" "$@"
 child_status=$?
 set -e
 exit "${child_status}"
