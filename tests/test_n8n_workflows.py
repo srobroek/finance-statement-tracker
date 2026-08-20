@@ -1011,7 +1011,7 @@ try {{
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 18)
+        self.assertEqual(len(manifest["workflows"]), 19)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
@@ -1051,6 +1051,10 @@ try {{
         scenarios = manifest["scenario_contract"]
         self.assertEqual(scenarios["sweep_zero"]["expected"]["scanned_count"], 0)
         self.assertTrue(scenarios["sweep_zero"]["expected"]["heartbeat"])
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["scanned_count"], 1)
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["matched_count"], 1)
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["attachment_identity_keys"], [])
+        self.assertEqual(scenarios["sweep_101"]["expected"]["attachment_identity_keys"], [])
         self.assertEqual(scenarios["sweep_101"]["expected"]["scanned_count"], 101)
         self.assertEqual(scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"])
         self.assertEqual(scenarios["sweep_pagination_failure"]["expected_exit"], "nonzero")
@@ -1226,7 +1230,10 @@ try {{
                 and node.get("parameters", {}).get("resource") == "folderMessage"
                 and node.get("parameters", {}).get("operation") == "getAll"
             ]
-            self.assertEqual(len(outlook_nodes), 1)
+            expected_count = 1 if filename == "12-outlook-message-sweep.json" else 0
+            self.assertEqual(len(outlook_nodes), expected_count)
+            if not outlook_nodes:
+                continue
             params = outlook_nodes[0]["parameters"]
             self.assertEqual(params["output"], "raw")
             self.assertTrue(params["returnAll"])
@@ -1251,19 +1258,16 @@ try {{
             self.assertEqual(node["parameters"]["binaryPropertyName"], "data")
 
         acquisition = self.workflow("01-outlook-finance-acquisition.json")
-        connections = acquisition["connections"]
-        self.assertEqual(
-            connections["Get Messages from Configured Folder"]["main"][0][0]["node"],
-            "Close Microsoft Graph Circuit",
-        )
-        self.assertEqual(
-            connections["Close Microsoft Graph Circuit"]["main"][0][0]["node"],
+        self.assertNotIn("Get Messages from Configured Folder", acquisition["connections"])
+        self.assertNotIn(
             "Exact Sender Subject and Window Filter",
+            {node["name"] for node in acquisition["nodes"]},
         )
-        filter_code = self.nodes("01-outlook-finance-acquisition.json")[
-            "Exact Sender Subject and Window Filter"
-        ]["parameters"]["jsCode"]
-        self.assertIn("$('Get Messages from Configured Folder').all()", filter_code)
+        sweep_connections = self.workflow("12-outlook-message-sweep.json")["connections"]
+        self.assertEqual(
+            sweep_connections["Exhaust Outlook Pagination"]["main"][0][0]["node"],
+            "Aggregate Exact Window Heartbeat",
+        )
 
     def test_interactive_browser_handoff_validates_before_archive_and_is_idempotent(self) -> None:
         table = next(

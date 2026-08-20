@@ -109,6 +109,19 @@ def build_sweep_core() -> dict:
     }
     for node in workflow["nodes"]:
         if node["name"] != "Exhaust Outlook Pagination":
+            if node["name"] == "List Immutable Message Attachments":
+                node.pop("credentials", None)
+                node.pop("alwaysOutputData", None)
+                node["type"] = "n8n-nodes-base.code"
+                node["typeVersion"] = 2
+                node["parameters"] = {
+                    "jsCode": (
+                        "return $input.all().flatMap(item => { "
+                        "const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; "
+                        "return attachments.length ? attachments.map(attachment => ({json: attachment})) : [{json:{}}]; "
+                        "});"
+                    )
+                }
             continue
         node.pop("credentials", None)
         node.pop("alwaysOutputData", None)
@@ -118,8 +131,9 @@ def build_sweep_core() -> dict:
             "jsCode": (
                 "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); "
                 "if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); "
+                "const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); "
                 "if(kind==='zero') return [{json:{}}]; "
-                "const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); "
+                "if(kind==='one-no-attachments') return [mk('m001',1000)]; "
                 "if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); "
                 "if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; "
                 "throw new Error('UNKNOWN_SWEEP_FIXTURE');"
@@ -408,6 +422,7 @@ def build_all() -> dict[str, dict]:
         "90-derived-outlook-sweep-core.json": build_sweep_core(),
         "91-sweep-zero.json": wrapper("90000000-0000-4000-8000-000000000901", "DISPOSABLE ONLY · Sweep zero messages", sweep_input("zero"), SWEEP_FIXTURE_ID),
         "92-sweep-101.json": wrapper("90000000-0000-4000-8000-000000000902", "DISPOSABLE ONLY · Sweep 101 messages", sweep_input("one-hundred-one"), SWEEP_FIXTURE_ID),
+        "108-sweep-one-no-attachments.json": wrapper("90000000-0000-4000-8000-000000000913", "DISPOSABLE ONLY · Sweep one message without attachments", sweep_input("one-no-attachments"), SWEEP_FIXTURE_ID),
         "93-sweep-late-order.json": wrapper("90000000-0000-4000-8000-000000000903", "DISPOSABLE ONLY · Sweep late out of order", sweep_input("late-out-of-order"), SWEEP_FIXTURE_ID),
         "94-sweep-pagination-failure.json": wrapper("90000000-0000-4000-8000-000000000904", "DISPOSABLE ONLY · Sweep pagination failure", sweep_input("pagination-failure"), SWEEP_FIXTURE_ID),
         "95-lease-acquire-a.json": build_lease_wrapper("90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"),
@@ -454,7 +469,8 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
         ],
         "scenario_contract": {
             "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
-            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101}},
+            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000913", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
+            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
             "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
             "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
             "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},

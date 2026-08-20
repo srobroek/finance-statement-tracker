@@ -5,7 +5,7 @@
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
     "09-ai-proposal.json": "abd305640a0d7b07103584d422f8580a34c917077b34699a143f084a7fb21d16",
-    "12-outlook-message-sweep.json": "fed17b2885a2d110c4793abe76146d1d7dedb9255d892d9bc14b4f1ee2c42f52",
+    "12-outlook-message-sweep.json": "ec2fd7521ef5f56530748227f167bba0959d81a87a7f171a5b88dc33c218a67d",
     "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
     "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",
     "18-finance-writer-lease.json": "e03e6d3defba9a30564db0b227cd0fa714a5676ba131ff0b679deeeb960abfc4"
@@ -14,7 +14,7 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "a625c2df8c373929c5aefd9321666fe93c4ed673ec43300fdfc4b54e3e507c3c"
+      "sha256": "467a659ff18ac15f322a3206fb1a193463fd9f0c580c5df55381b679cf24f769"
     },
     {
       "file": "91-sweep-zero.json",
@@ -25,6 +25,11 @@
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
       "sha256": "5340bc1e7cbc699efce22d2e9dd33497c097134652430eb388fe668ed4b39f30"
+    },
+    {
+      "file": "108-sweep-one-no-attachments.json",
+      "id": "90000000-0000-4000-8000-000000000913",
+      "sha256": "b3d782baa832fc3aacc481d879f41fdafc39e1b24e71fbd63aaf721124e21e1d"
     },
     {
       "file": "93-sweep-late-order.json",
@@ -111,12 +116,22 @@
         "heartbeat": true
       }
     },
+    "sweep_one_no_attachments": {
+      "workflow_id": "90000000-0000-4000-8000-000000000913",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 1,
+        "matched_count": 1,
+        "attachment_identity_keys": []
+      }
+    },
     "sweep_101": {
       "workflow_id": "90000000-0000-4000-8000-000000000902",
       "expected_exit": 0,
       "expected": {
         "scanned_count": 101,
-        "matched_count": 101
+        "matched_count": 101,
+        "attachment_identity_keys": []
       }
     },
     "sweep_late_order": {
