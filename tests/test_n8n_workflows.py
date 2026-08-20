@@ -419,7 +419,7 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertTrue(runner["api_key_fallback_forbidden"])
         self.assertEqual(runner["server_model_policy"], {
             "NORMAL": {"model": "gpt-5.6-luna", "reasoning_effort": "max"},
-            "EXCEPTION": {"model": "gpt-5.6-sol", "reasoning_effort": "xhigh"},
+            "EXCEPTION": {"model": "gpt-5.6-sol", "reasoning_effort": "medium"},
         })
         handoff = load_json(N8N / contract["request_schema"])
         proposal = load_json(N8N / contract["output_schema"])
@@ -514,7 +514,7 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertIn("finance_ai_policy_contracts", json.dumps(nodes["Read Active Server AI Policy Contract"]))
         compact_validation = re.sub(r"\s+", "", validation)
         self.assertIn("LUNA_MAX:'NORMAL'", compact_validation)
-        self.assertIn("SOL_XHIGH:'EXCEPTION'", compact_validation)
+        self.assertIn("SOL_MEDIUM:'EXCEPTION'", compact_validation)
         self.assertIn("agent_provider", validation)
         self.assertIn("Missing bounded server value domain", validation)
         self.assertIn("request_canonical", validation)
@@ -963,8 +963,8 @@ class N8nWorkflowTests(unittest.TestCase):
         sol = scenarios["ai_positive_sol_gated"]
         self.assertEqual(sol["workflow_id"], "90000000-0000-4000-8000-000000000912")
         self.assertEqual(sol["expected_model"], "gpt-5.6-sol")
-        self.assertEqual(sol["expected_reasoning_effort"], "xhigh")
-        self.assertEqual(sol["execution_gate"], "DISPOSABLE_ALLOW_SOL_XHIGH")
+        self.assertEqual(sol["expected_reasoning_effort"], "medium")
+        self.assertEqual(sol["execution_gate"], "DISPOSABLE_ALLOW_SOL_MEDIUM")
         self.assertTrue(sol["default_execution_forbidden"])
         self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
         self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
@@ -995,7 +995,7 @@ class N8nWorkflowTests(unittest.TestCase):
             ):
                 self.assertNotIn(forbidden, serialized)
             self.assertTrue(workflow["meta"]["financeWritesImpossible"])
-        self.assertEqual(sol["meta"]["executionGate"], "DISPOSABLE_ALLOW_SOL_XHIGH")
+        self.assertEqual(sol["meta"]["executionGate"], "DISPOSABLE_ALLOW_SOL_MEDIUM")
         self.assertTrue(sol["meta"]["defaultExecutionForbidden"])
 
     def test_rule_ownership_compiler_is_current_disjoint_and_complete(self) -> None:

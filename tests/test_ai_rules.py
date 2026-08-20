@@ -252,7 +252,7 @@ class AIRuleTests(TestCase):
     def test_agent_profile_is_loaded_and_forwarded_to_resolver(self) -> None:
         policies = load_ai_policies(ROOT / "config" / "ai-policies.json")
         policy = next(item for item in policies if item.policy_id == "recommend-category")
-        self.assertEqual("SOL_XHIGH", policy.agent_profile)
+        self.assertEqual("SOL_MEDIUM", policy.agent_profile)
 
         transaction = Transaction(
             "ai-profile",
@@ -266,7 +266,7 @@ class AIRuleTests(TestCase):
             policy,
             ["category_recommendation"],
         )
-        self.assertEqual("SOL_XHIGH", request["agent_profile"])
+        self.assertEqual("SOL_MEDIUM", request["agent_profile"])
 
     def test_unknown_agent_profile_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "agent_profile"):

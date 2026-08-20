@@ -202,11 +202,11 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
         AI_ID,
     )
     workflow["meta"]["agentProfileExpected"] = (
-        "LUNA_MAX" if profile == "luna" else "SOL_XHIGH"
+        "LUNA_MAX" if profile == "luna" else "SOL_MEDIUM"
     )
     workflow["meta"]["financeWritesImpossible"] = True
     if profile == "sol":
-        workflow["meta"]["executionGate"] = "DISPOSABLE_ALLOW_SOL_XHIGH"
+        workflow["meta"]["executionGate"] = "DISPOSABLE_ALLOW_SOL_MEDIUM"
         workflow["meta"]["defaultExecutionForbidden"] = True
     return workflow
 
@@ -461,7 +461,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
             "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
             "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
-            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "xhigh", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH", "default_execution_forbidden": True},
+            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
             "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
             "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
         },
