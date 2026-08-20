@@ -77,6 +77,26 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
         self.assertIn("uv run --frozen python -m unittest", workflow)
 
+    def test_promotion_workflows_exclude_pull_requests_and_codex_pushes(self) -> None:
+        phase1 = Path(".github/workflows/phase1-finance-artifacts.yml").read_text(
+            encoding="utf-8"
+        )
+        phase1_triggers = phase1.split("\npermissions:", 1)[0]
+        self.assertNotIn("\n  pull_request:", phase1_triggers)
+        self.assertNotIn('"codex/**"', phase1_triggers)
+        self.assertIn("branches: [main]", phase1_triggers)
+        self.assertIn("  workflow_dispatch:\n", phase1_triggers)
+        self.assertIn('".github/workflows/phase1-finance-artifacts.yml"', phase1_triggers)
+
+        cashback = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        cashback_triggers = cashback.split("\npermissions:", 1)[0]
+        self.assertNotIn("\n  pull_request:", cashback_triggers)
+        self.assertNotIn("codex/**", cashback_triggers)
+        self.assertIn("      - main\n", cashback_triggers)
+        self.assertIn('      - "v*"\n', cashback_triggers)
+        self.assertIn("  workflow_dispatch:\n", cashback_triggers)
+        self.assertIn('      - "uv.lock"\n', cashback_triggers)
+
     def test_global_ci_uses_the_reviewed_uv_lock(self) -> None:
         workflow = Path(".github/workflows/validate.yml").read_text(encoding="utf-8")
         self.assertIn("astral-sh/setup-uv@v6", workflow)
