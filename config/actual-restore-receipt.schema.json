@@ -70,6 +70,8 @@
         "required": [
           "run_index",
           "sidecar_id",
+          "network_name",
+          "network_internal",
           "data_sha256",
           "api_readback_sha256",
           "ui_readback_sha256",
@@ -79,11 +81,14 @@
           "restart_verified",
           "repeat_state_match",
           "cleanup_verified",
+          "network_cleanup_verified",
           "status"
         ],
         "properties": {
           "run_index": { "type": "integer", "minimum": 1 },
           "sidecar_id": { "type": "string", "minLength": 1 },
+          "network_name": { "type": "string", "minLength": 1 },
+          "network_internal": { "const": true },
           "data_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "api_readback_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
           "ui_readback_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
@@ -93,6 +98,7 @@
           "restart_verified": { "type": "boolean" },
           "repeat_state_match": { "type": "boolean" },
           "cleanup_verified": { "type": "boolean" },
+          "network_cleanup_verified": { "type": "boolean" },
           "status": { "enum": ["passed", "failed"] }
         }
       }
@@ -116,10 +122,27 @@
     {
       "if": { "properties": { "status": { "const": "passed" } } },
       "then": {
+        "required": ["runs", "cleanup_verified", "error"],
         "properties": {
           "backup": { "properties": { "verified": { "const": true } } },
           "runtime": { "properties": { "available": { "const": true }, "verified": { "const": true } } },
-          "cleanup_verified": { "const": true }
+          "cleanup_verified": { "const": true },
+          "error": { "type": "null" },
+          "runs": {
+            "minItems": 2,
+            "items": {
+              "properties": {
+                "api_readback_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "ui_readback_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "ui_api_parity": { "const": true },
+                "restart_verified": { "const": true },
+                "repeat_state_match": { "const": true },
+                "cleanup_verified": { "const": true },
+                "network_cleanup_verified": { "const": true },
+                "status": { "const": "passed" }
+              }
+            }
+          }
         }
       }
     }

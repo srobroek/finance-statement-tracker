@@ -28,7 +28,13 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
-NOT_FOUND = ("no such container", "no container with name or id", "container not found")
+NOT_FOUND = (
+    "no such container",
+    "no container with name or id",
+    "container not found",
+    "no such network",
+    "network not found",
+)
 
 
 class DrillError(RuntimeError):
@@ -90,7 +96,17 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     message = f"{result.stdout}\n{result.stderr}".casefold()
     if any(marker in message for marker in NOT_FOUND):
         return "absent"
-        raise DrillError("runtime_inspect_failed", "cleanup")
+    raise DrillError("runtime_inspect_failed", "cleanup")
+
+
+def inspect_network_state(runtime: list[str], network: str) -> str:
+    result = runtime_call(runtime, "network", "inspect", network)
+    if result.returncode == 0:
+        return "present"
+    message = f"{result.stdout}\n{result.stderr}".casefold()
+    if any(marker in message for marker in NOT_FOUND):
+        return "absent"
+    raise DrillError("runtime_network_inspect_failed", "cleanup")
 
 
 def safe_extract_actual(archive: Path, destination: Path) -> None:
@@ -292,27 +308,68 @@ def main() -> int:
     }
     current_runtime: list[str] | None = None
     current_sidecar: str | None = None
+    current_network: str | None = None
     current_data: Path | None = None
+    temp_root_for_cleanup: Path | None = None
+
     def cleanup() -> bool:
-        nonlocal current_sidecar, current_data
+        nonlocal current_sidecar, current_network, current_data
         ok = True
+        sidecar_state = "absent"
         if current_runtime and current_sidecar:
             try:
-                state = inspect_state(current_runtime, current_sidecar)
+                sidecar_state = inspect_state(current_runtime, current_sidecar)
             except DrillError:
-                state = "error"
-            if state == "present":
+                sidecar_state = "unknown"
+                ok = False
+            if sidecar_state == "present":
                 removed = runtime_call(current_runtime, "rm", "-f", current_sidecar)
-                ok = removed.returncode == 0 and inspect_state(current_runtime, current_sidecar) == "absent"
-            elif state == "error":
+                if removed.returncode != 0:
+                    ok = False
+                else:
+                    try:
+                        sidecar_state = inspect_state(current_runtime, current_sidecar)
+                    except DrillError:
+                        sidecar_state = "unknown"
+                        ok = False
+                    if sidecar_state != "absent":
+                        ok = False
+            elif sidecar_state != "absent":
+                ok = False
+        network_state = "absent"
+        if current_runtime and current_network:
+            if sidecar_state != "absent":
+                ok = False
+            try:
+                network_state = inspect_network_state(current_runtime, current_network)
+            except DrillError:
+                network_state = "unknown"
+                ok = False
+            if network_state == "present" and sidecar_state == "absent":
+                removed = runtime_call(current_runtime, "network", "rm", current_network)
+                if removed.returncode != 0:
+                    ok = False
+                else:
+                    try:
+                        network_state = inspect_network_state(current_runtime, current_network)
+                    except DrillError:
+                        network_state = "unknown"
+                        ok = False
+                    if network_state != "absent":
+                        ok = False
+            elif network_state != "absent":
                 ok = False
         if current_data and current_data.exists():
-            try:
-                shutil.rmtree(current_data)
-            except OSError:
+            if sidecar_state != "absent" or network_state != "absent":
                 ok = False
-            ok = ok and not current_data.exists()
-        current_sidecar, current_data = None, None
+            else:
+                try:
+                    shutil.rmtree(current_data)
+                except OSError:
+                    ok = False
+                ok = ok and not current_data.exists()
+        if ok:
+            current_sidecar, current_network, current_data = None, None, None
         return ok
 
     def handle_signal(signum: int, _frame: Any) -> None:
@@ -325,95 +382,116 @@ def main() -> int:
 
     try:
         expected = load_expected(Path(args.expected_readback))
-        with tempfile.TemporaryDirectory(prefix="finance-actual-restore.", dir=args.temp_root) as temporary:
-            temp_root = Path(temporary)
-            verified = backup_verify(Path(args.backup_root), Path(args.backup_path) if args.backup_path else None, temp_root)
-            result["backup"].update({
-                "name": verified["backup"],
-                "archive_sha256": verified["archive_sha256"],
-                "archive_bytes": verified["archive_bytes"],
-                "verified": True,
-            })
-            backup_dir = Path(args.backup_root).resolve() / verified["backup"]
-            archive = backup_dir / "finance-data.tar.gz"
-            current_runtime = runtime_command(args.runtime)
-            result["runtime"]["engine"] = Path(current_runtime[0]).name
-            version = runtime_call(current_runtime, "version")
-            if version.returncode != 0:
-                raise DrillError("container_runtime_unavailable", "runtime")
-            image = runtime_call(current_runtime, "image", "inspect", "--format", "{{.Id}}", args.image)
-            if image.returncode != 0:
-                raise DrillError("image_digest_unavailable", "runtime")
-            image_id = image.stdout.strip()
-            if len(image_id) == 64:
-                image_id = f"sha256:{image_id}"
-            if not image_id.startswith("sha256:") or len(image_id) != 71:
-                raise DrillError("image_digest_malformed", "runtime")
-            result["runtime"].update({"image_digest": image_id, "available": True, "verified": True})
-            readback_command = shlex.split(args.readback_command)
-            http_command = shlex.split(args.http_probe_command) if args.http_probe_command else None
-            for run_index in range(1, args.repeat + 1):
-                sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
-                data_dir = temp_root / f"data-{run_index}"
-                if inspect_state(current_runtime, sidecar) != "absent" or data_dir.exists():
-                    raise DrillError("disposable_resource_collision", "preflight", sidecar)
-                current_sidecar, current_data = sidecar, data_dir
-                safe_extract_actual(archive, data_dir)
-                data_sha = digest({str(path.relative_to(data_dir)): sha256(path) for path in sorted(data_dir.rglob("*")) if path.is_file()})
-                port = args.port or (5006 + run_index + (os.getpid() % 1000))
-                url = f"http://127.0.0.1:{port}"
-                started_container = runtime_call(
-                    current_runtime, "run", "-d", "--pull=never", "--network", "none", "--name", sidecar,
-                    "--user", f"{os.getuid()}:{os.getgid()}",
-                    "-p", f"127.0.0.1:{port}:5006", "-v", f"{data_dir}:/data", args.image,
-                )
-                if started_container.returncode != 0:
-                    raise DrillError("sidecar_start_failed", "start")
-                health_error: DrillError | None = None
-                for _attempt in range(args.health_attempts):
-                    try:
-                        probe_http(url, http_command)
-                        break
-                    except DrillError as error:
-                        health_error = error
-                        time.sleep(1)
-                else:
-                    raise health_error or DrillError("ui_http_probe_failed", "health")
-                first_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
-                restarted = runtime_call(current_runtime, "restart", sidecar)
-                if restarted.returncode != 0:
-                    raise DrillError("sidecar_restart_failed", "restart")
-                for _attempt in range(args.health_attempts):
-                    try:
-                        probe_http(url, http_command)
-                        break
-                    except DrillError as error:
-                        health_error = error
-                        time.sleep(1)
-                else:
-                    raise health_error or DrillError("ui_http_probe_failed", "restart_health")
-                second_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
-                repeat_match = first_readback == second_readback
-                if not repeat_match:
-                    raise DrillError("restart_readback_mismatch", "restart")
-                run = {
-                    "run_index": run_index,
-                    "sidecar_id": sidecar,
-                    "data_sha256": data_sha,
-                    **first_readback,
-                    "restart_verified": True,
-                    "repeat_state_match": repeat_match,
-                    "cleanup_verified": False,
-                    "status": "failed",
-                }
-                if not cleanup():
-                    result["cleanup_verified"] = False
-                    raise DrillError("cleanup_not_verified", "cleanup")
-                run["cleanup_verified"] = True
-                run["status"] = "passed"
-                result["runs"].append(run)
-            result["status"] = "passed"
-            return_code = 0
+        temp_root_for_cleanup = Path(tempfile.mkdtemp(prefix="finance-actual-restore.", dir=args.temp_root))
+        temp_root = temp_root_for_cleanup
+        verified = backup_verify(Path(args.backup_root), Path(args.backup_path) if args.backup_path else None, temp_root)
+        result["backup"].update({
+            "name": verified["backup"],
+            "archive_sha256": verified["archive_sha256"],
+            "archive_bytes": verified["archive_bytes"],
+            "verified": True,
+        })
+        backup_dir = Path(args.backup_root).resolve() / verified["backup"]
+        archive = backup_dir / "finance-data.tar.gz"
+        current_runtime = runtime_command(args.runtime)
+        result["runtime"]["engine"] = Path(current_runtime[0]).name
+        version = runtime_call(current_runtime, "version")
+        if version.returncode != 0:
+            raise DrillError("container_runtime_unavailable", "runtime")
+        image = runtime_call(current_runtime, "image", "inspect", "--format", "{{.Id}}", args.image)
+        if image.returncode != 0:
+            raise DrillError("image_digest_unavailable", "runtime")
+        image_id = image.stdout.strip()
+        if len(image_id) == 64:
+            image_id = f"sha256:{image_id}"
+        if not image_id.startswith("sha256:") or len(image_id) != 71:
+            raise DrillError("image_digest_malformed", "runtime")
+        result["runtime"].update({"image_digest": image_id, "available": True, "verified": True})
+        readback_command = shlex.split(args.readback_command)
+        http_command = shlex.split(args.http_probe_command) if args.http_probe_command else None
+        for run_index in range(1, args.repeat + 1):
+            sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
+            data_dir = temp_root / f"data-{run_index}"
+            network = f"finance-actual-restore-net-{run_index}-{os.getpid()}"
+            if inspect_state(current_runtime, sidecar) != "absent" or data_dir.exists():
+                raise DrillError("disposable_resource_collision", "preflight", sidecar)
+            if inspect_network_state(current_runtime, network) != "absent":
+                raise DrillError("disposable_resource_collision", "preflight", network)
+            current_sidecar, current_data = sidecar, data_dir
+            current_network = network
+            safe_extract_actual(archive, data_dir)
+            created_network = runtime_call(
+                current_runtime,
+                "network",
+                "create",
+                "--internal",
+                "--label",
+                "finance.restore.owner=actual-restore",
+                "--label",
+                f"finance.restore.run={network}",
+                network,
+            )
+            if created_network.returncode != 0:
+                raise DrillError("disposable_network_create_failed", "network")
+            data_sha = digest({str(path.relative_to(data_dir)): sha256(path) for path in sorted(data_dir.rglob("*")) if path.is_file()})
+            port = args.port or (5006 + run_index + (os.getpid() % 1000))
+            url = f"http://127.0.0.1:{port}"
+            started_container = runtime_call(
+                current_runtime, "run", "-d", "--pull=never", "--network", network, "--name", sidecar,
+                "--user", f"{os.getuid()}:{os.getgid()}",
+                "-p", f"127.0.0.1:{port}:5006", "-v", f"{data_dir}:/data", args.image,
+            )
+            if started_container.returncode != 0:
+                raise DrillError("sidecar_start_failed", "start")
+            health_error: DrillError | None = None
+            for _attempt in range(args.health_attempts):
+                try:
+                    probe_http(url, http_command)
+                    break
+                except DrillError as error:
+                    health_error = error
+                    time.sleep(1)
+            else:
+                raise health_error or DrillError("ui_http_probe_failed", "health")
+            first_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
+            restarted = runtime_call(current_runtime, "restart", sidecar)
+            if restarted.returncode != 0:
+                raise DrillError("sidecar_restart_failed", "restart")
+            for _attempt in range(args.health_attempts):
+                try:
+                    probe_http(url, http_command)
+                    break
+                except DrillError as error:
+                    health_error = error
+                    time.sleep(1)
+            else:
+                raise health_error or DrillError("ui_http_probe_failed", "restart_health")
+            second_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
+            repeat_match = first_readback == second_readback
+            if not repeat_match:
+                raise DrillError("restart_readback_mismatch", "restart")
+            run = {
+                "run_index": run_index,
+                "sidecar_id": sidecar,
+                "network_name": network,
+                "network_internal": True,
+                "data_sha256": data_sha,
+                **first_readback,
+                "restart_verified": True,
+                "repeat_state_match": repeat_match,
+                "cleanup_verified": False,
+                "network_cleanup_verified": False,
+                "status": "failed",
+            }
+            if not cleanup():
+                result["cleanup_verified"] = False
+                raise DrillError("cleanup_not_verified", "cleanup")
+            run["cleanup_verified"] = True
+            run["network_cleanup_verified"] = True
+            run["status"] = "passed"
+            result["runs"].append(run)
+        result["status"] = "passed"
+        return_code = 0
     except DrillError as error:
         result["status"] = "blocked" if error.code in {"container_runtime_unavailable", "image_digest_unavailable"} else "failed"
         result["error"] = error_payload(error)
@@ -432,6 +510,8 @@ def main() -> int:
         except OSError as error:
             print(json.dumps({"level": "error", "event": "restore_receipt_write_failed", "detail": str(error)}), file=sys.stderr)
             return_code = 1
+        if temp_root_for_cleanup and not (current_sidecar or current_network or current_data):
+            shutil.rmtree(temp_root_for_cleanup, ignore_errors=True)
     print(json.dumps({"status": result["status"], "receipt": str(receipt), "error": result["error"]}, sort_keys=True))
     return return_code
 

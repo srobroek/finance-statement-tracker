@@ -20,9 +20,13 @@ SCHEMA = ROOT / "config/actual-restore-receipt.schema.json"
 
 def _sqlite(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as connection:
+    connection = sqlite3.connect(path)
+    try:
         connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
         connection.execute("INSERT INTO sample VALUES (1, 'actual')")
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def backup_fixture(root: Path) -> Path:
@@ -90,7 +94,17 @@ def executable(root: Path, name: str, body: str) -> Path:
     return path
 
 
-def fake_runtime(root: Path, *, collision: bool = False, start_failure: bool = False, restart_failure: bool = False) -> Path:
+def fake_runtime(
+    root: Path,
+    *,
+    collision: bool = False,
+    network_collision: bool = False,
+    inspect_failure: bool = False,
+    cleanup_inspect_failure: bool = False,
+    network_failure: bool = False,
+    start_failure: bool = False,
+    restart_failure: bool = False,
+) -> Path:
     return executable(
         root,
         "runtime",
@@ -99,6 +113,31 @@ import pathlib
 import sys
 root = pathlib.Path({str(root)!r})
 command = sys.argv[1] if len(sys.argv) > 1 else ''
+if command == 'network':
+    action = sys.argv[2] if len(sys.argv) > 2 else ''
+    name = sys.argv[-1]
+    marker = root / (name + '.network')
+    if action == 'inspect':
+        if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
+            print('runtime transport failure', file=sys.stderr)
+            raise SystemExit(1)
+        if {network_collision!r} and 'restore-net-1-' in name:
+            raise SystemExit(0)
+        if marker.exists():
+            raise SystemExit(0)
+        print('no such network', file=sys.stderr)
+        raise SystemExit(1)
+    if action == 'create':
+        if {network_failure!r}:
+            print('network create failed', file=sys.stderr)
+            raise SystemExit(1)
+        marker.write_text('internal', encoding='utf-8')
+        print(name)
+        raise SystemExit(0)
+    if action == 'rm':
+        marker.unlink(missing_ok=True)
+        raise SystemExit(0)
+    raise SystemExit(1)
 name = sys.argv[sys.argv.index('--name') + 1] if '--name' in sys.argv else (sys.argv[2] if len(sys.argv) > 2 else '')
 if command == 'rm' and len(sys.argv) > 3 and sys.argv[2] == '-f':
     name = sys.argv[3]
@@ -109,6 +148,9 @@ if command == 'image' and len(sys.argv) > 3 and sys.argv[2] == 'inspect':
     print('a' * 64)
     raise SystemExit(0)
 if command == 'inspect':
+    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
+        print('runtime transport failure', file=sys.stderr)
+        raise SystemExit(1)
     if {collision!r} and 'restore-1-' in name:
         raise SystemExit(0)
     if marker.exists():
@@ -116,6 +158,7 @@ if command == 'inspect':
     print('no such container', file=sys.stderr)
     raise SystemExit(1)
 if command == 'run':
+    (root / 'run-args').write_text(' '.join(sys.argv), encoding='utf-8')
     if {start_failure!r}:
         print('start failed', file=sys.stderr)
         raise SystemExit(1)
@@ -151,7 +194,15 @@ print(json.dumps({'api': payload, 'ui': payload}))
 
 
 class ActualRestoreTests(unittest.TestCase):
-    def run_drill(self, root: Path, runtime: Path, *, expected: Path | None = None, probe_path: Path | None = None) -> tuple[subprocess.CompletedProcess[str], dict]:
+    def run_drill(
+        self,
+        root: Path,
+        runtime: Path,
+        *,
+        expected: Path | None = None,
+        probe_path: Path | None = None,
+        health_path: Path | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], dict]:
         receipt = root / "receipt.json"
         result = subprocess.run(
             [
@@ -161,7 +212,7 @@ class ActualRestoreTests(unittest.TestCase):
                 "--runtime", str(runtime),
                 "--expected-readback", str(expected or expected_fixture(root)),
                 "--readback-command", str(probe_path or probe(root)),
-                "--http-probe-command", str(executable(root, "health", "raise SystemExit(0)")),
+                "--http-probe-command", str(health_path or executable(root, "health", "raise SystemExit(0)")),
                 "--temp-root", str(root),
             ],
             cwd=ROOT,
@@ -178,6 +229,8 @@ class ActualRestoreTests(unittest.TestCase):
             "verify-backup.py",
             "--pull",
             "--network",
+            "--internal",
+            '"network", "inspect"',
             "--name",
             '"restart"',
             '"rm", "-f"',
@@ -187,9 +240,11 @@ class ActualRestoreTests(unittest.TestCase):
             "ui_api_parity",
             '"production_mutated": False',
             '"secret_values_recorded": False',
+            '"network_cleanup_verified": False',
         ):
             self.assertIn(required, source)
         self.assertNotIn("docker compose", source)
+        self.assertNotIn('"--network", "none"', source)
 
     def test_hash_mismatch_is_failed_and_not_a_restore(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -211,6 +266,37 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["error"]["code"], "disposable_resource_collision")
             self.assertTrue(receipt["cleanup_verified"])
 
+    def test_network_collision_is_refused_without_cleanup_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, network_collision=True))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "disposable_resource_collision")
+            self.assertTrue(receipt["cleanup_verified"])
+
+    def test_unknown_runtime_inspect_fails_closed_without_cleanup_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, inspect_failure=True))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_unknown_cleanup_inspect_retains_owned_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, cleanup_inspect_failure=True))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "cleanup_not_verified")
+            self.assertFalse(receipt["cleanup_verified"])
+            self.assertTrue(list(root.glob("*.container")))
+            self.assertTrue(list(root.glob("*.network")))
+            self.assertTrue(list(root.glob("finance-actual-restore.*/data-1")))
+
     def test_partial_start_failure_cleans_the_exact_data_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -220,6 +306,16 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["error"]["code"], "sidecar_start_failed")
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("data-*")))
+
+    def test_network_create_failure_cleans_the_exact_data_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, network_failure=True))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "disposable_network_create_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("finance-actual-restore.*/data-1")))
 
     def test_restart_failure_cleans_and_reports_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -283,15 +379,48 @@ class ActualRestoreTests(unittest.TestCase):
                 self.assertTrue(run["repeat_state_match"])
                 self.assertTrue(run["ui_api_parity"])
                 self.assertTrue(run["cleanup_verified"])
+                self.assertTrue(run["network_internal"])
+                self.assertTrue(run["network_cleanup_verified"])
             self.assertFalse(list(root.glob("data-*")))
+            run_args = (root / "run-args").read_text(encoding="utf-8")
+            self.assertIn("--network finance-actual-restore-net-", run_args)
+            self.assertNotIn("--network none", run_args)
             errors = list(Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8"))).iter_errors(receipt))
             self.assertEqual(errors, [])
+
+    def test_loopback_health_probe_requires_the_internal_network(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            health = executable(
+                root,
+                "network-health",
+                f"""
+import os
+import pathlib
+import sys
+args = (pathlib.Path({str(root)!r}) / 'run-args').read_text(encoding='utf-8')
+tokens = args.split()
+network = next((tokens[index + 1] for index, value in enumerate(tokens[:-1]) if value == '--network'), '')
+if not network.startswith('finance-actual-restore-net-'):
+    raise SystemExit(1)
+if not (pathlib.Path({str(root)!r}) / (network + '.network')).exists():
+    raise SystemExit(1)
+if not os.environ.get('ACTUAL_RESTORE_URL', '').startswith('http://127.0.0.1:'):
+    raise SystemExit(1)
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), health_path=health)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
 
     def test_receipt_schema_requires_two_runs_for_passed_proof(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         run = {
             "run_index": 1,
             "sidecar_id": "sidecar-1",
+            "network_name": "network-1",
+            "network_internal": True,
             "data_sha256": "a" * 64,
             "api_readback_sha256": "b" * 64,
             "ui_readback_sha256": "b" * 64,
@@ -301,6 +430,7 @@ class ActualRestoreTests(unittest.TestCase):
             "restart_verified": True,
             "repeat_state_match": True,
             "cleanup_verified": True,
+            "network_cleanup_verified": True,
             "status": "passed",
         }
         receipt = {
@@ -323,6 +453,15 @@ class ActualRestoreTests(unittest.TestCase):
         }
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(receipt)), [])
         receipt["requested_runs"] = 1
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
+        receipt["requested_runs"] = 2
+        receipt["runs"] = [run]
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
+        receipt["runs"] = [run, {**run, "run_index": 2, "sidecar_id": "sidecar-2"}]
+        receipt["runs"][0]["network_cleanup_verified"] = False
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
+        receipt["runs"][0]["network_cleanup_verified"] = True
+        receipt["error"] = {"code": "unexpected", "stage": "test"}
         self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
 
 
