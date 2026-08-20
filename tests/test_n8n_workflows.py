@@ -1116,7 +1116,10 @@ class N8nWorkflowTests(unittest.TestCase):
                 and node.get("parameters", {}).get("resource") == "folderMessage"
                 and node.get("parameters", {}).get("operation") == "getAll"
             ]
-            self.assertEqual(len(outlook_nodes), 1)
+            expected_count = 1 if filename == "12-outlook-message-sweep.json" else 0
+            self.assertEqual(len(outlook_nodes), expected_count)
+            if not outlook_nodes:
+                continue
             params = outlook_nodes[0]["parameters"]
             self.assertEqual(params["output"], "raw")
             self.assertTrue(params["returnAll"])
@@ -1141,19 +1144,16 @@ class N8nWorkflowTests(unittest.TestCase):
             self.assertEqual(node["parameters"]["binaryPropertyName"], "data")
 
         acquisition = self.workflow("01-outlook-finance-acquisition.json")
-        connections = acquisition["connections"]
-        self.assertEqual(
-            connections["Get Messages from Configured Folder"]["main"][0][0]["node"],
-            "Close Microsoft Graph Circuit",
-        )
-        self.assertEqual(
-            connections["Close Microsoft Graph Circuit"]["main"][0][0]["node"],
+        self.assertNotIn("Get Messages from Configured Folder", acquisition["connections"])
+        self.assertNotIn(
             "Exact Sender Subject and Window Filter",
+            {node["name"] for node in acquisition["nodes"]},
         )
-        filter_code = self.nodes("01-outlook-finance-acquisition.json")[
-            "Exact Sender Subject and Window Filter"
-        ]["parameters"]["jsCode"]
-        self.assertIn("$('Get Messages from Configured Folder').all()", filter_code)
+        sweep_connections = self.workflow("12-outlook-message-sweep.json")["connections"]
+        self.assertEqual(
+            sweep_connections["Exhaust Outlook Pagination"]["main"][0][0]["node"],
+            "Aggregate Exact Window Heartbeat",
+        )
 
     def test_interactive_statement_handoff_uses_only_durable_context(self) -> None:
         table = next(

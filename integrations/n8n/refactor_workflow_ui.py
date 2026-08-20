@@ -118,6 +118,16 @@ def harden_exact_node_contracts(workflows: list[dict]) -> None:
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
 
+    # W01 receives the immutable inventory from W12.  Older renderer passes
+    # rebuilt the mailbox listing here, which would silently reintroduce the
+    # forbidden second enumeration whenever the UI export was regenerated.
+    if any(
+        node["name"] == "Get Messages from Configured Folder"
+        for node in acquisition["nodes"]
+    ):
+        raise ValueError("W01 legacy Graph enumeration is forbidden; use the W12 immutable inventory")
+    return
+
     validate = node_by_name(acquisition, "Validate Bounded Source Request")
     validate["parameters"]["jsCode"] = r"""
 const request = $json;
@@ -1652,6 +1662,110 @@ return [{ json: normalized }];
                     if edge["node"] == "Invoke Fixed Subscription Agent Runner":
                         edge["node"] = "Invoke Subscription Agent Adapter"
     agent["meta"]["providerAdapterWorkflow"] = "SUBSCRIPTION_AGENT_ADAPTER"
+
+    # The current acquisition workflow receives an immutable message and
+    # attachment inventory from W12.  The legacy attachment rewrite below is
+    # coupled to the removed W01 Graph listing and must not run on this shape.
+    if not any(node["name"] == "Preserve Every Attachment" for node in acquisition["nodes"]):
+        workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
+        for workflow in workflows:
+            for node in workflow["nodes"]:
+                if node["type"] not in {
+                    "n8n-nodes-base.executeWorkflow",
+                    "@n8n/n8n-nodes-langchain.toolWorkflow",
+                }:
+                    continue
+                reference = node.get("parameters", {}).get("workflowId")
+                if not isinstance(reference, dict) or reference.get("value") not in workflow_names_by_id:
+                    continue
+                target_id = reference["value"]
+                node["parameters"]["workflowId"] = {
+                    "__rl": True,
+                    "value": target_id,
+                    "mode": "list",
+                    "cachedResultName": workflow_names_by_id[target_id],
+                }
+        barrier = node_by_name(acquisition, "Attachment Verification Barrier")
+        barrier["parameters"]["jsCode"] = r"""
+const request = $('Validate Bounded Source Request').first().json;
+const expected = Array.isArray(request.messages)
+  ? request.messages.flatMap(row => {
+      const message = row?.message && typeof row.message === 'object' ? row.message : row;
+      const messageId = String(row?.message_id || message?.id || '').trim();
+      return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])
+        .map(attachment => messageId + ':' + attachment.id);
+    })
+  : [];
+const safeRows = name => {
+  try {
+    return $(name).all().map(item => item.json);
+  } catch {
+    return [];
+  }
+};
+const attachmentRows = [
+  ...safeRows('Verify Enumerated Attachment Archive'),
+  ...safeRows('Verify Existing Enumerated Archive Receipt'),
+].filter(row => row.attachment_verified === true && !row.attachment_empty);
+const observed = attachmentRows.map(
+  row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id,
+);
+if (new Set(observed).size !== expected.length) {
+  throw new Error('ATTACHMENT_ARCHIVE_COUNT_MISMATCH');
+}
+for (const identity of expected) {
+  if (!observed.includes(identity)) {
+    throw new Error('ATTACHMENT_ARCHIVE_MISSING:' + identity);
+  }
+}
+const emailRows = [
+  ...safeRows('Verify Durable Email Evidence Receipt'),
+  ...safeRows('Verify Existing Email Evidence Receipt'),
+].filter(row => row.email_evidence_receipt_verified === true);
+const expectedEmail = Array.isArray(request.messages)
+  ? request.messages.map(row => {
+      const message = row?.message && typeof row.message === 'object' ? row.message : row;
+      return String(row?.message_id || message?.id) + ':INLINE_BODY';
+    })
+  : [];
+const observedEmail = emailRows.map(
+  row => row.email_evidence_identity || row.source_message_id + ':INLINE_BODY',
+);
+if (
+  new Set(observedEmail).size !== expectedEmail.length
+  || expectedEmail.some(identity => !observedEmail.includes(identity))
+) {
+  throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');
+}
+const first = attachmentRows[0] || emailRows[0] || {};
+return [{
+  json: {
+    status: 'ARCHIVED',
+    run_id: request.run_id,
+    source_code: request.source_code,
+    folder_id: request.folder_id,
+    senders: request.senders,
+    subjects: request.subjects,
+    onedrive_parent_id: request.onedrive_parent_id,
+    window_start: request.window_start,
+    run_upper_bound: request.run_upper_bound,
+    matched_count: request.messages.length,
+    onedrive_item_id: first.onedrive_item_id || null,
+    source_message_id: first.source_message_id || null,
+    source_attachment_id: first.source_attachment_id || null,
+    attachment_verification_barrier: 'VERIFIED',
+    attachment_ids_verified: true,
+    attachment_identity_keys: observed,
+    attachments_verified: attachmentRows.length,
+    email_evidence_receipt_barrier: 'VERIFIED',
+    email_evidence_receipts_verified: emailRows.length,
+    email_evidence_identity_keys: observedEmail,
+    archive_ready: true,
+    cursor_commit_eligible: false,
+  },
+}];
+""".strip()
+        return
 
     if any(node["name"] == "PDF Attachments Only" for node in acquisition["nodes"]):
         rename_node(acquisition, "PDF Attachments Only", "Preserve Every Attachment")

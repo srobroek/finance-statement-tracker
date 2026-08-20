@@ -109,6 +109,18 @@ def build_sweep_core() -> dict:
     }
     for node in workflow["nodes"]:
         if node["name"] != "Exhaust Outlook Pagination":
+            if node["name"] == "List Immutable Message Attachments":
+                node.pop("credentials", None)
+                node.pop("alwaysOutputData", None)
+                node["type"] = "n8n-nodes-base.code"
+                node["typeVersion"] = 2
+                node["parameters"] = {
+                    "jsCode": (
+                        "return $input.all().flatMap(item => "
+                        "(Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : [])"
+                        ".map(attachment => ({json: attachment})));"
+                    )
+                }
             continue
         node.pop("credentials", None)
         node.pop("alwaysOutputData", None)

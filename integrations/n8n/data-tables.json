@@ -44,7 +44,7 @@
       "name": "finance_acquisition_receipts",
       "purpose": "Exact paginated mailbox-window and valid-empty heartbeat receipt.",
       "idempotency_key": ["run_id", "source_code"],
-      "columns": {"run_id":"string","source_code":"string","window_start":"date","run_upper_bound":"date","pages_fetched":"number","pagination_exhausted":"boolean","scanned_count":"number","matched_count":"number","heartbeat":"boolean","terminal_state":"string","cursor_commit_eligible":"boolean","downstream_receipt_sha256":"string","readback_verified":"boolean","created_at":"date","updated_at":"date"},
+      "columns": {"run_id":"string","source_code":"string","window_start":"date","run_upper_bound":"date","pages_fetched":"number","pagination_exhausted":"boolean","scanned_count":"number","matched_count":"number","heartbeat":"boolean","immutable_inventory_json":"string","terminal_state":"string","cursor_commit_eligible":"boolean","downstream_receipt_sha256":"string","readback_verified":"boolean","created_at":"date","updated_at":"date"},
       "allowed_states": ["ENUMERATED", "ARCHIVED", "DOWNSTREAM_VERIFIED", "FAILED"]
     },
     {

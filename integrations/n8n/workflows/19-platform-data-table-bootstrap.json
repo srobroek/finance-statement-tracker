@@ -178,6 +178,10 @@
               "type": "boolean"
             },
             {
+              "name": "immutable_inventory_json",
+              "type": "string"
+            },
+            {
               "name": "terminal_state",
               "type": "string"
             },
