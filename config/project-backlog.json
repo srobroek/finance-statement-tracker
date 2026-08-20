@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-19",
+  "generated_at": "2026-08-20",
   "source_artifacts": [
     "docs/project-audit/transcript-requirements-ledger-2026-08-19.json",
     "docs/project-audit/implementation-status.json",
     "config/project-backlog-progress.json"
   ],
   "summary": {
-    "total": 74,
+    "total": 76,
     "verified_count": 0,
     "by_status": {
       "BLOCKED": 3,
-      "IMPLEMENTED_UNVERIFIED": 20,
+      "IMPLEMENTED_UNVERIFIED": 18,
       "NOT_STARTED": 1,
-      "PARTIAL": 49,
+      "PARTIAL": 53,
       "SUPERSEDED": 1
     },
     "by_priority": {
-      "P0": 40,
-      "P1": 28,
+      "P0": 41,
+      "P1": 29,
       "P2": 6
     },
     "by_domain": {
@@ -28,7 +28,7 @@
       "browser acquisition": 4,
       "cashback companion": 14,
       "documentation and public reusability": 4,
-      "n8n platform and workflows": 9,
+      "n8n platform and workflows": 11,
       "platform, security and deployment": 7,
       "scheduling and task lifecycle": 3
     }
@@ -54,7 +54,7 @@
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Run bounded Outlook and OneDrive refresh/readback acceptance while all workflows remain inactive.",
+      "next_action": "Remove the exact WF23 orphan, then complete the guarded Microsoft restart and second-read proof while all workflows remain inactive.",
       "blocked_by": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
@@ -64,12 +64,13 @@
     {
       "rank": 3,
       "id": "N8N-002",
-      "status": "IMPLEMENTED_UNVERIFIED",
+      "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Complete the remaining issuer workflow semantics; use Tidy Workflow only when a human canvas cleanup is desired.",
+      "next_action": "Complete setup proofs and N8N-011 first, then implement N8N-010; use Tidy Workflow only for optional coordinate cleanup.",
       "blocked_by": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"
       ]
     },
     {
@@ -252,18 +253,46 @@
     {
       "rank": 17,
       "id": "N8N-003",
-      "status": "IMPLEMENTED_UNVERIFIED",
+      "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Run the bounded Microsoft refresh acceptance and restart repeat without recording credential identifiers or token values.",
+      "next_action": "Restore the exact 21/0/0 boundary, wait for both expiries to be past, and run the guarded restart proof once without recording credential identifiers or token values.",
       "blocked_by": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
-        "OAUTH_TOKEN_REFRESH_PROOF_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "EMAIL_TO_PDF_RENDERER_REQUIRED"
       ]
     },
     {
       "rank": 18,
+      "id": "N8N-011",
+      "status": "PARTIAL",
+      "priority": "P0",
+      "owner_workstream": "n8n_workflows",
+      "next_action": "Audit all 15 tables and every column, then review the candidate consolidation and relocation design before any implementation.",
+      "blocked_by": [
+        "DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED",
+        "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED",
+        "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"
+      ]
+    },
+    {
+      "rank": 19,
+      "id": "N8N-010",
+      "status": "PARTIAL",
+      "priority": "P1",
+      "owner_workstream": "n8n_workflows",
+      "next_action": "Wait for the setup and N8N-011 gates, then implement and independently verify the Finance subtree without touching peer applications.",
+      "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
+        "ONEDRIVE_ROOT_SETUP_REQUIRED",
+        "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"
+      ]
+    },
+    {
+      "rank": 20,
       "id": "N8N-005",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
@@ -276,7 +305,7 @@
       ]
     },
     {
-      "rank": 19,
+      "rank": 21,
       "id": "ACTUAL-019",
       "status": "BLOCKED",
       "priority": "P0",
@@ -285,12 +314,11 @@
       "blocked_by": [
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW",
-        "CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED",
-        "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED"
+        "CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED"
       ]
     },
     {
-      "rank": 20,
+      "rank": 22,
       "id": "PLATFORM-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -303,7 +331,7 @@
       ]
     },
     {
-      "rank": 21,
+      "rank": 23,
       "id": "AUTO-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -312,11 +340,11 @@
       "blocked_by": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
-        "OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED"
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 22,
+      "rank": 24,
       "id": "AUTO-003",
       "status": "PARTIAL",
       "priority": "P1",
@@ -327,7 +355,7 @@
       ]
     },
     {
-      "rank": 23,
+      "rank": 25,
       "id": "ACTUAL-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -338,7 +366,7 @@
       ]
     },
     {
-      "rank": 24,
+      "rank": 26,
       "id": "ACTUAL-002",
       "status": "PARTIAL",
       "priority": "P0",
@@ -354,7 +382,7 @@
       ]
     },
     {
-      "rank": 25,
+      "rank": 27,
       "id": "ACTUAL-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -366,7 +394,7 @@
       ]
     },
     {
-      "rank": 26,
+      "rank": 28,
       "id": "ACTUAL-005",
       "status": "PARTIAL",
       "priority": "P0",
@@ -379,7 +407,7 @@
       ]
     },
     {
-      "rank": 27,
+      "rank": 29,
       "id": "ACTUAL-017",
       "status": "PARTIAL",
       "priority": "P0",
@@ -395,7 +423,7 @@
       ]
     },
     {
-      "rank": 28,
+      "rank": 30,
       "id": "AGENT-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -406,7 +434,7 @@
       ]
     },
     {
-      "rank": 29,
+      "rank": 31,
       "id": "AUTO-002",
       "status": "PARTIAL",
       "priority": "P0",
@@ -418,7 +446,7 @@
       ]
     },
     {
-      "rank": 30,
+      "rank": 32,
       "id": "BROWSER-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -430,7 +458,7 @@
       ]
     },
     {
-      "rank": 31,
+      "rank": 33,
       "id": "CASHBACK-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -443,7 +471,7 @@
       ]
     },
     {
-      "rank": 32,
+      "rank": 34,
       "id": "CASHBACK-003",
       "status": "PARTIAL",
       "priority": "P0",
@@ -456,7 +484,7 @@
       ]
     },
     {
-      "rank": 33,
+      "rank": 35,
       "id": "CASHBACK-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -469,7 +497,7 @@
       ]
     },
     {
-      "rank": 34,
+      "rank": 36,
       "id": "CASHBACK-005",
       "status": "PARTIAL",
       "priority": "P0",
@@ -482,7 +510,7 @@
       ]
     },
     {
-      "rank": 35,
+      "rank": 37,
       "id": "CASHBACK-006",
       "status": "PARTIAL",
       "priority": "P0",
@@ -495,7 +523,7 @@
       ]
     },
     {
-      "rank": 36,
+      "rank": 38,
       "id": "CASHBACK-007",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
@@ -508,7 +536,7 @@
       ]
     },
     {
-      "rank": 37,
+      "rank": 39,
       "id": "CASHBACK-012",
       "status": "PARTIAL",
       "priority": "P0",
@@ -521,7 +549,7 @@
       ]
     },
     {
-      "rank": 38,
+      "rank": 40,
       "id": "CASHBACK-013",
       "status": "PARTIAL",
       "priority": "P0",
@@ -534,7 +562,7 @@
       ]
     },
     {
-      "rank": 39,
+      "rank": 41,
       "id": "CASHBACK-014",
       "status": "PARTIAL",
       "priority": "P0",
@@ -550,7 +578,7 @@
       ]
     },
     {
-      "rank": 40,
+      "rank": 42,
       "id": "N8N-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -562,7 +590,7 @@
       ]
     },
     {
-      "rank": 41,
+      "rank": 43,
       "id": "N8N-006",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
@@ -576,7 +604,7 @@
       ]
     },
     {
-      "rank": 42,
+      "rank": 44,
       "id": "PLATFORM-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -589,7 +617,7 @@
       ]
     },
     {
-      "rank": 43,
+      "rank": 45,
       "id": "ACTUAL-007",
       "status": "PARTIAL",
       "priority": "P1",
@@ -604,7 +632,7 @@
       ]
     },
     {
-      "rank": 44,
+      "rank": 46,
       "id": "ACTUAL-008",
       "status": "PARTIAL",
       "priority": "P1",
@@ -616,7 +644,7 @@
       ]
     },
     {
-      "rank": 45,
+      "rank": 47,
       "id": "ACTUAL-009",
       "status": "PARTIAL",
       "priority": "P1",
@@ -631,7 +659,7 @@
       ]
     },
     {
-      "rank": 46,
+      "rank": 48,
       "id": "ACTUAL-012",
       "status": "PARTIAL",
       "priority": "P1",
@@ -646,7 +674,7 @@
       ]
     },
     {
-      "rank": 47,
+      "rank": 49,
       "id": "ACTUAL-013",
       "status": "PARTIAL",
       "priority": "P1",
@@ -659,7 +687,7 @@
       ]
     },
     {
-      "rank": 48,
+      "rank": 50,
       "id": "ACTUAL-014",
       "status": "PARTIAL",
       "priority": "P1",
@@ -672,7 +700,7 @@
       ]
     },
     {
-      "rank": 49,
+      "rank": 51,
       "id": "ACTUAL-016",
       "status": "PARTIAL",
       "priority": "P1",
@@ -685,7 +713,7 @@
       ]
     },
     {
-      "rank": 50,
+      "rank": 52,
       "id": "ACTUAL-018",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -698,7 +726,7 @@
       ]
     },
     {
-      "rank": 51,
+      "rank": 53,
       "id": "ACTUAL-020",
       "status": "PARTIAL",
       "priority": "P1",
@@ -713,7 +741,7 @@
       ]
     },
     {
-      "rank": 52,
+      "rank": 54,
       "id": "AGENT-002",
       "status": "PARTIAL",
       "priority": "P1",
@@ -724,7 +752,7 @@
       ]
     },
     {
-      "rank": 53,
+      "rank": 55,
       "id": "BROWSER-004",
       "status": "PARTIAL",
       "priority": "P1",
@@ -736,7 +764,7 @@
       ]
     },
     {
-      "rank": 54,
+      "rank": 56,
       "id": "CASHBACK-002",
       "status": "PARTIAL",
       "priority": "P1",
@@ -749,7 +777,7 @@
       ]
     },
     {
-      "rank": 55,
+      "rank": 57,
       "id": "CASHBACK-008",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -762,7 +790,7 @@
       ]
     },
     {
-      "rank": 56,
+      "rank": 58,
       "id": "CASHBACK-009",
       "status": "PARTIAL",
       "priority": "P1",
@@ -775,7 +803,7 @@
       ]
     },
     {
-      "rank": 57,
+      "rank": 59,
       "id": "CASHBACK-010",
       "status": "PARTIAL",
       "priority": "P1",
@@ -788,7 +816,7 @@
       ]
     },
     {
-      "rank": 58,
+      "rank": 60,
       "id": "CASHBACK-011",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -801,7 +829,7 @@
       ]
     },
     {
-      "rank": 59,
+      "rank": 61,
       "id": "DOC-001",
       "status": "PARTIAL",
       "priority": "P1",
@@ -816,7 +844,7 @@
       ]
     },
     {
-      "rank": 60,
+      "rank": 62,
       "id": "DOC-003",
       "status": "PARTIAL",
       "priority": "P1",
@@ -828,7 +856,7 @@
       ]
     },
     {
-      "rank": 61,
+      "rank": 63,
       "id": "DOC-004",
       "status": "PARTIAL",
       "priority": "P1",
@@ -844,7 +872,7 @@
       ]
     },
     {
-      "rank": 62,
+      "rank": 64,
       "id": "DOC-005",
       "status": "PARTIAL",
       "priority": "P1",
@@ -856,7 +884,7 @@
       ]
     },
     {
-      "rank": 63,
+      "rank": 65,
       "id": "DOC-006",
       "status": "PARTIAL",
       "priority": "P1",
@@ -870,7 +898,7 @@
       ]
     },
     {
-      "rank": 64,
+      "rank": 66,
       "id": "DOCS-001",
       "status": "PARTIAL",
       "priority": "P1",
@@ -881,7 +909,7 @@
       ]
     },
     {
-      "rank": 65,
+      "rank": 67,
       "id": "N8N-007",
       "status": "PARTIAL",
       "priority": "P1",
@@ -892,7 +920,7 @@
       ]
     },
     {
-      "rank": 66,
+      "rank": 68,
       "id": "PLATFORM-002",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -906,7 +934,7 @@
       ]
     },
     {
-      "rank": 67,
+      "rank": 69,
       "id": "PLATFORM-005",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -919,7 +947,7 @@
       ]
     },
     {
-      "rank": 68,
+      "rank": 70,
       "id": "ACTUAL-015",
       "status": "PARTIAL",
       "priority": "P2",
@@ -932,7 +960,7 @@
       ]
     },
     {
-      "rank": 69,
+      "rank": 71,
       "id": "AGENT-004",
       "status": "PARTIAL",
       "priority": "P2",
@@ -943,7 +971,7 @@
       ]
     },
     {
-      "rank": 70,
+      "rank": 72,
       "id": "AGENT-005",
       "status": "PARTIAL",
       "priority": "P2",
@@ -956,7 +984,7 @@
       ]
     },
     {
-      "rank": 71,
+      "rank": 73,
       "id": "DOCS-003",
       "status": "NOT_STARTED",
       "priority": "P2",
@@ -967,7 +995,7 @@
       ]
     },
     {
-      "rank": 72,
+      "rank": 74,
       "id": "N8N-009",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P2",
@@ -978,7 +1006,7 @@
       ]
     },
     {
-      "rank": 73,
+      "rank": 75,
       "id": "PLATFORM-007",
       "status": "PARTIAL",
       "priority": "P2",
@@ -1005,6 +1033,7 @@
         "PLATFORM-001",
         "AGENT-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Exact n8n image imports and executes all non-placeholder workflows",
         "Three consecutive shadow runs and one guarded write per active issuer",
@@ -1034,7 +1063,7 @@
         "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, task launcher, and Codex runner passed"
       ],
       "live_readback": "Internal n8n 2.36.2 at finance commit 00491aa and orchestrator commit c8d4f7c has 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, 13 OneDrive bindings, 15 exact Data Tables, seven AI policy rows, and nine config rows. Runtime health passed; no provider, Actual, or cashback call occurred.",
-      "remaining_work": "Refresh and read back both Microsoft credentials, execute the fixture matrix twice, and prove issuer schedules before any activation.",
+      "remaining_work": "Remove the exact WF23 orphan, complete Microsoft restart persistence, execute the fixture matrix twice, and prove issuer schedules before any activation.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
@@ -1046,7 +1075,7 @@
         "Current Codex schedules intentionally remain active until n8n replacement acceptance, so the target is not deployed"
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Run bounded Outlook and OneDrive refresh/readback acceptance while all workflows remain inactive."
+      "next_action": "Remove the exact WF23 orphan, then complete the guarded Microsoft restart and second-read proof while all workflows remain inactive."
     },
     {
       "id": "N8N-002",
@@ -1054,13 +1083,14 @@
       "title": "Workflow stages remain visible and composable",
       "requirement": "Use native n8n nodes and subworkflows for acquisition, OneDrive archive, hashing, PDF extraction, normalization, rules, AI, reconciliation, Actual write, cursor commit, and close instead of one opaque worker call.",
       "priority": "P1",
-      "status": "IMPLEMENTED_UNVERIFIED",
+      "status": "PARTIAL",
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
       "dependencies": [
         "N8N-001",
         "N8N-008"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Imported canvas shows each required stage",
         "No generic Execute Command or SSH node",
@@ -1068,7 +1098,7 @@
         "A reviewer can follow source to write without reading application code"
       ],
       "implementation_state": "DEPLOYED_INACTIVE",
-      "verification_state": "RUNTIME_FOLDER_PLACEMENT_VERIFIED_CANVAS_REVIEW_DEFERRED",
+      "verification_state": "RUNTIME_SIBLING_PLACEMENT_VERIFIED_TARGET_APPLICATION_HIERARCHY_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
@@ -1083,9 +1113,10 @@
         "runtime readback verified 8 folders, 21 placements, and 63 tag edges"
       ],
       "live_readback": "All 21 workflows are imported inactive and unpublished in eight folders with 63 tag edges. Manual coordinate cleanup and Tidy Workflow are deferred to the user; semantic names, notes, and section contracts remain repository-tested.",
-      "remaining_work": "Complete remaining workflow semantics and optional human canvas review; manual coordinate optimization is out of scope.",
+      "remaining_work": "Complete remaining workflow semantics and implement the reviewed Finance application root and role hierarchy after setup proofs and N8N-011 design; manual coordinate optimization is out of scope.",
       "blockers": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
       "contradictions": [
@@ -1094,7 +1125,7 @@
         "Readable node names, code, notes, section labels and folders remain required even though manual positioning does not."
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Complete the remaining issuer workflow semantics; use Tidy Workflow only when a human canvas cleanup is desired."
+      "next_action": "Complete setup proofs and N8N-011 first, then implement N8N-010; use Tidy Workflow only for optional coordinate cleanup."
     },
     {
       "id": "N8N-003",
@@ -1102,13 +1133,14 @@
       "title": "Cursor-safe Outlook acquisition",
       "requirement": "Freeze run_upper_bound, scan from the last successful cursor minus overlap, exhaust pagination, record exact scanned count including zero-message heartbeats, and advance once only after durable downstream success.",
       "priority": "P0",
-      "status": "IMPLEMENTED_UNVERIFIED",
+      "status": "PARTIAL",
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
       "dependencies": [
         "N8N-004",
         "DOC-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Fixtures cover zero, 101-plus, late, duplicate, out-of-order and pagination failure",
         "Cursor compare-and-swap rejects stale writers",
@@ -1116,13 +1148,13 @@
         "Runtime receipt contains frozen window and exact counts"
       ],
       "implementation_state": "DEPLOYED_INACTIVE",
-      "verification_state": "RUNTIME_BINDINGS_VERIFIED_OAUTH_REFRESH_PENDING",
+      "verification_state": "MICROSOFT_FIRST_READ_AND_REFRESH_OBSERVED_RESTART_PERSISTENCE_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
         "integrations/n8n/data-tables.json",
         "tests/test_n8n_workflows.py",
-        "integrations/n8n/workflows/01-shared-outlook-acquisition.json",
+        "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
         "runtime/n8n-orchestrator-repo/docs/runtime-health-and-microsoft-refresh.md",
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
@@ -1130,11 +1162,12 @@
         "Outlook server-filter, From-list subworkflow, attachment, and OneDrive binary-upload contracts pass",
         "runtime readback verified 4 Outlook and 13 OneDrive credential bindings with unchanged ciphertext"
       ],
-      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact and credential ciphertext was unchanged. Both access tokens were expired and both refresh tokens were present, but token_refresh_performed was false. Bounded provider reads, post-refresh metadata, restart persistence, live filtering, and inline-email PDF rendering are not proven.",
-      "remaining_work": "Perform bounded filtered Outlook and OneDrive reads, verify both token refreshes before and after restart, archive every attachment and original email, and add the fixed inline-email PDF renderer.",
+      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact. The transient WF23 execution completed one bounded Outlook read and one OneDrive root read and moved both expired access-token expiries to future values. It did not complete the n8n-only restart, second reads, cleanup, or persistence proof; inline-email PDF rendering also remains unproven.",
+      "remaining_work": "Remove the exact WF23 orphan, then rerun the complete expired-before, first-read, n8n-restart and second-read sequence; separately prove live filtering, attachment/original archival, and the fixed inline-email PDF renderer.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
-        "OAUTH_TOKEN_REFRESH_PROOF_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "EMAIL_TO_PDF_RENDERER_REQUIRED"
       ],
       "source_status": "MIXED",
@@ -1143,7 +1176,7 @@
         "Successful legacy/Codex cursor runs do not prove the n8n implementation"
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Run the bounded Microsoft refresh acceptance and restart repeat without recording credential identifiers or token values."
+      "next_action": "Restore the exact 21/0/0 boundary, wait for both expiries to be past, and run the guarded restart proof once without recording credential identifiers or token values."
     },
     {
       "id": "N8N-004",
@@ -1154,7 +1187,8 @@
       "status": "PARTIAL",
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
-      "dependencies": [
+      "dependencies": [],
+      "related_tasks": [
         "ACTUAL-001",
         "CASHBACK-001"
       ],
@@ -1205,7 +1239,9 @@
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
       "dependencies": [
-        "PLATFORM-003",
+        "PLATFORM-003"
+      ],
+      "related_tasks": [
         "ACTUAL-019"
       ],
       "acceptance_criteria": [
@@ -1254,9 +1290,11 @@
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
       "dependencies": [
-        "N8N-001",
         "N8N-005",
         "PLATFORM-006"
+      ],
+      "related_tasks": [
+        "N8N-001"
       ],
       "acceptance_criteria": [
         "Registry status and live activation agree",
@@ -1265,7 +1303,7 @@
         "UI/API readback passes before activation"
       ],
       "implementation_state": "DEPLOYED_INACTIVE",
-      "verification_state": "RUNTIME_EXACT_INACTIVE_IMPORT_VERIFIED_ACTIVATION_FORBIDDEN",
+      "verification_state": "REGULAR_CORPUS_INACTIVE_VERIFIED_TRANSIENT_WF23_CLEANUP_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
@@ -1283,7 +1321,7 @@
         "local receipt: 21 imported, 0 active, 0 published",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: exact commits and 21/0/0 state"
       ],
-      "live_readback": "The internal runtime reports the exact 00491aa workflow corpus with 21 workflows, zero active, and zero published. Promotion performed no activation, provider call, Actual write, or cashback write.",
+      "live_readback": "The reviewed regular corpus remains 21 workflows and unchanged from 00491aa, but one transient inactive WF23 setup workflow currently makes the project boundary 22 workflows, zero active, and zero published until exact cleanup. No production activation, publication, Actual write, or cashback write occurred.",
       "remaining_work": "Complete current-byte double replay and conflict review, then obtain separate explicit authorization for any production activation or finance write.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -1312,6 +1350,7 @@
         "DOC-007",
         "PLATFORM-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Induced failures create redacted durable failures",
         "No PDF bytes, decrypted text, passwords or tokens appear in execution history",
@@ -1349,6 +1388,7 @@
       "dependencies": [
         "PLATFORM-002"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Exact lockfile and SBOM",
         "Zero high/critical image findings",
@@ -1399,6 +1439,7 @@
         "PLATFORM-004",
         "N8N-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Positive and negative Service Auth tests",
         "Exact-path Cloudflare policy",
@@ -1427,6 +1468,113 @@
       "next_action": "Run allowed and malicious MCP facade requests with instance MCP disabled and prove zero unauthorized writes."
     },
     {
+      "id": "N8N-010",
+      "domain": "n8n platform and workflows",
+      "title": "Application-scoped role hierarchy",
+      "requirement": "Place the finance application beneath one concise top-level Finance folder so unrelated applications can coexist, and group workflows beneath it by execution role and logical flow rather than only by finance topic, provider, or implementation technology.",
+      "priority": "P1",
+      "status": "PARTIAL",
+      "owner_workstream": "n8n_workflows",
+      "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
+      "dependencies": [
+        "N8N-011",
+        "N8N-006"
+      ],
+      "related_tasks": [
+        "N8N-002",
+        "N8N-003",
+        "DOC-001",
+        "PLATFORM-001"
+      ],
+      "acceptance_criteria": [
+        "Database and browser readback prove exactly one finance-owned top-level Finance root, exactly nine direct current-corpus children, and 99 Setup Only nested only beneath 90 Platform Administration",
+        "All 21 current workflows map exactly once to the reviewed role folders; the 17 Execute Sub-workflow and three Tool Workflow references remain list-mode and resolve to the same targets",
+        "Every unrelated peer application root, folder, workflow, tag, timestamp and relationship is unchanged; the migration performs no folder deletion",
+        "A duplicate or colliding Finance root, child, workflow mapping, or setup-only placement fails before mutation and leaves an exact rollback readback",
+        "All workflows remain inactive and unpublished, the current-corpus tag edge count is unchanged, and setup workflows remain transient and activation-forbidden",
+        "A second hierarchy application produces zero row and timestamp changes and the browser tree matches the database tree"
+      ],
+      "implementation_state": "PARTIAL",
+      "verification_state": "CURRENT_SIBLING_LAYOUT_VERIFIED_TARGET_FINANCE_HIERARCHY_UNIMPLEMENTED",
+      "evidence_paths": [
+        "integrations/n8n/workflow-folders.json",
+        "integrations/n8n/workflow-folder-placement.sql",
+        "tests/test_n8n_workflows.py"
+      ],
+      "tests": [
+        "Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"
+      ],
+      "live_readback": "The retained project proves eight sibling folders, 21 current-corpus placements, 63 tag edges, zero active and zero published workflows. This is the pre-migration state and does not satisfy the sole Finance application root, nine direct children, or nested 99 Setup Only target.",
+      "remaining_work": "After WF23 cleanup, Microsoft restart persistence, WF22 root proof and N8N-011 design approval, implement the exact reviewed role mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence.",
+      "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
+        "ONEDRIVE_ROOT_SETUP_REQUIRED",
+        "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"
+      ],
+      "source_status": "REQUESTED_UNVERIFIED",
+      "contradictions": [
+        "The previously verified eight sibling folders are historical current-state evidence and no longer satisfy the target information architecture",
+        "Finance Automation was considered as the root name but the reviewed decision is the concise Finance root so future application roots remain peers"
+      ],
+      "last_verified": "2026-08-20",
+      "next_action": "Wait for the setup and N8N-011 gates, then implement and independently verify the Finance subtree without touching peer applications."
+    },
+    {
+      "id": "N8N-011",
+      "domain": "n8n platform and workflows",
+      "title": "Minimize Data Tables to durable finance-domain state",
+      "requirement": "Treat the existing 15 Data Tables and every declared column as an audit baseline, then retain only durable finance-domain state that has a named authoritative owner, producer, consumer, invariant, retention need and privacy justification; consolidate or remove redundant operational and configuration state before workflow promotion.",
+      "priority": "P0",
+      "status": "PARTIAL",
+      "owner_workstream": "n8n_workflows",
+      "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
+      "dependencies": [],
+      "related_tasks": [
+        "N8N-004",
+        "N8N-005",
+        "N8N-007",
+        "N8N-009",
+        "AGENT-003",
+        "DOC-007",
+        "PLATFORM-006"
+      ],
+      "acceptance_criteria": [
+        "A machine-reviewable matrix covers all 15 tables and every column with disposition, authoritative owner, every producer, every consumer, read and write path, invariant, idempotency key, retention, privacy class and rationale",
+        "The audit identifies table merges, cross-table duplicate fields, redundant timestamps, verification booleans, version and hash fields, payload pointers, state fields and denormalized identifiers, and proves why each surviving field is necessary",
+        "Candidate consolidation explicitly evaluates finance_acquisition_receipts, finance_pipeline_runs, finance_execution_failures and finance_mcp_requests against one operation-receipt contract without weakening cursor, failure, Service Auth or terminal-readback invariants",
+        "Candidate removal or relocation explicitly evaluates finance_source_contracts, finance_config_versions, finance_ai_policy_contracts and finance_provider_circuits against Git-canonical configuration and a narrowly owned operational circuit store",
+        "Every affected workflow node and generated seed is mapped before migration; no caller-controlled value replaces a server-owned contract and no posted transaction or cashback event is introduced into Data Tables",
+        "A disposable migration receipt proves exact pre-migration counts and hashes, transformed rows, producer and consumer parity, concurrency and restart behavior, retention and privacy scans, and zero dropped required state",
+        "A second migration is a no-op and an exact rollback restores schemas, rows, hashes, workflow behavior and timestamps without provider, Actual, cashback or production activation",
+        "No runtime schema change starts until the disposition matrix and migration and rollback plan receive independent review"
+      ],
+      "implementation_state": "PARTIAL",
+      "verification_state": "FIFTEEN_TABLE_BASELINE_VERIFIED_MINIMALITY_AND_MIGRATION_UNPROVEN",
+      "evidence_paths": [
+        "integrations/n8n/data-tables.json",
+        "docs/n8n-package-template-data-table-audit-2026-08-19.md",
+        "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md"
+      ],
+      "tests": [
+        "Existing schema, bootstrap, producer and consumer contract tests prove the 15-table baseline but do not prove that every table and column is necessary"
+      ],
+      "live_readback": "Official DataTableService readback proved all 15 exact deployed schemas, seven AI policy rows, nine config rows and preservation of the source cursor row. No table or column has yet passed the required necessity, authoritative-owner, retention, privacy, consolidation, migration or rollback audit.",
+      "remaining_work": "Complete and independently review the all-table and all-column producer/consumer/invariant matrix, approve a minimal target, and prove disposable migration, no-op replay and exact rollback before changing any runtime schema.",
+      "blockers": [
+        "DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED",
+        "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED",
+        "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"
+      ],
+      "source_status": "REQUESTED_UNVERIFIED",
+      "contradictions": [
+        "Earlier work treated all 15 tables as a desired deployed contract; the current decision requires proving that each table and column earns persistent Data Table storage",
+        "The official 15-table runtime readback proves current deployment only and does not prove that the schema is minimal"
+      ],
+      "last_verified": "2026-08-20",
+      "next_action": "Audit all 15 tables and every column, then review the candidate consolidation and relocation design before any implementation."
+    },
+    {
       "id": "DOC-001",
       "domain": "Outlook, OneDrive and document evidence",
       "title": "Immutable OneDrive evidence archive",
@@ -1439,6 +1587,7 @@
         "DOC-007",
         "PLATFORM-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Every saved file path follows AGENTS.md naming",
         "SHA-256 and OneDrive item identity read back",
@@ -1452,7 +1601,7 @@
         "integrations/n8n/workflows/13-document-extraction-request.json",
         "integrations/n8n/workflows/14-local-pdf-extraction.json",
         "tests/test_evidence.py",
-        "integrations/n8n/workflows/01-shared-outlook-acquisition.json",
+        "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
         "integrations/n8n/setup-workflows/22-onedrive-finance-evidence-root-setup.json",
         "integrations/n8n/setup-workflows/manifest.json"
       ],
@@ -1490,6 +1639,7 @@
         "PLATFORM-003",
         "N8N-008"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Encrypted EI/ADCB and synthetic fixtures pass",
         "Wrong-password/corrupt/polyglot/oversize/timeout/OOM/network cases fail closed",
@@ -1539,6 +1689,7 @@
         "DOC-001",
         "AGENT-001"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Positive, negative and ambiguous fixtures",
         "High-value unknown product searches use vendor plus price and period",
@@ -1583,6 +1734,7 @@
         "DOC-001",
         "ACTUAL-011"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Bidirectional catalogue/ledger link",
         "Stable message and attachment identities",
@@ -1641,7 +1793,9 @@
       "owner_workstream": "document_evidence",
       "acceptance_validator": "evidence tests plus immutable archive and readback receipt review",
       "dependencies": [
-        "DOC-002",
+        "DOC-002"
+      ],
+      "related_tasks": [
         "ACTUAL-012"
       ],
       "acceptance_criteria": [
@@ -1685,6 +1839,7 @@
         "BROWSER-004",
         "ACTUAL-019"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Exact amount equation",
         "Stable order references and evidence links",
@@ -1731,7 +1886,8 @@
       "status": "IMPLEMENTED_UNVERIFIED",
       "owner_workstream": "document_evidence",
       "acceptance_validator": "evidence tests plus immutable archive and readback receipt review",
-      "dependencies": [
+      "dependencies": [],
+      "related_tasks": [
         "N8N-003"
       ],
       "acceptance_criteria": [
@@ -1775,6 +1931,7 @@
         "ACTUAL-005",
         "ACTUAL-010"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Stage trace proves execution order",
         "Protected-field mutation fixtures are rejected",
@@ -1813,6 +1970,7 @@
       "dependencies": [
         "AGENT-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Normal and exception receipts show forced model mapping",
         "Caller model selection is rejected",
@@ -1853,6 +2011,7 @@
         "PLATFORM-003",
         "N8N-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Three consecutive valid disposable receipts",
         "Malicious output and protected fields rejected",
@@ -1902,7 +2061,9 @@
       "owner_workstream": "agent_runtime",
       "acceptance_validator": "runner contract tests plus isolated structured-output receipt review",
       "dependencies": [
-        "AGENT-001",
+        "AGENT-001"
+      ],
+      "related_tasks": [
         "ACTUAL-009"
       ],
       "acceptance_criteria": [
@@ -1942,6 +2103,7 @@
         "AGENT-003",
         "N8N-008"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "No unreviewed community package in production image",
         "Provider-neutral proposal schema",
@@ -1989,6 +2151,7 @@
       "dependencies": [
         "N8N-004"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Every posted source identity exists exactly once in Actual",
         "Operational stores contain no authoritative duplicate row",
@@ -2027,7 +2190,9 @@
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
         "BROWSER-002",
-        "BROWSER-003",
+        "BROWSER-003"
+      ],
+      "related_tasks": [
         "ACTUAL-003"
       ],
       "acceptance_criteria": [
@@ -2084,9 +2249,11 @@
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
         "ACTUAL-002",
-        "BROWSER-002",
-        "BROWSER-003",
         "PLATFORM-006"
+      ],
+      "related_tasks": [
+        "BROWSER-002",
+        "BROWSER-003"
       ],
       "acceptance_criteria": [
         "UI and API sync IDs and account hashes equal",
@@ -2148,7 +2315,9 @@
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
-        "DOC-002",
+        "DOC-002"
+      ],
+      "related_tasks": [
         "ACTUAL-019"
       ],
       "acceptance_criteria": [
@@ -2191,7 +2360,8 @@
       "status": "PARTIAL",
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
-      "dependencies": [
+      "dependencies": [],
+      "related_tasks": [
         "ACTUAL-006"
       ],
       "acceptance_criteria": [
@@ -2240,6 +2410,7 @@
         "ACTUAL-005",
         "N8N-002"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Generated ownership manifest",
         "Empty overlap report",
@@ -2285,6 +2456,7 @@
         "ACTUAL-005",
         "ACTUAL-020"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Normalization corpus covers current payees",
         "Original imported payee remains recoverable",
@@ -2332,7 +2504,9 @@
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
-        "AGENT-001",
+        "AGENT-001"
+      ],
+      "related_tasks": [
         "ACTUAL-020"
       ],
       "acceptance_criteria": [
@@ -2374,7 +2548,9 @@
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
-        "AGENT-004",
+        "AGENT-004"
+      ],
+      "related_tasks": [
         "ACTUAL-013"
       ],
       "acceptance_criteria": [
@@ -2424,7 +2600,9 @@
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
-        "ACTUAL-004",
+        "ACTUAL-004"
+      ],
+      "related_tasks": [
         "ACTUAL-019"
       ],
       "acceptance_criteria": [
@@ -2477,7 +2655,9 @@
       "owner_workstream": "actual_finance",
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
-        "ACTUAL-010",
+        "ACTUAL-010"
+      ],
+      "related_tasks": [
         "ACTUAL-019"
       ],
       "acceptance_criteria": [
@@ -2533,7 +2713,9 @@
       "acceptance_validator": "full Python suite plus disposable Actual and authenticated UI/API readback",
       "dependencies": [
         "ACTUAL-005",
-        "DOC-005",
+        "DOC-005"
+      ],
+      "related_tasks": [
         "ACTUAL-016"
       ],
       "acceptance_criteria": [
@@ -2586,6 +2768,7 @@
         "ACTUAL-009",
         "ACTUAL-014"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Budget templates populated for approved categories",
         "Annual sinking funds and savings goals",
@@ -2630,6 +2813,7 @@
         "DOC-003",
         "ACTUAL-010"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Schedule API readback",
         "Variable amount/date ranges where supported",
@@ -2675,6 +2859,7 @@
         "ACTUAL-005",
         "ACTUAL-014"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Account disabled by default",
         "IPMT plus PPMT equals payment within minor-unit tolerance",
@@ -2721,6 +2906,7 @@
         "ACTUAL-012",
         "ACTUAL-013"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Versioned suite matches live UI",
         "No invalid scroll-heavy/raw-table-only landing pages",
@@ -2766,6 +2952,7 @@
         "BROWSER-003",
         "ACTUAL-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Sarwa positions plus cash reconcile",
         "FX source/time/precision documented",
@@ -2820,6 +3007,7 @@
       "dependencies": [
         "ACTUAL-006"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Live setting readback false",
         "Rule inventory distinguishes user-owned learned rules",
@@ -2863,6 +3051,7 @@
         "ACTUAL-011",
         "PLATFORM-006"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Complete source manifest",
         "Manual overrides/splits/reconciliation/links preserved",
@@ -2888,8 +3077,7 @@
       "blockers": [
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW",
-        "CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED",
-        "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED"
+        "CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
       "contradictions": [
@@ -2911,6 +3099,7 @@
         "ACTUAL-008",
         "ACTUAL-016"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Unresolved count equals queue count",
         "Every row exposes correction workflow",
@@ -2961,6 +3150,7 @@
         "ACTUAL-010",
         "ACTUAL-019"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Consecutive statements/payment evidence reach zero",
         "Account closed/inactive in Actual",
@@ -3007,6 +3197,7 @@
         "ACTUAL-001",
         "PLATFORM-001"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Independent container restart",
         "No Actual sync needed for hourly/morning bucket updates",
@@ -3054,8 +3245,10 @@
       "owner_workstream": "cashback_companion",
       "acceptance_validator": "cashback regression suite plus live companion reconciliation receipt review",
       "dependencies": [
-        "DOCS-003",
         "PLATFORM-002"
+      ],
+      "related_tasks": [
+        "DOCS-003"
       ],
       "acceptance_criteria": [
         "Schema-valid profiles",
@@ -3103,6 +3296,7 @@
         "N8N-003",
         "CASHBACK-004"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "One accepted event changes route deterministically",
         "No provisional label or approval control",
@@ -3149,6 +3343,7 @@
         "ACTUAL-004",
         "AUTO-002"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "No close from notifications alone",
         "Reconcile live vs statement with exception report",
@@ -3193,8 +3388,10 @@
       "owner_workstream": "cashback_companion",
       "acceptance_validator": "cashback regression suite plus live companion reconciliation receipt review",
       "dependencies": [
-        "AUTO-001",
         "CASHBACK-004"
+      ],
+      "related_tasks": [
+        "AUTO-001"
       ],
       "acceptance_criteria": [
         "Boundary tests across months/leap year/timezone",
@@ -3239,7 +3436,9 @@
       "owner_workstream": "cashback_companion",
       "acceptance_validator": "cashback regression suite plus live companion reconciliation receipt review",
       "dependencies": [
-        "N8N-003",
+        "N8N-003"
+      ],
+      "related_tasks": [
         "AUTO-001"
       ],
       "acceptance_criteria": [
@@ -3287,7 +3486,9 @@
       "owner_workstream": "cashback_companion",
       "acceptance_validator": "cashback regression suite plus live companion reconciliation receipt review",
       "dependencies": [
-        "CASHBACK-002",
+        "CASHBACK-002"
+      ],
+      "related_tasks": [
         "CASHBACK-010"
       ],
       "acceptance_criteria": [
@@ -3336,6 +3537,7 @@
       "dependencies": [
         "CASHBACK-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "iPhone 13 Pro Max viewport screenshots",
         "No text overlap at system font scaling",
@@ -3382,6 +3584,7 @@
         "CASHBACK-004",
         "CASHBACK-005"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Current and historical period selector",
         "Expected versus finalized cashback",
@@ -3428,6 +3631,7 @@
         "CASHBACK-005",
         "CASHBACK-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Weekly target formula",
         "Partial-week and irregular-cycle fixtures",
@@ -3474,6 +3678,7 @@
         "CASHBACK-010",
         "PLATFORM-004"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Installed iOS PWA subscription",
         "Manual test delivery",
@@ -3520,6 +3725,7 @@
         "CASHBACK-002",
         "CASHBACK-006"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Exact sender/subject/body fixture",
         "Card suffix mapping",
@@ -3567,6 +3773,7 @@
         "CASHBACK-002",
         "CASHBACK-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Tier-boundary tests",
         "Tier-specific cap tests",
@@ -3613,6 +3820,7 @@
         "ACTUAL-010",
         "CASHBACK-004"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "No EI live source/job",
         "Unlimited UI state",
@@ -3672,8 +3880,10 @@
       "owner_workstream": "browser_acquisition",
       "acceptance_validator": "capture-schema tests plus immutable source and guarded-ingestion receipt review",
       "dependencies": [
-        "N8N-005",
         "DOC-001"
+      ],
+      "related_tasks": [
+        "N8N-005"
       ],
       "acceptance_criteria": [
         "Provider/data recipe and capture schema",
@@ -3715,7 +3925,9 @@
       "owner_workstream": "browser_acquisition",
       "acceptance_validator": "capture-schema tests plus immutable source and guarded-ingestion receipt review",
       "dependencies": [
-        "BROWSER-001",
+        "BROWSER-001"
+      ],
+      "related_tasks": [
         "ACTUAL-002"
       ],
       "acceptance_criteria": [
@@ -3766,7 +3978,9 @@
       "owner_workstream": "browser_acquisition",
       "acceptance_validator": "capture-schema tests plus immutable source and guarded-ingestion receipt review",
       "dependencies": [
-        "BROWSER-001",
+        "BROWSER-001"
+      ],
+      "related_tasks": [
         "ACTUAL-017"
       ],
       "acceptance_criteria": [
@@ -3821,7 +4035,9 @@
       "owner_workstream": "browser_acquisition",
       "acceptance_validator": "capture-schema tests plus immutable source and guarded-ingestion receipt review",
       "dependencies": [
-        "BROWSER-001",
+        "BROWSER-001"
+      ],
+      "related_tasks": [
         "DOC-006"
       ],
       "acceptance_criteria": [
@@ -3868,6 +4084,7 @@
         "CASHBACK-006",
         "N8N-001"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Manifest equals installed state during transition",
         "n8n replacement preserves schedule",
@@ -3894,7 +4111,7 @@
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
-        "OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED"
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ],
       "source_status": "MIXED",
       "contradictions": [
@@ -3915,7 +4132,9 @@
       "acceptance_validator": "automation lifecycle tests plus target scheduler and legacy-task readback",
       "dependencies": [
         "N8N-003",
-        "DOC-002",
+        "DOC-002"
+      ],
+      "related_tasks": [
         "CASHBACK-004"
       ],
       "acceptance_criteria": [
@@ -3964,6 +4183,7 @@
         "N8N-001",
         "N8N-007"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Three consecutive successful routine runs create no visible Codex task clutter",
         "Forced failure remains visible",
@@ -4005,7 +4225,9 @@
       "owner_workstream": "platform_operations",
       "acceptance_validator": "platform tests plus image, deploy, restart, security, and restore receipt review",
       "dependencies": [
-        "PLATFORM-002",
+        "PLATFORM-002"
+      ],
+      "related_tasks": [
         "PLATFORM-006"
       ],
       "acceptance_criteria": [
@@ -4057,7 +4279,9 @@
       "owner_workstream": "platform_operations",
       "acceptance_validator": "platform tests plus image, deploy, restart, security, and restore receipt review",
       "dependencies": [
-        "PLATFORM-003",
+        "PLATFORM-003"
+      ],
+      "related_tasks": [
         "DOCS-001"
       ],
       "acceptance_criteria": [
@@ -4074,7 +4298,7 @@
         "deploy/actual-poc/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json",
-        "integrations/n8n/Dockerfile",
+        "packages/n8n-nodes-finance/Dockerfile.n8n",
         "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/trivy.json",
         "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/sbom.spdx.json"
       ],
@@ -4106,7 +4330,8 @@
       "status": "IMPLEMENTED_UNVERIFIED",
       "owner_workstream": "platform_operations",
       "acceptance_validator": "platform tests plus image, deploy, restart, security, and restore receipt review",
-      "dependencies": [
+      "dependencies": [],
+      "related_tasks": [
         "PLATFORM-006"
       ],
       "acceptance_criteria": [
@@ -4158,6 +4383,7 @@
         "PLATFORM-001",
         "PLATFORM-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Positive and negative Access tests",
         "WebSocket/sync test",
@@ -4205,6 +4431,7 @@
       "dependencies": [
         "PLATFORM-004"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "crossOriginIsolated true",
         "COOP/COEP response headers",
@@ -4251,6 +4478,7 @@
         "PLATFORM-001",
         "PLATFORM-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Hash-verified backup",
         "Disposable restore drill",
@@ -4312,6 +4540,7 @@
         "CASHBACK-002",
         "DOCS-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Private repo visibility verified",
         "Public-safe sample profiles",
@@ -4346,6 +4575,7 @@
       "dependencies": [
         "PLATFORM-002"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Fresh clone runbook",
         "No stale Notion/bridge architecture claim",
@@ -4382,6 +4612,7 @@
         "N8N-006",
         "PLATFORM-006"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Schema validation",
         "No VERIFIED row with missing/stale evidence",
@@ -4426,6 +4657,7 @@
         "ACTUAL-004",
         "PLATFORM-003"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "Public-safe examples",
         "Configuration schema validation",
@@ -4460,6 +4692,7 @@
       "dependencies": [
         "ACTUAL-001"
       ],
+      "related_tasks": [],
       "acceptance_criteria": [
         "No Notion credential, API call, schema or migration in production",
         "Docs point to Actual/n8n/OneDrive/cashback owners",
@@ -4483,8 +4716,10 @@
   "progress_overlay": {
     "path": "config/project-backlog-progress.json",
     "recorded_at": "2026-08-20",
-    "evidence_commit": "b07c410fb43ad5953f83d3a6847dcd452b0b48d7",
+    "evidence_commit": "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
     "evidence_commits": [
+      "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
+      "8149f42f2694c200ca9fae37875c4dba4e727978",
       "b07c410fb43ad5953f83d3a6847dcd452b0b48d7",
       "00491aae2ab43c486f3a9b4a62ce3ba5e63032f6",
       "c8d4f7ce984ec0107846b2c7aa398cb1141caf39",
@@ -4496,8 +4731,9 @@
     "snapshot_notes": [
       "The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.",
       "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
-      "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
-      "The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.",
+      "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. The transient WF23 run completed bounded Outlook and OneDrive reads and moved both expired access-token expiries into the future, but restart persistence and the required second reads did not run.",
+      "WF23 is currently stranded as one inactive, unpublished setup workflow with one soft-deleted running execution row. The observed project boundary is temporarily 22 workflows, zero active, zero published, 22 placements, and 66 tag edges; exact reviewed cleanup back to 21/0/0 and zero WF23 rows is pending.",
+      "The setup-only OneDrive root workflow remains manual-only and outside the regular 21-workflow corpus. Its attempted live run failed at a clean restored boundary; exact create-or-reuse and root-folder readback remain unproven.",
       "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
       "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
       "Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.",
@@ -4529,6 +4765,6 @@
       "Repair provider-envelope contract/test parity",
       "current contract bytes fail their local suite"
     ],
-    "update_count": 21
+    "update_count": 23
   }
 }

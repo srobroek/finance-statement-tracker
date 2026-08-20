@@ -1,7 +1,7 @@
 # End-to-end finance platform project plan
 
 Date: 2026-08-19  
-Revision: 2, amended after independent adversarial review  
+Revision: 3, amended after independent adversarial review and the 2026-08-20 backlog reconciliation
 Decision: **GO for repository-only implementation; NO-GO for deployment, MCP
 exposure, schedule cutover, or production finance writes until Phase 0–3 gates
 pass**
@@ -9,6 +9,32 @@ pass**
 The adversarial review is retained in
 `docs/end-to-end-project-plan-red-team-2026-08-19.md`. Its fifteen findings are
 accepted and incorporated below.
+
+### 2026-08-20 execution-order amendment
+
+The retained architecture and production gates remain authoritative, but the
+current execution order begins with the exact inactive WF23 orphan cleanup,
+then the complete Microsoft first-read/restart/second-read proof, then the WF22
+OneDrive root proof. The live project is temporarily at 22 workflows, zero
+active and zero published; both Microsoft first reads refreshed expired access
+tokens, but restart persistence and exact cleanup are not yet proven.
+
+Before the next workflow-corpus promotion:
+
+1. `N8N-011` audits all 15 current Data Tables and every column for authoritative
+   owner, producer, consumer, invariant, idempotency, retention, privacy,
+   consolidation, migration and rollback. The deployed 15-table schema is a
+   baseline, not an approved minimal target.
+2. `N8N-010` then places the target workflow corpus beneath the sole top-level
+   `Finance` application root. Its role-based children are `01 Schedules &
+   Controllers`, `02 Acquisition & Intake`, `03 Document Services`, `04
+   Processing & Reconciliation`, `05 Agent Services`, `06 Ledger Persistence`,
+   `07 Interfaces & Dispatch`, `08 Operations & Recovery`, and `90 Platform
+   Administration`; transient `99 Setup Only` is nested below platform
+   administration.
+3. Both changes remain inactive and write-disabled, preserve unrelated peer
+   applications, and require independent disposable migration, idempotence and
+   rollback evidence before activation.
 
 ## 1. Required outcome
 

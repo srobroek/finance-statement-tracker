@@ -27,7 +27,7 @@ class ProjectBacklogTests(unittest.TestCase):
         backlog_ids = [row["id"] for row in self.payload["tasks"]]
         self.assertEqual(set(backlog_ids), set(source_ids))
         self.assertEqual(len(backlog_ids), len(set(backlog_ids)))
-        self.assertEqual(len(backlog_ids), 74)
+        self.assertEqual(len(backlog_ids), 76)
 
     def test_no_task_is_promoted_to_verified_without_fresh_acceptance(self) -> None:
         self.assertEqual(self.payload["summary"]["verified_count"], 0)
@@ -41,6 +41,35 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("n8n-nodes-prodex@0.5.1", agent_text)
         self.assertIn("@ggomez91npm/n8n-nodes-claude-code@0.8.0", agent_text)
         self.assertIn("disposable", tasks["AGENT-005"]["next_action"].lower())
+        hierarchy = tasks["N8N-010"]
+        self.assertIn("Finance", hierarchy["requirement"])
+        self.assertIn("N8N-011", hierarchy["dependencies"])
+        self.assertIn("N8N-002", hierarchy["related_tasks"])
+        hierarchy_acceptance = " ".join(hierarchy["acceptance_criteria"])
+        self.assertIn("17 Execute Sub-workflow", hierarchy_acceptance)
+        self.assertIn("three Tool Workflow", hierarchy_acceptance)
+        self.assertIn("second hierarchy application", hierarchy_acceptance)
+        minimization = tasks["N8N-011"]
+        minimization_acceptance = " ".join(minimization["acceptance_criteria"])
+        self.assertIn("all 15 tables and every column", minimization_acceptance)
+        self.assertIn("producer", minimization_acceptance)
+        self.assertIn("rollback", minimization_acceptance)
+
+    def test_data_table_minimization_plan_names_every_table_and_column(self) -> None:
+        contract = json.loads(
+            (ROOT / "integrations" / "n8n" / "data-tables.json").read_text(encoding="utf-8")
+        )
+        audit = (
+            ROOT
+            / "docs"
+            / "project-audit"
+            / "n8n-data-table-minimization-plan-2026-08-20.md"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(len(contract["tables"]), 15)
+        for table in contract["tables"]:
+            self.assertIn(f"`{table['name']}`", audit)
+            for column in table["columns"]:
+                self.assertIn(f"`{column}`", audit, f"missing {table['name']}.{column}")
 
     def test_implementation_audit_is_mapped_to_relevant_requirements(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
@@ -74,7 +103,11 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("ADCB_ISSUER_BALANCE_CONTRADICTION", tasks["ACTUAL-021"]["blockers"])
         self.assertIn("DUPLICATED_FINANCE_EVIDENCE_PATHS", tasks["DOC-001"]["blockers"])
         self.assertNotIn("RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED", tasks["PLATFORM-006"]["blockers"])
-        self.assertIn("OAUTH_TOKEN_REFRESH_PROOF_REQUIRED", tasks["N8N-003"]["blockers"])
+        self.assertIn("WF23_EXACT_CLEANUP_REQUIRED", tasks["N8N-003"]["blockers"])
+        self.assertIn(
+            "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
+            tasks["N8N-003"]["blockers"],
+        )
         self.assertNotIn(
             "OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED",
             tasks["N8N-003"]["blockers"],
@@ -83,8 +116,17 @@ class ProjectBacklogTests(unittest.TestCase):
             "ONEDRIVE_FINANCE_EVIDENCE_ROOT_LIVE_RUN_REQUIRED",
             tasks["DOC-001"]["blockers"],
         )
-        self.assertIn("21 workflows", tasks["N8N-006"]["live_readback"])
+        self.assertIn("22 workflows", tasks["N8N-006"]["live_readback"])
         self.assertIn("zero active", tasks["N8N-006"]["live_readback"])
+        self.assertIn("moved both expired access-token expiries", tasks["N8N-003"]["live_readback"])
+        self.assertNotIn(
+            "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED",
+            tasks["ACTUAL-019"]["blockers"],
+        )
+        self.assertNotIn(
+            "OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED",
+            tasks["AUTO-001"]["blockers"],
+        )
         self.assertEqual(tasks["AGENT-005"]["status"], "PARTIAL")
 
     def test_superseded_notion_requirement_is_not_queued(self) -> None:
@@ -98,6 +140,26 @@ class ProjectBacklogTests(unittest.TestCase):
         payload["tasks"][0]["dependencies"].append("ACTUAL-999")
         errors = validate_backlog(payload, {row["id"] for row in self.transcript["requirements"]})
         self.assertTrue(any("unknown dependencies" in error for error in errors))
+
+    def test_validator_rejects_dependency_cycles_and_related_overlap(self) -> None:
+        payload = copy.deepcopy(self.payload)
+        tasks = {task["id"]: task for task in payload["tasks"]}
+        tasks["N8N-011"]["dependencies"] = ["N8N-010"]
+        errors = validate_backlog(payload, {row["id"] for row in self.transcript["requirements"]})
+        self.assertTrue(any("dependency cycle" in error for error in errors))
+
+        payload = copy.deepcopy(self.payload)
+        task = payload["tasks"][0]
+        task["related_tasks"] = list(task["dependencies"])
+        errors = validate_backlog(payload, {row["id"] for row in self.transcript["requirements"]})
+        self.assertTrue(any("dependencies and related_tasks overlap" in error for error in errors))
+
+    def test_checked_in_dependency_graph_is_acyclic(self) -> None:
+        errors = validate_backlog(
+            self.payload,
+            {row["id"] for row in self.transcript["requirements"]},
+        )
+        self.assertFalse(any("dependency cycle" in error for error in errors))
 
     def test_validator_rejects_unproven_verified_status(self) -> None:
         payload = copy.deepcopy(self.payload)

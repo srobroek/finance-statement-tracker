@@ -118,6 +118,30 @@
       "blocked_by": ["CURRENT_TEST_FAILURE", "UNCOMMITTED_REFACTOR", "DISPOSABLE_N8N_REQUIRED", "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"]
     },
     {
+      "id": "orchestration.n8n-application-hierarchy",
+      "implemented_state": "PARTIAL",
+      "verification_state": "CURRENT_SIBLING_LAYOUT_ONLY_TARGET_HIERARCHY_UNIMPLEMENTED",
+      "evidence_paths": ["integrations/n8n/workflow-folders.json", "integrations/n8n/workflow-folder-placement.sql", "tests/test_n8n_workflows.py"],
+      "tests": ["Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"],
+      "live_readback": "The retained project previously proved eight sibling folders, 21 placements, 63 tag edges, and zero active or published workflows. That is accurate current-state evidence but does not satisfy the new sole Finance root and role-based child hierarchy.",
+      "last_verified": "2026-08-20",
+      "remaining_work": "After WF23 cleanup, Microsoft restart proof, WF22 root proof, and the N8N-011 design decision, implement the reviewed Finance hierarchy, preserve peer application roots, and prove exact database and browser idempotence.",
+      "risk": "MEDIUM",
+      "blocked_by": ["WF23_EXACT_CLEANUP_REQUIRED", "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED", "ONEDRIVE_ROOT_SETUP_REQUIRED", "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"]
+    },
+    {
+      "id": "orchestration.n8n-data-table-minimization",
+      "implemented_state": "PARTIAL",
+      "verification_state": "FIFTEEN_TABLE_BASELINE_VERIFIED_MINIMALITY_UNASSESSED",
+      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md"],
+      "tests": ["Existing schema, bootstrap, producer and consumer contract tests prove the 15-table baseline but do not prove that every table and column is necessary"],
+      "live_readback": "Official DataTableService readback previously proved all 15 exact deployed schemas, seven AI policy rows, nine config rows, and preservation of the source cursor row. This proves deployment fidelity only, not minimal durable finance-domain storage.",
+      "last_verified": "2026-08-20",
+      "remaining_work": "Complete the all-table and all-column producer, consumer, invariant, owner, retention and privacy matrix; approve a target design; then prove disposable migration, no-op replay and exact rollback before any runtime schema change.",
+      "risk": "HIGH",
+      "blocked_by": ["DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED", "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"]
+    },
+    {
       "id": "orchestration.codex-agent-handoff",
       "implemented_state": "PARTIAL",
       "verification_state": "FAILING_WORKTREE",

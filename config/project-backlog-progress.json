@@ -1,8 +1,10 @@
 {
   "schema_version": 1,
   "recorded_at": "2026-08-20",
-  "evidence_commit": "b07c410fb43ad5953f83d3a6847dcd452b0b48d7",
+  "evidence_commit": "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
   "evidence_commits": [
+    "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
+    "8149f42f2694c200ca9fae37875c4dba4e727978",
     "b07c410fb43ad5953f83d3a6847dcd452b0b48d7",
     "00491aae2ab43c486f3a9b4a62ce3ba5e63032f6",
     "c8d4f7ce984ec0107846b2c7aa398cb1141caf39",
@@ -14,8 +16,9 @@
   "snapshot_notes": [
     "The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.",
     "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
-    "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
-    "The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.",
+    "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. The transient WF23 run completed bounded Outlook and OneDrive reads and moved both expired access-token expiries into the future, but restart persistence and the required second reads did not run.",
+    "WF23 is currently stranded as one inactive, unpublished setup workflow with one soft-deleted running execution row. The observed project boundary is temporarily 22 workflows, zero active, zero published, 22 placements, and 66 tag edges; exact reviewed cleanup back to 21/0/0 and zero WF23 rows is pending.",
+    "The setup-only OneDrive root workflow remains manual-only and outside the regular 21-workflow corpus. Its attempted live run failed at a clean restored boundary; exact create-or-reuse and root-folder readback remain unproven.",
     "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
     "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
     "Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.",
@@ -54,29 +57,29 @@
       "evidence_paths": ["integrations/n8n/pipeline-registry.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json", "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"],
       "tests": ["n8n workflow, runner-closure, and task-runner-image focus: 50 run, 6 skipped", "codex-agent-runner npm: 16 of 16 pass", "full Python: 381 run, 6 skipped", "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: 21 workflows, 0 active, 0 published, 8 folders, 63 tag edges", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, task launcher, and Codex runner passed"],
       "live_readback": "Internal n8n 2.36.2 at finance commit 00491aa and orchestrator commit c8d4f7c has 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, 13 OneDrive bindings, 15 exact Data Tables, seven AI policy rows, and nine config rows. Runtime health passed; no provider, Actual, or cashback call occurred.",
-      "remaining_work": "Refresh and read back both Microsoft credentials, execute the fixture matrix twice, and prove issuer schedules before any activation.",
+      "remaining_work": "Remove the exact WF23 orphan, complete Microsoft restart persistence, execute the fixture matrix twice, and prove issuer schedules before any activation.",
       "blockers_remove": [], "blockers_add": ["DISPOSABLE_DOUBLE_REPLAY_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Run bounded Outlook and OneDrive refresh/readback acceptance while all workflows remain inactive."
+      "last_verified": "2026-08-20", "next_action": "Remove the exact WF23 orphan, then complete the guarded Microsoft restart and second-read proof while all workflows remain inactive."
     },
     {
-      "id": "N8N-002", "status": "IMPLEMENTED_UNVERIFIED",
-      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "RUNTIME_FOLDER_PLACEMENT_VERIFIED_CANVAS_REVIEW_DEFERRED",
+      "id": "N8N-002", "status": "PARTIAL",
+      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "RUNTIME_SIBLING_PLACEMENT_VERIFIED_TARGET_APPLICATION_HIERARCHY_PENDING",
       "evidence_paths": ["integrations/n8n/refactor_workflow_ui.py", "integrations/n8n/workflow-folders.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
       "tests": ["workflow renderer, group, folder, readability, and idempotence tests pass", "runtime readback verified 8 folders, 21 placements, and 63 tag edges"],
       "live_readback": "All 21 workflows are imported inactive and unpublished in eight folders with 63 tag edges. Manual coordinate cleanup and Tidy Workflow are deferred to the user; semantic names, notes, and section contracts remain repository-tested.",
-      "remaining_work": "Complete remaining workflow semantics and optional human canvas review; manual coordinate optimization is out of scope.",
-      "blockers_remove": [], "blockers_add": [],
-      "last_verified": "2026-08-20", "next_action": "Complete the remaining issuer workflow semantics; use Tidy Workflow only when a human canvas cleanup is desired."
+      "remaining_work": "Complete remaining workflow semantics and implement the reviewed Finance application root and role hierarchy after setup proofs and N8N-011 design; manual coordinate optimization is out of scope.",
+      "blockers_remove": [], "blockers_add": ["APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"],
+      "last_verified": "2026-08-20", "next_action": "Complete setup proofs and N8N-011 first, then implement N8N-010; use Tidy Workflow only for optional coordinate cleanup."
     },
     {
-      "id": "N8N-003", "status": "IMPLEMENTED_UNVERIFIED",
-      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "RUNTIME_BINDINGS_VERIFIED_OAUTH_REFRESH_PENDING",
-      "evidence_paths": ["integrations/n8n/workflows/01-shared-outlook-acquisition.json", "tests/test_n8n_workflows.py", "runtime/n8n-orchestrator-repo/docs/runtime-health-and-microsoft-refresh.md", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
+      "id": "N8N-003", "status": "PARTIAL",
+      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "MICROSOFT_FIRST_READ_AND_REFRESH_OBSERVED_RESTART_PERSISTENCE_PENDING",
+      "evidence_paths": ["integrations/n8n/workflows/01-outlook-finance-acquisition.json", "tests/test_n8n_workflows.py", "runtime/n8n-orchestrator-repo/docs/runtime-health-and-microsoft-refresh.md", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
       "tests": ["Outlook server-filter, From-list subworkflow, attachment, and OneDrive binary-upload contracts pass", "runtime readback verified 4 Outlook and 13 OneDrive credential bindings with unchanged ciphertext"],
-      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact and credential ciphertext was unchanged. Both access tokens were expired and both refresh tokens were present, but token_refresh_performed was false. Bounded provider reads, post-refresh metadata, restart persistence, live filtering, and inline-email PDF rendering are not proven.",
-      "remaining_work": "Perform bounded filtered Outlook and OneDrive reads, verify both token refreshes before and after restart, archive every attachment and original email, and add the fixed inline-email PDF renderer.",
-      "blockers_remove": [], "blockers_add": ["OAUTH_TOKEN_REFRESH_PROOF_REQUIRED", "EMAIL_TO_PDF_RENDERER_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Run the bounded Microsoft refresh acceptance and restart repeat without recording credential identifiers or token values."
+      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact. The transient WF23 execution completed one bounded Outlook read and one OneDrive root read and moved both expired access-token expiries to future values. It did not complete the n8n-only restart, second reads, cleanup, or persistence proof; inline-email PDF rendering also remains unproven.",
+      "remaining_work": "Remove the exact WF23 orphan, then rerun the complete expired-before, first-read, n8n-restart and second-read sequence; separately prove live filtering, attachment/original archival, and the fixed inline-email PDF renderer.",
+      "blockers_remove": [], "blockers_add": ["WF23_EXACT_CLEANUP_REQUIRED", "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED", "EMAIL_TO_PDF_RENDERER_REQUIRED"],
+      "last_verified": "2026-08-20", "next_action": "Restore the exact 21/0/0 boundary, wait for both expiries to be past, and run the guarded restart proof once without recording credential identifiers or token values."
     },
     {
       "id": "N8N-004", "status": "PARTIAL",
@@ -90,10 +93,10 @@
     },
     {
       "id": "N8N-006", "status": "IMPLEMENTED_UNVERIFIED",
-      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "RUNTIME_EXACT_INACTIVE_IMPORT_VERIFIED_ACTIVATION_FORBIDDEN",
+      "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "REGULAR_CORPUS_INACTIVE_VERIFIED_TRANSIENT_WF23_CLEANUP_PENDING",
       "evidence_paths": ["integrations/n8n/workflows", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
       "tests": ["local receipt: 21 imported, 0 active, 0 published", "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: exact commits and 21/0/0 state"],
-      "live_readback": "The internal runtime reports the exact 00491aa workflow corpus with 21 workflows, zero active, and zero published. Promotion performed no activation, provider call, Actual write, or cashback write.",
+      "live_readback": "The reviewed regular corpus remains 21 workflows and unchanged from 00491aa, but one transient inactive WF23 setup workflow currently makes the project boundary 22 workflows, zero active, and zero published until exact cleanup. No production activation, publication, Actual write, or cashback write occurred.",
       "remaining_work": "Complete current-byte double replay and conflict review, then obtain separate explicit authorization for any production activation or finance write.",
       "blockers_remove": [], "blockers_add": ["PRODUCTION_PROMOTION_AND_ACTIVATION_NOT_AUTHORIZED"],
       "last_verified": "2026-08-20", "next_action": "Keep all workflows inactive while completing disposable double replay and reviewed finance-write acceptance."
@@ -131,7 +134,7 @@
     {
       "id": "DOC-001", "status": "PARTIAL",
       "implementation_state": "PARTIAL", "verification_state": "REPOSITORY_TESTED_ROOT_SETUP_LIVE_RUN_PENDING",
-      "evidence_paths": ["Finance Evidence/catalogue.json", "integrations/n8n/workflows/01-shared-outlook-acquisition.json", "integrations/n8n/setup-workflows/22-onedrive-finance-evidence-root-setup.json", "integrations/n8n/setup-workflows/manifest.json"],
+      "evidence_paths": ["Finance Evidence/catalogue.json", "integrations/n8n/workflows/01-outlook-finance-acquisition.json", "integrations/n8n/setup-workflows/22-onedrive-finance-evidence-root-setup.json", "integrations/n8n/setup-workflows/manifest.json"],
       "tests": ["evidence and n8n OneDrive archive contracts pass", "setup-only OneDrive root workflow tests verify inactive manual import, exact root create-or-reuse, duplicate rejection, and redacted receipt"],
       "live_readback": "Archive nodes preserve attachments and original email. The b07c410 setup-only workflow can create or reuse exactly one top-level Finance Evidence folder and rejects nested duplication, but it has not been imported or run live. Existing evidence still has duplicated paths and missing warranty/property metadata.",
       "remaining_work": "Run the inactive manual OneDrive root setup with exact redacted readback, then deduplicate canonical evidence paths, populate required warranty/property metadata, and prove immutable upload/hash/readback with a live fixture.",
@@ -185,7 +188,7 @@
       "tests": ["b845ccf guarded dry-run tests and full Python suite pass"],
       "live_readback": "Current plan is deterministic and amount-safe, but older receipts cannot certify current workflows, account scope, semantics, notes, or runtime bytes.",
       "remaining_work": "Replay all current inputs twice through n8n into disposable Actual, compare exact state, and run restore/failure drills.",
-      "blockers_remove": [], "blockers_add": ["CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED", "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED"],
+      "blockers_remove": [], "blockers_add": ["CURRENT_N8N_DISPOSABLE_ACTUAL_REPLAY_REQUIRED"],
       "last_verified": "2026-08-19", "next_action": "Execute the current corpus twice through the inactive n8n writer."
     },
     {
@@ -215,7 +218,7 @@
       "tests": ["automation lifecycle and n8n schedule contracts pass"],
       "live_readback": "n8n schedules remain inactive and legacy Codex schedules remain current; no issuer shadow run or cutover occurred.",
       "remaining_work": "Prove each issuer schedule and durable receipt, then atomically disable the matching legacy task only after acceptance.",
-      "blockers_remove": [], "blockers_add": ["OAUTH_WORKFLOW_BINDING_AND_READBACK_REQUIRED"],
+      "blockers_remove": [], "blockers_add": ["MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"],
       "last_verified": "2026-08-19", "next_action": "Prove one issuer schedule end to end while inactive."
     },
     {
@@ -241,7 +244,7 @@
     {
       "id": "PLATFORM-002", "status": "IMPLEMENTED_UNVERIFIED",
       "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "HOST_IMAGE_RUNNING_LOCAL_SCAN_SBOM_VERIFIED_CI_ATTESTATION_PENDING",
-      "evidence_paths": ["integrations/n8n/Dockerfile", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/trivy.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/sbom.spdx.json"],
+      "evidence_paths": ["packages/n8n-nodes-finance/Dockerfile.n8n", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/trivy.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/sbom.spdx.json"],
       "tests": ["rootless exact image build passes", "Trivy: 0 HIGH and 0 CRITICAL"],
       "live_readback": "The locked n8n image is running healthy on the internal host and the exact extensions register. Local scan and SBOM evidence remain valid, but CI did not build or attest this deployed digest.",
       "remaining_work": "Build and attest the pinned image in CI and prove the deployed digest matches.",
@@ -257,6 +260,26 @@
       "remaining_work": "Complete disposable Actual double replay and backup/restore drills, then separately authorize any production finance action.",
       "blockers_remove": [], "blockers_add": [],
       "last_verified": "2026-08-20", "next_action": "Complete current-byte disposable replay and restore evidence while production remains untouched."
+    },
+    {
+      "id": "N8N-010", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "CURRENT_SIBLING_LAYOUT_VERIFIED_TARGET_FINANCE_HIERARCHY_UNIMPLEMENTED",
+      "evidence_paths": ["integrations/n8n/workflow-folders.json", "integrations/n8n/workflow-folder-placement.sql", "tests/test_n8n_workflows.py"],
+      "tests": ["Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"],
+      "live_readback": "The retained project proves eight sibling folders, 21 current-corpus placements, 63 tag edges, zero active and zero published workflows. This is the pre-migration state and does not satisfy the sole Finance application root, nine direct children, or nested 99 Setup Only target.",
+      "remaining_work": "After WF23 cleanup, Microsoft restart persistence, WF22 root proof and N8N-011 design approval, implement the exact reviewed role mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence.",
+      "blockers_remove": [], "blockers_add": ["WF23_EXACT_CLEANUP_REQUIRED", "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED", "ONEDRIVE_ROOT_SETUP_REQUIRED", "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"],
+      "last_verified": "2026-08-20", "next_action": "Wait for the setup and N8N-011 gates, then implement and independently verify the Finance subtree without touching peer applications."
+    },
+    {
+      "id": "N8N-011", "status": "PARTIAL",
+      "implementation_state": "PARTIAL", "verification_state": "FIFTEEN_TABLE_BASELINE_VERIFIED_MINIMALITY_AND_MIGRATION_UNPROVEN",
+      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md"],
+      "tests": ["Existing schema, bootstrap, producer and consumer contract tests prove the 15-table baseline but do not prove that every table and column is necessary"],
+      "live_readback": "Official DataTableService readback proved all 15 exact deployed schemas, seven AI policy rows, nine config rows and preservation of the source cursor row. No table or column has yet passed the required necessity, authoritative-owner, retention, privacy, consolidation, migration or rollback audit.",
+      "remaining_work": "Complete and independently review the all-table and all-column producer/consumer/invariant matrix, approve a minimal target, and prove disposable migration, no-op replay and exact rollback before changing any runtime schema.",
+      "blockers_remove": [], "blockers_add": ["DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED", "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"],
+      "last_verified": "2026-08-20", "next_action": "Audit all 15 tables and every column, then review the candidate consolidation and relocation design before any implementation."
     }
   ]
 }

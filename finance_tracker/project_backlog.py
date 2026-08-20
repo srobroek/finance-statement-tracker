@@ -63,6 +63,8 @@ IMPLEMENTATION_LINKS = {
         "N8N-001", "N8N-002", "N8N-003", "N8N-004", "N8N-005", "N8N-006",
         "N8N-007", "N8N-008", "N8N-009", "AUTO-001", "AUTO-002"
     ],
+    "orchestration.n8n-application-hierarchy": ["N8N-010"],
+    "orchestration.n8n-data-table-minimization": ["N8N-011"],
     "orchestration.codex-agent-handoff": [
         "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005"
     ],
@@ -168,6 +170,18 @@ LATEST_OVERRIDES = {
             "Run allowed and malicious MCP facade requests with instance MCP disabled and prove zero unauthorized writes."
         ),
     },
+    "N8N-010": {
+        "next_action": (
+            "After WF23 cleanup, Microsoft restart proof, WF22 root proof, and the N8N-011 design decision, "
+            "implement the reviewed Finance application folder hierarchy and prove it is idempotent without touching peer applications."
+        ),
+    },
+    "N8N-011": {
+        "next_action": (
+            "Audit all 15 Data Tables and every column against named producers, consumers, invariants, authoritative owners, "
+            "retention, privacy, consolidation candidates, and exact migration and rollback proofs before changing runtime schemas."
+        ),
+    },
     "AUTO-002": {
         "next_action": (
             "After OAuth binding, execute bounded expected-cycle polling and retain cursor, no-statement, and statement-found receipts."
@@ -218,6 +232,8 @@ QUEUE_FRONT = [
     "DOC-002",
     "DOC-007",
     "N8N-003",
+    "N8N-011",
+    "N8N-010",
     "N8N-005",
     "ACTUAL-019",
     "PLATFORM-004",
@@ -492,6 +508,7 @@ def build_backlog(transcript: dict[str, Any], implementation: dict[str, Any]) ->
             "owner_workstream": owner,
             "acceptance_validator": ACCEPTANCE_VALIDATORS[prefix],
             "dependencies": list(row.get("dependencies", [])),
+            "related_tasks": list(row.get("related_tasks", [])),
             "acceptance_criteria": list(row["acceptance_criteria"]),
             "implementation_state": _combined_implementation_state(linked),
             "verification_state": _combined_verification_state(linked),
@@ -508,9 +525,13 @@ def build_backlog(transcript: dict[str, Any], implementation: dict[str, Any]) ->
 
     known = {task["id"] for task in tasks}
     for task in tasks:
-        unknown = set(task["dependencies"]) - known
-        if unknown:
-            raise ValueError(f"{task['id']}: unknown dependencies {sorted(unknown)}")
+        for field in ("dependencies", "related_tasks"):
+            unknown = set(task[field]) - known
+            if unknown:
+                raise ValueError(f"{task['id']}: unknown {field} {sorted(unknown)}")
+        overlap = set(task["dependencies"]) & set(task["related_tasks"])
+        if overlap:
+            raise ValueError(f"{task['id']}: dependencies and related_tasks overlap {sorted(overlap)}")
 
     queue_rank = {task_id: rank for rank, task_id in enumerate(QUEUE_FRONT)}
     priority_rank = {"P0": 0, "P1": 1, "P2": 2}
@@ -579,7 +600,7 @@ def validate_backlog(payload: dict[str, Any], transcript_ids: set[str] | None = 
     known = set(ids)
     required_fields = {
         "id", "domain", "title", "requirement", "priority", "status",
-        "owner_workstream", "acceptance_validator", "dependencies", "acceptance_criteria", "implementation_state",
+        "owner_workstream", "acceptance_validator", "dependencies", "related_tasks", "acceptance_criteria", "implementation_state",
         "verification_state", "evidence_paths", "tests", "live_readback", "remaining_work",
         "blockers", "source_status", "contradictions", "last_verified", "next_action",
     }
@@ -597,9 +618,13 @@ def validate_backlog(payload: dict[str, Any], transcript_ids: set[str] | None = 
         expected_validator = ACCEPTANCE_VALIDATORS.get(prefix)
         if task.get("acceptance_validator") != expected_validator:
             errors.append(f"{task_id}: acceptance_validator must match its workstream")
-        unknown = set(task.get("dependencies", [])) - known
-        if unknown:
-            errors.append(f"{task_id}: unknown dependencies {sorted(unknown)}")
+        for field in ("dependencies", "related_tasks"):
+            unknown = set(task.get(field, [])) - known
+            if unknown:
+                errors.append(f"{task_id}: unknown {field} {sorted(unknown)}")
+        overlap = set(task.get("dependencies", [])) & set(task.get("related_tasks", []))
+        if overlap:
+            errors.append(f"{task_id}: dependencies and related_tasks overlap {sorted(overlap)}")
         if not task.get("acceptance_criteria"):
             errors.append(f"{task_id}: acceptance_criteria must be non-empty")
         if task.get("status") == "VERIFIED":
@@ -607,6 +632,30 @@ def validate_backlog(payload: dict[str, Any], transcript_ids: set[str] | None = 
                 errors.append(f"{task_id}: VERIFIED requires evidence paths, live readback and last_verified")
         if task.get("status") not in {"VERIFIED", "SUPERSEDED"} and not task.get("blockers"):
             errors.append(f"{task_id}: unverified task requires blockers")
+
+    adjacency = {task["id"]: list(task.get("dependencies", [])) for task in tasks}
+    visit_state: dict[str, int] = {}
+    stack: list[str] = []
+
+    def visit(task_id: str) -> None:
+        state = visit_state.get(task_id, 0)
+        if state == 2:
+            return
+        if state == 1:
+            start = stack.index(task_id)
+            errors.append(f"dependency cycle: {' -> '.join(stack[start:] + [task_id])}")
+            return
+        visit_state[task_id] = 1
+        stack.append(task_id)
+        for dependency in adjacency.get(task_id, []):
+            if dependency in adjacency:
+                visit(dependency)
+        stack.pop()
+        visit_state[task_id] = 2
+
+    for task_id in adjacency:
+        if visit_state.get(task_id, 0) == 0:
+            visit(task_id)
 
     summary = payload.get("summary", {})
     if summary.get("total") != len(tasks):
@@ -666,6 +715,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         "- Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.",
         "- Execute Sub-workflow selectors should use **From list** when the target is available.",
+        "- The finance workflows must live under the sole top-level `Finance` application root, with role-based child folders and peer application roots left untouched.",
+        "- The 15-table Data Table contract is a review baseline, not the approved target; all tables and columns require producer, consumer, invariant, owner, retention, privacy, migration and rollback review before schema changes.",
         "- Community agent candidates are pinned to `n8n-nodes-prodex@0.5.1` and `@ggomez91npm/n8n-nodes-claude-code@0.8.0`; neither is production-approved until disposable registration, isolation, authentication and structured-output proof passes.",
         "- The backlog intentionally has no automatically promoted `VERIFIED` tasks.",
         "",
@@ -685,13 +736,16 @@ def render_markdown(payload: dict[str, Any]) -> str:
     for domain in domains:
         lines.extend([
             f"### {domain}", "",
-            "| ID | Owner | Dependencies | Status | Acceptance evidence and validator | Title |",
-            "| --- | --- | --- | --- | --- | --- |",
+            "| ID | Owner | Strict dependencies | Related tasks | Status | Acceptance evidence and validator | Title |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ])
         for task in payload["tasks"]:
             if task["domain"] == domain:
                 dependencies = ", ".join(
                     f"`{item}`" for item in task["dependencies"]
+                ) or "None"
+                related_tasks = ", ".join(
+                    f"`{item}`" for item in task["related_tasks"]
                 ) or "None"
                 evidence = (
                     f"{task['implementation_state']} / {task['verification_state']}; "
@@ -703,7 +757,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
                 title = task["title"].replace("|", "\\|")
                 lines.append(
                     f"| `{task['id']}` | `{task['owner_workstream']}` | {dependencies} | "
-                    f"`{task['status']}` | {evidence} | {title} |"
+                    f"{related_tasks} | `{task['status']}` | {evidence} | {title} |"
                 )
         lines.append("")
     lines.extend([
