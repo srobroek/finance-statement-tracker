@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import sqlite3
 import tempfile
 import unittest
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from finance_tracker.cashback_events import CashbackEventStore, build_live_dashboard
+from finance_tracker.cashback_events import (
+    CashbackEventStore,
+    _json_digest,
+    build_live_dashboard,
+)
+
+
+def statement_digest(reference: str) -> str:
+    return hashlib.sha256(reference.encode()).hexdigest()
 
 
 class CashbackEventStoreTests(unittest.TestCase):
@@ -250,6 +260,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             ])
             reconciliation = {
                 "statement_reference": "RAK-2026-08",
+                "statement_sha256": statement_digest("RAK-2026-08"),
                 "card_code": "RAK_WORLD",
                 "period_start": "2026-08-01",
                 "period_end": "2026-08-31",
@@ -402,6 +413,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             config_path.write_text(json.dumps(configuration), encoding="utf-8")
             store.reconcile_statement({
                 "statement_reference": "RAK-2026-08-15",
+                "statement_sha256": statement_digest("RAK-2026-08-15"),
                 "card_code": "RAK_WORLD",
                 "period_start": "2026-07-16",
                 "period_end": "2026-08-15",
@@ -410,9 +422,10 @@ class CashbackEventStoreTests(unittest.TestCase):
             store.finalize_period(
                 {
                     "statement_reference": "RAK-2026-08-15",
+                    "statement_sha256": statement_digest("RAK-2026-08-15"),
                     "statement_evidence_reference": "sha256:test",
+                    "actual_import_receipt_sha256": statement_digest("actual:RAK-2026-08-15"),
                     "statement_document_url": "https://evidence.example/rak.pdf",
-                    "actual_import_verified": True,
                 },
                 program_config_path=config_path,
             )
@@ -425,6 +438,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
             reconciliation = {
                 "statement_reference": "EI-2026-08",
+                "statement_sha256": statement_digest("EI-2026-08"),
                 "card_code": "EI_AMAZON",
                 "period_start": "2026-08-01",
                 "period_end": "2026-08-31",
@@ -436,9 +450,10 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             payload = {
                 "statement_reference": "EI-2026-08",
+                "statement_sha256": statement_digest("EI-2026-08"),
                 "statement_evidence_reference": "sha256:abc",
+                "actual_import_receipt_sha256": statement_digest("actual:EI-2026-08"),
                 "statement_document_url": "Finance Evidence/2026/08/ei/statement.pdf",
-                "actual_import_verified": True,
             }
             finalized = store.finalize_period(payload)
             replay = store.finalize_period(payload)
@@ -462,6 +477,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             }])
             store.reconcile_statement({
                 "statement_reference": "RAK-2026-09-05",
+                "statement_sha256": statement_digest("RAK-2026-09-05"),
                 "card_code": "RAK_WORLD",
                 "period_start": "2026-08-06",
                 "period_end": "2026-09-05",
@@ -469,9 +485,10 @@ class CashbackEventStoreTests(unittest.TestCase):
             })
             payload = {
                 "statement_reference": "RAK-2026-09-05",
+                "statement_sha256": statement_digest("RAK-2026-09-05"),
                 "statement_evidence_reference": "sha256:def",
+                "actual_import_receipt_sha256": statement_digest("actual:RAK-2026-09-05"),
                 "statement_document_url": "Finance Evidence/2026/08/rak/statement.pdf",
-                "actual_import_verified": True,
             }
 
             with self.assertRaisesRegex(ValueError, "variances"):
@@ -481,6 +498,212 @@ class CashbackEventStoreTests(unittest.TestCase):
                 store.finalize_period(payload)["reconciliation_status"],
                 "RECONCILED_WITH_ACKNOWLEDGED_VARIANCES",
             )
+
+    def test_reconciliation_replay_rejects_changed_content_or_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            payload = {
+                "statement_reference": "EI-2026-09",
+                "statement_sha256": statement_digest("EI-2026-09"),
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-09-01",
+                "period_end": "2026-09-30",
+                "transactions": [{
+                    "statement_transaction_id": "line-1",
+                    "occurred_at": "2026-09-10T12:30:00+04:00",
+                    "amount_aed": "20",
+                    "merchant": "Example",
+                }],
+            }
+            first = store.reconcile_statement(payload)
+            self.assertFalse(first["idempotent_replay"])
+
+            changed_content = {
+                **payload,
+                "transactions": [{**payload["transactions"][0], "merchant": "Changed"}],
+            }
+            with self.assertRaisesRegex(ValueError, "different statement content or digest"):
+                store.reconcile_statement(changed_content)
+
+            changed_digest = {**payload, "statement_sha256": statement_digest("other")}
+            with self.assertRaisesRegex(ValueError, "different statement content or digest"):
+                store.reconcile_statement(changed_digest)
+
+            self.assertEqual(store.stats()["event_count"], 1)
+
+    def test_actual_verified_boolean_without_receipt_digest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            reference = "EI-2026-10"
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_digest(reference),
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "transactions": [],
+            })
+            with self.assertRaisesRegex(ValueError, "actual_import_receipt_sha256"):
+                store.finalize_period({
+                    "statement_reference": reference,
+                    "statement_sha256": statement_digest(reference),
+                    "statement_evidence_reference": "sha256:evidence",
+                    "statement_document_url": "Finance Evidence/ei.pdf",
+                    "actual_import_verified": True,
+                })
+            self.assertNotIn("FINALIZED", {row["status"] for row in store.period_rows()})
+
+    def test_finalization_replay_rejects_changed_evidence_and_receipt_after_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "events.sqlite3"
+            reference = "EI-2026-11"
+            statement_sha256 = statement_digest(reference)
+            actual_receipt_sha256 = statement_digest("actual:EI-2026-11")
+            store = CashbackEventStore(database)
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-11-01",
+                "period_end": "2026-11-30",
+                "transactions": [],
+            })
+            payload = {
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "statement_evidence_reference": "sha256:evidence-1",
+                "statement_document_url": "Finance Evidence/ei-11.pdf",
+                "actual_import_receipt_sha256": actual_receipt_sha256,
+            }
+            first = store.finalize_period(payload)
+            self.assertFalse(first["idempotent_replay"])
+
+            restarted = CashbackEventStore(database)
+            self.assertTrue(restarted.finalize_period(payload)["idempotent_replay"])
+            with self.assertRaisesRegex(ValueError, "different content, digest, or evidence"):
+                restarted.finalize_period({**payload, "statement_evidence_reference": "sha256:evidence-2"})
+            with self.assertRaisesRegex(ValueError, "different content, digest, or evidence"):
+                restarted.finalize_period({**payload, "actual_import_receipt_sha256": statement_digest("other")})
+
+    def test_finalization_can_digest_an_independent_actual_receipt_object(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            reference = "EI-2026-11-object"
+            statement_sha256 = statement_digest(reference)
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-11-01",
+                "period_end": "2026-11-30",
+                "transactions": [],
+            })
+            receipt = {
+                "outbox_id": "outbox:ei-2026-11",
+                "observed_payload_sha256": statement_digest("actual-payload"),
+                "invariants_passed": True,
+            }
+            result = store.finalize_period({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "statement_evidence_reference": "sha256:evidence-object",
+                "statement_document_url": "Finance Evidence/ei-object.pdf",
+                "actual_import_receipt": receipt,
+            })
+            self.assertEqual(result["actual_import_receipt_sha256"], _json_digest(receipt))
+
+    def test_finalization_fault_rolls_back_and_retry_survives_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "events.sqlite3"
+            reference = "EI-2026-12"
+            statement_sha256 = statement_digest(reference)
+            receipt_sha256 = statement_digest("actual:EI-2026-12")
+            store = CashbackEventStore(database)
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-12-01",
+                "period_end": "2026-12-31",
+                "transactions": [],
+            })
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    """
+                    CREATE TRIGGER fail_card_period_insert
+                    BEFORE INSERT ON card_periods
+                    WHEN NEW.status = 'FINALIZED'
+                    BEGIN
+                        SELECT RAISE(ABORT, 'synthetic finalization fault');
+                    END
+                    """
+                )
+            payload = {
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "statement_evidence_reference": "sha256:evidence-12",
+                "statement_document_url": "Finance Evidence/ei-12.pdf",
+                "actual_import_receipt_sha256": receipt_sha256,
+            }
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "synthetic finalization fault"):
+                store.finalize_period(payload)
+            restarted = CashbackEventStore(database)
+            self.assertNotIn("FINALIZED", {row["status"] for row in restarted.period_rows()})
+            with sqlite3.connect(database) as connection:
+                connection.execute("DROP TRIGGER fail_card_period_insert")
+            self.assertEqual(restarted.finalize_period(payload)["status"], "FINALIZED")
+
+    def test_digest_migration_adds_close_proof_columns_to_legacy_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "events.sqlite3"
+            with sqlite3.connect(database) as connection:
+                connection.executescript(
+                    """
+                    CREATE TABLE card_periods (
+                        card_code TEXT NOT NULL,
+                        period_start TEXT NOT NULL,
+                        period_end TEXT NOT NULL,
+                        statement_reference TEXT,
+                        statement_evidence_reference TEXT,
+                        statement_document_url TEXT,
+                        actual_import_verified INTEGER NOT NULL DEFAULT 0,
+                        reconciliation_status TEXT NOT NULL DEFAULT 'PENDING',
+                        status TEXT NOT NULL DEFAULT 'OPEN',
+                        finalized_at TEXT,
+                        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY(card_code, period_start, period_end)
+                    );
+                    CREATE TABLE reconciliation_runs (
+                        statement_reference TEXT PRIMARY KEY,
+                        card_code TEXT NOT NULL,
+                        period_start TEXT NOT NULL,
+                        period_end TEXT NOT NULL,
+                        matched_count INTEGER NOT NULL,
+                        statement_only_count INTEGER NOT NULL,
+                        notification_only_count INTEGER NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """
+                )
+            CashbackEventStore(database)
+            with sqlite3.connect(database) as connection:
+                period_columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(card_periods)")
+                }
+                run_columns = {
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(reconciliation_runs)")
+                }
+            self.assertTrue(
+                {
+                    "statement_sha256",
+                    "statement_content_sha256",
+                    "actual_import_receipt_sha256",
+                    "actual_verification_sha256",
+                }
+                <= period_columns
+            )
+            self.assertTrue({"statement_sha256", "statement_content_sha256"} <= run_columns)
 
 
 if __name__ == "__main__":

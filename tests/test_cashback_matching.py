@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
 from datetime import date
@@ -22,6 +23,9 @@ class CashbackStatementMatchingTests(unittest.TestCase):
     ) -> dict[str, object]:
         return {
             "statement_reference": "RAK-2026-08",
+            "statement_sha256": hashlib.sha256(
+                f"{merchant}|{currency}|{occurred_at}".encode()
+            ).hexdigest(),
             "card_code": "RAK_WORLD",
             "period_start": "2026-08-01",
             "period_end": "2026-08-31",

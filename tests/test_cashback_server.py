@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -136,6 +137,9 @@ class CashbackServerTests(unittest.TestCase):
 
                 reconciliation = post("reconcile", {
                     "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
+                    "statement_sha256": hashlib.sha256(
+                        b"synthetic-statement-2026-08-06--2026-09-05"
+                    ).hexdigest(),
                     "card_code": "RAK_WORLD",
                     "period_start": "2026-08-06",
                     "period_end": "2026-09-05",
@@ -165,11 +169,31 @@ class CashbackServerTests(unittest.TestCase):
 
                 finalized = post("periods/finalize", {
                     "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
+                    "statement_sha256": hashlib.sha256(
+                        b"synthetic-statement-2026-08-06--2026-09-05"
+                    ).hexdigest(),
+                    "actual_import_receipt_sha256": hashlib.sha256(
+                        b"synthetic-actual-receipt"
+                    ).hexdigest(),
                     "statement_evidence_reference": "sha256:synthetic",
                     "statement_document_url": "https://evidence.example/statement.pdf",
-                    "actual_import_verified": True,
                 })
                 self.assertEqual(finalized["period"]["status"], "FINALIZED")
+                changed_finalization = {
+                    "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
+                    "statement_sha256": hashlib.sha256(
+                        b"synthetic-statement-2026-08-06--2026-09-05"
+                    ).hexdigest(),
+                    "statement_evidence_reference": "sha256:changed-evidence",
+                    "statement_document_url": "https://evidence.example/changed.pdf",
+                    "actual_import_receipt_sha256": hashlib.sha256(
+                        b"synthetic-actual-receipt"
+                    ).hexdigest(),
+                }
+                with self.assertRaises(urllib.error.HTTPError) as changed:
+                    post("periods/finalize", changed_finalization)
+                self.assertEqual(changed.exception.code, 400)
+                changed.exception.close()
 
                 outlook = post("outlook/messages", {
                     "source": "outlook",

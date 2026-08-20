@@ -60,6 +60,23 @@ AI_CORRECTABLE_EVENT_FIELDS = frozenset(
     }
 )
 _MERCHANT_TOKEN = re.compile(r"[^A-Z0-9]+")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_STATEMENT_DIGEST_FIELDS = (
+    "statement_sha256",
+    "statement_digest",
+    "document_sha256",
+)
+_STATEMENT_CONTENT_DIGEST_FIELDS = (
+    "statement_content_sha256",
+    "statement_content_digest",
+    "canonical_statement_sha256",
+)
+_ACTUAL_RECEIPT_DIGEST_FIELDS = (
+    "actual_import_receipt_sha256",
+    "actual_verification_sha256",
+    "actual_import_receipt_digest",
+    "actual_receipt_sha256",
+)
 
 
 class IngestCursorConflict(ValueError):
@@ -70,6 +87,60 @@ def _json_digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
+
+
+def _sha256_field(value: object, field_name: str) -> str:
+    """Normalize a SHA-256 field while keeping the persisted form unambiguous."""
+    digest = str(value or "").strip().casefold()
+    if digest.startswith("sha256:"):
+        digest = digest[7:]
+    if not _SHA256.fullmatch(digest):
+        raise ValueError(f"{field_name} must be a SHA-256 hex digest")
+    return digest
+
+
+def _payload_sha256(payload: dict[str, Any], fields: tuple[str, ...], label: str) -> str:
+    """Read one digest under its supported contract aliases and reject conflicts."""
+    values = {
+        _sha256_field(payload[field], field)
+        for field in fields
+        if field in payload and payload[field] not in (None, "")
+    }
+    if not values:
+        raise ValueError(f"{label} is required")
+    if len(values) != 1:
+        raise ValueError(f"{label} fields disagree")
+    return values.pop()
+
+
+def _statement_content_digest(
+    statement_events: Iterable[dict[str, Any]],
+    transaction_ids: Iterable[str],
+    *,
+    statement_reference: str,
+    card_code: str,
+    period_start: date,
+    period_end: date,
+) -> str:
+    """Hash normalized statement content in a stable transaction-id order."""
+    content = []
+    for transaction_id, event in zip(transaction_ids, statement_events, strict=True):
+        content.append({
+            "statement_transaction_id": transaction_id,
+            "event": {
+                key: value
+                for key, value in event.items()
+                if key not in {"source_event_id", "identity_key"}
+            },
+        })
+    content.sort(key=lambda item: str(item["statement_transaction_id"]))
+    return _json_digest({
+        "statement_reference": statement_reference,
+        "card_code": card_code,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "transactions": content,
+    })
 
 
 def _cursor_order(left: str, right: str) -> int:
@@ -295,8 +366,12 @@ class CashbackEventStore:
                         period_start TEXT NOT NULL,
                         period_end TEXT NOT NULL,
                         statement_reference TEXT,
+                        statement_sha256 TEXT NOT NULL DEFAULT '',
+                        statement_content_sha256 TEXT NOT NULL DEFAULT '',
                         statement_evidence_reference TEXT,
                         statement_document_url TEXT,
+                        actual_import_receipt_sha256 TEXT,
+                        actual_verification_sha256 TEXT,
                         actual_import_verified INTEGER NOT NULL DEFAULT 0,
                         reconciliation_status TEXT NOT NULL DEFAULT 'PENDING',
                         status TEXT NOT NULL DEFAULT 'OPEN',
@@ -356,6 +431,8 @@ class CashbackEventStore:
                         card_code TEXT NOT NULL,
                         period_start TEXT NOT NULL,
                         period_end TEXT NOT NULL,
+                        statement_sha256 TEXT NOT NULL DEFAULT '',
+                        statement_content_sha256 TEXT NOT NULL DEFAULT '',
                         matched_count INTEGER NOT NULL,
                         statement_only_count INTEGER NOT NULL,
                         notification_only_count INTEGER NOT NULL,
@@ -378,6 +455,8 @@ class CashbackEventStore:
                 )
                 self._migrate_event_columns(connection)
                 self._migrate_ingest_state_columns(connection)
+                self._migrate_period_columns(connection)
+                self._migrate_reconciliation_columns(connection)
                 connection.execute(
                     "UPDATE cashback_events SET status='ACTIVE' WHERE status IN ('PROVISIONAL', 'CONFIRMED')"
                 )
@@ -448,6 +527,40 @@ class CashbackEventStore:
             if column not in existing:
                 connection.execute(
                     f"ALTER TABLE ingest_state ADD COLUMN {column} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_period_columns(connection: sqlite3.Connection) -> None:
+        existing = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(card_periods)").fetchall()
+        }
+        additions = {
+            "statement_sha256": "TEXT NOT NULL DEFAULT ''",
+            "statement_content_sha256": "TEXT NOT NULL DEFAULT ''",
+            "actual_import_receipt_sha256": "TEXT",
+            "actual_verification_sha256": "TEXT",
+        }
+        for column, definition in additions.items():
+            if column not in existing:
+                connection.execute(
+                    f"ALTER TABLE card_periods ADD COLUMN {column} {definition}"
+                )
+
+    @staticmethod
+    def _migrate_reconciliation_columns(connection: sqlite3.Connection) -> None:
+        existing = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(reconciliation_runs)").fetchall()
+        }
+        additions = {
+            "statement_sha256": "TEXT NOT NULL DEFAULT ''",
+            "statement_content_sha256": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in additions.items():
+            if column not in existing:
+                connection.execute(
+                    f"ALTER TABLE reconciliation_runs ADD COLUMN {column} {definition}"
                 )
 
     def _connect(self) -> sqlite3.Connection:
@@ -776,6 +889,11 @@ class CashbackEventStore:
         card_code = str(payload.get("card_code") or "").strip().upper()
         if not statement_reference or not card_code:
             raise ValueError("statement_reference and card_code are required")
+        statement_sha256 = _payload_sha256(
+            payload,
+            _STATEMENT_DIGEST_FIELDS,
+            "statement_sha256",
+        )
         try:
             period_start = date.fromisoformat(str(payload.get("period_start")))
             period_end = date.fromisoformat(str(payload.get("period_end")))
@@ -788,6 +906,7 @@ class CashbackEventStore:
             raise ValueError("transactions must be a list of statement transaction objects")
 
         statement_events = []
+        statement_transaction_ids = []
         transaction_ids: set[str] = set()
         for row in rows:
             transaction_id = str(row.get("statement_transaction_id") or "").strip()
@@ -810,6 +929,27 @@ class CashbackEventStore:
             if occurred < period_start or occurred > period_end:
                 raise ValueError(f"statement transaction {transaction_id} falls outside the statement period")
             statement_events.append(event)
+            statement_transaction_ids.append(transaction_id)
+
+        statement_content_sha256 = _statement_content_digest(
+            statement_events,
+            statement_transaction_ids,
+            statement_reference=statement_reference,
+            card_code=card_code,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        if any(
+            field in payload and payload[field] not in (None, "")
+            for field in _STATEMENT_CONTENT_DIGEST_FIELDS
+        ):
+            supplied_content_sha256 = _payload_sha256(
+                payload,
+                _STATEMENT_CONTENT_DIGEST_FIELDS,
+                "statement_content_sha256",
+            )
+            if supplied_content_sha256 != statement_content_sha256:
+                raise ValueError("statement content digest does not match canonical content")
 
         with closing(self._connect()) as connection:
             with connection:
@@ -824,9 +964,18 @@ class CashbackEventStore:
                         or prior["period_end"] != period_end.isoformat()
                     ):
                         raise ValueError("statement_reference was already used for a different card or period")
+                    if (
+                        str(prior["statement_sha256"] or "") != statement_sha256
+                        or str(prior["statement_content_sha256"] or "") != statement_content_sha256
+                    ):
+                        raise ValueError(
+                            "statement_reference was already used for different statement content or digest"
+                        )
                     return {
                         "statement_reference": statement_reference,
                         "card_code": prior["card_code"],
+                        "statement_sha256": prior["statement_sha256"],
+                        "statement_content_sha256": prior["statement_content_sha256"],
                         "matched": prior["matched_count"],
                         "statement_only": prior["statement_only_count"],
                         "notification_only": prior["notification_only_count"],
@@ -943,14 +1092,17 @@ class CashbackEventStore:
                     """
                     INSERT INTO reconciliation_runs (
                         statement_reference, card_code, period_start, period_end,
+                        statement_sha256, statement_content_sha256,
                         matched_count, statement_only_count, notification_only_count
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         statement_reference,
                         card_code,
                         period_start.isoformat(),
                         period_end.isoformat(),
+                        statement_sha256,
+                        statement_content_sha256,
                         matched,
                         statement_only,
                         notification_only,
@@ -959,6 +1111,8 @@ class CashbackEventStore:
         return {
             "statement_reference": statement_reference,
             "card_code": card_code,
+            "statement_sha256": statement_sha256,
+            "statement_content_sha256": statement_content_sha256,
             "matched": matched,
             "statement_only": statement_only,
             "notification_only": notification_only,
@@ -1070,8 +1224,51 @@ class CashbackEventStore:
             raise ValueError(
                 "statement_reference, statement_evidence_reference, and statement_document_url are required"
             )
-        if not _boolean(payload.get("actual_import_verified")):
-            raise ValueError("actual_import_verified must be true")
+        statement_sha256 = _payload_sha256(
+            payload,
+            _STATEMENT_DIGEST_FIELDS,
+            "statement_sha256",
+        )
+        supplied_content_sha256 = None
+        if any(
+            field in payload and payload[field] not in (None, "")
+            for field in _STATEMENT_CONTENT_DIGEST_FIELDS
+        ):
+            supplied_content_sha256 = _payload_sha256(
+                payload,
+                _STATEMENT_CONTENT_DIGEST_FIELDS,
+                "statement_content_sha256",
+            )
+        actual_import_receipt = payload.get("actual_import_receipt")
+        if actual_import_receipt is not None and not isinstance(actual_import_receipt, dict):
+            raise ValueError("actual_import_receipt must be an object")
+        if any(
+            field in payload and payload[field] not in (None, "")
+            for field in _ACTUAL_RECEIPT_DIGEST_FIELDS
+        ):
+            actual_import_receipt_sha256 = _payload_sha256(
+                payload,
+                _ACTUAL_RECEIPT_DIGEST_FIELDS,
+                "actual_import_receipt_sha256",
+            )
+        elif actual_import_receipt is not None:
+            try:
+                actual_import_receipt_sha256 = _json_digest(actual_import_receipt)
+            except (TypeError, ValueError) as error:
+                raise ValueError("actual_import_receipt must be JSON serializable") from error
+        else:
+            raise ValueError("actual_import_receipt_sha256 is required")
+        if actual_import_receipt is not None:
+            try:
+                observed_receipt_sha256 = _json_digest(actual_import_receipt)
+            except (TypeError, ValueError) as error:
+                raise ValueError("actual_import_receipt must be JSON serializable") from error
+            if observed_receipt_sha256 != actual_import_receipt_sha256:
+                raise ValueError("Actual import receipt digest does not match its content")
+        if "actual_import_verified" in payload and not _boolean(
+            payload.get("actual_import_verified")
+        ):
+            raise ValueError("actual_import_verified cannot replace an Actual import receipt digest")
         acknowledge_variances = _boolean(payload.get("acknowledge_variances"), default=False)
         now = datetime.now(timezone.utc).isoformat()
         with closing(self._connect()) as connection:
@@ -1082,6 +1279,14 @@ class CashbackEventStore:
                 ).fetchone()
                 if run is None:
                     raise ValueError("A successful statement reconciliation is required before finalization")
+                if str(run["statement_sha256"] or "") != statement_sha256:
+                    raise ValueError("statement digest does not match the reconciliation receipt")
+                if supplied_content_sha256 is not None and supplied_content_sha256 != str(
+                    run["statement_content_sha256"] or ""
+                ):
+                    raise ValueError(
+                        "statement content digest does not match the reconciliation receipt"
+                    )
                 if run["notification_only_count"] and not acknowledge_variances:
                     raise ValueError(
                         "Unresolved notification variances require explicit acknowledgement before finalization"
@@ -1091,11 +1296,33 @@ class CashbackEventStore:
                     (run["card_code"], run["period_start"], run["period_end"]),
                 ).fetchone()
                 if existing and existing["status"] == "FINALIZED":
+                    if (
+                        existing["statement_reference"] != statement_reference
+                        or str(existing["statement_sha256"] or "") != statement_sha256
+                        or str(existing["statement_content_sha256"] or "")
+                        != str(run["statement_content_sha256"] or "")
+                        or existing["statement_evidence_reference"] != evidence_reference
+                        or existing["statement_document_url"] != document_url
+                        or str(existing["actual_import_receipt_sha256"] or "")
+                        != actual_import_receipt_sha256
+                        or str(existing["actual_verification_sha256"] or "")
+                        != actual_import_receipt_sha256
+                    ):
+                        raise ValueError(
+                            "finalized statement reference was already used for different content, digest, or evidence"
+                        )
                     return {
                         "card_code": existing["card_code"],
                         "period_start": existing["period_start"],
                         "period_end": existing["period_end"],
                         "status": existing["status"],
+                        "statement_reference": existing["statement_reference"],
+                        "statement_sha256": existing["statement_sha256"],
+                        "statement_content_sha256": existing["statement_content_sha256"],
+                        "statement_evidence_reference": existing["statement_evidence_reference"],
+                        "statement_document_url": existing["statement_document_url"],
+                        "actual_import_receipt_sha256": existing["actual_import_receipt_sha256"],
+                        "actual_verification_sha256": existing["actual_verification_sha256"],
                         "idempotent_replay": True,
                     }
                 reconciliation_status = (
@@ -1107,13 +1334,20 @@ class CashbackEventStore:
                     """
                     INSERT INTO card_periods (
                         card_code, period_start, period_end, statement_reference,
+                        statement_sha256, statement_content_sha256,
                         statement_evidence_reference, statement_document_url,
-                        actual_import_verified, reconciliation_status, status, finalized_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, 'FINALIZED', ?)
+                        actual_import_receipt_sha256, actual_verification_sha256,
+                        actual_import_verified,
+                        reconciliation_status, status, finalized_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'FINALIZED', ?)
                     ON CONFLICT(card_code, period_start, period_end) DO UPDATE SET
                         statement_reference=excluded.statement_reference,
+                        statement_sha256=excluded.statement_sha256,
+                        statement_content_sha256=excluded.statement_content_sha256,
                         statement_evidence_reference=excluded.statement_evidence_reference,
                         statement_document_url=excluded.statement_document_url,
+                        actual_import_receipt_sha256=excluded.actual_import_receipt_sha256,
+                        actual_verification_sha256=excluded.actual_verification_sha256,
                         actual_import_verified=1,
                         reconciliation_status=excluded.reconciliation_status,
                         status='FINALIZED', finalized_at=excluded.finalized_at,
@@ -1121,7 +1355,9 @@ class CashbackEventStore:
                     """,
                     (
                         run["card_code"], run["period_start"], run["period_end"],
-                        statement_reference, evidence_reference, document_url,
+                        statement_reference, statement_sha256, run["statement_content_sha256"],
+                        evidence_reference, document_url,
+                        actual_import_receipt_sha256, actual_import_receipt_sha256,
                         reconciliation_status, now,
                     ),
                 )
@@ -1156,6 +1392,13 @@ class CashbackEventStore:
             "period_start": run["period_start"],
             "period_end": run["period_end"],
             "status": "FINALIZED",
+            "statement_reference": statement_reference,
+            "statement_sha256": statement_sha256,
+            "statement_content_sha256": run["statement_content_sha256"],
+            "statement_evidence_reference": evidence_reference,
+            "statement_document_url": document_url,
+            "actual_import_receipt_sha256": actual_import_receipt_sha256,
+            "actual_verification_sha256": actual_import_receipt_sha256,
             "reconciliation_status": reconciliation_status,
             "idempotent_replay": False,
         }
