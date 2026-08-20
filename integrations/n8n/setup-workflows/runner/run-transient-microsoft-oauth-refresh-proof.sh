@@ -14,6 +14,9 @@ readonly companion_setup_id="10000000-0000-4000-8000-000000000022"
 readonly workflow_name="Finance · Microsoft OAuth Refresh Proof · Manual Read Only"
 readonly folder_id="f1000000-0000-4000-8000-000000000090"
 readonly folder_name="90 Platform & Admin"
+# n8n 2.36.2 Execute.init() starts a task broker. The retained service already
+# owns 5679, so the transient internal runner uses one reviewed loopback port.
+readonly internal_runner_broker_port="15679"
 readonly finance_repo="${FINANCE_REPOSITORY_DIR:-/opt/stacks/finance-statement-tracker}"
 readonly stack_dir="${FINANCE_N8N_STACK_DIR:-/opt/stacks/finance-n8n}"
 readonly runner_dir="${finance_repo}/integrations/n8n/setup-workflows/runner"
@@ -71,6 +74,16 @@ direct_transport_probe() {
 
 direct_transport_probe || { echo "WF23 direct execution transport probe failed before metadata/provider access" >&2; exit 1; }
 
+internal_runner_port_preflight() {
+  timeout --foreground --signal=TERM --kill-after=5s 15s docker exec -i \
+    -e WF23_INTERNAL_BROKER_PORT="${internal_runner_broker_port}" \
+    "${n8n_container}" node -e \
+    'const net=require("node:net");const port=Number(process.env.WF23_INTERNAL_BROKER_PORT);if(!Number.isInteger(port)||port!==15679)process.exit(1);const server=net.createServer();server.once("error",()=>process.exit(1));server.listen(port,"127.0.0.1",()=>server.close((error)=>process.exit(error?1:0)));' \
+    >/dev/null 2>&1
+}
+
+internal_runner_port_preflight || { echo "WF23 dedicated internal task-runner broker port unavailable" >&2; exit 1; }
+
 psql_scalar() { docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -At -U "${N8N_POSTGRES_USER:-n8n}" -d "${N8N_POSTGRES_DATABASE:-n8n}" -c "$1"; }
 project_state() { psql_scalar "select count(*)||'|'||count(*) filter (where w.active)||'|'||count(*) filter (where w.\"activeVersionId\" is not null) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id where s.\"projectId\"='${expected_project_id}';"; }
 mapped_count() { psql_scalar "select count(*) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id join folder f on f.id=w.\"parentFolderId\" where s.\"projectId\"='${expected_project_id}' and f.\"projectId\"='${expected_project_id}';"; }
@@ -96,7 +109,8 @@ data_table_digest() {
 
 execute_probe() {
   local raw command_status=0 timeout_code
-  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false -e N8N_RUNNERS_MODE=internal "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
+  internal_runner_port_preflight || return 1
+  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false -e N8N_RUNNERS_MODE=internal -e N8N_RUNNERS_BROKER_PORT="${internal_runner_broker_port}" -e N8N_RUNNERS_BROKER_LISTEN_ADDRESS=127.0.0.1 "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
   if [[ "${command_status}" == "0" ]]; then
     printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" success
     return

@@ -81,6 +81,20 @@ runner rejects every other failure payload and retains an allowlisted timeout
 code only in the redacted failure receipt before performing the same exact
 cleanup and digest readback.
 
+n8n 2.36.2's `Execute` command declares `needsTaskRunner = true`, and
+`BaseCommand.init()` therefore starts a task broker before `Execute.run()`.
+The retained n8n service already owns its external-runner broker on
+`0.0.0.0:5679`. A second CLI process using internal-runner mode on the inherited
+port reaches `EADDRINUSE`; n8n calls `process.exit(1)` from the broker error
+handler while its `listen()` promise remains unresolved. Because the guarded
+WF23 process intercepts early exits, that condition previously appeared as
+`WF23_TIMEOUT_COMMAND_INIT`. The runner now reserves `127.0.0.1:15679` only for
+the transient internal runner, verifies that port is bindable before any
+metadata read, workflow import, or provider call, and requires the direct shim
+to reject every other runner mode/address/port boundary. The workflow's Code
+nodes still execute in n8n's official isolated task runner; no Code-node
+execution is moved into the main process.
+
 The runner restarts only the n8n container and verifies that every other
 service container and start time remains unchanged. Exact baseline and Finance
 Data Table digests must match after cleanup. The final mode-600 receipt contains
