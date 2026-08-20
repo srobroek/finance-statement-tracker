@@ -125,6 +125,54 @@ class CashbackStatementMatchingTests(unittest.TestCase):
             self.assertEqual(result["notification_only"], 2)
             self.assertEqual(store.stats()["variance_count"], 2)
 
+    def test_same_merchant_candidates_on_different_days_remain_ambiguous(self) -> None:
+        temporary, store = self._store()
+        with temporary:
+            store.upsert([
+                self._notification(
+                    source_event_id="notification-1",
+                    merchant="Expected Merchant",
+                    occurred_at="2026-08-10T12:00:00+04:00",
+                ),
+                self._notification(
+                    source_event_id="notification-2",
+                    merchant="Expected Merchant",
+                    occurred_at="2026-08-11T12:00:00+04:00",
+                ),
+            ])
+
+            result = store.reconcile_statement(
+                self._statement(merchant="Expected Merchant")
+            )
+
+            self.assertEqual(result["matched"], 0)
+            self.assertEqual(result["statement_only"], 1)
+            self.assertEqual(result["notification_only"], 2)
+            self.assertEqual(store.stats()["variance_count"], 2)
+
+    def test_exact_and_alias_candidates_remain_ambiguous(self) -> None:
+        temporary, store = self._store()
+        with temporary:
+            store.upsert([
+                self._notification(
+                    source_event_id="notification-exact",
+                    merchant="Expected Merchant",
+                ),
+                self._notification(
+                    source_event_id="notification-alias",
+                    merchant="Expected Merchant LLC",
+                ),
+            ])
+
+            result = store.reconcile_statement(
+                self._statement(merchant="Expected Merchant")
+            )
+
+            self.assertEqual(result["matched"], 0)
+            self.assertEqual(result["statement_only"], 1)
+            self.assertEqual(result["notification_only"], 2)
+            self.assertEqual(store.stats()["variance_count"], 2)
+
     def test_exact_reconciliation_replay_is_a_no_op(self) -> None:
         temporary, store = self._store()
         with temporary:

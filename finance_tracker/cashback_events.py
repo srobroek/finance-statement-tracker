@@ -640,8 +640,7 @@ class CashbackEventStore:
                         )
                     ranked.sort(reverse=True)
                     unique_match = bool(
-                        ranked
-                        and (len(ranked) == 1 or ranked[0][:2] != ranked[1][:2])
+                        len(ranked) == 1
                         and ranked[0][0] > 0
                     )
                     if unique_match:
@@ -662,12 +661,16 @@ class CashbackEventStore:
                             "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
                             (event["identity_key"],),
                         ).fetchone()
-                        if existing:
+                        # A duplicate identity cannot override a compatible-candidate collision.
+                        if existing and not ranked:
                             connection.execute(
                                 "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
                                 (existing["source_event_id"],),
                             )
                             matched += 1
+                            continue
+                        if existing:
+                            statement_only += 1
                             continue
                         columns = tuple(event)
                         connection.execute(
