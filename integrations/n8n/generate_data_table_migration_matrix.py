@@ -144,6 +144,7 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "length_prefix": "uint64_be",
                 "tuple_encoding": "versioned_length_prefixed_binary",
                 "digest_encoding": "base64url_unpadded",
+                "alias_fields": [],
             },
             {
                 "source_table": "finance_document_operations",
@@ -160,6 +161,11 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "tuple_encoding": "versioned_length_prefixed_binary",
                 "digest_encoding": "base64url_unpadded",
                 "alias_fields": ["document_id"],
+                "legacy_to_canonical": {
+                    "adapter": "document-identity-alias-v1",
+                    "legacy_fields": ["document_id"],
+                    "canonical_target": "finance_documents.document_id",
+                },
                 "fallback_identity": {
                     "identity_kind": "PROCESSING_ONLY",
                     "source_fields": [
@@ -171,7 +177,17 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         ],
         "columns": {
-            "document_id": _target_column("string", "finance_document_operations.document_id"),
+            "document_id": _target_column(
+                "string",
+                "finance_archive_receipts.source_sha256",
+                "finance_archive_receipts.source_message_id",
+                "finance_archive_receipts.source_attachment_id",
+                "finance_document_operations.source_sha256",
+                "finance_document_operations.source_message_id",
+                "finance_document_operations.source_attachment_id",
+                "finance_document_operations.document_profile",
+                "finance_document_operations.requested_schema_version",
+            ),
             "archive_receipt_id": _target_column("string", "finance_archive_receipts.archive_receipt_id"),
             "run_id": _target_column("string", "finance_archive_receipts.run_id"),
             "source_code": _target_column(
@@ -750,6 +766,13 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         target_field = ACQUISITION_TARGET_FIELDS.get(column, column)
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_ingestion_state", "target_artifact": None, "target_field": target_field}
+    if table_name == "finance_document_operations" and column == "document_id":
+        return {
+            "disposition": "transform",
+            "target_table": None,
+            "target_artifact": "document-identity-aliases-v1",
+            "target_field": "legacy_to_canonical.document_id",
+        }
     if table_name in {"finance_archive_receipts", "finance_document_operations"}:
         target_field = "archive_verified_at" if column == "verified_at" else column
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_documents", "target_artifact": None, "target_field": target_field}
@@ -960,11 +983,30 @@ def validate_identity_derivations(
                         raise MatrixError(
                             f"{target}.{source_table} identity tuple differs from the approved document contract"
                         )
-                aliases = derivation.get("alias_fields", [])
-                if not isinstance(aliases, list) or len(set(aliases)) != len(aliases):
+                aliases = derivation.get("alias_fields")
+                if (
+                    not isinstance(aliases, list)
+                    or any(not isinstance(alias, str) for alias in aliases)
+                    or len(set(aliases)) != len(aliases)
+                ):
                     raise MatrixError(f"{target}.{source_table} alias fields are malformed")
                 if any(alias not in source_columns[source_table] for alias in aliases):
                     raise MatrixError(f"{target}.{source_table} alias field is unknown")
+                legacy_adapter = derivation.get("legacy_to_canonical")
+                if aliases:
+                    if (
+                        not isinstance(legacy_adapter, dict)
+                        or legacy_adapter.get("adapter") != "document-identity-alias-v1"
+                        or legacy_adapter.get("legacy_fields") != aliases
+                        or legacy_adapter.get("canonical_target") != "finance_documents.document_id"
+                    ):
+                        raise MatrixError(
+                            f"{target}.{source_table} needs the approved legacy-to-canonical adapter"
+                        )
+                elif legacy_adapter is not None:
+                    raise MatrixError(
+                        f"{target}.{source_table} cannot declare a legacy adapter without aliases"
+                    )
                 fallback = derivation.get("fallback_identity")
                 if fallback is not None:
                     fallback_fields = fallback.get("source_fields") if isinstance(fallback, dict) else None
@@ -1093,6 +1135,29 @@ def validate_target_mappings(
             observed.setdefault((target_table, target_field), []).append(
                 f"{source_table}.{column['source_column']}"
             )
+
+    # A document_id is generated from its identity tuple.  Its tuple inputs
+    # are canonical bindings, while a legacy processing document_id is kept
+    # only by the explicit alias adapter above and must not populate this key.
+    document_schema = target_schemas["finance_documents"]
+    for derivation in document_schema["identity_derivations"]:
+        if derivation["strategy"] != "versioned_length_prefixed_sha256":
+            continue
+        source_table = derivation["source_table"]
+        for source_field in derivation["source_fields"]:
+            observed.setdefault(("finance_documents", "document_id"), []).append(
+                f"{source_table}.{source_field}"
+            )
+        fallback = derivation.get("fallback_identity")
+        if fallback is not None:
+            for source_field in fallback["source_fields"]:
+                observed.setdefault(("finance_documents", "document_id"), []).append(
+                    f"{source_table}.{source_field}"
+                )
+    generated_document_sources = ("finance_documents", "document_id")
+    observed[generated_document_sources] = list(
+        dict.fromkeys(observed.get(generated_document_sources, []))
+    )
 
     for target in TARGETS:
         declared_columns = TARGET_SCHEMAS[target]["columns"]

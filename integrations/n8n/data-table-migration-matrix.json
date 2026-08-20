@@ -180,7 +180,8 @@
           "version": "document-identity-v1",
           "length_prefix": "uint64_be",
           "tuple_encoding": "versioned_length_prefixed_binary",
-          "digest_encoding": "base64url_unpadded"
+          "digest_encoding": "base64url_unpadded",
+          "alias_fields": []
         },
         {
           "source_table": "finance_document_operations",
@@ -201,6 +202,13 @@
           "alias_fields": [
             "document_id"
           ],
+          "legacy_to_canonical": {
+            "adapter": "document-identity-alias-v1",
+            "legacy_fields": [
+              "document_id"
+            ],
+            "canonical_target": "finance_documents.document_id"
+          },
           "fallback_identity": {
             "identity_kind": "PROCESSING_ONLY",
             "source_fields": [
@@ -215,7 +223,14 @@
         "document_id": {
           "type": "string",
           "source_bindings": [
-            "finance_document_operations.document_id"
+            "finance_archive_receipts.source_sha256",
+            "finance_archive_receipts.source_message_id",
+            "finance_archive_receipts.source_attachment_id",
+            "finance_document_operations.source_sha256",
+            "finance_document_operations.source_message_id",
+            "finance_document_operations.source_attachment_id",
+            "finance_document_operations.document_profile",
+            "finance_document_operations.requested_schema_version"
           ]
         },
         "archive_receipt_id": {
@@ -811,8 +826,8 @@
     "producer_nodes_equal_write_mapping_plus_schema_creation": true,
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
-      "keep": 91,
-      "transform": 57,
+      "keep": 90,
+      "transform": 58,
       "remove": 56
     }
   },
@@ -3109,10 +3124,10 @@
         {
           "source_column": "document_id",
           "source_type": "string",
-          "disposition": "keep",
-          "target_table": "finance_documents",
-          "target_artifact": null,
-          "target_field": "document_id",
+          "disposition": "transform",
+          "target_table": null,
+          "target_artifact": "document-identity-aliases-v1",
+          "target_field": "legacy_to_canonical.document_id",
           "constraints": [
             "type:string"
           ],

@@ -285,6 +285,7 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         },
+        "legacy_to_canonical": {"$ref": "#/$defs/legacy_to_canonical"},
         "fallback_identity": {"$ref": "#/$defs/fallback_identity"},
         "cardinality": {"const": "exactly_one"},
         "join_key": {"$ref": "#/$defs/join_key"},
@@ -307,7 +308,16 @@
         },
         {
           "if": {"properties": {"strategy": {"const": "versioned_length_prefixed_sha256"}}},
-          "then": {"required": ["source_fields", "identity_kind", "version", "length_prefix", "tuple_encoding", "digest_encoding"]}
+          "then": {"required": ["source_fields", "identity_kind", "version", "length_prefix", "tuple_encoding", "digest_encoding", "alias_fields"]}
+        },
+        {
+          "if": {
+            "properties": {
+              "strategy": {"const": "versioned_length_prefixed_sha256"},
+              "alias_fields": {"minItems": 1}
+            }
+          },
+          "then": {"required": ["legacy_to_canonical"]}
         },
         {
           "if": {"properties": {"strategy": {"const": "join"}}},
@@ -346,6 +356,21 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         }
+      }
+    },
+    "legacy_to_canonical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "legacy_fields", "canonical_target"],
+      "properties": {
+        "adapter": {"const": "document-identity-alias-v1"},
+        "legacy_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "canonical_target": {"const": "finance_documents.document_id"}
       }
     },
     "join_step": {

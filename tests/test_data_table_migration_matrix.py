@@ -85,7 +85,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
                 "producer_node_edges": 608,
             },
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 91, "transform": 57, "remove": 56})
+        self.assertEqual(invariants["dispositions"], {"keep": 90, "transform": 58, "remove": 56})
         tables = load_json(N8N / "data-tables.json")["tables"]
         self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
         self.assertEqual(
@@ -236,6 +236,15 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             archive_identity["tuple_encoding"], "versioned_length_prefixed_binary"
         )
         self.assertEqual(archive_identity["digest_encoding"], "base64url_unpadded")
+        self.assertEqual(archive_identity["alias_fields"], [])
+        self.assertEqual(
+            processing_identity["legacy_to_canonical"],
+            {
+                "adapter": "document-identity-alias-v1",
+                "legacy_fields": ["document_id"],
+                "canonical_target": "finance_documents.document_id",
+            },
+        )
         self.assertEqual(
             processing_identity["fallback_identity"]["identity_kind"], "PROCESSING_ONLY"
         )
@@ -268,6 +277,16 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             reconciliation_identity["join_steps"][0]["right_fields"],
             ["observed_payload_sha256"],
         )
+        processing_document_id = next(
+            column
+            for table in self.matrix["tables"]
+            if table["source_table"] == "finance_document_operations"
+            for column in table["columns"]
+            if column["source_column"] == "document_id"
+        )
+        self.assertIsNone(processing_document_id["target_table"])
+        self.assertEqual(processing_document_id["target_artifact"], "document-identity-aliases-v1")
+        self.assertEqual(processing_document_id["target_field"], "legacy_to_canonical.document_id")
 
         source_tables = self.generator.load_source_tables()
         missing_archive_identity = deepcopy(self.matrix["target_schemas"])
@@ -307,6 +326,34 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             identity["source_fields"] = ["source_sha256", "source_message_id"]
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_identity_derivations(source_tables, malformed_document_tuple)
+
+        missing_alias_adapter = deepcopy(self.matrix["target_schemas"])
+        missing_alias_adapter["finance_documents"]["identity_derivations"][1].pop("legacy_to_canonical")
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, missing_alias_adapter)
+
+        reversed_alias_adapter = deepcopy(self.matrix["target_schemas"])
+        reversed_alias_adapter["finance_documents"]["identity_derivations"][1][
+            "legacy_to_canonical"
+        ]["canonical_target"] = "finance_documents.source_sha256"
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, reversed_alias_adapter)
+
+        direct_document_binding = deepcopy(self.matrix)
+        for table in direct_document_binding["tables"]:
+            if table["source_table"] == "finance_document_operations":
+                for column in table["columns"]:
+                    if column["source_column"] == "document_id":
+                        column.update(
+                            {
+                                "disposition": "keep",
+                                "target_table": "finance_documents",
+                                "target_artifact": None,
+                                "target_field": "document_id",
+                            }
+                        )
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(direct_document_binding)
 
         duplicate_target = deepcopy(self.matrix)
         for table in duplicate_target["tables"]:
