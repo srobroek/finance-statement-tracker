@@ -160,6 +160,40 @@ try {{
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
 
+    def run_exported_workflow_node(
+        self,
+        workflow_filename: str,
+        node_name: str,
+        json_input: dict,
+        references: dict[str, dict],
+    ) -> dict:
+        code = self.nodes(workflow_filename)[node_name]["parameters"]["jsCode"]
+        script = f"""
+const code = {json.dumps(code)};
+const jsonInput = {json.dumps(json_input)};
+const references = {json.dumps(references)};
+const lookup = name => ({{ first: () => references[name] }});
+try {{
+  const output = new Function('$json', '$', 'require', code)(jsonInput, lookup, require);
+  process.stdout.write(JSON.stringify({{ ok: true, output }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
+        result = subprocess.run(
+            [node, "-e", script],
+            cwd=ROOT,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
+
     def test_registry_maps_every_existing_codex_automation(self) -> None:
         automations = load_json(ROOT / "config" / "codex-automations.json")
         mapped = {
@@ -1569,6 +1603,149 @@ try {{
         terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"]["jsCode"]
         self.assertIn("direct_actual_writer", terminal)
         self.assertIn("direct_cashback_writer", terminal)
+
+    def test_shared_pipeline_binds_cashback_close_to_post_actual_receipt(self) -> None:
+        workflow = self.workflow("03-shared-statement-pipeline.json")
+        nodes = self.nodes("03-shared-statement-pipeline.json")
+        self.assertEqual(
+            workflow["connections"]["Apply Prepared Outbox Safely"]["main"][0][0]["node"],
+            "Build Trusted Cashback Finalization",
+        )
+        self.assertEqual(
+            workflow["connections"]["Build Trusted Cashback Finalization"]["main"][0][0]["node"],
+            "Convert Trusted Actual Receipt to File",
+        )
+        self.assertEqual(
+            workflow["connections"]["Convert Trusted Actual Receipt to File"]["main"][0][0]["node"],
+            "SHA-256 Trusted Actual Receipt",
+        )
+        self.assertEqual(
+            workflow["connections"]["SHA-256 Trusted Actual Receipt"]["main"][0][0]["node"],
+            "Finalize Trusted Cashback Payload",
+        )
+        self.assertEqual(
+            workflow["connections"]["Finalize Trusted Cashback Payload"]["main"][0][0]["node"],
+            "Cashback Close Required",
+        )
+        self.assertEqual(
+            nodes["Convert Trusted Actual Receipt to File"]["type"],
+            "n8n-nodes-base.convertToFile",
+        )
+        self.assertEqual(
+            nodes["SHA-256 Trusted Actual Receipt"]["type"],
+            "n8n-nodes-base.crypto",
+        )
+        self.assertEqual(
+            nodes["SHA-256 Trusted Actual Receipt"]["parameters"]["dataPropertyName"],
+            "actual_import_receipt_sha256",
+        )
+        body = nodes["Finalize Eligible Cashback Period"]["parameters"]["jsonBody"]
+        self.assertIn("Finalize Trusted Cashback Payload", body)
+        self.assertNotIn("cashback_finalization", nodes["Validate Statement Reconciliation and IDs"]["parameters"]["jsCode"])
+
+        digest = "a" * 64
+        source = {
+            "source_code": "EI_AMAZON",
+            "document_sha256": "b" * 64,
+            "onedrive_item_id": "drive-statement-1",
+            "actual_file_id": "actual-file-1",
+            "account_id": "EI_AMAZON",
+            "card_code": "EI_AMAZON",
+        }
+        statement = {"statement_reference": "EI-2026-08", "statement_sha256": "c" * 64}
+        manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31"}
+        actual = {
+            "outbox_id": "outbox:ei-2026-08",
+            "actual_file_id": "actual-file-1",
+            "account_id": "EI_AMAZON",
+            "card_code": "EI_AMAZON",
+            "state": "COMMITTED",
+            "writer_release_verified": True,
+            "verification_version": 1,
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": digest,
+            "observed_payload_sha256": digest,
+            "expected_count": 2,
+            "observed_count": 2,
+            "expected_amount_sum_minor": 800,
+            "observed_amount_sum_minor": 800,
+            "expected_account_balance": -800,
+            "observed_account_balance": -800,
+            "invariants_passed": True,
+            "verified_at": "2026-08-20T00:00:00+00:00",
+        }
+        references = {
+            "Verify Archive and Execution Context": {"json": source},
+            "Validate Statement Reconciliation and IDs": {"json": statement},
+            "Build Canonical Delta Artifact": {"json": {"manifest": manifest}},
+        }
+        result = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Build Trusted Cashback Finalization",
+            actual,
+            references,
+        )
+        self.assertTrue(result["ok"], result)
+        close = result["output"][0]["json"]["cashback_finalization"]
+        self.assertEqual(close["actual_import_receipt"]["state"], "COMMITTED")
+        self.assertEqual(close["actual_import_receipt"]["account_id"], "EI_AMAZON")
+        self.assertEqual(close["actual_import_receipt"]["period_end"], "2026-08-31")
+        self.assertEqual(close["actual_import_receipt"]["expected_payload_sha256"], digest)
+        receipt_digest = hashlib.sha256(
+            json.dumps(
+                close["actual_import_receipt"],
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode()
+        ).hexdigest()
+        finalized = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Finalize Trusted Cashback Payload",
+            {"actual_import_receipt_sha256": receipt_digest},
+            {**references, "Build Trusted Cashback Finalization": result["output"][0]},
+        )
+        self.assertTrue(finalized["ok"], finalized)
+        self.assertEqual(
+            finalized["output"][0]["json"]["actual_import_receipt_sha256"],
+            receipt_digest,
+        )
+        self.assertEqual(
+            finalized["output"][0]["json"]["cashback_finalization"]["actual_import_receipt_sha256"],
+            receipt_digest,
+        )
+        replay = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Build Trusted Cashback Finalization",
+            actual,
+            references,
+        )
+        replay_finalized = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Finalize Trusted Cashback Payload",
+            {"actual_import_receipt_sha256": receipt_digest},
+            {**references, "Build Trusted Cashback Finalization": replay["output"][0]},
+        )
+        self.assertEqual(
+            replay_finalized["output"][0]["json"]["actual_import_receipt_sha256"],
+            finalized["output"][0]["json"]["actual_import_receipt_sha256"],
+        )
+
+        for label, invalid in {
+            "missing": {key: value for key, value in actual.items() if key != "observed_payload_sha256"},
+            "stale": {**actual, "state": "ACTUAL_OBSERVED"},
+            "cross-account": {**actual, "account_id": "RAK_WORLD"},
+            "cross-period": {**actual, "period_end": "2026-09-01"},
+            "digest-mismatch": {**actual, "observed_payload_sha256": "d" * 64},
+        }.items():
+            rejected = self.run_exported_workflow_node(
+                "03-shared-statement-pipeline.json",
+                "Build Trusted Cashback Finalization",
+                invalid,
+                references,
+            )
+            self.assertFalse(rejected["ok"], label)
 
     def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
         lock = load_json(N8N / "community-node-lock.json")

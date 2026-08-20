@@ -144,6 +144,8 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         "account_id",
         "period_start",
         "period_end",
+        "state",
+        "writer_release_verified",
         "invariants_passed",
         "verified_at",
     )
@@ -161,6 +163,10 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         raise ValueError("actual_import_receipt.verification_version must be a positive integer")
     if receipt["invariants_passed"] is not True:
         raise ValueError("actual_import_receipt invariants must pass")
+    if receipt["state"] != "COMMITTED":
+        raise ValueError("actual_import_receipt state must be COMMITTED")
+    if receipt["writer_release_verified"] is not True:
+        raise ValueError("actual_import_receipt writer release must be verified")
     for field in ("period_start", "period_end"):
         try:
             date.fromisoformat(str(receipt[field]))
@@ -1502,11 +1508,13 @@ class CashbackEventStore:
                     raise ValueError(
                         "actual_import_receipt period does not match the reconciliation receipt"
                     )
-                if str(actual_import_receipt["account_id"]).strip().upper() != str(
-                    run["card_code"]
-                ).strip().upper():
+                receipt_card = str(
+                    actual_import_receipt.get("card_code")
+                    or actual_import_receipt["account_id"]
+                ).strip().upper()
+                if receipt_card != str(run["card_code"]).strip().upper():
                     raise ValueError(
-                        "actual_import_receipt account identity does not match the reconciled card"
+                        "actual_import_receipt account identity/card does not match the reconciled card"
                     )
                 if supplied_content_sha256 is not None and supplied_content_sha256 != str(
                     run["statement_content_sha256"] or ""

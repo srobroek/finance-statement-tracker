@@ -613,7 +613,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst verification = $('Recovery Verify Actual').first().json;\nreturn [{\n        json: {\n            outbox_id: committed.outbox_id,\n            account_id: committed.account_id,\n            state: committed.state,\n            observed_sha256: verification.observed_sha256,\n            expected_sha256: verification.expected_sha256,\n            current_balance: verification.current_balance,\n            writer_release_verified: true,\n        },\n    }];\n"
+        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst verification = $('Recovery Verify Actual').first().json.actual;\nconst receipt = $('Compare Exact Actual Verification Receipt').first().json;\nif (!receipt || receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED')\n    throw new Error('ACTUAL_COMMIT_RECEIPT_NOT_TRUSTED');\nreturn [{\n        json: {\n            outbox_id: committed.outbox_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code || receipt.account_id,\n            state: committed.state,\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: receipt.invariants_passed,\n            verified_at: receipt.verified_at,\n            writer_release_verified: true,\n        },\n    }];\n"
       }
     },
     {
@@ -657,14 +657,14 @@
             "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
             "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
             "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
-            "expected_payload_sha256": "={{ $json.expected_sha256 }}",
-            "observed_payload_sha256": "={{ $json.observed_sha256 }}",
-            "expected_count": "={{ $json.transaction_count }}",
-            "observed_count": "={{ $json.transaction_count }}",
-            "expected_amount_sum_minor": "={{ $json.amount_sum }}",
-            "observed_amount_sum_minor": "={{ $json.amount_sum }}",
+            "expected_payload_sha256": "={{ $json.actual.expected_sha256 }}",
+            "observed_payload_sha256": "={{ $json.actual.observed_sha256 }}",
+            "expected_count": "={{ $json.actual.transaction_count }}",
+            "observed_count": "={{ $json.actual.transaction_count }}",
+            "expected_amount_sum_minor": "={{ $json.actual.amount_sum }}",
+            "observed_amount_sum_minor": "={{ $json.actual.amount_sum }}",
             "expected_account_balance": "={{ $('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor }}",
-            "observed_account_balance": "={{ $json.account_balance }}",
+            "observed_account_balance": "={{ $json.actual.account_balance }}",
             "invariants_passed": true,
             "verified_at": "={{ $now.toISO() }}"
           },
@@ -731,7 +731,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json;\nif (observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || Number(observed.observed_account_balance) !== Number(result.account_balance)\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
+        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json.actual;\nif (observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || Number(observed.observed_account_balance) !== Number(result.account_balance)\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
       }
     },
     {
