@@ -118,6 +118,53 @@ def rename_node(workflow: dict, old: str, new: str) -> None:
             node["parameters"] = json.loads(parameters.replace(old, new))
 
 
+def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
+    """Keep each statement cycle's W03-to-W12 commit handoff explicit."""
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
+    for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        workflow = by_code[code]
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        required = {
+            "Run Shared Statement Pipeline",
+            "Read Source Cursor Before Commit",
+            "Build W12 COMMIT Request",
+            "Commit Source Cursor via W12",
+            "Verify W12 COMMIT Terminal Readback",
+        }
+        missing = sorted(required - nodes.keys())
+        if missing:
+            raise ValueError(
+                f"{code} missing explicit commit nodes: {', '.join(missing)}"
+            )
+        commit = nodes["Commit Source Cursor via W12"]
+        workflow_id = commit["parameters"]["workflowId"]
+        if workflow_id.get("value") != "10000000-0000-4000-8000-000000000012":
+            raise ValueError(f"{code} commit target is not W12")
+        mapped = commit["parameters"].get("workflowInputs", {}).get("value", {})
+        for field in (
+            "operation",
+            "downstream_receipt_sha256",
+            "expected_cursor_version",
+            "attachment_verification_barrier",
+            "email_evidence_receipt_barrier",
+            "receipt_readback_verified",
+        ):
+            if field not in mapped:
+                raise ValueError(f"{code} W12 COMMIT input omits {field}")
+        expected_edges = {
+            "Run Shared Statement Pipeline": "Read Source Cursor Before Commit",
+            "Read Source Cursor Before Commit": "Build W12 COMMIT Request",
+            "Build W12 COMMIT Request": "Commit Source Cursor via W12",
+            "Commit Source Cursor via W12": "Verify W12 COMMIT Terminal Readback",
+        }
+        for source, target in expected_edges.items():
+            edges = workflow["connections"].get(source, {}).get("main", [[]])[0]
+            if not any(edge.get("node") == target for edge in edges):
+                raise ValueError(f"{code} missing connection {source} -> {target}")
+
+
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
     """Reject obsolete W01 enumeration before presentation formatting."""
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
@@ -3172,6 +3219,7 @@ def main() -> int:
     harden_exact_node_contracts(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
+    assert_monthly_cycle_commit_graph(workflows)
     paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
