@@ -210,6 +210,14 @@
       "dependencies": ["cloudflare-route-security"], "evidence": [], "blockers": ["MCP_SERVER_TRIGGER_RUNTIME_PROOF_REQUIRED", "SERVICE_AUTH_TEST_REQUIRED"]
     },
     {
+      "id": "finance-mcp-origin-bearer-contract",
+      "invariant": "Finance owns one absent-only FinanceRuntime MCP bearer, binds one encrypted httpBearerAuth credential to inactive workflow 15 at finance-operations-v1, and exposes it only through an explicitly acknowledged disposable proof or a child-only Codex launch.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
+      "production_gate": true,
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_finance_mcp_bearer_contract tests.test_finance_mcp_binder tests.test_finance_mcp_disposable_proof tests.test_finance_mcp_launcher -v", "expected": "Schema, absent-only provisioning, deterministic encrypted credential binding, W15 disposable teardown, and child-environment redaction checks pass without runtime mutation."},
+      "dependencies": ["bounded-mcp-facade", "n8n-secrets"], "evidence": [], "blockers": ["FINANCE_MCP_1PASSWORD_MUTATION_AUTH_REQUIRED", "FINANCE_MCP_N8N_MUTATION_AUTH_REQUIRED", "FINANCE_MCP_CODEX_LAUNCH_AUTH_REQUIRED"]
+    },
+    {
       "id": "cashback-reusability-mobile-push",
       "invariant": "Cashback supports arbitrary versioned cards, tiers, buckets, categories, rules, periods, alerts, and decision trees without user hardcoding.",
       "status": "PARTIAL",
