@@ -29,6 +29,7 @@ archive_bytes=""
 backup_verified=false
 failure_code=""
 failure_stage=""
+failure_detail=""
 status="failed"
 cleanup_verified=true
 current_container=""
@@ -192,6 +193,7 @@ write_receipt() {
     "${backup_name}" "${archive_sha256}" "${archive_bytes}" "${backup_verified}" \
     "${runtime_name}" "${IMAGE}" "${runtime_available}" "${runtime_verified}" \
     "${REPEAT_COUNT}" "${cleanup_verified}" "${failure_code}" "${failure_stage}" \
+    "${failure_detail}" \
     "${run_records[@]}" <<'PY'
 import json
 import os
@@ -215,6 +217,7 @@ import sys
     cleanup_verified,
     failure_code,
     failure_stage,
+    failure_detail,
     *record_paths,
 ) = sys.argv[1:]
 
@@ -256,6 +259,7 @@ receipt = {
     "error": None if not failure_code else {
         "code": failure_code,
         "stage": failure_stage,
+        **({"detail": failure_detail} if failure_detail else {}),
     },
 }
 
@@ -274,14 +278,19 @@ PY
 
 cleanup_current() {
   local cleanup_ok=true
+  local inspect_status
+  local inspect_error
   if [[ -n "${current_container}" && "${runtime_available}" == true ]]; then
-    if "${RUNTIME}" inspect "${current_container}" >/dev/null 2>&1; then
+    inspect_error="${temp_dir}/inspect-${current_container}.stderr"
+    if "${RUNTIME}" inspect "${current_container}" >/dev/null 2>"${inspect_error}"; then
       if ! "${RUNTIME}" rm -f "${current_container}" >/dev/null 2>&1; then
         cleanup_ok=false
       fi
-      if "${RUNTIME}" inspect "${current_container}" >/dev/null 2>&1; then
+      if ! inspect_status="$(inspect_result "${current_container}" "${inspect_error}")" || [[ "${inspect_status}" != absent ]]; then
         cleanup_ok=false
       fi
+    elif ! inspect_status="$(inspect_result "${current_container}" "${inspect_error}")" || [[ "${inspect_status}" != absent ]]; then
+      cleanup_ok=false
     fi
   fi
   if [[ -n "${current_data_dir}" && -e "${current_data_dir}" ]]; then
@@ -300,6 +309,60 @@ cleanup_current() {
     return 1
   fi
   return 0
+}
+
+inspect_result() {
+  local container="$1"
+  local error_file="$2"
+  python3 - "${container}" "${error_file}" <<'PY'
+import pathlib
+import sys
+
+container, error_file = sys.argv[1:]
+message = pathlib.Path(error_file).read_text(encoding="utf-8", errors="replace").casefold()
+not_found_markers = (
+    "no such container",
+    "no container with name or id",
+    "container does not exist",
+    "container not found",
+)
+if any(marker in message for marker in not_found_markers):
+    print("absent")
+    raise SystemExit(0)
+print("error", file=sys.stderr)
+raise SystemExit(1)
+PY
+}
+
+classify_runtime_failure() {
+  local error_file="$1"
+  local classification
+  classification="$(python3 - "${error_file}" <<'PY'
+import pathlib
+import sys
+
+message = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").casefold()
+if "/run/user/1000/libpod" in message:
+    print("podman-libpod-read-only")
+elif "emulate docker cli using podman" in message:
+    print("podman")
+else:
+    print("generic")
+PY
+)"
+  case "${classification}" in
+    podman-libpod-read-only)
+      runtime_name="podman"
+      failure_detail="podman preflight failed at /run/user/1000/libpod: read-only file system"
+      ;;
+    podman)
+      runtime_name="podman"
+      failure_detail="podman preflight failed"
+      ;;
+    *)
+      failure_detail="container runtime preflight failed"
+      ;;
+  esac
 }
 
 write_record() {
@@ -454,7 +517,10 @@ on_exit() {
   fi
   finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [[ -n "${RECEIPT_PATH}" && -n "${temp_dir}" ]]; then
-    write_receipt || true
+    if ! write_receipt; then
+      printf '%s\n' '{"level":"error","event":"restore_receipt_write_failed"}' >&2
+      exit_code=1
+    fi
   fi
   if [[ -n "${temp_dir}" && -d "${temp_dir}" ]]; then
     rm -rf -- "${temp_dir}" || true
@@ -510,7 +576,7 @@ done
 if [[ -z "${RECEIPT_PATH}" ]]; then
   RECEIPT_PATH="/tmp/finance-cashback-restore-$(date -u +%Y%m%dT%H%M%SZ).json"
 fi
-if ! [[ "${REPEAT_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
+if ! [[ "${REPEAT_COUNT}" =~ ^([2-9]|[1-9][0-9]+)$ ]]; then
   record_failure "invalid_repeat_count" "arguments"
   exit 64
 fi
@@ -552,11 +618,13 @@ if [[ -z "${RUNTIME}" ]]; then
 fi
 if [[ -z "${RUNTIME}" ]]; then
   status="blocked"
+  failure_detail="no docker or podman command found"
   record_failure "container_runtime_unavailable" "runtime"
   exit 2
 fi
 runtime_name="$(basename "${RUNTIME}")"
 if ! "${RUNTIME}" version >/dev/null 2>"${temp_dir}/runtime-version.stderr"; then
+  classify_runtime_failure "${temp_dir}/runtime-version.stderr"
   status="blocked"
   record_failure "container_runtime_unavailable" "runtime"
   exit 2

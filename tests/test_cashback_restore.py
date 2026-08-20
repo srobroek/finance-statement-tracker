@@ -64,6 +64,43 @@ def backup_fixture(root: Path) -> Path:
     return backup
 
 
+def fake_runtime(root: Path, *, inspect_fault: bool) -> Path:
+    runtime = root / ("fake-runtime-fault" if inspect_fault else "fake-runtime")
+    mode = "fault" if inspect_fault else "success"
+    runtime.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib\n"
+        "import sys\n"
+        f"root = pathlib.Path({str(root)!r})\n"
+        f"mode = {mode!r}\n"
+        "command = sys.argv[1] if len(sys.argv) > 1 else ''\n"
+        "marker = root / 'retained-marker'\n"
+        "if command == 'version':\n"
+        "    raise SystemExit(0)\n"
+        "if command == 'run':\n"
+        "    marker.write_text('container-retained', encoding='utf-8')\n"
+        "    raise SystemExit(0)\n"
+        "if command in {'exec', 'restart'}:\n"
+        "    raise SystemExit(0)\n"
+        "if command == 'inspect':\n"
+        "    if mode == 'fault':\n"
+        "        print('runtime transport failure', file=sys.stderr)\n"
+        "        raise SystemExit(1)\n"
+        "    if marker.exists():\n"
+        "        raise SystemExit(0)\n"
+        "    print('Error: no such container', file=sys.stderr)\n"
+        "    raise SystemExit(1)\n"
+        "if command == 'rm':\n"
+        "    (root / 'rm-called').write_text('called', encoding='utf-8')\n"
+        "    marker.unlink(missing_ok=True)\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    runtime.chmod(0o700)
+    return runtime
+
+
 class CashbackRestoreContractTests(unittest.TestCase):
     def test_script_uses_authoritative_contract_and_exact_disposable_cleanup(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
@@ -145,6 +182,119 @@ class CashbackRestoreContractTests(unittest.TestCase):
             self.assertEqual(payload["error"]["code"], "backup_verification_failed")
             self.assertFalse(payload["backup"]["verified"])
             self.assertFalse(payload["runtime"]["verified"])
+
+    def test_runtime_inspect_fault_fails_closed_and_never_claims_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            runtime = fake_runtime(root, inspect_fault=True)
+            receipt = root / "fault.json"
+            result = subprocess.run(
+                [
+                    str(SCRIPT),
+                    "--backup-root",
+                    str(root),
+                    "--receipt",
+                    str(receipt),
+                    "--runtime",
+                    str(runtime),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue((root / "retained-marker").is_file())
+            self.assertFalse((root / "rm-called").exists())
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "failed")
+            self.assertEqual(payload["error"]["code"], "cleanup_not_verified")
+            self.assertFalse(payload["cleanup_verified"])
+            self.assertFalse(payload["runs"][0]["cleanup_verified"])
+
+    def test_receipt_write_failure_is_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            runtime = fake_runtime(root, inspect_fault=False)
+            result = subprocess.run(
+                [
+                    str(SCRIPT),
+                    "--backup-root",
+                    str(root),
+                    "--receipt",
+                    "/dev/null/cb5-receipt.json",
+                    "--runtime",
+                    str(runtime),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("restore_receipt_write_failed", result.stderr)
+
+    def test_repeat_requires_two_and_passed_schema_requires_all_invariants(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt = root / "repeat-one.json"
+            result = subprocess.run(
+                [str(SCRIPT), "--repeat", "1", "--receipt", str(receipt)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 64)
+            self.assertFalse(receipt.exists())
+
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        run = {
+            "run_index": 1,
+            "sidecar_id": "sidecar-1",
+            "pre_state_sha256": "a" * 64,
+            "post_state_sha256": "a" * 64,
+            "exact_state_match": True,
+            "health_authorized": True,
+            "restart_verified": True,
+            "cleanup_verified": True,
+            "status": "passed",
+        }
+        receipt = {
+            "schema_version": 1,
+            "status": "passed",
+            "mode": "disposable",
+            "redacted": True,
+            "started_at": "2026-08-20T12:00:00Z",
+            "completed_at": "2026-08-20T12:00:01Z",
+            "backup": {
+                "name": "20260820T120000Z",
+                "archive_sha256": "b" * 64,
+                "archive_bytes": 1,
+                "verified": True,
+            },
+            "runtime": {
+                "engine": "podman",
+                "image": "cashback:test",
+                "available": True,
+                "verified": True,
+            },
+            "requested_runs": 2,
+            "runs": [run, {**run, "run_index": 2, "sidecar_id": "sidecar-2"}],
+            "cleanup_verified": True,
+            "production_mutated": False,
+            "retained_mutated": False,
+            "secret_values_recorded": False,
+            "error": None,
+        }
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(receipt)), [])
+        receipt["requested_runs"] = 1
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
+        receipt["requested_runs"] = 2
+        receipt["runs"][0]["restart_verified"] = False
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(receipt)))
 
 
 if __name__ == "__main__":
