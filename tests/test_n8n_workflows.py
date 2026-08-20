@@ -487,8 +487,10 @@ try {{
             "Upsert Exact Actual Verification Receipt",
             "Read Back Exact Actual Verification Receipt",
             "Compare Exact Actual Verification Receipt",
+            "Read Back Released Recovery Writer Fence",
             "Route Recovery State", "Read Back COMMITTED Recovery Replay",
             "Read Back Exact Actual Verification Receipt Replay",
+            "Read Back Released Recovery Writer Fence Replay",
             "Return Verified Commit Receipt Replay",
         ):
             self.assertIn(name, writer)
@@ -514,6 +516,124 @@ try {{
             "replay_readback_only",
             writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"],
         )
+        self.assertIn(
+            "ACTUAL_WRITER_LEASE_RELEASE_NOT_READ_BACK",
+            writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Release Recovery Writer Fence"]["main"][0][0]["node"],
+            "Read Back Released Recovery Writer Fence",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Exact Actual Verification Receipt Replay"]["main"][0][0]["node"],
+            "Read Back Released Recovery Writer Fence Replay",
+        )
+
+    def test_shared_pipeline_reuses_existing_outbox_before_prepared_upsert(self) -> None:
+        workflow = self.workflow("03-shared-statement-pipeline.json")
+        nodes = self.nodes("03-shared-statement-pipeline.json")
+        connections = workflow["connections"]
+        self.assertTrue(nodes["Read Back Existing Actual Outbox"]["alwaysOutputData"])
+        self.assertEqual(
+            connections["Prepare Outbox Intent"]["main"][0][0]["node"],
+            "Read Back Existing Actual Outbox",
+        )
+        self.assertEqual(
+            connections["Select Existing Outbox Or Prepare"]["main"][0][0]["node"],
+            "Route Existing Outbox State",
+        )
+        self.assertEqual(
+            connections["Route Existing Outbox State"]["main"][0][0]["node"],
+            "Apply Prepared Outbox Safely",
+        )
+        self.assertEqual(
+            connections["Route Existing Outbox State"]["main"][1][0]["node"],
+            "Upsert PREPARED Actual Outbox",
+        )
+        digest = "a" * 64
+        draft = {
+            "outbox_id": "run:statement",
+            "imported_id": "statement:payload",
+            "actual_file_id": "actual-file:replay",
+            "account_id": "actual-account:EI_AMAZON",
+            "card_code": "EI_AMAZON",
+            "payload_sha256": digest,
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-31",
+            "state": "PREPARED",
+        }
+        existing = {
+            **draft,
+            "state": "COMMITTED",
+            "lease_owner": "n8n:recovery:run:statement",
+            "lease_fence": 9,
+        }
+        selected = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Select Existing Outbox Or Prepare",
+            existing,
+            {"Prepare Outbox Intent": {"json": draft}},
+        )
+        self.assertTrue(selected["ok"], selected)
+        selected_row = selected["output"][0]["json"]
+        self.assertTrue(selected_row["existing_outbox_replay"])
+        self.assertEqual(selected_row["state"], "COMMITTED")
+        self.assertEqual(selected_row["lease_fence"], 9)
+        fresh = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Select Existing Outbox Or Prepare",
+            {},
+            {"Prepare Outbox Intent": {"json": draft}},
+        )
+        self.assertTrue(fresh["ok"], fresh)
+        self.assertFalse(fresh["output"][0]["json"]["existing_outbox_replay"])
+        stale = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Select Existing Outbox Or Prepare",
+            {**existing, "payload_sha256": "b" * 64},
+            {"Prepare Outbox Intent": {"json": draft}},
+        )
+        self.assertFalse(stale["ok"])
+
+        receipt = {
+            "outbox_id": "run:statement",
+            "actual_file_id": "actual-file:replay",
+            "account_id": "actual-account:EI_AMAZON",
+            "card_code": "EI_AMAZON",
+            "verification_version": 1,
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": digest,
+            "observed_payload_sha256": digest,
+            "invariants_passed": True,
+        }
+        replay = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt Replay",
+            receipt,
+            {
+                "Verify Recovery Contract": {"json": {
+                    "outbox_row": selected_row,
+                    "manifest": {
+                        "actual_file_id": "actual-file:replay",
+                        "account_id": "actual-account:EI_AMAZON",
+                        "card_code": "EI_AMAZON",
+                        "period_start": "2026-08-01",
+                        "period_end": "2026-08-31",
+                    },
+                }},
+                "Read Back COMMITTED Recovery Replay": {"json": selected_row},
+                "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+                "Read Back Released Recovery Writer Fence Replay": {"json": {
+                    "resource_key": "actual:actual-file:replay",
+                    "lease_owner": "n8n:recovery:run:statement",
+                    "fencing_token": 9,
+                    "released": True,
+                }},
+            },
+        )
+        self.assertTrue(replay["ok"], replay)
+        self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
 
     def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
         recovery = set(self.nodes("17-actual-outbox-recovery.json"))
@@ -539,7 +659,10 @@ try {{
         digest = "a" * 64
         committed = {
             "outbox_id": "outbox:replay-1",
+            "actual_file_id": "actual-file:replay-1",
             "state": "COMMITTED",
+            "lease_owner": "n8n:recovery:outbox:replay-1",
+            "lease_fence": 7,
         }
         receipt = {
             "outbox_id": "outbox:replay-1",
@@ -575,6 +698,12 @@ try {{
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+            "Read Back Released Recovery Writer Fence Replay": {"json": {
+                "resource_key": "actual:actual-file:replay-1",
+                "lease_owner": "n8n:recovery:outbox:replay-1",
+                "fencing_token": 7,
+                "released": True,
+            }},
         }
         replay = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
@@ -585,6 +714,50 @@ try {{
         self.assertTrue(replay["ok"], replay)
         self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
         self.assertEqual(replay["output"][0]["json"]["state"], "COMMITTED")
+        self.assertTrue(replay["output"][0]["json"]["writer_release_verified"])
+        normal = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt",
+            receipt,
+            {
+                "Read Back COMMITTED Recovery": {"json": committed},
+                "Recovery Verify Actual": {"json": {"actual": {"status": "VERIFIED"}}},
+                "Compare Exact Actual Verification Receipt": {"json": receipt},
+                "Build Recovery Fence Release": {"json": {
+                    "resource_key": "actual:actual-file:replay",
+                    "lease_id": "00000000-0000-4000-8000-000000000007",
+                    "lease_owner": "n8n:recovery:outbox:replay-1",
+                    "fencing_token": 7,
+                }},
+                "Read Back Released Recovery Writer Fence": {"json": {
+                    "resource_key": "actual:actual-file:replay",
+                    "lease_id": "00000000-0000-4000-8000-000000000007",
+                    "lease_owner": "n8n:recovery:outbox:replay-1",
+                    "fencing_token": 7,
+                    "released": True,
+                }},
+            },
+        )
+        self.assertTrue(normal["ok"], normal)
+        self.assertTrue(normal["output"][0]["json"]["writer_release_verified"])
+        unreleased_normal = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt",
+            receipt,
+            {
+                "Read Back COMMITTED Recovery": {"json": committed},
+                "Recovery Verify Actual": {"json": {"actual": {"status": "VERIFIED"}}},
+                "Compare Exact Actual Verification Receipt": {"json": receipt},
+                "Build Recovery Fence Release": {"json": {
+                    "resource_key": "actual:actual-file:replay",
+                    "lease_id": "00000000-0000-4000-8000-000000000007",
+                    "lease_owner": "n8n:recovery:outbox:replay-1",
+                    "fencing_token": 7,
+                }},
+                "Read Back Released Recovery Writer Fence": {"json": {"released": False}},
+            },
+        )
+        self.assertFalse(unreleased_normal["ok"])
         invalid_cases = (
             ({**committed, "state": "ACTUAL_OBSERVED"}, receipt),
             (committed, {**receipt, "card_code": "RAK_WORLD"}),
@@ -602,6 +775,21 @@ try {{
                 },
             )
             self.assertFalse(rejected["ok"])
+        unreleased = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt Replay",
+            receipt,
+            {
+                **references,
+                "Read Back Released Recovery Writer Fence Replay": {"json": {
+                    "resource_key": "actual:actual-file:replay-1",
+                    "lease_owner": "n8n:recovery:outbox:replay-1",
+                    "fencing_token": 7,
+                    "released": False,
+                }},
+            },
+        )
+        self.assertFalse(unreleased["ok"])
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
@@ -1959,6 +2147,55 @@ try {{
                 references,
             )
             self.assertFalse(rejected["ok"], label)
+
+    def test_reconciliation_readback_rejects_stale_version_close_and_digest(self) -> None:
+        nodes = self.nodes("03-shared-statement-pipeline.json")
+        self.assertIn(
+            "RECONCILIATION_READBACK_BINDING_MISMATCH",
+            nodes["Validate Reconciliation Readback"]["parameters"]["jsCode"],
+        )
+        source = {
+            "source_code": "EI_AMAZON",
+            "period_key": "2026-08",
+            "cashback_close_required": True,
+        }
+        request = {"statement_sha256": "a" * 64}
+        actual = {"observed_payload_sha256": "b" * 64}
+        row = {
+            "source_code": "EI_AMAZON",
+            "period_key": "2026-08",
+            "reconciliation_version": 1,
+            "statement_sha256": "a" * 64,
+            "actual_verification_sha256": "b" * 64,
+            "cashback_close_id": "cashback-close:EI_AMAZON:2026-08-01:2026-08-31",
+            "state": "COMMITTED",
+        }
+        refs = {
+            "Verify Archive and Execution Context": {"json": source},
+            "Apply Prepared Outbox Safely": {"json": actual},
+            "Build Cashback Reconciliation Request": {"json": {"cashback_reconcile": request}},
+            "Validate Cashback Finalization Response": {"json": {"close_id": row["cashback_close_id"]}},
+        }
+        valid = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Validate Reconciliation Readback",
+            row,
+            refs,
+        )
+        self.assertTrue(valid["ok"], valid)
+        for invalid in (
+            {**row, "reconciliation_version": 2},
+            {**row, "cashback_close_id": "cashback-close:RAK_WORLD:2026-08-01:2026-08-31"},
+            {**row, "actual_verification_sha256": "c" * 64},
+            {**row, "statement_sha256": "d" * 64},
+        ):
+            rejected = self.run_exported_workflow_node(
+                "03-shared-statement-pipeline.json",
+                "Validate Reconciliation Readback",
+                invalid,
+                refs,
+            )
+            self.assertFalse(rejected["ok"])
 
     def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
         lock = load_json(N8N / "community-node-lock.json")

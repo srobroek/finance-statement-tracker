@@ -363,6 +363,122 @@
       }
     },
     {
+      "id": "3068",
+      "name": "Read Back Existing Actual Outbox",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        980
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "imported_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Outbox Intent').first().json.imported_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3071",
+      "name": "Validate Reconciliation Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Reconciliation Readback. Keep this deterministic and fail closed.\nconst row = $json || {};\nconst source = $('Verify Archive and Execution Context').first().json;\nconst actual = $('Apply Prepared Outbox Safely').first().json;\nconst request = $('Build Cashback Reconciliation Request').first().json.cashback_reconcile;\nconst text = value => String(value ?? '').trim();\nlet closeId = '';\ntry {\n    closeId = text($('Validate Cashback Finalization Response').first().json.close_id);\n}\ncatch (_) {\n    closeId = '';\n}\nif (text(row.source_code) !== text(source.source_code)\n    || text(row.period_key) !== text(source.period_key)\n    || Number(row.reconciliation_version) !== 1\n    || row.state !== 'COMMITTED'\n    || text(row.statement_sha256).toLowerCase() !== text(request.statement_sha256).toLowerCase()\n    || text(row.actual_verification_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('RECONCILIATION_READBACK_BINDING_MISMATCH');\nif (source.cashback_close_required === true && (!closeId || text(row.cashback_close_id) !== closeId))\n    throw new Error('RECONCILIATION_READBACK_CLOSE_MISMATCH');\nif (source.cashback_close_required !== true && text(row.cashback_close_id))\n    throw new Error('RECONCILIATION_READBACK_UNEXPECTED_CLOSE');\nreturn [{ json: { ...row, reconciliation_readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "3069",
+      "name": "Select Existing Outbox Or Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        980
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Select Existing Outbox Or Prepare. Keep this deterministic and fail closed.\nconst draft = $('Prepare Outbox Intent').first().json;\nconst existing = $json || {};\nconst state = String(existing.state || '').trim().toUpperCase();\nconst states = new Set(['PREPARED', 'ACTUAL_OBSERVED', 'VERIFIED', 'COMMITTED']);\nif (!state)\n    return [{ json: { ...draft, existing_outbox_replay: false } }];\nif (!states.has(state))\n    throw new Error('ACTUAL_OUTBOX_STATE_INVALID');\nconst exact = ['imported_id', 'outbox_id', 'actual_file_id', 'account_id', 'card_code', 'payload_sha256'];\nfor (const field of exact) {\n    if (String(existing[field] ?? '').trim() !== String(draft[field] ?? '').trim())\n        throw new Error('ACTUAL_OUTBOX_IDENTITY_MISMATCH:' + field);\n}\nreturn [{ json: { ...draft, ...existing, existing_outbox_replay: true } }];\n"
+      }
+    },
+    {
+      "id": "3070",
+      "name": "Route Existing Outbox State",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        980
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.existing_outbox_replay }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.existing_outbox_replay }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
       "id": "3015",
       "name": "Read Back PREPARED Actual Outbox",
       "type": "n8n-nodes-base.dataTable",
@@ -859,7 +975,7 @@
             "source_code": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
             "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
             "reconciliation_version": 1,
-            "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
+            "statement_sha256": "={{ $('Build Cashback Reconciliation Request').first().json.cashback_reconcile.statement_sha256 }}",
             "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
             "cashback_close_id": "={{ $json.close_id || '' }}",
             "state": "COMMITTED",
@@ -913,6 +1029,21 @@
               "keyName": "state",
               "condition": "eq",
               "keyValue": "COMMITTED"
+            },
+            {
+              "keyName": "reconciliation_version",
+              "condition": "eq",
+              "keyValue": 1
+            },
+            {
+              "keyName": "statement_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cashback Reconciliation Request').first().json.cashback_reconcile.statement_sha256 }}"
+            },
+            {
+              "keyName": "actual_verification_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}"
             }
           ]
         },
@@ -1343,6 +1474,46 @@
       "main": [
         [
           {
+            "node": "Read Back Existing Actual Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Existing Actual Outbox": {
+      "main": [
+        [
+          {
+            "node": "Select Existing Outbox Or Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Existing Outbox Or Prepare": {
+      "main": [
+        [
+          {
+            "node": "Route Existing Outbox State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Existing Outbox State": {
+      "main": [
+        [
+          {
+            "node": "Apply Prepared Outbox Safely",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Upsert PREPARED Actual Outbox",
             "type": "main",
             "index": 0
@@ -1556,6 +1727,17 @@
       ]
     },
     "Read Back Reconciliation Receipt": {
+      "main": [
+        [
+          {
+            "node": "Validate Reconciliation Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reconciliation Readback": {
       "main": [
         [
           {
