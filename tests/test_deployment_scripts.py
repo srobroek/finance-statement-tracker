@@ -71,6 +71,20 @@ class DeploymentScriptTests(unittest.TestCase):
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
 
+    def test_cashback_browser_access_uses_private_origin_contract(self) -> None:
+        compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
+        self.assertIn('"127.0.0.1:5010:5010"', compose)
+        environment = Path("deploy/finance-runtime/finance.env.tpl").read_text(encoding="utf-8")
+        for name in (
+            "CASHBACK_ACCESS_ISSUER",
+            "CASHBACK_ACCESS_AUDIENCE",
+            "CASHBACK_ACCESS_JWKS_URL",
+        ):
+            self.assertIn(name, environment)
+        readme = Path("apps/cashback-control/README.md").read_text(encoding="utf-8")
+        self.assertIn("Cf-Access-Jwt-Assertion", readme)
+        self.assertIn("exactly equals `CASHBACK_PUBLIC_URL`", readme)
+
 
 if __name__ == "__main__":
     unittest.main()

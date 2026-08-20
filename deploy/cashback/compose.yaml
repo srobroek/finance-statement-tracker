@@ -17,7 +17,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "5010:5010"
+      # Cloudflare Tunnel is the only public entry point; keep the origin off the LAN.
+      - "127.0.0.1:5010:5010"
     volumes:
       - ${CASHBACK_DATA_DIR:-./data}:/var/lib/cashback-control
       - ./cashback-profile.json:/etc/cashback/profile.json:ro
