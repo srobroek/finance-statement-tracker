@@ -13,7 +13,7 @@
         0
       ],
       "parameters": {
-        "path": "finance-operations",
+        "path": "finance-operations-v1",
         "authentication": "bearerAuth"
       },
       "credentials": {
@@ -166,6 +166,7 @@
   "pinData": {},
   "meta": {
     "financeWorkflowCode": "FINANCE_MCP_FACADE",
+    "workflowPath": "finance-operations-v1",
     "mcpSafe": true,
     "migrationStatus": "SPEC_ONLY",
     "instanceMcpRequired": false,

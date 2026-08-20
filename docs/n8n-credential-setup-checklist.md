@@ -1,6 +1,6 @@
 # n8n finance credential and provider setup checklist
 
-Status: **setup required; all workflows remain inactive**
+Checked-in workflow exports declare inactive state and placeholder credential IDs.
 
 No Outlook or OneDrive credential exists in the disposable baseline. Placeholder
 IDs in workflow JSON are declarations, not proof that authentication is ready.
@@ -31,6 +31,33 @@ step.
   project first.
 - [ ] Leave `ALLOW_ACTUAL_WRITES` false until double replay, fenced-lease,
   crash-recovery, exact economic readback, and reconciliation gates pass.
+
+## Finance MCP origin bearer
+
+- [ ] Create `finance_n8n_mcp_bearer` once in
+  `FinanceRuntime/Finance Statement Tracker Runtime` through the approved
+  operator mutation gate. The field is concealed and must not be overwritten,
+  deleted, recreated, or rotated.
+- [ ] Keep the bearer available only as
+  `FINANCE_N8N_MCP_BEARER` through the `op` runtime-injection boundary. Do not
+  place it in `.env`, workflow JSON, command arguments, logs, receipts, or
+  generated configuration.
+- [ ] Run `deploy/finance-runtime/bind-finance-mcp-facade.py` with the pinned
+  n8n CLI. Verify one encrypted `httpBearerAuth` credential named `Finance MCP
+  Facade Bearer`, a `credential:owner` relation for the finance project, and
+  inactive workflow 15. The credential file must be mode `0600` under
+  `/run/finance-mcp-binder` and removed before exit.
+- [ ] Verify workflow 15 exposes the exact path
+  `/mcp/finance-operations-v1` and retains the
+  `BIND_FINANCE_MCP_FACADE` placeholder in the checked-in export.
+- [ ] Set `FINANCE_N8N_MCP_DISPOSABLE_ACK=ACTIVATE_W15_ONLY` only for a
+  disposable proof. The proof may temporarily publish W15 and must deactivate,
+  unpublish, remove the live webhook registration, and verify inactive state
+  before exit.
+- [ ] Launch Codex with
+  `deploy/finance-runtime/launch-codex-finance-mcp.sh`. The launcher rejects a
+  pre-existing parent bearer and scrubs the child-only environment after both
+  success and failure.
 
 ## Subscription agents
 

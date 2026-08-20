@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The mutator is an operator-approved service gate. Keeping it outside this
+# repository avoids guessing an unsafe 1Password CLI mutation interface.
+umask 077
+readonly item_path="FinanceRuntime/Finance Statement Tracker Runtime"
+readonly field_label="finance_n8n_mcp_bearer"
+readonly op_bin="${OP_BIN:-op}"
+readonly work_root="${FINANCE_MCP_PROVISION_TMPDIR:-/dev/shm}"
+readonly provision_ack="CREATE_FINANCE_MCP_BEARER_ONCE"
+
+[[ "${FINANCE_MCP_PROVISION_ACK:-}" == "${provision_ack}" ]] || {
+  echo "FINANCE_MCP_PROVISION_ACK=${provision_ack} is required" >&2
+  exit 1
+}
+[[ -x "$(command -v "${op_bin}" || true)" ]] || {
+  echo "Approved 1Password CLI is unavailable" >&2
+  exit 1
+}
+readonly mutator="${FINANCE_MCP_APPROVED_MUTATOR:-}"
+[[ -n "${mutator}" && -x "${mutator}" && ! -d "${mutator}" ]] || {
+  echo "An approved service mutation gate is required" >&2
+  exit 1
+}
+
+run_root="$(mktemp -d "${work_root%/}/finance-mcp-provision.XXXXXX")"
+cleanup() {
+  local status=$?
+  trap - EXIT
+  rm -f -- "${run_root}/item.json" "${run_root}/after.json" "${run_root}/bearer" "${run_root}/mutator.out"
+  rmdir -- "${run_root}" 2>/dev/null || true
+  exit "${status}"
+}
+trap cleanup EXIT
+
+item_json="${run_root}/item.json"
+after_json="${run_root}/after.json"
+secret_file="${run_root}/bearer"
+
+# Redirect the complete 1Password response into mode-0600 tmpfs. Only the
+# field-state enum is allowed to leave this process.
+"${op_bin}" item get "${item_path}" --format json >"${item_json}"
+field_state="$(python3 - "${item_json}" "${item_path}" "${field_label}" <<'PY'
+import json
+import pathlib
+import sys
+
+document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected_vault, expected_item = sys.argv[2].split("/", 1)
+if document.get("title") != expected_item:
+    raise SystemExit("FINANCE_RUNTIME_ITEM_MISMATCH")
+vault = document.get("vault")
+if isinstance(vault, dict) and vault.get("name") != expected_vault:
+    raise SystemExit("FINANCE_RUNTIME_VAULT_MISMATCH")
+fields = [field for field in document.get("fields", []) if field.get("label") == sys.argv[3]]
+if len(fields) > 1:
+    raise SystemExit("FINANCE_MCP_FIELD_DUPLICATE")
+if not fields:
+    print("absent")
+    raise SystemExit(0)
+field = fields[0]
+if field.get("type") != "CONCEALED":
+    raise SystemExit("FINANCE_MCP_FIELD_NOT_CONCEALED")
+print("present_nonempty" if isinstance(field.get("value"), str) and field["value"] else "present_empty")
+PY
+)"
+[[ "${field_state}" == "absent" ]] || {
+  echo "Finance MCP bearer field exists; overwrite, deletion, recreation, and rotation are forbidden" >&2
+  exit 1
+}
+
+# This is the only CSPRNG invocation in the provisioner. The value is fed to
+# the approved mutator over stdin and never becomes an argument or log field.
+openssl rand -hex 32 | tr -d '\n' >"${secret_file}"
+[[ "$(wc -c <"${secret_file}")" == "64" ]] || { echo "Bearer generation failed" >&2; exit 1; }
+
+python3 - "${secret_file}" "${item_path}" "${field_label}" <<'PY' | "${mutator}" >"${run_root}/mutator.out"
+import json
+import pathlib
+import sys
+
+value = pathlib.Path(sys.argv[1]).read_text(encoding="ascii")
+json.dump({"item_path": sys.argv[2], "field": sys.argv[3], "value": value}, sys.stdout)
+sys.stdout.write("\n")
+PY
+
+"${op_bin}" item get "${item_path}" --format json >"${after_json}"
+readback_state="$(python3 - "${after_json}" "${item_path}" "${field_label}" <<'PY'
+import json
+import pathlib
+import sys
+
+document = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if document.get("title") != sys.argv[2].split("/", 1)[1]:
+    raise SystemExit("FINANCE_RUNTIME_ITEM_MISMATCH")
+fields = [field for field in document.get("fields", []) if field.get("label") == sys.argv[3]]
+if len(fields) != 1 or fields[0].get("type") != "CONCEALED":
+    raise SystemExit("FINANCE_MCP_FIELD_READBACK_FAILED")
+if not isinstance(fields[0].get("value"), str) or not fields[0]["value"]:
+    raise SystemExit("FINANCE_MCP_FIELD_READBACK_EMPTY")
+print("present_nonempty")
+PY
+)"
+[[ "${readback_state}" == "present_nonempty" ]] || { echo "Finance MCP bearer metadata readback failed" >&2; exit 1; }
+printf '%s\n' 'Finance MCP bearer provisioned once; metadata-only non-empty readback verified (value redacted).'
