@@ -136,6 +136,21 @@ class N8nApplicationManifestTests(unittest.TestCase):
         for key in ("image_lock", "workflow_manifest", "fixture_manifest"):
             artifact = self.manifest[key]
             self.assertEqual(artifact["sha256"], sha256(ROOT / artifact["path"]))
+        self.assertEqual(
+            self.manifest["mcp"]["contract"]["sha256"],
+            sha256(ROOT / self.manifest["mcp"]["contract"]["path"]),
+        )
+        self.assertEqual(
+            self.manifest["mcp"]["path"], "/mcp/finance-operations-v1"
+        )
+        self.assertEqual(
+            self.manifest["mcp"]["operations"],
+            [
+                "finance.status.v1",
+                "finance.document.request.v1",
+                "finance.reviewed-artifact.handoff.v1",
+            ],
+        )
         corpus = self.manifest["inactive_corpus"]
         self.assertEqual(corpus["file_count"], len(list((N8N / "workflows").glob("*.json"))))
         self.assertEqual(corpus["sha256"], corpus_sha256(N8N / "workflows"))

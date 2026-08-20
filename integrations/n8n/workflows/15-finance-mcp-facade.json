@@ -25,7 +25,7 @@
     },
     {
       "id": "15002",
-      "name": "finance.status",
+      "name": "finance.status.v1",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -33,7 +33,7 @@
         0
       ],
       "parameters": {
-        "name": "finance_status",
+        "name": "finance.status.v1",
         "description": "Read redacted finance workflow and receipt status. This tool performs no finance mutation.",
         "workflowId": {
           "__rl": true,
@@ -54,7 +54,7 @@
     },
     {
       "id": "15003",
-      "name": "artifact.submit_reviewed",
+      "name": "finance.reviewed-artifact.handoff.v1",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -62,7 +62,7 @@
         0
       ],
       "parameters": {
-        "name": "artifact_submit_reviewed",
+        "name": "finance.reviewed-artifact.handoff.v1",
         "description": "Submit an already staged and human-reviewed browser artifact by immutable server-owned artifact ID. The workflow loads the durable document and derives both hashes; URLs, paths, binaries, client hashes, providers, credentials, account IDs, and commit flags are forbidden.",
         "workflowId": {
           "__rl": true,
@@ -84,7 +84,7 @@
     },
     {
       "id": "15004",
-      "name": "document.request",
+      "name": "finance.document.request.v1",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -92,7 +92,7 @@
         0
       ],
       "parameters": {
-        "name": "document_request",
+        "name": "finance.document.request.v1",
         "description": "Request extraction of an existing immutable document record using only its ID, expected hash, profile, and schema version.",
         "workflowId": {
           "__rl": true,
@@ -117,7 +117,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000015-generated-note-1",
-      "name": "Stage 1 · Finance MCP Server Trigger to document.request",
+      "name": "Stage 1 · Finance MCP Server Trigger to finance.document.request.v1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -125,7 +125,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Finance MCP Server Trigger → document.request\n**Input:** Finance MCP Server Trigger  ·  **Output:** document.request  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Finance MCP Server Trigger → finance.document.request.v1\n**Input:** Finance MCP Server Trigger  ·  **Output:** finance.document.request.v1  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -137,17 +137,17 @@
       "ai_tool": [
         [
           {
-            "node": "finance.status",
+            "node": "finance.status.v1",
             "type": "ai_tool",
             "index": 0
           },
           {
-            "node": "artifact.submit_reviewed",
+            "node": "finance.reviewed-artifact.handoff.v1",
             "type": "ai_tool",
             "index": 0
           },
           {
-            "node": "document.request",
+            "node": "finance.document.request.v1",
             "type": "ai_tool",
             "index": 0
           }
@@ -170,9 +170,9 @@
     "migrationStatus": "SPEC_ONLY",
     "instanceMcpRequired": false,
     "allowedOperationCodes": [
-      "finance.status",
-      "artifact.submit_reviewed",
-      "document.request"
+      "finance.status.v1",
+      "finance.document.request.v1",
+      "finance.reviewed-artifact.handoff.v1"
     ],
     "auditTable": "finance_mcp_requests",
     "importTested": false,

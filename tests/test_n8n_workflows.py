@@ -197,7 +197,11 @@ try {{
         self.assertEqual(mcp["facade_workflow_code"], "FINANCE_MCP_FACADE")
         self.assertEqual(
             set(mcp["allowed_operation_codes"]),
-            {"finance.status", "artifact.submit_reviewed", "document.request"},
+            {
+                "finance.status.v1",
+                "finance.reviewed-artifact.handoff.v1",
+                "finance.document.request.v1",
+            },
         )
         exposed = [row for row in self.registry["workflows"] if row["mcp_exposed"]]
         self.assertEqual([row["code"] for row in exposed], ["FINANCE_MCP_FACADE"])
@@ -964,14 +968,18 @@ try {{
 
     def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:
         facade = self.nodes("15-finance-mcp-facade.json")
-        for name in ("finance.status", "artifact.submit_reviewed", "document.request"):
+        for name in (
+            "finance.status.v1",
+            "finance.reviewed-artifact.handoff.v1",
+            "finance.document.request.v1",
+        ):
             params = facade[name]["parameters"]
             self.assertEqual(params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010")
             self.assertIn("_mcp_request_id", params["workflowInputs"]["value"])
-        artifact_inputs = facade["artifact.submit_reviewed"]["parameters"]["workflowInputs"]["value"]
+        artifact_inputs = facade["finance.reviewed-artifact.handoff.v1"]["parameters"]["workflowInputs"]["value"]
         self.assertEqual(set(artifact_inputs), {"_mcp_request_id", "operation_code", "artifact_id"})
         self.assertNotIn("expected_sha256", artifact_inputs)
-        self.assertIn("server-owned", facade["artifact.submit_reviewed"]["parameters"]["description"])
+        self.assertIn("server-owned", facade["finance.reviewed-artifact.handoff.v1"]["parameters"]["description"])
         nodes = self.nodes("10-finance-operations-status.json")
         for name in (
             "Upsert ACCEPTED MCP Request", "Read Back ACCEPTED MCP Request",
