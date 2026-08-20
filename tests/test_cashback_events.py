@@ -11,12 +11,37 @@ from pathlib import Path
 from finance_tracker.cashback_events import (
     CashbackEventStore,
     _json_digest,
+    _legacy_recovery_digest,
     build_live_dashboard,
 )
 
 
 def statement_digest(reference: str) -> str:
     return hashlib.sha256(reference.encode()).hexdigest()
+
+
+def actual_receipt(reference: str, period_start: str, period_end: str) -> dict[str, object]:
+    payload_digest = statement_digest(f"actual-payload:{reference}")
+    return {
+        "outbox_id": f"outbox:{reference}",
+        "verification_version": 1,
+        "actual_file_id": f"actual-file:{reference}",
+        "account_id": "EI_AMAZON",
+        "period_start": period_start,
+        "period_end": period_end,
+        "expected_payload_sha256": payload_digest,
+        "observed_payload_sha256": payload_digest,
+        "expected_count": 0,
+        "observed_count": 0,
+        "expected_amount_sum_minor": 0,
+        "observed_amount_sum_minor": 0,
+        "invariants_passed": True,
+        "verified_at": "2026-08-20T00:00:00+00:00",
+    }
+
+
+def actual_receipt_digest(receipt: dict[str, object]) -> str:
+    return _json_digest(receipt)
 
 
 class CashbackEventStoreTests(unittest.TestCase):
@@ -424,7 +449,12 @@ class CashbackEventStoreTests(unittest.TestCase):
                     "statement_reference": "RAK-2026-08-15",
                     "statement_sha256": statement_digest("RAK-2026-08-15"),
                     "statement_evidence_reference": "sha256:test",
-                    "actual_import_receipt_sha256": statement_digest("actual:RAK-2026-08-15"),
+                    "actual_import_receipt": actual_receipt(
+                        "RAK-2026-08-15", "2026-07-16", "2026-08-15"
+                    ),
+                    "actual_import_receipt_sha256": actual_receipt_digest(
+                        actual_receipt("RAK-2026-08-15", "2026-07-16", "2026-08-15")
+                    ),
                     "statement_document_url": "https://evidence.example/rak.pdf",
                 },
                 program_config_path=config_path,
@@ -452,7 +482,12 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "statement_reference": "EI-2026-08",
                 "statement_sha256": statement_digest("EI-2026-08"),
                 "statement_evidence_reference": "sha256:abc",
-                "actual_import_receipt_sha256": statement_digest("actual:EI-2026-08"),
+                "actual_import_receipt": actual_receipt(
+                    "EI-2026-08", "2026-08-01", "2026-08-31"
+                ),
+                "actual_import_receipt_sha256": actual_receipt_digest(
+                    actual_receipt("EI-2026-08", "2026-08-01", "2026-08-31")
+                ),
                 "statement_document_url": "Finance Evidence/2026/08/ei/statement.pdf",
             }
             finalized = store.finalize_period(payload)
@@ -487,7 +522,12 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "statement_reference": "RAK-2026-09-05",
                 "statement_sha256": statement_digest("RAK-2026-09-05"),
                 "statement_evidence_reference": "sha256:def",
-                "actual_import_receipt_sha256": statement_digest("actual:RAK-2026-09-05"),
+                "actual_import_receipt": actual_receipt(
+                    "RAK-2026-09-05", "2026-08-06", "2026-09-05"
+                ),
+                "actual_import_receipt_sha256": actual_receipt_digest(
+                    actual_receipt("RAK-2026-09-05", "2026-08-06", "2026-09-05")
+                ),
                 "statement_document_url": "Finance Evidence/2026/08/rak/statement.pdf",
             }
 
@@ -553,12 +593,129 @@ class CashbackEventStoreTests(unittest.TestCase):
                 })
             self.assertNotIn("FINALIZED", {row["status"] for row in store.period_rows()})
 
+    def test_actual_close_requires_trusted_readback_receipt_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            reference = "EI-2026-10-receipt-shape"
+            statement_sha256 = statement_digest(reference)
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "transactions": [],
+            })
+            close_fields = {
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "statement_evidence_reference": "sha256:evidence",
+                "statement_document_url": "Finance Evidence/ei.pdf",
+            }
+            with self.assertRaisesRegex(ValueError, "missing required fields"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": {},
+                    "actual_import_receipt_sha256": statement_digest("empty"),
+                })
+            with self.assertRaisesRegex(ValueError, "missing required fields"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": {
+                        "outbox_id": "caller-invented",
+                        "observed_payload_sha256": statement_digest("payload"),
+                        "invariants_passed": True,
+                    },
+                    "actual_import_receipt_sha256": statement_digest("caller-invented"),
+                })
+            with self.assertRaisesRegex(ValueError, "readback object"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt_sha256": statement_digest("digest-only"),
+                })
+            receipt = actual_receipt(reference, "2026-10-01", "2026-10-31")
+            mismatched_readback = {
+                **receipt,
+                "observed_payload_sha256": statement_digest("different-readback"),
+            }
+            with self.assertRaisesRegex(ValueError, "payload digests differ"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": mismatched_readback,
+                    "actual_import_receipt_sha256": actual_receipt_digest(mismatched_readback),
+                })
+            with self.assertRaisesRegex(ValueError, "invariants must pass"):
+                failed_receipt = {**receipt, "invariants_passed": False}
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": failed_receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(failed_receipt),
+                })
+            self.assertNotIn("FINALIZED", {row["status"] for row in store.period_rows()})
+
+    def test_legacy_reconciliation_digest_recovery_backfills_once_and_rejects_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "events.sqlite3"
+            legacy_row = {
+                "statement_reference": "legacy-EI-2026-10",
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-10-01",
+                "period_end": "2026-10-31",
+                "matched_count": 0,
+                "statement_only_count": 0,
+                "notification_only_count": 0,
+            }
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE reconciliation_runs (
+                        statement_reference TEXT PRIMARY KEY,
+                        card_code TEXT NOT NULL,
+                        period_start TEXT NOT NULL,
+                        period_end TEXT NOT NULL,
+                        matched_count INTEGER NOT NULL,
+                        statement_only_count INTEGER NOT NULL,
+                        notification_only_count INTEGER NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO reconciliation_runs (
+                        statement_reference, card_code, period_start, period_end,
+                        matched_count, statement_only_count, notification_only_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(legacy_row.values()),
+                )
+            store = CashbackEventStore(database)
+            payload = {
+                **legacy_row,
+                "statement_sha256": statement_digest(legacy_row["statement_reference"]),
+                "transactions": [],
+            }
+            with self.assertRaisesRegex(ValueError, "recovery proof is invalid"):
+                store.reconcile_statement({**payload, "legacy_recovery_digest": "0" * 64})
+            recovered = store.reconcile_statement({
+                **payload,
+                "legacy_recovery_digest": _legacy_recovery_digest(legacy_row),
+            })
+            self.assertTrue(recovered["idempotent_replay"])
+            self.assertTrue(recovered["legacy_digest_backfilled"])
+            replay = store.reconcile_statement(payload)
+            self.assertTrue(replay["idempotent_replay"])
+            with self.assertRaisesRegex(ValueError, "different statement content or digest"):
+                store.reconcile_statement({
+                    **payload,
+                    "statement_sha256": statement_digest("changed-legacy"),
+                })
+
     def test_finalization_replay_rejects_changed_evidence_and_receipt_after_restart(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             database = Path(temporary) / "events.sqlite3"
             reference = "EI-2026-11"
             statement_sha256 = statement_digest(reference)
-            actual_receipt_sha256 = statement_digest("actual:EI-2026-11")
             store = CashbackEventStore(database)
             store.reconcile_statement({
                 "statement_reference": reference,
@@ -568,12 +725,14 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "period_end": "2026-11-30",
                 "transactions": [],
             })
+            receipt = actual_receipt(reference, "2026-11-01", "2026-11-30")
             payload = {
                 "statement_reference": reference,
                 "statement_sha256": statement_sha256,
                 "statement_evidence_reference": "sha256:evidence-1",
                 "statement_document_url": "Finance Evidence/ei-11.pdf",
-                "actual_import_receipt_sha256": actual_receipt_sha256,
+                "actual_import_receipt": receipt,
+                "actual_import_receipt_sha256": actual_receipt_digest(receipt),
             }
             first = store.finalize_period(payload)
             self.assertFalse(first["idempotent_replay"])
@@ -582,7 +741,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertTrue(restarted.finalize_period(payload)["idempotent_replay"])
             with self.assertRaisesRegex(ValueError, "different content, digest, or evidence"):
                 restarted.finalize_period({**payload, "statement_evidence_reference": "sha256:evidence-2"})
-            with self.assertRaisesRegex(ValueError, "different content, digest, or evidence"):
+            with self.assertRaisesRegex(ValueError, "Actual import receipt digest"):
                 restarted.finalize_period({**payload, "actual_import_receipt_sha256": statement_digest("other")})
 
     def test_finalization_can_digest_an_independent_actual_receipt_object(self) -> None:
@@ -600,24 +759,32 @@ class CashbackEventStoreTests(unittest.TestCase):
             })
             receipt = {
                 "outbox_id": "outbox:ei-2026-11",
+                "verification_version": 1,
+                "actual_file_id": "actual-file:ei-2026-11",
+                "account_id": "EI_AMAZON",
+                "period_start": "2026-11-01",
+                "period_end": "2026-11-30",
+                "expected_payload_sha256": statement_digest("actual-payload"),
                 "observed_payload_sha256": statement_digest("actual-payload"),
                 "invariants_passed": True,
+                "verified_at": "2026-08-20T00:00:00+00:00",
             }
+            receipt_sha256 = actual_receipt_digest(receipt)
             result = store.finalize_period({
                 "statement_reference": reference,
                 "statement_sha256": statement_sha256,
                 "statement_evidence_reference": "sha256:evidence-object",
                 "statement_document_url": "Finance Evidence/ei-object.pdf",
                 "actual_import_receipt": receipt,
+                "actual_import_receipt_sha256": receipt_sha256,
             })
-            self.assertEqual(result["actual_import_receipt_sha256"], _json_digest(receipt))
+            self.assertEqual(result["actual_import_receipt_sha256"], receipt_sha256)
 
     def test_finalization_fault_rolls_back_and_retry_survives_restart(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             database = Path(temporary) / "events.sqlite3"
             reference = "EI-2026-12"
             statement_sha256 = statement_digest(reference)
-            receipt_sha256 = statement_digest("actual:EI-2026-12")
             store = CashbackEventStore(database)
             store.reconcile_statement({
                 "statement_reference": reference,
@@ -627,6 +794,8 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "period_end": "2026-12-31",
                 "transactions": [],
             })
+            receipt = actual_receipt(reference, "2026-12-01", "2026-12-31")
+            receipt_sha256 = actual_receipt_digest(receipt)
             with sqlite3.connect(database) as connection:
                 connection.execute(
                     """
@@ -643,6 +812,7 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "statement_sha256": statement_sha256,
                 "statement_evidence_reference": "sha256:evidence-12",
                 "statement_document_url": "Finance Evidence/ei-12.pdf",
+                "actual_import_receipt": receipt,
                 "actual_import_receipt_sha256": receipt_sha256,
             }
             with self.assertRaisesRegex(sqlite3.IntegrityError, "synthetic finalization fault"):

@@ -77,6 +77,15 @@ _ACTUAL_RECEIPT_DIGEST_FIELDS = (
     "actual_import_receipt_digest",
     "actual_receipt_sha256",
 )
+_ACTUAL_RECEIPT_DIGEST_KEYS = frozenset(
+    {
+        "receipt_sha256",
+        "actual_import_receipt_sha256",
+        "actual_verification_sha256",
+        "actual_import_receipt_digest",
+        "actual_receipt_sha256",
+    }
+)
 
 
 class IngestCursorConflict(ValueError):
@@ -111,6 +120,181 @@ def _payload_sha256(payload: dict[str, Any], fields: tuple[str, ...], label: str
     if len(values) != 1:
         raise ValueError(f"{label} fields disagree")
     return values.pop()
+
+
+def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Validate and hash the independently read-back Actual verification receipt.
+
+    The receipt is deliberately stronger than a caller supplied boolean or hash:
+    it must carry the writer identity, period, payload read-back hashes, and a
+    successful invariant check.  The digest is calculated from that receipt,
+    excluding only an optional embedded digest field, and is compared with the
+    top-level close proof when one is supplied.
+    """
+    receipt = payload.get("actual_import_receipt")
+    if not isinstance(receipt, dict):
+        raise ValueError(  # noqa: TRY004 - payload errors are HTTP 400s
+            "actual_import_receipt readback object and actual_import_receipt_sha256 are required"
+        )
+    required = (
+        "outbox_id",
+        "verification_version",
+        "actual_file_id",
+        "account_id",
+        "period_start",
+        "period_end",
+        "invariants_passed",
+        "verified_at",
+    )
+    missing = [field for field in required if field not in receipt]
+    if missing:
+        raise ValueError(
+            "actual_import_receipt readback is missing required fields: "
+            + ", ".join(missing)
+        )
+    for field in ("outbox_id", "actual_file_id", "account_id"):
+        if not isinstance(receipt[field], str) or not receipt[field].strip():
+            raise ValueError(f"actual_import_receipt.{field} must be a non-empty identity")
+    version = receipt["verification_version"]
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError("actual_import_receipt.verification_version must be a positive integer")
+    if receipt["invariants_passed"] is not True:
+        raise ValueError("actual_import_receipt invariants must pass")
+    for field in ("period_start", "period_end"):
+        try:
+            date.fromisoformat(str(receipt[field]))
+        except ValueError as error:
+            raise ValueError(f"actual_import_receipt.{field} must be an ISO date") from error
+    if date.fromisoformat(str(receipt["period_end"])) < date.fromisoformat(
+        str(receipt["period_start"])
+    ):
+        raise ValueError("actual_import_receipt period_end cannot be before period_start")
+    verified_at = receipt["verified_at"]
+    if not isinstance(verified_at, str) or not verified_at.strip():
+        raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp")
+    try:
+        datetime.fromisoformat(verified_at)
+    except ValueError as error:
+        raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp") from error
+
+    expected_values = {
+        _sha256_field(receipt[field], field)
+        for field in ("expected_payload_sha256", "expected_sha256")
+        if field in receipt and receipt[field] not in (None, "")
+    }
+    observed_values = {
+        _sha256_field(receipt[field], field)
+        for field in ("observed_payload_sha256", "observed_sha256")
+        if field in receipt and receipt[field] not in (None, "")
+    }
+    if not expected_values or not observed_values:
+        raise ValueError(
+            "actual_import_receipt expected and observed payload digests are required"
+        )
+    if len(expected_values) != 1 or len(observed_values) != 1:
+        raise ValueError("actual_import_receipt payload digest aliases disagree")
+    expected_digest = expected_values.pop()
+    observed_digest = observed_values.pop()
+    if expected_digest != observed_digest:
+        raise ValueError("actual_import_receipt expected and observed payload digests differ")
+
+    embedded_digest = None
+    if "receipt_sha256" in receipt and receipt["receipt_sha256"] not in (None, ""):
+        embedded_digest = _sha256_field(receipt["receipt_sha256"], "receipt_sha256")
+    top_level_digest = None
+    if any(
+        field in payload and payload[field] not in (None, "")
+        for field in _ACTUAL_RECEIPT_DIGEST_FIELDS
+    ):
+        top_level_digest = _payload_sha256(
+            payload,
+            _ACTUAL_RECEIPT_DIGEST_FIELDS,
+            "actual_import_receipt_sha256",
+        )
+    if top_level_digest is None and embedded_digest is None:
+        raise ValueError("actual_import_receipt_sha256 is required")
+    canonical_receipt = {
+        key: value for key, value in receipt.items() if key not in _ACTUAL_RECEIPT_DIGEST_KEYS
+    }
+    computed_digest = _json_digest(canonical_receipt)
+    for supplied_digest in (top_level_digest, embedded_digest):
+        if supplied_digest is not None and supplied_digest != computed_digest:
+            raise ValueError("Actual import receipt digest does not match its readback content")
+    return receipt, computed_digest
+
+
+def _legacy_recovery_digest(row: sqlite3.Row | dict[str, Any]) -> str:
+    """Return the deterministic proof key for a pre-digest reconciliation row."""
+    return _json_digest({
+        "statement_reference": str(row["statement_reference"]),
+        "card_code": str(row["card_code"]),
+        "period_start": str(row["period_start"]),
+        "period_end": str(row["period_end"]),
+        "matched_count": int(row["matched_count"]),
+        "statement_only_count": int(row["statement_only_count"]),
+        "notification_only_count": int(row["notification_only_count"]),
+    })
+
+
+def _legacy_statement_content_digest(
+    connection: sqlite3.Connection,
+    *,
+    statement_reference: str,
+    card_code: str,
+    period_start: date,
+    period_end: date,
+) -> str | None:
+    """Rebuild a legacy content digest from persisted statement rows when possible."""
+    rows = connection.execute(
+        """
+        SELECT * FROM cashback_events
+        WHERE source = 'statement' AND statement_reference = ?
+        ORDER BY source_event_id
+        """,
+        (statement_reference,),
+    ).fetchall()
+    if not rows:
+        return None
+    statement_events = []
+    transaction_ids = []
+    prefix = f"statement:{statement_reference}:"
+    for row in rows:
+        source_event_id = str(row["source_event_id"])
+        if not source_event_id.startswith(prefix):
+            raise ValueError("legacy statement rows have an invalid transaction identity")
+        transaction_ids.append(source_event_id.removeprefix(prefix))
+        statement_events.append(_normalize_event({
+            "source_event_id": source_event_id,
+            "occurred_at": row["occurred_at"],
+            "card_code": row["card_code"],
+            "amount": str(Decimal(int(row["amount_aed_minor"])) / Decimal(100)),
+            "currency": row["currency"],
+            "purchase_type": row["purchase_type"],
+            "channel": row["channel"],
+            "merchant": row["merchant"],
+            "bucket_code": row["bucket_code"],
+            "event_type": row["event_type"],
+            "source": row["source"],
+            "status": row["status"],
+            "tags": json.loads(str(row["tags_json"] or "[]")),
+            "confidence": row["confidence"],
+            "review_required": row["review_required"],
+            "reconciliation_status": row["reconciliation_status"],
+            "statement_reference": row["statement_reference"],
+            "email_reference": row["email_reference"],
+            "document_url": row["document_url"],
+            "reversal_of": row["reversal_of"],
+            "decision_trace": json.loads(str(row["decision_trace_json"] or "[]")),
+            "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
+        }))
+    return _statement_content_digest(
+        statement_events,
+        transaction_ids,
+        statement_reference=statement_reference,
+        card_code=card_code,
+        period_start=period_start,
+        period_end=period_end,
+    )
 
 
 def _statement_content_digest(
@@ -964,9 +1148,63 @@ class CashbackEventStore:
                         or prior["period_end"] != period_end.isoformat()
                     ):
                         raise ValueError("statement_reference was already used for a different card or period")
+                    prior_statement_sha256 = str(prior["statement_sha256"] or "")
+                    prior_content_sha256 = str(prior["statement_content_sha256"] or "")
+                    if not prior_statement_sha256 and not prior_content_sha256:
+                        recovery_digest = payload.get("legacy_recovery_digest")
+                        if recovery_digest in (None, ""):
+                            raise ValueError(
+                                "legacy reconciliation digest recovery proof is required"
+                            )
+                        if _sha256_field(
+                            recovery_digest, "legacy_recovery_digest"
+                        ) != _legacy_recovery_digest(prior):
+                            raise ValueError("legacy reconciliation digest recovery proof is invalid")
+                        persisted_content_sha256 = _legacy_statement_content_digest(
+                            connection,
+                            statement_reference=statement_reference,
+                            card_code=card_code,
+                            period_start=period_start,
+                            period_end=period_end,
+                        )
+                        if persisted_content_sha256 is None:
+                            if (
+                                prior["matched_count"]
+                                or prior["statement_only_count"]
+                                or prior["notification_only_count"]
+                                or statement_events
+                            ):
+                                raise ValueError(
+                                    "legacy reconciliation statement content is unavailable"
+                                )
+                        elif persisted_content_sha256 != statement_content_sha256:
+                            raise ValueError(
+                                "legacy reconciliation statement content does not match persisted rows"
+                            )
+                        connection.execute(
+                            """
+                            UPDATE reconciliation_runs
+                            SET statement_sha256 = ?, statement_content_sha256 = ?
+                            WHERE statement_reference = ?
+                            """,
+                            (statement_sha256, statement_content_sha256, statement_reference),
+                        )
+                        return {
+                            "statement_reference": statement_reference,
+                            "card_code": prior["card_code"],
+                            "statement_sha256": statement_sha256,
+                            "statement_content_sha256": statement_content_sha256,
+                            "matched": prior["matched_count"],
+                            "statement_only": prior["statement_only_count"],
+                            "notification_only": prior["notification_only_count"],
+                            "idempotent_replay": True,
+                            "legacy_digest_backfilled": True,
+                        }
+                    if not prior_statement_sha256 or not prior_content_sha256:
+                        raise ValueError("legacy reconciliation digest columns are incomplete")
                     if (
-                        str(prior["statement_sha256"] or "") != statement_sha256
-                        or str(prior["statement_content_sha256"] or "") != statement_content_sha256
+                        prior_statement_sha256 != statement_sha256
+                        or prior_content_sha256 != statement_content_sha256
                     ):
                         raise ValueError(
                             "statement_reference was already used for different statement content or digest"
@@ -1239,32 +1477,7 @@ class CashbackEventStore:
                 _STATEMENT_CONTENT_DIGEST_FIELDS,
                 "statement_content_sha256",
             )
-        actual_import_receipt = payload.get("actual_import_receipt")
-        if actual_import_receipt is not None and not isinstance(actual_import_receipt, dict):
-            raise ValueError("actual_import_receipt must be an object")
-        if any(
-            field in payload and payload[field] not in (None, "")
-            for field in _ACTUAL_RECEIPT_DIGEST_FIELDS
-        ):
-            actual_import_receipt_sha256 = _payload_sha256(
-                payload,
-                _ACTUAL_RECEIPT_DIGEST_FIELDS,
-                "actual_import_receipt_sha256",
-            )
-        elif actual_import_receipt is not None:
-            try:
-                actual_import_receipt_sha256 = _json_digest(actual_import_receipt)
-            except (TypeError, ValueError) as error:
-                raise ValueError("actual_import_receipt must be JSON serializable") from error
-        else:
-            raise ValueError("actual_import_receipt_sha256 is required")
-        if actual_import_receipt is not None:
-            try:
-                observed_receipt_sha256 = _json_digest(actual_import_receipt)
-            except (TypeError, ValueError) as error:
-                raise ValueError("actual_import_receipt must be JSON serializable") from error
-            if observed_receipt_sha256 != actual_import_receipt_sha256:
-                raise ValueError("Actual import receipt digest does not match its content")
+        actual_import_receipt, actual_import_receipt_sha256 = _trusted_actual_receipt(payload)
         if "actual_import_verified" in payload and not _boolean(
             payload.get("actual_import_verified")
         ):
@@ -1281,6 +1494,13 @@ class CashbackEventStore:
                     raise ValueError("A successful statement reconciliation is required before finalization")
                 if str(run["statement_sha256"] or "") != statement_sha256:
                     raise ValueError("statement digest does not match the reconciliation receipt")
+                if (
+                    str(actual_import_receipt["period_start"]) != str(run["period_start"])
+                    or str(actual_import_receipt["period_end"]) != str(run["period_end"])
+                ):
+                    raise ValueError(
+                        "actual_import_receipt period does not match the reconciliation receipt"
+                    )
                 if supplied_content_sha256 is not None and supplied_content_sha256 != str(
                     run["statement_content_sha256"] or ""
                 ):
