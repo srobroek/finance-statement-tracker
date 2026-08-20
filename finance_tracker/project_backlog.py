@@ -25,6 +25,24 @@ VALID_STATUSES = {
     "SUPERSEDED",
 }
 
+SUPERSEDED_EVIDENCE_MARKERS = (
+    "35/36 passing",
+    "350 passed, 1 failed",
+    "14/16 passing",
+    "14 passed, 2 failed",
+    "DIRTY_N8N_REFACTOR",
+    "FAILING_WORKTREE",
+    "CURRENT_TEST_SUITE_FAILURES",
+    "CURRENT_TEST_FAILURES",
+    "CURRENT_TEST_FAILURE",
+    "CURRENT_N8N_TEST_FAILURE",
+    "UNCOMMITTED_REFACTOR",
+    "The refactor is uncommitted",
+    "Stabilize generated/bootstrap contracts",
+    "Repair provider-envelope contract/test parity",
+    "current contract bytes fail their local suite",
+)
+
 PREFIX_METADATA = {
     "N8N": ("n8n platform and workflows", "n8n_workflows"),
     "DOC": ("Outlook, OneDrive and document evidence", "document_evidence"),
@@ -172,14 +190,19 @@ LATEST_OVERRIDES = {
     },
     "N8N-010": {
         "next_action": (
-            "After WF23 cleanup, Microsoft restart proof, WF22 root proof, and the N8N-011 design decision, "
-            "implement the reviewed Finance application folder hierarchy and prove it is idempotent without touching peer applications."
+            "After N8N-012 exact WF23 cleanup, implement the reviewed Finance application folder hierarchy and prove it is "
+            "idempotent without touching peer applications; restart proof and N8N-011 remain related acceptance tracks."
         ),
     },
     "N8N-011": {
         "next_action": (
-            "Audit all 15 Data Tables and every column against named producers, consumers, invariants, authoritative owners, "
-            "retention, privacy, consolidation candidates, and exact migration and rollback proofs before changing runtime schemas."
+            "Review the exact 15-to-4 table-column map, both generated caller-immutable Edit Fields resolvers, observability owners, "
+            "provider-circuit removal, WF20 verification-artifact atomicity, migration and rollback decisions."
+        ),
+    },
+    "N8N-012": {
+        "next_action": (
+            "Execute the exact WF23 cleanup gate, retain the external content-addressed cleanup receipt, and prove the second run is a no-op."
         ),
     },
     "AUTO-002": {
@@ -231,9 +254,10 @@ QUEUE_FRONT = [
     "ACTUAL-006",
     "DOC-002",
     "DOC-007",
+    "N8N-012",
+    "N8N-010",
     "N8N-003",
     "N8N-011",
-    "N8N-010",
     "N8N-005",
     "ACTUAL-019",
     "PLATFORM-004",
@@ -244,6 +268,21 @@ QUEUE_FRONT = [
 
 def _unique(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _superseded_evidence_hits(row: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for field in (
+        "implementation_state", "verification_state", "tests", "live_readback",
+        "remaining_work", "blocked_by", "blockers_add", "next_action",
+    ):
+        value = row.get(field, [])
+        if isinstance(value, list):
+            values.extend(str(item) for item in value)
+        elif value is not None:
+            values.append(str(value))
+    text = "\n".join(values)
+    return [marker for marker in SUPERSEDED_EVIDENCE_MARKERS if marker in text]
 
 
 def validate_progress_overlay(
@@ -297,6 +336,9 @@ def validate_progress_overlay(
     }
     for row in updates:
         task_id = row.get("id", "<missing>")
+        stale = _superseded_evidence_hits(row)
+        if stale:
+            errors.append(f"{task_id}: superseded evidence markers {stale}")
         extra = set(row) - allowed
         if extra:
             errors.append(f"{task_id}: unsupported progress fields {sorted(extra)}")
@@ -334,22 +376,11 @@ def apply_progress_overlay(backlog: dict[str, Any], overlay: dict[str, Any]) -> 
     if errors:
         raise ValueError("; ".join(errors))
     resolved = set(overlay["resolved_blockers"])
-    markers = tuple(overlay["superseded_text_markers"])
     for task in backlog["tasks"]:
         task["blockers"] = [item for item in task["blockers"] if item not in resolved]
-        task["tests"] = [
-            item for item in task["tests"] if not any(marker in item for marker in markers)
-        ]
-        for field in ("live_readback", "remaining_work"):
-            parts = [
-                part for part in task[field].split(" | ")
-                if not any(marker in part for marker in markers)
-            ]
-            task[field] = " | ".join(parts)
-        if not task["remaining_work"]:
-            task["remaining_work"] = f"Collect current acceptance evidence for {task['id']}."
-        if any(marker in task["next_action"] for marker in markers):
-            task["next_action"] = task["remaining_work"]
+        stale = _superseded_evidence_hits(task)
+        if stale:
+            raise ValueError(f"{task['id']}: superseded evidence markers {stale}")
         if task["status"] not in {"VERIFIED", "SUPERSEDED"} and not task["blockers"]:
             task["blockers"] = ["ACCEPTANCE_EVIDENCE_REQUIRED"]
     for update in overlay["updates"]:
@@ -467,7 +498,12 @@ def build_backlog(transcript: dict[str, Any], implementation: dict[str, Any]) ->
     if len(source_ids) != len(set(source_ids)):
         raise ValueError("transcript requirement IDs must be unique")
 
-    implementation_index = _implementation_index(implementation.get("items", []))
+    implementation_items = implementation.get("items", [])
+    for item in implementation_items:
+        stale = _superseded_evidence_hits(item)
+        if stale:
+            raise ValueError(f"{item.get('id', '<missing>')}: superseded evidence markers {stale}")
+    implementation_index = _implementation_index(implementation_items)
     tasks: list[dict[str, Any]] = []
     for row in rows:
         task_id = row["id"]
@@ -606,6 +642,9 @@ def validate_backlog(payload: dict[str, Any], transcript_ids: set[str] | None = 
     }
     for task in tasks:
         task_id = task.get("id", "<missing>")
+        stale = _superseded_evidence_hits(task)
+        if stale:
+            errors.append(f"{task_id}: superseded evidence markers {stale}")
         missing = required_fields - set(task)
         if missing:
             errors.append(f"{task_id}: missing fields {sorted(missing)}")
@@ -627,6 +666,9 @@ def validate_backlog(payload: dict[str, Any], transcript_ids: set[str] | None = 
             errors.append(f"{task_id}: dependencies and related_tasks overlap {sorted(overlap)}")
         if not task.get("acceptance_criteria"):
             errors.append(f"{task_id}: acceptance_criteria must be non-empty")
+        for evidence_path in task.get("evidence_paths", []):
+            if not str(evidence_path).startswith("/") and not (ROOT / evidence_path).exists():
+                errors.append(f"{task_id}: missing relative evidence path {evidence_path}")
         if task.get("status") == "VERIFIED":
             if not task.get("evidence_paths") or not task.get("live_readback") or not task.get("last_verified"):
                 errors.append(f"{task_id}: VERIFIED requires evidence paths, live readback and last_verified")
@@ -716,7 +758,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "- Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.",
         "- Execute Sub-workflow selectors should use **From list** when the target is available.",
         "- The finance workflows must live under the sole top-level `Finance` application root, with role-based child folders and peer application roots left untouched.",
-        "- The 15-table Data Table contract is a review baseline, not the approved target; all tables and columns require producer, consumer, invariant, owner, retention, privacy, migration and rollback review before schema changes.",
+        "- The 15-table Data Table contract is a review baseline. The unapproved direction is four domain tables; n8n owns generic execution/failures, Cloudflare access logs, optional Langfuse sanitized traces, and cashback companion period close.",
         "- Community agent candidates are pinned to `n8n-nodes-prodex@0.5.1` and `@ggomez91npm/n8n-nodes-claude-code@0.8.0`; neither is production-approved until disposable registration, isolation, authentication and structured-output proof passes.",
         "- The backlog intentionally has no automatically promoted `VERIFIED` tasks.",
         "",

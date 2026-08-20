@@ -903,6 +903,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertLess(runner.index('docker compose stop -t 30 n8n'), runner.index('< "${sql_file}"'))
         retained_digest = runner[runner.index("corpus_digest_without_wf23()") : runner.index("credential_digest()")]
         for surface in (
+            "coalesce(w.description,'')",
             r'w.\"versionId\"', r'w.\"isArchived\"', r'w.\"triggerCount\"',
             r'w.\"sourceWorkflowId\"', r'w.\"staticData\"', r'w.\"nodeGroups\"',
             "from workflow_history h", r'h.\"versionId\"', "h.authors", "h.autosaved",
@@ -947,6 +948,48 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertIn('"$(wf23_execution_count)" == "1"', old_runner)
         self.assertIn("ORPHANED_SOFT_DELETED_EXECUTION", old_runner)
         self.assertNotIn("REMOVE_EXACT_EXECUTION_FREE_WF23", old_runner)
+
+    def test_execution_free_stop_timeout_after_side_effect_always_attempts_recovery(self) -> None:
+        runner = (RUNNER / "run-remediate-execution-free-wf23.sh").read_text(encoding="utf-8")
+        stop = 'timeout --foreground --signal=TERM --kill-after=15s 60s docker compose stop -t 30 n8n'
+        self.assertLess(runner.index('n8n_stopped="true"', runner.index("# Cleanly stop")), runner.index(stop))
+        self.assertLess(runner.index("wait_for_n8n_health ||"), runner.index('n8n_stopped="false"', runner.index(stop)))
+
+        function_start = runner.index("restore_n8n_if_stopped() {")
+        function_end = runner.index("\n}\ntrap restore_n8n_if_stopped EXIT", function_start) + 2
+        recovery_function = runner[function_start:function_end]
+
+        def exercise(observed_running: str) -> subprocess.CompletedProcess[str]:
+            script = f"""
+set -euo pipefail
+exec 3>&1
+n8n_container=fake
+n8n_stopped=true
+mock_running={observed_running}
+docker() {{
+  if [[ "$1" == "inspect" ]]; then
+    printf '%s\\n' "$mock_running"
+  elif [[ "$*" == "compose start n8n" ]]; then
+    printf 'RECOVERY_START\\n' >&3
+  else
+    return 97
+  fi
+}}
+timeout() {{
+  while [[ "$#" -gt 0 && "$1" != "docker" ]]; do shift; done
+  "$@"
+}}
+{recovery_function}
+restore_n8n_if_stopped
+"""
+            return subprocess.run(["bash", "-c", script], text=True, capture_output=True)
+
+        timed_out_after_stop = exercise("false")
+        self.assertEqual(timed_out_after_stop.returncode, 0, timed_out_after_stop.stderr)
+        self.assertEqual(timed_out_after_stop.stdout, "RECOVERY_START\n")
+        still_running = exercise("true")
+        self.assertEqual(still_running.returncode, 0, still_running.stderr)
+        self.assertEqual(still_running.stdout, "")
 
     def test_execution_free_wf23_rehearsal_receipt_is_exact_and_recent(self) -> None:
         validator = load_module(

@@ -185,9 +185,9 @@ wait, and PostgreSQL statement all have independent bounds; stopping releases
 in-flight database connections instead of freezing their locks.
 Only the exact positive `commit_authorized=on` branch can commit. The commit
 readback must restore `21/0/0`, 21 placements, 63 tag edges, and zero WF23
-workflow/history/execution rows while preserving the full retained workflow
-and history surface, credential corpus, and official Finance Data Table
-digest. The older stranded
+workflow/history/execution rows while preserving the reviewed retained
+workflow and history configuration surface (including workflow description),
+credential corpus, and official Finance Data Table digest. The older stranded
 runner remains pinned to `ORPHANED_SOFT_DELETED_EXECUTION` and must not be used
 after pruning changes that signature.
 

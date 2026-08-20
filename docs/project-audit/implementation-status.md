@@ -1,23 +1,26 @@
 # Finance tracker implementation status
 
-Date: 2026-08-19
-Audited revision: `f4436d8` plus a large uncommitted n8n/agent-runner refactor
+Date: 2026-08-20
+Audited committed baseline: `a07c5abdc5accb57e669ca8c506e2d2f709a505e`
 Production writes performed by this audit: **none**
 
-> Baseline snapshot: the test and worktree findings below describe the audited
-> revision at collection time. Current status is the generated
-> [`project-backlog.md`](../project-backlog.md), whose progress overlay records
-> later contract, corpus, disposable-runtime, OAuth, and independent-audit evidence.
+> Current status artifact: this document and
+> [`implementation-status.json`](implementation-status.json) were refreshed from
+> the committed baseline and current repository tests. Host-only `/opt/disposable`
+> receipts are explicitly external and unversioned; they do not become repository
+> evidence or restart proof merely because their path and hash are recorded.
+> [`project-backlog.md`](../project-backlog.md) remains the authoritative execution
+> queue.
 
 ## Verdict
 
-The repository is not ready for production promotion. Important deterministic
-components exist and are well tested, but the current shared worktree is not
-green: the Python suite has one n8n bootstrap failure and the Codex agent runner
-has two envelope-contract failures. The n8n refactor is also uncommitted and has
-not been executed end to end in a disposable runtime. Older production and
-replay artifacts do not certify these changed bytes or the expanded FAB/Sarwa
-account scope.
+The repository is green but not ready for production promotion. The current
+Python suite and Codex runner contracts pass. The live critical boundary remains
+operational: one transient WF23 workflow must be removed exactly before WF22 and
+the Finance hierarchy are eligible. The Microsoft first reads refreshed both
+credentials, but the failure receipt is external and no n8n restart plus second
+read proves persistence. Older production and replay artifacts do not certify
+the expanded FAB/Sarwa scope or the current end-to-end finance path.
 
 The machine-readable backlog is
 [`implementation-status.json`](implementation-status.json). Its IDs use stable
@@ -57,32 +60,40 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
    n8n workflow exports are intentionally inactive. Therefore automation
    ownership has not yet cut over.
 
-## Test evidence collected in this audit
+## Current test and host evidence
 
 | Command | Result |
 | --- | --- |
-| `python -m unittest discover -s tests -v` | **FAIL** — 351 run, 350 passed, 1 failed, 6 skipped. Failure: n8n platform-bootstrap seed/readback assertion. |
-| `python -m unittest tests.test_n8n_workflows -v` | **FAIL** — 36 run, 35 passed, 1 failed (same bootstrap contract mismatch). |
+| `python -m unittest discover -s tests -v` | **PASS** — 434 passed, 8 skipped at the refreshed baseline. |
+| `python -m unittest tests.test_project_backlog -v` | **PASS** — 20/20 at the refreshed baseline. |
 | `npm test --prefix integrations/actual` | **PASS** — 48/48. |
-| `npm test --prefix services/codex-agent-runner` | **FAIL** — 14/16 passed; both failures are `agent_provider` envelope mismatches. |
-| HTTPS read-only health probes | **UNVERIFIED** — the audit host failed before HTTP with Windows Schannel `SEC_E_NO_CREDENTIALS`; this is not evidence that either service is down. |
+| `npm test --prefix services/codex-agent-runner` | **PASS** — 16/16 in the retained current evidence. |
+| Microsoft host run | **PARTIAL** — external failure receipt records first Outlook and OneDrive reads and refreshed expiries; exact cleanup receipt and restart/second-read proof are pending. |
 
 ## Production blockers in execution order
 
-1. Stabilize and commit the n8n/runner refactor; regenerate contracts and make
-   every suite green.
-2. Acquire fresh interactive Sarwa holdings and a versioned FX snapshot.
-3. Prove the complete FAB non-credit and Sarwa account set through both Actual
+1. Remove the exact WF23 orphan and retain a later cleanup receipt proving the
+   reviewed inactive project boundary.
+2. Run WF22 create-or-reuse for the OneDrive `Finance Evidence` root, then make
+   the Finance application hierarchy eligible. Microsoft restart persistence is
+   a parallel acceptance track, not a hierarchy dependency.
+3. Independently review the 15-to-4 Data Table design: ingestion state,
+   merged documents, Actual batches with immutable OneDrive verification
+   artifacts, and review-only AI state. Generic execution/failure observability
+   belongs to n8n, access logs to Cloudflare, optional sanitized agent traces to
+   Langfuse, and cashback period close to the companion.
+4. Acquire fresh interactive Sarwa holdings and a versioned FX snapshot.
+5. Prove the complete FAB non-credit and Sarwa account set through both Actual
    API and authenticated UI, including signed balances and a consistent sync
    file identity.
-4. Obtain issuer evidence for the ADCB closing payment and prove AED 0 without
+6. Obtain issuer evidence for the ADCB closing payment and prove AED 0 without
    a synthetic balancing row.
-5. Generate note-v2 manifests and a full positive-credit/classification
+7. Generate note-v2 manifests and a full positive-credit/classification
    exception report; resolve manual-state conflicts before any replacement.
-6. Run the exact current n8n image and complete corpus twice in disposable
+8. Run the exact current n8n image and complete corpus twice in disposable
    Actual, including crash, concurrency, cursor, secret, PDF, restart, and
    restore drills.
-7. Review the receipts, promote immutable image digests, cut schedules from
+9. Review the receipts, promote immutable image digests, cut schedules from
    legacy Codex tasks to n8n, and perform authenticated live readback.
 
 ## Requirement traceability

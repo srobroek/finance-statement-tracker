@@ -6,6 +6,7 @@ from pathlib import Path
 from finance_tracker.project_backlog import (
     IMPLEMENTATION_PATH,
     TRANSCRIPT_PATH,
+    build_backlog,
     load_and_build,
     render_markdown,
     validate_backlog,
@@ -27,7 +28,7 @@ class ProjectBacklogTests(unittest.TestCase):
         backlog_ids = [row["id"] for row in self.payload["tasks"]]
         self.assertEqual(set(backlog_ids), set(source_ids))
         self.assertEqual(len(backlog_ids), len(set(backlog_ids)))
-        self.assertEqual(len(backlog_ids), 76)
+        self.assertEqual(len(backlog_ids), 77)
 
     def test_no_task_is_promoted_to_verified_without_fresh_acceptance(self) -> None:
         self.assertEqual(self.payload["summary"]["verified_count"], 0)
@@ -43,8 +44,13 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("disposable", tasks["AGENT-005"]["next_action"].lower())
         hierarchy = tasks["N8N-010"]
         self.assertIn("Finance", hierarchy["requirement"])
-        self.assertIn("N8N-011", hierarchy["dependencies"])
+        self.assertEqual(hierarchy["priority"], "P0")
+        self.assertEqual(hierarchy["dependencies"], ["N8N-012"])
+        self.assertIn("N8N-011", hierarchy["related_tasks"])
+        self.assertIn("N8N-006", hierarchy["related_tasks"])
         self.assertIn("N8N-002", hierarchy["related_tasks"])
+        self.assertEqual(hierarchy["implementation_state"], "DESIGN_RECORDED_UNIMPLEMENTED")
+        self.assertNotIn("MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED", hierarchy["blockers"])
         hierarchy_acceptance = " ".join(hierarchy["acceptance_criteria"])
         self.assertIn("17 Execute Sub-workflow", hierarchy_acceptance)
         self.assertIn("three Tool Workflow", hierarchy_acceptance)
@@ -55,21 +61,117 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("producer", minimization_acceptance)
         self.assertIn("rollback", minimization_acceptance)
 
-    def test_data_table_minimization_plan_names_every_table_and_column(self) -> None:
+    def test_data_table_machine_inventory_is_schema_valid_exact_and_complete(self) -> None:
+        import jsonschema
+
         contract = json.loads(
             (ROOT / "integrations" / "n8n" / "data-tables.json").read_text(encoding="utf-8")
         )
-        audit = (
+        inventory = json.loads((
             ROOT
             / "docs"
             / "project-audit"
-            / "n8n-data-table-minimization-plan-2026-08-20.md"
-        ).read_text(encoding="utf-8")
+            / "n8n-data-table-column-disposition-2026-08-20.json"
+        ).read_text(encoding="utf-8"))
+        schema = json.loads((
+            ROOT
+            / "docs"
+            / "project-audit"
+            / "n8n-data-table-column-disposition.schema.json"
+        ).read_text(encoding="utf-8"))
+        jsonschema.validate(inventory, schema)
         self.assertEqual(len(contract["tables"]), 15)
-        for table in contract["tables"]:
-            self.assertIn(f"`{table['name']}`", audit)
-            for column in table["columns"]:
-                self.assertIn(f"`{column}`", audit, f"missing {table['name']}.{column}")
+        expected = {
+            (table["name"], column)
+            for table in contract["tables"]
+            for column in table["columns"]
+        }
+        observed = [(row["table"], row["column"]) for row in inventory["rows"]]
+        self.assertEqual(len(observed), len(set(observed)))
+        self.assertEqual(set(observed), expected)
+        self.assertEqual(inventory["observability_owners"], {
+            "generic_execution_and_failure": "n8n",
+            "protected_route_access": "Cloudflare",
+            "agent_traces": "optional Langfuse sanitized traces only",
+        })
+        self.assertEqual(inventory["resolver_contract"]["subworkflows"], [
+            "Resolve Finance Source and Runtime Config",
+            "Resolve AI Policy and Output Contract",
+        ])
+        self.assertEqual(inventory["resolver_contract"]["node_type"], "n8n-nodes-base.set")
+        self.assertTrue(inventory["resolver_contract"]["content_addressed"])
+        self.assertFalse(inventory["resolver_contract"]["caller_mutable"])
+        self.assertFalse(any(
+            "finance_operation_receipts" in row["replacement"]
+            for row in inventory["rows"]
+        ))
+        text = json.dumps(inventory)
+        self.assertNotIn("finance_period_closes", {row["table"] for row in inventory["rows"]})
+        self.assertNotIn("FIXED_POSTGRES_IF_PROVEN", text)
+        self.assertNotIn("fixed operational Postgres circuit", text)
+        expected_target_counts = {
+            "finance_ingestion_state": 9,
+            "finance_documents": 20,
+            "finance_actual_batches": 18,
+            "finance_ai_reviews": 9,
+        }
+        plan = (
+            ROOT / "docs" / "project-audit" / "n8n-data-table-minimization-plan-2026-08-20.md"
+        ).read_text(encoding="utf-8")
+        for target, count in expected_target_counts.items():
+            self.assertEqual(len(inventory["target_schemas"][target]), count)
+            self.assertIn(f"`{target}`", plan)
+            self.assertIn(f"{target}` ({count})", plan)
+        self.assertIn("archive_state", inventory["target_schemas"]["finance_documents"])
+        self.assertIn("processing_state", inventory["target_schemas"]["finance_documents"])
+
+    def test_data_table_inventory_matches_exact_current_workflow_access(self) -> None:
+        inventory = json.loads((
+            ROOT / "docs" / "project-audit" / "n8n-data-table-column-disposition-2026-08-20.json"
+        ).read_text(encoding="utf-8"))
+        first_by_table = {}
+        for row in inventory["rows"]:
+            first_by_table.setdefault(row["table"], row)
+        expected_workflows = {
+            "finance_source_contracts": {"WF02", "WF04", "WF05", "WF09", "WF19"},
+            "finance_source_cursors": {"WF12", "WF19"},
+            "finance_acquisition_receipts": {"WF12", "WF19"},
+            "finance_archive_receipts": {"WF01", "WF19"},
+            "finance_document_operations": {"WF01", "WF11", "WF13", "WF19"},
+            "finance_pipeline_runs": {"WF03", "WF04", "WF05", "WF19"},
+            "finance_actual_outbox": {"WF03", "WF17", "WF19", "WF20"},
+            "finance_actual_verifications": {"WF19", "WF20"},
+            "finance_reconciliations": {"WF03", "WF19"},
+            "finance_config_versions": {"WF19"},
+            "finance_provider_circuits": {"WF01", "WF09", "WF12", "WF16", "WF19"},
+            "finance_execution_failures": {"WF16", "WF19"},
+            "finance_mcp_requests": {"WF10", "WF19"},
+            "finance_agent_jobs": {"WF09", "WF19"},
+            "finance_ai_policy_contracts": {"WF09", "WF19"},
+        }
+        for table, expected in expected_workflows.items():
+            access = first_by_table[table]["workflow_access"]
+            self.assertEqual({row["workflow_code"] for row in access}, expected, table)
+            for row in access:
+                workflow = ROOT / row["workflow_path"]
+                document = json.loads(workflow.read_text(encoding="utf-8"))
+                node = next(node for node in document["nodes"] if str(node["id"]) == row["node_id"])
+                self.assertEqual(node["name"], row["node_name"])
+                self.assertEqual(node["parameters"]["operation"], row["operation"])
+        source_wf19 = [
+            row for row in first_by_table["finance_source_contracts"]["workflow_access"]
+            if row["workflow_code"] == "WF19"
+        ]
+        self.assertEqual([(row["operation"], row["access_kind"]) for row in source_wf19], [("create", "schema")])
+        self.assertEqual(
+            {row["disposition"] for row in inventory["rows"] if row["table"] == "finance_provider_circuits"},
+            {"REMOVE_TO_N8N_RETRY_POLICY"},
+        )
+        self.assertTrue(all(
+            row["disposition"] == "MOVE_ONEDRIVE_VERIFICATION_ARTIFACT"
+            for row in inventory["rows"]
+            if row["table"] == "finance_actual_verifications"
+        ))
 
     def test_implementation_audit_is_mapped_to_relevant_requirements(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
@@ -118,7 +220,20 @@ class ProjectBacklogTests(unittest.TestCase):
         )
         self.assertIn("22 workflows", tasks["N8N-006"]["live_readback"])
         self.assertIn("zero active", tasks["N8N-006"]["live_readback"])
-        self.assertIn("moved both expired access-token expiries", tasks["N8N-003"]["live_readback"])
+        self.assertIn("external", tasks["N8N-003"]["live_readback"].lower())
+        self.assertIn("no n8n-only restart", tasks["N8N-003"]["live_readback"])
+        self.assertIn(
+            "/opt/disposable/finance-n8n/20260819155134/receipts/microsoft-oauth-8149f42f2694-20260820T011501Z-failure.json",
+            tasks["N8N-003"]["evidence_paths"],
+        )
+        self.assertIn(
+            "d85a54134152493150b2618beffa25434e79e4160001f1d8ebdf14ce1ca88148",
+            " ".join(tasks["N8N-003"]["tests"]),
+        )
+        self.assertIn("WF23_EXACT_CLEANUP_RECEIPT_REQUIRED", tasks["N8N-012"]["blockers"])
+        self.assertIn("later external cleanup receipt", tasks["N8N-012"]["live_readback"])
+        self.assertIn("WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED", tasks["N8N-011"]["blockers"])
+        self.assertIn("FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED", tasks["N8N-011"]["blockers"])
         self.assertNotIn(
             "RUNTIME_COMMIT_DRIFT_RECONCILIATION_REQUIRED",
             tasks["ACTUAL-019"]["blockers"],
@@ -128,6 +243,41 @@ class ProjectBacklogTests(unittest.TestCase):
             tasks["AUTO-001"]["blockers"],
         )
         self.assertEqual(tasks["AGENT-005"]["status"], "PARTIAL")
+
+    def test_cleanup_is_the_hierarchy_and_wf22_critical_path(self) -> None:
+        tasks = {row["id"]: row for row in self.payload["tasks"]}
+        self.assertEqual(tasks["N8N-010"]["dependencies"], ["N8N-012"])
+        self.assertIn("N8N-012", tasks["DOC-001"]["dependencies"])
+        ranks = {row["id"]: row["rank"] for row in self.payload["ordered_executable_queue"]}
+        self.assertLess(ranks["N8N-012"], ranks["N8N-010"])
+        self.assertLess(ranks["N8N-012"], ranks["DOC-001"])
+
+    def test_every_relative_evidence_path_exists(self) -> None:
+        missing = []
+        for task in self.payload["tasks"]:
+            for evidence_path in task["evidence_paths"]:
+                if evidence_path.startswith("/"):
+                    continue
+                if not (ROOT / evidence_path).exists():
+                    missing.append((task["id"], evidence_path))
+        self.assertEqual(missing, [])
+
+    def test_stale_baseline_is_historical_and_status_is_current(self) -> None:
+        historical_plan = (ROOT / "docs" / "end-to-end-project-plan-2026-08-19.md").read_text(encoding="utf-8")
+        current_status = (ROOT / "docs" / "project-audit" / "implementation-status.md").read_text(encoding="utf-8")
+        self.assertIn("Historical architecture baseline", historical_plan)
+        self.assertIn("non-authoritative for current execution", historical_plan)
+        self.assertIn("Audited committed baseline", current_status)
+        stale = ("f4436d8", "14 passed, 2 failed", "14/16 passing", "35/36 passing")
+        for marker in stale:
+            self.assertNotIn(marker, current_status)
+            self.assertNotIn(marker, json.dumps(self.implementation))
+
+    def test_generator_rejects_superseded_evidence(self) -> None:
+        implementation = copy.deepcopy(self.implementation)
+        implementation["items"][0]["tests"].append("Codex runner: 14 passed, 2 failed")
+        with self.assertRaisesRegex(ValueError, "superseded evidence"):
+            build_backlog(self.transcript, implementation)
 
     def test_superseded_notion_requirement_is_not_queued(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
@@ -144,7 +294,7 @@ class ProjectBacklogTests(unittest.TestCase):
     def test_validator_rejects_dependency_cycles_and_related_overlap(self) -> None:
         payload = copy.deepcopy(self.payload)
         tasks = {task["id"]: task for task in payload["tasks"]}
-        tasks["N8N-011"]["dependencies"] = ["N8N-010"]
+        tasks["N8N-012"]["dependencies"] = ["N8N-010"]
         errors = validate_backlog(payload, {row["id"] for row in self.transcript["requirements"]})
         self.assertTrue(any("dependency cycle" in error for error in errors))
 
