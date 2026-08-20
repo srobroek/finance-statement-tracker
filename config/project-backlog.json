@@ -7,18 +7,18 @@
     "config/project-backlog-progress.json"
   ],
   "summary": {
-    "total": 76,
+    "total": 77,
     "verified_count": 0,
     "by_status": {
       "BLOCKED": 3,
       "IMPLEMENTED_UNVERIFIED": 18,
       "NOT_STARTED": 1,
-      "PARTIAL": 53,
+      "PARTIAL": 54,
       "SUPERSEDED": 1
     },
     "by_priority": {
-      "P0": 41,
-      "P1": 29,
+      "P0": 43,
+      "P1": 28,
       "P2": 6
     },
     "by_domain": {
@@ -28,7 +28,7 @@
       "browser acquisition": 4,
       "cashback companion": 14,
       "documentation and public reusability": 4,
-      "n8n platform and workflows": 11,
+      "n8n platform and workflows": 12,
       "platform, security and deployment": 7,
       "scheduling and task lifecycle": 3
     }
@@ -43,9 +43,9 @@
       "next_action": "Run one schema-bound proposal per provider after isolated authentication succeeds.",
       "blocked_by": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED",
         "DISPOSABLE_SECRET_AUDIT_REQUIRED",
-        "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
-        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
+        "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED"
       ]
     },
     {
@@ -56,8 +56,11 @@
       "owner_workstream": "n8n_workflows",
       "next_action": "Remove the exact WF23 orphan, then complete the guarded Microsoft restart and second-read proof while all workflows remain inactive.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_REQUIRED"
       ]
     },
@@ -67,8 +70,10 @@
       "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Complete setup proofs and N8N-011 first, then implement N8N-010; use Tidy Workflow only for optional coordinate cleanup.",
+      "next_action": "After exact WF23 cleanup, implement the Finance hierarchy; use Tidy Workflow only for optional coordinate cleanup.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"
       ]
@@ -81,6 +86,8 @@
       "owner_workstream": "n8n_workflows",
       "next_action": "Authenticate each isolated subscription and execute one schema-bound proposal per provider.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
         "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"
@@ -252,60 +259,71 @@
     },
     {
       "rank": 17,
+      "id": "N8N-012",
+      "status": "PARTIAL",
+      "priority": "P0",
+      "owner_workstream": "n8n_workflows",
+      "next_action": "Execute the exact cleanup gate and retain the later content-addressed cleanup receipt before WF22 or N8N-010.",
+      "blocked_by": [
+        "WF23_EXACT_CLEANUP_RECEIPT_REQUIRED"
+      ]
+    },
+    {
+      "rank": 18,
+      "id": "N8N-010",
+      "status": "PARTIAL",
+      "priority": "P0",
+      "owner_workstream": "n8n_workflows",
+      "next_action": "After N8N-012 exact cleanup, implement and independently verify the Finance subtree without touching peer applications.",
+      "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED"
+      ]
+    },
+    {
+      "rank": 19,
       "id": "N8N-003",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Restore the exact 21/0/0 boundary, wait for both expiries to be past, and run the guarded restart proof once without recording credential identifiers or token values.",
+      "next_action": "After N8N-012 cleanup, run the guarded n8n restart and second-read proof without making hierarchy work depend on a new token-expiry wait.",
       "blocked_by": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "EMAIL_TO_PDF_RENDERER_REQUIRED"
       ]
     },
     {
-      "rank": 18,
+      "rank": 20,
       "id": "N8N-011",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
-      "next_action": "Audit all 15 tables and every column, then review the candidate consolidation and relocation design before any implementation.",
+      "next_action": "Review the 15-to-4 machine map and WF20 artifact gates; do not create generic receipt, period-close or provider-circuit tables.",
       "blocked_by": [
-        "DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED",
+        "FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED",
+        "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED",
         "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED",
         "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"
       ]
     },
     {
-      "rank": 19,
-      "id": "N8N-010",
-      "status": "PARTIAL",
-      "priority": "P1",
-      "owner_workstream": "n8n_workflows",
-      "next_action": "Wait for the setup and N8N-011 gates, then implement and independently verify the Finance subtree without touching peer applications.",
-      "blocked_by": [
-        "WF23_EXACT_CLEANUP_REQUIRED",
-        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
-        "ONEDRIVE_ROOT_SETUP_REQUIRED",
-        "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"
-      ]
-    },
-    {
-      "rank": 20,
+      "rank": 21,
       "id": "N8N-005",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
       "next_action": "Run concurrent and kill-at-boundary disposable tests for the fenced Actual outbox and prove one row, one verified commit and one cursor advance.",
       "blocked_by": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW"
       ]
     },
     {
-      "rank": 21,
+      "rank": 22,
       "id": "ACTUAL-019",
       "status": "BLOCKED",
       "priority": "P0",
@@ -318,7 +336,7 @@
       ]
     },
     {
-      "rank": 22,
+      "rank": 23,
       "id": "PLATFORM-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -331,31 +349,34 @@
       ]
     },
     {
-      "rank": 23,
+      "rank": 24,
       "id": "AUTO-001",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "automation_cutover",
       "next_action": "Prove one issuer schedule end to end while inactive.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
         "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 24,
+      "rank": 25,
       "id": "AUTO-003",
       "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "automation_cutover",
       "next_action": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats.",
       "blocked_by": [
-        "N8N_SCHEDULE_CUTOVER_REQUIRED"
+        "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 25,
+      "rank": 26,
       "id": "ACTUAL-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -366,7 +387,7 @@
       ]
     },
     {
-      "rank": 26,
+      "rank": 27,
       "id": "ACTUAL-002",
       "status": "PARTIAL",
       "priority": "P0",
@@ -382,7 +403,7 @@
       ]
     },
     {
-      "rank": 27,
+      "rank": 28,
       "id": "ACTUAL-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -394,7 +415,7 @@
       ]
     },
     {
-      "rank": 28,
+      "rank": 29,
       "id": "ACTUAL-005",
       "status": "PARTIAL",
       "priority": "P0",
@@ -407,7 +428,7 @@
       ]
     },
     {
-      "rank": 29,
+      "rank": 30,
       "id": "ACTUAL-017",
       "status": "PARTIAL",
       "priority": "P0",
@@ -423,30 +444,34 @@
       ]
     },
     {
-      "rank": 30,
+      "rank": 31,
       "id": "AGENT-001",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "agent_runtime",
       "next_action": "Execute the deterministic-first n8n path and prove AI is invoked only for explicitly unresolved fields.",
       "blocked_by": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 31,
+      "rank": 32,
       "id": "AUTO-002",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "automation_cutover",
       "next_action": "After OAuth binding, execute bounded expected-cycle polling and retain cursor, no-statement, and statement-found receipts.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
-        "N8N_SCHEDULE_CUTOVER_REQUIRED"
+        "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 32,
+      "rank": 33,
       "id": "BROWSER-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -458,7 +483,7 @@
       ]
     },
     {
-      "rank": 33,
+      "rank": 34,
       "id": "CASHBACK-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -471,7 +496,7 @@
       ]
     },
     {
-      "rank": 34,
+      "rank": 35,
       "id": "CASHBACK-003",
       "status": "PARTIAL",
       "priority": "P0",
@@ -484,7 +509,7 @@
       ]
     },
     {
-      "rank": 35,
+      "rank": 36,
       "id": "CASHBACK-004",
       "status": "PARTIAL",
       "priority": "P0",
@@ -497,7 +522,7 @@
       ]
     },
     {
-      "rank": 36,
+      "rank": 37,
       "id": "CASHBACK-005",
       "status": "PARTIAL",
       "priority": "P0",
@@ -510,7 +535,7 @@
       ]
     },
     {
-      "rank": 37,
+      "rank": 38,
       "id": "CASHBACK-006",
       "status": "PARTIAL",
       "priority": "P0",
@@ -523,7 +548,7 @@
       ]
     },
     {
-      "rank": 38,
+      "rank": 39,
       "id": "CASHBACK-007",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
@@ -536,7 +561,7 @@
       ]
     },
     {
-      "rank": 39,
+      "rank": 40,
       "id": "CASHBACK-012",
       "status": "PARTIAL",
       "priority": "P0",
@@ -549,7 +574,7 @@
       ]
     },
     {
-      "rank": 40,
+      "rank": 41,
       "id": "CASHBACK-013",
       "status": "PARTIAL",
       "priority": "P0",
@@ -562,7 +587,7 @@
       ]
     },
     {
-      "rank": 41,
+      "rank": 42,
       "id": "CASHBACK-014",
       "status": "PARTIAL",
       "priority": "P0",
@@ -578,33 +603,36 @@
       ]
     },
     {
-      "rank": 42,
+      "rank": 43,
       "id": "N8N-004",
       "status": "PARTIAL",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
       "next_action": "Run the sole writer in disposable Actual and compare every economic field and balance.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "ACTUAL_DISPOSABLE_READBACK_REQUIRED"
       ]
     },
     {
-      "rank": 43,
+      "rank": 44,
       "id": "N8N-006",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P0",
       "owner_workstream": "n8n_workflows",
       "next_action": "Keep all workflows inactive while completing disposable double replay and reviewed finance-write acceptance.",
       "blocked_by": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW",
         "PRODUCTION_PROMOTION_AND_ACTIVATION_NOT_AUTHORIZED"
       ]
     },
     {
-      "rank": 44,
+      "rank": 45,
       "id": "PLATFORM-001",
       "status": "PARTIAL",
       "priority": "P0",
@@ -617,7 +645,7 @@
       ]
     },
     {
-      "rank": 45,
+      "rank": 46,
       "id": "ACTUAL-007",
       "status": "PARTIAL",
       "priority": "P1",
@@ -632,7 +660,7 @@
       ]
     },
     {
-      "rank": 46,
+      "rank": 47,
       "id": "ACTUAL-008",
       "status": "PARTIAL",
       "priority": "P1",
@@ -644,7 +672,7 @@
       ]
     },
     {
-      "rank": 47,
+      "rank": 48,
       "id": "ACTUAL-009",
       "status": "PARTIAL",
       "priority": "P1",
@@ -659,7 +687,7 @@
       ]
     },
     {
-      "rank": 48,
+      "rank": 49,
       "id": "ACTUAL-012",
       "status": "PARTIAL",
       "priority": "P1",
@@ -674,7 +702,7 @@
       ]
     },
     {
-      "rank": 49,
+      "rank": 50,
       "id": "ACTUAL-013",
       "status": "PARTIAL",
       "priority": "P1",
@@ -687,7 +715,7 @@
       ]
     },
     {
-      "rank": 50,
+      "rank": 51,
       "id": "ACTUAL-014",
       "status": "PARTIAL",
       "priority": "P1",
@@ -700,7 +728,7 @@
       ]
     },
     {
-      "rank": 51,
+      "rank": 52,
       "id": "ACTUAL-016",
       "status": "PARTIAL",
       "priority": "P1",
@@ -713,7 +741,7 @@
       ]
     },
     {
-      "rank": 52,
+      "rank": 53,
       "id": "ACTUAL-018",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -726,7 +754,7 @@
       ]
     },
     {
-      "rank": 53,
+      "rank": 54,
       "id": "ACTUAL-020",
       "status": "PARTIAL",
       "priority": "P1",
@@ -741,18 +769,19 @@
       ]
     },
     {
-      "rank": 54,
+      "rank": 55,
       "id": "AGENT-002",
       "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "agent_runtime",
       "next_action": "Prove server-owned normal and exception model routing, including the gated high-reasoning path, in disposable n8n.",
       "blocked_by": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 55,
+      "rank": 56,
       "id": "BROWSER-004",
       "status": "PARTIAL",
       "priority": "P1",
@@ -764,7 +793,7 @@
       ]
     },
     {
-      "rank": 56,
+      "rank": 57,
       "id": "CASHBACK-002",
       "status": "PARTIAL",
       "priority": "P1",
@@ -777,7 +806,7 @@
       ]
     },
     {
-      "rank": 57,
+      "rank": 58,
       "id": "CASHBACK-008",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -790,7 +819,7 @@
       ]
     },
     {
-      "rank": 58,
+      "rank": 59,
       "id": "CASHBACK-009",
       "status": "PARTIAL",
       "priority": "P1",
@@ -803,7 +832,7 @@
       ]
     },
     {
-      "rank": 59,
+      "rank": 60,
       "id": "CASHBACK-010",
       "status": "PARTIAL",
       "priority": "P1",
@@ -816,7 +845,7 @@
       ]
     },
     {
-      "rank": 60,
+      "rank": 61,
       "id": "CASHBACK-011",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -829,7 +858,7 @@
       ]
     },
     {
-      "rank": 61,
+      "rank": 62,
       "id": "DOC-001",
       "status": "PARTIAL",
       "priority": "P1",
@@ -844,7 +873,7 @@
       ]
     },
     {
-      "rank": 62,
+      "rank": 63,
       "id": "DOC-003",
       "status": "PARTIAL",
       "priority": "P1",
@@ -856,7 +885,7 @@
       ]
     },
     {
-      "rank": 63,
+      "rank": 64,
       "id": "DOC-004",
       "status": "PARTIAL",
       "priority": "P1",
@@ -872,7 +901,7 @@
       ]
     },
     {
-      "rank": 64,
+      "rank": 65,
       "id": "DOC-005",
       "status": "PARTIAL",
       "priority": "P1",
@@ -884,7 +913,7 @@
       ]
     },
     {
-      "rank": 65,
+      "rank": 66,
       "id": "DOC-006",
       "status": "PARTIAL",
       "priority": "P1",
@@ -898,7 +927,7 @@
       ]
     },
     {
-      "rank": 66,
+      "rank": 67,
       "id": "DOCS-001",
       "status": "PARTIAL",
       "priority": "P1",
@@ -909,18 +938,20 @@
       ]
     },
     {
-      "rank": 67,
+      "rank": 68,
       "id": "N8N-007",
       "status": "PARTIAL",
       "priority": "P1",
       "owner_workstream": "n8n_workflows",
       "next_action": "Run the disposable operations and error-workflow negative matrix and retain redacted durable receipts.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
       ]
     },
     {
-      "rank": 68,
+      "rank": 69,
       "id": "PLATFORM-002",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -934,7 +965,7 @@
       ]
     },
     {
-      "rank": 69,
+      "rank": 70,
       "id": "PLATFORM-005",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P1",
@@ -947,7 +978,7 @@
       ]
     },
     {
-      "rank": 70,
+      "rank": 71,
       "id": "ACTUAL-015",
       "status": "PARTIAL",
       "priority": "P2",
@@ -960,18 +991,19 @@
       ]
     },
     {
-      "rank": 71,
+      "rank": 72,
       "id": "AGENT-004",
       "status": "PARTIAL",
       "priority": "P2",
       "owner_workstream": "agent_runtime",
       "next_action": "Run protected-field and automatic-write attacks and prove every AI result remains a review-only proposal.",
       "blocked_by": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 72,
+      "rank": 73,
       "id": "AGENT-005",
       "status": "PARTIAL",
       "priority": "P2",
@@ -979,12 +1011,13 @@
       "next_action": "Prove identical provider boundaries in the disposable runtime.",
       "blocked_by": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED",
         "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
         "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"
       ]
     },
     {
-      "rank": 73,
+      "rank": 74,
       "id": "DOCS-003",
       "status": "NOT_STARTED",
       "priority": "P2",
@@ -995,18 +1028,20 @@
       ]
     },
     {
-      "rank": 74,
+      "rank": 75,
       "id": "N8N-009",
       "status": "IMPLEMENTED_UNVERIFIED",
       "priority": "P2",
       "owner_workstream": "n8n_workflows",
       "next_action": "Run allowed and malicious MCP facade requests with instance MCP disabled and prove zero unauthorized writes.",
       "blocked_by": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
       ]
     },
     {
-      "rank": 75,
+      "rank": 76,
       "id": "PLATFORM-007",
       "status": "PARTIAL",
       "priority": "P2",
@@ -1055,6 +1090,7 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "Automation manifest/lifecycle tests pass in full-suite run",
         "n8n workflow, runner-closure, and task-runner-image focus: 50 run, 6 skipped",
         "codex-agent-runner npm: 16 of 16 pass",
@@ -1065,8 +1101,11 @@
       "live_readback": "Internal n8n 2.36.2 at finance commit 00491aa and orchestrator commit c8d4f7c has 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, 13 OneDrive bindings, 15 exact Data Tables, seven AI policy rows, and nine config rows. Runtime health passed; no provider, Actual, or cashback call occurred.",
       "remaining_work": "Remove the exact WF23 orphan, complete Microsoft restart persistence, execute the fixture matrix twice, and prove issuer schedules before any activation.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_REQUIRED"
       ],
       "source_status": "FINAL_DECISION",
@@ -1109,12 +1148,15 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "workflow renderer, group, folder, readability, and idempotence tests pass",
         "runtime readback verified 8 folders, 21 placements, and 63 tag edges"
       ],
       "live_readback": "All 21 workflows are imported inactive and unpublished in eight folders with 63 tag edges. Manual coordinate cleanup and Tidy Workflow are deferred to the user; semantic names, notes, and section contracts remain repository-tested.",
       "remaining_work": "Complete remaining workflow semantics and implement the reviewed Finance application root and role hierarchy after setup proofs and N8N-011 design; manual coordinate optimization is out of scope.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"
       ],
@@ -1125,7 +1167,7 @@
         "Readable node names, code, notes, section labels and folders remain required even though manual positioning does not."
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Complete setup proofs and N8N-011 first, then implement N8N-010; use Tidy Workflow only for optional coordinate cleanup."
+      "next_action": "After exact WF23 cleanup, implement the Finance hierarchy; use Tidy Workflow only for optional coordinate cleanup."
     },
     {
       "id": "N8N-003",
@@ -1156,17 +1198,21 @@
         "tests/test_n8n_workflows.py",
         "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
         "runtime/n8n-orchestrator-repo/docs/runtime-health-and-microsoft-refresh.md",
-        "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
+        "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json",
+        "/opt/disposable/finance-n8n/20260819155134/receipts/microsoft-oauth-8149f42f2694-20260820T011501Z-failure.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "Outlook server-filter, From-list subworkflow, attachment, and OneDrive binary-upload contracts pass",
-        "runtime readback verified 4 Outlook and 13 OneDrive credential bindings with unchanged ciphertext"
+        "runtime readback verified 4 Outlook and 13 OneDrive credential bindings with unchanged ciphertext",
+        "external failure receipt SHA-256 d85a54134152493150b2618beffa25434e79e4160001f1d8ebdf14ce1ca88148 is recorded but unversioned"
       ],
-      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact. The transient WF23 execution completed one bounded Outlook read and one OneDrive root read and moved both expired access-token expiries to future values. It did not complete the n8n-only restart, second reads, cleanup, or persistence proof; inline-email PDF rendering also remains unproven.",
-      "remaining_work": "Remove the exact WF23 orphan, then rerun the complete expired-before, first-read, n8n-restart and second-read sequence; separately prove live filtering, attachment/original archival, and the fixed inline-email PDF renderer.",
+      "live_readback": "Four Outlook and 13 OneDrive binding occurrences are exact. External, unversioned host evidence reports one bounded Outlook read, one OneDrive root read, and both expired token expiries moving into the future. The repository does not contain the receipt; no n8n-only restart, second read, cleanup receipt, or persistence proof exists, and inline-email PDF rendering remains unproven.",
+      "remaining_work": "After N8N-012 exact cleanup, rerun the first-read, n8n-restart and second-read sequence without depending on a new token-expiry wait; separately prove live filtering, attachment/original archival, and the fixed inline-email PDF renderer.",
       "blockers": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
         "EMAIL_TO_PDF_RENDERER_REQUIRED"
       ],
@@ -1176,7 +1222,7 @@
         "Successful legacy/Codex cursor runs do not prove the n8n implementation"
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Restore the exact 21/0/0 boundary, wait for both expiries to be past, and run the guarded restart proof once without recording credential identifiers or token values."
+      "next_action": "After N8N-012 cleanup, run the guarded n8n restart and second-read proof without making hierarchy work depend on a new token-expiry wait."
     },
     {
       "id": "N8N-004",
@@ -1213,12 +1259,15 @@
       ],
       "tests": [
         "integrations/actual: 48/48 passing",
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "WF19 local bootstrap passed with 15 finance Data Tables",
         "official DataTableService readback verified 15 exact schemas, 7 policy rows, 9 config rows, and exact 00491aa commit binding"
       ],
       "live_readback": "Official n8n service readback verified all 15 operational Data Tables, seven policy rows, nine commit-bound config rows, exact schemas, and preservation of the existing cursor row. No provider or finance-system call occurred; Actual-authoritative ledger equality and the fenced writer were not exercised.",
       "remaining_work": "Prove operational-only table state and one fenced disposable Actual commit with exact readback.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "ACTUAL_DISPOSABLE_READBACK_REQUIRED"
       ],
@@ -1251,7 +1300,7 @@
         "Production concurrency starts at one"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "MIXED: FAIL, FAILING_WORKTREE",
+      "verification_state": "MIXED: REPOSITORY_GREEN_HOST_EVIDENCE_EXTERNAL_ACCEPTANCE_PENDING, REPOSITORY_GREEN_RUNTIME_PROMOTION_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
@@ -1262,14 +1311,17 @@
         "runtime/audit/production-post-replay-audit.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed"
+        "Codex runner: 16 passed"
       ],
-      "live_readback": "verification.full-corpus-and-production-promotion: Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
-      "remaining_work": "Reach a clean tree and green suites, hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts/balances/notes/manual state, run restore/failure drills, then produce reviewed promotion evidence.",
+      "live_readback": "orchestration.n8n-greenfield: The regular 21-workflow corpus was imported inactive and unpublished. Later host evidence is external and unversioned in this repository: transient WF23 reached 22/0/0 and refreshed both Microsoft credentials, but cleanup, restart persistence, and second reads remain unproven. | verification.full-corpus-and-production-promotion: Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
+      "remaining_work": "Complete exact WF23 cleanup, execute the current corpus double replay and failure-boundary fixtures, then review content-addressed receipts. | Hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts, balances, notes and manual state, run restore and failure drills, then produce reviewed promotion evidence.",
       "blockers": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW"
       ],
       "source_status": "ASSISTANT_CLAIM_ONLY",
@@ -1316,16 +1368,19 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Codex runner: 16 passed",
         "local receipt: 21 imported, 0 active, 0 published",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: exact commits and 21/0/0 state"
       ],
       "live_readback": "The reviewed regular corpus remains 21 workflows and unchanged from 00491aa, but one transient inactive WF23 setup workflow currently makes the project boundary 22 workflows, zero active, and zero published until exact cleanup. No production activation, publication, Actual write, or cashback write occurred.",
       "remaining_work": "Complete current-byte double replay and conflict review, then obtain separate explicit authorization for any production activation or finance write.",
       "blockers": [
-        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
+        "WF23_EXACT_CLEANUP_REQUIRED",
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
+        "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW",
         "PRODUCTION_PROMOTION_AND_ACTIVATION_NOT_AUTHORIZED"
       ],
@@ -1358,17 +1413,21 @@
         "Recovery is idempotent"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "FAILING_WORKTREE",
+      "verification_state": "REPOSITORY_GREEN_HOST_EVIDENCE_EXTERNAL_ACCEPTANCE_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
         "integrations/n8n/data-tables.json",
         "tests/test_n8n_workflows.py"
       ],
-      "tests": [],
-      "live_readback": "",
-      "remaining_work": "Collect current acceptance evidence for N8N-007.",
+      "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass"
+      ],
+      "live_readback": "orchestration.n8n-greenfield: The regular 21-workflow corpus was imported inactive and unpublished. Later host evidence is external and unversioned in this repository: transient WF23 reached 22/0/0 and refreshed both Microsoft credentials, but cleanup, restart persistence, and second reads remain unproven.",
+      "remaining_work": "Complete exact WF23 cleanup, execute the current corpus double replay and failure-boundary fixtures, then review content-addressed receipts.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
@@ -1408,12 +1467,15 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "20 of 20 Execute Sub-workflow references use From list",
         "host registration passed for pinned ProDex 0.5.1 and Claude 0.8.0 packages, 8 nodes, and 3 credential types"
       ],
       "live_readback": "Pinned ProDex 0.5.1 and Claude 0.8.0 register in the internal host runtime with eight nodes and three credential types. The reviewed promotion made no provider call; subscription authentication and schema-bound execution remain unproven.",
       "remaining_work": "Use an isolated compatible ProDex auth home, then prove both provider branches preserve identical typed output and protected-field policy.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
         "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"
@@ -1447,17 +1509,21 @@
         "Receipts can be polled to a terminal state"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "FAILING_WORKTREE",
+      "verification_state": "REPOSITORY_GREEN_HOST_EVIDENCE_EXTERNAL_ACCEPTANCE_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
         "integrations/n8n/data-tables.json",
         "tests/test_n8n_workflows.py"
       ],
-      "tests": [],
-      "live_readback": "",
-      "remaining_work": "Collect current acceptance evidence for N8N-009.",
+      "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass"
+      ],
+      "live_readback": "orchestration.n8n-greenfield: The regular 21-workflow corpus was imported inactive and unpublished. Later host evidence is external and unversioned in this repository: transient WF23 reached 22/0/0 and refreshed both Microsoft credentials, but cleanup, restart persistence, and second reads remain unproven.",
+      "remaining_work": "Complete exact WF23 cleanup, execute the current corpus double replay and failure-boundary fixtures, then review content-addressed receipts.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED"
       ],
       "source_status": "ASSISTANT_CLAIM_ONLY",
@@ -1472,17 +1538,18 @@
       "domain": "n8n platform and workflows",
       "title": "Application-scoped role hierarchy",
       "requirement": "Place the finance application beneath one concise top-level Finance folder so unrelated applications can coexist, and group workflows beneath it by execution role and logical flow rather than only by finance topic, provider, or implementation technology.",
-      "priority": "P1",
+      "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "n8n_workflows",
       "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
       "dependencies": [
-        "N8N-011",
-        "N8N-006"
+        "N8N-012"
       ],
       "related_tasks": [
         "N8N-002",
         "N8N-003",
+        "N8N-006",
+        "N8N-011",
         "DOC-001",
         "PLATFORM-001"
       ],
@@ -1494,8 +1561,8 @@
         "All workflows remain inactive and unpublished, the current-corpus tag edge count is unchanged, and setup workflows remain transient and activation-forbidden",
         "A second hierarchy application produces zero row and timestamp changes and the browser tree matches the database tree"
       ],
-      "implementation_state": "PARTIAL",
-      "verification_state": "CURRENT_SIBLING_LAYOUT_VERIFIED_TARGET_FINANCE_HIERARCHY_UNIMPLEMENTED",
+      "implementation_state": "DESIGN_RECORDED_UNIMPLEMENTED",
+      "verification_state": "DESIGN_RECORDED_UNIMPLEMENTED",
       "evidence_paths": [
         "integrations/n8n/workflow-folders.json",
         "integrations/n8n/workflow-folder-placement.sql",
@@ -1505,12 +1572,9 @@
         "Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"
       ],
       "live_readback": "The retained project proves eight sibling folders, 21 current-corpus placements, 63 tag edges, zero active and zero published workflows. This is the pre-migration state and does not satisfy the sole Finance application root, nine direct children, or nested 99 Setup Only target.",
-      "remaining_work": "After WF23 cleanup, Microsoft restart persistence, WF22 root proof and N8N-011 design approval, implement the exact reviewed role mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence.",
+      "remaining_work": "After N8N-012 exact cleanup, implement the exact reviewed role mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence. WF22 can then run under nested setup-only; Microsoft restart proof and N8N-011 continue as related acceptance tracks.",
       "blockers": [
-        "WF23_EXACT_CLEANUP_REQUIRED",
-        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED",
-        "ONEDRIVE_ROOT_SETUP_REQUIRED",
-        "DATA_TABLE_MINIMIZATION_DESIGN_REQUIRED"
+        "WF23_EXACT_CLEANUP_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
       "contradictions": [
@@ -1518,13 +1582,13 @@
         "Finance Automation was considered as the root name but the reviewed decision is the concise Finance root so future application roots remain peers"
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Wait for the setup and N8N-011 gates, then implement and independently verify the Finance subtree without touching peer applications."
+      "next_action": "After N8N-012 exact cleanup, implement and independently verify the Finance subtree without touching peer applications."
     },
     {
       "id": "N8N-011",
       "domain": "n8n platform and workflows",
       "title": "Minimize Data Tables to durable finance-domain state",
-      "requirement": "Treat the existing 15 Data Tables and every declared column as an audit baseline, then retain only durable finance-domain state that has a named authoritative owner, producer, consumer, invariant, retention need and privacy justification; consolidate or remove redundant operational and configuration state before workflow promotion.",
+      "requirement": "Treat the existing 15 Data Tables and every declared column as an audit baseline, then retain only durable finance-domain state that has a named authoritative owner, producer, consumer, invariant, retention need and privacy justification; remove generic execution, failure, access-log and tracing state from Data Tables before workflow promotion.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "n8n_workflows",
@@ -1542,10 +1606,13 @@
       "acceptance_criteria": [
         "A machine-reviewable matrix covers all 15 tables and every column with disposition, authoritative owner, every producer, every consumer, read and write path, invariant, idempotency key, retention, privacy class and rationale",
         "The audit identifies table merges, cross-table duplicate fields, redundant timestamps, verification booleans, version and hash fields, payload pointers, state fields and denormalized identifiers, and proves why each surviving field is necessary",
-        "Candidate consolidation explicitly evaluates finance_acquisition_receipts, finance_pipeline_runs, finance_execution_failures and finance_mcp_requests against one operation-receipt contract without weakening cursor, failure, Service Auth or terminal-readback invariants",
-        "Candidate removal or relocation explicitly evaluates finance_source_contracts, finance_config_versions, finance_ai_policy_contracts and finance_provider_circuits against Git-canonical configuration and a narrowly owned operational circuit store",
+        "The machine design maps the 15-table baseline to exactly four candidate domain schemas with 9, 20, 18 and 9 columns, forbids finance_operation_receipts and finance_period_closes, and keeps only the existing Postgres writer lease",
+        "Generic execution and failure evidence belongs to n8n, protected-route access logs belong to Cloudflare, Langfuse is optional for sanitized agent traces only, and cashback companion remains period-close authority",
+        "Source/config and AI-policy contracts move to exactly two Git-generated caller-immutable Edit Fields resolver subworkflows whose hashes and image/commit binding fail closed before activation",
+        "Provider circuits are removed to bounded n8n retry/error/concurrency policy with no new Postgres store",
         "Every affected workflow node and generated seed is mapped before migration; no caller-controlled value replaces a server-owned contract and no posted transaction or cashback event is introduced into Data Tables",
-        "A disposable migration receipt proves exact pre-migration counts and hashes, transformed rows, producer and consumer parity, concurrency and restart behavior, retention and privacy scans, and zero dropped required state",
+        "WF20 cannot verify or commit a batch until exact Actual comparison is uploaded to immutable OneDrive, read back, and its item ID and SHA-256 are bound to that batch; kill, duplicate, stale-fence and hash-mismatch fixtures pass",
+        "A disposable migration receipt proves exact pre-migration counts and hashes, transformed rows, producer and consumer parity, resolver hashes, concurrency and restart behavior, retention and privacy scans, and zero dropped required state",
         "A second migration is a no-op and an exact rollback restores schemas, rows, hashes, workflow behavior and timestamps without provider, Actual, cashback or production activation",
         "No runtime schema change starts until the disposition matrix and migration and rollback plan receive independent review"
       ],
@@ -1554,15 +1621,19 @@
       "evidence_paths": [
         "integrations/n8n/data-tables.json",
         "docs/n8n-package-template-data-table-audit-2026-08-19.md",
-        "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md"
+        "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md",
+        "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json",
+        "docs/project-audit/n8n-data-table-column-disposition.schema.json"
       ],
       "tests": [
-        "Existing schema, bootstrap, producer and consumer contract tests prove the 15-table baseline but do not prove that every table and column is necessary"
+        "Schema validation and exact-coverage tests prove one machine row for every current table.column and exact workflow-node operations",
+        "Schema-validated inventory covers every one of the 15 tables and every declared column exactly once with exact workflow node operations"
       ],
-      "live_readback": "Official DataTableService readback proved all 15 exact deployed schemas, seven AI policy rows, nine config rows and preservation of the source cursor row. No table or column has yet passed the required necessity, authoritative-owner, retention, privacy, consolidation, migration or rollback audit.",
-      "remaining_work": "Complete and independently review the all-table and all-column producer/consumer/invariant matrix, approve a minimal target, and prove disposable migration, no-op replay and exact rollback before changing any runtime schema.",
+      "live_readback": "Official DataTableService readback proved all 15 exact deployed schemas, seven AI policy rows, nine config rows and preservation of the source cursor row. The machine design now maps 203 current columns toward four domain tables with 9, 20, 18 and 9 columns, but no migration or separate approval has occurred.",
+      "remaining_work": "Independently review all four target schemas, every machine disposition, both generated caller-immutable Edit Fields resolvers, n8n/Cloudflare/optional-Langfuse ownership, provider-circuit removal and WF20 verification-artifact atomicity; then prove disposable migration, no-op replay and exact rollback.",
       "blockers": [
-        "DATA_TABLE_AND_COLUMN_DISPOSITION_REVIEW_REQUIRED",
+        "FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED",
+        "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED",
         "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED",
         "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"
       ],
@@ -1572,7 +1643,53 @@
         "The official 15-table runtime readback proves current deployment only and does not prove that the schema is minimal"
       ],
       "last_verified": "2026-08-20",
-      "next_action": "Audit all 15 tables and every column, then review the candidate consolidation and relocation design before any implementation."
+      "next_action": "Review the 15-to-4 machine map and WF20 artifact gates; do not create generic receipt, period-close or provider-circuit tables."
+    },
+    {
+      "id": "N8N-012",
+      "domain": "n8n platform and workflows",
+      "title": "Exact transient WF23 cleanup",
+      "requirement": "Remove only the stranded inactive WF23 setup workflow, its soft-deleted running execution row, placement and tag edges using the reviewed exact cleanup gate; preserve the regular corpus and every unrelated application object.",
+      "priority": "P0",
+      "status": "PARTIAL",
+      "owner_workstream": "n8n_workflows",
+      "acceptance_validator": "n8n contract tests plus exact disposable execution receipt review",
+      "dependencies": [],
+      "related_tasks": [
+        "N8N-003",
+        "N8N-006",
+        "N8N-010",
+        "DOC-001",
+        "PLATFORM-001"
+      ],
+      "acceptance_criteria": [
+        "Preflight matches exactly one inactive unpublished WF23 workflow, one allowed stranded execution and the reviewed placement and tag identities before mutation",
+        "Any count, identity, active, published, collision or unrelated-row mismatch aborts with zero mutation",
+        "Post-cleanup database and browser readback prove zero WF23 workflow and execution rows and the exact reviewed regular workflow, activation, publication, placement and tag boundary",
+        "A content-addressed external cleanup receipt records the exact script commit, before and after counts, deleted identities, preserved unrelated counts and SHA-256",
+        "A second cleanup invocation is a verified no-op and changes no row or timestamp"
+      ],
+      "implementation_state": "IMPLEMENTED_NOT_EXECUTED",
+      "verification_state": "EXACT_CLEANUP_GATE_COMMITTED_EXTERNAL_RECEIPT_PENDING",
+      "evidence_paths": [
+        "integrations/n8n/setup-workflows/runner/remediate-stranded-wf23.sql",
+        "integrations/n8n/setup-workflows/runner/run-remediate-stranded-wf23.sh",
+        "tests/test_n8n_microsoft_oauth_refresh_runner.py"
+      ],
+      "tests": [
+        "exact WF23 preflight, commit gate, postcondition, mismatch rollback and second-run no-op tests pass"
+      ],
+      "live_readback": "External host evidence still reports the transient 22/0/0 WF23 boundary. The exact cleanup implementation is committed, but no later external cleanup receipt path or SHA-256 has been supplied and no repository artifact proves zero WF23 rows.",
+      "remaining_work": "Run the exact cleanup once, record the external receipt path and SHA-256, prove the reviewed regular project boundary and zero WF23 rows, then run it again as a no-op.",
+      "blockers": [
+        "WF23_EXACT_CLEANUP_RECEIPT_REQUIRED"
+      ],
+      "source_status": "REQUESTED_UNVERIFIED",
+      "contradictions": [
+        "The first Microsoft reads and token refresh do not prove cleanup; restart persistence is a separate acceptance track"
+      ],
+      "last_verified": "2026-08-20",
+      "next_action": "Execute the exact cleanup gate and retain the later content-addressed cleanup receipt before WF22 or N8N-010."
     },
     {
       "id": "DOC-001",
@@ -1585,7 +1702,8 @@
       "acceptance_validator": "evidence tests plus immutable archive and readback receipt review",
       "dependencies": [
         "DOC-007",
-        "PLATFORM-003"
+        "PLATFORM-003",
+        "N8N-012"
       ],
       "related_tasks": [],
       "acceptance_criteria": [
@@ -1939,17 +2057,20 @@
         "Manual overrides always win"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "FAILING_WORKTREE",
+      "verification_state": "REPOSITORY_GREEN_SUBSCRIPTION_EXECUTION_PENDING",
       "evidence_paths": [
         "services/codex-agent-runner",
         "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
-      "remaining_work": "Collect current acceptance evidence for AGENT-001.",
+      "tests": [
+        "services/codex-agent-runner: 16 of 16 pass; provider-envelope and protected-field contracts pass"
+      ],
+      "live_readback": "orchestration.codex-agent-handoff: The current runner contracts are green and host health was observed without a provider call; subscription-authenticated structured execution and isolation remain unproven.",
+      "remaining_work": "Rerun malicious and protected-field cases through the full n8n wrapper with isolated subscription authentication, and promote only after reviewed disposable receipts.",
       "blockers": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ],
       "source_status": "FINAL_DECISION",
       "contradictions": [
@@ -1978,17 +2099,20 @@
         "No API-key fallback"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "FAILING_WORKTREE",
+      "verification_state": "REPOSITORY_GREEN_SUBSCRIPTION_EXECUTION_PENDING",
       "evidence_paths": [
         "services/codex-agent-runner",
         "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
-      "remaining_work": "Collect current acceptance evidence for AGENT-002.",
+      "tests": [
+        "services/codex-agent-runner: 16 of 16 pass; provider-envelope and protected-field contracts pass"
+      ],
+      "live_readback": "orchestration.codex-agent-handoff: The current runner contracts are green and host health was observed without a provider call; subscription-authenticated structured execution and isolation remain unproven.",
+      "remaining_work": "Rerun malicious and protected-field cases through the full n8n wrapper with isolated subscription authentication, and promote only after reviewed disposable receipts.",
       "blockers": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ],
       "source_status": "FINAL_DECISION",
       "contradictions": [
@@ -2030,6 +2154,7 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"
       ],
       "tests": [
+        "services/codex-agent-runner: 16 of 16 pass; provider-envelope and protected-field contracts pass",
         "Static secret/config tests pass in full-suite run",
         "codex-agent-runner: 16 of 16 pass",
         "provider envelope and protected-field tests pass",
@@ -2039,9 +2164,9 @@
       "remaining_work": "Repair isolated Codex auth, prove process isolation and redaction, and execute malicious protected-field cases through n8n.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED",
         "DISPOSABLE_SECRET_AUDIT_REQUIRED",
-        "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
-        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
+        "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED"
       ],
       "source_status": "ASSISTANT_CLAIM_ONLY",
       "contradictions": [
@@ -2073,17 +2198,20 @@
         "Rejected proposal has no ledger effect"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "FAILING_WORKTREE",
+      "verification_state": "REPOSITORY_GREEN_SUBSCRIPTION_EXECUTION_PENDING",
       "evidence_paths": [
         "services/codex-agent-runner",
         "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
-      "remaining_work": "Collect current acceptance evidence for AGENT-004.",
+      "tests": [
+        "services/codex-agent-runner: 16 of 16 pass; provider-envelope and protected-field contracts pass"
+      ],
+      "live_readback": "orchestration.codex-agent-handoff: The current runner contracts are green and host health was observed without a provider call; subscription-authenticated structured execution and isolation remain unproven.",
+      "remaining_work": "Rerun malicious and protected-field cases through the full n8n wrapper with isolated subscription authentication, and promote only after reviewed disposable receipts.",
       "blockers": [
-        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
+        "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
       "contradictions": [],
@@ -2122,12 +2250,14 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
       "tests": [
+        "services/codex-agent-runner: 16 of 16 pass; provider-envelope and protected-field contracts pass",
         "typed contract, server-owned model/reasoning/auth, and both provider branches pass repository tests"
       ],
       "live_readback": "Both branches are enabled behind one typed contract and both pinned packages register in the internal host runtime. The reviewed promotion made no provider call, so neither branch has subscription-authenticated structured execution evidence.",
       "remaining_work": "Resolve Codex auth compatibility and execute locked Codex and Claude branches with malicious caller fields.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
+        "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED",
         "CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED",
         "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"
       ],
@@ -2167,7 +2297,7 @@
       "tests": [
         "integrations/actual: 48/48 passing"
       ],
-      "live_readback": "architecture.actual-authoritative-ledger: The last checked snapshot predates the current refactor and enumerates only seven accounts.",
+      "live_readback": "architecture.actual-authoritative-ledger: Current repository contracts preserve Actual as the sole posted ledger; current production account and ledger parity still require authenticated readback.",
       "remaining_work": "Enumerate every posted identity across Actual and operational stores and prove Actual is the sole posted ledger.",
       "blockers": [
         "ACCEPTANCE_EVIDENCE_REQUIRED"
@@ -2281,8 +2411,9 @@
         "tests/test_wealth.py passing",
         "tests/test_wealth_acceptance.py passing",
         "tests/test_account_completeness.py passing",
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Codex runner: 16 passed",
         "full Python: 381 run, 6 skipped"
       ],
       "live_readback": "No current authenticated UI/API account-set, signed-balance, or net-worth parity; fresh Sarwa and FX are absent.",
@@ -2376,7 +2507,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2422,7 +2553,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2468,10 +2599,10 @@
       "evidence_paths": [
         "finance_tracker/classification_audit.py",
         "tests/test_transaction_semantics.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2520,7 +2651,7 @@
       "evidence_paths": [
         "finance_tracker/classification_audit.py",
         "tests/test_transaction_semantics.py",
-        "config/rules.json"
+        "config/static-rules.seed.json"
       ],
       "tests": [
         "Review/category and home/rental invariants have unit coverage"
@@ -2564,10 +2695,10 @@
       "evidence_paths": [
         "finance_tracker/classification_audit.py",
         "tests/test_transaction_semantics.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2620,7 +2751,7 @@
         "tests/test_transaction_semantics.py",
         "tests/test_actual_pipeline.py",
         "tests/test_corpus_migration.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json",
         "runtime/audit/actual-corpus-semantics-audit-2026-08-19.json",
         "runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json",
@@ -2729,10 +2860,10 @@
       "evidence_paths": [
         "finance_tracker/classification_audit.py",
         "tests/test_transaction_semantics.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2780,7 +2911,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2825,7 +2956,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2871,7 +3002,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2918,7 +3049,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -2968,7 +3099,7 @@
         "config/proposals/actual-accounts-fab-sarwa.json",
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -3018,7 +3149,7 @@
       "evidence_paths": [
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -3068,8 +3199,9 @@
         "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json"
       ],
       "tests": [
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Codex runner: 16 passed",
         "b845ccf guarded dry-run tests and full Python suite pass"
       ],
       "live_readback": "Current plan is deterministic and amount-safe, but older receipts cannot certify current workflows, account scope, semantics, notes, or runtime bytes.",
@@ -3111,10 +3243,10 @@
       "evidence_paths": [
         "finance_tracker/classification_audit.py",
         "tests/test_transaction_semantics.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/actual-bootstrap.json",
         "config/actual-budget-automation.json",
-        "integrations/actual/dashboard-export.mjs",
+        "integrations/actual/actualctl.mjs",
         "integrations/actual/budget-automation.mjs"
       ],
       "tests": [
@@ -3221,7 +3353,7 @@
         "Cashback Python tests pass in full-suite run",
         "CI profile matrix is defined"
       ],
-      "live_readback": "architecture.actual-authoritative-ledger: The last checked snapshot predates the current refactor and enumerates only seven accounts. | cashback.production: Prior interaction accepted routing/push behavior, but HTTPS health could not be independently queried from this audit environment (Schannel credentials error), and the current n8n live-ingestion cutover is not proven.",
+      "live_readback": "architecture.actual-authoritative-ledger: Current repository contracts preserve Actual as the sole posted ledger; current production account and ledger parity still require authenticated readback. | cashback.production: Prior interaction accepted routing/push behavior, but HTTPS health could not be independently queried from this audit environment (Schannel credentials error), and the current n8n live-ingestion cutover is not proven.",
       "remaining_work": "Enumerate every posted identity across Actual and operational stores and prove Actual is the sole posted ledger. | Recheck public/mobile health, push triggers, weekly pace, period history/reset, fictional profiles, and n8n-fed live events after deployment cutover.",
       "blockers": [
         "LIVE_HEALTH_READBACK_REQUIRED",
@@ -3836,7 +3968,7 @@
         "tests/test_transaction_semantics.py",
         "tests/test_actual_pipeline.py",
         "tests/test_corpus_migration.py",
-        "config/rules.json",
+        "config/static-rules.seed.json",
         "config/evidence/actual-corpus-migration-dry-run-2026-08-19.json",
         "runtime/audit/actual-corpus-semantics-audit-2026-08-19.json",
         "runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json",
@@ -4103,12 +4235,15 @@
         "finance_tracker/automation_lifecycle.py"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "Automation manifest/lifecycle tests pass in full-suite run",
         "automation lifecycle and n8n schedule contracts pass"
       ],
       "live_readback": "n8n schedules remain inactive and legacy Codex schedules remain current; no issuer shadow run or cutover occurred.",
       "remaining_work": "Prove each issuer schedule and durable receipt, then atomically disable the matching legacy task only after acceptance.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
         "N8N_SCHEDULE_CUTOVER_REQUIRED",
         "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
@@ -4144,7 +4279,7 @@
         "Duplicate attachment hash suppression"
       ],
       "implementation_state": "PARTIAL",
-      "verification_state": "MIXED: FAILING_WORKTREE, LEGACY_TASKS_AUDITED_N8N_CUTOVER_PENDING",
+      "verification_state": "MIXED: LEGACY_TASKS_AUDITED_N8N_CUTOVER_PENDING, REPOSITORY_GREEN_HOST_EVIDENCE_EXTERNAL_ACCEPTANCE_PENDING",
       "evidence_paths": [
         "integrations/n8n/pipeline-registry.json",
         "integrations/n8n/workflows",
@@ -4155,13 +4290,17 @@
         "finance_tracker/automation_lifecycle.py"
       ],
       "tests": [
+        "Current full Python suite passes; n8n workflow and bootstrap contracts pass",
         "Automation manifest/lifecycle tests pass in full-suite run"
       ],
-      "live_readback": "automation.schedules-and-task-archival: Six legacy Codex schedules were previously observed; self-archive failed, external exact-ID archival worked. No ephemeral task mode is evidenced. n8n schedules are exported inactive and not cut over.",
-      "remaining_work": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats.",
+      "live_readback": "orchestration.n8n-greenfield: The regular 21-workflow corpus was imported inactive and unpublished. Later host evidence is external and unversioned in this repository: transient WF23 reached 22/0/0 and refreshed both Microsoft credentials, but cleanup, restart persistence, and second reads remain unproven. | automation.schedules-and-task-archival: Six legacy Codex schedules were previously observed; self-archive failed, external exact-ID archival worked. No ephemeral task mode is evidenced. n8n schedules are exported inactive and not cut over.",
+      "remaining_work": "Complete exact WF23 cleanup, execute the current corpus double replay and failure-boundary fixtures, then review content-addressed receipts. | Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats.",
       "blockers": [
+        "WF23_EXACT_CLEANUP_REQUIRED",
+        "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
-        "N8N_SCHEDULE_CUTOVER_REQUIRED"
+        "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ],
       "source_status": "REQUESTED_UNVERIFIED",
       "contradictions": [
@@ -4204,7 +4343,8 @@
       "live_readback": "automation.schedules-and-task-archival: Six legacy Codex schedules were previously observed; self-archive failed, external exact-ID archival worked. No ephemeral task mode is evidenced. n8n schedules are exported inactive and not cut over.",
       "remaining_work": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats.",
       "blockers": [
-        "N8N_SCHEDULE_CUTOVER_REQUIRED"
+        "N8N_SCHEDULE_CUTOVER_REQUIRED",
+        "MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED"
       ],
       "source_status": "USER_REPORTED_DEFECT",
       "contradictions": [
@@ -4505,8 +4645,9 @@
       "tests": [
         "Actual Node suite 48/48 passing",
         "Deployment script tests pass in full-suite run",
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Codex runner: 16 passed",
         "local registration, import, bootstrap, health, scan, and SBOM receipts pass",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d",
         "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4"
@@ -4620,18 +4761,19 @@
         "Superseded items retained with override rationale"
       ],
       "implementation_state": "MISSING",
-      "verification_state": "FAIL",
+      "verification_state": "REPOSITORY_GREEN_RUNTIME_PROMOTION_PENDING",
       "evidence_paths": [
         "config/project-acceptance.json",
         "runtime/audit/disposable-full-rebuild-audit.json",
         "runtime/audit/production-post-replay-audit.json"
       ],
       "tests": [
+        "Python full suite: 434 passed, 8 skipped",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed"
+        "Codex runner: 16 passed"
       ],
       "live_readback": "verification.full-corpus-and-production-promotion: Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
-      "remaining_work": "Reach a clean tree and green suites, hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts/balances/notes/manual state, run restore/failure drills, then produce reviewed promotion evidence.",
+      "remaining_work": "Hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts, balances, notes and manual state, run restore and failure drills, then produce reviewed promotion evidence.",
       "blockers": [
         "DISPOSABLE_DOUBLE_REPLAY_NOT_COMPLETED",
         "MANUAL_FIELD_CONFLICTS_REQUIRE_REVIEW"
@@ -4716,8 +4858,9 @@
   "progress_overlay": {
     "path": "config/project-backlog-progress.json",
     "recorded_at": "2026-08-20",
-    "evidence_commit": "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
+    "evidence_commit": "a07c5abdc5accb57e669ca8c506e2d2f709a505e",
     "evidence_commits": [
+      "a07c5abdc5accb57e669ca8c506e2d2f709a505e",
       "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
       "8149f42f2694c200ca9fae37875c4dba4e727978",
       "b07c410fb43ad5953f83d3a6847dcd452b0b48d7",
@@ -4731,8 +4874,8 @@
     "snapshot_notes": [
       "The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.",
       "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
-      "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. The transient WF23 run completed bounded Outlook and OneDrive reads and moved both expired access-token expiries into the future, but restart persistence and the required second reads did not run.",
-      "WF23 is currently stranded as one inactive, unpublished setup workflow with one soft-deleted running execution row. The observed project boundary is temporarily 22 workflows, zero active, zero published, 22 placements, and 66 tag edges; exact reviewed cleanup back to 21/0/0 and zero WF23 rows is pending.",
+      "External, unversioned host evidence at /opt/disposable/finance-n8n/20260819155134/receipts/microsoft-oauth-8149f42f2694-20260820T011501Z-failure.json (SHA-256 d85a54134152493150b2618beffa25434e79e4160001f1d8ebdf14ce1ca88148) reports bounded Outlook and OneDrive first reads and future token expiries. The repository does not contain that receipt, and no n8n restart or second-read persistence proof exists.",
+      "WF23 is reported stranded as one inactive, unpublished setup workflow with one soft-deleted running execution row. The external observed boundary is temporarily 22 workflows, zero active, zero published, 22 placements, and 66 tag edges; the later exact cleanup receipt path and SHA-256 are pending.",
       "The setup-only OneDrive root workflow remains manual-only and outside the regular 21-workflow corpus. Its attempted live run failed at a clean restored boundary; exact create-or-reuse and root-folder readback remain unproven.",
       "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
       "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
@@ -4760,11 +4903,12 @@
       "35/36 passing",
       "350 passed, 1 failed",
       "14/16 passing",
+      "14 passed, 2 failed",
       "The refactor is uncommitted",
       "Stabilize generated/bootstrap contracts",
       "Repair provider-envelope contract/test parity",
       "current contract bytes fail their local suite"
     ],
-    "update_count": 23
+    "update_count": 24
   }
 }

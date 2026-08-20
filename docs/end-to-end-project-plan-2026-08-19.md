@@ -6,18 +6,28 @@ Decision: **GO for repository-only implementation; NO-GO for deployment, MCP
 exposure, schedule cutover, or production finance writes until Phase 0–3 gates
 pass**
 
+> **Historical architecture baseline — non-authoritative for current execution.**
+> This document preserves the reviewed target architecture and safety gates, but
+> its phase order and point-in-time evidence are historical. The authoritative
+> current task state, dependencies and critical path are generated in
+> [`project-backlog.md`](project-backlog.md) from the transcript ledger,
+> refreshed implementation status and progress overlay. Where this document
+> conflicts with that backlog, the backlog wins.
+
 The adversarial review is retained in
 `docs/end-to-end-project-plan-red-team-2026-08-19.md`. Its fifteen findings are
 accepted and incorporated below.
 
 ### 2026-08-20 execution-order amendment
 
-The retained architecture and production gates remain authoritative, but the
-current execution order begins with the exact inactive WF23 orphan cleanup,
-then the complete Microsoft first-read/restart/second-read proof, then the WF22
-OneDrive root proof. The live project is temporarily at 22 workflows, zero
-active and zero published; both Microsoft first reads refreshed expired access
-tokens, but restart persistence and exact cleanup are not yet proven.
+The retained architecture and production gates remain useful historical design
+input. Current hierarchy eligibility begins with exact inactive WF23 orphan
+cleanup, then WF22 OneDrive root proof; the complete Microsoft restart and
+second-read proof proceeds as a parallel/later acceptance track. The latest
+external host evidence reported a temporary 22 workflows, zero active and zero
+published boundary and two successful first-read refreshes, but the repository
+does not contain the host receipt, restart persistence proof or later cleanup
+receipt.
 
 Before the next workflow-corpus promotion:
 

@@ -139,9 +139,9 @@
       "requirement": "Place the finance application beneath one concise top-level Finance folder so unrelated applications can coexist, and group workflows beneath it by execution role and logical flow rather than only by finance topic, provider, or implementation technology.",
       "expected_state": "The sole finance-owned root is Finance. Its direct children are 01 Schedules & Controllers for workflows 02 and 04-08; 02 Acquisition & Intake for 01, 11 and 12; 03 Document Services for 13 and 14; 04 Processing & Reconciliation for 03; 05 Agent Services for 09 and 21; 06 Ledger Persistence for 18 and 20; 07 Interfaces & Dispatch for 10 and 15; 08 Operations & Recovery for 16 and 17; and 90 Platform Administration for 19. The transient 99 Setup Only folder is nested below 90 Platform Administration and may contain only setup workflows 22 and 23 while reviewed setup actions are in progress.",
       "status_from_transcript": "REQUESTED_UNVERIFIED",
-      "priority": "P1",
-      "dependencies": ["N8N-011", "N8N-006"],
-      "related_tasks": ["N8N-002", "N8N-003", "DOC-001", "PLATFORM-001"],
+      "priority": "P0",
+      "dependencies": ["N8N-012"],
+      "related_tasks": ["N8N-002", "N8N-003", "N8N-006", "N8N-011", "DOC-001", "PLATFORM-001"],
       "acceptance_criteria": [
         "Database and browser readback prove exactly one finance-owned top-level Finance root, exactly nine direct current-corpus children, and 99 Setup Only nested only beneath 90 Platform Administration",
         "All 21 current workflows map exactly once to the reviewed role folders; the 17 Execute Sub-workflow and three Tool Workflow references remain list-mode and resolve to the same targets",
@@ -164,8 +164,8 @@
     {
       "id": "N8N-011",
       "title": "Minimize Data Tables to durable finance-domain state",
-      "requirement": "Treat the existing 15 Data Tables and every declared column as an audit baseline, then retain only durable finance-domain state that has a named authoritative owner, producer, consumer, invariant, retention need and privacy justification; consolidate or remove redundant operational and configuration state before workflow promotion.",
-      "expected_state": "A reviewed table-and-column disposition matrix covers all 15 tables. The candidate design retains finance_source_cursors, finance_archive_receipts, finance_document_operations, finance_actual_outbox, finance_actual_verifications, finance_reconciliations and finance_agent_jobs; evaluates one consolidated finance_operation_receipts table for acquisition, pipeline, redacted failure and bounded MCP receipts; moves Git-canonical source, configuration and AI policy definitions out of Data Tables while retaining only required fingerprints in durable receipts; and moves provider circuit state to a narrowly owned operational store. These are candidates, not authorization to migrate, until the full producer and consumer audit proves them.",
+      "requirement": "Treat the existing 15 Data Tables and every declared column as an audit baseline, then retain only durable finance-domain state that has a named authoritative owner, producer, consumer, invariant, retention need and privacy justification; remove generic execution, failure, access-log and tracing state from Data Tables before workflow promotion.",
+      "expected_state": "A reviewed machine table-and-column disposition covers all 15 tables without inventing a generic finance_operation_receipts replacement. The design direction is exactly four n8n-visible domain tables: 9-column finance_ingestion_state, 20-column finance_documents with separate archive_state and processing_state, 18-column finance_actual_batches, and 9-column review-only finance_ai_reviews. Generic execution/failure stays n8n-owned, access logs Cloudflare-owned, optional sanitized traces Langfuse-owned, and cashback companion remains period-close authority with no finance_period_closes table. Source/config and AI-policy contracts move to exactly two generated caller-immutable Edit Fields resolver subworkflows. Provider circuits are removed; the existing Actual writer lease is the only separate Postgres state. This remains a design candidate until separate review.",
       "status_from_transcript": "REQUESTED_UNVERIFIED",
       "priority": "P0",
       "dependencies": [],
@@ -173,17 +173,21 @@
       "acceptance_criteria": [
         "A machine-reviewable matrix covers all 15 tables and every column with disposition, authoritative owner, every producer, every consumer, read and write path, invariant, idempotency key, retention, privacy class and rationale",
         "The audit identifies table merges, cross-table duplicate fields, redundant timestamps, verification booleans, version and hash fields, payload pointers, state fields and denormalized identifiers, and proves why each surviving field is necessary",
-        "Candidate consolidation explicitly evaluates finance_acquisition_receipts, finance_pipeline_runs, finance_execution_failures and finance_mcp_requests against one operation-receipt contract without weakening cursor, failure, Service Auth or terminal-readback invariants",
-        "Candidate removal or relocation explicitly evaluates finance_source_contracts, finance_config_versions, finance_ai_policy_contracts and finance_provider_circuits against Git-canonical configuration and a narrowly owned operational circuit store",
+        "The machine design maps the 15-table baseline to exactly four candidate domain schemas with 9, 20, 18 and 9 columns, forbids finance_operation_receipts and finance_period_closes, and keeps only the existing Postgres writer lease",
+        "Generic execution and failure evidence belongs to n8n, protected-route access logs belong to Cloudflare, Langfuse is optional for sanitized agent traces only, and cashback companion remains period-close authority",
+        "Source/config and AI-policy contracts move to exactly two Git-generated caller-immutable Edit Fields resolver subworkflows whose hashes and image/commit binding fail closed before activation",
+        "Provider circuits are removed to bounded n8n retry/error/concurrency policy with no new Postgres store",
         "Every affected workflow node and generated seed is mapped before migration; no caller-controlled value replaces a server-owned contract and no posted transaction or cashback event is introduced into Data Tables",
-        "A disposable migration receipt proves exact pre-migration counts and hashes, transformed rows, producer and consumer parity, concurrency and restart behavior, retention and privacy scans, and zero dropped required state",
+        "WF20 cannot verify or commit a batch until exact Actual comparison is uploaded to immutable OneDrive, read back, and its item ID and SHA-256 are bound to that batch; kill, duplicate, stale-fence and hash-mismatch fixtures pass",
+        "A disposable migration receipt proves exact pre-migration counts and hashes, transformed rows, producer and consumer parity, resolver hashes, concurrency and restart behavior, retention and privacy scans, and zero dropped required state",
         "A second migration is a no-op and an exact rollback restores schemas, rows, hashes, workflow behavior and timestamps without provider, Actual, cashback or production activation",
         "No runtime schema change starts until the disposition matrix and migration and rollback plan receive independent review"
       ],
       "claimed_evidence": [
         "integrations/n8n/data-tables.json declares the current 15-table and column baseline",
         "docs/n8n-package-template-data-table-audit-2026-08-19.md records current table purposes and known logical-key limitations",
-        "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md records the candidate table and column review plan"
+        "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md records the candidate table and column review plan",
+        "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json is the schema-validated exact table-column and workflow-node inventory"
       ],
       "contradictions": [
         "Earlier work treated all 15 tables as a desired deployed contract; the current decision requires proving that each table and column earns persistent Data Table storage",
@@ -192,13 +196,37 @@
       "source_turn_summary": "The user required Data Tables where durable finance state is relevant and then explicitly required minimizing them by auditing every table and column for removal, simplification, consolidation, retention, privacy, migration and rollback."
     },
     {
+      "id": "N8N-012",
+      "title": "Exact transient WF23 cleanup",
+      "requirement": "Remove only the stranded inactive WF23 setup workflow, its soft-deleted running execution row, placement and tag edges using the reviewed exact cleanup gate; preserve the regular corpus and every unrelated application object.",
+      "expected_state": "A later external cleanup receipt, recorded by exact path and SHA-256, proves zero WF23 workflow and execution rows and restores the reviewed regular project boundary before WF22 or the Finance hierarchy is eligible.",
+      "status_from_transcript": "REQUESTED_UNVERIFIED",
+      "priority": "P0",
+      "dependencies": [],
+      "related_tasks": ["N8N-003", "N8N-006", "N8N-010", "DOC-001", "PLATFORM-001"],
+      "acceptance_criteria": [
+        "Preflight matches exactly one inactive unpublished WF23 workflow, one allowed stranded execution and the reviewed placement and tag identities before mutation",
+        "Any count, identity, active, published, collision or unrelated-row mismatch aborts with zero mutation",
+        "Post-cleanup database and browser readback prove zero WF23 workflow and execution rows and the exact reviewed regular workflow, activation, publication, placement and tag boundary",
+        "A content-addressed external cleanup receipt records the exact script commit, before and after counts, deleted identities, preserved unrelated counts and SHA-256",
+        "A second cleanup invocation is a verified no-op and changes no row or timestamp"
+      ],
+      "claimed_evidence": [
+        "integrations/n8n/setup-workflows/runner/remediate-stranded-wf23.sql",
+        "integrations/n8n/setup-workflows/runner/run-remediate-stranded-wf23.sh",
+        "tests/test_n8n_microsoft_oauth_refresh_runner.py"
+      ],
+      "contradictions": ["The first Microsoft reads and token refresh do not prove cleanup; restart persistence is a separate acceptance track"],
+      "source_turn_summary": "The adversarial review required the exact transient cleanup to be represented as its own hierarchy eligibility gate rather than coupling hierarchy work to token expiry or restart proof."
+    },
+    {
       "id": "DOC-001",
       "title": "Immutable OneDrive evidence archive",
       "requirement": "Store statements, receipts, bills, warranties, message snapshots, and extracted documents under Finance Evidence/YYYY/MM/vendor-slug with deterministic filenames and catalogue metadata.",
       "expected_state": "The encrypted original is immutable; catalogue entries retain source identity, hash, transaction link, document type, property, warranty and expiry metadata.",
       "status_from_transcript": "REQUESTED_UNVERIFIED",
       "priority": "P1",
-      "dependencies": ["DOC-007", "PLATFORM-003"],
+      "dependencies": ["DOC-007", "PLATFORM-003", "N8N-012"],
       "acceptance_criteria": ["Every saved file path follows AGENTS.md naming", "SHA-256 and OneDrive item identity read back", "No browser session secret is stored", "Catalogue links resolve from ledger records"],
       "claimed_evidence": ["AGENTS.md document convention", "config/document-processing.json", "Finance Evidence catalogue was previously claimed to contain statement artifacts"],
       "contradictions": ["Early discussion considered Notion uploads; latest decision is OneDrive archive and no Notion dependency"],
