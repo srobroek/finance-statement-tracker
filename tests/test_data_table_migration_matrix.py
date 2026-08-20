@@ -214,6 +214,42 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             "verification_artifact_sha256",
         )
 
+        document_identities = self.matrix["target_schemas"]["finance_documents"]["identity_derivations"]
+        self.assertEqual(
+            next(row for row in document_identities if row["source_table"] == "finance_archive_receipts")["strategy"],
+            "hash_concat",
+        )
+        batch_identities = self.matrix["target_schemas"]["finance_actual_batches"]["identity_derivations"]
+        verification_identity = next(
+            row for row in batch_identities
+            if row["source_table"] == "finance_actual_verifications"
+        )
+        self.assertEqual(verification_identity["join_steps"][0]["left_fields"], ["outbox_id"])
+        reconciliation_identity = next(
+            row for row in batch_identities
+            if row["source_table"] == "finance_reconciliations"
+        )
+        self.assertEqual(
+            reconciliation_identity["join_steps"][0]["right_fields"],
+            ["observed_payload_sha256"],
+        )
+
+        source_tables = self.generator.load_source_tables()
+        missing_archive_identity = deepcopy(self.matrix["target_schemas"])
+        missing_archive_identity["finance_documents"]["identity_derivations"] = [
+            row for row in missing_archive_identity["finance_documents"]["identity_derivations"]
+            if row["source_table"] != "finance_archive_receipts"
+        ]
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, missing_archive_identity)
+
+        broken_join = deepcopy(self.matrix["target_schemas"])
+        broken_join["finance_actual_batches"]["identity_derivations"][1]["join_steps"][0]["left_fields"] = [
+            "missing_outbox_id"
+        ]
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, broken_join)
+
         duplicate_target = deepcopy(self.matrix)
         for table in duplicate_target["tables"]:
             if table["source_table"] == "finance_actual_verifications":

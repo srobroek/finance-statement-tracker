@@ -221,13 +221,18 @@
     "target_schema": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["logical_key", "columns"],
+      "required": ["logical_key", "identity_derivations", "columns"],
       "properties": {
         "logical_key": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
+        },
+        "identity_derivations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/identity_derivation"}
         },
         "columns": {
           "type": "object",
@@ -246,6 +251,74 @@
               }
             }
           }
+        }
+      }
+    },
+    "identity_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_table", "strategy", "target_key"],
+      "properties": {
+        "source_table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "strategy": {"enum": ["direct", "hash_concat", "join"]},
+        "target_key": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "source_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "prefix": {"type": "string", "minLength": 1},
+        "separator": {"type": "string", "minLength": 1},
+        "join_steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/join_step"}
+        },
+        "terminal_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"strategy": {"const": "direct"}}},
+          "then": {"required": ["source_fields"]}
+        },
+        {
+          "if": {"properties": {"strategy": {"const": "hash_concat"}}},
+          "then": {"required": ["source_fields", "prefix", "separator"]}
+        },
+        {
+          "if": {"properties": {"strategy": {"const": "join"}}},
+          "then": {"required": ["join_steps", "terminal_fields"]}
+        }
+      ]
+    },
+    "join_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "left_fields", "right_fields"],
+      "properties": {
+        "table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "left_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "right_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
         }
       }
     },

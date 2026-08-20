@@ -247,7 +247,7 @@
             }
           ]
         },
-        "includeOtherFields": false,
+        "includeOtherFields": true,
         "options": {}
       }
     },

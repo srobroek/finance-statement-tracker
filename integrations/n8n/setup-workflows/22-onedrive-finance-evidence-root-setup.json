@@ -40,7 +40,7 @@
             {"id": "22002-e", "name": "receipt_mode", "type": "string", "value": "REDACTED"}
           ]
         },
-        "includeOtherFields": false,
+        "includeOtherFields": true,
         "options": {}
       }
     },

@@ -56,6 +56,20 @@ def _target_column(source_type: str, *sources: str) -> dict[str, Any]:
 TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
     "finance_ingestion_state": {
         "logical_key": ["source_code"],
+        "identity_derivations": [
+            {
+                "source_table": "finance_source_cursors",
+                "strategy": "direct",
+                "target_key": ["source_code"],
+                "source_fields": ["source_code"],
+            },
+            {
+                "source_table": "finance_acquisition_receipts",
+                "strategy": "direct",
+                "target_key": ["source_code"],
+                "source_fields": ["source_code"],
+            },
+        ],
         "columns": {
             "source_code": _target_column(
                 "string",
@@ -110,6 +124,27 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "finance_documents": {
         "logical_key": ["document_id"],
+        "identity_derivations": [
+            {
+                "source_table": "finance_archive_receipts",
+                "strategy": "hash_concat",
+                "target_key": ["document_id"],
+                "source_fields": [
+                    "source_code",
+                    "source_message_id",
+                    "source_attachment_id",
+                    "source_sha256",
+                ],
+                "prefix": "finance-document-v1",
+                "separator": "|",
+            },
+            {
+                "source_table": "finance_document_operations",
+                "strategy": "direct",
+                "target_key": ["document_id"],
+                "source_fields": ["document_id"],
+            },
+        ],
         "columns": {
             "document_id": _target_column("string", "finance_document_operations.document_id"),
             "archive_receipt_id": _target_column("string", "finance_archive_receipts.archive_receipt_id"),
@@ -168,6 +203,45 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "finance_actual_batches": {
         "logical_key": ["idempotency_key"],
+        "identity_derivations": [
+            {
+                "source_table": "finance_actual_outbox",
+                "strategy": "direct",
+                "target_key": ["idempotency_key"],
+                "source_fields": ["imported_id"],
+            },
+            {
+                "source_table": "finance_actual_verifications",
+                "strategy": "join",
+                "target_key": ["idempotency_key"],
+                "join_steps": [
+                    {
+                        "table": "finance_actual_outbox",
+                        "left_fields": ["outbox_id"],
+                        "right_fields": ["outbox_id"],
+                    }
+                ],
+                "terminal_fields": ["imported_id"],
+            },
+            {
+                "source_table": "finance_reconciliations",
+                "strategy": "join",
+                "target_key": ["idempotency_key"],
+                "join_steps": [
+                    {
+                        "table": "finance_actual_verifications",
+                        "left_fields": ["actual_verification_sha256"],
+                        "right_fields": ["observed_payload_sha256"],
+                    },
+                    {
+                        "table": "finance_actual_outbox",
+                        "left_fields": ["outbox_id"],
+                        "right_fields": ["outbox_id"],
+                    },
+                ],
+                "terminal_fields": ["imported_id"],
+            },
+        ],
         "columns": {
             "batch_id": _target_column(
                 "string",
@@ -244,6 +318,14 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "finance_ai_reviews": {
         "logical_key": ["idempotency_key"],
+        "identity_derivations": [
+            {
+                "source_table": "finance_agent_jobs",
+                "strategy": "direct",
+                "target_key": ["idempotency_key"],
+                "source_fields": ["idempotency_key"],
+            }
+        ],
         "columns": {
             "idempotency_key": _target_column("string", "finance_agent_jobs.idempotency_key"),
             "policy_id": _target_column("string", "finance_agent_jobs.policy_id"),
@@ -717,6 +799,106 @@ def target_schema_payload() -> dict[str, dict[str, Any]]:
     return json.loads(json.dumps(TARGET_SCHEMAS))
 
 
+def validate_identity_derivations(
+    tables: list[dict[str, Any]], target_schemas: dict[str, dict[str, Any]]
+) -> None:
+    """Ensure every retained source has a deterministic target-row identity."""
+
+    source_columns: dict[str, dict[str, str]] = {}
+    for table in tables:
+        source_name = table.get("name", table.get("source_table"))
+        columns = table["columns"]
+        if isinstance(columns, dict):
+            source_columns[source_name] = columns
+        else:
+            source_columns[source_name] = {
+                column["source_column"]: column["source_type"]
+                for column in columns
+            }
+    target_sources: dict[str, set[str]] = {target: set() for target in target_schemas}
+    for table in tables:
+        source_name = table.get("name", table.get("source_table"))
+        target = TABLE_METADATA[source_name].get("target_table")
+        if target in target_sources:
+            target_sources[target].add(source_name)
+
+    for target, schema in target_schemas.items():
+        logical_key = schema.get("logical_key")
+        derivations = schema.get("identity_derivations")
+        if not isinstance(logical_key, list) or not logical_key:
+            raise MatrixError(f"{target} must declare a non-empty logical key")
+        if not isinstance(derivations, list) or not derivations:
+            raise MatrixError(f"{target} must declare identity derivations")
+        seen_sources: set[str] = set()
+        for derivation in derivations:
+            if not isinstance(derivation, dict):
+                raise MatrixError(f"{target} has a malformed identity derivation")
+            source_table = derivation.get("source_table")
+            if source_table not in source_columns:
+                raise MatrixError(f"{target} identity source is unknown: {source_table!r}")
+            if source_table in seen_sources:
+                raise MatrixError(f"{target} has duplicate identity derivation for {source_table}")
+            seen_sources.add(source_table)
+            if source_table not in target_sources[target]:
+                raise MatrixError(
+                    f"{target} identity source {source_table} does not belong to the target"
+                )
+            if derivation.get("target_key") != logical_key:
+                raise MatrixError(f"{target}.{source_table} identity does not produce the target logical key")
+            strategy = derivation.get("strategy")
+            if strategy == "direct":
+                source_fields = derivation.get("source_fields")
+                if not isinstance(source_fields, list) or len(source_fields) != len(logical_key):
+                    raise MatrixError(f"{target}.{source_table} direct identity fields are incomplete")
+                if any(field not in source_columns[source_table] for field in source_fields):
+                    raise MatrixError(f"{target}.{source_table} direct identity references an unknown source field")
+            elif strategy == "hash_concat":
+                source_fields = derivation.get("source_fields")
+                if not isinstance(source_fields, list) or len(source_fields) < 2:
+                    raise MatrixError(f"{target}.{source_table} hash identity needs at least two source fields")
+                if logical_key != ["document_id"]:
+                    raise MatrixError(f"{target}.{source_table} hash identity may only produce document_id")
+                if any(source_columns[source_table].get(field) != "string" for field in source_fields):
+                    raise MatrixError(f"{target}.{source_table} hash identity requires string source fields")
+                if not isinstance(derivation.get("prefix"), str) or not derivation["prefix"]:
+                    raise MatrixError(f"{target}.{source_table} hash identity needs a non-empty prefix")
+                if not isinstance(derivation.get("separator"), str) or not derivation["separator"]:
+                    raise MatrixError(f"{target}.{source_table} hash identity needs a non-empty separator")
+            elif strategy == "join":
+                steps = derivation.get("join_steps")
+                terminal_fields = derivation.get("terminal_fields")
+                if not isinstance(steps, list) or not steps or not isinstance(terminal_fields, list):
+                    raise MatrixError(f"{target}.{source_table} join identity is incomplete")
+                current_table = source_table
+                for step in steps:
+                    if not isinstance(step, dict) or step.get("table") not in source_columns:
+                        raise MatrixError(f"{target}.{source_table} join identity references an unknown table")
+                    left_fields = step.get("left_fields")
+                    right_fields = step.get("right_fields")
+                    joined_table = step["table"]
+                    if (
+                        not isinstance(left_fields, list)
+                        or not isinstance(right_fields, list)
+                        or len(left_fields) != len(right_fields)
+                        or not left_fields
+                        or any(field not in source_columns[current_table] for field in left_fields)
+                        or any(field not in source_columns[joined_table] for field in right_fields)
+                    ):
+                        raise MatrixError(f"{target}.{source_table} join identity has invalid join fields")
+                    current_table = joined_table
+                if any(field not in source_columns[current_table] for field in terminal_fields):
+                    raise MatrixError(f"{target}.{source_table} join identity terminal field is unknown")
+                if len(terminal_fields) != len(logical_key):
+                    raise MatrixError(f"{target}.{source_table} join identity terminal fields are incomplete")
+            else:
+                raise MatrixError(f"{target}.{source_table} uses unsupported identity strategy {strategy!r}")
+        if seen_sources != target_sources[target]:
+            raise MatrixError(
+                f"{target} identity derivations do not cover every source: "
+                f"expected {sorted(target_sources[target])}, observed {sorted(seen_sources)}"
+            )
+
+
 def validate_target_mappings(
     tables: list[dict[str, Any]], target_schemas: dict[str, dict[str, Any]]
 ) -> None:
@@ -725,6 +907,7 @@ def validate_target_mappings(
         raise MatrixError("target schemas must contain exactly the four approved targets")
     if target_schemas != TARGET_SCHEMAS:
         raise MatrixError("target schema payload differs from the generator contract")
+    validate_identity_derivations(tables, target_schemas)
 
     observed: dict[tuple[str, str], list[str]] = {}
     for table in tables:

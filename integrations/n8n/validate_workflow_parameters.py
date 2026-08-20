@@ -295,8 +295,8 @@ def scan(
             if node.get("credentials"):
                 findings.append(_finding("CREDENTIAL_BINDING_ON_PARAMETER_NODE", workflow=workflow, node=node_name, detail="parameter nodes cannot own n8n credential bindings"))
             parameters = node.get("parameters")
-            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not False:
-                findings.append(_finding("PARAMETER_PASSTHROUGH_ENABLED", workflow=workflow, node=node_name, detail="parameter nodes must emit only their allowlisted assignments"))
+            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not True:
+                findings.append(_finding("CALLER_FIELDS_NOT_PRESERVED", workflow=workflow, node=node_name, detail="parameter nodes must explicitly merge allowlisted assignments with caller JSON"))
             if spec is None:
                 findings.append(_finding("PARAMETER_NODE_UNALLOWLISTED", workflow=workflow, node=node_name, detail="Set/Edit Fields node is not in the ownership contract"))
             assignment_names: set[str] = set()
@@ -380,6 +380,9 @@ def scan(
                         "duplicate_literal_allowed": bool(field_spec.get("duplicate_literal_allowed", False)),
                     })
             if spec is not None:
+                caller_fields = spec.get("caller_fields", [])
+                if not caller_fields:
+                    findings.append(_finding("CALLER_FIELDS_UNDECLARED", workflow=workflow, node=node_name, detail="parameter node must declare the caller fields preserved by its validated merge"))
                 for missing_field in sorted(set(fields) - assignment_names):
                     findings.append(_finding("PARAMETER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="allowlisted field is absent from export"))
         for missing_node in sorted(set(node_specs) - seen_nodes):

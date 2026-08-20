@@ -29,7 +29,7 @@ def set_workflow(
                 "name": node_name,
                 "type": "n8n-nodes-base.set",
                 "parameters": {
-                    "includeOtherFields": False,
+                    "includeOtherFields": True,
                     "assignments": {
                         "assignments": [
                             {"name": field, "type": field_type, "value": value}
@@ -70,6 +70,70 @@ class N8nWorkflowParameterTests(unittest.TestCase):
         self.assertEqual(report["findings"], [])
         self.assertEqual(report["duplicate_literals"][0]["literal"], "default")
         self.assertTrue(report["duplicate_literals"][0]["allowed"])
+
+    def test_parameter_sets_are_validated_caller_json_merges(self) -> None:
+        """Execute the Set merge contract for every owned node and key consumer."""
+
+        contract = load_json(CONTRACT_PATH)
+        workflow_paths = {
+            **{
+                name: ROOT / "integrations" / "n8n" / "workflows" / name
+                for name in contract["workflows"]
+                if not name.startswith("22-")
+            },
+            "22-onedrive-finance-evidence-root-setup.json": ROOT
+            / "integrations"
+            / "n8n"
+            / "setup-workflows"
+            / "22-onedrive-finance-evidence-root-setup.json",
+        }
+        for workflow_name, workflow_spec in contract["workflows"].items():
+            workflow = load_json(workflow_paths[workflow_name])
+            by_name = {node["name"]: node for node in workflow["nodes"]}
+            for node_name, node_spec in workflow_spec["nodes"].items():
+                with self.subTest(workflow=workflow_name, node=node_name):
+                    node = by_name[node_name]
+                    parameters = node["parameters"]
+                    self.assertIs(parameters["includeOtherFields"], True)
+                    caller = {
+                        field: {"caller": field}
+                        for field in node_spec["caller_fields"]
+                    }
+                    merged = dict(caller)
+                    assignments = parameters["assignments"]["assignments"]
+                    for assignment in assignments:
+                        merged[assignment["name"]] = assignment["value"]
+                    self.assertTrue(
+                        set(node_spec["caller_fields"]).issubset(merged),
+                        f"{workflow_name}::{node_name} dropped caller JSON",
+                    )
+
+        # These are the high-risk boundaries called out by the workflow
+        # contracts. Their immediate consumers must visibly reference the
+        # preserved caller fields, not merely appear in an inventory.
+        checks = {
+            (
+                "03-shared-statement-pipeline.json",
+                "Statement Pipeline Parameters",
+                "Verify Archive and Execution Context",
+            ): ("run_id", "source_attachment_id", "attachment_id"),
+            (
+                "20-actual-outbox-apply.json",
+                "Actual Writer Parameters",
+                "Download Immutable Delta Artifact",
+            ): ("artifact_item_id",),
+            (
+                "21-subscription-agent-adapter.json",
+                "Subscription Provider Parameters",
+                "Validate and Build Fixed Provider Invocation",
+            ): ("agent_provider", "policy_class"),
+        }
+        for (workflow_name, parameter_name, consumer_name), fields in checks.items():
+            workflow = load_json(workflow_paths[workflow_name])
+            consumer = next(node for node in workflow["nodes"] if node["name"] == consumer_name)
+            consumer_text = json.dumps(consumer, sort_keys=True)
+            for field in fields:
+                self.assertIn(field, consumer_text, f"{workflow_name}::{parameter_name}->{consumer_name}")
 
     def test_model_and_reasoning_values_are_source_selected_not_literal_allowlisted(self) -> None:
         contract = load_json(CONTRACT_PATH)

@@ -108,8 +108,14 @@
             "additionalProperties": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["fields"],
+              "required": ["caller_fields", "fields"],
               "properties": {
+                "caller_fields": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}
+                },
                 "fields": {
                   "type": "object",
                   "minProperties": 1,

@@ -19,7 +19,7 @@ CORPUS_SNAPSHOT = {
         "nodes": 48, "edges": 46, "sticky": 6, "groups": 7,
         "node_ids_sha256": "e5c57fa1afe9759cdfe1c34b39d5c563a9c673091287995cc37c5824cbbd05c7",
         "connections_sha256": "7bf20be092faa1e9652f4dcc8c2ed4c462fc3c262d308c0e846a81ba9ba2c58d",
-        "parameters_sha256": "2a861be7e5e64facbfaf854d84e9864944ab19c22410deda3aa8a21d1fdbdf6b",
+        "parameters_sha256": "4ca05848c026494d9c12afa75d58e6f68cefcffb49ed1d2a5d0aea0be762c093",
         "groups_sha256": "4664caa773a2aab6e3bbcef3039ff003c2db47d29fb990a56e1ceb867b42f43c",
     },
     "02-rakbank-live-cashback.json": {
@@ -33,7 +33,7 @@ CORPUS_SNAPSHOT = {
         "nodes": 43, "edges": 40, "sticky": 5, "groups": 5,
         "node_ids_sha256": "5aab0cad859aa2b0ea464773026f16893ad204dc1439624f3159853c693a2ba4",
         "connections_sha256": "17dbcf44f8b88287f67fe45ad4bbf1de5b326e241eff7bfb056832cbf92d19d9",
-        "parameters_sha256": "bf1316d32e0d2bbf82b5fdb721963cba5a562829f328ac3f5c585f8d78db6310",
+        "parameters_sha256": "20348c7e52270737b7d21aeb0a7e88c166cef8187a4116caef79b0df801b8dfa",
         "groups_sha256": "82b1b5b302e05a98f640377b1492843ac6f6408a40de0a58f93b0abe7763879a",
     },
     "04-ei-monthly-statement.json": {
@@ -75,7 +75,7 @@ CORPUS_SNAPSHOT = {
         "nodes": 35, "edges": 30, "sticky": 4, "groups": 4,
         "node_ids_sha256": "5adc8b6735156f9707654c224992b4222aaf57ce1e04aa75a0febf3b8fa367bf",
         "connections_sha256": "4ff52193b65ee9e9b3127e162d9237ea98098100e31d7ed51faa53d9d9b1f103",
-        "parameters_sha256": "5c67237ebdd7568658d71519a5da86014c083d6309dfbda4cfea0179cc8d352c",
+        "parameters_sha256": "81f74d575791b13c49f2a9d4397df0c159c9cb149662bfa74b4de28b9c98f4f9",
         "groups_sha256": "76109032e9b59e76b1b3e2b357b4359123e35e040d34f2ee82d486edf1f532a6",
     },
     "10-finance-operations-status.json": {
@@ -110,7 +110,7 @@ CORPUS_SNAPSHOT = {
         "nodes": 11, "edges": 8, "sticky": 2, "groups": 1,
         "node_ids_sha256": "70a377c99ac7bff4b607473ffa2b436955e7d06b7529dbd8ca7697ee19920851",
         "connections_sha256": "33a911a9a17f40329ee434f5335de58f019757622eddd205b27c3be6a9460104",
-        "parameters_sha256": "c36c879f959b4cba11b6b63e1b2cbd82a4604690231ba7e2ab2df5ae731d2a82",
+        "parameters_sha256": "4e7d37fa331fdde338472e8926e0105c2f9a6f1845c7a0fbf75274374f22bf30",
         "groups_sha256": "f5302f8b0dad29e0f1da463e0eca2324188d1d799b978e921c5350c12ec971da",
     },
     "15-finance-mcp-facade.json": {
@@ -152,14 +152,14 @@ CORPUS_SNAPSHOT = {
         "nodes": 33, "edges": 30, "sticky": 4, "groups": 4,
         "node_ids_sha256": "dc2a457ee47afc1668b93f5ff1c2e576c16559cd63d9cf0da03906c869cee4e0",
         "connections_sha256": "e49fbb079f9ba6f49db633d98a2d871a15b9a393296693a24ea118883e4eb1c4",
-        "parameters_sha256": "58f494c14da9af2320a2ba7d8682c11ed49ec9caa30f97d463455a67c50a69e7",
+        "parameters_sha256": "4eb78203d8b8635074b63d6217ace3f35bf302c52840098ebf038e9b56b93f9a",
         "groups_sha256": "9eb816e129431247bad3b0b6acf54c1f800dd7535ace24a900764d50d3ca186c",
     },
     "21-subscription-agent-adapter.json": {
         "nodes": 9, "edges": 8, "sticky": 1, "groups": 1,
         "node_ids_sha256": "44424a413fe42001fed8cdcc4f2c9af6c47c75bd5b9936ede9676f889896b5cb",
         "connections_sha256": "dc9ef1e63829f6c2ef02d613ca6c9f4d15b7826ec808384e86612985655f646f",
-        "parameters_sha256": "1919dd217c04d945b4c658874b3d2f45745b3298c69b05299e282b0dc577ffc3",
+        "parameters_sha256": "470d69122454e89289903885d74bba65bc2152bd05d558fe4391c5beba228f97",
         "groups_sha256": "e1990b4608b5f524f88b0190f3c1be4a625c9297f9610ad76ec8a181ad5fbf90",
     },
 }

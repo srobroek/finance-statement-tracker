@@ -27,7 +27,7 @@
       ],
       "parameters": {
         "mode": "manual",
-        "includeOtherFields": false,
+        "includeOtherFields": true,
         "assignments": {
           "assignments": [
             {

@@ -149,7 +149,7 @@
           ]
         },
         "options": {},
-        "includeOtherFields": false
+        "includeOtherFields": true
       }
     },
     {
@@ -197,7 +197,7 @@
             }
           ]
         },
-        "includeOtherFields": false,
+        "includeOtherFields": true,
         "options": {}
       }
     },

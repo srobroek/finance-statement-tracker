@@ -6,7 +6,7 @@
   "source_snapshot": {
     "finance_commit": "926a99a40901fad5f40b15f129e5a0a5fca3cf69",
     "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
-    "node_scan_corpus_sha256": "104a88bc99af5909837509904a3d25039fb9f97e727d54c7bee19dfe6fbaba49",
+    "node_scan_corpus_sha256": "8bdd8feedee1c07ece5548578d3965c6fdbb8ee972b8bc6c15d374171b5600d9",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -25,6 +25,28 @@
     "finance_ingestion_state": {
       "logical_key": [
         "source_code"
+      ],
+      "identity_derivations": [
+        {
+          "source_table": "finance_source_cursors",
+          "strategy": "direct",
+          "target_key": [
+            "source_code"
+          ],
+          "source_fields": [
+            "source_code"
+          ]
+        },
+        {
+          "source_table": "finance_acquisition_receipts",
+          "strategy": "direct",
+          "target_key": [
+            "source_code"
+          ],
+          "source_fields": [
+            "source_code"
+          ]
+        }
       ],
       "columns": {
         "source_code": {
@@ -141,6 +163,33 @@
     "finance_documents": {
       "logical_key": [
         "document_id"
+      ],
+      "identity_derivations": [
+        {
+          "source_table": "finance_archive_receipts",
+          "strategy": "hash_concat",
+          "target_key": [
+            "document_id"
+          ],
+          "source_fields": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256"
+          ],
+          "prefix": "finance-document-v1",
+          "separator": "|"
+        },
+        {
+          "source_table": "finance_document_operations",
+          "strategy": "direct",
+          "target_key": [
+            "document_id"
+          ],
+          "source_fields": [
+            "document_id"
+          ]
+        }
       ],
       "columns": {
         "document_id": {
@@ -304,6 +353,69 @@
     "finance_actual_batches": {
       "logical_key": [
         "idempotency_key"
+      ],
+      "identity_derivations": [
+        {
+          "source_table": "finance_actual_outbox",
+          "strategy": "direct",
+          "target_key": [
+            "idempotency_key"
+          ],
+          "source_fields": [
+            "imported_id"
+          ]
+        },
+        {
+          "source_table": "finance_actual_verifications",
+          "strategy": "join",
+          "target_key": [
+            "idempotency_key"
+          ],
+          "join_steps": [
+            {
+              "table": "finance_actual_outbox",
+              "left_fields": [
+                "outbox_id"
+              ],
+              "right_fields": [
+                "outbox_id"
+              ]
+            }
+          ],
+          "terminal_fields": [
+            "imported_id"
+          ]
+        },
+        {
+          "source_table": "finance_reconciliations",
+          "strategy": "join",
+          "target_key": [
+            "idempotency_key"
+          ],
+          "join_steps": [
+            {
+              "table": "finance_actual_verifications",
+              "left_fields": [
+                "actual_verification_sha256"
+              ],
+              "right_fields": [
+                "observed_payload_sha256"
+              ]
+            },
+            {
+              "table": "finance_actual_outbox",
+              "left_fields": [
+                "outbox_id"
+              ],
+              "right_fields": [
+                "outbox_id"
+              ]
+            }
+          ],
+          "terminal_fields": [
+            "imported_id"
+          ]
+        }
       ],
       "columns": {
         "batch_id": {
@@ -524,6 +636,18 @@
     "finance_ai_reviews": {
       "logical_key": [
         "idempotency_key"
+      ],
+      "identity_derivations": [
+        {
+          "source_table": "finance_agent_jobs",
+          "strategy": "direct",
+          "target_key": [
+            "idempotency_key"
+          ],
+          "source_fields": [
+            "idempotency_key"
+          ]
+        }
       ],
       "columns": {
         "idempotency_key": {

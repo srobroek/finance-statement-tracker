@@ -680,7 +680,9 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
 """.strip()
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     ready = node_by_name(local_pdf, "Ready for Deterministic Parser")
-    ready["parameters"]["includeOtherFields"] = False
+    # Set nodes are explicit validated merges: local parser metadata is added
+    # without dropping the binary-input contract and caller JSON.
+    ready["parameters"]["includeOtherFields"] = True
     local_pdf["meta"]["reusableBoundary"] = "PDF_VALIDATE_UNLOCK_PROFILE_QUALITY"
 
     # Interactive handoff archives the binary capture once, then validates the
@@ -2143,7 +2145,7 @@ return [{
                 }
                 for index, (name, value_type, value) in enumerate(values, start=1)
             ]},
-            "includeOtherFields": False,
+            "includeOtherFields": True,
             "options": {},
         }
         workflow["connections"][trigger_name] = {
@@ -2268,7 +2270,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "position": [-650, 0],
             "parameters": {
                 "mode": "manual",
-                "includeOtherFields": False,
+                "includeOtherFields": True,
                 "assignments": {"assignments": [
                     {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
                     {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
