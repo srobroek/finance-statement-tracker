@@ -212,6 +212,21 @@ def group_snapshot(workflow: dict) -> list[dict]:
     ]
 
 
+def registry_export_code_mismatches(
+    rows: list[dict], workflows: dict[str, dict]
+) -> list[str]:
+    mismatches: list[str] = []
+    for row in rows:
+        filename = row.get("file")
+        workflow = workflows.get(filename)
+        export_code = workflow.get("meta", {}).get("financeWorkflowCode") if workflow else None
+        if export_code != row.get("code"):
+            mismatches.append(
+                f"{filename}: registry code={row.get('code')!r}, export code={export_code!r}"
+            )
+    return mismatches
+
+
 class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -275,6 +290,40 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
             set(registry_codes),
             "registry/export workflow-code bijection drift",
         )
+        self.assertEqual(
+            registry_export_code_mismatches(rows, self.workflows),
+            [],
+            "registry row is bound to the wrong export: "
+            f"{registry_export_code_mismatches(rows, self.workflows)}",
+        )
+
+        folder_by_code = {
+            code: folder
+            for folder in self.folder_manifest["folders"]
+            for code in folder["workflow_codes"]
+        }
+        same_folder_id = folder_by_code[rows[0]["code"]]["id"]
+        same_folder_indices = [
+            index
+            for index, row in enumerate(rows)
+            if folder_by_code[row["code"]]["id"] == same_folder_id
+        ]
+        self.assertGreaterEqual(
+            len(same_folder_indices),
+            2,
+            "negative fixture requires two registry rows in one folder",
+        )
+        swapped_rows = [dict(row) for row in rows]
+        first_index, second_index = same_folder_indices[:2]
+        swapped_rows[first_index]["code"], swapped_rows[second_index]["code"] = (
+            swapped_rows[second_index]["code"],
+            swapped_rows[first_index]["code"],
+        )
+        self.assertNotEqual(
+            registry_export_code_mismatches(swapped_rows, self.workflows),
+            [],
+            "registry/export guard failed to detect a same-folder code swap",
+        )
 
         folders = self.folder_manifest["folders"]
         self.assert_metric("folder manifest", "folder count", 8, len(folders))
@@ -285,11 +334,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
         codes = [code for folder in folders for code in folder["workflow_codes"]]
         self.assertEqual(len(codes), len(set(codes)), "duplicate folder workflow codes")
         self.assertEqual(set(codes), set(registry_codes), "folder/registry workflow-code bijection drift")
-        by_code = {
-            code: folder
-            for folder in folders
-            for code in folder["workflow_codes"]
-        }
+        by_code = folder_by_code
         expected_tags = self.folder_manifest["tags"]
         for row in rows:
             filename = row["file"]
