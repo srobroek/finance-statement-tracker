@@ -2054,7 +2054,7 @@ return [{
                             "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
                             "reconciliation_version": 1,
                             "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
-                            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_sha256 }}",
+                            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
                             "cashback_close_id": "={{ $json.close_id || '' }}",
                             "state": "COMMITTED",
                             "difference_minor": 0,
@@ -3191,7 +3191,7 @@ def main() -> int:
     for workflow in workflows:
         # W03 is a reviewed migration canvas. Preserve its existing positions
         # and groups while adding runtime nodes; this task does not redesign UI.
-        if workflow["meta"]["financeWorkflowCode"] != "SHARED_STATEMENT_PIPELINE":
+        if workflow["meta"]["financeWorkflowCode"] not in {"SHARED_STATEMENT_PIPELINE", "ACTUAL_OUTBOX_APPLY"}:
             layout(workflow)
     rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
     if args.check:

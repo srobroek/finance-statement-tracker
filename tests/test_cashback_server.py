@@ -211,6 +211,22 @@ class CashbackServerTests(unittest.TestCase):
                     "statement_document_url": "https://evidence.example/statement.pdf",
                 })
                 self.assertEqual(finalized["period"]["status"], "FINALIZED")
+                self.assertEqual(
+                    finalized["period"]["close_id"],
+                    "cashback-close:RAK_WORLD:2026-08-06:2026-09-05",
+                )
+                replayed = post("periods/finalize", {
+                    "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
+                    "statement_sha256": hashlib.sha256(
+                        b"synthetic-statement-2026-08-06--2026-09-05"
+                    ).hexdigest(),
+                    "actual_import_receipt": receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(receipt),
+                    "statement_evidence_reference": "sha256:synthetic",
+                    "statement_document_url": "https://evidence.example/statement.pdf",
+                })
+                self.assertTrue(replayed["period"]["idempotent_replay"])
+                self.assertEqual(replayed["period"]["close_id"], finalized["period"]["close_id"])
                 missing_receipt = {
                     key: value
                     for key, value in {

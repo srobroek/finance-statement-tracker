@@ -487,6 +487,9 @@ try {{
             "Upsert Exact Actual Verification Receipt",
             "Read Back Exact Actual Verification Receipt",
             "Compare Exact Actual Verification Receipt",
+            "Route Recovery State", "Read Back COMMITTED Recovery Replay",
+            "Read Back Exact Actual Verification Receipt Replay",
+            "Return Verified Commit Receipt Replay",
         ):
             self.assertIn(name, writer)
         code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"]["parameters"]["jsCode"]
@@ -502,6 +505,14 @@ try {{
         self.assertNotIn(
             "receipt.card_code || receipt.account_id",
             writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Route Recovery State"]["main"][3][0]["node"],
+            "Read Back COMMITTED Recovery Replay",
+        )
+        self.assertIn(
+            "replay_readback_only",
+            writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"],
         )
 
     def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
@@ -523,6 +534,74 @@ try {{
             "concurrent-acquire", "expired-reacquire", "stale-token-before-import",
             "kill-after-prepared", "kill-after-actual-observed", "kill-after-verified",
         }.issubset(cases))
+
+    def test_committed_actual_replay_is_readback_only_and_rejects_stale_receipts(self) -> None:
+        digest = "a" * 64
+        committed = {
+            "outbox_id": "outbox:replay-1",
+            "state": "COMMITTED",
+        }
+        receipt = {
+            "outbox_id": "outbox:replay-1",
+            "actual_file_id": "actual-file:replay-1",
+            "account_id": "actual-account:EI_AMAZON",
+            "card_code": "EI_AMAZON",
+            "verification_version": 1,
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": digest,
+            "observed_payload_sha256": digest,
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": 100,
+            "observed_amount_sum_minor": 100,
+            "expected_account_balance": -100,
+            "observed_account_balance": -100,
+            "invariants_passed": True,
+            "verified_at": "2026-08-20T00:00:00+00:00",
+        }
+        references = {
+            "Verify Recovery Contract": {
+                "json": {
+                    "outbox_row": committed,
+                    "manifest": {
+                        "actual_file_id": "actual-file:replay-1",
+                        "account_id": "actual-account:EI_AMAZON",
+                        "card_code": "EI_AMAZON",
+                        "period_start": "2026-08-01",
+                        "period_end": "2026-08-31",
+                    },
+                }
+            },
+            "Read Back COMMITTED Recovery Replay": {"json": committed},
+            "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+        }
+        replay = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt Replay",
+            receipt,
+            references,
+        )
+        self.assertTrue(replay["ok"], replay)
+        self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
+        self.assertEqual(replay["output"][0]["json"]["state"], "COMMITTED")
+        invalid_cases = (
+            ({**committed, "state": "ACTUAL_OBSERVED"}, receipt),
+            (committed, {**receipt, "card_code": "RAK_WORLD"}),
+            (committed, {**receipt, "observed_payload_sha256": "b" * 64}),
+        )
+        for invalid_committed, invalid_receipt in invalid_cases:
+            rejected = self.run_exported_workflow_node(
+                "20-actual-outbox-apply.json",
+                "Return Verified Commit Receipt Replay",
+                invalid_receipt,
+                {
+                    **references,
+                    "Read Back COMMITTED Recovery Replay": {"json": invalid_committed},
+                    "Read Back Exact Actual Verification Receipt Replay": {"json": invalid_receipt},
+                },
+            )
+            self.assertFalse(rejected["ok"])
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
@@ -1646,6 +1725,14 @@ try {{
             "Cashback Close Required",
         )
         self.assertEqual(
+            workflow["connections"]["Finalize Eligible Cashback Period"]["main"][0][0]["node"],
+            "Validate Cashback Finalization Response",
+        )
+        self.assertEqual(
+            workflow["connections"]["Validate Cashback Finalization Response"]["main"][0][0]["node"],
+            "Upsert Reconciliation Receipt",
+        )
+        self.assertEqual(
             nodes["Convert Trusted Actual Receipt to File"]["type"],
             "n8n-nodes-base.convertToFile",
         )
@@ -1664,6 +1751,8 @@ try {{
             "Build Cashback Reconciliation Request",
             nodes["Reconcile Cashback Statement"]["parameters"]["jsonBody"],
         )
+        self.assertIn("CASHBACK_FINALIZE_RESPONSE_BINDING_MISMATCH", nodes["Validate Cashback Finalization Response"]["parameters"]["jsCode"])
+        self.assertIn("close_id", nodes["Upsert Reconciliation Receipt"]["parameters"]["columns"]["value"]["cashback_close_id"])
         body = nodes["Finalize Eligible Cashback Period"]["parameters"]["jsonBody"]
         self.assertIn("Finalize Trusted Cashback Payload", body)
         self.assertNotIn("cashback_finalization", nodes["Validate Statement Reconciliation and IDs"]["parameters"]["jsCode"])
@@ -1690,6 +1779,7 @@ try {{
                 "amount_aed": "8.00",
                 "currency_original": "AED",
                 "transaction_type": "PURCHASE",
+                "purchase_type": "GROCERY",
             }],
         }
         manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31", "card_code": "EI_AMAZON"}
@@ -1770,6 +1860,50 @@ try {{
             "statement-transaction-1",
         )
         self.assertEqual(reconcile_request["transactions"][0]["event_type"], "PURCHASE")
+        self.assertEqual(reconcile_request["transactions"][0]["purchase_type"], "GROCERY")
+        close_id = "cashback-close:EI_AMAZON:2026-08-01:2026-08-31"
+        finalize_response = {
+            "period": {
+                "close_id": close_id,
+                "card_code": "EI_AMAZON",
+                "period_start": "2026-08-01",
+                "period_end": "2026-08-31",
+                "statement_reference": "EI-2026-08",
+                "statement_sha256": "c" * 64,
+                "actual_import_receipt_sha256": receipt_digest,
+                "actual_verification_sha256": receipt_digest,
+                "status": "FINALIZED",
+                "idempotent_replay": False,
+            }
+        }
+        validated_close = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Validate Cashback Finalization Response",
+            finalize_response,
+            {
+                **references,
+                "Build Cashback Reconciliation Request": reconciled["output"][0],
+                "Finalize Trusted Cashback Payload": finalized["output"][0],
+            },
+        )
+        self.assertTrue(validated_close["ok"], validated_close)
+        self.assertEqual(validated_close["output"][0]["json"]["close_id"], close_id)
+        for invalid_response in (
+            {"period": {key: value for key, value in finalize_response["period"].items() if key != "close_id"}},
+            {"period": {**finalize_response["period"], "status": "COMMITTED"}},
+            {"period": {**finalize_response["period"], "actual_verification_sha256": "d" * 64}},
+        ):
+            rejected_response = self.run_exported_workflow_node(
+                "03-shared-statement-pipeline.json",
+                "Validate Cashback Finalization Response",
+                invalid_response,
+                {
+                    **references,
+                    "Build Cashback Reconciliation Request": reconciled["output"][0],
+                    "Finalize Trusted Cashback Payload": finalized["output"][0],
+                },
+            )
+            self.assertFalse(rejected_response["ok"])
         empty_statement_references = {
             **references,
             "Validate Statement Reconciliation and IDs": {"json": {**statement, "transactions": []}},

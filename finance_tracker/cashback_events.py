@@ -123,6 +123,11 @@ def _payload_sha256(payload: dict[str, Any], fields: tuple[str, ...], label: str
     return values.pop()
 
 
+def _close_identifier(card_code: str, period_start: str, period_end: str) -> str:
+    """Return the server-owned stable identifier for a finalized card period."""
+    return f"cashback-close:{card_code}:{period_start}:{period_end}"
+
+
 def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Validate and hash the independently read-back Actual verification receipt.
 
@@ -1547,6 +1552,11 @@ class CashbackEventStore:
                             "finalized statement reference was already used for different content, digest, or evidence"
                         )
                     return {
+                        "close_id": _close_identifier(
+                            str(existing["card_code"]),
+                            str(existing["period_start"]),
+                            str(existing["period_end"]),
+                        ),
                         "card_code": existing["card_code"],
                         "period_start": existing["period_start"],
                         "period_end": existing["period_end"],
@@ -1623,6 +1633,11 @@ class CashbackEventStore:
                     (run["card_code"], next_start.isoformat(), next_end.isoformat()),
                 )
         return {
+            "close_id": _close_identifier(
+                str(run["card_code"]),
+                str(run["period_start"]),
+                str(run["period_end"]),
+            ),
             "card_code": run["card_code"],
             "period_start": run["period_start"],
             "period_end": run["period_end"],

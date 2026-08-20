@@ -714,7 +714,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.transaction_type || row.event_type || '').trim().toUpperCase();\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: String(row.currency_original || row.currency || 'AED'),\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: eventType,\n        event_type: eventType,\n    };\n});\nif (!transactions.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY');\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"
+        "jsCode": "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.event_type || row.transaction_type || '').trim().toUpperCase();\n    const purchaseType = String(row.purchase_type || row.category || 'GENERAL').trim().toUpperCase();\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: String(row.currency_original || row.currency || 'AED'),\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: purchaseType,\n        event_type: eventType,\n    };\n});\nif (!transactions.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY');\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"
       }
     },
     {
@@ -801,6 +801,19 @@
           "id": "BIND_CASHBACK_INGEST",
           "name": "Cashback Ingest Bearer"
         }
+      }
+    },
+    {
+      "id": "3067",
+      "name": "Validate Cashback Finalization Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Cashback Finalization Response. Keep this deterministic and fail closed.\nconst response = $json;\nconst period = response?.period;\nconst request = $('Build Cashback Reconciliation Request').first().json.cashback_reconcile;\nconst finalization = $('Finalize Trusted Cashback Payload').first().json.cashback_finalization;\nif (!period || typeof period !== 'object' || Array.isArray(period))\n    throw new Error('CASHBACK_FINALIZE_RESPONSE_PERIOD_MISSING');\nconst required = ['close_id', 'card_code', 'period_start', 'period_end', 'statement_reference', 'statement_sha256', 'actual_import_receipt_sha256', 'actual_verification_sha256', 'status', 'idempotent_replay'];\nfor (const field of required) {\n    if (period[field] === undefined || period[field] === null || period[field] === '')\n        throw new Error('CASHBACK_FINALIZE_RESPONSE_FIELD_MISSING:' + field);\n}\nif (period.status !== 'FINALIZED' || typeof period.idempotent_replay !== 'boolean')\n    throw new Error('CASHBACK_FINALIZE_RESPONSE_STATUS_INVALID');\nif (String(period.close_id).trim() === '')\n    throw new Error('CASHBACK_FINALIZE_RESPONSE_CLOSE_ID_INVALID');\nif (String(period.card_code).toUpperCase() !== String(request.card_code).toUpperCase()\n    || String(period.period_start) !== String(request.period_start)\n    || String(period.period_end) !== String(request.period_end)\n    || String(period.statement_reference) !== String(request.statement_reference)\n    || String(period.statement_sha256).toLowerCase() !== String(request.statement_sha256).toLowerCase()\n    || String(period.actual_import_receipt_sha256).toLowerCase() !== String(finalization.actual_import_receipt_sha256).toLowerCase()\n    || String(period.actual_verification_sha256).toLowerCase() !== String(finalization.actual_import_receipt_sha256).toLowerCase())\n    throw new Error('CASHBACK_FINALIZE_RESPONSE_BINDING_MISMATCH');\nreturn [{ json: { close_id: String(period.close_id), finalize_response: response } }];\n"
       }
     },
     {
@@ -1510,6 +1523,17 @@
       ]
     },
     "Finalize Eligible Cashback Period": {
+      "main": [
+        [
+          {
+            "node": "Validate Cashback Finalization Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Cashback Finalization Response": {
       "main": [
         [
           {

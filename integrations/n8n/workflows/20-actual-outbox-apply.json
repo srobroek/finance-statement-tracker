@@ -84,6 +84,101 @@
       }
     },
     {
+      "id": "17026",
+      "name": "Route Recovery State",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        680,
+        -380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.outbox_row.state }}",
+                    "rightValue": "PREPARED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.outbox_row.state }}",
+                    "rightValue": "ACTUAL_OBSERVED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.outbox_row.state }}",
+                    "rightValue": "VERIFIED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.outbox_row.state }}",
+                    "rightValue": "COMMITTED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
       "id": "17007",
       "name": "Build Recovery Lease Acquire Request",
       "type": "n8n-nodes-base.code",
@@ -617,6 +712,100 @@
       }
     },
     {
+      "id": "17027",
+      "name": "Read Back COMMITTED Recovery Replay",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        -380
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "COMMITTED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17028",
+      "name": "Read Back Exact Actual Verification Receipt Replay",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        -380
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_verifications",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "verification_version",
+              "condition": "eq",
+              "keyValue": 1
+            },
+            {
+              "keyName": "invariants_passed",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17029",
+      "name": "Return Verified Commit Receipt Replay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        -380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nif (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true)\n    throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');\nif (text(receipt.outbox_id) !== text(committed.outbox_id)\n    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(manifest.period_start)\n    || text(receipt.period_end) !== text(manifest.period_end)\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))\n    throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');\nreturn [{ json: {\n            outbox_id: committed.outbox_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            writer_release_verified: true,\n            replay_readback_only: true,\n        } }];\n"
+      }
+    },
+    {
       "id": "20003",
       "name": "Upsert Exact Actual Verification Receipt",
       "type": "n8n-nodes-base.dataTable",
@@ -874,7 +1063,61 @@
       "main": [
         [
           {
+            "node": "Route Recovery State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Recovery State": {
+      "main": [
+        [
+          {
             "node": "Build Recovery Lease Acquire Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Recovery Lease Acquire Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Recovery Lease Acquire Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Back COMMITTED Recovery Replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back COMMITTED Recovery Replay": {
+      "main": [
+        [
+          {
+            "node": "Read Back Exact Actual Verification Receipt Replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Exact Actual Verification Receipt Replay": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Commit Receipt Replay",
             "type": "main",
             "index": 0
           }

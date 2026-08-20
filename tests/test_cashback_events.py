@@ -518,8 +518,10 @@ class CashbackEventStoreTests(unittest.TestCase):
             replay = store.finalize_period(payload)
 
             self.assertEqual(finalized["status"], "FINALIZED")
+            self.assertEqual(finalized["close_id"], "cashback-close:EI_AMAZON:2026-08-01:2026-08-31")
             self.assertFalse(finalized["idempotent_replay"])
             self.assertTrue(replay["idempotent_replay"])
+            self.assertEqual(replay["close_id"], finalized["close_id"])
             periods = store.period_rows()
             self.assertEqual(periods[0]["status"], "OPEN")
             self.assertEqual(periods[1]["status"], "FINALIZED")
