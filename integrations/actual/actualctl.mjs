@@ -194,28 +194,29 @@ export async function openBudget() {
   await actual.sync();
 }
 
-async function doctor() {
-  const server = await actual.getServerVersion();
-  const accounts = await actual.getAccounts();
-  const categories = await actual.getCategories();
-  const groups = await actual.getCategoryGroups();
-  const tags = await actual.getTags();
-  const rules = await actual.getRules();
-  const schedules = await actual.getSchedules();
+export async function doctor(api = actual) {
+  const server = await api.getServerVersion();
+  const accounts = await api.getAccounts();
+  const categories = await api.getCategories();
+  const groups = await api.getCategoryGroups();
+  const tags = await api.getTags();
+  const rules = await api.getRules();
+  const schedules = await api.getSchedules();
+  const syncId = requireEnv("ACTUAL_SYNC_ID");
   const balances = [];
   for (const account of accounts) {
     balances.push({
-      id: account.id,
+      id: "[REDACTED]",
       name: account.name,
       offbudget: Boolean(account.offbudget),
       closed: Boolean(account.closed),
-      balance: await actual.getAccountBalance(account.id),
+      balance: await api.getAccountBalance(account.id),
     });
   }
   return {
     status: "ok",
     server,
-    sync_id: requireEnv("ACTUAL_SYNC_ID"),
+    sync_id_present: Boolean(syncId),
     counts: {
       accounts: accounts.length,
       category_groups: groups.length,
