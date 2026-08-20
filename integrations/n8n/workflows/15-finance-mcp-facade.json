@@ -9,7 +9,7 @@
       "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         0
       ],
       "parameters": {
@@ -29,7 +29,7 @@
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
-        -820,
+        -1120,
         0
       ],
       "parameters": {
@@ -58,7 +58,7 @@
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
-        -520,
+        -820,
         0
       ],
       "parameters": {
@@ -88,7 +88,7 @@
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
-        -220,
+        -520,
         0
       ],
       "parameters": {
@@ -117,7 +117,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000015-generated-note-1",
-      "name": "Stage 1 · Finance MCP Server Trigger to finance.document.request.v1",
+      "name": "Stage 1 · finance.status.v1 to Finance MCP Server Trigger",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -125,7 +125,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Finance MCP Server Trigger → finance.document.request.v1\n**Input:** Finance MCP Server Trigger  ·  **Output:** finance.document.request.v1  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · finance.status.v1 → Finance MCP Server Trigger\n**Input:** finance.status.v1  ·  **Output:** Finance MCP Server Trigger  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7

@@ -17,8 +17,8 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def exported_tools(workflow: dict) -> dict[str, dict]:
-    """Extract the MCP tools as n8n exports them, not from a second fixture."""
+def declared_tools(workflow: dict) -> dict[str, dict]:
+    """Extract declared MCP tool nodes from the workflow graph itself."""
     trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
     tools = {
         node["parameters"]["name"]: node
@@ -38,19 +38,19 @@ def exported_tools(workflow: dict) -> dict[str, dict]:
     return tools
 
 
-def published_tools_list(workflow: dict) -> list[str]:
-    """Model the MCP publication registry from the authoritative n8n graph."""
-    return sorted(exported_tools(workflow))
+def declared_tools_list(workflow: dict) -> list[str]:
+    """Derive the declared tool names from the authoritative n8n graph."""
+    return sorted(declared_tools(workflow))
 
 
-def call_published_tool(workflow: dict, name: str, arguments: dict[str, str]) -> dict:
-    """Execute the bounded source contract used by publication tests.
+def build_tool_call_envelope(workflow: dict, name: str, arguments: dict[str, str]) -> dict:
+    """Build the bounded source call envelope for structural contract tests.
 
-    n8n evaluates the ``$fromAI`` expressions at runtime. This harness supplies
-    those values and returns the exact subworkflow call envelope without making
-    any external or production mutation.
+    n8n evaluates the ``$fromAI`` expressions at runtime. This structural
+    harness supplies those values and returns the exact subworkflow envelope;
+    it does not publish a workflow or call n8n.
     """
-    tools = exported_tools(workflow)
+    tools = declared_tools(workflow)
     if name not in tools:
         raise LookupError("MCP_TOOL_NOT_FOUND")
     parameters = tools[name]["parameters"]
@@ -71,7 +71,7 @@ def call_published_tool(workflow: dict, name: str, arguments: dict[str, str]) ->
 
 
 class FinanceMcpContractTests(unittest.TestCase):
-    def test_exported_w15_contract_matches_application_contract(self) -> None:
+    def test_w15_source_contract_matches_application_contract(self) -> None:
         workflow = load_json(WORKFLOW)
         contract = load_json(CONTRACT)
         manifest = load_json(MANIFEST)
@@ -87,7 +87,7 @@ class FinanceMcpContractTests(unittest.TestCase):
             hashlib.sha256(CONTRACT.read_bytes().replace(b"\r\n", b"\n")).hexdigest(),
         )
 
-        tools = exported_tools(workflow)
+        tools = declared_tools(workflow)
         self.assertEqual(set(tools), set(expected_names))
         self.assertEqual(
             sorted(node["name"] for node in tools.values()),
@@ -99,7 +99,7 @@ class FinanceMcpContractTests(unittest.TestCase):
             self.assertNotIn("_", tools[row["name"]]["parameters"]["name"])
 
     def test_external_tool_names_reject_legacy_underscore_and_unversioned_forms(self) -> None:
-        tools = exported_tools(load_json(WORKFLOW))
+        tools = declared_tools(load_json(WORKFLOW))
         external_names = set(tools)
         self.assertNotIn("finance_status", external_names)
         self.assertNotIn("artifact_submit_reviewed", external_names)
@@ -108,10 +108,10 @@ class FinanceMcpContractTests(unittest.TestCase):
         self.assertNotIn("artifact.submit_reviewed", external_names)
         self.assertNotIn("document.request", external_names)
 
-    def test_source_publication_lists_three_tools_and_executes_exact_calls(self) -> None:
+    def test_source_graph_declares_three_tools_and_exact_call_envelopes(self) -> None:
         workflow = load_json(WORKFLOW)
         self.assertEqual(
-            published_tools_list(workflow),
+            declared_tools_list(workflow),
             [
                 "finance.document.request.v1",
                 "finance.reviewed-artifact.handoff.v1",
@@ -138,19 +138,19 @@ class FinanceMcpContractTests(unittest.TestCase):
         )
         for name, arguments, operation_code in calls:
             with self.subTest(tool=name):
-                result = call_published_tool(workflow, name, arguments)
+                result = build_tool_call_envelope(workflow, name, arguments)
                 self.assertEqual(result["tool"], name)
                 self.assertEqual(
                     result["workflow_id"], "10000000-0000-4000-8000-000000000010"
                 )
                 self.assertEqual(result["operation_code"], operation_code)
 
-    def test_source_publication_rejects_unknown_tool_and_invalid_arguments(self) -> None:
+    def test_source_graph_rejects_unknown_tool_and_invalid_arguments(self) -> None:
         workflow = load_json(WORKFLOW)
         with self.assertRaisesRegex(LookupError, "MCP_TOOL_NOT_FOUND"):
-            call_published_tool(workflow, "finance.unknown.v1", {})
+            build_tool_call_envelope(workflow, "finance.unknown.v1", {})
         with self.assertRaisesRegex(ValueError, "MCP_TOOL_ARGUMENTS_INVALID"):
-            call_published_tool(workflow, "finance.status.v1", {"unexpected": "value"})
+            build_tool_call_envelope(workflow, "finance.status.v1", {"unexpected": "value"})
 
 
 if __name__ == "__main__":

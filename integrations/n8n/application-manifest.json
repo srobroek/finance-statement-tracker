@@ -35,7 +35,7 @@
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 21,
-    "sha256": "3e7902275d5f28a99eee52329a6136ec9dcfbaeaaadaeb819da2a1cecb1ffca9",
+    "sha256": "b1bfd99be89341cb6e2d3370a7b06f3f517ab0a31ad9509ca84ea34df9f8c02b",
     "required_state": {
       "active": false,
       "published": false,
