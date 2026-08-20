@@ -242,6 +242,11 @@ return [{
     max_messages: maxMessages,
     subject_match: request.subject_match,
     archive_readback_required: request.archive_readback_required,
+    messages: request.messages,
+    immutable_inventory: request.immutable_inventory,
+    attachment_ids_verified: request.attachment_ids_verified,
+    attachment_identity_keys: request.attachment_identity_keys,
+    empty_inventory: request.empty_inventory,
     server_filter: `(${senderFilter}) and (${subjectFilter})`,
   },
 }];

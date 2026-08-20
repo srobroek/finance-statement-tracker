@@ -1035,38 +1035,53 @@ try {
                             json_value=commit_request,
                         )
                         self.assertTrue(validated_commit["ok"], validated_commit)
-                        merged_commit = self.execute_code_node(
+                        archived_receipt = {
+                            **commit_request,
+                            "terminal_state": "ARCHIVED",
+                            "readback_verified": True,
+                            "pagination_exhausted": True,
+                            "cursor_commit_eligible": False,
+                            "attachment_identity_keys_json": json.dumps(
+                                commit_request["attachment_identity_keys"], separators=(",", ":")
+                            ),
+                            "email_evidence_identity_keys_json": json.dumps(
+                                commit_request["email_evidence_identity_keys"], separators=(",", ":")
+                            ),
+                        }
+                        resumed_commit = self.execute_code_node(
                             w12,
-                            "Merge Commit Evidence Readback",
-                            json_value={
-                                **commit_request,
-                                "terminal_state": "ENUMERATED",
-                                "immutable_inventory_json": json.dumps(
-                                    persisted, separators=(",", ":")
-                                ),
-                                "pagination_exhausted": True,
-                                "cursor_commit_eligible": False,
-                                "matched_count": len(messages),
-                            },
+                            "Validate Commit Resume State",
+                            json_value=archived_receipt,
                             refs={"Validate Sweep or Commit": commit_request},
                         )
-                        self.assertTrue(merged_commit["ok"], merged_commit)
+                        self.assertTrue(resumed_commit["ok"], resumed_commit)
                         proof = self.execute_code_node(
                             w12,
                             "Verify Downstream Persistence Proof",
-                            json_value=merged_commit["output"][0]["json"],
+                            json_value=resumed_commit["output"][0]["json"],
                             refs={"Validate Sweep or Commit": validated_commit["output"][0]["json"]},
                         )
                         self.assertTrue(proof["ok"], proof)
+                        cursor_row = {
+                            "source_code": source_code,
+                            "cursor_version": 0,
+                            "cursor_value": "2026-08-18T00:00:00.000Z",
+                            "run_upper_bound": "2026-08-18T00:00:00.000Z",
+                            "committed_run_id": None,
+                            "readback_verified": True,
+                        }
+                        determined = self.execute_code_node(
+                            w12,
+                            "Determine Existing Cursor Commit",
+                            json_value=cursor_row,
+                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                        )
+                        self.assertTrue(determined["ok"], determined)
+                        self.assertEqual(determined["output"][0]["json"]["resume_path"], "CAS")
                         cas = self.execute_code_node(
                             w12,
                             "Build Cursor CAS Update",
-                            json_value={
-                                "source_code": source_code,
-                                "cursor_version": 0,
-                                "cursor_value": "2026-08-18T00:00:00.000Z",
-                                "committed_run_id": None,
-                            },
+                            json_value=cursor_row,
                             refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
                         )
                         self.assertTrue(cas["ok"], cas)
@@ -1084,14 +1099,26 @@ try {
                             refs={"Build Cursor CAS Update": cas_row},
                         )
                         self.assertTrue(readback["ok"], readback)
+                        verified_terminal = self.execute_code_node(
+                            w12,
+                            "Verify Terminal Acquisition Receipt",
+                            json_value={
+                                **proof["output"][0]["json"],
+                                "terminal_state": "DOWNSTREAM_VERIFIED",
+                                "cursor_commit_eligible": True,
+                                "readback_verified": False,
+                            },
+                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                        )
+                        self.assertTrue(verified_terminal["ok"], verified_terminal)
                         terminal = self.execute_code_node(
                             w12,
                             "Return Verified Cursor Commit",
-                            json_value={
-                                "downstream_receipt_sha256": "c" * 64,
-                                "cursor_commit_eligible": True,
+                            refs={
+                                "Verify Downstream Persistence Proof": proof["output"][0]["json"],
+                                "Determine Existing Cursor Commit": determined["output"][0]["json"],
+                                "Verify Terminal Acquisition Receipt": verified_terminal["output"][0]["json"],
                             },
-                            refs={"Build Cursor CAS Update": cas_row},
                         )
                         self.assertTrue(terminal["ok"], terminal)
                         self.assertEqual(terminal["output"][0]["json"]["status"], "CURSOR_COMMITTED")
@@ -1172,26 +1199,30 @@ try {
                     json_value=replay_commit_request,
                 )
                 self.assertTrue(replay_commit["ok"], replay_commit)
-                replay_merged_commit = self.execute_code_node(
+                replay_terminal_receipt = {
+                    **replay_commit_request,
+                    "terminal_state": "DOWNSTREAM_VERIFIED",
+                    "readback_verified": True,
+                    "pagination_exhausted": True,
+                    "cursor_commit_eligible": True,
+                    "attachment_identity_keys_json": json.dumps(
+                        replay_commit_request["attachment_identity_keys"], separators=(",", ":")
+                    ),
+                    "email_evidence_identity_keys_json": json.dumps(
+                        replay_commit_request["email_evidence_identity_keys"], separators=(",", ":")
+                    ),
+                }
+                replay_resumed_commit = self.execute_code_node(
                     w12,
-                    "Merge Commit Evidence Readback",
-                    json_value={
-                        **replay_commit_request,
-                        "terminal_state": "ENUMERATED",
-                        "immutable_inventory_json": json.dumps(
-                            persisted, separators=(",", ":")
-                        ),
-                        "pagination_exhausted": True,
-                        "cursor_commit_eligible": False,
-                        "matched_count": 101,
-                    },
+                    "Validate Commit Resume State",
+                    json_value=replay_terminal_receipt,
                     refs={"Validate Sweep or Commit": replay_commit_request},
                 )
-                self.assertTrue(replay_merged_commit["ok"], replay_merged_commit)
+                self.assertTrue(replay_resumed_commit["ok"], replay_resumed_commit)
                 replay_proof = self.execute_code_node(
                     w12,
                     "Verify Downstream Persistence Proof",
-                    json_value=replay_merged_commit["output"][0]["json"],
+                    json_value=replay_resumed_commit["output"][0]["json"],
                     refs={"Validate Sweep or Commit": replay_commit["output"][0]["json"]},
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)
@@ -1209,14 +1240,17 @@ try {
                 )
 
         self.assertEqual(
-            sum(
+            {
+                node["name"]
+                for node in w12["nodes"]
+                if (
                 node["type"] == "n8n-nodes-base.dataTable"
                 and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
                 and node["parameters"].get("operation") == "update"
-                for node in w12["nodes"]
-            ),
-            1,
-            "W12 owns the sole source-cursor CAS update",
+                )
+            },
+            {"CAS Update Source Cursor", "Mark Source Cursor Readback Verified"},
+            "W12 owns CAS and its crash-recovery readback verification update",
         )
         for filename, *_ in cases:
             self.assertEqual(
@@ -1284,16 +1318,16 @@ try {
             "Require Verified Attachment Barrier",
         )
         self.assertEqual(
-            w12["connections"]["Read ENUMERATED Receipt for Commit"]["main"][0][0]["node"],
-            "Merge Commit Evidence Readback",
+            w12["connections"]["Read Acquisition Receipt for Commit Resume"]["main"][0][0]["node"],
+            "Validate Commit Resume State",
         )
         self.assertEqual(
-            w12["connections"]["Merge Commit Evidence Readback"]["main"][0][0]["node"],
+            w12["connections"]["Validate Commit Resume State"]["main"][0][0]["node"],
             "Verify Downstream Persistence Proof",
         )
         self.assertIn(
-            "COMMIT_ARCHIVE_BARRIER_READBACK_MISMATCH",
-            w12_nodes["Merge Commit Evidence Readback"]["parameters"]["jsCode"],
+            "ACQUISITION_RESUME_CONTEXT_MISMATCH",
+            w12_nodes["Validate Commit Resume State"]["parameters"]["jsCode"],
         )
         self.assertIn("DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
         self.assertIn("EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH", w12_nodes["Verify Attachment Archive Barrier"]["parameters"]["jsCode"])

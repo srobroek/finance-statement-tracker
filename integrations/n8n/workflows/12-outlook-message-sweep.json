@@ -1756,7 +1756,7 @@
       }
     },
     {
-      "id": "12040",
+      "id": "12060",
       "name": "Read Source Cursor for Initialization",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
@@ -1788,7 +1788,7 @@
       }
     },
     {
-      "id": "12041",
+      "id": "12061",
       "name": "Build Cursor v0 Initialization",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1801,7 +1801,7 @@
       }
     },
     {
-      "id": "12042",
+      "id": "12062",
       "name": "Cursor Initialization Needed",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -1831,7 +1831,7 @@
       }
     },
     {
-      "id": "12043",
+      "id": "12063",
       "name": "Insert Source Cursor v0",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
@@ -1872,7 +1872,7 @@
       }
     },
     {
-      "id": "12044",
+      "id": "12064",
       "name": "Read Back Initialized Source Cursor",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
@@ -1904,7 +1904,7 @@
       }
     },
     {
-      "id": "12045",
+      "id": "12065",
       "name": "Verify Cursor v0 Initialization Readback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1917,7 +1917,7 @@
       }
     },
     {
-      "id": "12046",
+      "id": "12066",
       "name": "Return Existing Cursor Initialization Readback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1930,7 +1930,7 @@
       }
     },
     {
-      "id": "12047",
+      "id": "12067",
       "name": "Return Verified Cursor Initialization",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -2925,20 +2925,20 @@
     {
       "name": "Stage 5: Read Source Cursor for Initialization to Build Cursor v0 Initialization",
       "nodeIds": [
-        "12040",
-        "12041"
+        "12060",
+        "12061"
       ],
       "description": "Finance stage 5. Input starts at Read Source Cursor for Initialization; verified output leaves through Build Cursor v0 Initialization."
     },
     {
       "name": "Stage 6: Cursor Initialization Needed to Return Verified Cursor Initialization",
       "nodeIds": [
-        "12042",
-        "12043",
-        "12044",
-        "12045",
-        "12046",
-        "12047"
+        "12062",
+        "12063",
+        "12064",
+        "12065",
+        "12066",
+        "12067"
       ],
       "description": "Finance stage 6. Input starts at Cursor Initialization Needed; verified output leaves through Return Verified Cursor Initialization."
     },

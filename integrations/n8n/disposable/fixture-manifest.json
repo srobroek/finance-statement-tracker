@@ -5,7 +5,7 @@
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
     "09-ai-proposal.json": "1b869023f6c1a1e817e65d4b450da00b3ff168ed8894e5862f2d64e362d7a4b4",
-    "12-outlook-message-sweep.json": "a81c5b8bbf633d36e7234616053139f07d00c1fbcff8853f53297d2c704259ab",
+    "12-outlook-message-sweep.json": "b315e0c0abb92aa833a7d5731eb03b23b771e5bfbdf07ff4ed6766e14a048d6e",
     "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
     "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",
     "18-finance-writer-lease.json": "e03e6d3defba9a30564db0b227cd0fa714a5676ba131ff0b679deeeb960abfc4"
@@ -14,7 +14,7 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "690df352db6c21ad7242731f71d0fb367292b8d5a1d1cfd645a8dbd9a259309b"
+      "sha256": "4913dac6815ae56f9b6975008f7aaed7fff8cd2011dec4a90e770f3e09979c60"
     },
     {
       "file": "91-sweep-zero.json",
