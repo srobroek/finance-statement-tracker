@@ -27,11 +27,6 @@
       "sha256": "5340bc1e7cbc699efce22d2e9dd33497c097134652430eb388fe668ed4b39f30"
     },
     {
-      "file": "108-sweep-one-no-attachments.json",
-      "id": "90000000-0000-4000-8000-000000000913",
-      "sha256": "b3d782baa832fc3aacc481d879f41fdafc39e1b24e71fbd63aaf721124e21e1d"
-    },
-    {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
       "sha256": "c95ece6e575c8a851cc820cdbebfaa13ef32997dfa2623d0e6948dcded384448"

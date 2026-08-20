@@ -221,7 +221,10 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         for filename, digest in fixture["source_workflow_sha256"].items():
             self.assertEqual(digest, sha256(WORKFLOWS / filename))
         self.assertEqual(fixture["scenario_contract"]["sweep_zero"]["expected"], {"scanned_count": 0, "heartbeat": True})
-        self.assertEqual(fixture["scenario_contract"]["sweep_101"]["expected"], {"scanned_count": 101, "matched_count": 101})
+        self.assertEqual(
+            fixture["scenario_contract"]["sweep_101"]["expected"],
+            {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []},
+        )
         with tempfile.TemporaryDirectory() as temporary:
             _, manifest = self.stage(temporary)
             staged_root = Path(temporary) / "application"

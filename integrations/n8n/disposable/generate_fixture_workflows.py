@@ -422,7 +422,6 @@ def build_all() -> dict[str, dict]:
         "90-derived-outlook-sweep-core.json": build_sweep_core(),
         "91-sweep-zero.json": wrapper("90000000-0000-4000-8000-000000000901", "DISPOSABLE ONLY · Sweep zero messages", sweep_input("zero"), SWEEP_FIXTURE_ID),
         "92-sweep-101.json": wrapper("90000000-0000-4000-8000-000000000902", "DISPOSABLE ONLY · Sweep 101 messages", sweep_input("one-hundred-one"), SWEEP_FIXTURE_ID),
-        "108-sweep-one-no-attachments.json": wrapper("90000000-0000-4000-8000-000000000913", "DISPOSABLE ONLY · Sweep one message without attachments", sweep_input("one-no-attachments"), SWEEP_FIXTURE_ID),
         "93-sweep-late-order.json": wrapper("90000000-0000-4000-8000-000000000903", "DISPOSABLE ONLY · Sweep late out of order", sweep_input("late-out-of-order"), SWEEP_FIXTURE_ID),
         "94-sweep-pagination-failure.json": wrapper("90000000-0000-4000-8000-000000000904", "DISPOSABLE ONLY · Sweep pagination failure", sweep_input("pagination-failure"), SWEEP_FIXTURE_ID),
         "95-lease-acquire-a.json": build_lease_wrapper("90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"),
