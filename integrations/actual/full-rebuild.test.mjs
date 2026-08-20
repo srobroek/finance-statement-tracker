@@ -9,7 +9,10 @@ import {
   compareRebuildStates,
   isVerifiedEmptyManifest,
   loadFullRebuildManifests,
+  applyDisposableManualCorrections,
   summarizeRebuildState,
+  validateRebuildManifestCorpus,
+  validateRebuildManifestPayload,
 } from "./full-rebuild.mjs";
 
 test("full rebuild loads browser sources before statements with stable ordering", async () => {
@@ -99,21 +102,71 @@ function replayFixture() {
 test("full rebuild exact replay passes with changed provider row identifiers", () => {
   const fixture = replayFixture();
   const first = summarizeRebuildState(fixture.snapshot, fixture);
-  const replay = summarizeRebuildState(fixture.snapshot, {
+  const replayInput = {
     ...fixture,
     accounts: [{ ...fixture.accounts[0], id: "provider-account-replay" }],
     snapshot: {
       transactions: [{
         ...fixture.snapshot.transactions[0],
         id: "provider-row-replay",
+        schedule: "provider-schedule-replay",
+        subtransactions: [{
+          ...fixture.snapshot.transactions[0].subtransactions[0],
+          id: "provider-child-replay",
+        }],
       }],
     },
-  });
+    schedules: [{
+      ...fixture.schedules[0],
+      id: "provider-schedule-replay",
+      account: "provider-account-replay",
+    }],
+  };
+  const replay = summarizeRebuildState(replayInput.snapshot, replayInput);
   assert.equal(compareRebuildStates(first, replay).status, "PASS");
   const receipt = JSON.stringify(first);
   assert.ok(!receipt.includes("provider-account-first"));
   assert.ok(!receipt.includes("provider-row-first"));
   assert.ok(!receipt.includes("provider:transaction:1"));
+});
+
+test("full rebuild rejects missing and duplicate imported IDs before any import", () => {
+  assert.throws(
+    () => validateRebuildManifestPayload({ envelopes: [{ records: [{ amount: -1 }] }] }, "missing.json"),
+    /missing\.json.*lacks imported_id/,
+  );
+  assert.throws(
+    () => validateRebuildManifestPayload({
+      envelopes: [{ records: [{ imported_id: "provider:1" }, { imported_id: "provider:1" }] }],
+    }, "duplicate.json"),
+    /duplicate\.json.*duplicate imported_id/,
+  );
+  assert.throws(
+    () => validateRebuildManifestCorpus([
+      { filename: "one.json", payload: { envelopes: [{ records: [{ imported_id: "provider:1" }] }] } },
+      { filename: "two.json", payload: { envelopes: [{ records: [{ imported_id: "provider:1" }] }] } },
+    ]),
+    /Duplicate imported_id across manifests/,
+  );
+});
+
+test("full rebuild reports logical imported-ID drift as a redacted failure", () => {
+  const fixture = replayFixture();
+  const first = summarizeRebuildState(fixture.snapshot, fixture);
+  const changedSnapshot = {
+    transactions: [{
+      ...fixture.snapshot.transactions[0],
+      imported_id: "provider:transaction:changed",
+    }],
+  };
+  const verification = compareRebuildStates(
+    first,
+    summarizeRebuildState(changedSnapshot, fixture),
+  );
+  assert.equal(verification.status, "FAIL");
+  assert.ok(verification.differences.some(row => row.field === "hashes.transaction_sha256"));
+  const receipt = JSON.stringify(verification);
+  assert.ok(!receipt.includes("provider:transaction:changed"));
 });
 
 test("full rebuild reports balance and economic drift instead of a false pass", () => {
@@ -167,4 +220,26 @@ test("capture rebuild state reads account balances and schedules through the can
   assert.equal(state.balances.balance_sum_minor, -12500);
   assert.equal(state.counts.schedules, 1);
   assert.deepEqual(calls, ["balance:provider-account-first"]);
+});
+
+test("full rebuild applies executable manual corrections while retaining links", async () => {
+  const fixture = replayFixture();
+  let updated;
+  const result = await applyDisposableManualCorrections(fixture.snapshot, {
+    updateTransaction: async (id, fields) => {
+      updated = { id, fields };
+    },
+  });
+  assert.equal(result.status, "applied");
+  assert.equal(result.notes, 1);
+  assert.equal(result.reconciled, 1);
+  assert.equal(result.transfer_links, 1);
+  assert.equal(result.split_states, 1);
+  assert.equal(result.schedule_links, 1);
+  assert.equal(updated.id, "provider-row-first");
+  assert.equal(updated.fields.notes, "#manual | Memo: disposable manual correction");
+  assert.equal(updated.fields.reconciled, true);
+  assert.equal(updated.fields.transfer_id, "provider-transfer-1");
+  assert.equal(updated.fields.schedule, "provider-schedule-1");
+  assert.equal(updated.fields.subtransactions.length, 1);
 });

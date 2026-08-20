@@ -41,7 +41,29 @@ function sha256(value) {
 }
 
 function transactionKey(row, index = 0) {
-  return String(row.imported_id ?? row.id ?? `${row.date ?? ""}:${row.amount ?? 0}:${index}`);
+  const importedId = String(row.imported_id ?? "").trim();
+  return importedId || `unimported:${index}`;
+}
+
+function canonicalSubtransaction(child) {
+  return {
+    amount: Number(child.amount ?? 0),
+    date: String(child.date ?? ""),
+    notes: String(child.notes ?? ""),
+    imported_payee: String(child.imported_payee ?? ""),
+    payee: String(child.payee_name ?? ""),
+    category: String(child.category_name ?? ""),
+    cleared: Boolean(child.cleared),
+    reconciled: Boolean(child.reconciled),
+    is_parent: Boolean(child.is_parent),
+    is_child: Boolean(child.is_child),
+  };
+}
+
+function semanticSubtransactions(children) {
+  return (children ?? [])
+    .map(canonicalSubtransaction)
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 }
 
 function canonicalEconomicRecord(row, index) {
@@ -63,17 +85,21 @@ function canonicalManualRecord(row, index) {
     notes: String(row.notes ?? ""),
     cleared: Boolean(row.cleared),
     reconciled: Boolean(row.reconciled),
-    transfer_id: row.transfer_id ?? null,
-    schedule: row.schedule ?? null,
+    transfer_linked: Boolean(row.transfer_id),
+    schedule_linked: Boolean(row.schedule),
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
-    parent_id: row.parent_id ?? null,
-    subtransactions: (row.subtransactions ?? []).map(child => stable(child)),
+    parent_linked: Boolean(row.parent_id),
+    subtransactions: semanticSubtransactions(row.subtransactions),
   };
 }
 
 function canonicalSchedule(schedule) {
-  return stable(schedule ?? {});
+  const semantic = Object.fromEntries(
+    Object.entries(schedule ?? {})
+      .filter(([key]) => !["id", "account", "payee", "category"].includes(key)),
+  );
+  return stable(semantic);
 }
 
 function sortByKey(rows) {
@@ -99,7 +125,10 @@ export function summarizeRebuildState(snapshotDocument, {
   const notes = manual.filter(row => row.notes.length > 0);
   const splits = manual.filter(row =>
     row.is_parent || row.is_child || row.parent_id || row.subtransactions.length > 0);
-  const scheduleRows = schedules.filter(row => !row.tombstone).map(canonicalSchedule);
+  const scheduleRows = schedules
+    .filter(row => !row.tombstone)
+    .map(canonicalSchedule)
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   const accountRows = accounts.map((account, index) => ({
     name: String(account.name ?? ""),
     offbudget: Boolean(account.offbudget),
@@ -110,12 +139,12 @@ export function summarizeRebuildState(snapshotDocument, {
     ...canonicalEconomicRecord(row, index),
     notes: String(row.notes ?? ""),
     reconciled: Boolean(row.reconciled),
-    transfer_id: row.transfer_id ?? null,
-    schedule: row.schedule ?? null,
+    transfer_linked: Boolean(row.transfer_id),
+    schedule_linked: Boolean(row.schedule),
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
-    parent_id: row.parent_id ?? null,
-    subtransactions: (row.subtransactions ?? []).map(child => stable(child)),
+    parent_linked: Boolean(row.parent_id),
+    subtransactions: semanticSubtransactions(row.subtransactions),
   })));
   const splitChildren = splits.reduce(
     (total, row) => total + row.subtransactions.length,
@@ -263,6 +292,89 @@ export function isVerifiedEmptyManifest(payload) {
     Number(payload?.review_count ?? 0) === 0;
 }
 
+function manifestEnvelopes(payload) {
+  return Array.isArray(payload) ? payload : payload?.envelopes;
+}
+
+export function validateRebuildManifestPayload(payload, filename = "manifest") {
+  const envelopes = manifestEnvelopes(payload);
+  if (!Array.isArray(envelopes)) {
+    throw new Error(`Manifest ${filename} lacks an envelopes array`);
+  }
+  const importedIds = new Set();
+  for (const [envelopeIndex, envelope] of envelopes.entries()) {
+    if (!Array.isArray(envelope?.records)) {
+      throw new Error(`Manifest ${filename} envelope ${envelopeIndex} lacks a records array`);
+    }
+    for (const [recordIndex, record] of envelope.records.entries()) {
+      const importedId = typeof record?.imported_id === "string"
+        ? record.imported_id.trim()
+        : "";
+      if (!importedId) {
+        throw new Error(
+          `Manifest ${filename} record ${envelopeIndex}/${recordIndex} lacks imported_id`,
+        );
+      }
+      if (importedIds.has(importedId)) {
+        throw new Error(`Manifest ${filename} contains duplicate imported_id: ${importedId}`);
+      }
+      importedIds.add(importedId);
+    }
+  }
+  return [...importedIds];
+}
+
+export function validateRebuildManifestCorpus(manifestPayloads) {
+  const importedIds = new Map();
+  for (const manifest of manifestPayloads) {
+    for (const importedId of validateRebuildManifestPayload(manifest.payload, manifest.filename)) {
+      const previous = importedIds.get(importedId);
+      if (previous) {
+        throw new Error(
+          `Duplicate imported_id across manifests: ${importedId} (${previous}, ${manifest.filename})`,
+        );
+      }
+      importedIds.set(importedId, manifest.filename);
+    }
+  }
+  return [...importedIds.keys()];
+}
+
+export async function applyDisposableManualCorrections(snapshotDocument, api = actual) {
+  const target = (snapshotDocument?.transactions ?? [])
+    .find(row => !row.tombstone && row.id && row.imported_id);
+  if (!target) {
+    return {
+      status: "not-applicable",
+      changed: 0,
+      notes: 0,
+      reconciled: 0,
+      transfer_links: 0,
+      split_states: 0,
+      schedule_links: 0,
+    };
+  }
+  const fields = {
+    notes: "#manual | Memo: disposable manual correction",
+    reconciled: true,
+  };
+  if (target.transfer_id) fields.transfer_id = target.transfer_id;
+  if (target.schedule) fields.schedule = target.schedule;
+  if (target.subtransactions?.length) {
+    fields.subtransactions = target.subtransactions;
+  }
+  await api.updateTransaction(target.id, fields);
+  return {
+    status: "applied",
+    changed: 1,
+    notes: 1,
+    reconciled: 1,
+    transfer_links: target.transfer_id ? 1 : 0,
+    split_states: target.subtransactions?.length ? 1 : 0,
+    schedule_links: target.schedule ? 1 : 0,
+  };
+}
+
 export async function runDisposableFullRebuild({
   root,
   validationConfigPath,
@@ -276,6 +388,14 @@ export async function runDisposableFullRebuild({
   const validation = JSON.parse(await fs.readFile(validationConfigPath, "utf8"));
   const bootstrapConfig = JSON.parse(await fs.readFile(bootstrapConfigPath, "utf8"));
   const manifests = await loadFullRebuildManifests(resolvedRoot, validation);
+  const manifestPayloads = [];
+  for (const manifest of manifests) {
+    manifestPayloads.push({
+      ...manifest,
+      payload: JSON.parse(await fs.readFile(manifest.filename, "utf8")),
+    });
+  }
+  validateRebuildManifestCorpus(manifestPayloads);
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "finance-full-rebuild-"));
   const dataDir = path.join(tempRoot, "data");
   await fs.mkdir(dataDir);
@@ -290,8 +410,8 @@ export async function runDisposableFullRebuild({
       { syncRemote: false },
     );
     const imports = [];
-    for (const manifest of manifests) {
-      const payload = JSON.parse(await fs.readFile(manifest.filename, "utf8"));
+    for (const manifest of manifestPayloads) {
+      const payload = manifest.payload;
       if (isVerifiedEmptyManifest(payload)) {
         imports.push({
           source_id: manifest.source_id,
@@ -312,9 +432,12 @@ export async function runDisposableFullRebuild({
       });
     }
     const firstSnapshot = await snapshot(start, end);
-    const firstState = await captureRebuildState(firstSnapshot);
-    for (const [index, manifest] of manifests.entries()) {
-      const payload = JSON.parse(await fs.readFile(manifest.filename, "utf8"));
+    const baselineState = await captureRebuildState(firstSnapshot);
+    const manualCorrections = await applyDisposableManualCorrections(firstSnapshot);
+    const correctedSnapshot = await snapshot(start, end);
+    const correctedState = await captureRebuildState(correctedSnapshot);
+    for (const [index, manifest] of manifestPayloads.entries()) {
+      const payload = manifest.payload;
       if (isVerifiedEmptyManifest(payload)) continue;
       const replay = await importEnvelopes(payload, true, { syncRemote: false });
       if (replay.status !== "committed") {
@@ -324,7 +447,7 @@ export async function runDisposableFullRebuild({
     }
     const rebuiltSnapshot = await snapshot(start, end);
     const replayState = await captureRebuildState(rebuiltSnapshot);
-    const replayVerification = compareRebuildStates(firstState, replayState);
+    const replayVerification = compareRebuildStates(correctedState, replayState);
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
     await fs.writeFile(snapshotPath, `${JSON.stringify(rebuiltSnapshot, null, 2)}\n`, "utf8");
     result = {
@@ -335,7 +458,9 @@ export async function runDisposableFullRebuild({
       bootstrap_changes: bootstrapResult.changes.length,
       imports,
       replay: {
-        first: firstState,
+        first: correctedState,
+        baseline: baselineState,
+        manual_corrections: manualCorrections,
         replay: replayState,
         verification: replayVerification,
       },
