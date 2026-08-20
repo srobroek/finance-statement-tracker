@@ -88,17 +88,28 @@ def load_account_completeness_manifest(
             raise ValueError("Account entries must be objects")
         provider_id = str(raw.get("provider_id") or "").strip().casefold()
         identity = str(raw.get("provider_account_id") or "").strip()
+        account_key = str(raw.get("account_key") or "").strip()
+        identity_status = str(raw.get("provider_identity_status") or "").strip().upper()
+        identity_source = str(raw.get("provider_identity_source") or "").strip() or None
         display_name = str(raw.get("display_name") or "").strip()
         account_type = str(raw.get("account_type") or "").strip().casefold()
         currency = str(raw.get("currency") or "").strip().upper()
         last4 = str(raw.get("last4") or "").strip() or None
-        if not provider_id or not display_name:
-            raise ValueError("Account provider_id and display_name are required")
-        if not _STABLE_ID.fullmatch(identity) or not identity.startswith(f"{provider_id}:"):
-            raise ValueError(f"Unsafe or provider-mismatched account identity: {identity}")
-        if identity in identities:
+        if not provider_id or not display_name or not _STABLE_ID.fullmatch(account_key):
+            raise ValueError("Account provider_id, account_key, and display_name are required")
+        if identity_status == "EVIDENCED":
+            if not _STABLE_ID.fullmatch(identity) or not identity.startswith(f"{provider_id}:"):
+                raise ValueError(f"Unsafe or provider-mismatched account identity: {identity}")
+            if not identity_source:
+                raise ValueError(f"Evidence-backed account identity has no source: {account_key}")
+        elif identity_status == "UNAVAILABLE":
+            if identity or identity_source:
+                raise ValueError(f"Unavailable account identity has provider metadata: {account_key}")
+        else:
+            raise ValueError(f"Unsupported provider identity status: {identity_status}")
+        if identity and identity in identities:
             raise ValueError(f"Duplicate provider_account_id: {identity}")
-        if identity == display_name:
+        if identity and identity == display_name:
             raise ValueError("Display names must not be used as stable account identities")
         if account_type not in _ACCOUNT_TYPES:
             raise ValueError(f"Unsupported account type: {account_type}")
@@ -106,6 +117,12 @@ def load_account_completeness_manifest(
             raise ValueError(f"Invalid account currency: {currency}")
         if last4 and (len(last4) != 4 or not last4.isdigit()):
             raise ValueError(f"Account last4 must be exactly four digits: {identity}")
+        if identity_status == "UNAVAILABLE":
+            if account_type in {"credit", "mortgage"} and str(raw.get("balance_sign") or "ASSET_POSITIVE").upper() != "LIABILITY_NEGATIVE":
+                raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {account_key}")
+            # Accounts without an authoritative provider identity remain in the
+            # generated inventory but cannot participate in provider reconciliation.
+            continue
         identities.add(identity)
         accounts.append(AccountIdentity(
             provider_id=provider_id,
@@ -154,8 +171,8 @@ def load_account_completeness_manifest(
             accounts[-1].active or accounts[-1].include_in_active_routing
         ):
             raise ValueError(f"Planned account cannot be active or routed: {identity}")
-        if accounts[-1].account_type == "mortgage" and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
-            raise ValueError(f"Mortgage account must use liability-negative balances: {identity}")
+        if accounts[-1].account_type in {"credit", "mortgage"} and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {identity}")
 
     providers: list[ProviderInventory] = []
     provider_ids: set[str] = set()

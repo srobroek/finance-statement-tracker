@@ -19,6 +19,7 @@ SCHEMA = ROOT / "config" / "actual-account-taxonomy-schema-v1.json"
 BOOTSTRAP = ROOT / "config" / "actual-bootstrap.json"
 COMPLETENESS = ROOT / "config" / "account-completeness.json"
 WORKER_TAXONOMY = ROOT / "config" / "actual-worker-taxonomy.json"
+STATIC_RULES = ROOT / "config" / "static-rules.seed.json"
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -32,6 +33,22 @@ def _render(value: object) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
 
 
+def _runtime_emitted_tags() -> set[str]:
+    """Return tags emitted by deterministic rules and review-only runtime paths."""
+    rules = json.loads(STATIC_RULES.read_text(encoding="utf-8"))
+    emitted: set[str] = set()
+    for rule in rules:
+        for action in rule.get("actions", []):
+            if action.get("action") not in {"add_tag", "add_tags"}:
+                continue
+            values = action.get("value", [])
+            emitted.update(values if isinstance(values, list) else [values])
+    # These are emitted by the AI category-review and platform import paths,
+    # which are runtime producers rather than static rule entries.
+    emitted.update({"category-review", "needs-review"})
+    return {str(tag) for tag in emitted}
+
+
 def _validate_manifest(manifest: dict[str, Any]) -> None:
     errors = sorted(Draft202012Validator(_read(SCHEMA)).iter_errors(manifest), key=str)
     if errors:
@@ -41,7 +58,10 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
     if len(provider_ids) != len(set(provider_ids)):
         raise ValueError("Canonical taxonomy has duplicate provider inventories")
     known_providers = set(provider_ids)
-    account_ids = [row["provider_account_id"] for row in manifest["accounts"]]
+    account_keys = [row["account_key"] for row in manifest["accounts"]]
+    if len(account_keys) != len(set(account_keys)):
+        raise ValueError("Canonical taxonomy has duplicate internal account keys")
+    account_ids = [row["provider_account_id"] for row in manifest["accounts"] if row["provider_account_id"]]
     if len(account_ids) != len(set(account_ids)):
         raise ValueError("Canonical taxonomy has duplicate account identities")
     account_names = [row["display_name"].casefold() for row in manifest["accounts"]]
@@ -52,21 +72,32 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
 
     for row in manifest["accounts"]:
         actual = row["actual"]
+        identity = row["account_key"]
+        provider_id = row["provider_account_id"]
+        identity_status = row["provider_identity_status"]
+        identity_source = row["provider_identity_source"]
+        if identity_status == "EVIDENCED":
+            if not provider_id or not identity_source:
+                raise ValueError(f"Evidence-backed identity is incomplete: {identity}")
+            if not provider_id.startswith(f"{row['provider_id']}:" ):
+                raise ValueError(f"Provider identity is mismatched: {identity}")
+        elif provider_id is not None or identity_source is not None:
+            raise ValueError(f"Unavailable identity has provider metadata: {identity}")
         if actual["bootstrap"] and row["lifecycle_status"] == "CLOSED":
-            raise ValueError(f"Closed account cannot be a bootstrap target: {row['provider_account_id']}")
+            raise ValueError(f"Closed account cannot be a bootstrap target: {identity}")
         if actual["bootstrap"] and row["actual_account_name"] != actual["name"]:
-            raise ValueError(f"Bootstrap name must match actual account name: {row['provider_account_id']}")
+            raise ValueError(f"Bootstrap name must match actual account name: {identity}")
         if row["balance_reconciliation_required"] and row["expected_balance_minor"] is None:
-            raise ValueError(f"Reconciled account has no expected balance: {row['provider_account_id']}")
+            raise ValueError(f"Reconciled account has no expected balance: {identity}")
         if row["expected_balance_minor"] is not None and row["balance_evidence_status"] != "EVIDENCED":
-            raise ValueError(f"Expected balance is not evidence-backed: {row['provider_account_id']}")
-        if row["account_type"] == "mortgage" and row["balance_sign"] != "LIABILITY_NEGATIVE":
-            raise ValueError(f"Mortgage must use liability-negative balances: {row['provider_account_id']}")
+            raise ValueError(f"Expected balance is not evidence-backed: {identity}")
+        if row["account_type"] in {"credit", "mortgage"} and row["balance_sign"] != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {identity}")
         if row["lifecycle_status"] == "PLANNED" and (row["active"] or row["include_in_active_routing"]):
-            raise ValueError(f"Planned account cannot be active or routed: {row['provider_account_id']}")
+            raise ValueError(f"Planned account cannot be active or routed: {identity}")
         initial = actual.get("initial_balance_minor")
         if initial is not None and row["balance_evidence_status"] == "EVIDENCED":
-            raise ValueError(f"Bootstrap initial balance cannot masquerade as live evidence: {row['provider_account_id']}")
+            raise ValueError(f"Bootstrap initial balance cannot masquerade as live evidence: {identity}")
 
     for key in ("tags", "payees"):
         rows = manifest[key]
@@ -76,6 +107,12 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
             raise ValueError(f"Canonical taxonomy has duplicate {key}")
         if any(not row["bootstrap"] and not row["worker"] for row in rows):
             raise ValueError(f"Every {key[:-1]} must have an explicit owner")
+    static_and_runtime_tags = _runtime_emitted_tags()
+    worker_tags = {row["tag"] for row in manifest["tags"] if row["worker"]}
+    if static_and_runtime_tags != worker_tags:
+        missing = sorted(static_and_runtime_tags - worker_tags)
+        extra = sorted(worker_tags - static_and_runtime_tags)
+        raise ValueError(f"Worker tag ownership drifted: missing={missing}, extra={extra}")
 
 
 def _bootstrap_account(row: dict[str, Any]) -> dict[str, Any]:
@@ -84,8 +121,10 @@ def _bootstrap_account(row: dict[str, Any]) -> dict[str, Any]:
         "name": actual["name"],
         "type": actual["type"],
         "offbudget": actual["offbudget"],
-        "provider_account_id": row["provider_account_id"],
+        "account_key": row["account_key"],
     }
+    if row["provider_identity_status"] == "EVIDENCED":
+        result["provider_account_id"] = row["provider_account_id"]
     for key in ("aliases", "card_code", "card_last4", "loan_code", "activation_note"):
         if key in actual:
             result[key] = copy.deepcopy(actual[key])
@@ -184,7 +223,8 @@ def _render_bootstrap(manifest: dict[str, Any], current: dict[str, Any]) -> str:
 
 def _build_completeness(manifest: dict[str, Any]) -> dict[str, Any]:
     fields = (
-        "provider_id", "provider_account_id", "display_name", "actual_account_name",
+        "provider_id", "account_key", "provider_account_id", "provider_identity_status",
+        "provider_identity_source", "display_name", "actual_account_name",
         "account_type", "currency", "last4", "owner", "lifecycle_status", "active",
         "retain_history", "include_in_active_routing", "include_in_actual", "actual_offbudget",
         "include_in_net_worth", "balance_sign", "balance_evidence_status",

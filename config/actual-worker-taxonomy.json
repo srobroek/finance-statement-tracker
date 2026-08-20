@@ -51,6 +51,18 @@
       "worker": true
     },
     {
+      "tag": "category-review",
+      "description": "AI proposed a new category for owner review",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "needs-review",
+      "description": "Deterministic or manual review is required",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
       "tag": "adjustment",
       "description": "Deterministic worker adjustment marker",
       "bootstrap": false,
@@ -173,6 +185,12 @@
     {
       "tag": "vat",
       "description": "Deterministic worker VAT marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "review",
+      "description": "Deterministic worker review marker",
       "bootstrap": false,
       "worker": true
     }

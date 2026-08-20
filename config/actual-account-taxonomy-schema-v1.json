@@ -30,7 +30,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "provider_id", "provider_account_id", "display_name", "actual_account_name",
+          "provider_id", "account_key", "provider_account_id", "provider_identity_status",
+          "provider_identity_source", "display_name", "actual_account_name",
           "account_type", "currency", "last4", "owner", "lifecycle_status", "active",
           "retain_history", "include_in_active_routing", "include_in_actual", "actual_offbudget",
           "include_in_net_worth", "balance_sign", "balance_evidence_status",
@@ -39,7 +40,10 @@
         ],
         "properties": {
           "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
-          "provider_account_id": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "account_key": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_account_id": {"type": ["string", "null"], "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_identity_status": {"enum": ["EVIDENCED", "UNAVAILABLE"]},
+          "provider_identity_source": {"type": ["string", "null"], "minLength": 1},
           "display_name": {"type": "string", "minLength": 1},
           "actual_account_name": {"type": ["string", "null"]},
           "account_type": {"enum": ["checking", "savings", "investment", "trade", "credit", "mortgage"]},
@@ -72,7 +76,6 @@
               "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}},
               "card_code": {"type": "string", "minLength": 1},
               "card_last4": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]{4}$"}},
-              "provider_account_id": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
               "loan_code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
               "initial_balance_minor": {"type": "integer"},
               "activation_note": {"type": "string", "minLength": 1}

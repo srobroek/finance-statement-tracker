@@ -9,7 +9,7 @@
       "name": "Emirates Islamic Amazon Credit Card · 0082",
       "type": "credit",
       "offbudget": false,
-      "provider_account_id": "ei:credit:0082",
+      "account_key": "actual:ei:credit:0082",
       "card_code": "EI_AMAZON",
       "card_last4": [
         "0082"
@@ -19,7 +19,7 @@
       "name": "FAB Credit Card · 6031",
       "type": "credit",
       "offbudget": false,
-      "provider_account_id": "fab-credit:credit:6031",
+      "account_key": "actual:fab-credit:credit:6031",
       "card_code": "FAB_6031",
       "card_last4": [
         "6031"
@@ -29,6 +29,7 @@
       "name": "FAB Elite Gold Current Account · 2001",
       "type": "checking",
       "offbudget": false,
+      "account_key": "actual:fab:current:2001",
       "provider_account_id": "fab:current:2001",
       "card_code": "FAB_CURRENT_2001",
       "card_last4": [
@@ -39,37 +40,42 @@
       "name": "FAB Elite Gold Current Account · 2008",
       "type": "checking",
       "offbudget": false,
+      "account_key": "actual:fab:current:2008",
       "provider_account_id": "fab:current:2008"
     },
     {
       "name": "FAB Mortgage · 0203",
       "type": "mortgage",
       "offbudget": true,
+      "account_key": "actual:fab:loan:mortgage-0203",
       "provider_account_id": "fab:loan:mortgage-0203"
     },
     {
       "name": "FAB iSave · 2002",
       "type": "savings",
       "offbudget": false,
+      "account_key": "actual:fab:savings:isave-2002",
       "provider_account_id": "fab:savings:isave-2002"
     },
     {
       "name": "FAB AED Savings Shared Property · 2006",
       "type": "savings",
       "offbudget": false,
+      "account_key": "actual:fab:savings:shared-property-aed-2006",
       "provider_account_id": "fab:savings:shared-property-aed-2006"
     },
     {
       "name": "FAB EUR Savings Shared Property · 2007",
       "type": "savings",
       "offbudget": false,
+      "account_key": "actual:fab:savings:shared-property-eur-2007",
       "provider_account_id": "fab:savings:shared-property-eur-2007"
     },
     {
       "name": "Abu Dhabi Islamic Bank Mortgage · Bluewaters B7-306",
       "type": "mortgage",
       "offbudget": true,
-      "provider_account_id": "adib:loan:bluewaters-b7-306",
+      "account_key": "actual:adib:loan:bluewaters-b7-306",
       "loan_code": "ADIB_BLUEWATERS_B7_306",
       "activation_note": "Enable only after the new mortgage account exists and the exact loan start date is known.",
       "enabled": false,
@@ -79,7 +85,7 @@
       "name": "RAKBANK World Credit Card",
       "type": "credit",
       "offbudget": false,
-      "provider_account_id": "rak:credit:7210",
+      "account_key": "actual:rak:credit:7210",
       "card_code": "RAK_WORLD",
       "card_last4": [
         "7210"
@@ -89,7 +95,7 @@
       "name": "Standard Chartered Platinum X Credit Card",
       "type": "credit",
       "offbudget": false,
-      "provider_account_id": "sc:credit:platinum-x",
+      "account_key": "actual:sc:credit:platinum-x",
       "card_code": "SC_PLATINUM_X",
       "card_last4": []
     },
@@ -97,7 +103,7 @@
       "name": "Wio Credit Card · 4113 / 5009",
       "type": "credit",
       "offbudget": false,
-      "provider_account_id": "wio:credit:4113-5009",
+      "account_key": "actual:wio:credit:4113-5009",
       "card_code": "WIO_CREDIT",
       "card_last4": [
         "4113",
@@ -108,24 +114,28 @@
       "name": "Sarwa Invest · Personal",
       "type": "investment",
       "offbudget": true,
+      "account_key": "actual:sarwa:invest:personal",
       "provider_account_id": "sarwa:invest:personal"
     },
     {
       "name": "Sarwa Invest · Parents",
       "type": "investment",
       "offbudget": true,
+      "account_key": "actual:sarwa:invest:parents",
       "provider_account_id": "sarwa:invest:parents"
     },
     {
       "name": "Sarwa Invest · Shared Airbnb",
       "type": "investment",
       "offbudget": true,
+      "account_key": "actual:sarwa:invest:shared-airbnb",
       "provider_account_id": "sarwa:invest:shared-airbnb"
     },
     {
       "name": "Sarwa Trade · Primary",
       "type": "trade",
       "offbudget": true,
+      "account_key": "actual:sarwa:trade:primary",
       "provider_account_id": "sarwa:trade:primary"
     }
   ],

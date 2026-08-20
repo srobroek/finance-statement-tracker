@@ -29,14 +29,18 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "provider_id", "provider_account_id", "display_name", "account_type",
+          "provider_id", "account_key", "provider_account_id", "provider_identity_status",
+          "provider_identity_source", "display_name", "account_type",
           "currency", "lifecycle_status", "active", "retain_history",
           "include_in_active_routing", "include_in_actual", "include_in_net_worth",
           "balance_reconciliation_required"
         ],
         "properties": {
           "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
-          "provider_account_id": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "account_key": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_account_id": {"type": ["string", "null"], "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_identity_status": {"enum": ["EVIDENCED", "UNAVAILABLE"]},
+          "provider_identity_source": {"type": ["string", "null"], "minLength": 1},
           "display_name": {"type": "string", "minLength": 1},
           "actual_account_name": {"type": ["string", "null"]},
           "account_type": {"enum": ["checking", "savings", "investment", "trade", "credit", "mortgage"]},
