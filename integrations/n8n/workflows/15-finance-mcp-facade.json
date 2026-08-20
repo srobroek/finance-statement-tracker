@@ -133,21 +133,33 @@
     }
   ],
   "connections": {
-    "Finance MCP Server Trigger": {
+    "finance.status.v1": {
       "ai_tool": [
         [
           {
-            "node": "finance.status.v1",
+            "node": "Finance MCP Server Trigger",
             "type": "ai_tool",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "finance.reviewed-artifact.handoff.v1": {
+      "ai_tool": [
+        [
           {
-            "node": "finance.reviewed-artifact.handoff.v1",
+            "node": "Finance MCP Server Trigger",
             "type": "ai_tool",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "finance.document.request.v1": {
+      "ai_tool": [
+        [
           {
-            "node": "finance.document.request.v1",
+            "node": "Finance MCP Server Trigger",
             "type": "ai_tool",
             "index": 0
           }
