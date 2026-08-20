@@ -43,7 +43,14 @@ RUN mkdir -p /tmp/nodemailer-9.0.1 \
     && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
     && node -e "if(require('/tmp/nodemailer-9.0.1/package.json').version!=='9.0.1') process.exit(1)"
 
-FROM ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
+ARG N8N_BASE_IMAGE
+FROM ${N8N_BASE_IMAGE}
+
+ARG N8N_BASE_IMAGE
+ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
+LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
+      org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
+      io.finance.n8n.base-image="${N8N_BASE_IMAGE}"
 
 USER root
 RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \

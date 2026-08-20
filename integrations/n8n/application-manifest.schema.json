@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-n8n-application-manifest-v1.json",
+  "title": "Finance n8n application manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_status",
+    "application",
+    "finance_commit",
+    "image_lock",
+    "base_image",
+    "extension_image",
+    "workflow_manifest",
+    "fixture_manifest",
+    "inactive_corpus",
+    "credentials",
+    "validators",
+    "blockers"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "contract_status": {"enum": ["SPEC_ONLY", "DISPOSABLE_VERIFIED", "PRODUCTION_VERIFIED"]},
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository"],
+      "properties": {
+        "name": {"const": "finance-statement-tracker"},
+        "repository": {"const": "srobroek/finance-statement-tracker"}
+      }
+    },
+    "finance_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "image_lock": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact"},
+        {"properties": {"path": {"const": "integrations/n8n/application-images.lock.json"}}}
+      ]
+    },
+    "base_image": {"$ref": "#/$defs/baseImage"},
+    "extension_image": {"$ref": "#/$defs/extensionImage"},
+    "workflow_manifest": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact"},
+        {"properties": {"path": {"const": "integrations/n8n/pipeline-registry.json"}}}
+      ]
+    },
+    "fixture_manifest": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact"},
+        {"properties": {"path": {"const": "integrations/n8n/disposable/fixture-manifest.json"}}}
+      ]
+    },
+    "inactive_corpus": {"$ref": "#/$defs/inactiveCorpus"},
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["placeholders", "values_included", "forbidden_fields"],
+      "properties": {
+        "placeholders": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/credential"}},
+        "values_included": {"const": false},
+        "forbidden_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "enum": ["id", "value", "token", "secret", "password", "client_secret"]}
+        }
+      }
+    },
+    "validators": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/validator"},
+      "allOf": [
+        {"contains": {"properties": {"kind": {"const": "BUILD"}}}},
+        {"contains": {"properties": {"kind": {"const": "RUNTIME_ASSERTION"}}}},
+        {"contains": {"properties": {"kind": {"const": "TEST"}}}}
+      ]
+    },
+    "blockers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"contract_status": {"const": "SPEC_ONLY"}}},
+      "then": {
+        "properties": {
+          "finance_commit": {"type": "null"},
+          "extension_image": {
+            "properties": {
+              "digest": {"type": "null"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "finance_commit": {"$ref": "#/$defs/commit"},
+          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[^/].*"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "baseImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reference", "digest"],
+      "properties": {
+        "path": {"const": "packages/n8n-nodes-finance/base-image.txt"},
+        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "extensionImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest", "base_digest", "receipt"],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+:[A-Za-z0-9_.-]+$"},
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "base_digest": {"$ref": "#/$defs/digest"},
+        "receipt": {
+          "allOf": [
+            {"$ref": "#/$defs/artifact"},
+            {"properties": {"path": {"const": "packages/n8n-nodes-finance/finance-image-build-receipt.json"}}}
+          ]
+        }
+      }
+    },
+    "verifiedExtensionImage": {
+      "allOf": [
+        {"$ref": "#/$defs/extensionImage"},
+        {
+          "properties": {
+            "reference": {"pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+            "digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      ]
+    },
+    "inactiveCorpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_count", "sha256", "required_state", "setup_corpus_excluded"],
+      "properties": {
+        "path": {"const": "integrations/n8n/workflows"},
+        "file_count": {"const": 21},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "required_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["active", "published", "status"],
+          "properties": {
+            "active": {"const": false},
+            "published": {"const": false},
+            "status": {"const": "SPEC_ONLY"}
+          }
+        },
+        "setup_corpus_excluded": {"const": true}
+      }
+    },
+    "credential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "binding", "type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "binding": {"type": "string", "pattern": "^BIND_[A-Z0-9_]+$"},
+        "type": {"type": "string", "minLength": 1}
+      }
+    },
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "command"],
+      "properties": {
+        "kind": {"enum": ["TEST", "BUILD", "RUNTIME_ASSERTION"]},
+        "path": {"type": "string", "pattern": "^[^/].*"},
+        "command": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

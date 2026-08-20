@@ -9,10 +9,32 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 class N8nCustomImageTests(unittest.TestCase):
     def test_finance_extension_is_immutable_and_outside_persistent_state(self):
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
+        base_image = (ROOT / "packages/n8n-nodes-finance/base-image.txt").read_text(encoding="utf-8").strip()
         self.assertIn("/opt/finance-n8n/custom-extensions/n8n-nodes-finance", dockerfile)
         self.assertNotIn("/home/node/.n8n/nodes/node_modules/n8n-nodes-finance", dockerfile)
         self.assertNotIn("ENV N8N_CUSTOM_EXTENSIONS", dockerfile)
+        self.assertIn("ARG N8N_BASE_IMAGE", dockerfile)
+        self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
+        self.assertNotIn(base_image, dockerfile)
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
+
+    def test_finance_image_builder_uses_only_immutable_base_and_writes_spec_receipt(self):
+        builder = (ROOT / "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh").read_text(encoding="utf-8")
+        receipt = json.loads(
+            (ROOT / "packages/n8n-nodes-finance/finance-image-build-receipt.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("N8N_BASE_IMAGE", builder)
+        self.assertIn("FINANCE_SOURCE_COMMIT", builder)
+        self.assertIn("FINANCE_BASE_IMAGE_MUST_BE_IMMUTABLE", builder)
+        self.assertNotIn("docker push", builder)
+        self.assertEqual(receipt["status"], "SPEC_ONLY")
+        self.assertIsNone(receipt["image"]["image_digest"])
+        self.assertIsNone(receipt["attestation"]["subject_digest"])
+        self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
+
+    def test_package_test_does_not_rebuild_production_output(self):
+        package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))
+        self.assertNotIn("npm run build", package["scripts"]["test"])
 
     def test_runtime_assertion_requires_all_reviewed_types(self):
         assertion = (ROOT / "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs").read_text(

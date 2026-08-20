@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "SPEC_ONLY",
+  "package": "n8n-nodes-finance@0.1.0",
+  "image": {
+    "requested_reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
+    "image_digest": null,
+    "local_image_id": null
+  },
+  "base_image": {
+    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+  },
+  "source_commit": null,
+  "sbom_sha256": null,
+  "scan_sha256": null,
+  "scan": {
+    "tool": null,
+    "result": "NOT_RUN",
+    "high": null,
+    "critical": null
+  },
+  "attestation": {
+    "type": null,
+    "predicate_type": null,
+    "subject_digest": null,
+    "source_commit": null,
+    "sha256": null,
+    "status": "NOT_AVAILABLE"
+  },
+  "blockers": [
+    "LIVE_REGISTRY_DIGEST_REQUIRED",
+    "SBOM_SCAN_ATTESTATION_REQUIRED",
+    "DISPOSABLE_IMAGE_IMPORT_REQUIRED"
+  ]
+}
