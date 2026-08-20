@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "41536a92ef846f20a0e25a4d9d71a1207a759117",
+    "finance_commit": "8cf233d6ec5ba5ee6e62910f6a48618f9fb98547",
     "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
-    "node_scan_corpus_sha256": "8bdd8feedee1c07ece5548578d3965c6fdbb8ee972b8bc6c15d374171b5600d9",
+    "node_scan_corpus_sha256": "320ad222e4057436d02246443e7f15bc25e36f4b3db1dd69e7c9427642c29912",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -167,7 +167,7 @@
       "identity_derivations": [
         {
           "source_table": "finance_archive_receipts",
-          "strategy": "hash_concat",
+          "strategy": "versioned_length_prefixed_sha256",
           "target_key": [
             "document_id"
           ],
@@ -177,8 +177,8 @@
             "source_attachment_id",
             "source_sha256"
           ],
-          "prefix": "finance-document-v1",
-          "separator": "|"
+          "version": "finance-document-v1",
+          "length_prefix": "uint64_be"
         },
         {
           "source_table": "finance_document_operations",
@@ -371,6 +371,7 @@
           "target_key": [
             "idempotency_key"
           ],
+          "cardinality": "exactly_one",
           "join_steps": [
             {
               "table": "finance_actual_outbox",
@@ -392,6 +393,19 @@
           "target_key": [
             "idempotency_key"
           ],
+          "cardinality": "exactly_one",
+          "join_key": {
+            "source_fields": [
+              "source_code",
+              "period_key",
+              "actual_verification_sha256"
+            ],
+            "target_fields": [
+              "source_code",
+              "period_key",
+              "verification_artifact_sha256"
+            ]
+          },
           "join_steps": [
             {
               "table": "finance_actual_verifications",
