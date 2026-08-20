@@ -88,8 +88,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-run_gate activate
 activation_started=true
+run_gate activate
 run_gate publish
 run_gate readback-active
 run_probe positive 0

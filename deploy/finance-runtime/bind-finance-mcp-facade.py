@@ -27,7 +27,7 @@ PLACEHOLDER = "BIND_FINANCE_MCP_FACADE"
 OP_REFERENCE = f"op://{ITEM_PATH}/{FIELD_LABEL}"
 BINDER_ROOT = Path("/run/finance-mcp-binder")
 PINNED_N8N_VERSION = "2.36.2"
-# The caller must use `op run --env FINANCE_N8N_MCP_BEARER=<reference>`; this
+# The caller must use `op run --env-file=<mode-0600-template>`; this
 # binder accepts only the resulting child environment and never reads the item.
 # This namespace is an internal identity boundary; it is not emitted in receipts.
 BINDER_NAMESPACE = uuid.UUID("4d7e3a41-9e83-4bf3-bf8c-c0f99c0a8c32")
@@ -110,7 +110,8 @@ def bound_workflow(source: Path, credential_id: str) -> dict[str, Any]:
 
 
 def _write_private(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if not path.parent.is_dir() or path.parent.is_symlink():
+        raise ContractError("Binder root must be an existing directory")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     descriptor = os.open(path, flags, 0o600)
     try:
@@ -146,50 +147,107 @@ def _run(command: list[str], *, environment: dict[str, str] | None = None) -> No
         raise ContractError(f"command failed: {command[0]}")
 
 
-def _readback_metadata(path: Path, expected_project: str, credential_id: str) -> None:
-    """Check only non-secret metadata returned by an operator-supplied reader."""
+def _require_tmpfs(root: Path) -> None:
+    if not root.is_dir() or root.is_symlink() or root.stat().st_mode & 0o777 != 0o700:
+        raise ContractError("Binder root must be a mode-0700 directory")
+    if os.environ.get("FINANCE_MCP_BINDER_MOUNT") != str(root):
+        raise ContractError("Binder root ownership marker is required")
+    findmnt = shutil.which("findmnt")
+    if not findmnt:
+        raise ContractError("findmnt is required to verify the binder tmpfs")
+    result = subprocess.run(
+        [findmnt, "--noheadings", "--output", "FSTYPE", "--target", str(root)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={key: value for key, value in os.environ.items() if key != ENVIRONMENT_NAME},
+    )
+    if result.returncode or result.stdout.strip() != "tmpfs":
+        raise ContractError("Binder root must be a tmpfs mount")
 
+
+def _require_pinned_n8n(n8n: str) -> None:
+    environment = os.environ.copy()
+    environment.pop(ENVIRONMENT_NAME, None)
+    try:
+        result = subprocess.run(
+            [n8n, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+    except OSError as exc:
+        raise ContractError("Pinned n8n CLI is unavailable") from exc
+    if result.returncode or result.stdout.strip() != PINNED_N8N_VERSION:
+        raise ContractError(f"n8n CLI version must be exactly {PINNED_N8N_VERSION}")
+
+
+def _readback_metadata(path: Path, expected_project: str, credential_id: str) -> bool:
+    """Check the redacted preflight/readback state and return presence."""
     if not path.is_file():
         raise ContractError("n8n metadata readback is missing")
     document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("name") != CREDENTIAL_NAME or document.get("type") != CREDENTIAL_TYPE:
+    if document.get("name") not in (None, CREDENTIAL_NAME) or document.get("type") not in (None, CREDENTIAL_TYPE):
         raise ContractError("n8n credential metadata mismatch")
-    if document.get("projectId") != expected_project or document.get("ownerRole") != OWNER_ROLE:
+    if document.get("projectId") not in (None, expected_project) or document.get("ownerRole") not in (None, OWNER_ROLE):
         raise ContractError("n8n credential owner metadata mismatch")
-    if document.get("credentialPresent") is not True or document.get("secretValueRecorded") is not False:
+    if document.get("workflowPath") not in (None, WORKFLOW_PATH):
+        raise ContractError("n8n workflow path metadata mismatch")
+    if document.get("secretValueRecorded") is not False or document.get("idsRecorded") is not False:
         raise ContractError("n8n credential metadata is not redacted")
-    if document.get("credentialId") not in (None, "REDACTED", credential_id):
+    if document.get("credentialId") not in (None, "REDACTED") or document.get("workflowId") not in (None, "REDACTED"):
         raise ContractError("unexpected credential identifier in metadata")
+    counts = document.get("counts")
+    expected_empty = {"credentials": 0, "owners": 0, "workflows": 0, "webhooks": 0, "executions": 0}
+    expected_present = {"credentials": 1, "owners": 1, "workflows": 1, "webhooks": 0, "executions": 0}
+    present = document.get("credentialPresent") is True or document.get("workflowPresent") is True
+    if not isinstance(counts, dict) or counts != (expected_present if present else expected_empty):
+        raise ContractError("n8n metadata counts are not an exact clean boundary")
+    if document.get("credentialPresent") is not present or document.get("workflowPresent") is not present:
+        raise ContractError("n8n credential/workflow presence is inconsistent")
+    if document.get("active") is not False or document.get("activeVersionId") is not None or document.get("published") is not False:
+        raise ContractError("n8n workflow is not inactive and unpublished")
+    if present:
+        if document.get("name") != CREDENTIAL_NAME or document.get("type") != CREDENTIAL_TYPE or document.get("projectId") != expected_project or document.get("ownerRole") != OWNER_ROLE:
+            raise ContractError("n8n credential owner metadata is incomplete")
+        if document.get("ciphertextPlaintextEqual") is not False or document.get("decryptUseVerified") is not True:
+            raise ContractError("n8n encrypted decrypt/use evidence is missing")
+    return present
 
 
-def _run_optional_metadata_reader(project_id: str, credential_id: str, root: Path) -> None:
+def _run_metadata_reader(project_id: str, credential_id: str, root: Path) -> bool:
     command = _command_from_env("FINANCE_MCP_METADATA_READER")
-    readback_path = os.environ.get("FINANCE_MCP_METADATA_READBACK")
-    if not command and not readback_path:
-        return
-    if command:
-        readback_path = str(root / "metadata.json")
-        environment = os.environ.copy()
-        environment.pop(ENVIRONMENT_NAME, None)
-        environment.update(
-            {
-                "FINANCE_MCP_METADATA_PROJECT": project_id,
-                "FINANCE_MCP_METADATA_OUTPUT": readback_path,
-                "FINANCE_MCP_METADATA_CREDENTIAL": "REDACTED",
-            }
-        )
-        _run(command, environment=environment)
-    _readback_metadata(Path(readback_path), project_id, credential_id)
+    if not command:
+        raise ContractError("Mandatory n8n metadata readback command is required")
+    readback_path = root / "metadata.json"
+    environment = os.environ.copy()
+    environment.pop(ENVIRONMENT_NAME, None)
+    environment.update(
+        {
+            "FINANCE_MCP_METADATA_PROJECT": project_id,
+            "FINANCE_MCP_METADATA_OUTPUT": str(readback_path),
+            "FINANCE_MCP_METADATA_CREDENTIAL": "REDACTED",
+        }
+    )
+    _run(command, environment=environment)
+    return _readback_metadata(readback_path, project_id, credential_id)
 
 
 def _run_decrypt_use_challenge(secret: str, root: Path) -> None:
     command = _command_from_env("FINANCE_MCP_DECRYPT_USE_CHALLENGE")
     if not command:
-        return
+        raise ContractError("Mandatory n8n decrypt/use challenge command is required")
     environment = os.environ.copy()
     environment.pop(ENVIRONMENT_NAME, None)
     environment.update({ENVIRONMENT_NAME: secret, "FINANCE_MCP_CHALLENGE_OUTPUT": str(root / "challenge.json")})
     _run(command, environment=environment)
+    try:
+        challenge = json.loads((root / "challenge.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContractError("n8n decrypt/use challenge evidence is missing") from exc
+    if challenge != {"authenticatedRequest": True, "decryptUseVerified": True, "secretValueRecorded": False}:
+        raise ContractError("n8n decrypt/use challenge evidence is invalid")
 
 
 def _cleanup_disposable(root: Path) -> None:
@@ -205,15 +263,30 @@ def _cleanup_disposable(root: Path) -> None:
         }
     )
     _run(command, environment=environment)
+    try:
+        cleanup = json.loads((root / "cleanup.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContractError("n8n disposable cleanup evidence is missing") from exc
+    if cleanup != {
+        "cleanupVerified": True,
+        "counts": {"credentials": 0, "owners": 0, "workflows": 0, "webhooks": 0, "executions": 0},
+        "idsRecorded": False,
+        "secretValueRecorded": False,
+    }:
+        raise ContractError("n8n disposable cleanup did not prove a zero boundary")
 
 
-def _unmount_if_requested() -> None:
+def _unmount_if_requested(root: Path) -> None:
     mount = os.environ.get("FINANCE_MCP_BINDER_MOUNT", "")
-    if mount != str(BINDER_ROOT):
+    if not mount:
         return
+    if mount != str(root):
+        raise ContractError("Binder unmount target does not match the verified root")
     umount = shutil.which("umount")
-    if umount:
-        subprocess.run([umount, str(BINDER_ROOT)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if not umount:
+        raise ContractError("umount is required to remove the binder tmpfs")
+    if subprocess.run([umount, mount], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        raise ContractError("binder tmpfs removal failed")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -231,27 +304,36 @@ def main(argv: list[str] | None = None) -> int:
     if not args.project_id or any(character in args.project_id for character in "\r\n"):
         raise ContractError("N8N_FINANCE_PROJECT_ID is required")
     source = args.workflow or Path(__file__).resolve().parents[2] / "integrations/n8n/workflows/15-finance-mcp-facade.json"
-    if os.environ.get("N8N_EXPECTED_VERSION", PINNED_N8N_VERSION) != PINNED_N8N_VERSION:
-        raise ContractError(f"n8n CLI must be pinned to {PINNED_N8N_VERSION}")
+    _require_tmpfs(args.binder_root)
+    _require_pinned_n8n(args.n8n)
     credential_id = deterministic_credential_id()
     root = args.binder_root
     credential_file = root / "finance-mcp-facade-credential.json"
     workflow_file = root / "15-finance-mcp-facade-bound.json"
     try:
+        present = _run_metadata_reader(args.project_id, credential_id, root)
+        if present:
+            # Existing exact state is a clean idempotent no-op; never re-import it.
+            _run_decrypt_use_challenge(secret, root)
+            _run_metadata_reader(args.project_id, credential_id, root)
+            print(json.dumps({"status": "VERIFIED", "runtimeEvidence": True, "idempotentNoOp": True, "values": "REDACTED", "ids": "REDACTED"}, separators=(",", ":")))
+            return 0
         _write_private(credential_file, json.dumps(credential_export(secret, credential_id), separators=(",", ":")).encode())
         workflow = bound_workflow(source, credential_id)
         _write_private(workflow_file, (json.dumps(workflow, separators=(",", ":")) + "\n").encode())
         _run([args.n8n, "import:credentials", f"--input={credential_file}", f"--projectId={args.project_id}"])
         _run([args.n8n, "import:workflow", f"--input={workflow_file}", f"--projectId={args.project_id}", "--activeState=false"])
-        _run_optional_metadata_reader(args.project_id, credential_id, root)
+        _run_metadata_reader(args.project_id, credential_id, root)
         try:
             _run_decrypt_use_challenge(secret, root)
         except ContractError:
             _cleanup_disposable(root)
             _run([args.n8n, "import:credentials", f"--input={credential_file}", f"--projectId={args.project_id}"])
             _run([args.n8n, "import:workflow", f"--input={workflow_file}", f"--projectId={args.project_id}", "--activeState=false"])
-            _run_optional_metadata_reader(args.project_id, credential_id, root)
-        print(json.dumps({"status": "VERIFIED", "credential_present": True, "owner": True, "active": False, "published": False, "values": "REDACTED", "ids": "REDACTED"}, separators=(",", ":")))
+            _run_metadata_reader(args.project_id, credential_id, root)
+            _run_decrypt_use_challenge(secret, root)
+            _run_metadata_reader(args.project_id, credential_id, root)
+        print(json.dumps({"status": "VERIFIED", "runtimeEvidence": True, "idempotentNoOp": False, "values": "REDACTED", "ids": "REDACTED"}, separators=(",", ":")))
         return 0
     finally:
         os.environ.pop(ENVIRONMENT_NAME, None)
@@ -260,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
                 path.unlink()
             except FileNotFoundError:
                 pass
-        _unmount_if_requested()
+        _unmount_if_requested(root)
 
 
 if __name__ == "__main__":

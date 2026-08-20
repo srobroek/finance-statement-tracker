@@ -4,6 +4,8 @@ import json
 import os
 import stat
 import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "deploy" / "finance-runtime"
 WORKFLOW = ROOT / "integrations" / "n8n" / "workflows" / "15-finance-mcp-facade.json"
+
+
+def executable(path: Path, source: str) -> Path:
+    path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(source), encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
 
 
 class FinanceMcpBearerContractTests(unittest.TestCase):
@@ -72,13 +80,52 @@ class FinanceMcpBearerContractTests(unittest.TestCase):
             "BIND_FINANCE_MCP_FACADE",
         )
 
-    def test_provisioner_is_absent_only_and_redacts(self):
-        source = (RUNTIME / "provision-finance-mcp-bearer").read_text()
-        self.assertNotIn("op item edit", source)
-        self.assertEqual(source.count("openssl rand"), 1)
-        self.assertIn("CREATE_FINANCE_MCP_BEARER_ONCE", source)
-        self.assertIn("present_nonempty", source)
-        self.assertNotIn("value=${", source)
+    def test_provisioner_fake_1password_state_machine_is_absent_only(self):
+        with tempfile.TemporaryDirectory(dir="/dev/shm") as directory:
+            root = Path(directory)
+            state = root / "state.json"
+            op_log = root / "op.log"
+            mutator_log = root / "mutator.log"
+            fake_op = executable(
+                root / "op",
+                f"""
+                import json, os, pathlib, sys
+                pathlib.Path(r'{op_log}').open('a').write(json.dumps(sys.argv[1:]) + '\\n')
+                if sys.argv[1:4] != ['item', 'get', 'Finance Statement Tracker Runtime'] or sys.argv[4:6] != ['--vault', 'FinanceRuntime']:
+                    raise SystemExit(11)
+                fields = [{{'label': 'finance_n8n_mcp_bearer', 'type': 'CONCEALED', 'value': 'fixture-value'}}] if pathlib.Path(r'{state}').exists() else []
+                print(json.dumps({{'title': 'Finance Statement Tracker Runtime', 'vault': {{'name': 'FinanceRuntime'}}, 'fields': fields}}))
+                """,
+            )
+            mutator = executable(
+                root / "mutator",
+                f"""
+                import json, pathlib, sys
+                payload = json.load(sys.stdin)
+                if payload['item_path'] != 'FinanceRuntime/Finance Statement Tracker Runtime' or payload['field'] != 'finance_n8n_mcp_bearer' or not payload['value']:
+                    raise SystemExit(12)
+                with pathlib.Path(r'{mutator_log}').open('a') as stream:
+                    stream.write('called\\n')
+                pathlib.Path(r'{state}').write_text('present')
+                """,
+            )
+            environment = {
+                **os.environ,
+                "FINANCE_MCP_PROVISION_ACK": "CREATE_FINANCE_MCP_BEARER_ONCE",
+                "OP_BIN": str(fake_op),
+                "FINANCE_MCP_APPROVED_MUTATOR": str(mutator),
+                "FINANCE_MCP_PROVISION_TMPDIR": str(root),
+            }
+            provisioner = RUNTIME / "provision-finance-mcp-bearer"
+            first = subprocess.run([str(provisioner)], env=environment, text=True, capture_output=True, check=False)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertNotIn("fixture-value", first.stdout + first.stderr)
+            second = subprocess.run([str(provisioner)], env=environment, text=True, capture_output=True, check=False)
+            self.assertNotEqual(second.returncode, 0)
+            self.assertNotIn("fixture-value", second.stdout + second.stderr)
+            self.assertEqual(mutator_log.read_text().splitlines(), ["called"])
+            self.assertIn("--vault", op_log.read_text())
+            self.assertNotIn("edit", op_log.read_text())
 
     def test_shell_entrypoints_are_private_executables(self):
         for filename in (

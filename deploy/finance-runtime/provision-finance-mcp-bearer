@@ -5,6 +5,8 @@ set -euo pipefail
 # repository avoids guessing an unsafe 1Password CLI mutation interface.
 umask 077
 readonly item_path="FinanceRuntime/Finance Statement Tracker Runtime"
+readonly vault_name="FinanceRuntime"
+readonly item_name="Finance Statement Tracker Runtime"
 readonly field_label="finance_n8n_mcp_bearer"
 readonly op_bin="${OP_BIN:-op}"
 readonly work_root="${FINANCE_MCP_PROVISION_TMPDIR:-/dev/shm}"
@@ -40,7 +42,7 @@ secret_file="${run_root}/bearer"
 
 # Redirect the complete 1Password response into mode-0600 tmpfs. Only the
 # field-state enum is allowed to leave this process.
-"${op_bin}" item get "${item_path}" --format json >"${item_json}"
+"${op_bin}" item get "${item_name}" --vault "${vault_name}" --format json >"${item_json}"
 field_state="$(python3 - "${item_json}" "${item_path}" "${field_label}" <<'PY'
 import json
 import pathlib
@@ -85,7 +87,7 @@ json.dump({"item_path": sys.argv[2], "field": sys.argv[3], "value": value}, sys.
 sys.stdout.write("\n")
 PY
 
-"${op_bin}" item get "${item_path}" --format json >"${after_json}"
+"${op_bin}" item get "${item_name}" --vault "${vault_name}" --format json >"${after_json}"
 readback_state="$(python3 - "${after_json}" "${item_path}" "${field_label}" <<'PY'
 import json
 import pathlib
