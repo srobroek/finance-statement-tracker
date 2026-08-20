@@ -28,36 +28,17 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
-RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt \
-    && test "$(cat /tmp/nodemailer-pack.txt)" = "nodemailer-9.0.1.tgz" \
-    && echo "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3  /tmp/nodemailer-9.0.1.tgz" | sha256sum -c -
-
-# n8n 2.36.2 ships nodemailer 8.0.10, which is affected by
-# GHSA-p6gq-j5cr-w38f. Keep the upstream n8n image immutable and replace only
-# the dependency payload at its existing pnpm target with the compatible fixed
-# 9.0.1 package. The exact registry archive is fetched in the audited builder
-# and hash-verified before this stage, which works with both BuildKit and the
-# rootless Podman build engine used by the CI host.
-FROM node-builder AS nodemailer-security-patch
-RUN mkdir -p /tmp/nodemailer-9.0.1 \
-    && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
-    && node -e "if(require('/tmp/nodemailer-9.0.1/package.json').version!=='9.0.1') process.exit(1)"
-
-ARG N8N_BASE_IMAGE=ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
+ARG N8N_BASE_IMAGE=localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9
 FROM ${N8N_BASE_IMAGE}
 
 ARG N8N_BASE_IMAGE
 ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
       org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
-      io.finance.n8n.base-image="${N8N_BASE_IMAGE}"
+      io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
+      io.finance.n8n.base-source="https://github.com/srobroek/n8n@e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7"
 
 USER root
-RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
-    && rm -rf /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
-    && mkdir -p /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer
-COPY --from=nodemailer-security-patch /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
-RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const t=n.createTransport({jsonTransport:true}); if(p.version!=='9.0.1'||typeof t.sendMail!=='function') process.exit(1)"
 RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /opt/finance-n8n/custom-extensions/n8n-nodes-finance/package.json
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /opt/finance-n8n/custom-extensions/n8n-nodes-finance/CONTRACT.md

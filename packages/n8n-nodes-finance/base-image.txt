@@ -1,1 +1,1 @@
-ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
+localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9
