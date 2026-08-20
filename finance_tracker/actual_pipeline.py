@@ -19,7 +19,7 @@ from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
-from .transaction_semantics import finalize_transaction_topic
+from .transaction_semantics import CASHBACK_TOPICS, finalize_transaction_topic
 from .classification_audit import enforce_transaction_invariants
 
 
@@ -208,7 +208,7 @@ def build_actual_statement_run(
         if transaction.card not in supported_cashback_cards:
             continue
         transaction_type = transaction.transaction_type.upper()
-        if transaction_type not in {"PURCHASE", "REFUND", "REVERSAL"}:
+        if transaction_type not in CASHBACK_TOPICS:
             continue
         purchase_type = str(
             transaction.metadata.get("purchase_type")

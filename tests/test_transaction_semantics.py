@@ -72,6 +72,18 @@ class TransactionTopicTests(TestCase):
         self.assertEqual(transaction.transaction_type, "REVERSAL")
         self.assertTrue(transaction.is_refund)
 
+    def test_explicit_investment_credit_is_not_downgraded_to_refund(self) -> None:
+        transaction = self.transaction(
+            "INVESTMENT DISTRIBUTION",
+            direction="CREDIT",
+            transaction_type="INVESTMENT",
+        )
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "INVESTMENT")
+        self.assertEqual(transaction.spend_aed, Decimal("0"))
+
     def test_source_direction_is_required_to_agree_with_adapter_metadata(self) -> None:
         transaction = self.transaction("MERCHANT", direction="CREDIT")
         transaction.metadata["statement_direction"] = "DEBIT"
