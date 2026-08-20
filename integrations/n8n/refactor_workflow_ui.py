@@ -666,7 +666,31 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
             "parameters": {"jsCode": r"""
 const request = $json;
 if (!request.artifact_id || !/^[A-Za-z0-9:_-]{1,128}$/.test(String(request.artifact_id))) {
-  throw new Error('artifact_id, expected_source_sha256, and expected_capture_sha256 are required');
+  throw new Error('artifact_id is required');
+}
+const forbidden = ['provider', 'path', 'url', 'capture_payload', 'capture_schema', 'review_status'];
+if (forbidden.some(field => Object.hasOwn(request, field))) {
+  throw new Error('Artifact metadata must be resolved from durable server state');
+}
+const mcpMode = request.operation_code === 'artifact.submit_reviewed';
+if (mcpMode) {
+  const allowed = new Set(['_mcp_request_id', 'operation_code', 'artifact_id', 'expected_sha256', 'expected_source_sha256', 'expected_capture_sha256']);
+  if (Object.keys(request).some(field => !allowed.has(field))) {
+    throw new Error('MCP_REVIEWED_FIELDS_FORBIDDEN');
+  }
+  if ($binary?.data) throw new Error('MCP_REVIEWED_BINARY_FORBIDDEN');
+  if (Object.hasOwn(request, 'expected_sha256')
+      || Object.hasOwn(request, 'expected_source_sha256')
+      || Object.hasOwn(request, 'expected_capture_sha256')) {
+    throw new Error('MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED');
+  }
+  return [{ json: { handoff_mode: 'MCP_REVIEWED', artifact_id: String(request.artifact_id) } }];
+}
+if (Object.hasOwn(request, 'operation_code')) {
+  throw new Error('BROWSER_CAPTURE_OPERATION_CODE_FORBIDDEN');
+}
+if (Object.hasOwn(request, 'expected_sha256')) {
+  throw new Error('EXPECTED_SHA256_LEGACY_FORBIDDEN');
 }
 if (!/^[a-f0-9]{64}$/i.test(String(request.expected_source_sha256 || ''))) {
   throw new Error('expected_source_sha256 must be a SHA-256 digest');
@@ -674,18 +698,12 @@ if (!/^[a-f0-9]{64}$/i.test(String(request.expected_source_sha256 || ''))) {
 if (!/^[a-f0-9]{64}$/i.test(String(request.expected_capture_sha256 || ''))) {
   throw new Error('expected_capture_sha256 must be a SHA-256 digest');
 }
-if (Object.hasOwn(request, 'expected_sha256')) {
-  throw new Error('Use separate source and capture binary SHA-256 fields');
-}
 if (!$binary?.data) {
   throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
 }
-const forbidden = ['provider', 'path', 'url', 'capture_payload', 'capture_schema', 'review_status'];
-if (forbidden.some(field => Object.hasOwn(request, field))) {
-  throw new Error('Artifact metadata must be resolved from durable server state');
-}
 return [{
   json: {
+    handoff_mode: 'HEADED_CAPTURE',
     artifact_id: String(request.artifact_id),
     expected_source_sha256: String(request.expected_source_sha256).toLowerCase(),
     expected_capture_sha256: String(request.expected_capture_sha256).toLowerCase(),
@@ -875,7 +893,7 @@ return [{
                 "mappingMode": "defineBelow",
                 "value": {
                     "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                    "source_sha256": "={{ $('Validate Browser Capture Schema').first().json.provenance.source_content_sha256 }}",
+                    "source_sha256": "={{ $('Resolve Capture Hash Contract').first().json.expected_source_sha256 }}",
                     "document_profile": "BROWSER_CAPTURE_V1",
                     "requested_schema_version": "browser-capture-schema-v1",
                     "onedrive_item_id": "={{ $json.id }}",
@@ -945,7 +963,7 @@ return [{
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "parameters": {"jsCode": r"""
-const request = $('Validate Reviewed Artifact Reference').first().json;
+const request = $('Resolve Capture Hash Contract').first().json;
 const input = $('SHA-256 Browser Capture Input').first().json;
 const receipt = $('Read Back Durable Browser Archive Receipt').first().json;
 const observed = String($json.archived_sha256 || '').toLowerCase();
@@ -960,6 +978,107 @@ return [{ json: { receipt, source_content_sha256: request.expected_source_sha256
 """.strip()},
     })
     handoff["nodes"].extend([
+        {
+            "id": "11010-mode-if",
+            "name": "MCP Reviewed Artifact?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [-500, -180],
+            "parameters": {"conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "strict"},
+                "combinator": "and",
+                "conditions": [{
+                    "leftValue": "={{ $json.handoff_mode }}",
+                    "rightValue": "MCP_REVIEWED",
+                    "operator": {"type": "string", "operation": "equals"},
+                }],
+            }},
+        },
+        {
+            "id": "11010-mcp-load",
+            "name": "Load MCP Reviewed Document Record",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "position": [-250, -180],
+            "parameters": {
+                "resource": "row",
+                "operation": "get",
+                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "returnAll": False,
+                "limit": 1,
+                "matchType": "allConditions",
+                "filters": {"conditions": [{
+                    "keyName": "document_id",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                }]},
+                "options": {},
+            },
+        },
+        {
+            "id": "11010-mcp-validate",
+            "name": "Validate MCP Durable Document Reference",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [0, -180],
+            "parameters": {"jsCode": r"""
+const request = $('Validate Reviewed Artifact Reference').first().json;
+const record = $json;
+if (!record.document_id || String(record.document_id) !== request.artifact_id) {
+  throw new Error('MCP_REVIEWED_DOCUMENT_NOT_FOUND');
+}
+if (record.document_profile !== 'BROWSER_CAPTURE_V1' || !record.onedrive_item_id) {
+  throw new Error('MCP_REVIEWED_DOCUMENT_PROFILE_INVALID');
+}
+if (!/^[a-f0-9]{64}$/i.test(String(record.source_sha256 || ''))) {
+  throw new Error('MCP_REVIEWED_SOURCE_HASH_MISSING');
+}
+if (['QUARANTINED', 'UNSUPPORTED', 'PASSWORD_FAILED'].includes(String(record.state || ''))) {
+  throw new Error(`MCP_REVIEWED_DOCUMENT_TERMINAL:${record.state}`);
+}
+return [{ json: {
+  handoff_mode: 'MCP_REVIEWED',
+  artifact_id: request.artifact_id,
+  onedrive_item_id: String(record.onedrive_item_id),
+  server_source_sha256: String(record.source_sha256).toLowerCase(),
+  durable_state: String(record.state || ''),
+} }];
+""".strip()},
+        },
+        {
+            "id": "11010-mcp-download",
+            "name": "Download MCP Reviewed Capture",
+            "type": "n8n-nodes-base.microsoftOneDrive",
+            "typeVersion": 1.1,
+            "position": [250, -180],
+            "parameters": {
+                "resource": "file",
+                "operation": "download",
+                "fileId": "={{ $json.onedrive_item_id }}",
+                "binaryPropertyName": "data",
+            },
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+            },
+        },
+        {
+            "id": "11010-hash-contract",
+            "name": "Resolve Capture Hash Contract",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [250, 180],
+            "parameters": {"jsCode": r"""
+const request = $('Validate Reviewed Artifact Reference').first().json;
+const inputHash = String($json.input_sha256 || '').toLowerCase();
+if (!/^[a-f0-9]{64}$/.test(inputHash)) throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISSING');
+if (request.handoff_mode === 'MCP_REVIEWED') {
+  const durable = $('Validate MCP Durable Document Reference').first().json;
+  return [{ json: { ...$json, expected_source_sha256: durable.server_source_sha256, expected_capture_sha256: inputHash }, binary: $binary }];
+}
+return [{ json: { ...$json, expected_source_sha256: request.expected_source_sha256, expected_capture_sha256: request.expected_capture_sha256 }, binary: $binary }];
+""".strip()},
+        },
         {
             "id": "11010-preparse",
             "name": "Parse Browser Capture JSON Before Archive",
@@ -1013,7 +1132,7 @@ return [{ json: capture, binary: $binary }];
             "position": [950, 0],
             "parameters": {"jsCode": r"""
 const existing = $json;
-const request = $('Validate Reviewed Artifact Reference').first().json;
+const request = $('Resolve Capture Hash Contract').first().json;
 const captureBinary = $('Validate Browser Capture Schema').first().binary;
 const captureBinarySha256 = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
 if (!existing.document_id) {
@@ -1187,7 +1306,7 @@ if (capture.source?.url) {
 if (!validator(capture)) {
   throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
 }
-const request = $('Validate Reviewed Artifact Reference').first().json;
+const request = $('Resolve Capture Hash Contract').first().json;
 if (inputHash !== request.expected_capture_sha256) {
   throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISMATCH');
 }
@@ -1254,8 +1373,16 @@ return [{
     ])
     handoff["connections"] = {
         "Reviewed Artifact Reference": {"main": [[{"node": "Validate Reviewed Artifact Reference", "type": "main", "index": 0}]]},
-        "Validate Reviewed Artifact Reference": {"main": [[{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]]},
-        "SHA-256 Browser Capture Input": {"main": [[{"node": "Parse Browser Capture JSON Before Archive", "type": "main", "index": 0}]]},
+        "Validate Reviewed Artifact Reference": {"main": [[{"node": "MCP Reviewed Artifact?", "type": "main", "index": 0}]]},
+        "MCP Reviewed Artifact?": {"main": [
+            [{"node": "Load MCP Reviewed Document Record", "type": "main", "index": 0}],
+            [{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}],
+        ]},
+        "Load MCP Reviewed Document Record": {"main": [[{"node": "Validate MCP Durable Document Reference", "type": "main", "index": 0}]]},
+        "Validate MCP Durable Document Reference": {"main": [[{"node": "Download MCP Reviewed Capture", "type": "main", "index": 0}]]},
+        "Download MCP Reviewed Capture": {"main": [[{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]]},
+        "SHA-256 Browser Capture Input": {"main": [[{"node": "Resolve Capture Hash Contract", "type": "main", "index": 0}]]},
+        "Resolve Capture Hash Contract": {"main": [[{"node": "Parse Browser Capture JSON Before Archive", "type": "main", "index": 0}]]},
         "Parse Browser Capture JSON Before Archive": {"main": [[{"node": "Validate Browser Capture Schema", "type": "main", "index": 0}]]},
         "Validate Browser Capture Schema": {"main": [[{"node": "Load Existing Browser Archive Receipt", "type": "main", "index": 0}]]},
         "Load Existing Browser Archive Receipt": {"main": [[{"node": "Check Existing Browser Artifact", "type": "main", "index": 0}]]},
@@ -1294,6 +1421,12 @@ return [{
         "actual_mutation_forbidden": True,
         "cashback_mutation_forbidden": True,
         "workflow_state": "INACTIVE",
+        "handoff_modes": ["HEADED_CAPTURE", "MCP_REVIEWED"],
+        "headed_capture_contract": ["artifact_id", "expected_source_sha256", "expected_capture_sha256", "binary.data"],
+        "mcp_reviewed_contract": ["artifact_id"],
+        "mcp_server_owned_reference": "finance_document_operations.document_id",
+        "mcp_client_binary_forbidden": True,
+        "mcp_client_hashes_forbidden": True,
     }
 
     agent = by_code["AI_PROPOSAL"]

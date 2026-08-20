@@ -20,13 +20,21 @@ validation, enrichment, match, archive, and finance write step.
 4. Continue only after the user confirms that authentication is complete.
    Follow the deterministic recipe and capture only visible data or an official
    export.
-5. Produce one `browser-capture-schema-v1` artifact with a SHA-256 identity,
-   safe labels or last four digits, date/as-of evidence, and limitations.
-6. Send the capture JSON as the single binary `data` attachment to the
-   inactive `INTERACTIVE_ARTIFACT_HANDOFF` workflow. Keep the JSON envelope to
-   the artifact identity and source content hash (`expected_sha256`); do not
-   pass arbitrary paths, URLs, or capture payload fields in that envelope.
-7. Report the capture identity, provider, data scope, date/as-of value, row or
+5. Produce one `browser-capture-schema-v1` artifact with its original export
+   or source bytes recorded as `source_content_sha256`, safe labels or last
+   four digits, date/as-of evidence, and limitations. The canonical serialized
+   capture bytes have a separate `capture_binary_sha256` identity.
+6. For headed capture mode, send the canonical capture JSON as the single
+   binary `data` attachment to inactive `INTERACTIVE_ARTIFACT_HANDOFF` with
+   `artifact_id`, `expected_source_sha256`, and `expected_capture_sha256`.
+   The source hash identifies original export content; the capture hash
+   identifies the exact bytes sent. Do not pass arbitrary paths, URLs, or
+   capture payload fields in that envelope.
+7. For `artifact.submit_reviewed`, send only the safe `artifact_id` to the MCP
+   facade. n8n resolves the server-owned durable document, downloads its
+   binary, and derives both hashes inside the inactive workflow; never send a
+   client binary, URL, path, or client-supplied hash for this mode.
+8. Report the capture identity, provider, data scope, date/as-of value, row or
    portfolio count, review count, and blockers.
 
 ## Rules
@@ -48,6 +56,8 @@ and the single fenced Actual writer.
 NOT Write Actual, Cashback, a browser session, a cursor, or a second ledger
 transaction; Amazon order evidence remains supplemental matching input.
 NOT Activate or publish an n8n workflow during acquisition.
+NOT Use `artifact.submit_reviewed` to bypass the headed capture envelope or
+provide client-controlled durable-document metadata.
 
 ## Output
 

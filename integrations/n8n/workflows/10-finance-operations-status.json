@@ -84,7 +84,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Bounded MCP Dispatch. Keep this deterministic and fail closed.\nconst r = $json, allowed = new Set(['finance.status', 'artifact.submit_reviewed', 'document.request']), op = String(r.operation_code || '');\nif (!allowed.has(op))\n    throw new Error('MCP_OPERATION_NOT_ALLOWED');\nconst request_id = String(r._mcp_request_id || '');\nif (!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id))\n    throw new Error('MCP_REQUEST_ID_INVALID');\nconst specs = { 'finance.status': [], 'artifact.submit_reviewed': ['artifact_id', 'expected_sha256'], 'document.request': ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'] }, args = {};\nfor (const key of specs[op]) {\n    const value = String(r[key] || '');\n    if (!value || value.length > 256)\n        throw new Error(`MCP_ARGUMENT_INVALID:${key}`);\n    args[key] = value;\n}\nif (args.expected_sha256 && !/^[a-f0-9]{64}$/.test(args.expected_sha256))\n    throw new Error('MCP_HASH_INVALID');\nconst target = { 'finance.status': 'FINANCE_OPERATIONS_STATUS', 'artifact.submit_reviewed': 'INTERACTIVE_ARTIFACT_HANDOFF', 'document.request': 'DOCUMENT_EXTRACTION_REQUEST' }[op];\nreturn [{ json: { request_id, operation_code: op, target_workflow_code: target, args, request_canonical: JSON.stringify({ operation_code: op, args }) } }];\n"
+        "jsCode": "// Purpose: Validate Bounded MCP Dispatch. Keep this deterministic and fail closed.\nconst r = $json, allowed = new Set(['finance.status', 'artifact.submit_reviewed', 'document.request']), op = String(r.operation_code || '');\nif (!allowed.has(op))\n    throw new Error('MCP_OPERATION_NOT_ALLOWED');\nconst request_id = String(r._mcp_request_id || '');\nif (!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id))\n    throw new Error('MCP_REQUEST_ID_INVALID');\nconst specs = { 'finance.status': [], 'artifact.submit_reviewed': ['artifact_id'], 'document.request': ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'] }, args = {};\nfor (const key of specs[op]) {\n    const value = String(r[key] || '');\n    if (!value || value.length > 256)\n        throw new Error(`MCP_ARGUMENT_INVALID:${key}`);\n    args[key] = value;\n}\nif (args.expected_sha256 && !/^[a-f0-9]{64}$/.test(args.expected_sha256))\n    throw new Error('MCP_HASH_INVALID');\nconst target = { 'finance.status': 'FINANCE_OPERATIONS_STATUS', 'artifact.submit_reviewed': 'INTERACTIVE_ARTIFACT_HANDOFF', 'document.request': 'DOCUMENT_EXTRACTION_REQUEST' }[op];\nreturn [{ json: { request_id, operation_code: op, target_workflow_code: target, args, request_canonical: JSON.stringify({ operation_code: op, args }) } }];\n"
       }
     },
     {
@@ -341,8 +341,7 @@
           "mappingMode": "defineBelow",
           "value": {
             "operation_code": "artifact.submit_reviewed",
-            "artifact_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}",
-            "expected_sha256": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}"
+            "artifact_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}"
           },
           "matchingColumns": [],
           "schema": []
