@@ -33,7 +33,7 @@ reject_parent_secrets || exit 1
 shift
 [[ -x "$(command -v "${op_bin}" || true)" ]] || { echo "Approved 1Password CLI is unavailable" >&2; exit 1; }
 case "${op_bin}" in
-  op|*/op) ;;
+  op|op.exe|*/op|*/op.exe) ;;
   *) echo "OP_BIN must identify the approved 1Password CLI" >&2; exit 1 ;;
 esac
 case "${codex_bin}" in
