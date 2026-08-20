@@ -533,6 +533,9 @@ try {{
         workflow = self.workflow("03-shared-statement-pipeline.json")
         nodes = self.nodes("03-shared-statement-pipeline.json")
         connections = workflow["connections"]
+        prepare_code = nodes["Prepare Outbox Intent"]["parameters"]["jsCode"]
+        self.assertIn("outbox_id: `statement:${source.document_sha256}`", prepare_code)
+        self.assertNotIn("outbox_id: `${source.run_id}:${source.document_sha256}`", prepare_code)
         self.assertTrue(nodes["Read Back Existing Actual Outbox"]["alwaysOutputData"])
         self.assertEqual(
             connections["Prepare Outbox Intent"]["main"][0][0]["node"],
@@ -552,7 +555,7 @@ try {{
         )
         digest = "a" * 64
         draft = {
-            "outbox_id": "run:statement",
+            "outbox_id": "retry-run:new-outbox",
             "imported_id": "statement:payload",
             "actual_file_id": "actual-file:replay",
             "account_id": "actual-account:EI_AMAZON",
@@ -564,8 +567,9 @@ try {{
         }
         existing = {
             **draft,
+            "outbox_id": "statement:stable-existing",
             "state": "COMMITTED",
-            "lease_owner": "n8n:recovery:run:statement",
+            "lease_owner": "n8n:recovery:statement:stable-existing",
             "lease_fence": 9,
         }
         selected = self.run_exported_workflow_node(
@@ -578,6 +582,7 @@ try {{
         selected_row = selected["output"][0]["json"]
         self.assertTrue(selected_row["existing_outbox_replay"])
         self.assertEqual(selected_row["state"], "COMMITTED")
+        self.assertEqual(selected_row["outbox_id"], "statement:stable-existing")
         self.assertEqual(selected_row["lease_fence"], 9)
         fresh = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
@@ -596,7 +601,7 @@ try {{
         self.assertFalse(stale["ok"])
 
         receipt = {
-            "outbox_id": "run:statement",
+            "outbox_id": "statement:stable-existing",
             "actual_file_id": "actual-file:replay",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
@@ -626,7 +631,7 @@ try {{
                 "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
                 "Read Back Released Recovery Writer Fence Replay": {"json": {
                     "resource_key": "actual:actual-file:replay",
-                    "lease_owner": "n8n:recovery:run:statement",
+                    "lease_owner": "n8n:recovery:statement:stable-existing",
                     "fencing_token": 9,
                     "released": True,
                 }},
