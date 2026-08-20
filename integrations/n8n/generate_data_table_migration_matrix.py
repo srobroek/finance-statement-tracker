@@ -43,6 +43,11 @@ TARGETS = (
     "finance_actual_batches",
     "finance_ai_reviews",
 )
+DOCUMENT_IDENTITY_FIELDS = {
+    "MAIL_LINKED": ("source_sha256", "source_message_id", "source_attachment_id"),
+    "BROWSER_CAPTURE": ("source_sha256", "capture_id", "account_id", "period_key"),
+    "PROCESSING_ONLY": ("source_sha256", "document_profile", "requested_schema_version"),
+}
 
 
 def _target_column(source_type: str, *sources: str) -> dict[str, Any]:
@@ -130,19 +135,39 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "strategy": "versioned_length_prefixed_sha256",
                 "target_key": ["document_id"],
                 "source_fields": [
-                    "source_code",
+                    "source_sha256",
                     "source_message_id",
                     "source_attachment_id",
-                    "source_sha256",
                 ],
-                "version": "finance-document-v1",
+                "identity_kind": "MAIL_LINKED",
+                "version": "document-identity-v1",
                 "length_prefix": "uint64_be",
+                "tuple_encoding": "versioned_length_prefixed_binary",
+                "digest_encoding": "base64url_unpadded",
             },
             {
                 "source_table": "finance_document_operations",
-                "strategy": "direct",
+                "strategy": "versioned_length_prefixed_sha256",
                 "target_key": ["document_id"],
-                "source_fields": ["document_id"],
+                "source_fields": [
+                    "source_sha256",
+                    "source_message_id",
+                    "source_attachment_id",
+                ],
+                "identity_kind": "MAIL_LINKED",
+                "version": "document-identity-v1",
+                "length_prefix": "uint64_be",
+                "tuple_encoding": "versioned_length_prefixed_binary",
+                "digest_encoding": "base64url_unpadded",
+                "alias_fields": ["document_id"],
+                "fallback_identity": {
+                    "identity_kind": "PROCESSING_ONLY",
+                    "source_fields": [
+                        "source_sha256",
+                        "document_profile",
+                        "requested_schema_version",
+                    ],
+                },
             },
         ],
         "columns": {
@@ -844,6 +869,7 @@ def validate_identity_derivations(
         if not isinstance(derivations, list) or not derivations:
             raise MatrixError(f"{target} must declare identity derivations")
         seen_sources: set[str] = set()
+        document_identity_contract: tuple[str, str, str, str, str, tuple[str, ...]] | None = None
         for derivation in derivations:
             if not isinstance(derivation, dict):
                 raise MatrixError(f"{target} has a malformed identity derivation")
@@ -860,6 +886,10 @@ def validate_identity_derivations(
             if derivation.get("target_key") != logical_key:
                 raise MatrixError(f"{target}.{source_table} identity does not produce the target logical key")
             strategy = derivation.get("strategy")
+            if target == "finance_documents" and strategy != "versioned_length_prefixed_sha256":
+                raise MatrixError(
+                    f"{target}.{source_table} must use the approved versioned document identity tuple"
+                )
             if strategy == "direct":
                 source_fields = derivation.get("source_fields")
                 if not isinstance(source_fields, list) or len(source_fields) != len(logical_key):
@@ -868,7 +898,11 @@ def validate_identity_derivations(
                     raise MatrixError(f"{target}.{source_table} direct identity references an unknown source field")
             elif strategy == "versioned_length_prefixed_sha256":
                 source_fields = derivation.get("source_fields")
-                if not isinstance(source_fields, list) or len(source_fields) < 2:
+                if (
+                    not isinstance(source_fields, list)
+                    or len(source_fields) < 2
+                    or len(set(source_fields)) != len(source_fields)
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash needs at least two source fields"
                     )
@@ -888,10 +922,64 @@ def validate_identity_derivations(
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash must use uint64_be length prefixes"
                     )
+                if derivation.get("tuple_encoding") != "versioned_length_prefixed_binary":
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash must use binary length-prefixed tuples"
+                    )
+                if derivation.get("digest_encoding") != "base64url_unpadded":
+                    raise MatrixError(
+                        f"{target}.{source_table} document identity must use unpadded base64url SHA-256"
+                    )
                 if "separator" in derivation or "prefix" in derivation:
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash must not use delimiters or raw prefixes"
                     )
+                identity_kind = derivation.get("identity_kind")
+                version = derivation.get("version")
+                length_prefix = derivation.get("length_prefix")
+                if identity_kind not in DOCUMENT_IDENTITY_FIELDS:
+                    raise MatrixError(
+                        f"{target}.{source_table} versioned hash has an unsupported identity_kind"
+                    )
+                if target == "finance_documents" and tuple(source_fields) != DOCUMENT_IDENTITY_FIELDS[identity_kind]:
+                    raise MatrixError(
+                        f"{target}.{source_table} identity fields do not match {identity_kind}"
+                    )
+                contract = (
+                    identity_kind,
+                    version,
+                    length_prefix,
+                    derivation["tuple_encoding"],
+                    derivation["digest_encoding"],
+                    tuple(source_fields),
+                )
+                if target == "finance_documents":
+                    if document_identity_contract is None:
+                        document_identity_contract = contract
+                    elif contract != document_identity_contract:
+                        raise MatrixError(
+                            f"{target}.{source_table} identity tuple differs from the approved document contract"
+                        )
+                aliases = derivation.get("alias_fields", [])
+                if not isinstance(aliases, list) or len(set(aliases)) != len(aliases):
+                    raise MatrixError(f"{target}.{source_table} alias fields are malformed")
+                if any(alias not in source_columns[source_table] for alias in aliases):
+                    raise MatrixError(f"{target}.{source_table} alias field is unknown")
+                fallback = derivation.get("fallback_identity")
+                if fallback is not None:
+                    fallback_fields = fallback.get("source_fields") if isinstance(fallback, dict) else None
+                    if (
+                        not isinstance(fallback, dict)
+                        or fallback.get("identity_kind") != "PROCESSING_ONLY"
+                        or not isinstance(fallback_fields, list)
+                        or not fallback_fields
+                        or len(set(fallback_fields)) != len(fallback_fields)
+                        or tuple(fallback_fields) != DOCUMENT_IDENTITY_FIELDS["PROCESSING_ONLY"]
+                        or any(field not in source_columns[source_table] for field in fallback_fields)
+                    ):
+                        raise MatrixError(
+                            f"{target}.{source_table} fallback identity is invalid"
+                        )
             elif strategy == "join":
                 steps = derivation.get("join_steps")
                 terminal_fields = derivation.get("terminal_fields")
@@ -944,6 +1032,14 @@ def validate_identity_derivations(
                         or any(field not in source_columns[joined_table] for field in right_fields)
                     ):
                         raise MatrixError(f"{target}.{source_table} join identity has invalid join fields")
+                    for left_field, right_field in zip(left_fields, right_fields, strict=True):
+                        left_type = source_columns[current_table][left_field]
+                        right_type = source_columns[joined_table][right_field]
+                        if left_type != right_type:
+                            raise MatrixError(
+                                f"{target}.{source_table} join field type {left_type!r} cannot match "
+                                f"{joined_table}.{right_field} ({right_type!r})"
+                            )
                     current_table = joined_table
                 if any(field not in source_columns[current_table] for field in terminal_fields):
                     raise MatrixError(f"{target}.{source_table} join identity terminal field is unknown")

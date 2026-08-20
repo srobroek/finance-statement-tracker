@@ -172,23 +172,43 @@
             "document_id"
           ],
           "source_fields": [
-            "source_code",
+            "source_sha256",
             "source_message_id",
-            "source_attachment_id",
-            "source_sha256"
+            "source_attachment_id"
           ],
-          "version": "finance-document-v1",
-          "length_prefix": "uint64_be"
+          "identity_kind": "MAIL_LINKED",
+          "version": "document-identity-v1",
+          "length_prefix": "uint64_be",
+          "tuple_encoding": "versioned_length_prefixed_binary",
+          "digest_encoding": "base64url_unpadded"
         },
         {
           "source_table": "finance_document_operations",
-          "strategy": "direct",
+          "strategy": "versioned_length_prefixed_sha256",
           "target_key": [
             "document_id"
           ],
           "source_fields": [
+            "source_sha256",
+            "source_message_id",
+            "source_attachment_id"
+          ],
+          "identity_kind": "MAIL_LINKED",
+          "version": "document-identity-v1",
+          "length_prefix": "uint64_be",
+          "tuple_encoding": "versioned_length_prefixed_binary",
+          "digest_encoding": "base64url_unpadded",
+          "alias_fields": [
             "document_id"
-          ]
+          ],
+          "fallback_identity": {
+            "identity_kind": "PROCESSING_ONLY",
+            "source_fields": [
+              "source_sha256",
+              "document_profile",
+              "requested_schema_version"
+            ]
+          }
         }
       ],
       "columns": {

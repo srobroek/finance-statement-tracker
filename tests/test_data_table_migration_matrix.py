@@ -218,9 +218,32 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         archive_identity = next(
             row for row in document_identities if row["source_table"] == "finance_archive_receipts"
         )
+        processing_identity = next(
+            row for row in document_identities if row["source_table"] == "finance_document_operations"
+        )
         self.assertEqual(archive_identity["strategy"], "versioned_length_prefixed_sha256")
-        self.assertEqual(archive_identity["version"], "finance-document-v1")
+        self.assertEqual(processing_identity["strategy"], archive_identity["strategy"])
+        self.assertEqual(archive_identity["identity_kind"], "MAIL_LINKED")
+        self.assertEqual(processing_identity["identity_kind"], archive_identity["identity_kind"])
+        self.assertEqual(archive_identity["version"], "document-identity-v1")
+        self.assertEqual(processing_identity["version"], archive_identity["version"])
         self.assertEqual(archive_identity["length_prefix"], "uint64_be")
+        self.assertEqual(processing_identity["length_prefix"], archive_identity["length_prefix"])
+        self.assertEqual(
+            processing_identity["source_fields"], archive_identity["source_fields"]
+        )
+        self.assertEqual(
+            archive_identity["tuple_encoding"], "versioned_length_prefixed_binary"
+        )
+        self.assertEqual(archive_identity["digest_encoding"], "base64url_unpadded")
+        self.assertEqual(
+            processing_identity["fallback_identity"]["identity_kind"], "PROCESSING_ONLY"
+        )
+        self.assertEqual(
+            processing_identity["fallback_identity"]["source_fields"],
+            ["source_sha256", "document_profile", "requested_schema_version"],
+        )
+        self.assertEqual(processing_identity["alias_fields"], ["document_id"])
         self.assertNotIn("separator", archive_identity)
         batch_identities = self.matrix["target_schemas"]["finance_actual_batches"]["identity_derivations"]
         verification_identity = next(
@@ -261,6 +284,29 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         ]
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_identity_derivations(source_tables, broken_join)
+
+        numeric_rhs = deepcopy(self.matrix["target_schemas"])
+        numeric_rhs["finance_actual_batches"]["identity_derivations"][2]["join_steps"][0]["right_fields"] = [
+            "verification_version"
+        ]
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, numeric_rhs)
+
+        divergent_document_identity = deepcopy(self.matrix["target_schemas"])
+        divergent_document_identity["finance_documents"]["identity_derivations"][1] = {
+            "source_table": "finance_document_operations",
+            "strategy": "direct",
+            "target_key": ["document_id"],
+            "source_fields": ["document_id"],
+        }
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, divergent_document_identity)
+
+        malformed_document_tuple = deepcopy(self.matrix["target_schemas"])
+        for identity in malformed_document_tuple["finance_documents"]["identity_derivations"]:
+            identity["source_fields"] = ["source_sha256", "source_message_id"]
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_identity_derivations(source_tables, malformed_document_tuple)
 
         duplicate_target = deepcopy(self.matrix)
         for table in duplicate_target["tables"]:

@@ -273,8 +273,19 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         },
+        "identity_kind": {
+          "enum": ["MAIL_LINKED", "BROWSER_CAPTURE", "PROCESSING_ONLY"]
+        },
         "version": {"type": "string", "minLength": 1},
         "length_prefix": {"const": "uint64_be"},
+        "tuple_encoding": {"const": "versioned_length_prefixed_binary"},
+        "digest_encoding": {"const": "base64url_unpadded"},
+        "alias_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "fallback_identity": {"$ref": "#/$defs/fallback_identity"},
         "cardinality": {"const": "exactly_one"},
         "join_key": {"$ref": "#/$defs/join_key"},
         "join_steps": {
@@ -296,7 +307,7 @@
         },
         {
           "if": {"properties": {"strategy": {"const": "versioned_length_prefixed_sha256"}}},
-          "then": {"required": ["source_fields", "version", "length_prefix"]}
+          "then": {"required": ["source_fields", "identity_kind", "version", "length_prefix", "tuple_encoding", "digest_encoding"]}
         },
         {
           "if": {"properties": {"strategy": {"const": "join"}}},
@@ -316,6 +327,20 @@
           "items": {"type": "string", "minLength": 1}
         },
         "target_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "fallback_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_kind", "source_fields"],
+      "properties": {
+        "identity_kind": {"const": "PROCESSING_ONLY"},
+        "source_fields": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
