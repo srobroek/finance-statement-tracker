@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
-  "schema_sha256": "c7ebdcddfdf41ccabee077c0828884e2fe40be3590d5c2e543ecdb44b9b22582",
+  "schema_sha256": "8a9e96dd58eef929601ff619033e2ccc23471ca8a25b8a2d0e86a0af59cc1643",
   "content_digest": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
@@ -10,7 +10,7 @@
       "bundle_content_sha256"
     ]
   },
-  "bundle_content_sha256": "73bd45452e7aefb1a00c9d9729a9b024ce2e8f00e154d0aad57df94f00901467",
+  "bundle_content_sha256": "695eb54db954cab2e94c65e4f3bcda8d4970bcdeff2fb809be529dd7670bc96e",
   "source_documents": [
     {
       "path": "config/statement-sources.json",
@@ -694,7 +694,7 @@
       }
     },
     {
-      "source_code": "RAK_WORLD",
+      "source_code": "RAKBANK_CARD_TRANSACTION",
       "config_version": "1",
       "source_path": "config/transaction-email-sources.json",
       "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
@@ -717,7 +717,7 @@
       }
     },
     {
-      "source_code": "SC_PLATINUM_X",
+      "source_code": "STANDARD_CHARTERED_CARD_TRANSACTION",
       "config_version": "1",
       "source_path": "config/transaction-email-sources.json",
       "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",

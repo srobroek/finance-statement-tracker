@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator
+
 from refactor_workflow_ui import format_code_nodes, layout
 
 
@@ -23,6 +25,15 @@ APPLICATION_CONFIG_PATHS = (
     "config/statement-sources.json",
     "config/transaction-email-sources.json",
     "config/ai-policies.json",
+)
+SOURCE_CONFIG_SPECS = {
+    "config/statement-sources.json": {"collection": "sources", "identity_key": "card_code"},
+    "config/transaction-email-sources.json": {"collection": "sources", "identity_key": "code"},
+    "config/ai-policies.json": {"collection": "policies", "identity_key": "policy_id"},
+}
+SOURCE_CONTRACT_PATHS = (
+    "config/statement-sources.json",
+    "config/transaction-email-sources.json",
 )
 RESOLVER_WORKFLOWS = (
     {
@@ -93,6 +104,26 @@ def _source_row(document: dict[str, Any], key: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _config_rows(documents: dict[str, dict[str, Any]], source_path: str) -> list[dict[str, Any]]:
+    spec = SOURCE_CONFIG_SPECS[source_path]
+    return _source_row(documents[source_path], spec["collection"])
+
+
+def _identity_key(source_path: str) -> str:
+    return SOURCE_CONFIG_SPECS[source_path]["identity_key"]
+
+
+def _validate_unique_identities(
+    rows: list[dict[str, Any]], source_path: str,
+) -> None:
+    identity_key = _identity_key(source_path)
+    identities = [row.get(identity_key) for row in rows]
+    if any(not isinstance(identity, str) or not identity for identity in identities):
+        raise ValueError(f"application config has invalid {identity_key} identity: {source_path}")
+    if len(set(identities)) != len(identities):
+        raise ValueError(f"application config has duplicate {identity_key} identities: {source_path}")
+
+
 def _config_version(document: dict[str, Any], source_path: str) -> str:
     version = document.get("schema_version")
     if not isinstance(version, (int, str)) or not str(version):
@@ -121,19 +152,20 @@ def build_source_contracts(
 ) -> list[dict[str, Any]]:
     by_path = {source["path"]: source["sha256"] for source in sources}
     result: list[dict[str, Any]] = []
-    for path in ("config/statement-sources.json", "config/transaction-email-sources.json"):
-        document = documents[path]
-        for row in _source_row(document, "sources"):
-            source_code = row.get("card_code", row.get("code"))
-            if not isinstance(source_code, str) or not source_code:
-                raise ValueError(f"source row has no stable code: {path}")
+    for path in SOURCE_CONTRACT_PATHS:
+        rows = _config_rows(documents, path)
+        _validate_unique_identities(rows, path)
+        for row in rows:
+            source_code = row[_identity_key(path)]
             result.append({
                 "source_code": source_code,
-                "config_version": _config_version(document, path),
+                "config_version": _config_version(documents[path], path),
                 "source_path": path,
                 "content_sha256": by_path[path],
                 "contract": row,
             })
+    if len({row["source_code"] for row in result}) != len(result):
+        raise ValueError("application configs have duplicate semantic source_code identities")
     return result
 
 
@@ -143,6 +175,7 @@ def build_ai_policy_contracts(
     policies = document.get("policies")
     if not isinstance(policies, list) or not policies or not all(isinstance(row, dict) for row in policies):
         raise ValueError("ai-policies.json has no valid policies")
+    _validate_unique_identities(policies, "config/ai-policies.json")
     result = []
     for row in policies:
         policy_id = row.get("policy_id")
@@ -164,14 +197,11 @@ def build_resolver_maps(
 ) -> list[dict[str, Any]]:
     source_by_path = {source["path"]: source for source in sources}
     rows_by_path = {
-        "config/statement-sources.json": _source_row(
-            documents["config/statement-sources.json"], "sources"
-        ),
-        "config/transaction-email-sources.json": _source_row(
-            documents["config/transaction-email-sources.json"], "sources"
-        ),
-        "config/ai-policies.json": _source_row(documents["config/ai-policies.json"], "policies"),
+        source_path: _config_rows(documents, source_path)
+        for source_path in APPLICATION_CONFIG_PATHS
     }
+    for source_path, rows in rows_by_path.items():
+        _validate_unique_identities(rows, source_path)
     result = []
     for resolver in RESOLVER_WORKFLOWS:
         source = source_by_path[resolver["source_path"]]
@@ -199,62 +229,34 @@ def build_application_contract_schema(
 ) -> dict[str, Any]:
     source_paths = list(APPLICATION_CONFIG_PATHS)
     source_by_path = {source["path"]: source for source in sources}
-    source_document_schema = lambda path: {
-        "type": "object",
-        "required": ["path", "sha256"],
-        "properties": {
-            "path": {"const": path},
-            "sha256": {"const": source_by_path[path]["sha256"]},
-        },
-        "additionalProperties": False,
-    }
-    resolver_schemas = []
-    for resolver in RESOLVER_WORKFLOWS:
-        resolver_schemas.append({
+    resolver_maps = build_resolver_maps(documents, sources)
+    source_contracts = build_source_contracts(documents, sources)
+    config_versions = build_config_versions(documents, sources)
+    ai_policy_contracts = build_ai_policy_contracts(
+        documents["config/ai-policies.json"], source_by_path["config/ai-policies.json"]
+    )
+
+    def exact_object_schema(value: dict[str, Any]) -> dict[str, Any]:
+        return {
             "type": "object",
-            "required": ["workflow_code", "workflow_path", "selection_key", "sources", "entries"],
-            "properties": {
-                "workflow_code": {"const": resolver["workflow_code"]},
-                "workflow_path": {"const": resolver["workflow_path"]},
-                "selection_key": {"const": resolver["selection_key"]},
-                "sources": {
-                    "type": "array",
-                    "prefixItems": [source_document_schema(resolver["source_path"])],
-                    "items": False,
-                    "minItems": 1,
-                    "maxItems": 1,
-                },
-                "entries": {
-                    "type": "array",
-                    "minItems": len(_source_row(
-                        documents[resolver["source_path"]],
-                        "policies" if resolver["source_path"] == "config/ai-policies.json" else "sources",
-                    )),
-                    "maxItems": len(_source_row(
-                        documents[resolver["source_path"]],
-                        "policies" if resolver["source_path"] == "config/ai-policies.json" else "sources",
-                    )),
-                    "items": {
-                        "type": "object",
-                        "required": ["key", "value"],
-                        "properties": {
-                            "key": {
-                                "enum": [
-                                    row[resolver["row_key"]]
-                                    for row in _source_row(
-                                        documents[resolver["source_path"]],
-                                        "policies" if resolver["source_path"] == "config/ai-policies.json" else "sources",
-                                    )
-                                ]
-                            },
-                            "value": {"type": "object"},
-                        },
-                        "additionalProperties": False,
-                    },
-                },
-            },
+            "required": sorted(value),
+            "properties": {key: {"const": item} for key, item in value.items()},
             "additionalProperties": False,
-        })
+        }
+
+    def exact_tuple_schema(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "type": "array",
+            "prefixItems": [exact_object_schema(row) for row in rows],
+            "items": False,
+            "minItems": len(rows),
+            "maxItems": len(rows),
+        }
+
+    source_document_schemas = [
+        exact_object_schema(source) for source in sources
+    ]
+    resolver_map_schemas = [exact_object_schema(resolver) for resolver in resolver_maps]
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "finance-application-contract-bundle-v1",
@@ -284,7 +286,7 @@ def build_application_contract_schema(
             "bundle_content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
             "source_documents": {
                 "type": "array",
-                "prefixItems": [source_document_schema(path) for path in source_paths],
+                "prefixItems": source_document_schemas,
                 "items": False,
                 "minItems": len(source_paths),
                 "maxItems": len(source_paths),
@@ -294,37 +296,14 @@ def build_application_contract_schema(
             },
             "resolver_maps": {
                 "type": "array",
-                "prefixItems": resolver_schemas,
+                "prefixItems": resolver_map_schemas,
                 "items": False,
-                "minItems": len(resolver_schemas),
-                "maxItems": len(resolver_schemas),
+                "minItems": len(resolver_maps),
+                "maxItems": len(resolver_maps),
             },
-            "source_contracts": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "object"},
-            },
-            "config_versions": {
-                "type": "array",
-                "minItems": len(source_paths),
-                "items": {
-                    "type": "object",
-                    "required": ["config_name", "version", "source_path", "content_sha256", "state"],
-                    "properties": {
-                        "config_name": {"type": "string", "minLength": 1},
-                        "version": {"type": "string", "minLength": 1},
-                        "source_path": {"enum": source_paths},
-                        "content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-                        "state": {"const": "ACTIVE"},
-                    },
-                    "additionalProperties": False,
-                },
-            },
-            "ai_policy_contracts": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "object"},
-            },
+            "source_contracts": exact_tuple_schema(source_contracts),
+            "config_versions": exact_tuple_schema(config_versions),
+            "ai_policy_contracts": exact_tuple_schema(ai_policy_contracts),
         },
         "additionalProperties": False,
     }
@@ -361,7 +340,24 @@ def build_application_contract_bundle(
     bundle["bundle_content_sha256"] = hashlib.sha256(
         canonical_json(digest_payload).encode("utf-8")
     ).hexdigest()
+    validate_application_contract_bundle(bundle, schema)
     return bundle
+
+
+def validate_application_contract_bundle(
+    bundle: dict[str, Any], schema: dict[str, Any],
+) -> None:
+    Draft202012Validator.check_schema(schema)
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(bundle),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+    if errors:
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
+            for error in errors[:3]
+        )
+        raise ValueError(f"application contract bundle schema validation failed: {details}")
 
 
 def readable_js_literal(
@@ -944,12 +940,28 @@ def render() -> tuple[str, str, str, str]:
     )
 
 
-def main() -> int:
+def generated_artifact_drift(
+    expected: tuple[tuple[Path, str], ...], root: Path = ROOT,
+) -> list[str]:
+    return [
+        path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
+        for path, expected_text in expected
+        if not path.exists() or path.read_text(encoding="utf-8") != expected_text
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate the SPEC_ONLY n8n platform Data Table bootstrap contract."
     )
-    parser.add_argument("--write", action="store_true", help="write generated artifacts")
-    args = parser.parse_args()
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true", help="write generated artifacts")
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="check generated artifacts and exit non-zero when stale",
+    )
+    args = parser.parse_args(argv)
     bundle_text, bundle_schema_text, manifest_text, workflow_text = render()
     if args.write:
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -958,15 +970,12 @@ def main() -> int:
         MANIFEST_PATH.write_text(manifest_text, encoding="utf-8")
         WORKFLOW_PATH.write_text(workflow_text, encoding="utf-8")
         return 0
-    drift = []
-    for path, expected in (
+    drift = generated_artifact_drift((
         (BUNDLE_PATH, bundle_text),
         (BUNDLE_SCHEMA_PATH, bundle_schema_text),
         (MANIFEST_PATH, manifest_text),
         (WORKFLOW_PATH, workflow_text),
-    ):
-        if not path.exists() or path.read_text(encoding="utf-8") != expected:
-            drift.append(path.relative_to(ROOT).as_posix())
+    ))
     if drift:
         print("platform bootstrap artifacts are stale: " + ", ".join(drift))
         print("run: python integrations/n8n/generate_platform_bootstrap.py --write")

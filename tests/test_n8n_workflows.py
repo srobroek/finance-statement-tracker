@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import hashlib
+import importlib.util
 import subprocess
 import sys
+import tempfile
 import re
 import unittest
+from unittest import mock
 from pathlib import Path
+
+from jsonschema import Draft202012Validator, ValidationError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +28,20 @@ def load_json(path: Path) -> dict:
 def git_canonical_sha256(path: Path) -> str:
     """Hash the LF bytes that a normal Git checkout exposes on Linux."""
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def load_bootstrap_generator():
+    generator_path = N8N / "generate_platform_bootstrap.py"
+    spec = importlib.util.spec_from_file_location("finance_bootstrap_generator", generator_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load generator: {generator_path}")
+    sys.path.insert(0, str(N8N))
+    try:
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.pop(0)
 
 
 class N8nWorkflowTests(unittest.TestCase):
@@ -545,7 +565,7 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def test_platform_bootstrap_generator_is_current(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(N8N / "generate_platform_bootstrap.py")],
+            [sys.executable, str(N8N / "generate_platform_bootstrap.py"), "--check"],
             cwd=ROOT, capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -581,11 +601,34 @@ class N8nWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_platform_bootstrap_check_detects_stale_artifact(self) -> None:
+        generator = load_bootstrap_generator()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = tuple(root / name for name in ("bundle", "schema", "manifest", "workflow"))
+            expected = ("bundle\n", "schema\n", "manifest\n", "workflow\n")
+            for path, text in zip(paths, expected):
+                path.write_text(text, encoding="utf-8")
+            with mock.patch.object(generator, "BUNDLE_PATH", paths[0]), \
+                mock.patch.object(generator, "BUNDLE_SCHEMA_PATH", paths[1]), \
+                mock.patch.object(generator, "MANIFEST_PATH", paths[2]), \
+                mock.patch.object(generator, "WORKFLOW_PATH", paths[3]), \
+                mock.patch.object(generator, "render", return_value=expected):
+                self.assertEqual(generator.main(["--check"]), 0)
+                paths[0].write_text("stale\n", encoding="utf-8")
+                self.assertEqual(generator.main(["--check"]), 1)
+                with self.assertRaises(SystemExit) as error:
+                    generator.main(["--check", "--write"])
+                self.assertEqual(error.exception.code, 2)
+
     def test_application_contract_bundle_is_schema_valid_ordered_and_self_hashed(self) -> None:
         bundle_path = N8N / "generated" / "application-contract-bundle.json"
         schema_path = N8N / "generated" / "application-contract-bundle.schema.json"
         bundle = load_json(bundle_path)
         schema = load_json(schema_path)
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        validator.validate(bundle)
         self.assertEqual(bundle["schema_version"], 1)
         self.assertEqual(bundle["contract_status"], "SPEC_ONLY")
         self.assertEqual(bundle["schema_sha256"], git_canonical_sha256(schema_path))
@@ -635,13 +678,46 @@ class N8nWorkflowTests(unittest.TestCase):
             workflow["connections"]["Manual Platform Bootstrap Only"]["main"][0][0]["node"],
             "Load and Validate Application Contract Bundle",
         )
-        try:
-            import jsonschema
-        except ImportError:
-            jsonschema = None
-        if jsonschema:
-            jsonschema.validators.validator_for(schema).check_schema(schema)
-            jsonschema.validate(bundle, schema)
+        duplicate_key = deepcopy(bundle)
+        duplicate_key["resolver_maps"][0]["entries"][1]["key"] = duplicate_key["resolver_maps"][0]["entries"][0]["key"]
+        with self.assertRaises(ValidationError):
+            validator.validate(duplicate_key)
+        arbitrary_source_contract = deepcopy(bundle)
+        arbitrary_source_contract["source_contracts"][0]["contract"]["unapproved"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(arbitrary_source_contract)
+        arbitrary_policy_contract = deepcopy(bundle)
+        arbitrary_policy_contract["ai_policy_contracts"][0]["contract"]["unapproved"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(arbitrary_policy_contract)
+
+    def test_application_contract_bundle_preserves_transaction_semantics_and_unique_ids(self) -> None:
+        transaction_sources = load_json(ROOT / "config" / "transaction-email-sources.json")["sources"]
+        expected_codes = [row["code"] for row in transaction_sources]
+        self.assertEqual(expected_codes, [
+            "RAKBANK_CARD_TRANSACTION",
+            "STANDARD_CHARTERED_CARD_TRANSACTION",
+        ])
+        bundle = load_json(N8N / "generated" / "application-contract-bundle.json")
+        transaction_contracts = [
+            row for row in bundle["source_contracts"]
+            if row["source_path"] == "config/transaction-email-sources.json"
+        ]
+        self.assertEqual([row["source_code"] for row in transaction_contracts], expected_codes)
+        self.assertEqual(
+            [row["key"] for row in bundle["resolver_maps"][0]["entries"]],
+            expected_codes,
+        )
+        self.assertEqual(len({row["source_code"] for row in transaction_contracts}), len(expected_codes))
+
+        generator = load_bootstrap_generator()
+        documents = {
+            path: load_json(ROOT / path)
+            for path in generator.APPLICATION_CONFIG_PATHS
+        }
+        documents["config/transaction-email-sources.json"]["sources"][1]["code"] = expected_codes[0]
+        with self.assertRaisesRegex(ValueError, "duplicate code identities"):
+            generator.build_source_contracts(documents, bundle["source_documents"])
 
     def test_generated_source_hashes_use_git_canonical_lf_bytes(self) -> None:
         seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
