@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import hmac
+import json
 import os
 import signal
 import sys
@@ -27,16 +27,29 @@ REPOSITORY_ROOT = APP_ROOT.parent.parent
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from finance_tracker.actual_pipeline import account_maps, load_actual_config, load_compiled_rules
+from finance_tracker.actual_pipeline import (
+    account_maps,
+    load_actual_config,
+    load_compiled_rules,
+)
 from finance_tracker.cashback import load_program_configuration
-from finance_tracker.cashback_events import CashbackEventStore, build_live_dashboard, write_dashboard
+from finance_tracker.cashback_events import (
+    CashbackEventStore,
+    IngestCursorConflict,
+    _iso_datetime,
+    _json_digest,
+    build_live_dashboard,
+    write_dashboard,
+)
 from finance_tracker.notification_sources import (
     load_notification_sources,
     validate_notification_adapter_coverage,
 )
-from finance_tracker.notifications import DEFAULT_NOTIFICATION_ADAPTERS, parse_outlook_notifications
+from finance_tracker.notifications import (
+    DEFAULT_NOTIFICATION_ADAPTERS,
+    parse_outlook_notifications,
+)
 from finance_tracker.web_push import WebPushDispatcher, WebPushStore
-
 
 WEB_ROOT = APP_ROOT / "web"
 DASHBOARD_PATH = Path(
@@ -96,6 +109,11 @@ PUSH_DISPATCHER = WebPushDispatcher(
 
 
 def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
+    source_name = str(source.get("source") or "outlook").strip()
+    completed_at = _iso_datetime(source.get("completed_at"))
+    cursor = str(source.get("cursor") or "").strip()
+    if not cursor:
+        raise ValueError("cursor is required")
     messages = source.get("messages")
     if not isinstance(messages, list) or any(not isinstance(message, dict) for message in messages):
         raise ValueError("messages must be a list of Outlook message objects")
@@ -134,11 +152,23 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
         if batch.events
         else {"inserted": 0, "updated": 0, "event_count": 0}
     )
+    service_receipt = STORE.create_ingest_receipt(
+        {
+            "source": source_name,
+            "completed_at": completed_at,
+            "scanned_count": batch.scanned_count,
+            "accepted_count": batch.accepted_count,
+            "cursor": cursor,
+        },
+        event_ids=(event["source_event_id"] for event in batch.events),
+        event_digests=(_json_digest(event) for event in batch.events),
+    )
     return {
         "parse": batch.to_dict(),
         "persistence": persistence,
-        "cursor_candidate": source.get("cursor"),
+        "cursor_candidate": cursor,
         "cursor_committed": False,
+        "service_receipt": service_receipt,
     }
 
 
@@ -381,7 +411,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             result = STORE.upsert(events)
             dashboard = rebuild_dashboard()
         except (ValueError, json.JSONDecodeError) as error:
-            self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            status = HTTPStatus.CONFLICT if isinstance(error, IngestCursorConflict) else HTTPStatus.BAD_REQUEST
+            self._json(status, {"error": str(error)})
             return
         self._json(HTTPStatus.OK, {**result, "event_store": dashboard["data_status"]})
 
