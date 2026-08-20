@@ -618,8 +618,8 @@ return [{
     code = build_agent["parameters"]["jsCode"]
     if "agent_provider" not in code:
         code = code.replace(
-            "const p = rows[0], profileClass = { LUNA_MAX: 'NORMAL', SOL_XHIGH: 'EXCEPTION' }, policy_class = profileClass[p.agent_profile],",
-            "const p = rows[0], profileClass = { LUNA_MAX: 'NORMAL', SOL_XHIGH: 'EXCEPTION' }, providerByProfile = { LUNA_MAX: 'CODEX_SUBSCRIPTION', SOL_XHIGH: 'CODEX_SUBSCRIPTION' }, policy_class = profileClass[p.agent_profile], agent_provider = providerByProfile[p.agent_profile],",
+            "const p = rows[0], profileClass = { LUNA_MAX: 'NORMAL', SOL_MEDIUM: 'EXCEPTION' }, policy_class = profileClass[p.agent_profile],",
+            "const p = rows[0], profileClass = { LUNA_MAX: 'NORMAL', SOL_MEDIUM: 'EXCEPTION' }, providerByProfile = { LUNA_MAX: 'CODEX_SUBSCRIPTION', SOL_MEDIUM: 'CODEX_SUBSCRIPTION' }, policy_class = profileClass[p.agent_profile], agent_provider = providerByProfile[p.agent_profile],",
         )
         code = code.replace(
             "if (!policy_class)",
@@ -632,7 +632,7 @@ return [{
         build_agent["parameters"]["jsCode"] = code
     code = build_agent["parameters"]["jsCode"]
     code = re.sub(
-        r"providerByProfile\s*=\s*\{\s*LUNA_MAX:\s*'CODEX_SUBSCRIPTION',\s*SOL_XHIGH:\s*'CODEX_SUBSCRIPTION'\s*\},\s*",
+        r"providerByProfile\s*=\s*\{\s*LUNA_MAX:\s*'CODEX_SUBSCRIPTION',\s*SOL_MEDIUM:\s*'CODEX_SUBSCRIPTION'\s*\},\s*",
         "",
         code,
     )
@@ -721,7 +721,7 @@ if (
 const providerPolicy = {
   CODEX_SUBSCRIPTION: {
     NORMAL: ['gpt-5.6-luna', 'max', 'CHATGPT_SUBSCRIPTION'],
-    EXCEPTION: ['gpt-5.6-sol', 'xhigh', 'CHATGPT_SUBSCRIPTION'],
+    EXCEPTION: ['gpt-5.6-sol', 'medium', 'CHATGPT_SUBSCRIPTION'],
   },
   CLAUDE_SUBSCRIPTION: {
     NORMAL: ['claude-sonnet-4-6', 'default', 'CLAUDE_SUBSCRIPTION'],
@@ -1400,7 +1400,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                     {"id": "21002-d", "name": "codex_normal_model", "type": "string", "value": "gpt-5.6-luna"},
                     {"id": "21002-e", "name": "codex_normal_reasoning_effort", "type": "string", "value": "max"},
                     {"id": "21002-f", "name": "codex_exception_model", "type": "string", "value": "gpt-5.6-sol"},
-                    {"id": "21002-g", "name": "codex_exception_reasoning_effort", "type": "string", "value": "xhigh"},
+                    {"id": "21002-g", "name": "codex_exception_reasoning_effort", "type": "string", "value": "medium"},
                     {"id": "21002-h", "name": "codex_auth_mode", "type": "string", "value": "CHATGPT_SUBSCRIPTION"},
                     {"id": "21002-i", "name": "claude_normal_model", "type": "string", "value": "claude-sonnet-4-6"},
                     {"id": "21002-j", "name": "claude_normal_reasoning_effort", "type": "string", "value": "default"},

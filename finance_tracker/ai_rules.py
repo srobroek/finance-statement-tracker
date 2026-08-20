@@ -114,8 +114,8 @@ def validate_policy(policy: AIPolicy) -> None:
         errors.append("minimum_confidence must be between 0 and 1")
     if not policy.target_fields:
         errors.append("at least one target field is required")
-    if policy.agent_profile not in {"LUNA_MAX", "SOL_XHIGH"}:
-        errors.append("agent_profile must be LUNA_MAX or SOL_XHIGH")
+    if policy.agent_profile not in {"LUNA_MAX", "SOL_MEDIUM"}:
+        errors.append("agent_profile must be LUNA_MAX or SOL_MEDIUM")
     invalid_targets = set(policy.target_fields) - (AI_WRITABLE_FIELDS | {"tags"})
     if invalid_targets:
         errors.append("unsupported target fields: " + ", ".join(sorted(invalid_targets)))

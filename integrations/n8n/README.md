@@ -3,7 +3,7 @@
 This directory contains sanitized **SPEC_ONLY** n8n workflow exports and their
 contracts. They have not yet passed exact-image import or disposable execution
 tests and must not be described as executable or production-ready. n8n is the
-planned scheduler/orchestrator; Actual remains the authoritative ledger, the
+scheduler/orchestrator; Actual remains the authoritative ledger, the
 cashback app owns live routing state and its live-source cursor, OneDrive owns
 immutable evidence and canonical import artifacts, and Postgres owns n8n plus
 operational cursors, receipts, outbox metadata, and fenced leases.
@@ -80,7 +80,7 @@ Workflow 09 uses only the bounded provider-neutral handoff contract and calls
 workflow 21. The active server-side policy selects `CODEX_SUBSCRIPTION` or
 `CLAUDE_SUBSCRIPTION`; the caller cannot select the provider. Normal Codex policies
 map server-side to `gpt-5.6-luna`/`max`; exception policies map to
-`gpt-5.6-sol`/`xhigh`. Callers cannot select a model, prompt, command, path, URL,
+`gpt-5.6-sol`/`medium`. Callers cannot select a model, prompt, command, path, URL,
 credential, or write flag. Requests are redacted/idempotent and output is
 proposal-only under checked-in schemas. `community-node-lock.json` pins
 `n8n-nodes-prodex@0.5.1` and

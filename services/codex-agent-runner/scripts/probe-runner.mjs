@@ -35,7 +35,7 @@ const request = {
   idempotency_key: idempotencyKey,
   operation_code: "FINANCE_AI_PROPOSAL",
   policy_id: policyId,
-  policy_class: row.agent_profile === "SOL_XHIGH" ? "EXCEPTION" : "NORMAL",
+  policy_class: row.agent_profile === "SOL_MEDIUM" ? "EXCEPTION" : "NORMAL",
   policy_sha256: row.policy_sha256,
   config_sha256: row.config_sha256,
   output_schema_sha256: row.output_schema_sha256,
