@@ -81,6 +81,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            integrations/actual/package-lock.json
+            packages/n8n-nodes-finance/package-lock.json
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -95,15 +104,12 @@ jobs:
       - name: Install Python package
         run: uv sync --frozen --extra statements --extra test
 
+      - name: Install workflow contract formatter
+        working-directory: packages/n8n-nodes-finance
+        run: npm ci --ignore-scripts
+
       - name: Run full Python regression suite
         run: uv run --frozen python -m unittest discover -s tests -v
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: integrations/actual/package-lock.json
 
       - name: Install Actual integration
         working-directory: integrations/actual
