@@ -1,5 +1,5 @@
 export const NODE_PACKAGE = 'n8n-nodes-finance@0.1.0' as const;
-export const PDF_SOCKET_PATH = '/run/finance-pdf/pdf.sock' as const;
+export const PDF_SOCKET_PATH = '/run/platform-pdf/pdf.sock' as const;
 export const ACTUAL_DATA_DIR = '/home/node/.n8n/finance-actual-cache' as const;
 
 export type JsonObject = Record<string, unknown>;

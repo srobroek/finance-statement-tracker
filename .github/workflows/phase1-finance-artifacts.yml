@@ -135,8 +135,8 @@ jobs:
         run: docker build --tag finance-pdf-utility:${{ github.sha }} services/pdf-utility
       - name: Smoke sandbox and network denial
         run: |
-          docker run --rm --network none --read-only --tmpfs /tmp:size=96m,mode=1770,uid=1000,gid=1000 --tmpfs /run/finance-pdf:size=4m,mode=0770,uid=1000,gid=1000 --entrypoint python finance-pdf-utility:${{ github.sha }} -m unittest discover -s /opt/finance-pdf/tests -v
-          docker run --rm --network none --read-only --tmpfs /tmp:size=4m --entrypoint python finance-pdf-utility:${{ github.sha }} /opt/finance-pdf/tests/network_probe.py
+          docker run --rm --network none --read-only --tmpfs /tmp:size=96m,mode=1770,uid=1000,gid=1000 --tmpfs /run/platform-pdf:size=4m,mode=0770,uid=1000,gid=1000 --entrypoint python finance-pdf-utility:${{ github.sha }} -m unittest discover -s /opt/platform-pdf/tests -v
+          docker run --rm --network none --read-only --tmpfs /tmp:size=4m --entrypoint python finance-pdf-utility:${{ github.sha }} /opt/platform-pdf/tests/network_probe.py
       - name: Scan PDF utility image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

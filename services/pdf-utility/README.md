@@ -1,7 +1,7 @@
 # Finance PDF utility
 
 This is a deliberately narrow document sandbox. It listens only on the Unix
-socket `/run/finance-pdf/pdf.sock`, has no TCP listener, and accepts exactly:
+socket `/run/platform-pdf/pdf.sock`, has no TCP listener, and accepts exactly:
 
 - `POST /v1/validate`
 - `POST /v1/unlock`
