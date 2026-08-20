@@ -148,12 +148,20 @@ class CashbackEventStoreTests(unittest.TestCase):
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
             completed_at = datetime.now(timezone.utc).isoformat()
 
+            receipt = store.create_ingest_receipt({
+                "source": "outlook",
+                "completed_at": completed_at,
+                "scanned_count": 0,
+                "accepted_count": 0,
+                "cursor": "message-cursor",
+            })
             result = store.record_ingest_success({
                 "source": "outlook",
                 "completed_at": completed_at,
                 "scanned_count": 0,
                 "accepted_count": 0,
                 "cursor": "message-cursor",
+                "service_receipt": receipt,
             })
             dashboard = build_live_dashboard(
                 store,

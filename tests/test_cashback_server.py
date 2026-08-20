@@ -12,7 +12,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -194,6 +193,7 @@ class CashbackServerTests(unittest.TestCase):
                 self.assertEqual(outlook["parse"]["accepted_count"], 1)
                 self.assertEqual(outlook["persistence"]["inserted"], 1)
                 self.assertFalse(outlook["cursor_committed"])
+                self.assertEqual(outlook["service_receipt"]["state"], "READY")
                 self.assertEqual(
                     outlook["parse"]["events"][0]["purchase_type"],
                     "GENERAL",
@@ -219,12 +219,23 @@ class CashbackServerTests(unittest.TestCase):
                     "scanned_count": 1,
                     "accepted_count": 1,
                     "cursor": "2026-08-16T16:20:00+04:00",
+                    "service_receipt": outlook["service_receipt"],
                 })
                 self.assertEqual(heartbeat["ingest"]["source"], "outlook")
                 self.assertEqual(
                     heartbeat["ingest"]["cursor"],
                     "2026-08-16T16:20:00+04:00",
                 )
+                self.assertFalse(heartbeat["ingest"]["idempotent_replay"])
+                replay_heartbeat = post("ingest-runs", {
+                    "source": "outlook",
+                    "completed_at": "2026-08-16T16:20:00+04:00",
+                    "scanned_count": 1,
+                    "accepted_count": 1,
+                    "cursor": "2026-08-16T16:20:00+04:00",
+                    "service_receipt": outlook["service_receipt"],
+                })
+                self.assertTrue(replay_heartbeat["ingest"]["idempotent_replay"])
                 ingest_state = post("ingest-state", {"source": "outlook"})
                 self.assertEqual(
                     ingest_state["ingest_state"]["cursor"],

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import re
 import sqlite3
 from contextlib import closing
@@ -20,7 +20,6 @@ from .cashback import (
     statement_period,
 )
 from .models import Transaction, money
-
 
 ACTIVE_STATUSES = frozenset({"ACTIVE"})
 VALID_STATUSES = ACTIVE_STATUSES | {"IGNORED", "REVERSED"}
@@ -61,6 +60,27 @@ AI_CORRECTABLE_EVENT_FIELDS = frozenset(
     }
 )
 _MERCHANT_TOKEN = re.compile(r"[^A-Z0-9]+")
+
+
+class IngestCursorConflict(ValueError):
+    """Raised when a cursor commit cannot be proven to be the next commit."""
+
+
+def _json_digest(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _cursor_order(left: str, right: str) -> int:
+    """Compare timestamp cursors when possible, otherwise their source ordering."""
+    try:
+        left_value = datetime.fromisoformat(_iso_datetime(left))
+        right_value = datetime.fromisoformat(_iso_datetime(right))
+    except ValueError:
+        left_value = left
+        right_value = right
+    return (left_value > right_value) - (left_value < right_value)
 
 
 def default_payment_intents() -> tuple[PaymentIntent, ...]:
@@ -294,7 +314,29 @@ class CashbackEventStore:
                         scanned_count INTEGER NOT NULL,
                         accepted_count INTEGER NOT NULL,
                         cursor TEXT,
+                        cursor_version INTEGER NOT NULL DEFAULT 0,
+                        receipt_id TEXT,
+                        receipt_sha256 TEXT,
                         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ingest_receipts (
+                        receipt_id TEXT PRIMARY KEY,
+                        receipt_sha256 TEXT NOT NULL UNIQUE,
+                        source TEXT NOT NULL,
+                        completed_at TEXT NOT NULL,
+                        cursor TEXT NOT NULL,
+                        scanned_count INTEGER NOT NULL,
+                        accepted_count INTEGER NOT NULL,
+                        event_ids_json TEXT NOT NULL,
+                        event_digests_json TEXT NOT NULL,
+                        state TEXT NOT NULL DEFAULT 'READY',
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        committed_at TEXT,
+                        CHECK (state IN ('READY', 'COMMITTED'))
                     )
                     """
                 )
@@ -335,6 +377,7 @@ class CashbackEventStore:
                     """
                 )
                 self._migrate_event_columns(connection)
+                self._migrate_ingest_state_columns(connection)
                 connection.execute(
                     "UPDATE cashback_events SET status='ACTIVE' WHERE status IN ('PROVISIONAL', 'CONFIRMED')"
                 )
@@ -390,6 +433,23 @@ class CashbackEventStore:
                 (identity, row["source_event_id"]),
             )
 
+    @staticmethod
+    def _migrate_ingest_state_columns(connection: sqlite3.Connection) -> None:
+        existing = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(ingest_state)").fetchall()
+        }
+        additions = {
+            "cursor_version": "INTEGER NOT NULL DEFAULT 0",
+            "receipt_id": "TEXT",
+            "receipt_sha256": "TEXT",
+        }
+        for column, definition in additions.items():
+            if column not in existing:
+                connection.execute(
+                    f"ALTER TABLE ingest_state ADD COLUMN {column} {definition}"
+                )
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
         connection.row_factory = sqlite3.Row
@@ -443,41 +503,214 @@ class CashbackEventStore:
             raise ValueError("At least one event is required")
         return normalized
 
-    def record_ingest_success(self, source: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def _ingest_fields(source: dict[str, Any]) -> tuple[str, str, int, int, str]:
         source_name = str(source.get("source") or "mailbox").strip()
         if not source_name:
             raise ValueError("source is required")
-        completed_at = _iso_datetime(source.get("completed_at") or datetime.now(timezone.utc).isoformat())
+        completed_at = _iso_datetime(source.get("completed_at"))
         try:
-            scanned_count = int(source.get("scanned_count") or 0)
-            accepted_count = int(source.get("accepted_count") or 0)
+            scanned_count = int(source.get("scanned_count"))
+            accepted_count = int(source.get("accepted_count"))
         except (TypeError, ValueError) as error:
             raise ValueError("scanned_count and accepted_count must be integers") from error
-        if scanned_count < 0 or accepted_count < 0:
-            raise ValueError("ingest counts must be non-negative")
-        cursor = str(source.get("cursor") or "").strip() or None
+        if scanned_count < 0 or accepted_count < 0 or accepted_count > scanned_count:
+            raise ValueError("ingest counts must be non-negative and accepted cannot exceed scanned")
+        cursor = str(source.get("cursor") or "").strip()
+        if not cursor:
+            raise ValueError("cursor is required")
+        return source_name, completed_at, scanned_count, accepted_count, cursor
+
+    def create_ingest_receipt(
+        self,
+        source: dict[str, Any],
+        *,
+        event_ids: Iterable[str] = (),
+        event_digests: Iterable[str] = (),
+    ) -> dict[str, Any]:
+        """Persist the exact service result that is eligible for one cursor commit."""
+        source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
+        ids = sorted({str(event_id).strip() for event_id in event_ids if str(event_id).strip()})
+        digests = sorted({str(digest).strip() for digest in event_digests if str(digest).strip()})
+        if len(ids) != len(digests):
+            raise ValueError("event ids and event digests must have equal cardinality")
+        payload = {
+            "source": source_name,
+            "completed_at": completed_at,
+            "cursor": cursor,
+            "scanned_count": scanned_count,
+            "accepted_count": accepted_count,
+            "event_ids": ids,
+            "event_digests": digests,
+        }
+        receipt_sha256 = _json_digest(payload)
+        receipt_id = f"cashback-ingest:{receipt_sha256}"
         with closing(self._connect()) as connection:
-            with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                existing = connection.execute(
+                    "SELECT * FROM ingest_receipts WHERE receipt_id = ?",
+                    (receipt_id,),
+                ).fetchone()
+                if existing is None:
+                    connection.execute(
+                        """
+                        INSERT INTO ingest_receipts (
+                            receipt_id, receipt_sha256, source, completed_at, cursor,
+                            scanned_count, accepted_count, event_ids_json, event_digests_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            receipt_id,
+                            receipt_sha256,
+                            source_name,
+                            completed_at,
+                            cursor,
+                            scanned_count,
+                            accepted_count,
+                            json.dumps(ids, separators=(",", ":")),
+                            json.dumps(digests, separators=(",", ":")),
+                        ),
+                    )
+                    state = "READY"
+                else:
+                    if existing["receipt_sha256"] != receipt_sha256:
+                        raise IngestCursorConflict("service receipt identity collision")
+                    state = str(existing["state"])
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return {
+            "receipt_id": receipt_id,
+            "receipt_sha256": receipt_sha256,
+            **payload,
+            "state": state,
+        }
+
+    def record_ingest_success(self, source: dict[str, Any]) -> dict[str, Any]:
+        """Commit one registered service receipt and its cursor atomically."""
+        source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
+        service_receipt = source.get("service_receipt")
+        if isinstance(service_receipt, dict):
+            receipt_id = str(service_receipt.get("receipt_id") or "").strip()
+            receipt_sha256 = str(service_receipt.get("receipt_sha256") or "").strip()
+        else:
+            receipt_id = str(
+                source.get("service_receipt_id") or source.get("receipt_id") or ""
+            ).strip()
+            receipt_sha256 = str(
+                source.get("service_receipt_sha256") or source.get("receipt_sha256") or ""
+            ).strip()
+        if not receipt_id or not receipt_sha256:
+            raise IngestCursorConflict("exact service receipt is required")
+
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                receipt = connection.execute(
+                    "SELECT * FROM ingest_receipts WHERE receipt_id = ?",
+                    (receipt_id,),
+                ).fetchone()
+                if receipt is None or receipt["receipt_sha256"] != receipt_sha256:
+                    raise IngestCursorConflict("service receipt is unknown or mismatched")
+                expected = {
+                    "source": receipt["source"],
+                    "completed_at": receipt["completed_at"],
+                    "cursor": receipt["cursor"],
+                    "scanned_count": int(receipt["scanned_count"]),
+                    "accepted_count": int(receipt["accepted_count"]),
+                }
+                observed = {
+                    "source": source_name,
+                    "completed_at": completed_at,
+                    "cursor": cursor,
+                    "scanned_count": scanned_count,
+                    "accepted_count": accepted_count,
+                }
+                if observed != expected:
+                    raise IngestCursorConflict("service receipt is not bound to the commit payload")
+
+                current = connection.execute(
+                    "SELECT * FROM ingest_state WHERE source = ?",
+                    (source_name,),
+                ).fetchone()
+                if current is not None:
+                    current_receipt_id = str(current["receipt_id"] or "")
+                    if current_receipt_id == receipt_id and str(current["receipt_sha256"] or "") == receipt_sha256:
+                        connection.commit()
+                        return {
+                            "source": source_name,
+                            "last_success_at": completed_at,
+                            "scanned_count": scanned_count,
+                            "accepted_count": accepted_count,
+                            "cursor": cursor,
+                            "cursor_version": int(current["cursor_version"]),
+                            "receipt_id": receipt_id,
+                            "receipt_sha256": receipt_sha256,
+                            "idempotent_replay": True,
+                        }
+                    current_completed = str(current["last_success_at"])
+                    if _cursor_order(current_completed, completed_at) > 0:
+                        raise IngestCursorConflict("completed_at is stale or regressive")
+                    current_cursor = str(current["cursor"] or "")
+                    if _cursor_order(current_completed, completed_at) == 0:
+                        raise IngestCursorConflict("completed_at is already committed with another receipt")
+                    if current_cursor and _cursor_order(current_cursor, cursor) >= 0:
+                        raise IngestCursorConflict("cursor is stale or regressive")
+                    next_version = int(current["cursor_version"]) + 1
+                else:
+                    next_version = 1
+
                 connection.execute(
                     """
                     INSERT INTO ingest_state (
-                        source, last_success_at, scanned_count, accepted_count, cursor
-                    ) VALUES (?, ?, ?, ?, ?)
+                        source, last_success_at, scanned_count, accepted_count, cursor,
+                        cursor_version, receipt_id, receipt_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(source) DO UPDATE SET
                         last_success_at=excluded.last_success_at,
                         scanned_count=excluded.scanned_count,
                         accepted_count=excluded.accepted_count,
                         cursor=excluded.cursor,
+                        cursor_version=excluded.cursor_version,
+                        receipt_id=excluded.receipt_id,
+                        receipt_sha256=excluded.receipt_sha256,
                         updated_at=CURRENT_TIMESTAMP
                     """,
-                    (source_name, completed_at, scanned_count, accepted_count, cursor),
+                    (
+                        source_name,
+                        completed_at,
+                        scanned_count,
+                        accepted_count,
+                        cursor,
+                        next_version,
+                        receipt_id,
+                        receipt_sha256,
+                    ),
                 )
+                connection.execute(
+                    """
+                    UPDATE ingest_receipts
+                    SET state='COMMITTED', committed_at=CURRENT_TIMESTAMP
+                    WHERE receipt_id = ?
+                    """,
+                    (receipt_id,),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
         return {
             "source": source_name,
             "last_success_at": completed_at,
             "scanned_count": scanned_count,
             "accepted_count": accepted_count,
             "cursor": cursor,
+            "cursor_version": next_version,
+            "receipt_id": receipt_id,
+            "receipt_sha256": receipt_sha256,
+            "idempotent_replay": False,
         }
 
     def ingest_state(self, source: str = "outlook") -> dict[str, Any]:
@@ -487,7 +720,8 @@ class CashbackEventStore:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT source, last_success_at, scanned_count, accepted_count, cursor
+                SELECT source, last_success_at, scanned_count, accepted_count, cursor,
+                       cursor_version, receipt_id, receipt_sha256
                 FROM ingest_state
                 WHERE source = ?
                 """,
@@ -500,6 +734,9 @@ class CashbackEventStore:
                 "scanned_count": 0,
                 "accepted_count": 0,
                 "cursor": None,
+                "cursor_version": 0,
+                "receipt_id": None,
+                "receipt_sha256": None,
             }
         return dict(row)
 
