@@ -63,22 +63,11 @@ class N8nWorkflowParameterTests(unittest.TestCase):
                 ("22-onedrive-finance-evidence-root-setup.json", "Setup Parameters"),
             },
         )
-        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["status"], "PASS")
         proposal_spec = contract["workflows"]["21-subscription-agent-adapter.json"]["nodes"]["Subscription Provider Parameters"]["fields"]["proposal_output_schema"]
         self.assertEqual(proposal_spec["category"], "global_generated_contract")
         self.assertEqual(proposal_spec["source"]["selector"], "$")
-        self.assertEqual(
-            {(row["workflow"], row["node"], row["code"]) for row in report["findings"]},
-            {
-                ("01-outlook-finance-acquisition.json", "Acquisition Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("03-shared-statement-pipeline.json", "Statement Pipeline Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("09-ai-proposal.json", "Agent Proposal Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("14-local-pdf-extraction.json", "PDF Extraction Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("14-local-pdf-extraction.json", "Ready for Deterministic Parser", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("20-actual-outbox-apply.json", "Actual Writer Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-                ("21-subscription-agent-adapter.json", "Subscription Provider Parameters", "PARAMETER_PASSTHROUGH_ENABLED"),
-            },
-        )
+        self.assertEqual(report["findings"], [])
         self.assertEqual(report["duplicate_literals"][0]["literal"], "default")
         self.assertTrue(report["duplicate_literals"][0]["allowed"])
 

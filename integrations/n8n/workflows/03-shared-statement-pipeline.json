@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const k of ['run_id', 'source_code', 'message_id', 'attachment_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key'])\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind))\n    throw new Error('Manual and MCP mutation are forbidden');\nreturn [{ json: r, binary: $binary }];\n"
+        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nconst sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();\nconst attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();\nif (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {\n    throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');\n}\nfor (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key']) {\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\n}\nif (!attachmentId)\n    throw new Error('Missing trusted immutable field attachment_id');\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {\n    throw new Error('Manual and MCP mutation are forbidden');\n}\nreturn [{\n        json: { ...r, attachment_id: attachmentId, source_attachment_id: sourceAttachmentId },\n        binary: $binary,\n    }];\n"
       }
     },
     {
@@ -835,7 +835,7 @@
             }
           ]
         },
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       }
     },

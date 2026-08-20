@@ -26,6 +26,9 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
     "RAKBANK_LIVE_CASHBACK": (
         ("Sweep Exact Outlook Messages", "OUTLOOK_MESSAGE_SWEEP"),
     ),
+    "OUTLOOK_MESSAGE_SWEEP": (
+        ("Archive Enumerated Messages in W01", "OUTLOOK_FINANCE_ACQUISITION"),
+    ),
     "SHARED_STATEMENT_PIPELINE": (
         ("Request Scoped AI Proposals", "AI_PROPOSAL"),
         ("Run Isolated PDF Extraction", "LOCAL_PDF_EXTRACTION"),
@@ -47,15 +50,15 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Dispatch Document Request", "DOCUMENT_EXTRACTION_REQUEST"),
     ),
     "INTERACTIVE_ARTIFACT_HANDOFF": (
-        ("Run Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
+        ("Dispatch Browser Capture to Headless Pipeline", "SHARED_STATEMENT_PIPELINE"),
     ),
     "DOCUMENT_EXTRACTION_REQUEST": (
         ("Run Local Extraction Ladder", "LOCAL_PDF_EXTRACTION"),
     ),
     "FINANCE_MCP_FACADE": (
-        ("finance.status", "FINANCE_OPERATIONS_STATUS"),
-        ("artifact.submit_reviewed", "FINANCE_OPERATIONS_STATUS"),
-        ("document.request", "FINANCE_OPERATIONS_STATUS"),
+        ("finance.status.v1", "FINANCE_OPERATIONS_STATUS"),
+        ("finance.reviewed-artifact.handoff.v1", "FINANCE_OPERATIONS_STATUS"),
+        ("finance.document.request.v1", "FINANCE_OPERATIONS_STATUS"),
     ),
     "ACTUAL_OUTBOX_RECOVERY": (
         ("Apply Nonterminal Outbox Safely", "ACTUAL_OUTBOX_APPLY"),
@@ -232,7 +235,7 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
     ),
     boundary_case(
         "artifact handoff to statement pipeline",
-        ("INTERACTIVE_ARTIFACT_HANDOFF", "Run Statement Pipeline"),
+        ("INTERACTIVE_ARTIFACT_HANDOFF", "Dispatch Browser Capture to Headless Pipeline"),
         "SHARED_STATEMENT_PIPELINE",
         (
             "run_id",
@@ -270,21 +273,21 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
     ),
     boundary_case(
         "status facade",
-        ("FINANCE_MCP_FACADE", "finance.status"),
+        ("FINANCE_MCP_FACADE", "finance.status.v1"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code"),
         ("_mcp_request_id", "operation_code"),
     ),
     boundary_case(
         "artifact facade",
-        ("FINANCE_MCP_FACADE", "artifact.submit_reviewed"),
+        ("FINANCE_MCP_FACADE", "finance.reviewed-artifact.handoff.v1"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code", "artifact_id", "expected_sha256"),
         ("_mcp_request_id", "operation_code", "artifact_id", "expected_sha256"),
     ),
     boundary_case(
         "document facade",
-        ("FINANCE_MCP_FACADE", "document.request"),
+        ("FINANCE_MCP_FACADE", "finance.document.request.v1"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code", *DOCUMENT_REQUEST),
         ("_mcp_request_id", "operation_code", *DOCUMENT_REQUEST),
@@ -323,6 +326,13 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         "OUTLOOK_MESSAGE_SWEEP",
         SWEEP_CONTEXT,
         SWEEP_CONTEXT,
+    ),
+    boundary_case(
+        "message sweep to acquisition",
+        ("OUTLOOK_MESSAGE_SWEEP", "Archive Enumerated Messages in W01"),
+        "OUTLOOK_FINANCE_ACQUISITION",
+        SWEEP_CONTEXT,
+        tuple(field for field in ACQUISITION_CONTEXT if field != "onedrive_item_id"),
     ),
 )
 
@@ -518,6 +528,8 @@ class N8nInterfaceContractTests(unittest.TestCase):
             producer, r"(?<![A-Za-z0-9_])source_attachment_id(?![A-Za-z0-9_])"
         )
         self.assertRegex(consumer, r"(?<![A-Za-z0-9_])attachment_id(?![A-Za-z0-9_])")
+        self.assertIn("ATTACHMENT_ID_ALIAS_MISMATCH", consumer)
+        self.assertIn("source_attachment_id: sourceAttachmentId", consumer)
         with self.assertRaisesRegex(AssertionError, "attachment_id"):
             assert_directional_compatibility(
                 ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["producer_fields"],

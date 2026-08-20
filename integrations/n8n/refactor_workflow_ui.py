@@ -563,6 +563,25 @@ return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', ac
             },
         ])
     verify_context = node_by_name(statement, "Verify Archive and Execution Context")
+    verify_context["parameters"]["jsCode"] = r"""
+const r = $json;
+const sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();
+const attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();
+if (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {
+  throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');
+}
+for (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key']) {
+  if (!r[k]) throw new Error(`Missing trusted immutable field ${k}`);
+}
+if (!attachmentId) throw new Error('Missing trusted immutable field attachment_id');
+if (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {
+  throw new Error('Manual and MCP mutation are forbidden');
+}
+return [{
+  json: { ...r, attachment_id: attachmentId, source_attachment_id: sourceAttachmentId },
+  binary: $binary,
+}];
+""".strip()
     statement["connections"][verify_context["name"]] = {
         "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
     }
@@ -661,7 +680,7 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
 """.strip()
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     ready = node_by_name(local_pdf, "Ready for Deterministic Parser")
-    ready["parameters"]["includeOtherFields"] = True
+    ready["parameters"]["includeOtherFields"] = False
     local_pdf["meta"]["reusableBoundary"] = "PDF_VALIDATE_UNLOCK_PROFILE_QUALITY"
 
     # Interactive handoff archives the binary capture once, then validates the
@@ -2124,7 +2143,7 @@ return [{
                 }
                 for index, (name, value_type, value) in enumerate(values, start=1)
             ]},
-            "includeOtherFields": True,
+            "includeOtherFields": False,
             "options": {},
         }
         workflow["connections"][trigger_name] = {
@@ -2249,7 +2268,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "position": [-650, 0],
             "parameters": {
                 "mode": "manual",
-                "includeOtherFields": True,
+                "includeOtherFields": False,
                 "assignments": {"assignments": [
                     {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
                     {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
