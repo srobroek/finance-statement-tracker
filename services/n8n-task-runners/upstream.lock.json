@@ -25,5 +25,25 @@
     "python": "docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1",
     "golang": "docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69"
   },
-  "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+  "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+  "official_runner_input": {
+    "reference": "docker.io/n8nio/runners:2.36.2@sha256:db070aa0a7a294335680dbc33a66acfa076ce1dd3fca5e51414c5bdfce8b2119",
+    "source_repository": "https://hub.docker.com/r/n8nio/runners",
+    "source_version": "2.36.2",
+    "platform": "linux/amd64",
+    "image_id": "sha256:b8b2a4e54acdee06bc33c6cfb4e32d196861d9134cea4c26b0fe702da0d9083d",
+    "sbom": {
+      "format": "SPDX-2.3",
+      "package_count": 472,
+      "sha256": "4129c0c8a4fb45bd7dc2fe4129fb3707539ef3b8f97175a3b80df713877d344a"
+    },
+    "scan": {
+      "tool": "trivy 0.70.0",
+      "sha256": "448e8b006086deee8fd69710e9669c93554fda17bf3ee19c456aaef13c537657",
+      "high": 11,
+      "critical": 0,
+      "policy": "FAIL",
+      "promotion_blocker": "Official upstream runner image contains 11 HIGH findings and is not promoted as an executable finance image."
+    }
+  }
 }

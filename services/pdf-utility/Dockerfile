@@ -15,13 +15,13 @@ FROM ${PYTHON_RUNTIME_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/opt/finance-pdf \
+    PYTHONPATH=/opt/platform-pdf \
     PATH=/venv/bin:$PATH
 
-WORKDIR /opt/finance-pdf
+WORKDIR /opt/platform-pdf
 COPY --from=build /venv /venv
 COPY --chown=1000:1000 healthcheck.py server.py worker.py ./
 COPY --chown=1000:1000 tests ./tests
 
 USER 1000:1000
-ENTRYPOINT ["python", "/opt/finance-pdf/server.py"]
+ENTRYPOINT ["python", "/opt/platform-pdf/server.py"]

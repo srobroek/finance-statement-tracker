@@ -10,10 +10,10 @@ import subprocess
 import sys
 import tempfile
 
-SOCKET_PATH = "/run/finance-pdf/pdf.sock"
+SOCKET_PATH = "/run/platform-pdf/pdf.sock"
 MAX_BYTES = 25 * 1024 * 1024
 OPERATIONS = {"/v1/validate": "validate", "/v1/unlock": "unlock", "/v1/profile": "profile"}
-WORKER = "/opt/finance-pdf/worker.py"
+WORKER = "/opt/platform-pdf/worker.py"
 
 
 class PdfHandler(BaseHTTPRequestHandler):
@@ -90,7 +90,7 @@ class PdfHandler(BaseHTTPRequestHandler):
                     command.extend(["--password-file", str(password_file)])
                 if operation == "unlock":
                     command.extend(["--output", str(output)])
-                completed = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30, check=False, env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": "/opt/finance-pdf"})
+                completed = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30, check=False, env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": "/opt/platform-pdf"})
                 if completed.returncode != 0 or not result.is_file():
                     self._json(422, {"error": "PDF validation or extraction failed"})
                     return
