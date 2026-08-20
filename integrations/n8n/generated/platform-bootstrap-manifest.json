@@ -4,7 +4,7 @@
   "n8n_version": "2.36.2",
   "sources": {
     "data_tables": "integrations/n8n/data-tables.json",
-    "data_tables_sha256": "f17ae74665621555536314d20c6bb048fc5e89d452f62f516ec5eb2782fc413b",
+    "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "4ad2e1381484dc1a053ecad4ad3a8cbc54b817a754ed451cfdde8290cb983af3",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
@@ -158,6 +158,38 @@
             {
               "name": "updated_at",
               "type": "date"
+            },
+            {
+              "name": "attachment_verification_barrier",
+              "type": "string"
+            },
+            {
+              "name": "attachment_ids_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "attachment_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "attachments_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_receipt_barrier",
+              "type": "string"
+            },
+            {
+              "name": "email_evidence_receipts_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "archive_ready",
+              "type": "boolean"
             }
           ]
         },

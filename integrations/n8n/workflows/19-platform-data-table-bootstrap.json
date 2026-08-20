@@ -204,6 +204,38 @@
             {
               "name": "updated_at",
               "type": "date"
+            },
+            {
+              "name": "attachment_verification_barrier",
+              "type": "string"
+            },
+            {
+              "name": "attachment_ids_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "attachment_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "attachments_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_receipt_barrier",
+              "type": "string"
+            },
+            {
+              "name": "email_evidence_receipts_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "archive_ready",
+              "type": "boolean"
             }
           ]
         },
