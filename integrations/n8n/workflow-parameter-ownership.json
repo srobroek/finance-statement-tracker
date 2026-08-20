@@ -40,6 +40,12 @@
       "selectors": ["default_policy", "providers.*.code"]
     }
   ],
+  "credential_identifier_sources": [
+    {
+      "path": "integrations/n8n/pipeline-registry.json",
+      "selectors": ["custom_nodes.credentials"]
+    }
+  ],
   "forbidden": {
     "credential_key_patterns": [
       "credential",
@@ -208,7 +214,14 @@
               "type": "string",
               "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.adapter_package"}
             },
-            "proposal_output_schema": {"category": "workflow_local_constant", "type": "string"}
+            "proposal_output_schema": {
+              "category": "global_generated_contract",
+              "type": "string",
+              "source": {
+                "path": "integrations/n8n/contracts/ai-proposal-v1.schema.json",
+                "selector": "$"
+              }
+            }
           }
         }
       }
