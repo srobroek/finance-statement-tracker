@@ -66,6 +66,7 @@ class BackupVerifierTests(unittest.TestCase):
         sanitize_push: bool = False,
         extra_push_database: bool = False,
         historical_push_snapshot: bool = False,
+        historical_sidecar_sentinels: bool = False,
     ) -> Path:
         source = root / "source"
         cashback_database = source / "cashback-data/cashback-events.sqlite3"
@@ -82,6 +83,18 @@ class BackupVerifierTests(unittest.TestCase):
             historical_database = source / "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
             self._sqlite(historical_database)
             self._push_state(historical_database)
+        if historical_sidecar_sentinels:
+            historical_base = source / "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+            self._sqlite(historical_base)
+            sentinels = (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            )
+            for suffix in ("-wal", "-shm"):
+                (historical_base.with_name(historical_base.name + suffix)).write_bytes(
+                    b"|".join(sentinels)
+                )
         if sanitize_push:
             subprocess.run(
                 [
@@ -190,6 +203,29 @@ class BackupVerifierTests(unittest.TestCase):
                 b"secret-auth-value",
             ):
                 self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "historical cashback snapshot"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_historical_snapshot_sidecars_with_push_sentinels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, historical_sidecar_sentinels=True)
+
+            sentinels = (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            )
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                for suffix in ("-wal", "-shm"):
+                    member = archive.extractfile(
+                        "cashback-data/pre-deploy-20260818T010203Z.sqlite3" + suffix
+                    )
+                    self.assertIsNotNone(member)
+                    contents = member.read() if member is not None else b""
+                    for sentinel in sentinels:
+                        self.assertIn(sentinel, contents)
 
             with self.assertRaisesRegex(verifier.VerificationError, "historical cashback snapshot"):
                 verifier.verify_backup(root, backup, None)

@@ -36,7 +36,11 @@ EXCLUDED_PUSH_DATA = {
     "cashback-data/cashback-events.sqlite3:push_deliveries",
     "cashback-data/cashback-events.sqlite3:push_state",
 }
-EXCLUDED_CASHBACK_PATHS = {"cashback-data/pre-deploy-*.sqlite3"}
+EXCLUDED_CASHBACK_PATHS = {
+    "cashback-data/pre-deploy-*.sqlite3",
+    "cashback-data/pre-deploy-*.sqlite3-wal",
+    "cashback-data/pre-deploy-*.sqlite3-shm",
+}
 CURRENT_MANIFEST_SCHEMA = 4
 LEGACY_MANIFEST_SCHEMA = 3
 
@@ -152,7 +156,7 @@ def _extract_regular_files(archive: Path, destination: Path) -> int:
                 relative = _safe_member_path(member.name)
                 if (
                     relative.parts[:1] == ("cashback-data",)
-                    and re.fullmatch(r"pre-deploy-[^/]+\.sqlite3", relative.name)
+                    and re.fullmatch(r"pre-deploy-[^/]+\.sqlite3(?:-(?:wal|shm))?", relative.name)
                 ):
                     raise VerificationError(
                         f"archive contains excluded historical cashback snapshot: {member.name}"

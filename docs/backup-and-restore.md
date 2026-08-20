@@ -21,9 +21,9 @@ does not know about or pause n8n.
 The version 4 cashback archive excludes `push_subscriptions`, `push_deliveries`, and
 `push_state` from `cashback-events.sqlite3`. These tables contain browser push
 credentials or ephemeral delivery state. The backup manifest lists the three
-exclusions. It also excludes disposable `pre-deploy-*.sqlite3` snapshots. The
-verifier rejects an archive that contains rows in the push tables or a historical
-cashback snapshot.
+exclusions. It also excludes disposable `pre-deploy-*.sqlite3` snapshots and
+their `-wal` and `-shm` sidecars. The verifier rejects an archive that contains
+rows in the push tables or any member of that historical snapshot family.
 Push subscriptions are recreated by the browser after restore; cashback events,
 period state, and configuration remain restorable.
 

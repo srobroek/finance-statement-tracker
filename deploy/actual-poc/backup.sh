@@ -94,6 +94,8 @@ cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"
 # sanitizer or leak push credentials through a historical filename.
 tar -C "${CASHBACK_DATA_DIR}" \
   --exclude='pre-deploy-*.sqlite3' \
+  --exclude='pre-deploy-*.sqlite3-wal' \
+  --exclude='pre-deploy-*.sqlite3-shm' \
   -cf - . | tar -C "${payload}/cashback-data" -xf -
 while IFS= read -r -d '' database; do
   python3 "${SANITIZE_SCRIPT}" "${database}"
@@ -118,7 +120,7 @@ rm -rf -- "${payload}"
   sha256sum -c SHA256SUMS >/dev/null
 )
 cat > "${working}/manifest.json" <<EOF
-{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
+{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3","cashback-data/pre-deploy-*.sqlite3-wal","cashback-data/pre-deploy-*.sqlite3-shm"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 
 resume_services

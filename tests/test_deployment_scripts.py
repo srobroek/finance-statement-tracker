@@ -39,8 +39,13 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertNotIn("CASHBACK_INGEST_TOKEN", script)
         self.assertIn('"schema_version":4', script)
         self.assertIn("--exclude='pre-deploy-*.sqlite3'", script)
+        self.assertIn("--exclude='pre-deploy-*.sqlite3-wal'", script)
+        self.assertIn("--exclude='pre-deploy-*.sqlite3-shm'", script)
         self.assertIn("find \"${payload}\" -type f", script)
-        self.assertIn('"excluded_paths":["cashback-data/pre-deploy-*.sqlite3"]', script)
+        self.assertIn(
+            '"excluded_paths":["cashback-data/pre-deploy-*.sqlite3","cashback-data/pre-deploy-*.sqlite3-wal","cashback-data/pre-deploy-*.sqlite3-shm"]',
+            script,
+        )
         self.assertIn("excluded_data", script)
         self.assertIn("--write-receipt", script)
 
