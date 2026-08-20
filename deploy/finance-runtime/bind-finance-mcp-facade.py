@@ -272,8 +272,8 @@ def _run_decrypt_use_challenge(secret: str, root: Path) -> None:
     _run(command, environment=environment)
     try:
         challenge = json.loads((root / "challenge.json").read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        raise ContractError("n8n decrypt/use challenge evidence is missing") from exc
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ContractError("n8n decrypt/use challenge evidence is missing or invalid") from exc
     if challenge != {"authenticatedRequest": True, "decryptUseVerified": True, "secretValueRecorded": False}:
         raise ContractError("n8n decrypt/use challenge evidence is invalid")
 

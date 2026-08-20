@@ -309,6 +309,7 @@ class FinanceMcpBinderTests(unittest.TestCase):
             state = root / "state.json"
             imports = root / "imports.log"
             readback_count = root / "readback-count"
+            readback_states = root / "readback-states.log"
             executable(root / "findmnt", """
                 print('tmpfs')
                 """)
@@ -340,6 +341,8 @@ class FinanceMcpBinderTests(unittest.TestCase):
                 count_path = pathlib.Path(os.environ['READBACK_COUNT'])
                 count = int(count_path.read_text() or '0') if count_path.exists() else 0
                 count_path.write_text(str(count + 1))
+                with pathlib.Path(os.environ['READBACK_STATES']).open('a') as stream:
+                    stream.write(json.dumps(state) + '\\n')
                 if os.environ.get('MALFORMED_READBACK') == 'true' and count == 1:
                     pathlib.Path(os.environ['FINANCE_MCP_METADATA_OUTPUT']).write_text('{')
                     raise SystemExit(0)
@@ -348,6 +351,10 @@ class FinanceMcpBinderTests(unittest.TestCase):
                 pathlib.Path(os.environ['FINANCE_MCP_METADATA_OUTPUT']).write_text(json.dumps(payload))
                 """)
             executable(root / "challenge", """
+                import os, pathlib
+                if os.environ.get('INVALID_CHALLENGE') == 'true':
+                    pathlib.Path(os.environ['FINANCE_MCP_CHALLENGE_OUTPUT']).write_bytes(b'\\xff')
+                    raise SystemExit(0)
                 raise SystemExit(2)
                 """)
             executable(root / "cleanup", """
@@ -362,6 +369,7 @@ class FinanceMcpBinderTests(unittest.TestCase):
                 "STATE": str(state),
                 "IMPORTS": str(imports),
                 "READBACK_COUNT": str(readback_count),
+                "READBACK_STATES": str(readback_states),
                 "FAIL_STAGE": "import:workflow",
                 "CLEANUP_MARKER": str(root / "cleanup.marker"),
                 "FINANCE_MCP_METADATA_READER": str(root / "metadata-reader"),
@@ -375,7 +383,32 @@ class FinanceMcpBinderTests(unittest.TestCase):
                     self.binder.main(["--workflow", str(WORKFLOW), "--n8n", str(root / "n8n"), "--binder-root", str(binder_root)])
             self.assertEqual(len(imports.read_text().splitlines()), 2)
             self.assertEqual(json.loads(state.read_text()), {"credential": False, "workflow": False, "owner": False, "binding": False})
+
+            state.write_text(json.dumps({"credential": False, "workflow": False, "owner": False, "binding": False}))
+            imports.unlink()
+            readback_count.unlink()
+            readback_states.unlink()
+            invalid_challenge_environment = {**environment, "FAIL_STAGE": "", "INVALID_CHALLENGE": "true"}
+            invalid_challenge_output = io.StringIO()
+            with patch.dict(os.environ, invalid_challenge_environment, clear=True):
+                with redirect_stdout(invalid_challenge_output):
+                    with self.assertRaises(self.binder.ContractError):
+                        self.binder.main(["--workflow", str(WORKFLOW), "--n8n", str(root / "n8n"), "--binder-root", str(binder_root)])
+            self.assertEqual(len(imports.read_text().splitlines()), 4)
             self.assertEqual((root / "cleanup.marker").read_text(), "REMOVE_W15_FINANCE_MCP_ONLY")
+            self.assertEqual(readback_count.read_text(), "5")
+            self.assertEqual(
+                [json.loads(line) for line in readback_states.read_text().splitlines()],
+                [
+                    {"credential": False, "workflow": False, "owner": False, "binding": False},
+                    {"credential": True, "workflow": True, "owner": True, "binding": False},
+                    {"credential": False, "workflow": False, "owner": False, "binding": False},
+                    {"credential": True, "workflow": True, "owner": True, "binding": False},
+                    {"credential": False, "workflow": False, "owner": False, "binding": False},
+                ],
+            )
+            self.assertEqual(json.loads(state.read_text()), {"credential": False, "workflow": False, "owner": False, "binding": False})
+            self.assertEqual(invalid_challenge_output.getvalue(), "")
 
             state.write_text(json.dumps({"credential": False, "workflow": False, "owner": False, "binding": False}))
             imports.unlink()
