@@ -13,7 +13,6 @@ from finance_tracker.account_completeness import (
 from finance_tracker.account_proposals import (
     build_adcb_closed_zero_assertion,
     build_fab_inventory_proposal,
-    build_fab_opening_anchor_proposal,
     build_sarwa_position_sidecar,
 )
 from finance_tracker.wealth import parse_registered_wealth_capture
@@ -249,33 +248,62 @@ class AccountCompletenessTests(unittest.TestCase):
         self.assertEqual(proposal["sarwa"]["wealth_snapshot_id"], snapshot.snapshot_id)
         self.assertEqual(proposed_values, expected_values)
 
-    def test_fab_anchor_fails_closed_for_stale_or_future_capture(self) -> None:
-        capture = json.loads(
-            (ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json")
-            .read_text(encoding="utf-8")
+    def test_fab_inventory_proposal_fails_closed_for_stale_or_future_capture(self) -> None:
+        manifest = load_account_completeness_manifest(MANIFEST)
+        inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+        evaluated_at = datetime(2026, 8, 19, tzinfo=timezone.utc)
+        fresh = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at,
+            stale_after_seconds=86400,
         )
-        as_of = datetime.fromisoformat(
-            capture["account"]["balance_as_of"].replace("Z", "+00:00")
+        self.assertEqual(fresh["status"], "READY_FOR_REVIEW")
+        self.assertEqual(fresh["blockers"], [])
+        self.assertFalse(fresh["actual_writes_allowed"])
+
+        identities = [
+            "fab:current:2001",
+            "fab:current:2008",
+            "fab:loan:mortgage-0203",
+            "fab:savings:isave-2002",
+            "fab:savings:shared-property-aed-2006",
+            "fab:savings:shared-property-eur-2007",
+        ]
+        stale = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at + timedelta(days=2),
+            stale_after_seconds=86400,
         )
-        common = {
-            "capture": capture,
-            "provider_account_id": "fab:current:2001",
-            "account_name": "FAB Elite Gold Current Account · 2001",
-            "inventory_complete": False,
-            "stale_after_seconds": 86400,
-        }
-        stale = build_fab_opening_anchor_proposal(
-            evaluated_at=as_of + timedelta(days=2), **common
+        self.assertEqual(
+            stale["blockers"],
+            [f"FAB_BALANCE_SNAPSHOT_STALE:{identity}" for identity in identities],
         )
-        future = build_fab_opening_anchor_proposal(
-            evaluated_at=as_of - timedelta(seconds=1), **common
+        self.assertEqual(stale["status"], "BLOCKED")
+        self.assertFalse(stale["actual_writes_allowed"])
+        self.assertTrue(
+            all(row["opening_balance_anchor"]["freshness"] == "STALE" for row in stale["accounts"])
         )
 
-        self.assertIn("FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", stale["blockers"])
-        self.assertIn("FAB_BALANCE_SNAPSHOT_STALE", stale["blockers"])
-        self.assertIn("FAB_BALANCE_AS_OF_IN_FUTURE", future["blockers"])
-        self.assertFalse(stale["actual_writes_allowed"])
+        future = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at - timedelta(seconds=1),
+            stale_after_seconds=86400,
+        )
+        self.assertEqual(
+            future["blockers"],
+            [f"FAB_BALANCE_AS_OF_IN_FUTURE:{identity}" for identity in identities],
+        )
+        self.assertEqual(future["status"], "BLOCKED")
         self.assertFalse(future["actual_writes_allowed"])
+        self.assertTrue(
+            all(
+                row["opening_balance_anchor"]["freshness"] == "AS_OF_IN_FUTURE"
+                for row in future["accounts"]
+            )
+        )
 
     def test_complete_fab_inventory_proposal_rejects_set_or_sign_drift(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
@@ -286,6 +314,7 @@ class AccountCompletenessTests(unittest.TestCase):
             evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
         )
         self.assertEqual(proposal["status"], "READY_FOR_REVIEW")
+        self.assertEqual(proposal["blockers"], [])
         self.assertFalse(proposal["actual_writes_allowed"])
 
         missing = json.loads(json.dumps(inventory))
