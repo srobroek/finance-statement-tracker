@@ -1177,6 +1177,7 @@ try {
                         "source_code": source_code,
                         "cursor_version": 1,
                         "cursor_value": frozen["run_upper_bound"],
+                        "run_upper_bound": frozen["run_upper_bound"],
                         "committed_run_id": frozen["run_id"],
                     },
                     refs={
@@ -1229,11 +1230,12 @@ try {
                 self.assert_code_error(
                     w12,
                     "Build Cursor CAS Update",
-                    "SOURCE_CURSOR_NON_MONOTONIC",
+                    "SOURCE_CURSOR_VERSION_CONFLICT",
                     json_value={
                         "source_code": source_code,
                         "cursor_version": 1,
                         "cursor_value": frozen["run_upper_bound"],
+                        "run_upper_bound": frozen["run_upper_bound"],
                         "committed_run_id": frozen["run_id"],
                     },
                     refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
@@ -2245,6 +2247,215 @@ try {
         self.assertEqual(returned["output"][0]["json"]["cursor_version"], 1)
         self.assertEqual(returned["output"][0]["json"]["downstream_receipt_sha256"], "a" * 64)
         self.assertEqual(tables.cas_writes, 1)
+
+    def test_monthly_cycles_whole_restart_replays_after_exactly_one_cas(self):
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        for filename, source_code in (
+            ("04-ei-monthly-statement.json", "EI_AMAZON"),
+            ("05-wio-monthly-statement.json", "WIO_CREDIT"),
+        ):
+            with self.subTest(workflow=filename):
+                cycle = self.workflow(filename)
+                run_id = f"{source_code}:whole-restart"
+                run_upper_bound = "2026-08-20T00:00:00.000Z"
+                source = {
+                    "run_id": run_id,
+                    "source_code": source_code,
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": run_upper_bound,
+                    "folder_id": "folder",
+                    "senders": ["sender@example.test"],
+                    "subjects": ["Statement"],
+                    "onedrive_parent_id": "parent",
+                }
+                archive = {
+                    "folder_id": "folder",
+                    "senders": ["sender@example.test"],
+                    "subjects": ["Statement"],
+                    "onedrive_parent_id": "parent",
+                    "scanned_count": 1,
+                    "matched_count": 1,
+                    "heartbeat": False,
+                    "pagination_exhausted": True,
+                    "attachment_verification_barrier": "VERIFIED",
+                    "attachment_ids_verified": True,
+                    "attachment_identity_keys": ["message-1:attachment-1"],
+                    "attachments_verified": 1,
+                    "email_evidence_receipt_barrier": "VERIFIED",
+                    "email_evidence_receipts_verified": 1,
+                    "email_evidence_identity_keys": ["message-1:INLINE_BODY"],
+                    "archive_ready": True,
+                    "receipt_readback_verified": True,
+                    "cursor_commit_eligible": False,
+                }
+                pipeline = {
+                    "state": "SUCCEEDED",
+                    "receipt_sha256": "a" * 64,
+                    "terminal_readback_verified": True,
+                }
+
+                def build_request(cursor):
+                    built = self.execute_code_node(
+                        cycle,
+                        "Build W12 COMMIT Request",
+                        json_value=cursor,
+                        refs={
+                            "Assemble Trusted Acquisition Contract": source,
+                            "Acquire Archive and Read Back": archive,
+                            "Run Shared Statement Pipeline": pipeline,
+                        },
+                    )
+                    self.assertTrue(built["ok"], built)
+                    validated = self.execute_code_node(
+                        w12,
+                        "Validate Sweep or Commit",
+                        json_value=built["output"][0]["json"],
+                    )
+                    self.assertTrue(validated["ok"], validated)
+                    return validated["output"][0]["json"]
+
+                def persistence_proof(request, receipt):
+                    resumed = self.execute_code_node(
+                        w12,
+                        "Validate Commit Resume State",
+                        json_value=receipt,
+                        refs={"Validate Sweep or Commit": request},
+                    )
+                    self.assertTrue(resumed["ok"], resumed)
+                    proof = self.execute_code_node(
+                        w12,
+                        "Verify Downstream Persistence Proof",
+                        json_value=resumed["output"][0]["json"],
+                        refs={"Validate Sweep or Commit": request},
+                    )
+                    self.assertTrue(proof["ok"], proof)
+                    return proof["output"][0]["json"]
+
+                cursor_v0 = {
+                    "source_code": source_code,
+                    "cursor_version": 0,
+                    "cursor_value": source["window_start"],
+                    "run_upper_bound": source["window_start"],
+                    "committed_run_id": None,
+                    "readback_verified": True,
+                }
+                bad_window = self.execute_code_node(
+                    cycle,
+                    "Build W12 COMMIT Request",
+                    json_value={**cursor_v0, "committed_run_id": run_id},
+                    refs={
+                        "Assemble Trusted Acquisition Contract": source,
+                        "Acquire Archive and Read Back": archive,
+                        "Run Shared Statement Pipeline": pipeline,
+                    },
+                )
+                self.assertFalse(bad_window["ok"])
+                self.assertIn(
+                    "SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH", bad_window["error"]
+                )
+                invalid_v0_recovery = self.execute_code_node(
+                    cycle,
+                    "Build W12 COMMIT Request",
+                    json_value={
+                        **cursor_v0,
+                        "cursor_value": run_upper_bound,
+                        "run_upper_bound": run_upper_bound,
+                        "committed_run_id": run_id,
+                    },
+                    refs={
+                        "Assemble Trusted Acquisition Contract": source,
+                        "Acquire Archive and Read Back": archive,
+                        "Run Shared Statement Pipeline": pipeline,
+                    },
+                )
+                self.assertFalse(invalid_v0_recovery["ok"])
+                self.assertIn(
+                    "SOURCE_CURSOR_RECOVERY_VERSION_INVALID",
+                    invalid_v0_recovery["error"],
+                )
+                first_request = build_request(cursor_v0)
+                self.assertEqual(first_request["expected_cursor_version"], 0)
+                archived_receipt = {
+                    **first_request,
+                    "terminal_state": "ARCHIVED",
+                    "readback_verified": True,
+                    "cursor_commit_eligible": False,
+                    "attachment_identity_keys_json": json.dumps(
+                        archive["attachment_identity_keys"], separators=(",", ":")
+                    ),
+                    "email_evidence_identity_keys_json": json.dumps(
+                        archive["email_evidence_identity_keys"], separators=(",", ":")
+                    ),
+                }
+                first_proof = persistence_proof(first_request, archived_receipt)
+                determined = self.execute_code_node(
+                    w12,
+                    "Determine Existing Cursor Commit",
+                    json_value=cursor_v0,
+                    refs={"Verify Downstream Persistence Proof": first_proof},
+                )
+                self.assertTrue(determined["ok"], determined)
+                self.assertEqual(determined["output"][0]["json"]["resume_path"], "CAS")
+                cas = self.execute_code_node(
+                    w12,
+                    "Build Cursor CAS Update",
+                    json_value=determined["output"][0]["json"],
+                    refs={"Verify Downstream Persistence Proof": first_proof},
+                )
+                self.assertTrue(cas["ok"], cas)
+                cas_writes = 1
+                cursor_v1 = {
+                    "source_code": source_code,
+                    "cursor_version": 1,
+                    "cursor_value": run_upper_bound,
+                    "run_upper_bound": run_upper_bound,
+                    "committed_run_id": run_id,
+                    "readback_verified": True,
+                }
+
+                restarted_request = build_request(cursor_v1)
+                self.assertEqual(restarted_request["expected_cursor_version"], 0)
+                terminal_receipt = {
+                    **archived_receipt,
+                    "terminal_state": "DOWNSTREAM_VERIFIED",
+                    "readback_verified": True,
+                    "cursor_commit_eligible": True,
+                }
+                restarted_proof = persistence_proof(
+                    restarted_request, terminal_receipt
+                )
+                replay_path = self.execute_code_node(
+                    w12,
+                    "Determine Existing Cursor Commit",
+                    json_value=cursor_v1,
+                    refs={"Verify Downstream Persistence Proof": restarted_proof},
+                )
+                self.assertTrue(replay_path["ok"], replay_path)
+                replay_row = replay_path["output"][0]["json"]
+                self.assertEqual(replay_row["resume_path"], "DOWNSTREAM_VERIFIED_REPLAY")
+                replay = self.execute_code_node(
+                    w12,
+                    "Verify Replayed Terminal Acquisition Receipt",
+                    json_value=terminal_receipt,
+                    refs={
+                        "Verify Downstream Persistence Proof": restarted_proof,
+                        "Determine Existing Cursor Commit": replay_row,
+                    },
+                )
+                self.assertTrue(replay["ok"], replay)
+                terminal = self.execute_code_node(
+                    w12,
+                    "Return Replayed Cursor Commit",
+                    refs={
+                        "Verify Downstream Persistence Proof": restarted_proof,
+                        "Determine Existing Cursor Commit": replay_row,
+                        "Verify Replayed Terminal Acquisition Receipt": replay["output"][0]["json"],
+                    },
+                )
+                self.assertTrue(terminal["ok"], terminal)
+                self.assertTrue(terminal["output"][0]["json"]["replayed"])
+                self.assertEqual(terminal["output"][0]["json"]["cursor_version"], 1)
+                self.assertEqual(cas_writes, 1)
 
     def test_executable_101_attachment_barrier_all_new_then_all_replay(self):
         w01 = self.workflow("01-outlook-finance-acquisition.json")

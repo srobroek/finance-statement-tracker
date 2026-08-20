@@ -166,14 +166,29 @@ def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
 
 
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
-    """Reject obsolete W01 enumeration before presentation formatting."""
+    """Regenerate exact fail-closed node contracts before formatting."""
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    build_commit_request = r"""
+const source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;
+const receiptHash = String(pipeline.receipt_sha256 || '');
+if (pipeline.state !== 'SUCCEEDED' || pipeline.terminal_readback_verified !== true || !/^[a-f0-9]{64}$/.test(receiptHash)) throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED');
+if (archive.archive_ready !== true || archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.receipt_readback_verified !== true || archive.cursor_commit_eligible !== false) throw new Error('ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT');
+const observedVersion = Number(cursor.cursor_version), sameRun = cursor.committed_run_id === source.run_id, sameWindow = cursor.cursor_value === source.run_upper_bound && cursor.run_upper_bound === source.run_upper_bound;
+if (cursor.source_code !== source.source_code || !Number.isInteger(observedVersion) || observedVersion < 0) throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');
+if (sameRun && !sameWindow) throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');
+if (sameRun && observedVersion < 1) throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');
+const expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;
+return [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: true, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];
+""".strip()
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
         assemble = node_by_name(by_code[code], "Assemble Trusted Acquisition Contract")
         assemble["parameters"]["jsCode"] = r"""
 const w = $('Open Configured Cycle Window').first().json, c = $json;
 return [{ json: { ...w, ...c, operation: 'ENUMERATE', onedrive_parent_id: c.manifest_onedrive_parent_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];
 """.strip()
+        node_by_name(by_code[code], "Build W12 COMMIT Request")["parameters"][
+            "jsCode"
+        ] = build_commit_request
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
     legacy_graph = any(
         node["name"] == "Get Messages from Configured Folder"
