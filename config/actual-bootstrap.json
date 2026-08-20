@@ -6,54 +6,90 @@
   },
   "accounts": [
     {
-      "name": "ADCB Credit Card · 8833 / 6838",
-      "aliases": ["ADCB Credit Card · 8833"],
-      "type": "credit",
-      "offbudget": false,
-      "card_code": "ADCB_CASHBACK",
-      "card_last4": ["8833", "6838"]
-    },
-    {
       "name": "Emirates Islamic Amazon Credit Card · 0082",
       "type": "credit",
       "offbudget": false,
+      "provider_account_id": "ei:credit:0082",
       "card_code": "EI_AMAZON",
-      "card_last4": ["0082"]
+      "card_last4": [
+        "0082"
+      ]
     },
     {
       "name": "FAB Credit Card · 6031",
       "type": "credit",
       "offbudget": false,
+      "provider_account_id": "fab-credit:credit:6031",
       "card_code": "FAB_6031",
-      "card_last4": ["6031"]
+      "card_last4": [
+        "6031"
+      ]
     },
     {
       "name": "FAB Elite Gold Current Account · 2001",
       "type": "checking",
       "offbudget": false,
+      "provider_account_id": "fab:current:2001",
       "card_code": "FAB_CURRENT_2001",
-      "card_last4": ["2001"]
+      "card_last4": [
+        "2001"
+      ]
+    },
+    {
+      "name": "FAB Elite Gold Current Account · 2008",
+      "type": "checking",
+      "offbudget": false,
+      "provider_account_id": "fab:current:2008"
+    },
+    {
+      "name": "FAB Mortgage · 0203",
+      "type": "mortgage",
+      "offbudget": true,
+      "provider_account_id": "fab:loan:mortgage-0203"
+    },
+    {
+      "name": "FAB iSave · 2002",
+      "type": "savings",
+      "offbudget": false,
+      "provider_account_id": "fab:savings:isave-2002"
+    },
+    {
+      "name": "FAB AED Savings Shared Property · 2006",
+      "type": "savings",
+      "offbudget": false,
+      "provider_account_id": "fab:savings:shared-property-aed-2006"
+    },
+    {
+      "name": "FAB EUR Savings Shared Property · 2007",
+      "type": "savings",
+      "offbudget": false,
+      "provider_account_id": "fab:savings:shared-property-eur-2007"
     },
     {
       "name": "Abu Dhabi Islamic Bank Mortgage · Bluewaters B7-306",
       "type": "mortgage",
       "offbudget": true,
-      "enabled": false,
-      "initial_balance": -260000000,
+      "provider_account_id": "adib:loan:bluewaters-b7-306",
       "loan_code": "ADIB_BLUEWATERS_B7_306",
-      "activation_note": "Enable only after the new mortgage account exists and the exact loan start date is known."
+      "activation_note": "Enable only after the new mortgage account exists and the exact loan start date is known.",
+      "enabled": false,
+      "initial_balance": -260000000
     },
     {
       "name": "RAKBANK World Credit Card",
       "type": "credit",
       "offbudget": false,
+      "provider_account_id": "rak:credit:7210",
       "card_code": "RAK_WORLD",
-      "card_last4": ["7210"]
+      "card_last4": [
+        "7210"
+      ]
     },
     {
       "name": "Standard Chartered Platinum X Credit Card",
       "type": "credit",
       "offbudget": false,
+      "provider_account_id": "sc:credit:platinum-x",
       "card_code": "SC_PLATINUM_X",
       "card_last4": []
     },
@@ -61,8 +97,36 @@
       "name": "Wio Credit Card · 4113 / 5009",
       "type": "credit",
       "offbudget": false,
+      "provider_account_id": "wio:credit:4113-5009",
       "card_code": "WIO_CREDIT",
-      "card_last4": ["4113", "5009"]
+      "card_last4": [
+        "4113",
+        "5009"
+      ]
+    },
+    {
+      "name": "Sarwa Invest · Personal",
+      "type": "investment",
+      "offbudget": true,
+      "provider_account_id": "sarwa:invest:personal"
+    },
+    {
+      "name": "Sarwa Invest · Parents",
+      "type": "investment",
+      "offbudget": true,
+      "provider_account_id": "sarwa:invest:parents"
+    },
+    {
+      "name": "Sarwa Invest · Shared Airbnb",
+      "type": "investment",
+      "offbudget": true,
+      "provider_account_id": "sarwa:invest:shared-airbnb"
+    },
+    {
+      "name": "Sarwa Trade · Primary",
+      "type": "trade",
+      "offbudget": true,
+      "provider_account_id": "sarwa:trade:primary"
     }
   ],
   "retired_accounts": [
@@ -137,72 +201,215 @@
     }
   ],
   "tags": [
-    {"tag": "shared", "description": "Shared household spending"},
-    {"tag": "grocery", "description": "Groceries and supermarket spending"},
-    {"tag": "subscription", "description": "Recurring non-utility subscription"},
-    {"tag": "utility", "description": "Utility or property service"},
-    {"tag": "property", "description": "Transaction attributed to a configured property"},
-    {"tag": "home", "description": "Owner-occupied home expense"},
-    {"tag": "mortgage", "description": "Mortgage payment, interest, principal, or related adjustment"},
-    {"tag": "rental", "description": "Rental property income or expense"},
-    {"tag": "rental:lt713", "description": "Rental unit LT713"},
-    {"tag": "rental:indigo1414", "description": "Rental unit Indigo 1414"},
-    {"tag": "business", "description": "Business-related transaction"},
-    {"tag": "receipt", "description": "Receipt evidence is linked"},
-    {"tag": "warranty", "description": "Purchase has warranty evidence"},
-    {"tag": "category-review", "description": "AI proposed a new category for owner review"},
-    {"tag": "needs-review", "description": "Deterministic or manual review is required"}
+    {
+      "tag": "shared",
+      "description": "Shared household spending"
+    },
+    {
+      "tag": "grocery",
+      "description": "Groceries and supermarket spending"
+    },
+    {
+      "tag": "subscription",
+      "description": "Recurring non-utility subscription"
+    },
+    {
+      "tag": "utility",
+      "description": "Utility or property service"
+    },
+    {
+      "tag": "property",
+      "description": "Transaction attributed to a configured property"
+    },
+    {
+      "tag": "home",
+      "description": "Owner-occupied home expense"
+    },
+    {
+      "tag": "mortgage",
+      "description": "Mortgage payment, interest, principal, or related adjustment"
+    },
+    {
+      "tag": "rental",
+      "description": "Rental property income or expense"
+    },
+    {
+      "tag": "rental:lt713",
+      "description": "Rental unit LT713"
+    },
+    {
+      "tag": "rental:indigo1414",
+      "description": "Rental unit Indigo 1414"
+    },
+    {
+      "tag": "business",
+      "description": "Business-related transaction"
+    },
+    {
+      "tag": "receipt",
+      "description": "Receipt evidence is linked"
+    },
+    {
+      "tag": "warranty",
+      "description": "Purchase has warranty evidence"
+    },
+    {
+      "tag": "category-review",
+      "description": "AI proposed a new category for owner review"
+    },
+    {
+      "tag": "needs-review",
+      "description": "Deterministic or manual review is required"
+    }
   ],
   "payees": [
-    {"name": "ADNH Catering"},
-    {"name": "ART Fertility Clinics"},
-    {"name": "Anthropic"},
-    {"name": "Amazon"},
-    {"name": "Apple"},
-    {"name": "Aramex"},
-    {"name": "Best of Vends"},
-    {"name": "Carrefour"},
-    {"name": "Cloudflare"},
-    {"name": "Cults3D"},
-    {"name": "DEWA"},
-    {"name": "DHL Express"},
-    {"name": "Darkmoon 3D"},
-    {"name": "Empower"},
-    {"name": "Emirates Delivers"},
-    {"name": "Emirates Post"},
-    {"name": "Farzana Trading"},
-    {"name": "Food Delivery"},
-    {"name": "Franklin Chiropractic"},
-    {"name": "Fresha"},
-    {"name": "GMG Consumer"},
-    {"name": "German Neuroscience Centre"},
-    {"name": "Glucare"},
-    {"name": "Ride Hailing"},
-    {"name": "Airline"},
-    {"name": "Hotel or Booking Platform"},
-    {"name": "Instashop"},
-    {"name": "JBR Shams Pharmacy"},
-    {"name": "James Pro Barbers"},
-    {"name": "Keyani Health Services"},
-    {"name": "Kibsons"},
-    {"name": "Life Pharmacy"},
-    {"name": "LuLu Hypermarket"},
-    {"name": "Mobile Provider"},
-    {"name": "Move Shoot Move"},
-    {"name": "Naqel"},
-    {"name": "OpenAI"},
-    {"name": "Porkbun"},
-    {"name": "Real-Debrid"},
-    {"name": "Ritz Auto Care"},
-    {"name": "ServiceMarket"},
-    {"name": "Spinneys"},
-    {"name": "Steam"},
-    {"name": "Sukoon Insurance"},
-    {"name": "The Blue Box Vending"},
-    {"name": "Urban Company"},
-    {"name": "Urban Foods"},
-    {"name": "Virgin Mobile"},
-    {"name": "Waitrose"}
+    {
+      "name": "ADNH Catering"
+    },
+    {
+      "name": "ART Fertility Clinics"
+    },
+    {
+      "name": "Anthropic"
+    },
+    {
+      "name": "Amazon"
+    },
+    {
+      "name": "Apple"
+    },
+    {
+      "name": "Aramex"
+    },
+    {
+      "name": "Best of Vends"
+    },
+    {
+      "name": "Carrefour"
+    },
+    {
+      "name": "Cloudflare"
+    },
+    {
+      "name": "Cults3D"
+    },
+    {
+      "name": "DEWA"
+    },
+    {
+      "name": "DHL Express"
+    },
+    {
+      "name": "Darkmoon 3D"
+    },
+    {
+      "name": "Empower"
+    },
+    {
+      "name": "Emirates Delivers"
+    },
+    {
+      "name": "Emirates Post"
+    },
+    {
+      "name": "Farzana Trading"
+    },
+    {
+      "name": "Food Delivery"
+    },
+    {
+      "name": "Franklin Chiropractic"
+    },
+    {
+      "name": "Fresha"
+    },
+    {
+      "name": "GMG Consumer"
+    },
+    {
+      "name": "German Neuroscience Centre"
+    },
+    {
+      "name": "Glucare"
+    },
+    {
+      "name": "Ride Hailing"
+    },
+    {
+      "name": "Airline"
+    },
+    {
+      "name": "Hotel or Booking Platform"
+    },
+    {
+      "name": "Instashop"
+    },
+    {
+      "name": "JBR Shams Pharmacy"
+    },
+    {
+      "name": "James Pro Barbers"
+    },
+    {
+      "name": "Keyani Health Services"
+    },
+    {
+      "name": "Kibsons"
+    },
+    {
+      "name": "Life Pharmacy"
+    },
+    {
+      "name": "LuLu Hypermarket"
+    },
+    {
+      "name": "Mobile Provider"
+    },
+    {
+      "name": "Move Shoot Move"
+    },
+    {
+      "name": "Naqel"
+    },
+    {
+      "name": "OpenAI"
+    },
+    {
+      "name": "Porkbun"
+    },
+    {
+      "name": "Real-Debrid"
+    },
+    {
+      "name": "Ritz Auto Care"
+    },
+    {
+      "name": "ServiceMarket"
+    },
+    {
+      "name": "Spinneys"
+    },
+    {
+      "name": "Steam"
+    },
+    {
+      "name": "Sukoon Insurance"
+    },
+    {
+      "name": "The Blue Box Vending"
+    },
+    {
+      "name": "Urban Company"
+    },
+    {
+      "name": "Urban Foods"
+    },
+    {
+      "name": "Virgin Mobile"
+    },
+    {
+      "name": "Waitrose"
+    }
   ],
   "rules": [
     {

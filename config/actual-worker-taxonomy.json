@@ -1,0 +1,482 @@
+{
+  "schema_version": 1,
+  "source": "config/actual-account-taxonomy.json",
+  "tags": [
+    {
+      "tag": "shared",
+      "description": "Shared household spending",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "grocery",
+      "description": "Groceries and supermarket spending",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "subscription",
+      "description": "Recurring non-utility subscription",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "utility",
+      "description": "Utility or property service",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "property",
+      "description": "Transaction attributed to a configured property",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "home",
+      "description": "Owner-occupied home expense",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "rental",
+      "description": "Rental property income or expense",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "business",
+      "description": "Business-related transaction",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "tag": "adjustment",
+      "description": "Deterministic worker adjustment marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "amazon",
+      "description": "Deterministic worker Amazon marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "card-payment",
+      "description": "Deterministic worker card-payment marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "dining",
+      "description": "Deterministic worker dining marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "fee",
+      "description": "Deterministic worker fee marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "foreign",
+      "description": "Deterministic worker foreign-spend marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "health",
+      "description": "Deterministic worker health marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "income",
+      "description": "Deterministic worker income marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "maintenance",
+      "description": "Deterministic worker maintenance marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "online",
+      "description": "Deterministic worker online marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "recurring",
+      "description": "Deterministic worker recurring marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "refund",
+      "description": "Deterministic worker refund marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "reimbursement",
+      "description": "Deterministic worker reimbursement marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "reward",
+      "description": "Deterministic worker reward marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "salary",
+      "description": "Deterministic worker salary marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "service-charge",
+      "description": "Deterministic worker service-charge marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "telecom",
+      "description": "Deterministic worker telecom marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "transfer",
+      "description": "Deterministic worker transfer marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "transport",
+      "description": "Deterministic worker transport marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "travel",
+      "description": "Deterministic worker travel marker",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "tag": "vat",
+      "description": "Deterministic worker VAT marker",
+      "bootstrap": false,
+      "worker": true
+    }
+  ],
+  "payees": [
+    {
+      "name": "ADNH Catering",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "ART Fertility Clinics",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Anthropic",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Amazon",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Apple",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Aramex",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Best of Vends",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Carrefour",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Cloudflare",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Cults3D",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "DEWA",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "DHL Express",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Darkmoon 3D",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Empower",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Emirates Delivers",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Emirates Post",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Farzana Trading",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Food Delivery",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Franklin Chiropractic",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Fresha",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "GMG Consumer",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "German Neuroscience Centre",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Glucare",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Ride Hailing",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Airline",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Hotel or Booking Platform",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Instashop",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "JBR Shams Pharmacy",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "James Pro Barbers",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Keyani Health Services",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Kibsons",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Life Pharmacy",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "LuLu Hypermarket",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Mobile Provider",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Move Shoot Move",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Naqel",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "OpenAI",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Porkbun",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Real-Debrid",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Ritz Auto Care",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "ServiceMarket",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Spinneys",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Steam",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Sukoon Insurance",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "The Blue Box Vending",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Urban Company",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Urban Foods",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Waitrose",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "ACE Hardware",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "AWS",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "Al-Futtaim eCommerce",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "AliExpress",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "Cabincamp",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "FAB",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "IKEA",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "One Central Parking",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "Skyhound",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "Stake",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "UNRWA",
+      "bootstrap": false,
+      "worker": true
+    },
+    {
+      "name": "iSTYLE",
+      "bootstrap": false,
+      "worker": true
+    }
+  ]
+}

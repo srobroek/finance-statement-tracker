@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-_STABLE_ID = re.compile(r"^[a-z0-9]+(?::[a-z0-9-]+)+$")
+_STABLE_ID = re.compile(r"^[a-z0-9-]+(?::[a-z0-9-]+)+$")
 _ACCOUNT_TYPES = {"checking", "savings", "investment", "trade", "credit", "mortgage"}
 _BALANCE_SIGNS = {"ASSET_POSITIVE", "LIABILITY_NEGATIVE"}
+_BALANCE_EVIDENCE_STATUS = {"EVIDENCED", "UNAVAILABLE", "PLANNED"}
 _INVENTORY_STATUSES = {"COMPLETE", "INCOMPLETE"}
 
 
@@ -28,6 +29,7 @@ class AccountIdentity:
     actual_offbudget: bool
     include_in_net_worth: bool
     balance_sign: str
+    balance_evidence_status: str
     balance_source: str | None
     balance_as_of: str | None
     active: bool
@@ -119,6 +121,7 @@ def load_account_completeness_manifest(
             actual_offbudget=bool(raw.get("actual_offbudget", False)),
             include_in_net_worth=bool(raw.get("include_in_net_worth", True)),
             balance_sign=str(raw.get("balance_sign") or "ASSET_POSITIVE").upper(),
+            balance_evidence_status=str(raw.get("balance_evidence_status") or "UNAVAILABLE").upper(),
             balance_source=str(raw.get("balance_source") or "").strip() or None,
             balance_as_of=str(raw.get("balance_as_of") or "").strip() or None,
             active=bool(raw.get("active", True)),
@@ -143,6 +146,14 @@ def load_account_completeness_manifest(
             raise ValueError(f"Reconciled account requires expected_balance_minor: {identity}")
         if accounts[-1].balance_sign not in _BALANCE_SIGNS:
             raise ValueError(f"Unsupported balance sign convention: {identity}")
+        if accounts[-1].balance_evidence_status not in _BALANCE_EVIDENCE_STATUS:
+            raise ValueError(f"Unsupported balance evidence status: {identity}")
+        if accounts[-1].lifecycle_status not in {"ACTIVE", "CLOSED", "PLANNED"}:
+            raise ValueError(f"Unsupported lifecycle status: {identity}")
+        if accounts[-1].lifecycle_status == "PLANNED" and (
+            accounts[-1].active or accounts[-1].include_in_active_routing
+        ):
+            raise ValueError(f"Planned account cannot be active or routed: {identity}")
         if accounts[-1].account_type == "mortgage" and accounts[-1].balance_sign != "LIABILITY_NEGATIVE":
             raise ValueError(f"Mortgage account must use liability-negative balances: {identity}")
 
