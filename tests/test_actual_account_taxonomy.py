@@ -9,6 +9,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from finance_tracker.account_completeness import load_account_completeness_manifest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = ROOT / "config" / "actual-account-taxonomy.json"
@@ -181,6 +183,44 @@ class ActualAccountTaxonomyTests(unittest.TestCase):
         self.assertEqual(len(unresolved), 6)
         self.assertTrue(all(row["provider_account_id"] is None for row in unresolved))
         self.assertTrue(all(row["provider_identity_source"] is None for row in unresolved))
+
+    def test_completeness_projection_retains_all_rows_and_filters_candidates(self) -> None:
+        manifest = load_account_completeness_manifest(COMPLETENESS)
+        self.assertEqual(manifest.account_count, 18)
+        self.assertEqual(len(manifest.provider_identity_candidates()), 12)
+        self.assertEqual(len(manifest.provider_identity_candidates("sarwa")), 5)
+        provisional = [row for row in manifest.accounts if row.provider_account_id is None]
+        self.assertEqual(len(provisional), 6)
+        self.assertTrue(all(row.provider_identity_status == "UNAVAILABLE" for row in provisional))
+        self.assertTrue(all(row.provider_identity_source is None for row in provisional))
+
+    def test_evidenced_identity_sources_are_tracked_and_row_bound(self) -> None:
+        canonical = json.loads(CANONICAL.read_text(encoding="utf-8"))
+        generator = self._generator()
+        generator._validate_manifest(canonical)
+        sarwa_rows = [row for row in canonical["accounts"] if row["provider_id"] == "sarwa"]
+        self.assertTrue(all(
+            (ROOT / row["provider_identity_source"]).is_file()
+            for row in sarwa_rows
+        ))
+        sources = json.loads((ROOT / "config/wealth-sources.json").read_text(encoding="utf-8"))
+        memberships = {
+            (account["provider_account_id"], label)
+            for account in sources["providers"]["sarwa"]["accounts"]
+            for label in account["capture_labels"]
+        }
+        self.assertEqual(
+            {(row["provider_account_id"], row["display_name"]) for row in sarwa_rows},
+            memberships,
+        )
+        missing = copy.deepcopy(canonical)
+        next(row for row in missing["accounts"] if row["provider_id"] == "sarwa")["provider_identity_source"] = "tests/fixtures/missing-sarwa.json"
+        with self.assertRaisesRegex(ValueError, "Identity evidence is missing"):
+            generator._validate_manifest(missing)
+        mismatch = copy.deepcopy(canonical)
+        next(row for row in mismatch["accounts"] if row["provider_id"] == "sarwa")["display_name"] = "Uncaptured Sarwa account"
+        with self.assertRaisesRegex(ValueError, "Sarwa account is absent"):
+            generator._validate_manifest(mismatch)
 
     def test_manifest_never_persists_full_account_numbers(self) -> None:
         rendered = CANONICAL.read_text(encoding="utf-8")

@@ -7,6 +7,7 @@ import copy
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,50 @@ def _runtime_emitted_tags() -> set[str]:
     return {str(tag) for tag in emitted}
 
 
+def _validate_identity_evidence(row: dict[str, Any]) -> None:
+    """Require every evidenced identity to belong to tracked evidence at HEAD."""
+    source = row["provider_identity_source"]
+    if not source:
+        return
+    path = ROOT / source
+    if not path.is_file():
+        raise ValueError(f"Identity evidence is missing: {source}")
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", source],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if tracked.returncode != 0:
+        raise ValueError(f"Identity evidence is not tracked at HEAD: {source}")
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    if row["provider_id"] == "adcb":
+        observed = {evidence.get("provider_account_id")}
+        if row["provider_account_id"] not in observed:
+            raise ValueError(f"ADCB identity is absent from evidence: {row['account_key']}")
+    elif row["provider_id"] == "fab":
+        observed = {
+            account.get("provider_account_id")
+            for account in evidence.get("accounts", [])
+            if isinstance(account, dict)
+        }
+        if row["provider_account_id"] not in observed:
+            raise ValueError(f"FAB identity is absent from evidence: {row['account_key']}")
+    elif row["provider_id"] == "sarwa":
+        accounts = evidence.get("providers", {}).get("sarwa", {}).get("accounts", [])
+        memberships = {
+            (account.get("provider_account_id"), label)
+            for account in accounts
+            if isinstance(account, dict)
+            for label in account.get("capture_labels", [])
+        }
+        if (row["provider_account_id"], row["display_name"]) not in memberships:
+            raise ValueError(f"Sarwa account is absent from evidence: {row['account_key']}")
+    else:
+        raise ValueError(f"No identity evidence validator for provider: {row['provider_id']}")
+
+
 def _validate_manifest(manifest: dict[str, Any]) -> None:
     errors = sorted(Draft202012Validator(_read(SCHEMA)).iter_errors(manifest), key=str)
     if errors:
@@ -81,6 +126,7 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
                 raise ValueError(f"Evidence-backed identity is incomplete: {identity}")
             if not provider_id.startswith(f"{row['provider_id']}:" ):
                 raise ValueError(f"Provider identity is mismatched: {identity}")
+            _validate_identity_evidence(row)
         elif provider_id is not None or identity_source is not None:
             raise ValueError(f"Unavailable identity has provider metadata: {identity}")
         if actual["bootstrap"] and row["lifecycle_status"] == "CLOSED":
