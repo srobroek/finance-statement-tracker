@@ -513,6 +513,470 @@ try {
             )
         )
 
+    def test_statement_cycles_run_w01_barrier_and_w12_commit_cas(self):
+        """The caller path archives once, proves downstream state, then owns CAS."""
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        cases = (
+            (
+                "04-ei-monthly-statement.json",
+                "EI_AMAZON",
+                ["estatement@emiratesislamic.ae"],
+                ["Statement of your Emirates Islamic Credit Card"],
+                1,
+            ),
+            (
+                "05-wio-monthly-statement.json",
+                "WIO_CREDIT",
+                ["communications@email.wio.io", "communications@mail.wio.io"],
+                ["Your Wio Credit statement for this month"],
+                3,
+            ),
+        )
+
+        def cycle_request(workflow, source_code, senders, subjects, cycle_day):
+            run = {
+                "run_id": f"fixture:{source_code}:barrier",
+                "source_code": source_code,
+                "folder_id": f"folder:{source_code}",
+                "window_start": "2026-08-19T00:00:00.000Z",
+                "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                "period_key": "2026-08",
+                "cycle_day": cycle_day,
+                "deadline_days": 5,
+                "deadline_at": "2026-08-25T23:59:59.000Z",
+                "trigger_kind": "SCHEDULE",
+            }
+            source = {
+                "source_code": source_code,
+                "config_version": "fixture-v1",
+                "folder_id": run["folder_id"],
+                "senders_json": json.dumps(senders),
+                "subjects_json": json.dumps(subjects),
+                "onedrive_parent_id": f"drive:{source_code}",
+                "manifest_onedrive_parent_id": f"manifest:{source_code}",
+                "actual_file_id": f"actual:{source_code}",
+                "account_id": f"account:{source_code}",
+                "card_code": source_code,
+                "cashback_close_required": source_code == "EI_AMAZON",
+                "enabled": True,
+            }
+            assembled = self.execute_code_node(
+                workflow,
+                "Assemble Trusted Acquisition Contract",
+                json_value=source,
+                refs={"Open Configured Cycle Window": run},
+            )
+            self.assertTrue(assembled["ok"], assembled)
+            return assembled["output"][0]["json"]
+
+        def message(source, index, attachments):
+            return {
+                "id": f"message-{index:03d}",
+                "receivedDateTime": f"2026-08-19T00:{index % 60:02d}:00.000Z",
+                "from": {"emailAddress": {"address": source["senders"][0]}},
+                "subject": source["subjects"][0],
+                "attachment_inventory": attachments,
+            }
+
+        def inventory_for(request, messages):
+            frozen = self.execute_code_node(
+                w12,
+                "Freeze Trusted Cursor Window",
+                json_value=request,
+            )
+            self.assertTrue(frozen["ok"], frozen)
+            frozen_request = frozen["output"][0]["json"]
+            aggregate = self.execute_code_node(
+                w12,
+                "Aggregate Exact Window Heartbeat",
+                input_items=messages,
+                refs={"Freeze Trusted Cursor Window": frozen_request},
+            )
+            self.assertTrue(aggregate["ok"], aggregate)
+            sweep = aggregate["output"][0]["json"]
+            shaped = self.execute_code_node(
+                w12,
+                "Shape Immutable Message Inventory",
+                refs={"Verify Receipt and Return Sweep": sweep},
+            )
+            self.assertTrue(shaped["ok"], shaped)
+            parents = [item["json"] for item in shaped["output"]]
+            attachment_rows = [
+                {"message_id": parent["message_id"], "attachment": attachment}
+                for parent in parents
+                for attachment in parent.get("attachment_inventory", [])
+            ]
+            inventory = self.execute_code_node(
+                w12,
+                "Aggregate Immutable Archive Inventory",
+                input_items=attachment_rows,
+                refs={
+                    "Verify Receipt and Return Sweep": sweep,
+                    "Shape Immutable Message Inventory": parents,
+                },
+            )
+            self.assertTrue(inventory["ok"], inventory)
+            aggregate_inventory = inventory["output"][0]["json"]
+            persisted = {
+                "messages": aggregate_inventory["messages"],
+                "attachment_identity_keys": aggregate_inventory["attachment_identity_keys"],
+                "empty_inventory": aggregate_inventory["empty_inventory"],
+                "immutable_inventory": True,
+                "attachment_ids_verified": True,
+            }
+            receipt = {
+                **{
+                    key: sweep[key]
+                    for key in (
+                        "run_id",
+                        "source_code",
+                        "window_start",
+                        "run_upper_bound",
+                        "scanned_count",
+                        "matched_count",
+                        "heartbeat",
+                    )
+                },
+                "pagination_exhausted": True,
+                "cursor_commit_eligible": False,
+                "immutable_inventory_json": json.dumps(persisted, separators=(",", ":")),
+            }
+            verified = self.execute_code_node(
+                w12,
+                "Verify Receipt and Return Sweep",
+                json_value=receipt,
+                refs={"Aggregate Immutable Archive Inventory": aggregate_inventory},
+            )
+            self.assertTrue(verified["ok"], verified)
+            attached = self.execute_code_node(
+                w12,
+                "Attach Immutable Inventory to Sweep",
+                json_value=verified["output"][0]["json"],
+                refs={"Aggregate Immutable Archive Inventory": aggregate_inventory},
+            )
+            self.assertTrue(attached["ok"], attached)
+            return frozen_request, attached["output"][0]["json"], persisted
+
+        for filename, source_code, senders, subjects, cycle_day in cases:
+            with self.subTest(workflow=filename):
+                workflow = self.workflow(filename)
+                request = cycle_request(workflow, source_code, senders, subjects, cycle_day)
+                cardinalities = {
+                    "zero": [],
+                    "one": [message(request, 1, [{"id": "statement-001", "name": "statement.pdf"}])],
+                    "one-hundred-one": [
+                        message(request, index, [{"id": f"statement-{index:03d}", "name": "statement.pdf"}])
+                        for index in range(1, 102)
+                    ],
+                    "mixed": [
+                        message(
+                            request,
+                            1,
+                            [
+                                {"id": "statement-001", "name": "statement.pdf"},
+                                {"id": "inline-001", "name": "logo.png", "isInline": True},
+                            ],
+                        ),
+                        message(request, 2, []),
+                    ],
+                }
+                committed = None
+                for cardinality, messages in cardinalities.items():
+                    with self.subTest(cardinality=cardinality):
+                        frozen, w01_request, persisted = inventory_for(request, messages)
+                        validated = self.execute_code_node(
+                            w01,
+                            "Validate Bounded Source Request",
+                            json_value=w01_request,
+                        )
+                        self.assertTrue(validated["ok"], validated)
+                        archive_input = self.execute_code_node(
+                            w01,
+                            "Shape Immutable Archive Input",
+                            refs={"Validate Bounded Source Request": validated["output"][0]["json"]},
+                        )
+                        self.assertTrue(archive_input["ok"], archive_input)
+                        archive_rows = [
+                            {
+                                "attachment_verified": True,
+                                "attachment_identity": f"{row['message_id']}:{attachment['id']}",
+                                "source_message_id": row["message_id"],
+                                "source_attachment_id": attachment["id"],
+                                "source_sha256": "a" * 64,
+                                "onedrive_item_id": f"drive:{row['message_id']}:{attachment['id']}",
+                            }
+                            for row in persisted["messages"]
+                            for attachment in row["attachment_inventory"]
+                        ]
+                        email_rows = [
+                            {
+                                "email_evidence_receipt_verified": True,
+                                "email_evidence_identity": f"{row['message_id']}:INLINE_BODY",
+                                "source_message_id": row["message_id"],
+                                "source_attachment_id": "INLINE_BODY",
+                                "source_sha256": "b" * 64,
+                                "onedrive_item_id": f"drive-email:{row['message_id']}",
+                            }
+                            for row in persisted["messages"]
+                        ]
+                        if archive_input["output"] and messages:
+                            verified_archive_rows = []
+                            verified_email_rows = []
+                            for archive_item in archive_input["output"]:
+                                archive_message = archive_item["json"]
+                                message_id = archive_message["message_id"]
+                                for attachment in archive_message["attachment_inventory"]:
+                                    attachment_id = attachment["id"]
+                                    attachment_hash = "a" * 64
+                                    archive_readback = self.execute_code_node(
+                                        w01,
+                                        "Verify Enumerated Attachment Archive",
+                                        json_value={"archive_readback_sha256": attachment_hash},
+                                        refs={
+                                            "SHA-256 Enumerated Attachment": {
+                                                "document_sha256": attachment_hash,
+                                                "source_message_id": message_id,
+                                                "source_attachment_id": attachment_id,
+                                            },
+                                            "Archive Enumerated Attachment in OneDrive": {
+                                                "id": f"drive:{message_id}:{attachment_id}",
+                                            },
+                                        },
+                                    )
+                                    self.assertTrue(archive_readback["ok"], archive_readback)
+                                    archive_receipt = self.execute_code_node(
+                                        w01,
+                                        "Verify Enumerated Archive Receipt",
+                                        json_value={
+                                            "archive_state": "HASH_VERIFIED",
+                                            "source_message_id": message_id,
+                                            "source_attachment_id": attachment_id,
+                                            "source_sha256": attachment_hash,
+                                            "onedrive_item_id": f"drive:{message_id}:{attachment_id}",
+                                        },
+                                        refs={
+                                            "Verify Enumerated Attachment Archive":
+                                                archive_readback["output"][0]["json"],
+                                        },
+                                    )
+                                    self.assertTrue(archive_receipt["ok"], archive_receipt)
+                                    verified_archive_rows.append(archive_receipt["output"][0]["json"])
+
+                                built_email = self.execute_code_node(
+                                    w01,
+                                    "Build Original Email Evidence",
+                                    json_value=archive_message,
+                                )
+                                self.assertTrue(built_email["ok"], built_email)
+                                email_hash = "b" * 64
+                                email_readback = self.execute_code_node(
+                                    w01,
+                                    "Verify Email Evidence Readback",
+                                    json_value={"email_readback_sha256": email_hash},
+                                    refs={
+                                        "SHA-256 Email Evidence": {
+                                            "email_evidence_sha256": email_hash,
+                                            "source_message_id": message_id,
+                                        },
+                                        "Archive Email Evidence in OneDrive": {
+                                            "id": f"drive-email:{message_id}",
+                                        },
+                                        "Build Original Email Evidence":
+                                            built_email["output"][0]["json"],
+                                    },
+                                )
+                                self.assertTrue(email_readback["ok"], email_readback)
+                                email_receipt = self.execute_code_node(
+                                    w01,
+                                    "Verify Durable Email Evidence Receipt",
+                                    json_value={
+                                        "archive_state": "HASH_VERIFIED",
+                                        "source_message_id": message_id,
+                                        "source_attachment_id": "INLINE_BODY",
+                                        "source_sha256": email_hash,
+                                        "onedrive_item_id": f"drive-email:{message_id}",
+                                    },
+                                    refs={
+                                        "Verify Email Evidence Readback":
+                                            email_readback["output"][0]["json"],
+                                    },
+                                )
+                                self.assertTrue(email_receipt["ok"], email_receipt)
+                                verified_email_rows.append(email_receipt["output"][0]["json"])
+                            archive_rows = verified_archive_rows
+                            email_rows = verified_email_rows
+                        barrier = self.execute_code_node(
+                            w01,
+                            "Attachment Verification Barrier",
+                            refs={
+                                "Validate Bounded Source Request": validated["output"][0]["json"],
+                                "Verify Enumerated Attachment Archive": archive_rows,
+                                "Verify Durable Email Evidence Receipt": email_rows,
+                            },
+                        )
+                        self.assertTrue(barrier["ok"], barrier)
+                        downstream = barrier["output"][0]["json"]
+                        self.assertEqual(downstream["attachments_verified"], len(archive_rows))
+                        self.assertEqual(downstream["email_evidence_receipts_verified"], len(messages))
+                        downstream.update(
+                            pagination_exhausted=True,
+                            scanned_count=len(messages),
+                            heartbeat=not messages,
+                        )
+                        commit_request = {
+                            **frozen,
+                            "operation": "COMMIT",
+                            "expected_cursor_version": 0,
+                            "downstream_receipt_sha256": "c" * 64,
+                        }
+                        validated_commit = self.execute_code_node(
+                            w12,
+                            "Validate Sweep or Commit",
+                            json_value=commit_request,
+                        )
+                        self.assertTrue(validated_commit["ok"], validated_commit)
+                        proof = self.execute_code_node(
+                            w12,
+                            "Verify Downstream Persistence Proof",
+                            json_value=downstream,
+                            refs={"Validate Sweep or Commit": validated_commit["output"][0]["json"]},
+                        )
+                        self.assertTrue(proof["ok"], proof)
+                        cas = self.execute_code_node(
+                            w12,
+                            "Build Cursor CAS Update",
+                            json_value={
+                                "source_code": source_code,
+                                "cursor_version": 0,
+                                "cursor_value": "2026-08-18T00:00:00.000Z",
+                                "committed_run_id": None,
+                            },
+                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                        )
+                        self.assertTrue(cas["ok"], cas)
+                        cas_row = cas["output"][0]["json"]
+                        self.assertEqual(cas_row["prior_cursor_version"], 0)
+                        self.assertEqual(cas_row["next_cursor_version"], 1)
+                        readback = self.execute_code_node(
+                            w12,
+                            "Compare CAS Cursor Readback",
+                            json_value={
+                                "cursor_value": frozen["run_upper_bound"],
+                                "cursor_version": 1,
+                                "committed_run_id": frozen["run_id"],
+                            },
+                            refs={"Build Cursor CAS Update": cas_row},
+                        )
+                        self.assertTrue(readback["ok"], readback)
+                        terminal = self.execute_code_node(
+                            w12,
+                            "Return Verified Cursor Commit",
+                            json_value={
+                                "downstream_receipt_sha256": "c" * 64,
+                                "cursor_commit_eligible": True,
+                            },
+                            refs={"Build Cursor CAS Update": cas_row},
+                        )
+                        self.assertTrue(terminal["ok"], terminal)
+                        self.assertEqual(terminal["output"][0]["json"]["status"], "CURSOR_COMMITTED")
+                        if cardinality == "one-hundred-one":
+                            committed = (frozen, persisted, archive_rows, email_rows)
+
+                self.assertIsNotNone(committed)
+                frozen, persisted, archive_rows, email_rows = committed
+                replay_receipt = {
+                    **{
+                        key: frozen[key]
+                        for key in ("run_id", "source_code", "window_start", "run_upper_bound")
+                    },
+                    "matched_count": 101,
+                    "terminal_state": "ENUMERATED",
+                    "pagination_exhausted": True,
+                    "cursor_commit_eligible": False,
+                    "immutable_inventory_json": json.dumps(persisted, separators=(",", ":")),
+                }
+                replay = self.execute_code_node(
+                    w12,
+                    "Return Existing ENUMERATED Receipt",
+                    json_value=replay_receipt,
+                    refs={"Freeze Trusted Cursor Window": frozen},
+                )
+                self.assertTrue(replay["ok"], replay)
+                replay_request = replay["output"][0]["json"]
+                replay_validated = self.execute_code_node(
+                    w01,
+                    "Validate Bounded Source Request",
+                    json_value=replay_request,
+                )
+                self.assertTrue(replay_validated["ok"], replay_validated)
+                replay_barrier = self.execute_code_node(
+                    w01,
+                    "Attachment Verification Barrier",
+                    refs={
+                        "Validate Bounded Source Request": replay_validated["output"][0]["json"],
+                        "Verify Existing Enumerated Archive Receipt": archive_rows,
+                        "Verify Existing Email Evidence Receipt": email_rows,
+                    },
+                )
+                self.assertTrue(replay_barrier["ok"], replay_barrier)
+                replay_commit = self.execute_code_node(
+                    w12,
+                    "Validate Sweep or Commit",
+                    json_value={
+                        **frozen,
+                        "operation": "COMMIT",
+                        "expected_cursor_version": 1,
+                        "downstream_receipt_sha256": "c" * 64,
+                    },
+                )
+                self.assertTrue(replay_commit["ok"], replay_commit)
+                replay_downstream = replay_barrier["output"][0]["json"]
+                replay_downstream.update(
+                    pagination_exhausted=True,
+                    scanned_count=101,
+                    heartbeat=False,
+                )
+                replay_proof = self.execute_code_node(
+                    w12,
+                    "Verify Downstream Persistence Proof",
+                    json_value=replay_downstream,
+                    refs={"Validate Sweep or Commit": replay_commit["output"][0]["json"]},
+                )
+                self.assertTrue(replay_proof["ok"], replay_proof)
+                self.assert_code_error(
+                    w12,
+                    "Build Cursor CAS Update",
+                    "SOURCE_CURSOR_NON_MONOTONIC",
+                    json_value={
+                        "source_code": source_code,
+                        "cursor_version": 1,
+                        "cursor_value": frozen["run_upper_bound"],
+                        "committed_run_id": frozen["run_id"],
+                    },
+                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
+                )
+
+        self.assertEqual(
+            sum(
+                node["type"] == "n8n-nodes-base.dataTable"
+                and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
+                and node["parameters"].get("operation") == "update"
+                for node in w12["nodes"]
+            ),
+            1,
+            "W12 owns the sole source-cursor CAS update",
+        )
+        for filename, *_ in cases:
+            self.assertEqual(
+                sum(
+                    node["type"] == "n8n-nodes-base.dataTable"
+                    and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
+                    for node in self.workflow(filename)["nodes"]
+                ),
+                0,
+            )
+
     def test_w01_archive_barrier_covers_zero_one_and_many_attachments(self):
         workflow = self.workflow("01-outlook-finance-acquisition.json")
         nodes = {node["name"]: node for node in workflow["nodes"]}
