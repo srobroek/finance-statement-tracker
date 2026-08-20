@@ -290,7 +290,11 @@ jobs:
             ../../services/n8n-task-runners/verify_workspace_packages.mjs \
             ../../services/n8n-task-runners/javascript-extras/package-lock.json
       - name: Build source-reproduced task runners image
-        run: docker build --file services/n8n-task-runners/Dockerfile --tag finance-n8n-task-runners:${{ github.sha }} .
+        run: >-
+          docker build
+          --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}"
+          --file services/n8n-task-runners/Dockerfile
+          --tag finance-n8n-task-runners:${{ github.sha }} .
       - name: Smoke exact runtime and n8n broker protocol
         shell: bash
         run: |
@@ -313,6 +317,9 @@ jobs:
           test "$(realpath "$copied_closure")" = "$(realpath "$RUNNER_TEMP")/finance-n8n-task-runners-image-closure"
           rm -rf -- "$copied_closure"
           test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.n8n.source_commit" }}')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
+          test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.n8n.source_commit" }}')" != "UNVERIFIED"
+          test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.finance_source_commit" }}')" = "${{ github.sha }}"
+          test "$(docker image inspect finance-n8n-task-runners:${{ github.sha }} --format '{{ index .Config.Labels "finance.finance_source_commit" }}')" != "UNVERIFIED"
           sh services/n8n-task-runners/protocol-smoke.sh \
             finance-n8n-task-runners:${{ github.sha }} \
             ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386

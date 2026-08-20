@@ -101,6 +101,32 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
             workflow,
         )
 
+    def test_workflow_binds_and_asserts_image_provenance(self):
+        workflow = (ROOT / ".github" / "workflows" / "phase1-finance-artifacts.yml").read_text(
+            encoding="utf-8"
+        )
+        image = "finance-n8n-task-runners:${{ github.sha }}"
+        self.assertIn(
+            'run: >-\n          docker build\n          --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}"',
+            workflow,
+        )
+        self.assertIn(
+            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.n8n.source_commit" }}}}\')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"',
+            workflow,
+        )
+        self.assertIn(
+            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.n8n.source_commit" }}}}\')" != "UNVERIFIED"',
+            workflow,
+        )
+        self.assertIn(
+            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.finance_source_commit" }}}}\')" = "${{{{ github.sha }}}}"',
+            workflow,
+        )
+        self.assertIn(
+            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.finance_source_commit" }}}}\')" != "UNVERIFIED"',
+            workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
