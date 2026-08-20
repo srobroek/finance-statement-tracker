@@ -71,6 +71,16 @@ inside the execution process long enough to validate the terminal node; only
 the redacted terminal result leaves that process. Execution persistence is
 disabled and independently checked in PostgreSQL after both calls.
 
+The direct WF23 process has its own 120-second, re-armed watchdog for the fixed
+stages `CONFIG_LOAD`, `MODULE_LOAD`, `COMMAND_INIT`, `COMMAND_RUN`,
+`RAW_CAPTURE`, and `FINALIZE`. A timeout emits exactly one fixed-schema line
+whose only diagnostic is the allowlisted `WF23_TIMEOUT_<STAGE>` code, invokes
+only sanitized command finalization, and exits. Provider responses, exception
+text, raw execution data, and secrets are never copied into that line. The host
+runner rejects every other failure payload and retains an allowlisted timeout
+code only in the redacted failure receipt before performing the same exact
+cleanup and digest readback.
+
 The runner restarts only the n8n container and verifies that every other
 service container and start time remains unchanged. Exact baseline and Finance
 Data Table digests must match after cleanup. The final mode-600 receipt contains

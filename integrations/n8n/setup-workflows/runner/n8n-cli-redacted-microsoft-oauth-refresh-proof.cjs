@@ -10,6 +10,17 @@ const EXPECTED_KEYS = new Set([
   'file_fields_recorded', 'credential_values_recorded', 'token_values_recorded',
   'production_workflows_activated', 'actual_writes', 'cashback_writes', 'verified_at',
 ]);
+const WATCHDOG_TIMEOUT_MS = 120_000;
+const WATCHDOG_FINALIZE_GRACE_MS = 10_000;
+const WATCHDOG_STAGES = Object.freeze([
+  'CONFIG_LOAD',
+  'MODULE_LOAD',
+  'COMMAND_INIT',
+  'COMMAND_RUN',
+  'RAW_CAPTURE',
+  'FINALIZE',
+]);
+const TIMEOUT_FAILURE_CODES = new Set(WATCHDOG_STAGES.map((stage) => `WF23_TIMEOUT_${stage}`));
 const SAFE_FAILURE_CODES = new Set([
   'WF23_EXECUTION_NOT_FINISHED_SUCCESS',
   'WF23_LAST_NODE_MISMATCH',
@@ -34,6 +45,8 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_REDACTED_RECEIPT_NOT_CAPTURED',
   'WF23_N8N_REQUESTED_EARLY_EXIT',
   'WF23_DIRECT_LIFECYCLE_ORDER_INVALID',
+  'WF23_WATCHDOG_STAGE_INVALID',
+  ...TIMEOUT_FAILURE_CODES,
 ]);
 const SUCCESS_PREFIX = 'transient WF23 execution verified:';
 const FAILURE_PREFIX = 'transient WF23 execution failed:';
@@ -130,6 +143,46 @@ function directLifecycleGate() {
   };
 }
 
+function createStageWatchdog({
+  timeoutMs = WATCHDOG_TIMEOUT_MS,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+  onTimeout,
+} = {}) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || typeof setTimer !== 'function' ||
+      typeof clearTimer !== 'function' || typeof onTimeout !== 'function') {
+    fail('WF23_WATCHDOG_STAGE_INVALID');
+  }
+  let active = true;
+  let generation = 0;
+  let timer = null;
+
+  function arm(stage) {
+    if (!WATCHDOG_STAGES.includes(stage) || !active) fail('WF23_WATCHDOG_STAGE_INVALID');
+    generation += 1;
+    const armedGeneration = generation;
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(() => {
+      if (!active || armedGeneration !== generation) return;
+      active = false;
+      timer = null;
+      onTimeout(`WF23_TIMEOUT_${stage}`);
+    }, timeoutMs);
+    return stage;
+  }
+
+  function cancel() {
+    if (!active) return false;
+    active = false;
+    generation += 1;
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    return true;
+  }
+
+  return { arm, cancel };
+}
+
 function isDirectEntrypoint(mainModule, currentModule, argv = process.argv) {
   if (mainModule != null && currentModule != null && mainModule === currentModule) return true;
   const filename = typeof currentModule?.filename === 'string'
@@ -143,8 +196,9 @@ function isDirectEntrypoint(mainModule, currentModule, argv = process.argv) {
 }
 
 module.exports = {
-  validateIRun, safeFailureCode, terminalLine, directLifecycleGate, isDirectEntrypoint,
-  DIRECT_LIFECYCLE_ORDER, N8N_CONFIG_ENTRYPOINT, WORKFLOW_ID, TERMINAL_NODE,
+  validateIRun, safeFailureCode, terminalLine, directLifecycleGate, createStageWatchdog,
+  isDirectEntrypoint, DIRECT_LIFECYCLE_ORDER, N8N_CONFIG_ENTRYPOINT, WATCHDOG_STAGES,
+  WATCHDOG_TIMEOUT_MS, WORKFLOW_ID, TERMINAL_NODE,
 };
 
 if (isDirectEntrypoint(require.main, module)) {
@@ -179,8 +233,41 @@ if (isDirectEntrypoint(require.main, module)) {
     let command = null;
     let receipt = null;
     let terminalError = null;
+    let terminating = false;
+    let watchdog = null;
     const advanceLifecycle = directLifecycleGate();
+
+    function writeTerminalOnce(error, validatedReceipt) {
+      if (emitted) return false;
+      emitted = true;
+      fs.writeSync(1, terminalLine(error, validatedReceipt));
+      return true;
+    }
+
+    async function terminateOnTimeout(code) {
+      if (terminating || emitted || !TIMEOUT_FAILURE_CODES.has(code)) return;
+      terminating = true;
+      receipt = null;
+      watchdog.cancel();
+      writeTerminalOnce(fixedError(code), null);
+
+      if (code !== 'WF23_TIMEOUT_FINALIZE' && command && typeof command.finally === 'function') {
+        const forcedExit = setTimeout(() => {
+          process.exit = originalExit;
+          originalExit(1);
+        }, WATCHDOG_FINALIZE_GRACE_MS);
+        try { await command.finally(fixedError(code)); } catch { /* fixed failure already emitted */ }
+        clearTimeout(forcedExit);
+      }
+      process.exit = originalExit;
+      originalExit(1);
+    }
+
+    watchdog = createStageWatchdog({
+      onTimeout: (code) => { void terminateOnTimeout(code); },
+    });
     process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };
+    watchdog.arm('CONFIG_LOAD');
     try {
       n8nRequire('source-map-support').install();
       n8nRequire('reflect-metadata');
@@ -191,11 +278,13 @@ if (isDirectEntrypoint(require.main, module)) {
       const { Execute } = n8nRequire('./dist/commands/execute.js');
       advanceLifecycle('command-loaded');
       const { ModuleRegistry } = n8nRequire('@n8n/backend-common');
+      watchdog.arm('MODULE_LOAD');
       await Container.get(ModuleRegistry).loadModules();
       advanceLifecycle('modules-loaded');
       command = Container.get(Execute);
       advanceLifecycle('execute-resolved');
       command.flags = { id: WORKFLOW_ID, rawOutput: true };
+      watchdog.arm('COMMAND_INIT');
       await command.init();
       advanceLifecycle('execute-initialized');
 
@@ -204,6 +293,7 @@ if (isDirectEntrypoint(require.main, module)) {
       // relying on dynamic-import command constructor identity.
       command.logger = new Proxy({}, { get: () => () => undefined });
       command.log = function captureRawIRunInMemory(message) {
+        watchdog.arm('RAW_CAPTURE');
         if (receipt !== null) fail('WF23_MULTIPLE_RAW_OUTPUTS');
         if (typeof message !== 'string' || Buffer.byteLength(message, 'utf8') > 16 * 1024 * 1024) {
           fail('WF23_RAW_OUTPUT_INVALID');
@@ -212,22 +302,31 @@ if (isDirectEntrypoint(require.main, module)) {
         try { payload = JSON.parse(message); } catch { fail('WF23_RAW_OUTPUT_INVALID'); }
         receipt = validateIRun(payload);
         payload = null;
+        watchdog.arm('COMMAND_RUN');
       };
+      watchdog.arm('COMMAND_RUN');
       await command.run();
       if (receipt === null) throw fixedError('WF23_REDACTED_RECEIPT_NOT_CAPTURED');
     } catch (error) {
       terminalError = error;
     }
 
-    process.exit = originalExit;
-    fs.writeSync(1, terminalLine(terminalError, receipt));
-    emitted = true;
-    receipt = null;
+    if (terminating) return;
 
     if (command && typeof command.finally === 'function') {
       const sanitizedError = terminalError ? fixedError(safeFailureCode(terminalError)) : undefined;
-      try { await command.finally(sanitizedError); } catch { originalExit(terminalError ? 1 : 0); }
+      watchdog.arm('FINALIZE');
+      try {
+        await command.finally(sanitizedError);
+      } catch (error) {
+        if (!terminalError) terminalError = fixedError(safeFailureCode(error));
+      }
     }
+    if (terminating) return;
+    watchdog.cancel();
+    process.exit = originalExit;
+    writeTerminalOnce(terminalError, receipt);
+    receipt = null;
     originalExit(terminalError ? 1 : 0);
   }
 

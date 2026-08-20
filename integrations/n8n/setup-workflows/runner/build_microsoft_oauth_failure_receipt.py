@@ -10,6 +10,16 @@ import pathlib
 import re
 
 
+TIMEOUT_CODES = {
+    "WF23_TIMEOUT_CONFIG_LOAD",
+    "WF23_TIMEOUT_MODULE_LOAD",
+    "WF23_TIMEOUT_COMMAND_INIT",
+    "WF23_TIMEOUT_COMMAND_RUN",
+    "WF23_TIMEOUT_RAW_CAPTURE",
+    "WF23_TIMEOUT_FINALIZE",
+}
+
+
 def flag(value: str) -> bool:
     if value not in {"true", "false"}:
         raise ValueError("BOOLEAN_FLAG_REQUIRED")
@@ -23,16 +33,20 @@ def build_receipt(
     workflow_boundary_restored: bool,
     execution_rows_zero: bool,
     data_table_digest_restored: bool,
+    failure_code: str = "",
 ) -> dict:
     all_clean = workflow_boundary_restored and execution_rows_zero and data_table_digest_restored
     if cleanup_verified and not all_clean:
         raise ValueError("INVALID_CLEAN_BOUNDARY_ASSERTION")
+    if failure_code and failure_code not in TIMEOUT_CODES:
+        raise ValueError("INVALID_FAILURE_CODE")
     return {
         "schema_version": 1,
         "status": "FAILED_CLEAN_BOUNDARY_RESTORED" if cleanup_verified else "FAILED_REVIEW_REQUIRED",
         "scope": "TRANSIENT_MICROSOFT_OAUTH_REFRESH_PROOF",
         "run_id": run_id,
         "failure_stage": stage if re.fullmatch(r"[a-z_]+", stage) else "unknown",
+        "failure_code": failure_code or None,
         "recorded_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "cleanup_verified": cleanup_verified,
         "postconditions": {
@@ -59,6 +73,7 @@ def main() -> int:
     parser.add_argument("workflow_boundary_restored")
     parser.add_argument("execution_rows_zero")
     parser.add_argument("data_table_digest_restored")
+    parser.add_argument("failure_code", nargs="?", default="")
     args = parser.parse_args()
     payload = build_receipt(
         args.run_id,
@@ -67,6 +82,7 @@ def main() -> int:
         flag(args.workflow_boundary_restored),
         flag(args.execution_rows_zero),
         flag(args.data_table_digest_restored),
+        args.failure_code,
     )
     args.target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     args.target.chmod(0o600)

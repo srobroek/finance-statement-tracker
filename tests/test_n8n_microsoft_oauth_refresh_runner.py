@@ -163,6 +163,15 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "const originalExit = process.exit.bind(process);",
             "process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };",
             "process.exit = originalExit;",
+            "const WATCHDOG_TIMEOUT_MS = 120_000;",
+            "watchdog.arm('CONFIG_LOAD')",
+            "watchdog.arm('MODULE_LOAD')",
+            "watchdog.arm('COMMAND_INIT')",
+            "watchdog.arm('COMMAND_RUN')",
+            "watchdog.arm('RAW_CAPTURE')",
+            "watchdog.arm('FINALIZE')",
+            "async function terminateOnTimeout(code)",
+            "writeTerminalOnce(fixedError(code), null)",
         ):
             self.assertIn(marker, shim)
         self.assertNotIn("writeFile", shim)
@@ -184,6 +193,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         )
         positions = [shim.index(marker) for marker in lifecycle_markers]
         self.assertEqual(positions, sorted(positions))
+        self.assertLess(shim.rindex("watchdog.cancel()"), shim.rindex("writeTerminalOnce(terminalError, receipt)"))
 
     def test_production_shim_stdin_entrypoint_is_exact_and_require_import_is_inert(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
@@ -272,6 +282,146 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertIn("WF23_REDACTED_EXECUTION_FAILED", completed.stdout)
         self.assertNotIn("fake-token", completed.stdout + completed.stderr)
         self.assertNotIn("fake-subject", completed.stdout + completed.stderr)
+
+    def test_internal_watchdog_uses_fixed_stages_once_and_cancels_on_success(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});"
+            "let nextId=0;const timers=new Map();const cleared=[];"
+            "const setTimer=(callback,ms)=>{const id=++nextId;timers.set(id,{callback,ms});return id};"
+            "const clearTimer=(id)=>{cleared.push(id);timers.delete(id)};"
+            "const stageLines=[];"
+            "for(const stage of shim.WATCHDOG_STAGES){"
+            "const watchdog=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>{"
+            "stageLines.push(shim.terminalLine({code:timeoutCode,access_token:'must-not-emit'},null))}});"
+            "watchdog.arm(stage);const entry=timers.get(nextId);"
+            "if(entry.ms!==shim.WATCHDOG_TIMEOUT_MS)process.exit(1);entry.callback();entry.callback();}"
+            "const raceLines=[];const race=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>{"
+            "raceLines.push(shim.terminalLine({code:timeoutCode},null))}});"
+            "race.arm('COMMAND_RUN');const stale=timers.get(nextId).callback;"
+            "race.arm('RAW_CAPTURE');const current=timers.get(nextId).callback;stale();current();current();"
+            "const successLines=[];const success=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>successLines.push(timeoutCode)});"
+            "success.arm('FINALIZE');const afterSuccess=timers.get(nextId).callback;"
+            "if(!success.cancel())process.exit(1);afterSuccess();"
+            "let invalid='';try{race.arm('access_token=secret')}catch(error){invalid=error.code}"
+            "process.stdout.write(JSON.stringify({stageLines,raceLines,successLines,invalid,cleared,stages:shim.WATCHDOG_STAGES}));"
+        )
+        completed = subprocess.run(["node", "-"], input=code, text=True, capture_output=True, check=True)
+        self.assertNotIn("must-not-emit", completed.stdout + completed.stderr)
+        self.assertNotIn("access_token=secret", completed.stdout + completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["invalid"], "WF23_WATCHDOG_STAGE_INVALID")
+        self.assertEqual(len(result["stageLines"]), len(result["stages"]))
+        self.assertEqual(len(result["raceLines"]), 1)
+        self.assertEqual(result["successLines"], [])
+        self.assertGreater(len(result["cleared"]), 0)
+        for stage, line in zip(result["stages"], result["stageLines"], strict=True):
+            payload = json.loads(line.split(":", 1)[1])
+            self.assertEqual(payload["error_code"], f"WF23_TIMEOUT_{stage}")
+            self.assertEqual(
+                set(payload),
+                {"schema_version", "status", "error_code", "provider_response_logged", "secret_values_recorded"},
+            )
+        self.assertEqual(
+            json.loads(result["raceLines"][0].split(":", 1)[1])["error_code"],
+            "WF23_TIMEOUT_RAW_CAPTURE",
+        )
+
+    def test_execution_output_parser_accepts_only_exact_success_and_allowlisted_timeouts(self) -> None:
+        parser_path = RUNNER / "parse_wf23_execution_output.py"
+        parser = load_module("wf23_execution_output", parser_path)
+        success = "transient WF23 execution verified:" + json.dumps(terminal_result(), separators=(",", ":")) + "\n"
+        self.assertEqual(parser.parse_success(success), terminal_result())
+
+        timeout_codes = {
+            "WF23_TIMEOUT_CONFIG_LOAD",
+            "WF23_TIMEOUT_MODULE_LOAD",
+            "WF23_TIMEOUT_COMMAND_INIT",
+            "WF23_TIMEOUT_COMMAND_RUN",
+            "WF23_TIMEOUT_RAW_CAPTURE",
+            "WF23_TIMEOUT_FINALIZE",
+        }
+        failure_builder = load_module(
+            "wf23_failure_timeout_allowlist", RUNNER / "build_microsoft_oauth_failure_receipt.py"
+        )
+        self.assertEqual(parser.TIMEOUT_CODES, timeout_codes)
+        self.assertEqual(failure_builder.TIMEOUT_CODES, timeout_codes)
+        runner_source = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
+        for code in timeout_codes:
+            self.assertIn(code, runner_source)
+        for code in timeout_codes:
+            with self.subTest(code=code):
+                payload = {
+                    "schema_version": 1,
+                    "status": "FAILED",
+                    "error_code": code,
+                    "provider_response_logged": False,
+                    "secret_values_recorded": False,
+                }
+                raw = "transient WF23 execution failed:" + json.dumps(payload, separators=(",", ":")) + "\n"
+                self.assertEqual(parser.parse_timeout(raw), code)
+
+        valid = (
+            'transient WF23 execution failed:{"schema_version":1,"status":"FAILED",'
+            '"error_code":"WF23_TIMEOUT_COMMAND_RUN","provider_response_logged":false,'
+            '"secret_values_recorded":false}'
+        )
+        adversarial = {
+            "duplicate override": valid.replace(
+                '"error_code":"WF23_TIMEOUT_COMMAND_RUN"',
+                '"error_code":"BOGUS","error_code":"WF23_TIMEOUT_COMMAND_RUN"',
+            ),
+            "boolean schema": valid.replace('"schema_version":1', '"schema_version":true'),
+            "unknown code": valid.replace("WF23_TIMEOUT_COMMAND_RUN", "WF23_TIMEOUT_PROVIDER_SECRET"),
+            "extra provider value": valid[:-1] + ',"access_token":"secret"}',
+            "integer false flag": valid.replace('"provider_response_logged":false', '"provider_response_logged":0'),
+            "multiple output": valid + "\n" + valid,
+        }
+        for name, raw in adversarial.items():
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                parser.parse_timeout(raw)
+
+        secret = "SECRET_ACCESS_TOKENZ"
+        bad_timestamp = terminal_result()
+        bad_timestamp["verified_at"] = secret
+        cli_adversarial = {
+            "token-like timestamp": (
+                "success",
+                "transient WF23 execution verified:" + json.dumps(bad_timestamp, separators=(",", ":")),
+            ),
+            "malformed json": (
+                "success",
+                'transient WF23 execution verified:{"verified_at":"' + secret,
+            ),
+            "duplicate key": (
+                "timeout",
+                valid.replace(
+                    '"error_code":"WF23_TIMEOUT_COMMAND_RUN"',
+                    f'"error_code":"{secret}","error_code":"WF23_TIMEOUT_COMMAND_RUN"',
+                ),
+            ),
+            "extra field": (
+                "timeout",
+                valid[:-1] + f',"provider_value":"{secret}"}}',
+            ),
+        }
+        for name, (mode, raw) in cli_adversarial.items():
+            with self.subTest(cli=name):
+                completed = subprocess.run(
+                    [sys.executable, str(parser_path), mode],
+                    input=raw,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertEqual(completed.stdout, "")
+                self.assertEqual(completed.stderr.strip(), parser.REJECTED_DIAGNOSTIC)
+                self.assertNotIn(secret, completed.stdout + completed.stderr)
+                self.assertNotIn("Traceback", completed.stdout + completed.stderr)
+
+        with self.assertRaisesRegex(ValueError, "^WF23_EXECUTION_RECEIPT_CONTRACT_MISMATCH$") as rejected:
+            parser.parse_timestamp(secret)
+        self.assertNotIn(secret, str(rejected.exception))
 
     def test_direct_transport_probe_is_no_workflow_no_provider_and_exactly_redacted(self) -> None:
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
@@ -491,6 +641,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         builder = load_module("wf23_failure_receipt", RUNNER / "build_microsoft_oauth_failure_receipt.py")
         unknown = builder.build_receipt("run", "first_execution", False, False, False, False)
         self.assertEqual(unknown["status"], "FAILED_REVIEW_REQUIRED")
+        self.assertIsNone(unknown["failure_code"])
         self.assertIsNone(unknown["raw_irun_persisted"])
         self.assertIsNone(unknown["finance_data_table_writes"])
         self.assertEqual(unknown["postconditions"], {
@@ -503,6 +654,13 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertEqual(clean["status"], "FAILED_CLEAN_BOUNDARY_RESTORED")
         self.assertFalse(clean["raw_irun_persisted"])
         self.assertFalse(clean["finance_data_table_writes"])
+        self.assertIsNone(clean["failure_code"])
+        timed_out = builder.build_receipt(
+            "run", "first_execution", True, True, True, True, "WF23_TIMEOUT_COMMAND_RUN"
+        )
+        self.assertEqual(timed_out["failure_code"], "WF23_TIMEOUT_COMMAND_RUN")
+        with self.assertRaisesRegex(ValueError, "INVALID_FAILURE_CODE"):
+            builder.build_receipt("run", "first_execution", True, True, True, True, "provider secret")
         with self.assertRaisesRegex(ValueError, "INVALID_CLEAN_BOUNDARY_ASSERTION"):
             builder.build_receipt("run", "first_execution", True, True, False, True)
 
@@ -550,8 +708,12 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "validate_microsoft_oauth_refresh_evidence.py",
             "build_microsoft_oauth_failure_receipt.py",
             "parse_n8n_redacted_wrapper_output.py",
+            "parse_wf23_execution_output.py",
             "execution_rows_zero_verified",
             "data_table_digest_restored",
+            "retain_execution_timeout_code",
+            '"${execution_failure_code}"',
+            "WF23_TIMEOUT_COMMAND_RUN",
             'raw_irun_persisted":False',
             'finance_data_table_writes":False',
             'baseline_digest_restored":True',
