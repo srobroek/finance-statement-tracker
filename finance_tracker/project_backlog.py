@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections import Counter
 from pathlib import Path
@@ -190,8 +191,9 @@ LATEST_OVERRIDES = {
     },
     "N8N-010": {
         "next_action": (
-            "After N8N-012 exact WF23 cleanup, implement the reviewed Finance application folder hierarchy and prove it is "
-            "idempotent without touching peer applications; restart proof and N8N-011 remain related acceptance tracks."
+            "After the functional MVP double replay and activation gates, implement the reviewed six-folder Finance/Global "
+            "hierarchy and Canvas contract, prove exact group coverage and zero redundant sticky notes in repository and "
+            "browser readback, and preserve unrelated applications."
         ),
     },
     "N8N-011": {
@@ -238,6 +240,12 @@ LATEST_OVERRIDES = {
 }
 
 QUEUE_FRONT = [
+    "N8N-012",
+    "N8N-003",
+    "DOC-001",
+    "N8N-005",
+    "N8N-011",
+    "N8N-006",
     "AGENT-003",
     "N8N-001",
     "N8N-002",
@@ -254,20 +262,226 @@ QUEUE_FRONT = [
     "ACTUAL-006",
     "DOC-002",
     "DOC-007",
-    "N8N-012",
-    "N8N-010",
-    "N8N-003",
-    "N8N-011",
-    "N8N-005",
     "ACTUAL-019",
     "PLATFORM-004",
     "AUTO-001",
+    "N8N-010",
     "AUTO-003",
 ]
 
 
 def _unique(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _parameter_strings(value: Any, path: str = "parameters") -> list[tuple[str, str]]:
+    """Return stable JSON-style parameter paths and their string values."""
+    if isinstance(value, dict):
+        rows: list[tuple[str, str]] = []
+        for key, child in value.items():
+            rows.extend(_parameter_strings(child, f"{path}.{key}"))
+        return rows
+    if isinstance(value, list):
+        rows = []
+        for index, child in enumerate(value):
+            rows.extend(_parameter_strings(child, f"{path}.{index}"))
+        return rows
+    return [(path, value)] if isinstance(value, str) else []
+
+
+def _binding_sha256(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def derive_n8n_data_table_column_access(
+    workflows_dir: Path,
+    contract: dict[str, Any],
+) -> dict[tuple[str, str], list[dict[str, str]]]:
+    """Mechanically derive exact schema, filter, value and consumer bindings.
+
+    A row write exists only when the column is explicitly present in
+    ``parameters.columns.value``. Reads are filter-key bindings or an explicit
+    downstream parameter/code reference to a get-node result. Schema creation
+    is recorded independently for each declared column.
+    """
+    table_columns = {
+        table["name"]: list(table["columns"])
+        for table in contract["tables"]
+    }
+    access: dict[tuple[str, str], list[dict[str, str]]] = {
+        (table, column): []
+        for table, columns in table_columns.items()
+        for column in columns
+    }
+
+    def add(
+        *,
+        workflow_path: str,
+        workflow_code: str,
+        table: str,
+        column: str,
+        data_node: dict[str, Any],
+        operation: str,
+        access_kind: str,
+        binding_kind: str,
+        binding_node: dict[str, Any],
+        binding_path: str,
+        binding_value: Any,
+    ) -> None:
+        key = (table, column)
+        if key not in access:
+            return
+        entry = {
+            "workflow_path": workflow_path,
+            "workflow_code": workflow_code,
+            "data_table_node_id": str(data_node["id"]),
+            "data_table_node_name": str(data_node["name"]),
+            "operation": operation,
+            "access_kind": access_kind,
+            "binding_kind": binding_kind,
+            "binding_node_id": str(binding_node["id"]),
+            "binding_node_name": str(binding_node["name"]),
+            "binding_path": binding_path,
+            "binding_sha256": _binding_sha256(binding_value),
+        }
+        if entry not in access[key]:
+            access[key].append(entry)
+
+    for workflow_file in sorted(workflows_dir.glob("[0-9][0-9]-*.json")):
+        workflow = json.loads(workflow_file.read_text(encoding="utf-8"))
+        workflow_code = f"WF{workflow_file.name[:2]}"
+        workflow_path = workflow_file.resolve().relative_to(ROOT).as_posix()
+        nodes = workflow.get("nodes", [])
+        nodes_by_name = {node["name"]: node for node in nodes}
+        connections = workflow.get("connections", {})
+
+        for node in nodes:
+            if "dataTable" not in node.get("type", ""):
+                continue
+            parameters = node.get("parameters", {})
+            operation = str(parameters.get("operation", ""))
+            if parameters.get("resource") == "table":
+                table = str(parameters.get("tableName", ""))
+            else:
+                data_table_id = parameters.get("dataTableId", {})
+                table = str(data_table_id.get("value", "")) if isinstance(data_table_id, dict) else ""
+            if table not in table_columns:
+                continue
+
+            for index, definition in enumerate(parameters.get("columns", {}).get("column", [])):
+                column = definition.get("name")
+                if column in table_columns[table]:
+                    add(
+                        workflow_path=workflow_path,
+                        workflow_code=workflow_code,
+                        table=table,
+                        column=column,
+                        data_node=node,
+                        operation=operation,
+                        access_kind="schema",
+                        binding_kind="schema_definition",
+                        binding_node=node,
+                        binding_path=f"parameters.columns.column.{index}",
+                        binding_value=definition,
+                    )
+
+            conditions = parameters.get("filters", {}).get("conditions", [])
+            for index, condition in enumerate(conditions):
+                column = condition.get("keyName")
+                if column in table_columns[table]:
+                    add(
+                        workflow_path=workflow_path,
+                        workflow_code=workflow_code,
+                        table=table,
+                        column=column,
+                        data_node=node,
+                        operation=operation,
+                        access_kind="read",
+                        binding_kind="filter",
+                        binding_node=node,
+                        binding_path=f"parameters.filters.conditions.{index}",
+                        binding_value=condition,
+                    )
+
+            mapped_values = parameters.get("columns", {}).get("value", {})
+            for column, binding_value in mapped_values.items():
+                if column in table_columns[table]:
+                    add(
+                        workflow_path=workflow_path,
+                        workflow_code=workflow_code,
+                        table=table,
+                        column=column,
+                        data_node=node,
+                        operation=operation,
+                        access_kind="write",
+                        binding_kind="column_value",
+                        binding_node=node,
+                        binding_path=f"parameters.columns.value.{column}",
+                        binding_value=binding_value,
+                    )
+
+            if operation != "get":
+                continue
+
+            direct_names = {
+                target["node"]
+                for output in connections.get(node["name"], {}).get("main", [])
+                for target in output
+            }
+            for consumer in nodes:
+                parameter_values = _parameter_strings(consumer.get("parameters", {}))
+                is_direct = consumer["name"] in direct_names
+                for binding_path, binding_value in parameter_values:
+                    names_data_node = node["name"] in binding_value
+                    if not is_direct and not names_data_node:
+                        continue
+                    json_aliases = set(re.findall(
+                        r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*\$json\b",
+                        binding_value,
+                    ))
+                    value_sources = [r"\$json", *(re.escape(alias) for alias in json_aliases)]
+                    source_pattern = "(?:" + "|".join(value_sources) + ")"
+                    spread_all = is_direct and bool(re.search(
+                        rf"\.\.\.{source_pattern}\b",
+                        binding_value,
+                    ))
+                    consumes_all_inputs = is_direct and "$input.all()" in binding_value
+                    for column in table_columns[table]:
+                        property_reference = re.search(
+                            rf"{source_pattern}(?:\?\.|\.|\[['\"]){re.escape(column)}(?:['\"]\])?(?=[^A-Za-z0-9_]|$)",
+                            binding_value,
+                        )
+                        if (names_data_node or consumes_all_inputs) and not property_reference:
+                            property_reference = re.search(
+                                rf"(?:\?\.|\.|\[['\"]){re.escape(column)}(?:['\"]\])?(?=[^A-Za-z0-9_]|$)",
+                                binding_value,
+                            )
+                        if not property_reference and not spread_all:
+                            continue
+                        add(
+                            workflow_path=workflow_path,
+                            workflow_code=workflow_code,
+                            table=table,
+                            column=column,
+                            data_node=node,
+                            operation=operation,
+                            access_kind="read",
+                            binding_kind=(
+                                "downstream_spread" if spread_all and not property_reference
+                                else "downstream_expression"
+                            ),
+                            binding_node=consumer,
+                            binding_path=binding_path,
+                            binding_value=binding_value,
+                        )
+
+    for rows in access.values():
+        rows.sort(key=lambda row: (
+            row["workflow_path"], row["data_table_node_id"], row["binding_node_id"],
+            row["binding_path"], row["binding_kind"],
+        ))
+    return access
 
 
 def _superseded_evidence_hits(row: dict[str, Any]) -> list[str]:
@@ -570,7 +784,7 @@ def build_backlog(transcript: dict[str, Any], implementation: dict[str, Any]) ->
             raise ValueError(f"{task['id']}: dependencies and related_tasks overlap {sorted(overlap)}")
 
     queue_rank = {task_id: rank for rank, task_id in enumerate(QUEUE_FRONT)}
-    priority_rank = {"P0": 0, "P1": 1, "P2": 2}
+    priority_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
     queued = sorted(
         (task for task in tasks if task["status"] != "SUPERSEDED"),
         key=lambda task: (

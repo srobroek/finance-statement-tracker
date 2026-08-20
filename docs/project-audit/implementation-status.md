@@ -1,7 +1,7 @@
 # Finance tracker implementation status
 
 Date: 2026-08-20
-Audited committed baseline: `a07c5abdc5accb57e669ca8c506e2d2f709a505e`
+Audited committed baseline: `6a4595caf8e9da0970e93aea8c32cc8fa0e4dcda`
 Production writes performed by this audit: **none**
 
 > Current status artifact: this document and
@@ -16,8 +16,9 @@ Production writes performed by this audit: **none**
 
 The repository is green but not ready for production promotion. The current
 Python suite and Codex runner contracts pass. The live critical boundary remains
-operational: one transient WF23 workflow must be removed exactly before WF22 and
-the Finance hierarchy are eligible. The Microsoft first reads refreshed both
+operational: one transient WF23 workflow must be removed exactly before the
+Microsoft restart/second-read proof and OneDrive-root setup. Folder and canvas
+polish are explicitly deferred until after the functional MVP gates. The Microsoft first reads refreshed both
 credentials, but the failure receipt is external and no n8n restart plus second
 read proves persistence. Older production and replay artifacts do not certify
 the expanded FAB/Sarwa scope or the current end-to-end finance path.
@@ -64,7 +65,7 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
 
 | Command | Result |
 | --- | --- |
-| `python -m unittest discover -s tests -v` | **PASS** — 434 passed, 8 skipped at the refreshed baseline. |
+| `python -m unittest discover -s tests -v` | **PASS** — 435 passed, 8 skipped at the refreshed baseline. |
 | `python -m unittest tests.test_project_backlog -v` | **PASS** — 20/20 at the refreshed baseline. |
 | `npm test --prefix integrations/actual` | **PASS** — 48/48. |
 | `npm test --prefix services/codex-agent-runner` | **PASS** — 16/16 in the retained current evidence. |
@@ -74,26 +75,29 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
 
 1. Remove the exact WF23 orphan and retain a later cleanup receipt proving the
    reviewed inactive project boundary.
-2. Run WF22 create-or-reuse for the OneDrive `Finance Evidence` root, then make
-   the Finance application hierarchy eligible. Microsoft restart persistence is
-   a parallel acceptance track, not a hierarchy dependency.
-3. Independently review the 15-to-4 Data Table design: ingestion state,
+2. Prove Microsoft persistence through n8n restart and bounded Outlook/OneDrive
+   second reads without waiting for token expiry.
+3. Run WF22 create-or-reuse for the OneDrive `Finance Evidence` root with exact readback.
+4. Prove WF20 Actual fencing, immutable verification-artifact binding and recovery.
+5. Independently review and migrate the 15-to-4 Data Table design: ingestion state,
    merged documents, Actual batches with immutable OneDrive verification
    artifacts, and review-only AI state. Generic execution/failure observability
    belongs to n8n, access logs to Cloudflare, optional sanitized agent traces to
    Langfuse, and cashback period close to the companion.
-4. Acquire fresh interactive Sarwa holdings and a versioned FX snapshot.
-5. Prove the complete FAB non-credit and Sarwa account set through both Actual
+6. Pass complete disposable double replay and reviewed promotion/activation gates.
+7. Apply the final Finance/Global folder, Canvas Group and sticky-note polish.
+8. Acquire fresh interactive Sarwa holdings and a versioned FX snapshot.
+9. Prove the complete FAB non-credit and Sarwa account set through both Actual
    API and authenticated UI, including signed balances and a consistent sync
    file identity.
-6. Obtain issuer evidence for the ADCB closing payment and prove AED 0 without
+10. Obtain issuer evidence for the ADCB closing payment and prove AED 0 without
    a synthetic balancing row.
-7. Generate note-v2 manifests and a full positive-credit/classification
+11. Generate note-v2 manifests and a full positive-credit/classification
    exception report; resolve manual-state conflicts before any replacement.
-8. Run the exact current n8n image and complete corpus twice in disposable
+12. Run the exact current n8n image and complete corpus twice in disposable
    Actual, including crash, concurrency, cursor, secret, PDF, restart, and
    restore drills.
-9. Review the receipts, promote immutable image digests, cut schedules from
+13. Review the receipts, promote immutable image digests, cut schedules from
    legacy Codex tasks to n8n, and perform authenticated live readback.
 
 ## Requirement traceability

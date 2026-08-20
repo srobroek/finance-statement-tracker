@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -7,6 +8,7 @@ from finance_tracker.project_backlog import (
     IMPLEMENTATION_PATH,
     TRANSCRIPT_PATH,
     build_backlog,
+    derive_n8n_data_table_column_access,
     load_and_build,
     render_markdown,
     validate_backlog,
@@ -37,6 +39,21 @@ class ProjectBacklogTests(unittest.TestCase):
     def test_latest_n8n_overrides_are_persistent(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
         self.assertIn("Tidy Workflow", " ".join(tasks["N8N-002"]["contradictions"]))
+        canvas_acceptance = " ".join(tasks["N8N-002"]["acceptance_criteria"])
+        self.assertIn("Canvas Group", canvas_acceptance)
+        self.assertIn("zero redundant sticky notes", canvas_acceptance)
+        self.assertIn("browser acceptance", canvas_acceptance)
+        self.assertIn("duplicate-cluster audit", canvas_acceptance)
+        self.assertIn("From list", canvas_acceptance)
+        self.assertIn("trivial one-node or pass-through wrappers", canvas_acceptance)
+        self.assertIn("exactly 42 semantic Canvas Groups", canvas_acceptance)
+        self.assertIn("22 triggers, six From-list delegated nodes and four blocked terminals", canvas_acceptance)
+        self.assertIn("exactly 21 workflow-overview stickies", canvas_acceptance)
+        self.assertIn("exactly two byte-deterministic", canvas_acceptance.lower())
+        self.assertIn("Finance/Shared", canvas_acceptance)
+        self.assertIn("Global/Shared", canvas_acceptance)
+        self.assertIn("exactly one typed Workflow Parameters", canvas_acceptance)
+        self.assertIn("without assuming Enterprise Variables", canvas_acceptance)
         self.assertIn("From list", " ".join(tasks["N8N-008"]["contradictions"]))
         agent_text = " ".join(tasks["AGENT-005"]["contradictions"])
         self.assertIn("n8n-nodes-prodex@0.5.1", agent_text)
@@ -44,17 +61,20 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("disposable", tasks["AGENT-005"]["next_action"].lower())
         hierarchy = tasks["N8N-010"]
         self.assertIn("Finance", hierarchy["requirement"])
-        self.assertEqual(hierarchy["priority"], "P0")
-        self.assertEqual(hierarchy["dependencies"], ["N8N-012"])
+        self.assertIn("Global", hierarchy["requirement"])
+        self.assertEqual(hierarchy["priority"], "P3")
+        self.assertEqual(hierarchy["dependencies"], ["N8N-006", "AUTO-001"])
         self.assertIn("N8N-011", hierarchy["related_tasks"])
-        self.assertIn("N8N-006", hierarchy["related_tasks"])
         self.assertIn("N8N-002", hierarchy["related_tasks"])
         self.assertEqual(hierarchy["implementation_state"], "DESIGN_RECORDED_UNIMPLEMENTED")
         self.assertNotIn("MICROSOFT_RESTART_PERSISTENCE_PROOF_REQUIRED", hierarchy["blockers"])
         hierarchy_acceptance = " ".join(hierarchy["acceptance_criteria"])
-        self.assertIn("17 Execute Sub-workflow", hierarchy_acceptance)
-        self.assertIn("three Tool Workflow", hierarchy_acceptance)
+        self.assertIn("10/3/8/0", hierarchy_acceptance)
+        self.assertIn("All 20 Execute Sub-workflow", hierarchy_acceptance)
+        self.assertIn("Finance/Shared", hierarchy_acceptance)
         self.assertIn("second hierarchy application", hierarchy_acceptance)
+        self.assertIn("Canvas Group coverage", hierarchy_acceptance)
+        self.assertIn("browser readback", hierarchy_acceptance)
         minimization = tasks["N8N-011"]
         minimization_acceptance = " ".join(minimization["acceptance_criteria"])
         self.assertIn("all 15 tables and every column", minimization_acceptance)
@@ -101,6 +121,22 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertEqual(inventory["resolver_contract"]["node_type"], "n8n-nodes-base.set")
         self.assertTrue(inventory["resolver_contract"]["content_addressed"])
         self.assertFalse(inventory["resolver_contract"]["caller_mutable"])
+        self.assertEqual(inventory["resolver_contract"]["placements"], {
+            "Resolve Finance Source and Runtime Config": "Finance/Shared",
+            "Resolve AI Policy and Output Contract": "Global/Shared",
+        })
+        local_parameters = inventory["resolver_contract"]["callable_workflow_parameters"]
+        self.assertEqual(local_parameters["local_node"], "exactly one Workflow Parameters Edit Fields node")
+        self.assertEqual(set(local_parameters["layers"]), {"input", "config", "params"})
+        self.assertFalse(local_parameters["generic_parameter_table_allowed"])
+        self.assertEqual(
+            local_parameters["downstream_expression"],
+            "$('Workflow Parameters').first().json.<field>",
+        )
+        self.assertIn("credential", local_parameters["forbidden_override_fields"])
+        self.assertFalse(
+            inventory["resolver_contract"]["secret_runtime_owners"]["enterprise_variables_assumed"]
+        )
         self.assertFalse(any(
             "finance_operation_receipts" in row["replacement"]
             for row in inventory["rows"]
@@ -118,20 +154,137 @@ class ProjectBacklogTests(unittest.TestCase):
         plan = (
             ROOT / "docs" / "project-audit" / "n8n-data-table-minimization-plan-2026-08-20.md"
         ).read_text(encoding="utf-8")
+        current_binding_keys = {
+            (
+                access["workflow_code"], access["workflow_path"],
+                access["data_table_node_id"], access["operation"],
+                access["binding_kind"], access["binding_path"], access["binding_sha256"],
+            )
+            for source_row in inventory["rows"]
+            for access in source_row["workflow_access"]
+        }
         for target, count in expected_target_counts.items():
-            self.assertEqual(len(inventory["target_schemas"][target]), count)
+            target_rows = inventory["target_schemas"][target]
+            self.assertEqual(len(target_rows), count)
+            names = [row["name"] for row in target_rows]
+            self.assertEqual(len(names), len(set(names)), target)
+            for row in target_rows:
+                self.assertTrue(row["constraints"], f"{target}.{row['name']}")
+                self.assertTrue(row["authoritative_owner"], f"{target}.{row['name']}")
+                self.assertTrue(row["source_lineage"], f"{target}.{row['name']}")
+                self.assertTrue(row["producers"], f"{target}.{row['name']}")
+                self.assertTrue(row["consumers"], f"{target}.{row['name']}")
+                self.assertEqual(
+                    len(row["producers"]),
+                    len({json.dumps(item, sort_keys=True) for item in row["producers"]}),
+                )
+                self.assertEqual(
+                    len(row["consumers"]),
+                    len({json.dumps(item, sort_keys=True) for item in row["consumers"]}),
+                )
+                self.assertTrue(row["rationale"], f"{target}.{row['name']}")
+                for binding in row["producers"] + row["consumers"]:
+                    self.assertTrue((ROOT / binding["workflow_path"]).exists())
+                    if binding["status"] == "current source binding":
+                        self.assertIn(
+                            (
+                                binding["workflow_code"], binding["workflow_path"],
+                                binding["data_table_node_id"], binding["operation"],
+                                binding["binding_kind"], binding["binding_path"],
+                                binding["binding_sha256"],
+                            ),
+                            current_binding_keys,
+                        )
+                    else:
+                        self.assertEqual(binding["status"], "planned target binding; not implemented")
+                        self.assertTrue(binding["data_table_node_id"].startswith("planned-n8n011-"))
+                        self.assertEqual(binding["binding_sha256"], "0" * 64)
             self.assertIn(f"`{target}`", plan)
             self.assertIn(f"{target}` ({count})", plan)
-        self.assertIn("archive_state", inventory["target_schemas"]["finance_documents"])
-        self.assertIn("processing_state", inventory["target_schemas"]["finance_documents"])
+        document_names = {row["name"] for row in inventory["target_schemas"]["finance_documents"]}
+        self.assertIn("archive_state", document_names)
+        self.assertIn("processing_state", document_names)
+
+        actual_columns = {
+            row["name"]: row
+            for row in inventory["target_schemas"]["finance_actual_batches"]
+        }
+        expected_lineage = {
+            "account_id": {"finance_actual_verifications.account_id"},
+            "period_start": {"finance_actual_verifications.period_start"},
+            "period_end": {"finance_actual_verifications.period_end"},
+            "verification_artifact_item_id": {"workflow:WF20.Read Back Immutable Verification Artifact.id"},
+            "verification_artifact_sha256": {
+                "finance_actual_verifications.expected_payload_sha256",
+                "finance_actual_verifications.observed_payload_sha256",
+                "finance_actual_verifications.invariants_passed",
+                "workflow:WF20.SHA-256 Immutable Verification Artifact Readback.value",
+            },
+        }
+        for column, lineage in expected_lineage.items():
+            self.assertEqual(
+                {row["source"] for row in actual_columns[column]["source_lineage"]},
+                lineage,
+            )
+            self.assertTrue(any(
+                binding["workflow_code"] == "WF20"
+                and binding["status"] == "planned target binding; not implemented"
+                for binding in actual_columns[column]["producers"]
+            ), column)
 
     def test_data_table_inventory_matches_exact_current_workflow_access(self) -> None:
         inventory = json.loads((
             ROOT / "docs" / "project-audit" / "n8n-data-table-column-disposition-2026-08-20.json"
         ).read_text(encoding="utf-8"))
-        first_by_table = {}
-        for row in inventory["rows"]:
-            first_by_table.setdefault(row["table"], row)
+        contract = json.loads(
+            (ROOT / "integrations" / "n8n" / "data-tables.json").read_text(encoding="utf-8")
+        )
+        expected_access = derive_n8n_data_table_column_access(
+            ROOT / "integrations" / "n8n" / "workflows",
+            contract,
+        )
+        observed_rows = {(row["table"], row["column"]): row for row in inventory["rows"]}
+        self.assertEqual(set(observed_rows), set(expected_access))
+        workflow_cache = {}
+        for key, expected in expected_access.items():
+            row = observed_rows[key]
+            self.assertEqual(row["workflow_access"], expected, f"{key[0]}.{key[1]}")
+            self.assertTrue(row["rationale"], f"{key[0]}.{key[1]}")
+            for binding in row["workflow_access"]:
+                workflow = workflow_cache.setdefault(
+                    binding["workflow_path"],
+                    json.loads((ROOT / binding["workflow_path"]).read_text(encoding="utf-8")),
+                )
+                nodes = {str(node["id"]): node for node in workflow["nodes"]}
+                data_node = nodes[binding["data_table_node_id"]]
+                binding_node = nodes[binding["binding_node_id"]]
+                self.assertEqual(data_node["name"], binding["data_table_node_name"])
+                self.assertEqual(binding_node["name"], binding["binding_node_name"])
+                self.assertEqual(data_node["parameters"]["operation"], binding["operation"])
+                value = binding_node
+                for part in binding["binding_path"].split("."):
+                    value = value[int(part)] if isinstance(value, list) else value[part]
+                digest = hashlib.sha256(
+                    json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest()
+                self.assertEqual(digest, binding["binding_sha256"])
+                if binding["binding_kind"] == "schema_definition":
+                    self.assertEqual(value["name"], row["column"])
+                elif binding["binding_kind"] == "filter":
+                    self.assertEqual(value["keyName"], row["column"])
+                elif binding["binding_kind"] == "column_value":
+                    self.assertTrue(binding["binding_path"].endswith(f".{row['column']}"))
+
+        all_access = [entry for row in inventory["rows"] for entry in row["workflow_access"]]
+        self.assertEqual(sum(row["access_kind"] == "write" for row in all_access), 279)
+        for entry in all_access:
+            if entry["access_kind"] == "write":
+                self.assertEqual(entry["binding_kind"], "column_value")
+                self.assertIn("parameters.columns.value.", entry["binding_path"])
+            elif entry["binding_kind"] == "filter":
+                self.assertEqual(entry["access_kind"], "read")
+                self.assertIn("parameters.filters.conditions.", entry["binding_path"])
+
         expected_workflows = {
             "finance_source_contracts": {"WF02", "WF04", "WF05", "WF09", "WF19"},
             "finance_source_cursors": {"WF12", "WF19"},
@@ -150,19 +303,24 @@ class ProjectBacklogTests(unittest.TestCase):
             "finance_ai_policy_contracts": {"WF09", "WF19"},
         }
         for table, expected in expected_workflows.items():
-            access = first_by_table[table]["workflow_access"]
-            self.assertEqual({row["workflow_code"] for row in access}, expected, table)
-            for row in access:
-                workflow = ROOT / row["workflow_path"]
-                document = json.loads(workflow.read_text(encoding="utf-8"))
-                node = next(node for node in document["nodes"] if str(node["id"]) == row["node_id"])
-                self.assertEqual(node["name"], row["node_name"])
-                self.assertEqual(node["parameters"]["operation"], row["operation"])
+            table_access = [
+                access
+                for row in inventory["rows"]
+                if row["table"] == table
+                for access in row["workflow_access"]
+            ]
+            self.assertEqual({row["workflow_code"] for row in table_access}, expected, table)
         source_wf19 = [
-            row for row in first_by_table["finance_source_contracts"]["workflow_access"]
-            if row["workflow_code"] == "WF19"
+            access
+            for row in inventory["rows"]
+            if row["table"] == "finance_source_contracts"
+            for access in row["workflow_access"]
+            if access["workflow_code"] == "WF19"
         ]
-        self.assertEqual([(row["operation"], row["access_kind"]) for row in source_wf19], [("create", "schema")])
+        self.assertEqual(
+            {(row["operation"], row["access_kind"]) for row in source_wf19},
+            {("create", "schema")},
+        )
         self.assertEqual(
             {row["disposition"] for row in inventory["rows"] if row["table"] == "finance_provider_circuits"},
             {"REMOVE_TO_N8N_RETRY_POLICY"},
@@ -196,6 +354,11 @@ class ProjectBacklogTests(unittest.TestCase):
     def test_current_snapshot_is_honest_about_runtime_boundaries(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
         commits = self.payload["progress_overlay"]["evidence_commits"]
+        self.assertEqual(
+            self.payload["progress_overlay"]["evidence_commit"],
+            "6a4595caf8e9da0970e93aea8c32cc8fa0e4dcda",
+        )
+        self.assertIn("3484c8261512b92a217d3c8c12ba777b41ac8386", commits)
         self.assertIn("da6b0c128210b2cd44a7a2c5a120b08e942de9ce", commits)
         self.assertIn("3a6acc625abe99d977d2b225eaae63f8ffe02c65", commits)
         self.assertIn("00491aae2ab43c486f3a9b4a62ce3ba5e63032f6", commits)
@@ -246,11 +409,18 @@ class ProjectBacklogTests(unittest.TestCase):
 
     def test_cleanup_is_the_hierarchy_and_wf22_critical_path(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
-        self.assertEqual(tasks["N8N-010"]["dependencies"], ["N8N-012"])
-        self.assertIn("N8N-012", tasks["DOC-001"]["dependencies"])
+        self.assertIn("N8N-012", tasks["N8N-003"]["dependencies"])
+        self.assertIn("N8N-003", tasks["DOC-001"]["dependencies"])
+        self.assertIn("DOC-001", tasks["N8N-005"]["dependencies"])
+        self.assertIn("N8N-005", tasks["N8N-011"]["dependencies"])
+        self.assertIn("N8N-011", tasks["N8N-006"]["dependencies"])
+        self.assertIn("N8N-006", tasks["AUTO-001"]["dependencies"])
+        self.assertIn("AUTO-001", tasks["N8N-010"]["dependencies"])
+        self.assertNotIn("N8N-010", tasks["DOC-001"]["dependencies"])
         ranks = {row["id"]: row["rank"] for row in self.payload["ordered_executable_queue"]}
-        self.assertLess(ranks["N8N-012"], ranks["N8N-010"])
-        self.assertLess(ranks["N8N-012"], ranks["DOC-001"])
+        sequence = ["N8N-012", "N8N-003", "DOC-001", "N8N-005", "N8N-011", "N8N-006", "AUTO-001", "N8N-010"]
+        for before, after in zip(sequence, sequence[1:]):
+            self.assertLess(ranks[before], ranks[after], f"{before} before {after}")
 
     def test_every_relative_evidence_path_exists(self) -> None:
         missing = []
@@ -267,6 +437,8 @@ class ProjectBacklogTests(unittest.TestCase):
         current_status = (ROOT / "docs" / "project-audit" / "implementation-status.md").read_text(encoding="utf-8")
         self.assertIn("Historical architecture baseline", historical_plan)
         self.assertIn("non-authoritative for current execution", historical_plan)
+        self.assertIn("Historical point-in-time baseline (2026-08-19)", historical_plan)
+        self.assertNotIn("Current authoritative baseline", historical_plan)
         self.assertIn("Audited committed baseline", current_status)
         stale = ("f4436d8", "14 passed, 2 failed", "14/16 passing", "35/36 passing")
         for marker in stale:

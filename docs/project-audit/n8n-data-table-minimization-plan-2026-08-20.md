@@ -5,6 +5,7 @@ Status: design and audit candidate only; no runtime migration or final approval
 Backlog requirement: `N8N-011`
 Machine inventory: `n8n-data-table-column-disposition-2026-08-20.json`
 Machine schema: `n8n-data-table-column-disposition.schema.json`
+Deterministic generator: `../../scripts/generate-n8n-data-table-column-disposition.py`
 
 ## Decision boundary
 
@@ -39,8 +40,14 @@ only separate Postgres state and holds atomic fencing only.
 
 WF19 creates the schema for all current tables. For
 `finance_source_contracts`, WF19 only creates the table and does not seed rows.
-The machine inventory repeats every exact workflow path, node ID, node name and
-`create`, `get`, `update` or `upsert` operation on each table-column row.
+The machine inventory derives every column independently from the workflow JSON:
+WF19 schema definitions, filter key reads, explicit
+`parameters.columns.value.<column>` writes, and downstream expressions or row
+spreads from `get` nodes. Each binding records the Data Table node, binding node,
+parameter path and binding SHA-256. No operation is copied from a sibling column;
+the resulting 203 rows contain 279 explicit value writes and omit the 159 false
+writes found in the previous table-level expansion. Every row includes its own
+disposition rationale.
 
 | Current table | Exact access beyond WF19 schema creation | 15-to-4 direction |
 | --- | --- | --- |
@@ -86,15 +93,26 @@ exist. Any other unlisted reference is a blocking inventory error.
 `proposal_artifact_item_id`, `proposal_sha256`, `review_state`,
 `review_decision`, `reviewed_at`, `updated_at`.
 
-These schemas are a direction for independent review, not an approved migration.
+The machine target-schema matrix declares every one of these 56 columns with its
+type, constraints, authoritative owner, exact source-column lineage and
+transformation, current source producer/consumer bindings, and the planned target
+producer/consumer binding. In particular, `finance_actual_batches.account_id`,
+`period_start`, and `period_end` descend from the WF20 verification manifest;
+`verification_artifact_item_id` comes from the immutable OneDrive upload/readback;
+and `verification_artifact_sha256` is the read-back hash of the canonical full
+expected/observed verification receipt. These schemas are a direction for
+independent review, not an approved migration.
 
 ## Generated caller-immutable resolvers
 
 Source, config and policy contracts move to exactly two generated subworkflows
 made from server-owned Edit Fields nodes:
 
-1. `Resolve Finance Source and Runtime Config`;
-2. `Resolve AI Policy and Output Contract`.
+1. `Finance/Shared/Resolve Finance Source and Runtime Config`, generated from
+   statement, email, document, deployment and account-mapping configuration;
+2. `Global/Shared/Resolve AI Policy and Output Contract`, generated from AI
+   policy, agent-provider and output-schema configuration and returning the
+   server-owned provider, model, reasoning, auth mode, package and schema.
 
 They are generated from reviewed Git inputs, content-addressed, image/commit
 bound, read-only to callers, and hash-checked before activation. Callers cannot
@@ -102,6 +120,28 @@ choose or override provider, model, mailbox, folder, URL, account, card, source,
 policy, output schema, or allowed fields. A missing key, caller override, hash
 mismatch or ungenerated edit fails closed. Deployment and domain artifacts may
 record resolver hashes but must not recreate editable config tables.
+
+Current parameter ownership is scattered across compose/environment runtime
+values, `config/*.json` and generated Data Table seeds, plus workflow JSON, Code
+and Set-node literals. The target inventory assigns every value exactly once:
+
+- secrets and auth remain n8n credentials or 1Password-rendered environment;
+- runtime URLs, images, mounts, ports, timezone and concurrency remain in
+  compose/environment;
+- the two resolvers above own reusable Global and Finance non-secret config;
+- each callable workflow declares a strict typed input schema and then exactly
+  one `Workflow Parameters` Edit Fields node for truly local non-secret
+  constants/defaults; downstream expressions read
+  `$('Workflow Parameters').first().json.<field>`.
+
+Callers may pass invocation facts only: IDs, hashes, window, cursor, version and
+operation. Source-owning workflows fix `source_code` locally. Provider, model,
+account, mail folder, OneDrive path, credential, URL and commit flags are never
+caller-controlled. Unknown fields, override attempts, missing/duplicate keys,
+resolver hash drift and duplicated authoritative literals fail closed. A static
+authority scan must prove every literal/config binding has one owner, and no
+generic parameter table may be introduced. All Execute Sub-workflow selectors
+use From list. This design assumes no Enterprise Variables feature.
 
 ## Provider circuits and observability
 

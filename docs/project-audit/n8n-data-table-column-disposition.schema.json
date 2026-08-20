@@ -1,20 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vxsan.com/schemas/n8n-data-table-column-disposition-v1.json",
-  "title": "n8n Data Table column disposition audit",
+  "$id": "https://vxsan.com/schemas/n8n-data-table-column-disposition-v2.json",
+  "title": "n8n Data Table column-exact disposition audit",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "generated_at",
-    "source_contract",
-    "target_schemas",
-    "observability_owners",
-    "resolver_contract",
-    "rows"
-  ],
+  "required": ["schema_version", "generated_at", "source_contract", "target_schemas", "observability_owners", "resolver_contract", "rows"],
   "properties": {
-    "schema_version": {"const": "n8n-data-table-column-disposition-v1"},
+    "schema_version": {"const": "n8n-data-table-column-disposition-v2"},
     "generated_at": {"type": "string", "format": "date"},
     "source_contract": {"type": "string", "minLength": 1},
     "target_schemas": {
@@ -22,10 +14,10 @@
       "additionalProperties": false,
       "required": ["finance_ingestion_state", "finance_documents", "finance_actual_batches", "finance_ai_reviews"],
       "properties": {
-        "finance_ingestion_state": {"$ref": "#/$defs/nineColumns"},
-        "finance_documents": {"$ref": "#/$defs/twentyColumns"},
-        "finance_actual_batches": {"$ref": "#/$defs/eighteenColumns"},
-        "finance_ai_reviews": {"$ref": "#/$defs/nineColumns"}
+        "finance_ingestion_state": {"$ref": "#/$defs/nineTargetColumns"},
+        "finance_documents": {"$ref": "#/$defs/twentyTargetColumns"},
+        "finance_actual_batches": {"$ref": "#/$defs/eighteenTargetColumns"},
+        "finance_ai_reviews": {"$ref": "#/$defs/nineTargetColumns"}
       }
     },
     "observability_owners": {
@@ -41,7 +33,7 @@
     "resolver_contract": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["owner", "subworkflows", "node_type", "content_addressed", "caller_mutable", "activation_gate"],
+      "required": ["owner", "subworkflows", "placements", "node_type", "content_addressed", "caller_mutable", "activation_gate", "callable_workflow_parameters", "secret_runtime_owners"],
       "properties": {
         "owner": {"const": "Git"},
         "subworkflows": {
@@ -54,80 +46,129 @@
           "minItems": 2,
           "maxItems": 2
         },
+        "placements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Resolve Finance Source and Runtime Config", "Resolve AI Policy and Output Contract"],
+          "properties": {
+            "Resolve Finance Source and Runtime Config": {"const": "Finance/Shared"},
+            "Resolve AI Policy and Output Contract": {"const": "Global/Shared"}
+          }
+        },
         "node_type": {"const": "n8n-nodes-base.set"},
         "content_addressed": {"const": true},
         "caller_mutable": {"const": false},
-        "activation_gate": {"type": "string", "minLength": 1}
+        "activation_gate": {"type": "string", "minLength": 1},
+        "callable_workflow_parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layers", "input_schema", "local_node", "downstream_expression", "caller_fact_fields", "forbidden_override_fields", "generic_parameter_table_allowed"],
+          "properties": {
+            "layers": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["input", "config", "params"],
+              "properties": {
+                "input": {"const": "strict typed trigger schema"},
+                "config": {"const": "caller-immutable generated resolver"},
+                "params": {"const": "typed Workflow Parameters Edit Fields entry node"}
+              }
+            },
+            "input_schema": {"const": "strict typed schema; unknown and override fields rejected"},
+            "local_node": {"const": "exactly one Workflow Parameters Edit Fields node"},
+            "downstream_expression": {"const": "$('Workflow Parameters').first().json.<field>"},
+            "caller_fact_fields": {"type": "array", "minItems": 6, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "forbidden_override_fields": {"type": "array", "minItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "generic_parameter_table_allowed": {"const": false}
+          }
+        },
+        "secret_runtime_owners": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secrets_and_auth", "runtime", "enterprise_variables_assumed"],
+          "properties": {
+            "secrets_and_auth": {"const": "n8n credentials or 1Password-rendered environment"},
+            "runtime": {"const": "compose/environment owns URLs, images, mounts, ports, timezone and concurrency"},
+            "enterprise_variables_assumed": {"const": false}
+          }
+        }
       }
     },
-    "rows": {
-      "type": "array",
-      "minItems": 1,
-      "items": {"$ref": "#/$defs/row"}
-    }
+    "rows": {"type": "array", "minItems": 203, "maxItems": 203, "items": {"$ref": "#/$defs/row"}}
   },
   "$defs": {
-    "nineColumns": {
-      "type": "array",
-      "minItems": 9,
-      "maxItems": 9,
-      "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    "nineTargetColumns": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"$ref": "#/$defs/targetColumn"}},
+    "eighteenTargetColumns": {"type": "array", "minItems": 18, "maxItems": 18, "items": {"$ref": "#/$defs/targetColumn"}},
+    "twentyTargetColumns": {"type": "array", "minItems": 20, "maxItems": 20, "items": {"$ref": "#/$defs/targetColumn"}},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_code", "workflow_path", "data_table_node_id", "data_table_node_name", "operation", "binding_kind", "binding_path", "binding_sha256", "status"],
+      "properties": {
+        "workflow_code": {"type": "string", "pattern": "^WF[0-9]{2}$"},
+        "workflow_path": {"type": "string", "pattern": "^integrations/n8n/workflows/[0-9]{2}-.+\\.json$"},
+        "data_table_node_id": {"type": "string", "minLength": 1},
+        "data_table_node_name": {"type": "string", "minLength": 1},
+        "operation": {"enum": ["create", "get", "update", "upsert"]},
+        "binding_kind": {"type": "string", "minLength": 1},
+        "binding_path": {"type": "string", "minLength": 1},
+        "binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "status": {"enum": ["current source binding", "planned target binding; not implemented"]}
+      }
     },
-    "eighteenColumns": {
-      "type": "array",
-      "minItems": 18,
-      "maxItems": 18,
-      "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "transformation"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "transformation": {"type": "string", "minLength": 1}
+      }
     },
-    "twentyColumns": {
-      "type": "array",
-      "minItems": 20,
-      "maxItems": 20,
-      "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    "targetColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "constraints", "authoritative_owner", "source_lineage", "producers", "consumers", "rationale"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "type": {"enum": ["string", "number", "boolean", "date"]},
+        "constraints": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "authoritative_owner": {"type": "string", "minLength": 1},
+        "source_lineage": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/lineage"}},
+        "producers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/binding"}},
+        "consumers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/binding"}},
+        "rationale": {"type": "string", "minLength": 1}
+      }
     },
     "workflowAccess": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workflow_path", "workflow_code", "node_id", "node_name", "operation", "access_kind"],
+      "required": ["workflow_path", "workflow_code", "data_table_node_id", "data_table_node_name", "operation", "access_kind", "binding_kind", "binding_node_id", "binding_node_name", "binding_path", "binding_sha256"],
       "properties": {
         "workflow_path": {"type": "string", "pattern": "^integrations/n8n/workflows/[0-9]{2}-.+\\.json$"},
         "workflow_code": {"type": "string", "pattern": "^WF[0-9]{2}$"},
-        "node_id": {"type": "string", "minLength": 1},
-        "node_name": {"type": "string", "minLength": 1},
+        "data_table_node_id": {"type": "string", "minLength": 1},
+        "data_table_node_name": {"type": "string", "minLength": 1},
         "operation": {"enum": ["create", "get", "update", "upsert"]},
-        "access_kind": {"enum": ["schema", "read", "write"]}
+        "access_kind": {"enum": ["schema", "read", "write"]},
+        "binding_kind": {"enum": ["schema_definition", "filter", "column_value", "downstream_expression", "downstream_spread"]},
+        "binding_node_id": {"type": "string", "minLength": 1},
+        "binding_node_name": {"type": "string", "minLength": 1},
+        "binding_path": {"type": "string", "minLength": 1},
+        "binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       }
     },
     "row": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "table",
-        "column",
-        "disposition",
-        "authoritative_owner",
-        "workflow_access",
-        "invariant",
-        "idempotency",
-        "retention",
-        "privacy",
-        "replacement",
-        "migration",
-        "rollback"
-      ],
+      "required": ["table", "column", "disposition", "authoritative_owner", "workflow_access", "rationale", "invariant", "idempotency", "retention", "privacy", "replacement", "migration", "rollback"],
       "properties": {
         "table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
         "column": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
         "disposition": {"type": "string", "minLength": 1},
         "authoritative_owner": {"type": "string", "minLength": 1},
-        "workflow_access": {
-          "type": "array",
-          "minItems": 1,
-          "items": {"$ref": "#/$defs/workflowAccess"}
-        },
+        "workflow_access": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/workflowAccess"}},
+        "rationale": {"type": "string", "minLength": 1},
         "invariant": {"type": "string", "minLength": 1},
         "idempotency": {"type": "string", "minLength": 1},
         "retention": {"type": "string", "minLength": 1},

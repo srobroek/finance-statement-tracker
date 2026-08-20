@@ -2,7 +2,7 @@
   "schema_version": "implementation-status-v1",
   "generated_at": "2026-08-20",
   "audit_basis": {
-    "repository_head": "a07c5abdc5accb57e669ca8c506e2d2f709a505e",
+    "repository_head": "6a4595caf8e9da0970e93aea8c32cc8fa0e4dcda",
     "working_tree": "CURRENT_COMMITTED_BASELINE",
     "transcript_requirements_artifact": "docs/project-audit/transcript-requirements-ledger-2026-08-19.json",
     "production_mutated": false
@@ -123,10 +123,10 @@
       "implemented_state": "DESIGN_RECORDED_UNIMPLEMENTED",
       "verification_state": "DESIGN_RECORDED_UNIMPLEMENTED",
       "evidence_paths": ["integrations/n8n/workflow-folders.json", "integrations/n8n/workflow-folder-placement.sql", "tests/test_n8n_workflows.py"],
-      "tests": ["Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"],
-      "live_readback": "The retained project previously proved eight sibling folders, 21 placements, 63 tag edges, and zero active or published workflows. That is accurate current-state evidence but does not satisfy the new sole Finance root and role-based child hierarchy.",
+      "tests": ["Current tests prove 21 unique placements and 20 list-mode references but still assert eight sibling folders; the six-folder 10/3/8/0 tree and 42-group/21-overview contract are design-only"],
+      "live_readback": "The retained project previously proved eight sibling folders, 21 placements, 63 tag edges, and zero active or published workflows. That current state does not satisfy Finance/{Account Reconciliation,Cashback Sweep,Shared}, Global/{Shared}, 42 semantic groups or 21 overview stickies.",
       "last_verified": "2026-08-20",
-      "remaining_work": "After exact WF23 cleanup restores the reviewed project boundary, run WF22 and implement the reviewed Finance hierarchy; preserve peer application roots and prove exact database and browser idempotence. Microsoft restart proof proceeds independently and is not a hierarchy eligibility gate.",
+      "remaining_work": "After functional MVP double replay and activation gates, implement and prove the six-folder 10/3/8/0 Finance/Global hierarchy, 42 semantic groups, exact exemptions and 21 overview stickies; preserve unrelated application roots and prove database/browser idempotence. This optical polish is not an OAuth, OneDrive-root, WF20 or Data Table MVP dependency.",
       "risk": "MEDIUM",
       "blocked_by": ["WF23_EXACT_CLEANUP_REQUIRED"]
     },
@@ -134,13 +134,13 @@
       "id": "orchestration.n8n-data-table-minimization",
       "implemented_state": "PARTIAL",
       "verification_state": "FIFTEEN_TABLE_BASELINE_VERIFIED_MINIMALITY_UNASSESSED",
-      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md", "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json", "docs/project-audit/n8n-data-table-column-disposition.schema.json"],
-      "tests": ["Schema validation and exact-coverage tests prove one machine row for every current table.column and exact workflow-node operations"],
+      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md", "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json", "docs/project-audit/n8n-data-table-column-disposition.schema.json", "scripts/generate-n8n-data-table-column-disposition.py"],
+      "tests": ["Schema validation and exact-coverage tests prove one machine row for every current table.column; all 203 rows are cross-checked against exact schema, filter, columns.value and downstream-consumer bindings, and all 56 target columns carry typed lineage and producer/consumer contracts"],
       "live_readback": "Official DataTableService readback previously proved all 15 exact deployed schemas, seven AI policy rows, nine config rows, and preservation of the source cursor row. The schema-validated design maps 203 current columns toward four domain tables, but no runtime migration or separate approval has occurred.",
       "last_verified": "2026-08-20",
       "remaining_work": "Independently review all four target schemas, every machine disposition, both generated Edit Fields resolvers, observability ownership, provider-circuit removal and the WF20 verification-artifact state machine; then prove disposable migration, no-op replay and exact rollback.",
       "risk": "HIGH",
-      "blocked_by": ["FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED", "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED", "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"]
+      "blocked_by": ["FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED", "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED", "COLUMN_EXACT_MATRIX_INDEPENDENT_REVIEW_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"]
     },
     {
       "id": "orchestration.codex-agent-handoff",
@@ -243,7 +243,7 @@
       "implemented_state": "MISSING",
       "verification_state": "REPOSITORY_GREEN_RUNTIME_PROMOTION_PENDING",
       "evidence_paths": ["config/project-acceptance.json", "runtime/audit/disposable-full-rebuild-audit.json", "runtime/audit/production-post-replay-audit.json"],
-      "tests": ["Python full suite: 434 passed, 8 skipped", "Actual Node: 48 passed", "Codex runner: 16 passed"],
+      "tests": ["Python full suite: 435 passed, 8 skipped", "Actual Node: 48 passed", "Codex runner: 16 passed"],
       "live_readback": "Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
       "last_verified": "2026-08-19",
       "remaining_work": "Hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts, balances, notes and manual state, run restore and failure drills, then produce reviewed promotion evidence.",

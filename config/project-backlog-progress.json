@@ -1,8 +1,11 @@
 {
   "schema_version": 1,
   "recorded_at": "2026-08-20",
-  "evidence_commit": "a07c5abdc5accb57e669ca8c506e2d2f709a505e",
+  "evidence_commit": "6a4595caf8e9da0970e93aea8c32cc8fa0e4dcda",
   "evidence_commits": [
+    "6a4595caf8e9da0970e93aea8c32cc8fa0e4dcda",
+    "1636e0ed64db66672a208b018a445de3594f455e",
+    "3484c8261512b92a217d3c8c12ba777b41ac8386",
     "a07c5abdc5accb57e669ca8c506e2d2f709a505e",
     "4a30c7fa9240f63cde1a5f3a5cedcbd9bd8b79c5",
     "8149f42f2694c200ca9fae37875c4dba4e727978",
@@ -69,9 +72,9 @@
       "evidence_paths": ["integrations/n8n/refactor_workflow_ui.py", "integrations/n8n/workflow-folders.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
       "tests": ["workflow renderer, group, folder, readability, and idempotence tests pass", "runtime readback verified 8 folders, 21 placements, and 63 tag edges"],
       "live_readback": "All 21 workflows are imported inactive and unpublished in eight folders with 63 tag edges. Manual coordinate cleanup and Tidy Workflow are deferred to the user; semantic names, notes, and section contracts remain repository-tested.",
-      "remaining_work": "Complete remaining workflow semantics and implement the reviewed Finance application root and role hierarchy after setup proofs and N8N-011 design; manual coordinate optimization is out of scope.",
-      "blockers_remove": [], "blockers_add": ["APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "After exact WF23 cleanup, implement the Finance hierarchy; use Tidy Workflow only for optional coordinate cleanup."
+      "remaining_work": "Complete functional workflow semantics and the current-to-target parameter-owner matrix for MVP, eliminating scattered literals/duplicated configuration with 1Password-backed environment or credentials for secrets, the two scope-correct generated caller-immutable Edit Fields resolvers, and one named Edit Fields node for truly local parameters without assuming Enterprise Variables. After end-to-end double replay and activation gates, apply the recorded six-folder, 42-group, duplicate-extraction and sticky-note polish; Tidy owns coordinates.",
+      "blockers_remove": [], "blockers_add": ["APPLICATION_SCOPED_ROLE_HIERARCHY_REQUIRED", "CANVAS_GROUP_COVERAGE_AND_REDUNDANT_STICKY_PROOF_REQUIRED", "PARAMETER_OWNERSHIP_AND_LITERAL_DEDUPLICATION_REQUIRED"],
+      "last_verified": "2026-08-20", "next_action": "Implement only functional parameter ownership and workflow semantics for MVP now; defer six-folder, Canvas Group, sticky and Tidy polish until after double replay and activation gates."
     },
     {
       "id": "N8N-003", "status": "PARTIAL",
@@ -139,9 +142,9 @@
       "evidence_paths": ["Finance Evidence/catalogue.json", "integrations/n8n/workflows/01-outlook-finance-acquisition.json", "integrations/n8n/setup-workflows/22-onedrive-finance-evidence-root-setup.json", "integrations/n8n/setup-workflows/manifest.json"],
       "tests": ["evidence and n8n OneDrive archive contracts pass", "setup-only OneDrive root workflow tests verify inactive manual import, exact root create-or-reuse, duplicate rejection, and redacted receipt"],
       "live_readback": "Archive nodes preserve attachments and original email. The b07c410 setup-only workflow can create or reuse exactly one top-level Finance Evidence folder and rejects nested duplication, but it has not been imported or run live. Existing evidence still has duplicated paths and missing warranty/property metadata.",
-      "remaining_work": "Run the inactive manual OneDrive root setup with exact redacted readback, then deduplicate canonical evidence paths, populate required warranty/property metadata, and prove immutable upload/hash/readback with a live fixture.",
+      "remaining_work": "After N8N-012 cleanup and N8N-003 Microsoft restart/second-read proof, run the inactive manual OneDrive root setup with exact redacted readback, then deduplicate canonical evidence paths, populate required warranty/property metadata, and prove immutable upload/hash/readback with a live fixture. Final Finance/Shared folder placement is polish and not an MVP gate.",
       "blockers_remove": [], "blockers_add": ["DUPLICATED_FINANCE_EVIDENCE_PATHS", "WARRANTY_PROPERTY_METADATA_INCOMPLETE", "ONEDRIVE_FINANCE_EVIDENCE_ROOT_LIVE_RUN_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Import and run the inactive setup-only workflow once, retain the redacted exact-root receipt, then proceed with archive normalization."
+      "last_verified": "2026-08-20", "next_action": "After Microsoft restart/second-read proof, import and run inactive WF22 once, retain the redacted exact-root receipt, then proceed with archive normalization; defer final folder polish."
     },
     {
       "id": "ACTUAL-002", "status": "PARTIAL",
@@ -267,20 +270,20 @@
       "id": "N8N-010", "status": "PARTIAL",
       "implementation_state": "DESIGN_RECORDED_UNIMPLEMENTED", "verification_state": "DESIGN_RECORDED_UNIMPLEMENTED",
       "evidence_paths": ["integrations/n8n/workflow-folders.json", "integrations/n8n/workflow-folder-placement.sql", "tests/test_n8n_workflows.py"],
-      "tests": ["Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders"],
-      "live_readback": "The retained project proves eight sibling folders, 21 current-corpus placements, 63 tag edges, zero active and zero published workflows. This is the pre-migration state and does not satisfy the sole Finance application root, nine direct children, or nested 99 Setup Only target.",
-      "remaining_work": "After N8N-012 exact cleanup, implement the exact reviewed role mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence. WF22 can then run under nested setup-only; Microsoft restart proof and N8N-011 continue as related acceptance tracks.",
+      "tests": ["Current tests prove 21 unique placements and 20 list-mode workflow references but still assert eight sibling folders; the exact six-folder 10/3/8/0 target and 42-group/21-overview contract remain design-only"],
+      "live_readback": "The retained project proves eight sibling folders, 21 current-corpus placements, 63 tag edges, zero active and zero published workflows. This is pre-polish state and does not satisfy Finance/{Account Reconciliation,Cashback Sweep,Shared}, Global/{Shared}, 42 semantic groups or 21 overview stickies.",
+      "remaining_work": "After functional MVP double replay and promotion gates, implement the exact six-folder 10/3/8/0 mapping and prove peer-root preservation, collision rollback, zero deletes and second-run timestamp idempotence. In the same final-polish pass, prove 42 semantic groups, exact exemptions, 21 overview stickies, zero redundant row notes and complete browser readback.",
       "blockers_remove": [], "blockers_add": ["WF23_EXACT_CLEANUP_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "After N8N-012 exact cleanup, implement and independently verify the Finance subtree without touching peer applications."
+      "last_verified": "2026-08-20", "next_action": "After the functional MVP and activation gates, apply and independently verify the six-folder Finance/Global tree and Canvas documentation contract without touching unrelated applications."
     },
     {
       "id": "N8N-011", "status": "PARTIAL",
       "implementation_state": "PARTIAL", "verification_state": "FIFTEEN_TABLE_BASELINE_VERIFIED_MINIMALITY_AND_MIGRATION_UNPROVEN",
-      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md", "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json", "docs/project-audit/n8n-data-table-column-disposition.schema.json"],
-      "tests": ["Schema-validated inventory covers every one of the 15 tables and every declared column exactly once with exact workflow node operations"],
+      "evidence_paths": ["integrations/n8n/data-tables.json", "docs/n8n-package-template-data-table-audit-2026-08-19.md", "docs/project-audit/n8n-data-table-minimization-plan-2026-08-20.md", "docs/project-audit/n8n-data-table-column-disposition-2026-08-20.json", "docs/project-audit/n8n-data-table-column-disposition.schema.json", "scripts/generate-n8n-data-table-column-disposition.py"],
+      "tests": ["Schema-validated inventory covers every one of the 15 tables and every declared column exactly once; all 203 rows are cross-checked against schema definitions, filter keys, explicit columns.value writes, downstream consumers and binding hashes, and all 56 target columns carry typed lineage and producer/consumer contracts"],
       "live_readback": "Official DataTableService readback proved all 15 exact deployed schemas, seven AI policy rows, nine config rows and preservation of the source cursor row. The machine design now maps 203 current columns toward four domain tables with 9, 20, 18 and 9 columns, but no migration or separate approval has occurred.",
       "remaining_work": "Independently review all four target schemas, every machine disposition, both generated caller-immutable Edit Fields resolvers, n8n/Cloudflare/optional-Langfuse ownership, provider-circuit removal and WF20 verification-artifact atomicity; then prove disposable migration, no-op replay and exact rollback.",
-      "blockers_remove": [], "blockers_add": ["FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED", "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED", "WORKFLOW_PRODUCER_CONSUMER_MATRIX_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"],
+      "blockers_remove": [], "blockers_add": ["FOUR_TABLE_TARGET_INDEPENDENT_REVIEW_REQUIRED", "WF20_VERIFICATION_ARTIFACT_ATOMICITY_REQUIRED", "COLUMN_EXACT_MATRIX_INDEPENDENT_REVIEW_REQUIRED", "DISPOSABLE_SCHEMA_MIGRATION_AND_ROLLBACK_REQUIRED"],
       "last_verified": "2026-08-20", "next_action": "Review the 15-to-4 machine map and WF20 artifact gates; do not create generic receipt, period-close or provider-circuit tables."
     },
     {
@@ -291,7 +294,7 @@
       "live_readback": "External host evidence still reports the transient 22/0/0 WF23 boundary. The exact cleanup implementation is committed, but no later external cleanup receipt path or SHA-256 has been supplied and no repository artifact proves zero WF23 rows.",
       "remaining_work": "Run the exact cleanup once, record the external receipt path and SHA-256, prove the reviewed regular project boundary and zero WF23 rows, then run it again as a no-op.",
       "blockers_remove": ["IMPLEMENTATION_REQUIRED"], "blockers_add": ["WF23_EXACT_CLEANUP_RECEIPT_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Execute the exact cleanup gate and retain the later content-addressed cleanup receipt before WF22 or N8N-010."
+      "last_verified": "2026-08-20", "next_action": "Execute the exact cleanup gate and retain the later content-addressed cleanup receipt, then proceed directly to Microsoft restart/second-read proof; folder and canvas polish are last."
     }
   ]
 }

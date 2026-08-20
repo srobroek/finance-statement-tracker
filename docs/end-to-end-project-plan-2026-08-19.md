@@ -22,27 +22,53 @@ accepted and incorporated below.
 
 The retained architecture and production gates remain useful historical design
 input. Current hierarchy eligibility begins with exact inactive WF23 orphan
-cleanup, then WF22 OneDrive root proof; the complete Microsoft restart and
+cleanup, then the Finance/Global hierarchy, then transient WF22 OneDrive root proof inside
+`Finance/Shared`; the complete Microsoft restart and
 second-read proof proceeds as a parallel/later acceptance track. The latest
 external host evidence reported a temporary 22 workflows, zero active and zero
 published boundary and two successful first-read refreshes, but the repository
 does not contain the host receipt, restart persistence proof or later cleanup
 receipt.
 
-Before the next workflow-corpus promotion:
+The functional MVP critical path, from most to least critical, is:
 
-1. `N8N-011` audits all 15 current Data Tables and every column for authoritative
-   owner, producer, consumer, invariant, idempotency, retention, privacy,
-   consolidation, migration and rollback. The deployed 15-table schema is a
-   baseline, not an approved minimal target.
-2. `N8N-010` then places the target workflow corpus beneath the sole top-level
-   `Finance` application root. Its role-based children are `01 Schedules &
-   Controllers`, `02 Acquisition & Intake`, `03 Document Services`, `04
-   Processing & Reconciliation`, `05 Agent Services`, `06 Ledger Persistence`,
-   `07 Interfaces & Dispatch`, `08 Operations & Recovery`, and `90 Platform
-   Administration`; transient `99 Setup Only` is nested below platform
-   administration.
-3. Both changes remain inactive and write-disabled, preserve unrelated peer
+1. `N8N-012` removes the exact transient WF23 orphan and proves a second cleanup
+   run changes nothing.
+2. `N8N-003` proves Microsoft credential persistence with n8n restart and bounded
+   Outlook/OneDrive second reads, without waiting for token expiry.
+3. WF22 creates or reuses the OneDrive `Finance Evidence` root with exact readback.
+4. WF20/`N8N-005` proves fenced Actual correctness, immutable verification
+   artifact binding and recovery at every kill boundary.
+5. `N8N-011` completes the four-table migration and the two generated resolver
+   contracts required by the functional workflows.
+6. `N8N-006` passes the complete disposable double replay, followed by reviewed
+   promotion and activation gates.
+
+MVP success is observed end-to-end ingestion, evidence persistence, Actual
+readback/recovery and cashback replay, not implementation volume. Every slice
+requires a separate adversarial simplification review before acceptance.
+
+Only after the functional MVP gates, `N8N-010` applies the exact shallow tree:
+`Finance/{Account Reconciliation, Cashback Sweep, Shared}` and
+`Global/{Shared}`, with regular workflow counts 10/3/8/0. WF22/WF23 ultimately
+target `Finance/Shared` while transient, retain setup-only/manual/inactive/
+activation-forbidden metadata, and are removed after the reviewed action.
+
+The canvas target is 42 semantic Canvas Groups and 261 grouped executable nodes.
+Exactly 22 triggers, six readable From-list delegated calls and four blocked
+terminals remain outside groups. The 47 generated row notes are replaced by 21
+workflow-level overview stickies; any extra sticky requires a registry-justified
+cross-group warning, operator decision or temporary blocker. Repeated monthly
+statement control, Outlook enumeration, provider-circuit, immutable-archive and
+verified-receipt clusters are extraction candidates, while trivial wrappers and
+unsafe fencing/CAS abstractions are rejected.
+
+In parallel, `N8N-011` audits all 15 current Data Tables and every column for
+authoritative owner, producer, consumer, invariant, idempotency, retention,
+privacy, consolidation, migration and rollback. The deployed 15-table schema is
+a baseline, not an approved minimal target. The Microsoft restart and second-read
+proof also proceeds in parallel without waiting for token expiry. All changes
+remain inactive and write-disabled, preserve unrelated peer
    applications, and require independent disposable migration, idempotence and
    rollback evidence before activation.
 
@@ -93,7 +119,7 @@ Also excluded:
 - external PDF/AI services without explicit per-document approval and local
   deterministic reconciliation.
 
-## 3. Current authoritative baseline
+## 3. Historical point-in-time baseline (2026-08-19)
 
 Repository:
 
