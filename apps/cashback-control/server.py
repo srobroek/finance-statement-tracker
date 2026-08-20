@@ -52,6 +52,11 @@ from finance_tracker.notifications import (
 from finance_tracker.web_push import WebPushDispatcher, WebPushStore
 
 WEB_ROOT = APP_ROOT / "web"
+CASHBACK_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; "
+    "frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'"
+)
 DASHBOARD_PATH = Path(
     os.environ.get(
         "CASHBACK_DASHBOARD_PATH",
@@ -235,6 +240,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         if not urlsplit(self.path).path.startswith("/api/"):
+            self.send_header("Content-Security-Policy", CASHBACK_CONTENT_SECURITY_POLICY)
+            self.send_header("X-Content-Type-Options", "nosniff")
             # The dashboard is a small operational UI. Revalidate its static
             # shell on every visit so a container rollout cannot leave a
             # device running stale routing code from its browser cache.

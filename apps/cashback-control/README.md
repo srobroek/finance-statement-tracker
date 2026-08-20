@@ -53,6 +53,10 @@ Submit one event or a list to `POST /api/events`. Use the configured bearer toke
 
 `CASHBACK_INGEST_TOKEN` authenticates machine-to-machine ingestion endpoints. The browser never receives or stores this token.
 
+## Browser content security
+
+The dashboard response sends a same-origin Content Security Policy and the shell repeats it in `web/index.html`. It permits same-origin scripts, styles, images, API requests, and form submissions; disallows plugins and base-URL overrides; and disallows framing. The policy allows inline style attributes because the dashboard sets numeric progress widths through DOM style properties. Dashboard values from API responses and configuration are inserted with text nodes or DOM properties, not HTML parsing.
+
 The browser acknowledgement and push-subscription endpoints are `POST /api/alerts/ack` and `POST /api/push/subscriptions`. A public deployment accepts these routes only when all of these conditions hold:
 
 - `Content-Type` is `application/json`.
