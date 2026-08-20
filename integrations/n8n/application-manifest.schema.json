@@ -129,7 +129,7 @@
       "additionalProperties": false,
       "required": ["reference", "digest", "base_digest", "receipt"],
       "properties": {
-        "reference": {"type": "string", "pattern": "^[^\\s@]+:[A-Za-z0-9_.-]+$"},
+        "reference": {"type": "string", "pattern": "^[^\\s@]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})$"},
         "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
         "base_digest": {"$ref": "#/$defs/digest"},
         "receipt": {

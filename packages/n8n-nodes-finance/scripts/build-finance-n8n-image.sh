@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 package_dir="${repo_root}/packages/n8n-nodes-finance"
 dockerfile="${package_dir}/Dockerfile.n8n"
 base_file="${package_dir}/base-image.txt"
-receipt="${package_dir}/finance-image-build-receipt.json"
+receipt="${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json"
 tag="finance-n8n:spec-0.1.0"
 dry_run=0
 
@@ -40,9 +40,22 @@ while (($#)); do
   esac
 done
 
+receipt="$(realpath -m "${receipt}")"
+case "${receipt}" in
+  "${repo_root}"|"${repo_root}"/*)
+    echo "FINANCE_RUNTIME_RECEIPT_MUST_BE_EXTERNAL" >&2
+    exit 1
+    ;;
+esac
+
 base_image="$(tr -d '[:space:]' < "${base_file}")"
 if [[ ! "${base_image}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]]; then
   echo "FINANCE_BASE_IMAGE_MUST_BE_IMMUTABLE" >&2
+  exit 1
+fi
+
+if [[ -n "$(git -C "${repo_root}" status --porcelain --untracked-files=all)" ]]; then
+  echo "FINANCE_SOURCE_TREE_MUST_BE_CLEAN" >&2
   exit 1
 fi
 

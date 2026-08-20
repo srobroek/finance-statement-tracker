@@ -42,6 +42,46 @@ def schema_errors(document: dict, schema: dict) -> list:
     )
 
 
+def verified_image_lock(document: dict, status: str) -> dict:
+    verified = deepcopy(document)
+    source_commit = "a" * 40
+    image_digest = "sha256:" + "b" * 64
+    verified.update(
+        status=status,
+        generated_at_utc="2026-08-20T00:00:00Z",
+        source_commit=source_commit,
+    )
+    extension = verified["extension_image"]
+    extension.update(
+        reference="ghcr.io/srobroek/finance-n8n@" + image_digest,
+        image_digest=image_digest,
+        source_commit=source_commit,
+        sbom_sha256="c" * 64,
+        scan_sha256="d" * 64,
+        scan={"tool": "trivy", "result": "PASS", "high": 0, "critical": 0},
+        attestation={
+            "type": "https://in-toto.io/Statement/v1",
+            "predicate_type": "https://slsa.dev/provenance/v1",
+            "subject_digest": image_digest,
+            "source_commit": source_commit,
+            "sha256": "e" * 64,
+            "status": "VERIFIED",
+        },
+    )
+    return verified
+
+
+def verified_manifest(document: dict, status: str) -> dict:
+    verified = deepcopy(document)
+    verified["contract_status"] = status
+    verified["finance_commit"] = "a" * 40
+    verified["extension_image"].update(
+        reference="ghcr.io/srobroek/finance-n8n@sha256:" + "b" * 64,
+        digest="sha256:" + "b" * 64,
+    )
+    return verified
+
+
 class N8nApplicationManifestTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -70,6 +110,27 @@ class N8nApplicationManifestTests(unittest.TestCase):
         lock_with_extra_field = deepcopy(self.image_lock)
         lock_with_extra_field["unexpected"] = True
         self.assertTrue(schema_errors(lock_with_extra_field, self.image_lock_schema))
+
+    def test_verified_disposable_and_production_fixtures_match_both_schemas(self) -> None:
+        for status in ("LOCKED_DISPOSABLE", "LOCKED_PRODUCTION"):
+            self.assertEqual(
+                schema_errors(verified_image_lock(self.image_lock, status), self.image_lock_schema),
+                [],
+            )
+        for status in ("DISPOSABLE_VERIFIED", "PRODUCTION_VERIFIED"):
+            self.assertEqual(
+                schema_errors(verified_manifest(self.manifest, status), self.manifest_schema),
+                [],
+            )
+
+    def test_verified_fixtures_reject_tag_references_and_missing_digests(self) -> None:
+        lock_with_tag = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
+        lock_with_tag["extension_image"]["reference"] = "ghcr.io/srobroek/finance-n8n:verified"
+        self.assertTrue(schema_errors(lock_with_tag, self.image_lock_schema))
+
+        manifest_without_digest = verified_manifest(self.manifest, "PRODUCTION_VERIFIED")
+        manifest_without_digest["extension_image"]["digest"] = None
+        self.assertTrue(schema_errors(manifest_without_digest, self.manifest_schema))
 
     def test_manifest_binds_checked_in_source_artifacts(self) -> None:
         for key in ("image_lock", "workflow_manifest", "fixture_manifest"):

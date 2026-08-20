@@ -14,8 +14,8 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertNotIn("/home/node/.n8n/nodes/node_modules/n8n-nodes-finance", dockerfile)
         self.assertNotIn("ENV N8N_CUSTOM_EXTENSIONS", dockerfile)
         self.assertIn("ARG N8N_BASE_IMAGE", dockerfile)
+        self.assertIn(f"ARG N8N_BASE_IMAGE={base_image}", dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
-        self.assertNotIn(base_image, dockerfile)
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
 
     def test_finance_image_builder_uses_only_immutable_base_and_writes_spec_receipt(self):
@@ -26,6 +26,10 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("N8N_BASE_IMAGE", builder)
         self.assertIn("FINANCE_SOURCE_COMMIT", builder)
         self.assertIn("FINANCE_BASE_IMAGE_MUST_BE_IMMUTABLE", builder)
+        self.assertIn("FINANCE_RUNTIME_RECEIPT_MUST_BE_EXTERNAL", builder)
+        self.assertIn("FINANCE_SOURCE_TREE_MUST_BE_CLEAN", builder)
+        self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
+        self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
         self.assertEqual(receipt["status"], "SPEC_ONLY")
         self.assertIsNone(receipt["image"]["image_digest"])
@@ -35,6 +39,7 @@ class N8nCustomImageTests(unittest.TestCase):
     def test_package_test_does_not_rebuild_production_output(self):
         package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))
         self.assertNotIn("npm run build", package["scripts"]["test"])
+        self.assertEqual(package["scripts"]["prepack"], "npm run build")
 
     def test_runtime_assertion_requires_all_reviewed_types(self):
         assertion = (ROOT / "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs").read_text(

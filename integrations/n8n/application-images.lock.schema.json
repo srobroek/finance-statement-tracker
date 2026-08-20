@@ -128,7 +128,7 @@
         "receipt"
       ],
       "properties": {
-        "reference": {"type": "string", "pattern": "^[^\\s@]+:[A-Za-z0-9_.-]+$"},
+        "reference": {"type": "string", "pattern": "^[^\\s@]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})$"},
         "image_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
         "source_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
         "base_image_digest": {"$ref": "#/$defs/digest"},
