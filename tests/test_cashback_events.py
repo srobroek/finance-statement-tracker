@@ -26,6 +26,7 @@ def actual_receipt(
     period_end: str,
     *,
     account_id: str = "EI_AMAZON",
+    card_code: str | None = None,
 ) -> dict[str, object]:
     payload_digest = statement_digest(f"actual-payload:{reference}")
     return {
@@ -33,7 +34,7 @@ def actual_receipt(
         "verification_version": 1,
         "actual_file_id": f"actual-file:{reference}",
         "account_id": account_id,
-        "card_code": account_id,
+        "card_code": card_code or account_id,
         "period_start": period_start,
         "period_end": period_end,
         "expected_payload_sha256": payload_digest,
@@ -487,6 +488,16 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "period_end": "2026-08-31",
                 "transactions": [],
             }
+            premature_receipt = actual_receipt("EI-2026-08", "2026-08-01", "2026-08-31")
+            with self.assertRaisesRegex(ValueError, "successful statement reconciliation"):
+                store.finalize_period({
+                    "statement_reference": "EI-2026-08",
+                    "statement_sha256": statement_digest("EI-2026-08"),
+                    "statement_evidence_reference": "sha256:premature",
+                    "statement_document_url": "Finance Evidence/ei-premature.pdf",
+                    "actual_import_receipt": premature_receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(premature_receipt),
+                })
             store.reconcile_statement(reconciliation)
             with self.assertRaisesRegex(ValueError, "statement_evidence_reference"):
                 store.finalize_period({"statement_reference": "EI-2026-08"})
@@ -726,8 +737,16 @@ class CashbackEventStoreTests(unittest.TestCase):
                 reference,
                 "2026-08-06",
                 "2026-09-05",
-                account_id="RAK_WORLD",
+                account_id="actual-account:RAK_WORLD",
+                card_code="RAK_WORLD",
             )
+            missing_card_receipt = {key: value for key, value in exact_receipt.items() if key != "card_code"}
+            with self.assertRaisesRegex(ValueError, "missing required fields.*card_code"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": missing_card_receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(missing_card_receipt),
+                })
             exact_payload = {
                 **close_fields,
                 "actual_import_receipt": exact_receipt,

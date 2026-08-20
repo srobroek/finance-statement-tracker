@@ -80,7 +80,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nif (h !== o.payload_sha256 || m.schema_version !== o.artifact_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
+        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nif (h !== o.payload_sha256 || m.schema_version !== o.artifact_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
       }
     },
     {
@@ -127,7 +127,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.\nconst r = $('Verify Recovery Contract').first().json, l = $json;\nif (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date())\n    throw new Error('RECOVERY_WRITER_LEASE_INVALID');\nreturn [{ json: { original_state: r.outbox_row.state, outbox: { state: 'PREPARED', outbox_id: r.outbox_row.outbox_id, actual_file_id: r.outbox_row.actual_file_id, account_id: r.manifest.account_id, transactions: r.manifest.transactions, reimportDeleted: false, writer_lease: { lease_id: String(l.lease_id), fencing_token: Number(l.fencing_token), expires_at: String(l.expires_at) } }, verification: r.verification } }];\n"
+        "jsCode": "// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.\nconst r = $('Verify Recovery Contract').first().json, l = $json;\nif (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date())\n    throw new Error('RECOVERY_WRITER_LEASE_INVALID');\nreturn [{ json: { original_state: r.outbox_row.state, outbox: { state: 'PREPARED', outbox_id: r.outbox_row.outbox_id, actual_file_id: r.outbox_row.actual_file_id, account_id: r.manifest.account_id, card_code: r.manifest.card_code, transactions: r.manifest.transactions, reimportDeleted: false, writer_lease: { lease_id: String(l.lease_id), fencing_token: Number(l.fencing_token), expires_at: String(l.expires_at) } }, verification: r.verification } }];\n"
       }
     },
     {
@@ -384,7 +384,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.\nreturn [{ json: { verification: $('Verify Recovery Contract').first().json.verification } }];\n"
+        "jsCode": "// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.\nconst verification = $('Verify Recovery Contract').first().json.verification;\nif (!verification.card_code)\n    throw new Error('RECOVERY_CARD_CODE_MISSING');\nreturn [{ json: { verification } }];\n"
       }
     },
     {
@@ -613,7 +613,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst verification = $('Recovery Verify Actual').first().json.actual;\nconst receipt = $('Compare Exact Actual Verification Receipt').first().json;\nif (!receipt || receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED')\n    throw new Error('ACTUAL_COMMIT_RECEIPT_NOT_TRUSTED');\nreturn [{\n        json: {\n            outbox_id: committed.outbox_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code || receipt.account_id,\n            state: committed.state,\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: receipt.invariants_passed,\n            verified_at: receipt.verified_at,\n            writer_release_verified: true,\n        },\n    }];\n"
+        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst verification = $('Recovery Verify Actual').first().json.actual;\nconst receipt = $('Compare Exact Actual Verification Receipt').first().json;\nif (!receipt || !receipt.card_code || receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED')\n    throw new Error('ACTUAL_COMMIT_RECEIPT_NOT_TRUSTED');\nreturn [{\n        json: {\n            outbox_id: committed.outbox_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: committed.state,\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: receipt.invariants_passed,\n            verified_at: receipt.verified_at,\n            writer_release_verified: true,\n        },\n    }];\n"
       }
     },
     {
@@ -655,6 +655,7 @@
             "verification_version": 1,
             "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
             "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
+            "card_code": "={{ $('Verify Recovery Contract').first().json.manifest.card_code }}",
             "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
             "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
             "expected_payload_sha256": "={{ $json.actual.expected_sha256 }}",
@@ -731,7 +732,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json.actual;\nif (observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || Number(observed.observed_account_balance) !== Number(result.account_balance)\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
+        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json.actual;\nif (!observed.card_code || String(observed.card_code).toUpperCase() !== String($('Verify Recovery Contract').first().json.manifest.card_code).toUpperCase()\n    || observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || Number(observed.observed_account_balance) !== Number(result.account_balance)\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
       }
     },
     {

@@ -142,6 +142,7 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         "verification_version",
         "actual_file_id",
         "account_id",
+        "card_code",
         "period_start",
         "period_end",
         "state",
@@ -155,7 +156,7 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
             "actual_import_receipt readback is missing required fields: "
             + ", ".join(missing)
         )
-    for field in ("outbox_id", "actual_file_id", "account_id"):
+    for field in ("outbox_id", "actual_file_id", "account_id", "card_code"):
         if not isinstance(receipt[field], str) or not receipt[field].strip():
             raise ValueError(f"actual_import_receipt.{field} must be a non-empty identity")
     version = receipt["verification_version"]
@@ -1508,10 +1509,9 @@ class CashbackEventStore:
                     raise ValueError(
                         "actual_import_receipt period does not match the reconciliation receipt"
                     )
-                receipt_card = str(
-                    actual_import_receipt.get("card_code")
-                    or actual_import_receipt["account_id"]
-                ).strip().upper()
+                receipt_card = str(actual_import_receipt.get("card_code") or "").strip().upper()
+                if not receipt_card:
+                    raise ValueError("actual_import_receipt.card_code is required")
                 if receipt_card != str(run["card_code"]).strip().upper():
                     raise ValueError(
                         "actual_import_receipt account identity/card does not match the reconciled card"

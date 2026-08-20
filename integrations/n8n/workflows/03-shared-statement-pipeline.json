@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const k of ['run_id', 'source_code', 'message_id', 'attachment_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key'])\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind))\n    throw new Error('Manual and MCP mutation are forbidden');\nreturn [{ json: r, binary: $binary }];\n"
+        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const k of ['run_id', 'source_code', 'message_id', 'attachment_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key'])\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind))\n    throw new Error('Manual and MCP mutation are forbidden');\nreturn [{ json: r, binary: $binary }];\n"
       }
     },
     {
@@ -180,7 +180,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = { schema_version: 'actual-delta-v1', source_code: s.source_code, document_sha256: s.document_sha256, config_version: s.config_version, parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0', actual_file_id: s.actual_file_id, account_id: s.account_id, period_start: r.period_start, period_end: r.period_end, expected_statement_balance_minor: r.reconciliation?.ending_balance_minor, transactions: r.actual_transactions };\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
+        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = { schema_version: 'actual-delta-v1', source_code: s.source_code, document_sha256: s.document_sha256, config_version: s.config_version, parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0', actual_file_id: s.actual_file_id, account_id: s.account_id, card_code: s.card_code, period_start: r.period_start, period_end: r.period_end, expected_statement_balance_minor: r.reconciliation?.ending_balance_minor, transactions: r.actual_transactions };\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
       }
     },
     {
@@ -303,7 +303,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nreturn [{ json: { outbox_id: `${source.run_id}:${source.document_sha256}`, run_id: source.run_id, imported_id: `statement:${source.document_sha256}`, actual_file_id: source.actual_file_id, payload_sha256: a.artifact_sha256, artifact_item_id: a.artifact_item_id, artifact_etag: a.artifact_etag, artifact_schema_version: a.artifact_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
+        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nreturn [{ json: { outbox_id: `${source.run_id}:${source.document_sha256}`, run_id: source.run_id, imported_id: `statement:${source.document_sha256}`, actual_file_id: source.actual_file_id, payload_sha256: a.artifact_sha256, artifact_item_id: a.artifact_item_id, artifact_etag: a.artifact_etag, artifact_schema_version: a.artifact_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, card_code: source.card_code, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
       }
     },
     {
@@ -346,6 +346,8 @@
             "artifact_schema_version": "={{ $json.artifact_schema_version }}",
             "config_version": "={{ $json.config_version }}",
             "parser_version": "={{ $json.parser_version }}",
+            "account_id": "={{ $json.account_id }}",
+            "card_code": "={{ $json.card_code }}",
             "state": "PREPARED",
             "attempt_count": 0,
             "updated_at": "={{ $now.toISO() }}"
@@ -652,7 +654,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Trusted Cashback Finalization. Keep this deterministic and fail closed.\nconst source = $('Verify Archive and Execution Context').first().json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst actual = $json;\nconst text = value => String(value ?? '').trim();\nconst required = ['outbox_id', 'actual_file_id', 'account_id', 'state', 'verification_version', 'period_start', 'period_end', 'expected_payload_sha256', 'observed_payload_sha256', 'invariants_passed', 'verified_at'];\nfor (const field of required) {\n    if (actual[field] === undefined || actual[field] === null || actual[field] === '')\n        throw new Error(`ACTUAL_CLOSE_RECEIPT_MISSING:${field}`);\n}\nif (actual.state !== 'COMMITTED' || actual.writer_release_verified !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_STALE');\nif (text(actual.actual_file_id) !== text(source.actual_file_id) || text(actual.account_id).toUpperCase() !== text(source.account_id).toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_ACCOUNT_MISMATCH');\nconst cardCode = text(source.card_code || source.account_id);\nif (text(actual.card_code || actual.account_id).toUpperCase() !== cardCode.toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_CARD_MISMATCH');\nif (text(actual.period_start) !== text(manifest.period_start) || text(actual.period_end) !== text(manifest.period_end))\n    throw new Error('ACTUAL_CLOSE_RECEIPT_PERIOD_MISMATCH');\nif (!/^[a-f0-9]{64}$/i.test(text(actual.expected_payload_sha256)) || !/^[a-f0-9]{64}$/i.test(text(actual.observed_payload_sha256)) || text(actual.expected_payload_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_DIGEST_MISMATCH');\nif (actual.invariants_passed !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_INVARIANTS_FAILED');\nconst receipt = {\n    account_id: text(actual.account_id),\n    actual_file_id: text(actual.actual_file_id),\n    card_code: cardCode,\n    expected_account_balance: actual.expected_account_balance ?? null,\n    expected_amount_sum_minor: actual.expected_amount_sum_minor ?? null,\n    expected_count: actual.expected_count ?? null,\n    expected_payload_sha256: text(actual.expected_payload_sha256).toLowerCase(),\n    invariants_passed: true,\n    observed_account_balance: actual.observed_account_balance ?? null,\n    observed_amount_sum_minor: actual.observed_amount_sum_minor ?? null,\n    observed_count: actual.observed_count ?? null,\n    observed_payload_sha256: text(actual.observed_payload_sha256).toLowerCase(),\n    outbox_id: text(actual.outbox_id),\n    period_end: text(actual.period_end),\n    period_start: text(actual.period_start),\n    state: 'COMMITTED',\n    verification_version: Number(actual.verification_version),\n    verified_at: text(actual.verified_at),\n    writer_release_verified: true,\n};\n// The native Convert to File and Crypto nodes below calculate this digest. The draft never authenticates itself.\nconst actual_import_receipt_sha256 = undefined;\nconst statement_sha256 = text(statement.statement_sha256 || statement.document_sha256 || source.document_sha256);\nif (!/^[a-f0-9]{64}$/i.test(statement_sha256))\n    throw new Error('CASHBACK_CLOSE_STATEMENT_DIGEST_INVALID');\nconst statement_reference = text(statement.statement_reference || source.statement_reference) || `statement:${source.source_code}:${source.document_sha256}`;\nconst statement_evidence_reference = text(statement.statement_evidence_reference || source.statement_evidence_reference) || `onedrive:${source.onedrive_item_id}:${source.document_sha256}`;\nconst statement_document_url = text(statement.statement_document_url || source.statement_document_url) || `onedrive-item:${source.onedrive_item_id}`;\nconst cashback_finalization = { statement_reference, statement_sha256, statement_evidence_reference, statement_document_url, actual_import_receipt: receipt, actual_import_receipt_sha256 };\nreturn [{ json: { ...actual, cashback_finalization, actual_import_receipt: receipt, actual_import_receipt_sha256 } }];\n"
+        "jsCode": "// Purpose: Build Trusted Cashback Finalization. Keep this deterministic and fail closed.\nconst source = $('Verify Archive and Execution Context').first().json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst actual = $json;\nconst text = value => String(value ?? '').trim();\nconst required = ['outbox_id', 'actual_file_id', 'account_id', 'card_code', 'state', 'verification_version', 'period_start', 'period_end', 'expected_payload_sha256', 'observed_payload_sha256', 'invariants_passed', 'verified_at'];\nfor (const field of required) {\n    if (actual[field] === undefined || actual[field] === null || actual[field] === '')\n        throw new Error(`ACTUAL_CLOSE_RECEIPT_MISSING:${field}`);\n}\nif (actual.state !== 'COMMITTED' || actual.writer_release_verified !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_STALE');\nif (text(actual.actual_file_id) !== text(source.actual_file_id) || text(actual.account_id).toUpperCase() !== text(source.account_id).toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_ACCOUNT_MISMATCH');\nconst cardCode = text(source.card_code);\nif (!cardCode || !text(actual.card_code) || text(actual.card_code).toUpperCase() !== cardCode.toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_CARD_MISMATCH');\nif (text(actual.period_start) !== text(manifest.period_start) || text(actual.period_end) !== text(manifest.period_end))\n    throw new Error('ACTUAL_CLOSE_RECEIPT_PERIOD_MISMATCH');\nif (!/^[a-f0-9]{64}$/i.test(text(actual.expected_payload_sha256)) || !/^[a-f0-9]{64}$/i.test(text(actual.observed_payload_sha256)) || text(actual.expected_payload_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_DIGEST_MISMATCH');\nif (actual.invariants_passed !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_INVARIANTS_FAILED');\nconst receipt = {\n    account_id: text(actual.account_id),\n    actual_file_id: text(actual.actual_file_id),\n    card_code: cardCode,\n    expected_account_balance: actual.expected_account_balance ?? null,\n    expected_amount_sum_minor: actual.expected_amount_sum_minor ?? null,\n    expected_count: actual.expected_count ?? null,\n    expected_payload_sha256: text(actual.expected_payload_sha256).toLowerCase(),\n    invariants_passed: true,\n    observed_account_balance: actual.observed_account_balance ?? null,\n    observed_amount_sum_minor: actual.observed_amount_sum_minor ?? null,\n    observed_count: actual.observed_count ?? null,\n    observed_payload_sha256: text(actual.observed_payload_sha256).toLowerCase(),\n    outbox_id: text(actual.outbox_id),\n    period_end: text(actual.period_end),\n    period_start: text(actual.period_start),\n    state: 'COMMITTED',\n    verification_version: Number(actual.verification_version),\n    verified_at: text(actual.verified_at),\n    writer_release_verified: true,\n};\n// The native Convert to File and Crypto nodes below calculate this digest. The draft never authenticates itself.\nconst actual_import_receipt_sha256 = undefined;\nconst statement_sha256 = text(statement.statement_sha256 || statement.document_sha256 || source.document_sha256);\nif (!/^[a-f0-9]{64}$/i.test(statement_sha256))\n    throw new Error('CASHBACK_CLOSE_STATEMENT_DIGEST_INVALID');\nconst statement_reference = text(statement.statement_reference || source.statement_reference) || `statement:${source.source_code}:${source.document_sha256}`;\nconst statement_evidence_reference = text(statement.statement_evidence_reference || source.statement_evidence_reference) || `onedrive:${source.onedrive_item_id}:${source.document_sha256}`;\nconst statement_document_url = text(statement.statement_document_url || source.statement_document_url) || `onedrive-item:${source.onedrive_item_id}`;\nconst cashback_finalization = { statement_reference, statement_sha256, statement_evidence_reference, statement_document_url, actual_import_receipt: receipt, actual_import_receipt_sha256 };\nreturn [{ json: { ...actual, cashback_finalization, actual_import_receipt: receipt, actual_import_receipt_sha256 } }];\n"
       }
     },
     {
@@ -700,6 +702,47 @@
       ],
       "parameters": {
         "jsCode": "// Purpose: Finalize Trusted Cashback Payload. Keep this deterministic and fail closed.\nconst draft = $('Build Trusted Cashback Finalization').first().json;\nconst digest = String($json.actual_import_receipt_sha256 || '').toLowerCase();\nif (!/^[a-f0-9]{64}$/.test(digest))\n    throw new Error('ACTUAL_CLOSE_RECEIPT_DIGEST_MISSING');\nconst cashback_finalization = { ...draft.cashback_finalization, actual_import_receipt_sha256: digest };\nreturn [{ json: { ...draft, actual_import_receipt_sha256: digest, cashback_finalization } }];\n"
+      }
+    },
+    {
+      "id": "3065",
+      "name": "Build Cashback Reconciliation Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.transaction_type || row.event_type || '').trim().toUpperCase();\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: String(row.currency_original || row.currency || 'AED'),\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: eventType,\n        event_type: eventType,\n    };\n});\nif (!transactions.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY');\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"
+      }
+    },
+    {
+      "id": "3066",
+      "name": "Reconcile Cashback Statement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1900
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/reconcile",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Build Cashback Reconciliation Request').first().json.cashback_reconcile }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
       }
     },
     {
@@ -804,7 +847,7 @@
             "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
             "reconciliation_version": 1,
             "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
-            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_sha256 }}",
+            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
             "cashback_close_id": "={{ $json.close_id || '' }}",
             "state": "COMMITTED",
             "difference_minor": 0,
@@ -1416,6 +1459,28 @@
       ]
     },
     "Finalize Trusted Cashback Payload": {
+      "main": [
+        [
+          {
+            "node": "Build Cashback Reconciliation Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cashback Reconciliation Request": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Cashback Statement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile Cashback Statement": {
       "main": [
         [
           {

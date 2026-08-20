@@ -23,7 +23,7 @@ def actual_receipt(reference: str) -> dict[str, object]:
         "outbox_id": f"outbox:{reference}",
         "verification_version": 1,
         "actual_file_id": f"actual-file:{reference}",
-        "account_id": "RAK_WORLD",
+        "account_id": "actual-account:RAK_WORLD",
         "card_code": "RAK_WORLD",
         "period_start": "2026-08-06",
         "period_end": "2026-09-05",

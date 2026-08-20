@@ -492,7 +492,17 @@ try {{
         code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"]["parameters"]["jsCode"]
         self.assertIn("expected_transactions", code)
         self.assertIn("expected_account_balance", code)
+        self.assertIn("card_code", code)
         self.assertNotIn("imported_ids:", code)
+        writer_nodes = self.nodes("20-actual-outbox-apply.json")
+        self.assertIn(
+            "card_code",
+            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["columns"]["value"],
+        )
+        self.assertNotIn(
+            "receipt.card_code || receipt.account_id",
+            writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
+        )
 
     def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
         recovery = set(self.nodes("17-actual-outbox-recovery.json"))
@@ -1625,6 +1635,14 @@ try {{
         )
         self.assertEqual(
             workflow["connections"]["Finalize Trusted Cashback Payload"]["main"][0][0]["node"],
+            "Build Cashback Reconciliation Request",
+        )
+        self.assertEqual(
+            workflow["connections"]["Build Cashback Reconciliation Request"]["main"][0][0]["node"],
+            "Reconcile Cashback Statement",
+        )
+        self.assertEqual(
+            workflow["connections"]["Reconcile Cashback Statement"]["main"][0][0]["node"],
             "Cashback Close Required",
         )
         self.assertEqual(
@@ -1639,9 +1657,19 @@ try {{
             nodes["SHA-256 Trusted Actual Receipt"]["parameters"]["dataPropertyName"],
             "actual_import_receipt_sha256",
         )
+        self.assertTrue(
+            nodes["Reconcile Cashback Statement"]["parameters"]["url"].endswith("/api/reconcile")
+        )
+        self.assertIn(
+            "Build Cashback Reconciliation Request",
+            nodes["Reconcile Cashback Statement"]["parameters"]["jsonBody"],
+        )
         body = nodes["Finalize Eligible Cashback Period"]["parameters"]["jsonBody"]
         self.assertIn("Finalize Trusted Cashback Payload", body)
         self.assertNotIn("cashback_finalization", nodes["Validate Statement Reconciliation and IDs"]["parameters"]["jsCode"])
+        trusted_builder = nodes["Build Trusted Cashback Finalization"]["parameters"]["jsCode"]
+        self.assertNotIn("source.card_code || source.account_id", trusted_builder)
+        self.assertNotIn("actual.card_code || actual.account_id", trusted_builder)
 
         digest = "a" * 64
         source = {
@@ -1649,15 +1677,26 @@ try {{
             "document_sha256": "b" * 64,
             "onedrive_item_id": "drive-statement-1",
             "actual_file_id": "actual-file-1",
-            "account_id": "EI_AMAZON",
+            "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
         }
-        statement = {"statement_reference": "EI-2026-08", "statement_sha256": "c" * 64}
-        manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31"}
+        statement = {
+            "statement_reference": "EI-2026-08",
+            "statement_sha256": "c" * 64,
+            "transactions": [{
+                "transaction_id": "statement-transaction-1",
+                "transaction_date": "2026-08-15",
+                "description": "Synthetic Merchant",
+                "amount_aed": "8.00",
+                "currency_original": "AED",
+                "transaction_type": "PURCHASE",
+            }],
+        }
+        manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31", "card_code": "EI_AMAZON"}
         actual = {
             "outbox_id": "outbox:ei-2026-08",
             "actual_file_id": "actual-file-1",
-            "account_id": "EI_AMAZON",
+            "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
             "state": "COMMITTED",
             "writer_release_verified": True,
@@ -1689,7 +1728,8 @@ try {{
         self.assertTrue(result["ok"], result)
         close = result["output"][0]["json"]["cashback_finalization"]
         self.assertEqual(close["actual_import_receipt"]["state"], "COMMITTED")
-        self.assertEqual(close["actual_import_receipt"]["account_id"], "EI_AMAZON")
+        self.assertEqual(close["actual_import_receipt"]["account_id"], "actual-account:EI_AMAZON")
+        self.assertEqual(close["actual_import_receipt"]["card_code"], "EI_AMAZON")
         self.assertEqual(close["actual_import_receipt"]["period_end"], "2026-08-31")
         self.assertEqual(close["actual_import_receipt"]["expected_payload_sha256"], digest)
         receipt_digest = hashlib.sha256(
@@ -1715,6 +1755,43 @@ try {{
             finalized["output"][0]["json"]["cashback_finalization"]["actual_import_receipt_sha256"],
             receipt_digest,
         )
+        reconciled = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Build Cashback Reconciliation Request",
+            finalized["output"][0]["json"],
+            references,
+        )
+        self.assertTrue(reconciled["ok"], reconciled)
+        reconcile_request = reconciled["output"][0]["json"]["cashback_reconcile"]
+        self.assertEqual(reconcile_request["card_code"], "EI_AMAZON")
+        self.assertEqual(reconcile_request["period_start"], "2026-08-01")
+        self.assertEqual(
+            reconcile_request["transactions"][0]["statement_transaction_id"],
+            "statement-transaction-1",
+        )
+        self.assertEqual(reconcile_request["transactions"][0]["event_type"], "PURCHASE")
+        empty_statement_references = {
+            **references,
+            "Validate Statement Reconciliation and IDs": {"json": {**statement, "transactions": []}},
+        }
+        empty_reconcile = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Build Cashback Reconciliation Request",
+            finalized["output"][0]["json"],
+            empty_statement_references,
+        )
+        self.assertFalse(empty_reconcile["ok"])
+        missing_card_references = {
+            **references,
+            "Verify Archive and Execution Context": {"json": {key: value for key, value in source.items() if key != "card_code"}},
+        }
+        missing_card_reconcile = self.run_exported_workflow_node(
+            "03-shared-statement-pipeline.json",
+            "Build Cashback Reconciliation Request",
+            finalized["output"][0]["json"],
+            missing_card_references,
+        )
+        self.assertFalse(missing_card_reconcile["ok"])
         replay = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
             "Build Trusted Cashback Finalization",
@@ -1736,6 +1813,8 @@ try {{
             "missing": {key: value for key, value in actual.items() if key != "observed_payload_sha256"},
             "stale": {**actual, "state": "ACTUAL_OBSERVED"},
             "cross-account": {**actual, "account_id": "RAK_WORLD"},
+            "missing-card": {key: value for key, value in actual.items() if key != "card_code"},
+            "cross-card": {**actual, "card_code": "RAK_WORLD"},
             "cross-period": {**actual, "period_end": "2026-09-01"},
             "digest-mismatch": {**actual, "observed_payload_sha256": "d" * 64},
         }.items():
