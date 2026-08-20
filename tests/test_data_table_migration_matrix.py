@@ -42,6 +42,22 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         Draft202012Validator.check_schema(schema)
         Draft202012Validator(schema).validate(self.matrix)
 
+    def test_provenance_excludes_generator_commit_cycle(self) -> None:
+        snapshot = self.generator.source_snapshot()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        self.assertNotEqual(snapshot["finance_commit"], head)
+        self.assertIn("data-tables.json", snapshot["source_ref_selection"])
+        self.assertIn("scan-root directories", snapshot["source_ref_selection"])
+        self.assertIn("Normalize CRLF to LF", snapshot["node_scan_digest_method"])
+
+    def test_crlf_normalization_covers_hashing_and_emission(self) -> None:
+        self.assertEqual(self.generator.normalize_lf(b"one\r\ntwo\r\n"), b"one\ntwo\n")
+        rendered = self.generator.render({"line": "one\ntwo"})
+        self.assertNotIn("\r", rendered)
+        self.assertEqual(rendered.encode("utf-8"), self.generator.normalize_lf(rendered.encode("utf-8")))
+
     def test_source_counts_and_dispositions_match_current_corpus(self) -> None:
         invariants = self.matrix["invariants"]
         self.assertEqual(
