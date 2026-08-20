@@ -257,18 +257,14 @@ try {
         self.assertIn("SOURCE_CURSOR_ALREADY_COMMITTED", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
         cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
-        commit_read_filters = w12_nodes["Read ARCHIVED Receipt for Commit"]["parameters"]["filters"]["conditions"]
+        commit_read_filters = w12_nodes["Read Acquisition Receipt for Commit Resume"]["parameters"]["filters"]["conditions"]
         self.assertEqual(
             [row["keyName"] for row in commit_read_filters],
-            ["run_id", "source_code", "terminal_state", "readback_verified"],
-        )
-        self.assertEqual(
-            [row["keyValue"] for row in commit_read_filters],
-            ["={{ $('Validate Sweep or Commit').item.json.run_id }}", "={{ $('Validate Sweep or Commit').item.json.source_code }}", "ARCHIVED", True],
+            ["run_id", "source_code"],
         )
         self.assertEqual(
             w12["connections"]["Route Operation"]["main"][1][0]["node"],
-            "Read ARCHIVED Receipt for Commit",
+            "Read Acquisition Receipt for Commit Resume",
         )
         self.assertEqual(
             w12["connections"]["Verify Attachment Archive Barrier"]["main"][0][0]["node"],
@@ -279,12 +275,20 @@ try {
             "Determine Existing Cursor Commit",
         )
         self.assertEqual(
-            w12["connections"]["Cursor Commit Already Applied"]["main"][0][0]["node"],
-            "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            w12["connections"]["Determine Existing Cursor Commit"]["main"][0][0]["node"],
+            "Source Cursor Recovery Readback Needed",
         )
         self.assertEqual(
-            w12["connections"]["Cursor Commit Already Applied"]["main"][1][0]["node"],
+            w12["connections"]["Route Commit Resume State"]["main"][1][0]["node"],
             "Build Cursor CAS Update",
+        )
+        self.assertEqual(
+            w12["connections"]["Compare CAS Cursor Readback"]["main"][0][0]["node"],
+            "Mark Source Cursor Readback Verified",
+        )
+        self.assertEqual(
+            w12["connections"]["Route Commit Resume State"]["main"][4][0]["node"],
+            "Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
         )
         self.assertEqual(
             w12["connections"]["Verify Terminal Acquisition Receipt"]["main"][0][0]["node"],
@@ -296,6 +300,9 @@ try {
         self.assertTrue(
             w12_nodes["Mark DOWNSTREAM_VERIFIED Receipt Readback Verified"]["parameters"]["columns"]["value"]["readback_verified"]
         )
+        self.assertIn("ACQUISITION_RESUME_STATE_UNSUPPORTED", w12_nodes["Validate Commit Resume State"]["parameters"]["jsCode"])
+        self.assertIn("downstream_receipt_sha256", w12_nodes["Validate Sweep or Commit"]["parameters"]["jsCode"])
+        self.assertIn("SOURCE_CURSOR_TERMINAL_COMMIT_MISSING", w12_nodes["Determine Existing Cursor Commit"]["parameters"]["jsCode"])
         self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
         self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
         self.assertIn("ARCHIVE_RECEIPT_REPLAY_NOT_SAFE", w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"]["jsCode"])
@@ -656,6 +663,19 @@ try {
             },
         )
         self.assert_code_error(
+            w12,
+            "Validate Sweep or Commit",
+            "Missing downstream_receipt_sha256",
+            json_value={
+                "operation": "COMMIT",
+                "run_id": "fixture:commit",
+                "source_code": "FIXTURE",
+                "window_start": "2026-08-19T00:00:00.000Z",
+                "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                "expected_cursor_version": 0,
+            },
+        )
+        self.assert_code_error(
             w01,
             "Verify Enumerated Attachment Archive",
             "ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH",
@@ -819,6 +839,190 @@ try {
         )
         self.assertTrue(barrier["ok"], barrier)
         self.assertEqual(barrier["output"][0]["json"]["attachments_verified"], 2)
+
+    def test_executable_commit_resume_uses_persisted_states_without_duplicate_cas(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        request = {
+            "run_id": "fixture:persisted-resume",
+            "source_code": "FIXTURE",
+            "window_start": "2026-08-19T00:00:00.000Z",
+            "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "operation": "COMMIT",
+            "expected_cursor_version": 0,
+            "downstream_receipt_sha256": "a" * 64,
+        }
+        receipt = {
+            **{key: request[key] for key in (
+                "run_id", "source_code", "window_start", "run_upper_bound",
+            )},
+            "folder_id": "folder",
+            "senders": ["sender@example.test"],
+            "subjects": ["Fixture"],
+            "onedrive_parent_id": "parent",
+            "scanned_count": 1,
+            "matched_count": 1,
+            "heartbeat": False,
+            "pagination_exhausted": True,
+            "attachment_verification_barrier": "VERIFIED",
+            "attachment_ids_verified": True,
+            "attachment_identity_keys_json": '["message-1:attachment-1"]',
+            "attachments_verified": 1,
+            "email_evidence_receipt_barrier": "VERIFIED",
+            "email_evidence_receipts_verified": 1,
+            "email_evidence_identity_keys_json": '["message-1:INLINE_BODY"]',
+            "archive_ready": True,
+            "cursor_commit_eligible": False,
+            "terminal_state": "ARCHIVED",
+            "readback_verified": True,
+            "downstream_receipt_sha256": "a" * 64,
+        }
+
+        class PersistedDataTables:
+            def __init__(self):
+                self.receipt = dict(receipt)
+                self.cursor = {
+                    "source_code": "FIXTURE",
+                    "cursor_version": 0,
+                    "cursor_value": "2026-08-19T00:00:00.000Z",
+                    "committed_run_id": None,
+                    "run_upper_bound": "2026-08-19T00:00:00.000Z",
+                    "readback_verified": True,
+                }
+                self.cas_writes = 0
+
+            def read_receipt(self):
+                return dict(self.receipt)
+
+            def read_cursor(self):
+                return dict(self.cursor)
+
+            def compare_and_swap(self, cas_row):
+                self.assert_cas_preconditions(cas_row)
+                self.cursor.update({
+                    "cursor_version": cas_row["next_cursor_version"],
+                    "cursor_value": cas_row["run_upper_bound"],
+                    "committed_run_id": cas_row["run_id"],
+                    "run_upper_bound": cas_row["run_upper_bound"],
+                    "readback_verified": False,
+                })
+                self.cas_writes += 1
+
+            def assert_cas_preconditions(self, cas_row):
+                if self.cursor["cursor_version"] != cas_row["prior_cursor_version"]:
+                    raise AssertionError("CAS version changed before write")
+                if self.cursor["source_code"] != cas_row["source_code"]:
+                    raise AssertionError("CAS source changed before write")
+
+            def transition_receipt(self, terminal_state, *, readback_verified):
+                self.receipt.update({
+                    "terminal_state": terminal_state,
+                    "cursor_commit_eligible": terminal_state == "DOWNSTREAM_VERIFIED",
+                    "readback_verified": readback_verified,
+                })
+
+            def mark_cursor_readback_verified(self):
+                if self.cursor["readback_verified"] is not False:
+                    raise AssertionError("cursor readback marker was not pending")
+                self.cursor["readback_verified"] = True
+
+        tables = PersistedDataTables()
+
+        def enter_commit():
+            persisted_receipt = tables.read_receipt()
+            validated = self.execute_code_node(
+                workflow,
+                "Validate Commit Resume State",
+                json_value=persisted_receipt,
+                refs={"Validate Sweep or Commit": request},
+            )
+            self.assertTrue(validated["ok"], validated)
+            proof = self.execute_code_node(
+                workflow,
+                "Verify Downstream Persistence Proof",
+                json_value=validated["output"][0]["json"],
+                refs={"Validate Sweep or Commit": request},
+            )
+            self.assertTrue(proof["ok"], proof)
+            proof_row = proof["output"][0]["json"]
+            determined = self.execute_code_node(
+                workflow,
+                "Determine Existing Cursor Commit",
+                json_value=tables.read_cursor(),
+                refs={"Verify Downstream Persistence Proof": proof_row},
+            )
+            self.assertTrue(determined["ok"], determined)
+            return proof_row, determined["output"][0]["json"]
+
+        # The persisted ARCHIVED/true row takes the one allowed CAS path.
+        proof, detected = enter_commit()
+        self.assertEqual(detected["resume_path"], "CAS")
+        cas = self.execute_code_node(
+            workflow,
+            "Build Cursor CAS Update",
+            json_value=detected,
+            refs={"Verify Downstream Persistence Proof": proof},
+        )
+        self.assertTrue(cas["ok"], cas)
+        tables.compare_and_swap(cas["output"][0]["json"])
+        self.assertEqual(tables.cas_writes, 1)
+
+        # Crash after CAS leaves ARCHIVED/true and a pending source-cursor readback.
+        proof, detected = enter_commit()
+        self.assertEqual(detected["resume_path"], "ARCHIVED_RECOVERY")
+        self.assertFalse(detected["cursor_readback_verified"])
+        tables.mark_cursor_readback_verified()
+        source_readback = self.execute_code_node(
+            workflow,
+            "Verify Source Cursor Readback",
+            json_value=tables.read_cursor(),
+            refs={
+                "Verify Downstream Persistence Proof": proof,
+                "Determine Existing Cursor Commit": detected,
+            },
+        )
+        self.assertTrue(source_readback["ok"], source_readback)
+        self.assertTrue(source_readback["output"][0]["json"]["cursor_readback_stage"])
+        tables.transition_receipt("DOWNSTREAM_VERIFIED", readback_verified=False)
+
+        # A crash after DOWNSTREAM_VERIFIED is written must resume its receipt readback.
+        proof, detected = enter_commit()
+        self.assertEqual(detected["resume_path"], "DOWNSTREAM_UNVERIFIED")
+        terminal_readback = self.execute_code_node(
+            workflow,
+            "Verify Terminal Acquisition Receipt",
+            json_value=tables.read_receipt(),
+            refs={"Verify Downstream Persistence Proof": proof},
+        )
+        self.assertTrue(terminal_readback["ok"], terminal_readback)
+        tables.transition_receipt("DOWNSTREAM_VERIFIED", readback_verified=True)
+
+        # An exact replay of DOWNSTREAM_VERIFIED/true is terminal and never CASes again.
+        proof, detected = enter_commit()
+        self.assertEqual(detected["resume_path"], "DOWNSTREAM_VERIFIED_REPLAY")
+        replay = self.execute_code_node(
+            workflow,
+            "Verify Replayed Terminal Acquisition Receipt",
+            json_value=tables.read_receipt(),
+            refs={
+                "Verify Downstream Persistence Proof": proof,
+                "Determine Existing Cursor Commit": detected,
+            },
+        )
+        self.assertTrue(replay["ok"], replay)
+        returned = self.execute_code_node(
+            workflow,
+            "Return Replayed Cursor Commit",
+            refs={
+                "Verify Downstream Persistence Proof": proof,
+                "Determine Existing Cursor Commit": detected,
+                "Verify Replayed Terminal Acquisition Receipt": replay["output"][0]["json"],
+            },
+        )
+        self.assertTrue(returned["ok"], returned)
+        self.assertTrue(returned["output"][0]["json"]["replayed"])
+        self.assertEqual(returned["output"][0]["json"]["cursor_version"], 1)
+        self.assertEqual(returned["output"][0]["json"]["downstream_receipt_sha256"], "a" * 64)
+        self.assertEqual(tables.cas_writes, 1)
 
     def test_executable_101_attachment_barrier_all_new_then_all_replay(self):
         w01 = self.workflow("01-outlook-finance-acquisition.json")
