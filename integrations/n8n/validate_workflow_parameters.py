@@ -3,21 +3,30 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
 import json
-from pathlib import Path
 import re
 import sys
-from typing import Any, Iterable
+from collections import defaultdict
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
 from jsonschema import Draft202012Validator
-
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = Path(__file__).with_name("workflow-parameter-ownership.json")
 SCHEMA_PATH = Path(__file__).with_name("workflow-parameter-ownership.schema.json")
 EXPRESSION_PREFIX = "={{"
 CALLER_EXPRESSION = re.compile(r"(?:\$json|\$input|\$fromAI\b)")
+# n8n supports several equivalent ways to read another node. Keep these
+# deliberately syntax-oriented: a named parameter node is trusted only when
+# the referenced field can be shown not to be protected.
+NAMED_NODE_REFERENCE = re.compile(
+    r"(?:\$\(\s*|\$node\[\s*|\$items\(\s*|\$item\([^)]*\)\.\$node\[\s*)['\"]([^'\"]+)['\"]"
+)
+JSON_FIELD_REFERENCE = re.compile(
+    r"(?:\.json|\[\s*['\"]json['\"]\s*\])\s*(?:\.\s*([A-Za-z_$][A-Za-z0-9_$]*)|\[\s*['\"]([^'\"]+)['\"]\s*\])"
+)
 MIN_SHARED_LITERAL_LENGTH = 4
 
 
@@ -28,6 +37,8 @@ def load_json(path: Path) -> Any:
 def _selector_values(document: Any, selector: str) -> list[Any]:
     """Resolve a small deterministic dot selector with ``*`` fan-out."""
 
+    if selector == "$":
+        return [document]
     values: list[Any] = [document]
     for part in selector.split("."):
         next_values: list[Any] = []
@@ -74,6 +85,34 @@ def _is_expression(value: Any) -> bool:
 def _is_protected_field(field: str, protected_names: set[str]) -> bool:
     parts = set(re.split(r"[^a-z0-9]+", field.casefold()))
     return field.casefold() in protected_names or bool(parts & protected_names)
+
+
+def _named_node_protected_fields(
+    value: str, parameter_node_names: set[str], protected_names: set[str]
+) -> tuple[set[str], list[str]]:
+    """Return parameter nodes and protected fields referenced by an expression.
+
+    Expressions that return an entire named node object are also rejected: the
+    expression cannot prove that protected local inputs are not being exposed.
+    """
+
+    named_nodes = {
+        name for name in NAMED_NODE_REFERENCE.findall(value) if name in parameter_node_names
+    }
+    if not named_nodes:
+        return set(), []
+    referenced_fields = [
+        field
+        for match in JSON_FIELD_REFERENCE.finditer(value)
+        for field in match.groups()
+        if field
+    ]
+    protected_fields = [
+        field for field in referenced_fields if _is_protected_field(field, protected_names)
+    ]
+    if not referenced_fields:
+        protected_fields = ["<entire-node>"]
+    return named_nodes, protected_fields
 
 
 def _finding(
@@ -166,6 +205,29 @@ def _global_values(root: Path, contract: dict[str, Any]) -> tuple[set[str], list
     return values, findings
 
 
+def _credential_values(root: Path, contract: dict[str, Any]) -> tuple[set[str], list[dict[str, str]]]:
+    """Load canonical credential identifiers without treating them as secrets."""
+
+    values: set[str] = set()
+    findings: list[dict[str, str]] = []
+    for source in contract["credential_identifier_sources"]:
+        path = root / source["path"]
+        try:
+            document = load_json(path)
+        except (OSError, json.JSONDecodeError) as error:
+            findings.append(
+                _finding(
+                    "CREDENTIAL_SOURCE_UNREADABLE",
+                    detail=f"{source['path']}: {error.__class__.__name__}",
+                )
+            )
+            continue
+        for selector in source["selectors"]:
+            for selected in _selector_values(document, selector):
+                values.update(_scalar_strings(selected))
+    return values, findings
+
+
 def _validate_schema(root: Path, contract: dict[str, Any]) -> list[dict[str, str]]:
     try:
         schema = load_json(root / SCHEMA_PATH.relative_to(ROOT))
@@ -189,6 +251,8 @@ def scan(
     findings = _validate_schema(root, ownership)
     global_values, source_findings = _global_values(root, ownership)
     findings.extend(source_findings)
+    credential_values, credential_source_findings = _credential_values(root, ownership)
+    findings.extend(credential_source_findings)
     docs = documents if documents is not None else _workflow_documents(root, ownership)
     discovered_names = {name for name, _ in docs}
     expected_names = set(ownership["workflows"])
@@ -202,6 +266,11 @@ def scan(
     key_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in forbidden["credential_key_patterns"]]
     value_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in forbidden["secret_value_patterns"]]
     protected_names = {name.casefold() for name in forbidden["protected_field_names"]}
+    parameter_node_names = {
+        node_name
+        for workflow_spec in ownership["workflows"].values()
+        for node_name in workflow_spec.get("nodes", {})
+    }
 
     for workflow, document in sorted(docs, key=lambda row: row[0]):
         if not isinstance(document, dict) or not isinstance(document.get("nodes"), list):
@@ -247,6 +316,8 @@ def scan(
                     findings.append(_finding("CREDENTIAL_OR_SECRET_FIELD", workflow=workflow, node=node_name, field=field, detail="credential or secret-shaped field name"))
                 if any(pattern.search(candidate) for pattern in value_patterns for candidate in _scalar_strings(value)):
                     findings.append(_finding("SECRET_VALUE_IN_PARAMETER", workflow=workflow, node=node_name, field=field, detail="secret-shaped literal"))
+                if any(candidate in credential_values for candidate in _scalar_strings(value)):
+                    findings.append(_finding("CREDENTIAL_IDENTIFIER_IN_PARAMETER", workflow=workflow, node=node_name, field=field, detail="value matches a canonical n8n credential identifier"))
                 if field_spec is None:
                     findings.append(_finding("PARAMETER_FIELD_UNALLOWLISTED", workflow=workflow, node=node_name, field=field, detail="field is not in the ownership contract"))
                     continue
@@ -257,6 +328,16 @@ def scan(
                 expression = _is_expression(value)
                 if expression and not field_spec.get("expression_allowed", False):
                     findings.append(_finding("UNDECLARED_INPUT_EXPRESSION", workflow=workflow, node=node_name, field=field, detail="expression is not allowlisted for this field"))
+                if expression and isinstance(value, str):
+                    named_nodes, protected_fields = _named_node_protected_fields(value, parameter_node_names, protected_names)
+                    if protected_fields:
+                        findings.append(_finding(
+                            "PROTECTED_NAMED_NODE_INPUT",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail=f"expression reads protected field(s) {protected_fields} from named parameter node(s) {sorted(named_nodes)}",
+                        ))
                 if category == "global_generated_contract":
                     source = field_spec.get("source")
                     if expression:
@@ -265,13 +346,28 @@ def scan(
                         findings.append(_finding("GLOBAL_SOURCE_MISSING", workflow=workflow, node=node_name, field=field, detail="global field has no source selector"))
                     else:
                         source_path = root / source["path"]
+                        source_document: Any = None
+                        source_readable = False
                         try:
                             source_document = load_json(source_path)
+                            source_readable = True
                             allowed = _selector_values(source_document, source["selector"])
                         except (OSError, json.JSONDecodeError) as error:
                             allowed = []
                             findings.append(_finding("GLOBAL_SOURCE_UNREADABLE", workflow=workflow, node=node_name, field=field, detail=f"{source['path']}: {error.__class__.__name__}"))
-                        if value not in allowed:
+                        if source["selector"] == "$" and source_readable:
+                            try:
+                                parsed_value = json.loads(value) if isinstance(value, str) else None
+                            except json.JSONDecodeError:
+                                parsed_value = None
+                                document_valid = False
+                            else:
+                                document_valid = True
+                            if not document_valid:
+                                findings.append(_finding("GLOBAL_DOCUMENT_INVALID", workflow=workflow, node=node_name, field=field, detail=f"value is not valid JSON for {source['path']}"))
+                            elif parsed_value != source_document:
+                                findings.append(_finding("GLOBAL_DOCUMENT_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value does not equal the complete document at {source['path']}"))
+                        elif source["selector"] != "$" and value not in allowed:
                             findings.append(_finding("GLOBAL_VALUE_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value is not present at {source['path']}::{source['selector']}"))
                 if category == "workflow_local_input" and expression and _is_protected_field(field, protected_names) and isinstance(value, str) and CALLER_EXPRESSION.search(value):
                     findings.append(_finding("PROTECTED_CALLER_INPUT", workflow=workflow, node=node_name, field=field, detail="caller expression targets a protected field"))
@@ -322,7 +418,7 @@ def scan(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="return non-zero when ownership findings exist")
-    args = parser.parse_args(argv)
+    parser.parse_args(argv)
     report = scan()
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["status"] == "PASS" else 1

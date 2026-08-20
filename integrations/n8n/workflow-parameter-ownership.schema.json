@@ -11,6 +11,7 @@
     "parameter_node_types",
     "workflow_globs",
     "global_contract_sources",
+    "credential_identifier_sources",
     "forbidden",
     "workflows"
   ],
@@ -31,6 +32,24 @@
       "items": {"type": "string", "minLength": 1}
     },
     "global_contract_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "selectors"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "selectors": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "credential_identifier_sources": {
       "type": "array",
       "minItems": 1,
       "items": {
