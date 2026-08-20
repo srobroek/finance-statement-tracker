@@ -237,14 +237,14 @@
     {
       "id": "AGENT-002",
       "title": "Luna normal path and gated Sol exception path",
-      "requirement": "Use gpt-5.6-luna max for normal bounded enrichment and gpt-5.6-sol xhigh only for high-confidence category/rule/property exceptions.",
+      "requirement": "Use gpt-5.6-luna max for normal bounded enrichment and gpt-5.6-sol medium only for high-confidence category/rule/property exceptions.",
       "expected_state": "The caller selects a trusted policy class, not an arbitrary model; model/effort mapping is server-owned.",
       "status_from_transcript": "FINAL_DECISION",
       "priority": "P1",
       "dependencies": ["AGENT-003"],
       "acceptance_criteria": ["Normal and exception receipts show forced model mapping", "Caller model selection is rejected", "Cost/latency and quality fixtures pass", "No API-key fallback"],
       "claimed_evidence": ["config/ai-policies.json profiles", "integrations/n8n/ai-policy-targets.json", "codex-agent-handoff.json"],
-      "contradictions": ["Earlier daily tasks displayed Sol medium and the user corrected them to Luna max; monthly statement tasks still intentionally use Sol medium", "The n8n AI exception path uses Sol xhigh, which is separate from monthly deterministic reconciliation"],
+      "contradictions": ["Earlier daily tasks displayed Sol medium and the user corrected them to Luna max; monthly statement tasks still intentionally use Sol medium", "The n8n AI exception path uses Sol medium, which is separate from monthly deterministic reconciliation"],
       "source_turn_summary": "The user questioned Terra quality, requested Luna for lightweight scans, and preferred one stronger agent only where needed."
     },
     {
