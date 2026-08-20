@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -28,17 +29,24 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
-CONTAINER_NOT_FOUND = (
-    "no such container",
-    "no container with name or id",
-    "container not found",
-    "no such object:",
-)
-NETWORK_NOT_FOUND = (
-    "no such network",
-    "network not found",
-    "no such object:",
-)
+
+
+def is_absent_inspect_response(message: str, object_name: str, kind: str) -> bool:
+    """Accept only complete, object-bound Docker or Podman absent responses."""
+    escaped_name = re.escape(object_name)
+    if kind == "container":
+        patterns = (
+            rf"Error: No such object: {escaped_name}",
+            rf"Error: no container with name or ID \"{escaped_name}\" found: no such container",
+        )
+    elif kind == "network":
+        patterns = (
+            rf"Error: No such object: {escaped_name}",
+            rf"Error: network {escaped_name} not found",
+        )
+    else:
+        raise ValueError(f"unsupported inspect object kind: {kind}")
+    return any(re.fullmatch(pattern, message.strip(), flags=re.IGNORECASE) for pattern in patterns)
 
 
 class DrillError(RuntimeError):
@@ -102,7 +110,7 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     if result.returncode == 0:
         return "present"
     message = f"{result.stdout}\n{result.stderr}".casefold()
-    if any(marker in message for marker in CONTAINER_NOT_FOUND):
+    if is_absent_inspect_response(message, sidecar, "container"):
         return "absent"
     raise DrillError("runtime_inspect_failed", "cleanup")
 
@@ -112,7 +120,7 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     if result.returncode == 0:
         return "present"
     message = f"{result.stdout}\n{result.stderr}".casefold()
-    if any(marker in message for marker in NETWORK_NOT_FOUND):
+    if is_absent_inspect_response(message, network, "network"):
         return "absent"
     raise DrillError("runtime_network_inspect_failed", "cleanup")
 
