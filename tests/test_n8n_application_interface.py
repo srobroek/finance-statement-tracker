@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -223,13 +224,35 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         self.assertEqual(fixture["scenario_contract"]["sweep_101"]["expected"], {"scanned_count": 101, "matched_count": 101})
         with tempfile.TemporaryDirectory() as temporary:
             _, manifest = self.stage(temporary)
-            staged_fixture = load_json(Path(temporary) / "application" / manifest["fixtures"]["manifest"])
+            staged_root = Path(temporary) / "application"
+            staged_fixture = load_json(staged_root / manifest["fixtures"]["manifest"])
             self.assertEqual(staged_fixture, fixture)
+            self.assertEqual(
+                sha256(staged_root / manifest["fixtures"]["manifest"]),
+                sha256(N8N / "disposable/fixture-manifest.json"),
+            )
+            for entry in fixture["workflows"]:
+                staged_workflow = staged_root / "fixtures" / "generated" / entry["file"]
+                self.assertEqual(sha256(staged_workflow), entry["sha256"])
+            self.assertEqual(
+                sha256(staged_root / "fixtures" / "onedrive-root-setup.json"),
+                sha256(N8N / "setup-workflows/22-onedrive-finance-evidence-root-setup.json"),
+            )
+            self.assertEqual(
+                sha256(staged_root / "bootstrap" / "data-tables.json"),
+                sha256(N8N / "data-tables.json"),
+            )
 
     def test_adapter_rejects_unpinned_source_commits(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, "source commit"):
                 self.adapter.stage_application(ROOT, Path(temporary) / "application", "finance")
+
+    def test_adapter_rejects_fixture_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(self.adapter, "_sha256", return_value="0" * 64):
+                with self.assertRaisesRegex(ValueError, "fixture workflow hash mismatch"):
+                    self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
 
 
 if __name__ == "__main__":

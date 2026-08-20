@@ -7,6 +7,7 @@ never needs to follow paths outside the supplied application boundary.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -16,6 +17,7 @@ from pathlib import Path
 APPLICATION_ID = "finance-statement-tracker"
 WORKFLOW_COUNT = 21
 TABLE_COUNT = 15
+FIXTURE_WORKFLOW_COUNT = 18
 MCP_ROUTE = "/mcp/finance-operations-v1"
 BOOTSTRAP_WORKFLOW_ID = "10000000-0000-4000-8000-000000000019"
 SOURCE_FILES = {
@@ -38,6 +40,10 @@ def _copy_regular(source: Path, destination: Path) -> None:
         raise ValueError(f"finance application input must be a regular file: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _validate_commit(source_commit: str) -> None:
@@ -69,6 +75,22 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
     tables = _load(finance_root / "data-tables.json")["tables"]
     if len(tables) != TABLE_COUNT or len({row["name"] for row in tables}) != TABLE_COUNT:
         raise ValueError("finance Data Table schema does not match the application contract")
+    fixture_manifest = _load(finance_root / "disposable" / "fixture-manifest.json")
+    fixture_workflows = fixture_manifest["workflows"]
+    if len(fixture_workflows) != FIXTURE_WORKFLOW_COUNT:
+        raise ValueError("finance fixture workflow corpus does not match the application contract")
+    for fixture in fixture_workflows:
+        filename = fixture.get("file")
+        if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".json"):
+            raise ValueError("finance fixture workflow filename is invalid")
+        source = finance_root / "disposable" / "generated" / filename
+        _copy_regular(source, destination / "fixtures" / "generated" / filename)
+        if not isinstance(fixture.get("sha256"), str) or _sha256(source) != fixture["sha256"]:
+            raise ValueError(f"finance fixture workflow hash mismatch: {filename}")
+    for filename, expected_hash in fixture_manifest["source_workflow_sha256"].items():
+        source = workflow_root / filename
+        if not source.is_file() or source.is_symlink() or _sha256(source) != expected_hash:
+            raise ValueError(f"finance source workflow hash mismatch: {filename}")
 
     for workflow in workflows:
         _copy_regular(workflow, destination / "workflows" / workflow.name)
