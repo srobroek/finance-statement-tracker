@@ -298,15 +298,13 @@ class CashbackProgrammeProvenanceTests(TestCase):
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
             validate_program_configuration(source)
 
-    def test_claim_interval_cannot_extend_beyond_issuer_end(self) -> None:
+    def test_issuer_interval_must_cover_programme_end(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_end"] = date.today().isoformat()
+        reference["effective_end"] = (date.today() - timedelta(days=1)).isoformat()
         program["source_references"] = [reference]
         claims = authoritative_claims(program)
-        claims[0]["effective_start"] = date.today().isoformat()
-        claims[0]["effective_end"] = None
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises evidence interval end coverage.",
@@ -314,6 +312,21 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
+            validate_program_configuration(source)
+
+    def test_open_current_program_rejects_claim_ending_before_today(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        program["source_references"] = [authoritative_fixture_reference()]
+        claims = authoritative_claims(program)
+        claims[0]["effective_end"] = (date.today() - timedelta(days=1)).isoformat()
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises exact current boundary coverage.",
+            "claims": claims,
+        }
+
+        with self.assertRaisesRegex(ValueError, "does not span the programme interval"):
             validate_program_configuration(source)
 
     def test_open_current_program_rejects_future_claim(self) -> None:
@@ -331,6 +344,21 @@ class CashbackProgrammeProvenanceTests(TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds the programme interval"):
             validate_program_configuration(source)
 
+    def test_open_current_program_rejects_today_only_evidence(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_start"] = date.today().isoformat()
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises future evidence boundary.",
+            "claims": authoritative_claims(program),
+        }
+
+        with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
+            validate_program_configuration(source)
+
     def test_open_current_program_rejects_future_evidence(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
@@ -339,12 +367,46 @@ class CashbackProgrammeProvenanceTests(TestCase):
         program["source_references"] = [reference]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
-            "reason": "Test-only fixture exercises future evidence boundary.",
+            "reason": "Test-only fixture exercises future evidence coverage.",
             "claims": authoritative_claims(program),
         }
 
-        with self.assertRaisesRegex(ValueError, "evidence exceeds the programme interval"):
+        with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
             validate_program_configuration(source)
+
+    def test_pre_dating_evidence_may_cover_the_programme(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_start"] = "2026-07-01"
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises pre-dating issuer coverage.",
+            "claims": authoritative_claims(program),
+        }
+
+        validate_program_configuration(source)
+
+    def test_configured_programme_boundary_requires_exact_claim_end(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        programme_end = (date.today() + timedelta(days=7)).isoformat()
+        program["effective_end"] = programme_end
+        reference = authoritative_fixture_reference()
+        reference["effective_start"] = "2026-07-01"
+        reference["effective_end"] = programme_end
+        program["source_references"] = [reference]
+        claims = authoritative_claims(program)
+        for claim in claims:
+            claim["effective_end"] = programme_end
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises exact programme interval coverage.",
+            "claims": claims,
+        }
+
+        validate_program_configuration(source)
 
     def test_authoritative_reference_without_fixture_content_is_rejected(self) -> None:
         source = copy.deepcopy(self.config)

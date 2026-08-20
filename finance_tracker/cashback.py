@@ -678,15 +678,8 @@ def validate_program_provenance(source: dict[str, object]) -> None:
         program_end = configured_program_end or date.today()
         if program_start and program_end and program_end < program_start:
             raise ValueError(f"Cashback program {card} has an invalid effective interval")
-        for reference in references:
-            reference_start = _iso_date(reference.get("effective_start"))
-            reference_end = _iso_date(reference.get("effective_end"))
-            if reference_start and program_start and reference_start < program_start:
-                raise ValueError(f"Cashback program {card} evidence starts before the programme")
-            if reference_start and program_end and reference_start > program_end:
-                raise ValueError(f"Cashback program {card} evidence exceeds the programme interval")
-            if reference_end and program_end and reference_end > program_end:
-                raise ValueError(f"Cashback program {card} evidence exceeds the programme interval")
+        if authority == "AUTHORITATIVE" and program_start is None:
+            raise ValueError(f"Cashback program {card} requires an effective programme start")
         for claim in claims:
             if not isinstance(claim, dict):
                 raise ValueError(f"Cashback program {card} contains invalid provenance claim")
@@ -709,6 +702,16 @@ def validate_program_provenance(source: dict[str, object]) -> None:
                 raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
             if not configured_program_end and claim_end and claim_end > program_end:
                 raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            claim_coverage_end = claim_end
+            if authority == "AUTHORITATIVE":
+                if claim_start != program_start:
+                    raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                if configured_program_end:
+                    if claim_end != configured_program_end:
+                        raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                elif claim_end not in (None, program_end):
+                    raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+                claim_coverage_end = claim_end or program_end
             reference_ids = claim.get("reference_ids")
             if not isinstance(reference_ids, list) or not reference_ids:
                 raise ValueError(f"Cashback program {card} claim {path} requires evidence references")
@@ -724,7 +727,7 @@ def validate_program_provenance(source: dict[str, object]) -> None:
                 if reference_start and reference_end and reference_end < reference_start:
                     raise ValueError(f"Cashback program {card} evidence has an invalid date range")
                 if reference_start and _provenance_interval_covers(
-                    reference_start, reference_end, claim_start, claim_end
+                    reference_start, reference_end, claim_start, claim_coverage_end
                 ):
                     covered = True
             if authority == "AUTHORITATIVE" and not covered:
