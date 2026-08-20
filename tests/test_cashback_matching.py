@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from finance_tracker.cashback_events import CashbackEventStore
@@ -164,14 +165,35 @@ class CashbackStatementMatchingTests(unittest.TestCase):
                 ),
             ])
 
-            result = store.reconcile_statement(
-                self._statement(merchant="Expected Merchant")
-            )
+            statement = self._statement(merchant="Expected Merchant")
+            result = store.reconcile_statement(statement)
 
             self.assertEqual(result["matched"], 0)
             self.assertEqual(result["statement_only"], 1)
             self.assertEqual(result["notification_only"], 2)
             self.assertEqual(store.stats()["variance_count"], 2)
+            statement_event = next(
+                row
+                for row in store.rows(date(2026, 8, 1), date(2026, 8, 31))
+                if row["source_event_id"] == "statement:RAK-2026-08:line-1"
+            )
+            self.assertEqual(statement_event["source"], "statement")
+            self.assertEqual(statement_event["status"], "ACTIVE")
+            self.assertEqual(statement_event["reconciliation_status"], "RECONCILED")
+            identity_key = statement_event["identity_key"]
+            self.assertTrue(identity_key)
+            self.assertEqual(store.stats()["event_count"], 3)
+
+            replay = store.reconcile_statement(statement)
+
+            self.assertTrue(replay["idempotent_replay"])
+            replay_event = next(
+                row
+                for row in store.rows(date(2026, 8, 1), date(2026, 8, 31))
+                if row["source_event_id"] == "statement:RAK-2026-08:line-1"
+            )
+            self.assertEqual(replay_event["identity_key"], identity_key)
+            self.assertEqual(store.stats()["event_count"], 3)
 
     def test_exact_reconciliation_replay_is_a_no_op(self) -> None:
         temporary, store = self._store()

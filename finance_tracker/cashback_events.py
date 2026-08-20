@@ -219,6 +219,12 @@ def _merchant_match_score(candidate: object, statement: object) -> int:
     return 0
 
 
+def _statement_collision_identity(event: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        f"{event['identity_key']}|statement:{event['source_event_id']}".encode("utf-8")
+    ).hexdigest()
+
+
 def _event_polarity(value: object) -> str:
     return "CREDIT" if str(value).upper() in {"REFUND", "REVERSAL"} else "DEBIT"
 
@@ -661,7 +667,8 @@ class CashbackEventStore:
                             "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
                             (event["identity_key"],),
                         ).fetchone()
-                        # A duplicate identity cannot override a compatible-candidate collision.
+                        # A duplicate identity cannot override a compatible-candidate
+                        # collision.
                         if existing and not ranked:
                             connection.execute(
                                 "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
@@ -669,13 +676,18 @@ class CashbackEventStore:
                             )
                             matched += 1
                             continue
-                        if existing:
-                            statement_only += 1
-                            continue
-                        columns = tuple(event)
+                        statement_event = (
+                            {
+                                **event,
+                                "identity_key": _statement_collision_identity(event),
+                            }
+                            if existing
+                            else event
+                        )
+                        columns = tuple(statement_event)
                         connection.execute(
                             f"INSERT INTO cashback_events ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
-                            tuple(event[column] for column in columns),
+                            tuple(statement_event[column] for column in columns),
                         )
                         statement_only += 1
 
