@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/actual-restore-receipt-v1.json",
+  "title": "Disposable Actual backup restore receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "redacted",
+    "started_at",
+    "completed_at",
+    "backup",
+    "runtime",
+    "source_provenance",
+    "requested_runs",
+    "runs",
+    "cleanup_verified",
+    "production_mutated",
+    "retained_mutated",
+    "secret_values_recorded",
+    "error"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "enum": ["passed", "failed", "blocked"] },
+    "mode": { "const": "disposable" },
+    "redacted": { "const": true },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": ["string", "null"], "format": "date-time" },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "archive_sha256", "archive_bytes", "verified"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "archive_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "archive_bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "image", "image_digest", "available", "verified"],
+      "properties": {
+        "engine": { "type": ["string", "null"] },
+        "image": { "type": "string", "minLength": 1 },
+        "image_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "available": { "type": "boolean" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "script_sha256"],
+      "properties": {
+        "commit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "script_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "requested_runs": { "type": "integer", "minimum": 2 },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_index",
+          "sidecar_id",
+          "data_sha256",
+          "api_readback_sha256",
+          "ui_readback_sha256",
+          "account_count",
+          "representative_transaction_count",
+          "ui_api_parity",
+          "restart_verified",
+          "repeat_state_match",
+          "cleanup_verified",
+          "status"
+        ],
+        "properties": {
+          "run_index": { "type": "integer", "minimum": 1 },
+          "sidecar_id": { "type": "string", "minLength": 1 },
+          "data_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "api_readback_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+          "ui_readback_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+          "account_count": { "type": "integer", "minimum": 0 },
+          "representative_transaction_count": { "type": "integer", "minimum": 0 },
+          "ui_api_parity": { "type": "boolean" },
+          "restart_verified": { "type": "boolean" },
+          "repeat_state_match": { "type": "boolean" },
+          "cleanup_verified": { "type": "boolean" },
+          "status": { "enum": ["passed", "failed"] }
+        }
+      }
+    },
+    "cleanup_verified": { "type": "boolean" },
+    "production_mutated": { "const": false },
+    "retained_mutated": { "const": false },
+    "secret_values_recorded": { "const": false },
+    "error": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["code", "stage"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "stage": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } } },
+      "then": {
+        "properties": {
+          "backup": { "properties": { "verified": { "const": true } } },
+          "runtime": { "properties": { "available": { "const": true }, "verified": { "const": true } } },
+          "cleanup_verified": { "const": true }
+        }
+      }
+    }
+  ]
+}
