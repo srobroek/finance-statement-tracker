@@ -76,16 +76,16 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             },
             {
                 "source_tables": 15,
-                "source_columns": 203,
-                "node_references": 110,
-                "consumer_node_edges": 764,
+                "source_columns": 204,
+                "node_references": 117,
+                "consumer_node_edges": 873,
                 "filter_only_consumer_columns": 33,
-                "filter_only_consumer_edges": 69,
-                "write_reference_edges": 382,
-                "producer_node_edges": 585,
+                "filter_only_consumer_edges": 75,
+                "write_reference_edges": 404,
+                "producer_node_edges": 608,
             },
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 75, "transform": 72, "remove": 56})
+        self.assertEqual(invariants["dispositions"], {"keep": 91, "transform": 57, "remove": 56})
         tables = load_json(N8N / "data-tables.json")["tables"]
         self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
         self.assertEqual(
@@ -178,6 +178,55 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         incomplete["tables"][1]["columns"][0]["consumer_nodes"] = []
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_matrix(incomplete)
+
+    def test_exact_target_schemas_and_explicit_merge_bindings(self) -> None:
+        expected_targets = {
+            "finance_ingestion_state",
+            "finance_documents",
+            "finance_actual_batches",
+            "finance_ai_reviews",
+        }
+        self.assertEqual(set(self.matrix["target_schemas"]), expected_targets)
+        for target, schema in self.matrix["target_schemas"].items():
+            self.assertTrue(set(schema["logical_key"]) <= set(schema["columns"]), target)
+            for field, definition in schema["columns"].items():
+                self.assertTrue(definition["source_bindings"], (target, field))
+
+        actual_verifications = {
+            column["source_column"]: column
+            for table in self.matrix["tables"]
+            if table["source_table"] == "finance_actual_verifications"
+            for column in table["columns"]
+        }
+        self.assertEqual(actual_verifications["actual_file_id"]["target_field"], "actual_file_id")
+        self.assertEqual(
+            actual_verifications["expected_payload_sha256"]["target_field"],
+            "expected_payload_sha256",
+        )
+        reconciliations = {
+            column["source_column"]: column
+            for table in self.matrix["tables"]
+            if table["source_table"] == "finance_reconciliations"
+            for column in table["columns"]
+        }
+        self.assertEqual(
+            reconciliations["actual_verification_sha256"]["target_field"],
+            "verification_artifact_sha256",
+        )
+
+        duplicate_target = deepcopy(self.matrix)
+        for table in duplicate_target["tables"]:
+            if table["source_table"] == "finance_actual_verifications":
+                for column in table["columns"]:
+                    if column["source_column"] == "expected_count":
+                        column["target_field"] = "verification_artifact_sha256"
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(duplicate_target)
+
+        missing_target = deepcopy(self.matrix)
+        del missing_target["target_schemas"]["finance_ai_reviews"]
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(missing_target)
 
 
 if __name__ == "__main__":

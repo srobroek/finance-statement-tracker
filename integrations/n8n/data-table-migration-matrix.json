@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "80b21fc9d0cf9b404ebb10c0f781f22d9418f1d8",
-    "data_tables_sha256": "56266e11f6e547179302d9243b77351ae804b6bcbc6442f53db79fcf6508c490",
-    "node_scan_corpus_sha256": "faeb89f4a8db63fe99eef37516454a40cdf745f460cd1e80d3eed3fbb7ea1312",
+    "finance_commit": "926a99a40901fad5f40b15f129e5a0a5fca3cf69",
+    "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
+    "node_scan_corpus_sha256": "104a88bc99af5909837509904a3d25039fb9f97e727d54c7bee19dfe6fbaba49",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -21,15 +21,625 @@
     "finance_actual_batches",
     "finance_ai_reviews"
   ],
+  "target_schemas": {
+    "finance_ingestion_state": {
+      "logical_key": [
+        "source_code"
+      ],
+      "columns": {
+        "source_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_source_cursors.source_code",
+            "finance_acquisition_receipts.source_code"
+          ]
+        },
+        "cursor_value": {
+          "type": "date",
+          "source_bindings": [
+            "finance_source_cursors.cursor_value"
+          ]
+        },
+        "committed_run_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_source_cursors.committed_run_id",
+            "finance_acquisition_receipts.run_id"
+          ]
+        },
+        "run_upper_bound": {
+          "type": "date",
+          "source_bindings": [
+            "finance_source_cursors.run_upper_bound",
+            "finance_acquisition_receipts.run_upper_bound"
+          ]
+        },
+        "overlap_seconds": {
+          "type": "number",
+          "source_bindings": [
+            "finance_source_cursors.overlap_seconds"
+          ]
+        },
+        "scanned_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_source_cursors.scanned_count",
+            "finance_acquisition_receipts.scanned_count"
+          ]
+        },
+        "matched_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_source_cursors.matched_count",
+            "finance_acquisition_receipts.matched_count"
+          ]
+        },
+        "cursor_version": {
+          "type": "number",
+          "source_bindings": [
+            "finance_source_cursors.cursor_version"
+          ]
+        },
+        "readback_verified": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_source_cursors.readback_verified",
+            "finance_acquisition_receipts.readback_verified"
+          ]
+        },
+        "updated_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_source_cursors.updated_at",
+            "finance_acquisition_receipts.updated_at"
+          ]
+        },
+        "last_window_start": {
+          "type": "date",
+          "source_bindings": [
+            "finance_acquisition_receipts.window_start"
+          ]
+        },
+        "last_pages_fetched": {
+          "type": "number",
+          "source_bindings": [
+            "finance_acquisition_receipts.pages_fetched"
+          ]
+        },
+        "last_pagination_exhausted": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_acquisition_receipts.pagination_exhausted"
+          ]
+        },
+        "last_heartbeat": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_acquisition_receipts.heartbeat"
+          ]
+        },
+        "last_terminal_state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.terminal_state"
+          ]
+        },
+        "last_receipt_created_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_acquisition_receipts.created_at"
+          ]
+        },
+        "downstream_receipt_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.downstream_receipt_sha256"
+          ]
+        }
+      }
+    },
+    "finance_documents": {
+      "logical_key": [
+        "document_id"
+      ],
+      "columns": {
+        "document_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.document_id"
+          ]
+        },
+        "archive_receipt_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.archive_receipt_id"
+          ]
+        },
+        "run_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.run_id"
+          ]
+        },
+        "source_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.source_code",
+            "finance_document_operations.source_code"
+          ]
+        },
+        "source_message_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.source_message_id",
+            "finance_document_operations.source_message_id"
+          ]
+        },
+        "source_attachment_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.source_attachment_id",
+            "finance_document_operations.source_attachment_id"
+          ]
+        },
+        "source_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.source_sha256",
+            "finance_document_operations.source_sha256"
+          ]
+        },
+        "onedrive_item_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.onedrive_item_id",
+            "finance_document_operations.onedrive_item_id"
+          ]
+        },
+        "onedrive_etag": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.onedrive_etag"
+          ]
+        },
+        "archive_state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_archive_receipts.archive_state"
+          ]
+        },
+        "archive_verified_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_archive_receipts.verified_at"
+          ]
+        },
+        "document_profile": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.document_profile"
+          ]
+        },
+        "requested_schema_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.requested_schema_version"
+          ]
+        },
+        "config_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.config_version"
+          ]
+        },
+        "actual_file_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.actual_file_id"
+          ]
+        },
+        "account_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.account_id"
+          ]
+        },
+        "period_key": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.period_key"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.state"
+          ]
+        },
+        "attempt_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_document_operations.attempt_count"
+          ]
+        },
+        "last_execution_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.last_execution_id"
+          ]
+        },
+        "parser_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.parser_version"
+          ]
+        },
+        "output_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.output_sha256"
+          ]
+        },
+        "error_class": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.error_class"
+          ]
+        },
+        "error_detail_redacted": {
+          "type": "string",
+          "source_bindings": [
+            "finance_document_operations.error_detail_redacted"
+          ]
+        },
+        "updated_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_archive_receipts.updated_at",
+            "finance_document_operations.updated_at"
+          ]
+        }
+      }
+    },
+    "finance_actual_batches": {
+      "logical_key": [
+        "idempotency_key"
+      ],
+      "columns": {
+        "batch_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.outbox_id",
+            "finance_actual_verifications.outbox_id"
+          ]
+        },
+        "run_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.run_id"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.imported_id"
+          ]
+        },
+        "actual_file_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.actual_file_id",
+            "finance_actual_verifications.actual_file_id"
+          ]
+        },
+        "delta_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.payload_sha256"
+          ]
+        },
+        "delta_artifact_item_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.artifact_item_id"
+          ]
+        },
+        "delta_artifact_etag": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.artifact_etag"
+          ]
+        },
+        "delta_schema_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.artifact_schema_version"
+          ]
+        },
+        "config_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.config_version"
+          ]
+        },
+        "parser_version": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.parser_version"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.state"
+          ]
+        },
+        "actual_transaction_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.actual_transaction_id"
+          ]
+        },
+        "attempt_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_outbox.attempt_count"
+          ]
+        },
+        "last_error_class": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.last_error_class"
+          ]
+        },
+        "updated_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_actual_outbox.updated_at",
+            "finance_reconciliations.updated_at"
+          ]
+        },
+        "verification_version": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.verification_version"
+          ]
+        },
+        "account_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_verifications.account_id"
+          ]
+        },
+        "period_start": {
+          "type": "date",
+          "source_bindings": [
+            "finance_actual_verifications.period_start"
+          ]
+        },
+        "period_end": {
+          "type": "date",
+          "source_bindings": [
+            "finance_actual_verifications.period_end"
+          ]
+        },
+        "expected_payload_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_verifications.expected_payload_sha256"
+          ]
+        },
+        "observed_payload_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_verifications.observed_payload_sha256"
+          ]
+        },
+        "expected_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.expected_count"
+          ]
+        },
+        "observed_count": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.observed_count"
+          ]
+        },
+        "expected_amount_sum_minor": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.expected_amount_sum_minor"
+          ]
+        },
+        "observed_amount_sum_minor": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.observed_amount_sum_minor"
+          ]
+        },
+        "invariants_passed": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_actual_verifications.invariants_passed"
+          ]
+        },
+        "verified_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_actual_verifications.verified_at"
+          ]
+        },
+        "source_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_reconciliations.source_code"
+          ]
+        },
+        "period_key": {
+          "type": "string",
+          "source_bindings": [
+            "finance_reconciliations.period_key"
+          ]
+        },
+        "reconciliation_version": {
+          "type": "number",
+          "source_bindings": [
+            "finance_reconciliations.reconciliation_version"
+          ]
+        },
+        "statement_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_reconciliations.statement_sha256"
+          ]
+        },
+        "verification_artifact_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_reconciliations.actual_verification_sha256"
+          ]
+        },
+        "reconciliation_state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_reconciliations.state"
+          ]
+        },
+        "reconciliation_difference_minor": {
+          "type": "number",
+          "source_bindings": [
+            "finance_reconciliations.difference_minor"
+          ]
+        },
+        "reconciliation_verified_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_reconciliations.verified_at"
+          ]
+        }
+      }
+    },
+    "finance_ai_reviews": {
+      "logical_key": [
+        "idempotency_key"
+      ],
+      "columns": {
+        "idempotency_key": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.idempotency_key"
+          ]
+        },
+        "policy_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.policy_id"
+          ]
+        },
+        "policy_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.policy_sha256"
+          ]
+        },
+        "config_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.config_sha256"
+          ]
+        },
+        "output_schema_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.output_schema_sha256"
+          ]
+        },
+        "request_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.request_sha256"
+          ]
+        },
+        "runner_receipt_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.runner_receipt_id"
+          ]
+        },
+        "proposal_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.proposal_sha256"
+          ]
+        },
+        "proposal_artifact_item_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.proposal_artifact_item_id"
+          ]
+        },
+        "proposal_artifact_etag": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.proposal_artifact_etag"
+          ]
+        },
+        "proposal_artifact_schema": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.proposal_artifact_schema"
+          ]
+        },
+        "review_state": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.review_state"
+          ]
+        },
+        "review_decision": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.review_decision"
+          ]
+        },
+        "reviewed_by_hash": {
+          "type": "string",
+          "source_bindings": [
+            "finance_agent_jobs.reviewed_by_hash"
+          ]
+        },
+        "reviewed_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_agent_jobs.reviewed_at"
+          ]
+        },
+        "terminal_readback_verified": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_agent_jobs.terminal_readback_verified"
+          ]
+        },
+        "updated_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_agent_jobs.updated_at"
+          ]
+        }
+      }
+    }
+  },
   "invariants": {
     "source_tables": 15,
-    "source_columns": 203,
-    "node_references": 110,
-    "consumer_node_edges": 764,
+    "source_columns": 204,
+    "node_references": 117,
+    "consumer_node_edges": 873,
     "filter_only_consumer_columns": 33,
-    "filter_only_consumer_edges": 69,
-    "write_reference_edges": 382,
-    "producer_node_edges": 585,
+    "filter_only_consumer_edges": 75,
+    "write_reference_edges": 404,
+    "producer_node_edges": 608,
     "every_source_column_has_one_disposition": true,
     "node_operations": [
       "create",
@@ -43,8 +653,8 @@
     "producer_nodes_equal_write_mapping_plus_schema_creation": true,
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
-      "keep": 75,
-      "transform": 72,
+      "keep": 91,
+      "transform": 57,
       "remove": 56
     }
   },
@@ -933,7 +1543,7 @@
     },
     {
       "source_table": "finance_acquisition_receipts",
-      "source_columns_count": 15,
+      "source_columns_count": 16,
       "logical_key": [
         "run_id",
         "source_code"
@@ -1020,6 +1630,21 @@
         {
           "table": "finance_acquisition_receipts",
           "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Existing ENUMERATED Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
           "node": "Upsert ENUMERATED Receipt",
           "operation": "upsert",
           "read_columns": [],
@@ -1028,6 +1653,7 @@
             "cursor_commit_eligible",
             "downstream_receipt_sha256",
             "heartbeat",
+            "immutable_inventory_json",
             "matched_count",
             "pages_fetched",
             "pagination_exhausted",
@@ -1113,6 +1739,21 @@
         {
           "table": "finance_acquisition_receipts",
           "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Existing ENUMERATED Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
           "node": "Upsert ENUMERATED Receipt",
           "operation": "upsert",
           "read_columns": [],
@@ -1121,6 +1762,7 @@
             "cursor_commit_eligible",
             "downstream_receipt_sha256",
             "heartbeat",
+            "immutable_inventory_json",
             "matched_count",
             "pages_fetched",
             "pagination_exhausted",
@@ -1173,11 +1815,13 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -1206,11 +1850,13 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -1237,9 +1883,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1265,9 +1913,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1293,9 +1943,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1321,9 +1973,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1349,9 +2003,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1377,9 +2033,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1405,9 +2063,41 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "immutable_inventory_json",
+          "source_type": "string",
+          "disposition": "remove",
+          "target_table": null,
+          "target_artifact": null,
+          "target_field": null,
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1436,10 +2126,12 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1467,9 +2159,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1497,9 +2191,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1527,9 +2223,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1555,9 +2253,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         },
@@ -1585,9 +2285,11 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
         }
@@ -1619,7 +2321,7 @@
         {
           "table": "finance_archive_receipts",
           "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Back Archive Receipt",
+          "node": "Read Back Durable Email Evidence Receipt",
           "operation": "get",
           "read_columns": [
             "*"
@@ -1633,7 +2335,80 @@
         {
           "table": "finance_archive_receipts",
           "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Upsert Durable Archive Receipt",
+          "node": "Read Back Enumerated Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "archive_receipt_id",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Existing Email Evidence Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Existing Enumerated Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Upsert Durable Email Evidence Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "archive_receipt_id",
+            "archive_state",
+            "onedrive_etag",
+            "onedrive_item_id",
+            "run_id",
+            "source_attachment_id",
+            "source_code",
+            "source_message_id",
+            "source_sha256",
+            "updated_at",
+            "verified_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Upsert Enumerated Archive Receipt",
           "operation": "upsert",
           "read_columns": [],
           "write_columns": [
@@ -1681,11 +2456,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1703,11 +2482,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1726,12 +2509,17 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1750,12 +2538,17 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1774,12 +2567,17 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1798,12 +2596,17 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1821,11 +2624,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1843,11 +2650,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1865,11 +2676,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1887,11 +2702,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
@@ -1909,11 +2728,15 @@
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
           "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_archive_receipts"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Archive Receipt"
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
           ],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         }
@@ -1975,13 +2798,90 @@
         },
         {
           "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Record Enumerated Attachment Disposition",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "onedrive_item_id",
+            "requested_schema_version",
+            "source_attachment_id",
+            "source_code",
+            "source_message_id",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "source_sha256",
+            "document_profile",
+            "requested_schema_version"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
           "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-          "node": "Load Durable Document Record",
+          "node": "Load Existing Browser Archive Receipt",
           "operation": "get",
           "read_columns": [
             "*"
           ],
           "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Load MCP Reviewed Document Record",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Read Back Durable Browser Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Upsert Durable Browser Archive Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "onedrive_item_id",
+            "output_sha256",
+            "requested_schema_version",
+            "source_code",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
           "filter_keys": [
             "document_id"
           ]
@@ -2063,11 +2963,16 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
@@ -2090,12 +2995,17 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2117,12 +3027,17 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2144,12 +3059,17 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2170,10 +3090,14 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2194,10 +3118,13 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2218,10 +3145,13 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2241,10 +3171,14 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2267,7 +3201,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2290,7 +3226,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2313,7 +3251,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2336,7 +3276,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2357,11 +3299,15 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2382,11 +3328,15 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2410,7 +3360,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2434,7 +3386,9 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2454,11 +3408,14 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2479,11 +3436,15 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2504,11 +3465,15 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -2529,11 +3494,15 @@
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [
             "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
+            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_document_operations"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Durable Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
+            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
             "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
             "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
           ],
@@ -3711,10 +4680,10 @@
         {
           "source_column": "actual_transaction_id",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "actual_transaction_id",
           "constraints": [
             "type:string"
           ],
@@ -3950,10 +4919,10 @@
         {
           "source_column": "actual_file_id",
           "source_type": "string",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "actual_file_id",
           "constraints": [
             "type:string"
           ],
@@ -3972,10 +4941,10 @@
         {
           "source_column": "account_id",
           "source_type": "string",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "account_id",
           "constraints": [
             "type:string"
           ],
@@ -3994,10 +4963,10 @@
         {
           "source_column": "period_start",
           "source_type": "date",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "period_start",
           "constraints": [
             "type:date"
           ],
@@ -4016,10 +4985,10 @@
         {
           "source_column": "period_end",
           "source_type": "date",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "period_end",
           "constraints": [
             "type:date"
           ],
@@ -4038,10 +5007,10 @@
         {
           "source_column": "expected_payload_sha256",
           "source_type": "string",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "expected_payload_sha256",
           "constraints": [
             "type:string"
           ],
@@ -4060,10 +5029,10 @@
         {
           "source_column": "observed_payload_sha256",
           "source_type": "string",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "observed_payload_sha256",
           "constraints": [
             "type:string"
           ],
@@ -4082,10 +5051,10 @@
         {
           "source_column": "expected_count",
           "source_type": "number",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "expected_count",
           "constraints": [
             "type:number"
           ],
@@ -4104,10 +5073,10 @@
         {
           "source_column": "observed_count",
           "source_type": "number",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "observed_count",
           "constraints": [
             "type:number"
           ],
@@ -4126,10 +5095,10 @@
         {
           "source_column": "expected_amount_sum_minor",
           "source_type": "number",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "expected_amount_sum_minor",
           "constraints": [
             "type:number"
           ],
@@ -4148,10 +5117,10 @@
         {
           "source_column": "observed_amount_sum_minor",
           "source_type": "number",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "observed_amount_sum_minor",
           "constraints": [
             "type:number"
           ],
@@ -4214,10 +5183,10 @@
         {
           "source_column": "invariants_passed",
           "source_type": "boolean",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "invariants_passed",
           "constraints": [
             "type:boolean"
           ],
@@ -4236,10 +5205,10 @@
         {
           "source_column": "verified_at",
           "source_type": "date",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "verified_at",
           "constraints": [
             "type:date"
           ],
@@ -4382,10 +5351,10 @@
         {
           "source_column": "reconciliation_version",
           "source_type": "number",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "reconciliation_version",
           "constraints": [
             "type:number",
             "logical-key-member"
@@ -4406,10 +5375,10 @@
         {
           "source_column": "statement_sha256",
           "source_type": "string",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "statement_sha256",
           "constraints": [
             "type:string"
           ],
@@ -4475,7 +5444,7 @@
           "disposition": "transform",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "reconciliation_state",
           "constraints": [
             "type:string"
           ],
@@ -4497,7 +5466,7 @@
           "disposition": "transform",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "reconciliation_difference_minor",
           "constraints": [
             "type:number"
           ],
@@ -4519,7 +5488,7 @@
           "disposition": "transform",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "reconciliation_verified_at",
           "constraints": [
             "type:date"
           ],
@@ -4538,10 +5507,10 @@
         {
           "source_column": "updated_at",
           "source_type": "date",
-          "disposition": "transform",
+          "disposition": "keep",
           "target_table": "finance_actual_batches",
           "target_artifact": "actual-verification-v2",
-          "target_field": "verification_artifact_sha256",
+          "target_field": "updated_at",
           "constraints": [
             "type:date"
           ],
@@ -4949,59 +5918,6 @@
         },
         {
           "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Close Microsoft Graph Circuit",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "last_error_class",
-            "opened_at",
-            "provider_code",
-            "readback_verified",
-            "retry_after",
-            "state",
-            "transient_failure_count",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Persist Microsoft Graph Circuit Gate",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "last_error_class",
-            "opened_at",
-            "provider_code",
-            "readback_verified",
-            "retry_after",
-            "state",
-            "transient_failure_count",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Microsoft Graph Circuit",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
           "file": "integrations/n8n/workflows/09-ai-proposal.json",
           "node": "Close Agent Runner Circuit",
           "operation": "upsert",
@@ -5182,8 +6098,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5198,9 +6112,6 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
@@ -5230,8 +6141,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5243,7 +6152,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5268,8 +6176,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5281,7 +6187,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5306,8 +6211,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5319,7 +6222,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5344,8 +6246,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5357,7 +6257,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5382,8 +6281,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5395,7 +6292,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5420,8 +6316,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5433,7 +6327,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
@@ -5458,8 +6351,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Close Microsoft Graph Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Persist Microsoft Graph Circuit Gate",
             "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
@@ -5471,7 +6362,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Microsoft Graph Circuit",
             "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",

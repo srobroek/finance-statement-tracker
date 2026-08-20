@@ -45,6 +45,238 @@ TARGETS = (
 )
 
 
+def _target_column(source_type: str, *sources: str) -> dict[str, Any]:
+    """Describe one target field and the source columns allowed to populate it."""
+    return {"type": source_type, "source_bindings": list(sources)}
+
+
+# These are the four executable target contracts.  Source columns may merge
+# only when their target field and type are explicitly listed here; this keeps
+# a migration review from silently collapsing unrelated values into one field.
+TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
+    "finance_ingestion_state": {
+        "logical_key": ["source_code"],
+        "columns": {
+            "source_code": _target_column(
+                "string",
+                "finance_source_cursors.source_code",
+                "finance_acquisition_receipts.source_code",
+            ),
+            "cursor_value": _target_column("date", "finance_source_cursors.cursor_value"),
+            "committed_run_id": _target_column(
+                "string",
+                "finance_source_cursors.committed_run_id",
+                "finance_acquisition_receipts.run_id",
+            ),
+            "run_upper_bound": _target_column(
+                "date",
+                "finance_source_cursors.run_upper_bound",
+                "finance_acquisition_receipts.run_upper_bound",
+            ),
+            "overlap_seconds": _target_column("number", "finance_source_cursors.overlap_seconds"),
+            "scanned_count": _target_column(
+                "number",
+                "finance_source_cursors.scanned_count",
+                "finance_acquisition_receipts.scanned_count",
+            ),
+            "matched_count": _target_column(
+                "number",
+                "finance_source_cursors.matched_count",
+                "finance_acquisition_receipts.matched_count",
+            ),
+            "cursor_version": _target_column("number", "finance_source_cursors.cursor_version"),
+            "readback_verified": _target_column(
+                "boolean",
+                "finance_source_cursors.readback_verified",
+                "finance_acquisition_receipts.readback_verified",
+            ),
+            "updated_at": _target_column(
+                "date",
+                "finance_source_cursors.updated_at",
+                "finance_acquisition_receipts.updated_at",
+            ),
+            "last_window_start": _target_column("date", "finance_acquisition_receipts.window_start"),
+            "last_pages_fetched": _target_column("number", "finance_acquisition_receipts.pages_fetched"),
+            "last_pagination_exhausted": _target_column(
+                "boolean", "finance_acquisition_receipts.pagination_exhausted"
+            ),
+            "last_heartbeat": _target_column("boolean", "finance_acquisition_receipts.heartbeat"),
+            "last_terminal_state": _target_column("string", "finance_acquisition_receipts.terminal_state"),
+            "last_receipt_created_at": _target_column("date", "finance_acquisition_receipts.created_at"),
+            "downstream_receipt_sha256": _target_column(
+                "string", "finance_acquisition_receipts.downstream_receipt_sha256"
+            ),
+        },
+    },
+    "finance_documents": {
+        "logical_key": ["document_id"],
+        "columns": {
+            "document_id": _target_column("string", "finance_document_operations.document_id"),
+            "archive_receipt_id": _target_column("string", "finance_archive_receipts.archive_receipt_id"),
+            "run_id": _target_column("string", "finance_archive_receipts.run_id"),
+            "source_code": _target_column(
+                "string",
+                "finance_archive_receipts.source_code",
+                "finance_document_operations.source_code",
+            ),
+            "source_message_id": _target_column(
+                "string",
+                "finance_archive_receipts.source_message_id",
+                "finance_document_operations.source_message_id",
+            ),
+            "source_attachment_id": _target_column(
+                "string",
+                "finance_archive_receipts.source_attachment_id",
+                "finance_document_operations.source_attachment_id",
+            ),
+            "source_sha256": _target_column(
+                "string",
+                "finance_archive_receipts.source_sha256",
+                "finance_document_operations.source_sha256",
+            ),
+            "onedrive_item_id": _target_column(
+                "string",
+                "finance_archive_receipts.onedrive_item_id",
+                "finance_document_operations.onedrive_item_id",
+            ),
+            "onedrive_etag": _target_column("string", "finance_archive_receipts.onedrive_etag"),
+            "archive_state": _target_column("string", "finance_archive_receipts.archive_state"),
+            "archive_verified_at": _target_column("date", "finance_archive_receipts.verified_at"),
+            "document_profile": _target_column("string", "finance_document_operations.document_profile"),
+            "requested_schema_version": _target_column(
+                "string", "finance_document_operations.requested_schema_version"
+            ),
+            "config_version": _target_column("string", "finance_document_operations.config_version"),
+            "actual_file_id": _target_column("string", "finance_document_operations.actual_file_id"),
+            "account_id": _target_column("string", "finance_document_operations.account_id"),
+            "period_key": _target_column("string", "finance_document_operations.period_key"),
+            "state": _target_column("string", "finance_document_operations.state"),
+            "attempt_count": _target_column("number", "finance_document_operations.attempt_count"),
+            "last_execution_id": _target_column("string", "finance_document_operations.last_execution_id"),
+            "parser_version": _target_column("string", "finance_document_operations.parser_version"),
+            "output_sha256": _target_column("string", "finance_document_operations.output_sha256"),
+            "error_class": _target_column("string", "finance_document_operations.error_class"),
+            "error_detail_redacted": _target_column(
+                "string", "finance_document_operations.error_detail_redacted"
+            ),
+            "updated_at": _target_column(
+                "date",
+                "finance_archive_receipts.updated_at",
+                "finance_document_operations.updated_at",
+            ),
+        },
+    },
+    "finance_actual_batches": {
+        "logical_key": ["idempotency_key"],
+        "columns": {
+            "batch_id": _target_column(
+                "string",
+                "finance_actual_outbox.outbox_id",
+                "finance_actual_verifications.outbox_id",
+            ),
+            "run_id": _target_column("string", "finance_actual_outbox.run_id"),
+            "idempotency_key": _target_column("string", "finance_actual_outbox.imported_id"),
+            "actual_file_id": _target_column(
+                "string",
+                "finance_actual_outbox.actual_file_id",
+                "finance_actual_verifications.actual_file_id",
+            ),
+            "delta_sha256": _target_column("string", "finance_actual_outbox.payload_sha256"),
+            "delta_artifact_item_id": _target_column("string", "finance_actual_outbox.artifact_item_id"),
+            "delta_artifact_etag": _target_column("string", "finance_actual_outbox.artifact_etag"),
+            "delta_schema_version": _target_column(
+                "string", "finance_actual_outbox.artifact_schema_version"
+            ),
+            "config_version": _target_column("string", "finance_actual_outbox.config_version"),
+            "parser_version": _target_column("string", "finance_actual_outbox.parser_version"),
+            "state": _target_column("string", "finance_actual_outbox.state"),
+            "actual_transaction_id": _target_column(
+                "string", "finance_actual_outbox.actual_transaction_id"
+            ),
+            "attempt_count": _target_column("number", "finance_actual_outbox.attempt_count"),
+            "last_error_class": _target_column("string", "finance_actual_outbox.last_error_class"),
+            "updated_at": _target_column(
+                "date",
+                "finance_actual_outbox.updated_at",
+                "finance_reconciliations.updated_at",
+            ),
+            "verification_version": _target_column(
+                "number", "finance_actual_verifications.verification_version"
+            ),
+            "account_id": _target_column("string", "finance_actual_verifications.account_id"),
+            "period_start": _target_column("date", "finance_actual_verifications.period_start"),
+            "period_end": _target_column("date", "finance_actual_verifications.period_end"),
+            "expected_payload_sha256": _target_column(
+                "string", "finance_actual_verifications.expected_payload_sha256"
+            ),
+            "observed_payload_sha256": _target_column(
+                "string", "finance_actual_verifications.observed_payload_sha256"
+            ),
+            "expected_count": _target_column("number", "finance_actual_verifications.expected_count"),
+            "observed_count": _target_column("number", "finance_actual_verifications.observed_count"),
+            "expected_amount_sum_minor": _target_column(
+                "number", "finance_actual_verifications.expected_amount_sum_minor"
+            ),
+            "observed_amount_sum_minor": _target_column(
+                "number", "finance_actual_verifications.observed_amount_sum_minor"
+            ),
+            "invariants_passed": _target_column(
+                "boolean", "finance_actual_verifications.invariants_passed"
+            ),
+            "verified_at": _target_column("date", "finance_actual_verifications.verified_at"),
+            "source_code": _target_column("string", "finance_reconciliations.source_code"),
+            "period_key": _target_column("string", "finance_reconciliations.period_key"),
+            "reconciliation_version": _target_column(
+                "number", "finance_reconciliations.reconciliation_version"
+            ),
+            "statement_sha256": _target_column("string", "finance_reconciliations.statement_sha256"),
+            "verification_artifact_sha256": _target_column(
+                "string", "finance_reconciliations.actual_verification_sha256"
+            ),
+            "reconciliation_state": _target_column("string", "finance_reconciliations.state"),
+            "reconciliation_difference_minor": _target_column(
+                "number", "finance_reconciliations.difference_minor"
+            ),
+            "reconciliation_verified_at": _target_column(
+                "date", "finance_reconciliations.verified_at"
+            ),
+        },
+    },
+    "finance_ai_reviews": {
+        "logical_key": ["idempotency_key"],
+        "columns": {
+            "idempotency_key": _target_column("string", "finance_agent_jobs.idempotency_key"),
+            "policy_id": _target_column("string", "finance_agent_jobs.policy_id"),
+            "policy_sha256": _target_column("string", "finance_agent_jobs.policy_sha256"),
+            "config_sha256": _target_column("string", "finance_agent_jobs.config_sha256"),
+            "output_schema_sha256": _target_column(
+                "string", "finance_agent_jobs.output_schema_sha256"
+            ),
+            "request_sha256": _target_column("string", "finance_agent_jobs.request_sha256"),
+            "runner_receipt_id": _target_column("string", "finance_agent_jobs.runner_receipt_id"),
+            "proposal_sha256": _target_column("string", "finance_agent_jobs.proposal_sha256"),
+            "proposal_artifact_item_id": _target_column(
+                "string", "finance_agent_jobs.proposal_artifact_item_id"
+            ),
+            "proposal_artifact_etag": _target_column(
+                "string", "finance_agent_jobs.proposal_artifact_etag"
+            ),
+            "proposal_artifact_schema": _target_column(
+                "string", "finance_agent_jobs.proposal_artifact_schema"
+            ),
+            "review_state": _target_column("string", "finance_agent_jobs.review_state"),
+            "review_decision": _target_column("string", "finance_agent_jobs.review_decision"),
+            "reviewed_by_hash": _target_column("string", "finance_agent_jobs.reviewed_by_hash"),
+            "reviewed_at": _target_column("date", "finance_agent_jobs.reviewed_at"),
+            "terminal_readback_verified": _target_column(
+                "boolean", "finance_agent_jobs.terminal_readback_verified"
+            ),
+            "updated_at": _target_column("date", "finance_agent_jobs.updated_at"),
+        },
+    },
+}
+
+
 class MatrixError(ValueError):
     """Raised when the checked-in source cannot produce a safe matrix."""
 
@@ -393,7 +625,7 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
     if table_name == "finance_source_cursors":
         return {"disposition": "keep", "target_table": "finance_ingestion_state", "target_artifact": None, "target_field": column}
     if table_name == "finance_acquisition_receipts":
-        if column == "cursor_commit_eligible":
+        if column in {"cursor_commit_eligible", "immutable_inventory_json"}:
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         target_field = ACQUISITION_TARGET_FIELDS.get(column, column)
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_ingestion_state", "target_artifact": None, "target_field": target_field}
@@ -401,7 +633,7 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         target_field = "archive_verified_at" if column == "verified_at" else column
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_documents", "target_artifact": None, "target_field": target_field}
     if table_name == "finance_actual_outbox":
-        if column in {"lease_owner", "lease_fence", "lease_expires_at", "actual_transaction_id"}:
+        if column in {"lease_owner", "lease_fence", "lease_expires_at"}:
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         target_field = OUTBOX_TARGET_FIELDS.get(column, column)
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": target_field}
@@ -412,13 +644,30 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
             return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": "batch_id"}
         if column == "verification_version":
             return {"disposition": "keep", "target_table": "finance_actual_batches", "target_artifact": "actual-verification-v2", "target_field": column}
-        return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": "actual-verification-v2", "target_field": "verification_artifact_sha256"}
+        return {
+            "disposition": "keep",
+            "target_table": "finance_actual_batches",
+            "target_artifact": "actual-verification-v2",
+            "target_field": column,
+        }
     if table_name == "finance_reconciliations":
         if column in {"source_code", "period_key"}:
             return {"disposition": "keep", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": column}
         if column == "cashback_close_id":
             return {"disposition": "transform", "target_table": None, "target_artifact": "cashback-companion", "target_field": column}
-        return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": "actual-verification-v2", "target_field": "verification_artifact_sha256"}
+        reconciliation_fields = {
+            "actual_verification_sha256": "verification_artifact_sha256",
+            "state": "reconciliation_state",
+            "difference_minor": "reconciliation_difference_minor",
+            "verified_at": "reconciliation_verified_at",
+        }
+        target_field = reconciliation_fields.get(column, column)
+        return {
+            "disposition": "transform" if target_field != column else "keep",
+            "target_table": "finance_actual_batches",
+            "target_artifact": "actual-verification-v2",
+            "target_field": target_field,
+        }
     if table_name == "finance_agent_jobs":
         if column not in AGENT_REVIEW_COLUMNS:
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
@@ -461,6 +710,70 @@ def column_matrix(table: dict[str, Any], references: list[dict[str, Any]]) -> li
         }
         result.append(row)
     return result
+
+
+def target_schema_payload() -> dict[str, dict[str, Any]]:
+    """Return the checked-in target contract without exposing mutable state."""
+    return json.loads(json.dumps(TARGET_SCHEMAS))
+
+
+def validate_target_mappings(
+    tables: list[dict[str, Any]], target_schemas: dict[str, dict[str, Any]]
+) -> None:
+    """Reject unknown targets, type drift, and undeclared source coalescing."""
+    if set(target_schemas) != set(TARGETS):
+        raise MatrixError("target schemas must contain exactly the four approved targets")
+    if target_schemas != TARGET_SCHEMAS:
+        raise MatrixError("target schema payload differs from the generator contract")
+
+    observed: dict[tuple[str, str], list[str]] = {}
+    for table in tables:
+        source_table = table["source_table"]
+        for column in table["columns"]:
+            target_table = column["target_table"]
+            target_field = column["target_field"]
+            if target_table is None:
+                if target_field is not None and column["target_artifact"] is None:
+                    raise MatrixError(f"{source_table}.{column['source_column']} has a field without a target table")
+                continue
+            if target_table not in TARGET_SCHEMAS or not isinstance(target_field, str):
+                raise MatrixError(
+                    f"{source_table}.{column['source_column']} points to an undeclared target"
+                )
+            target_columns = TARGET_SCHEMAS[target_table]["columns"]
+            expected = target_columns.get(target_field)
+            if expected is None:
+                raise MatrixError(
+                    f"{source_table}.{column['source_column']} points to undeclared "
+                    f"{target_table}.{target_field}"
+                )
+            if column["source_type"] != expected["type"]:
+                raise MatrixError(
+                    f"{source_table}.{column['source_column']} type {column['source_type']!r} "
+                    f"cannot populate {target_table}.{target_field} ({expected['type']!r})"
+                )
+            observed.setdefault((target_table, target_field), []).append(
+                f"{source_table}.{column['source_column']}"
+            )
+
+    for target in TARGETS:
+        declared_columns = TARGET_SCHEMAS[target]["columns"]
+        observed_fields = {
+            field for table_name, field in observed if table_name == target
+        }
+        if observed_fields != set(declared_columns):
+            raise MatrixError(
+                f"{target} fields differ from its exact target schema: "
+                f"expected {sorted(declared_columns)}, observed {sorted(observed_fields)}"
+            )
+        for field, spec in declared_columns.items():
+            actual_sources = observed.get((target, field), [])
+            if len(actual_sources) != len(set(actual_sources)):
+                raise MatrixError(f"{target}.{field} receives a source column more than once")
+            if set(actual_sources) != set(spec["source_bindings"]):
+                raise MatrixError(
+                    f"{target}.{field} source bindings differ from its explicit merge policy"
+                )
 
 
 def build_matrix() -> dict[str, Any]:
@@ -508,7 +821,7 @@ def build_matrix() -> dict[str, Any]:
             "columns": cols,
         }
         tables.append(table_row)
-    return {
+    matrix = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "schema_version": 1,
         "artifact_role": "GENERATED_SOURCE_MATRIX",
@@ -516,6 +829,7 @@ def build_matrix() -> dict[str, Any]:
         "source_snapshot": source_snapshot(),
         "scan_roots": list(SCAN_ROOTS),
         "targets": list(TARGETS),
+        "target_schemas": target_schema_payload(),
         "invariants": {
             "source_tables": len(source_tables),
             "source_columns": source_columns,
@@ -536,6 +850,8 @@ def build_matrix() -> dict[str, Any]:
         },
         "tables": tables,
     }
+    validate_target_mappings(tables, matrix["target_schemas"])
+    return matrix
 
 
 def validate_matrix(matrix: dict[str, Any]) -> None:
