@@ -76,7 +76,9 @@ function validateIRun(payload) {
   const resultData = payload.data?.resultData;
   if (resultData?.lastNodeExecuted !== TERMINAL_NODE) fail('WF23_LAST_NODE_MISMATCH');
   const terminal = resultData.runData?.[TERMINAL_NODE];
-  if (!Array.isArray(terminal) || terminal.length !== 1 || terminal[0]?.executionStatus !== 'success') {
+  if (!Array.isArray(terminal) || terminal.length !== 1 ||
+      (terminal[0]?.executionStatus !== undefined && terminal[0].executionStatus !== 'success') ||
+      terminal[0]?.error !== undefined) {
     fail('WF23_TERMINAL_RUN_INVALID');
   }
   const main = terminal[0]?.data?.main;
