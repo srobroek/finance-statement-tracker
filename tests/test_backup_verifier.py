@@ -64,6 +64,8 @@ class BackupVerifierTests(unittest.TestCase):
         unsafe_member: str | None = None,
         push_data: bool = False,
         sanitize_push: bool = False,
+        extra_push_database: bool = False,
+        historical_push_snapshot: bool = False,
     ) -> Path:
         source = root / "source"
         cashback_database = source / "cashback-data/cashback-events.sqlite3"
@@ -72,6 +74,14 @@ class BackupVerifierTests(unittest.TestCase):
         self._sqlite(cashback_database)
         if push_data:
             self._push_state(cashback_database)
+        if extra_push_database:
+            auxiliary_database = source / "cashback-data/auxiliary.sqlite3"
+            self._sqlite(auxiliary_database)
+            self._push_state(auxiliary_database)
+        if historical_push_snapshot:
+            historical_database = source / "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+            self._sqlite(historical_database)
+            self._push_state(historical_database)
         if sanitize_push:
             subprocess.run(
                 [
@@ -107,6 +117,7 @@ class BackupVerifierTests(unittest.TestCase):
                     "includes": ["actual-data", "cashback-data", "configuration"],
                     "secrets_included": False,
                     "excluded_data": sorted(verifier.EXCLUDED_PUSH_DATA),
+                    "excluded_paths": sorted(verifier.EXCLUDED_CASHBACK_PATHS),
                 }
             ),
             encoding="utf-8",
@@ -125,6 +136,7 @@ class BackupVerifierTests(unittest.TestCase):
             self.assertEqual(result["json_documents"], 1)
             self.assertEqual(len(result["sqlite_databases"]), 3)
             self.assertEqual(result["excluded_data"], sorted(verifier.EXCLUDED_PUSH_DATA))
+            self.assertEqual(result["excluded_paths"], sorted(verifier.EXCLUDED_CASHBACK_PATHS))
 
     def test_sanitized_backup_excludes_push_credentials_and_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -140,6 +152,47 @@ class BackupVerifierTests(unittest.TestCase):
                 contents = database.read() if database is not None else b""
             self.assertNotIn(b"secret-p256dh-value", contents)
             self.assertNotIn(b"secret-auth-value", contents)
+            self.assertNotIn(b"https://push.example/private-endpoint", contents)
+
+    def test_rejects_push_sentinels_in_any_sqlite_archive_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, extra_push_database=True)
+
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile("cashback-data/auxiliary.sqlite3")
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            for sentinel in (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            ):
+                self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "excluded push state"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_historical_snapshot_with_push_sentinels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, historical_push_snapshot=True)
+
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile(
+                    "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+                )
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            for sentinel in (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            ):
+                self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "historical cashback snapshot"):
+                verifier.verify_backup(root, backup, None)
 
     def test_rejects_backup_that_claims_push_exclusion_without_scrubbing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

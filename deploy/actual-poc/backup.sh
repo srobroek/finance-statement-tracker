@@ -89,8 +89,15 @@ if [[ "${cashback_running}" == "running" ]]; then docker pause finance-cashback-
 sync
 
 cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"
-cp -a "${CASHBACK_DATA_DIR}/." "${payload}/cashback-data/"
-python3 "${SANITIZE_SCRIPT}" "${payload}/cashback-data/cashback-events.sqlite3"
+# Disposable pre-deploy snapshots are rollback material, not restore input.
+# Exclude them before they enter the archive so an old copy cannot bypass the
+# sanitizer or leak push credentials through a historical filename.
+tar -C "${CASHBACK_DATA_DIR}" \
+  --exclude='pre-deploy-*.sqlite3' \
+  -cf - . | tar -C "${payload}/cashback-data" -xf -
+while IFS= read -r -d '' database; do
+  python3 "${SANITIZE_SCRIPT}" "${database}"
+done < <(find "${payload}" -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) -print0)
 
 install -m 0644 "${ACTUAL_STACK_DIR}/compose.yaml" "${payload}/configuration/actual-compose.yaml"
 install -m 0644 "${CASHBACK_STACK_DIR}/compose.yaml" "${payload}/configuration/cashback-compose.yaml"
@@ -111,7 +118,7 @@ rm -rf -- "${payload}"
   sha256sum -c SHA256SUMS >/dev/null
 )
 cat > "${working}/manifest.json" <<EOF
-{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
+{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 
 resume_services

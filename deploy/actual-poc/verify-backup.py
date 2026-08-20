@@ -36,6 +36,7 @@ EXCLUDED_PUSH_DATA = {
     "cashback-data/cashback-events.sqlite3:push_deliveries",
     "cashback-data/cashback-events.sqlite3:push_state",
 }
+EXCLUDED_CASHBACK_PATHS = {"cashback-data/pre-deploy-*.sqlite3"}
 CURRENT_MANIFEST_SCHEMA = 4
 LEGACY_MANIFEST_SCHEMA = 3
 
@@ -100,6 +101,11 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
         if schema_version == LEGACY_MANIFEST_SCHEMA:
             raise VerificationError("legacy v3 backup requires push-state classification")
         raise VerificationError("backup manifest does not classify excluded push state")
+    excluded_paths = manifest.get("excluded_paths")
+    if schema_version == CURRENT_MANIFEST_SCHEMA and (
+        not isinstance(excluded_paths, list) or set(excluded_paths) != EXCLUDED_CASHBACK_PATHS
+    ):
+        raise VerificationError("backup manifest does not classify excluded historical snapshots")
     return manifest
 
 
@@ -144,6 +150,13 @@ def _extract_regular_files(archive: Path, destination: Path) -> int:
         with tarfile.open(archive, mode="r:gz") as bundle:
             for member in bundle:
                 relative = _safe_member_path(member.name)
+                if (
+                    relative.parts[:1] == ("cashback-data",)
+                    and re.fullmatch(r"pre-deploy-[^/]+\.sqlite3", relative.name)
+                ):
+                    raise VerificationError(
+                        f"archive contains excluded historical cashback snapshot: {member.name}"
+                    )
                 target = destination / relative
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
@@ -206,14 +219,16 @@ def _verify_extracted(root: Path) -> tuple[list[str], int]:
     user_databases = sorted((root / "actual-data/user-files").glob("*.sqlite"))
     if not user_databases:
         raise VerificationError("Actual budget database is missing")
-    databases = [
-        root / "actual-data/server-files/account.sqlite",
-        root / "cashback-data/cashback-events.sqlite3",
-        *user_databases,
-    ]
+    databases = sorted(
+        {
+            path
+            for path in root.rglob("*")
+            if path.is_file() and path.suffix in {".sqlite", ".sqlite3"}
+        }
+    )
     for database in databases:
         _sqlite_integrity(database)
-    _verify_excluded_push_data(root / "cashback-data/cashback-events.sqlite3")
+        _verify_excluded_push_data(database)
 
     json_paths = sorted((root / "configuration").glob("*.json"))
     dashboard = root / "cashback-data/cashback-dashboard.json"
@@ -248,6 +263,7 @@ def verify_backup(backup_root: Path, backup_path: Path | None, work_root: Path |
         "sqlite_databases": databases,
         "json_documents": json_documents,
         "excluded_data": manifest["excluded_data"],
+        "excluded_paths": manifest.get("excluded_paths", []),
     }
 
 
