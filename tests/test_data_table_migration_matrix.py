@@ -1,0 +1,168 @@
+from __future__ import annotations
+
+from copy import deepcopy
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+import unittest
+
+from jsonschema import Draft202012Validator
+
+
+ROOT = Path(__file__).resolve().parents[1]
+N8N = ROOT / "integrations" / "n8n"
+SCRIPT = N8N / "generate_data_table_migration_matrix.py"
+MATRIX_PATH = N8N / "data-table-migration-matrix.json"
+SCHEMA_PATH = N8N / "data-table-migration-matrix.schema.json"
+
+
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_generator():
+    spec = importlib.util.spec_from_file_location("data_table_matrix_generator", SCRIPT)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load generator: {SCRIPT}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class DataTableMigrationMatrixTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.generator = load_generator()
+        cls.matrix = load_json(MATRIX_PATH)
+
+    def test_generated_matrix_is_schema_valid(self) -> None:
+        schema = load_json(SCHEMA_PATH)
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(self.matrix)
+
+    def test_source_counts_and_dispositions_match_current_corpus(self) -> None:
+        invariants = self.matrix["invariants"]
+        self.assertEqual(
+            {
+                key: invariants[key]
+                for key in (
+                    "source_tables",
+                    "source_columns",
+                    "node_references",
+                    "consumer_node_edges",
+                    "filter_only_consumer_columns",
+                    "filter_only_consumer_edges",
+                    "write_reference_edges",
+                    "producer_node_edges",
+                )
+            },
+            {
+                "source_tables": 15,
+                "source_columns": 203,
+                "node_references": 110,
+                "consumer_node_edges": 764,
+                "filter_only_consumer_columns": 33,
+                "filter_only_consumer_edges": 69,
+                "write_reference_edges": 382,
+                "producer_node_edges": 585,
+            },
+        )
+        self.assertEqual(invariants["dispositions"], {"keep": 75, "transform": 72, "remove": 56})
+        tables = load_json(N8N / "data-tables.json")["tables"]
+        self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
+        self.assertEqual(
+            [column["source_column"] for column in self.matrix["tables"][0]["columns"]],
+            list(tables[0]["columns"]),
+        )
+
+    def test_reference_scan_preserves_exact_operations_and_ordered_filters(self) -> None:
+        references = {
+            (reference["file"], reference["node"]): reference
+            for table in self.matrix["tables"]
+            for reference in table["node_references"]
+        }
+        repeated = references[
+            (
+                "integrations/n8n/disposable/generated/102-derived-recovery-core.json",
+                "Read Nonterminal Actual Outbox",
+            )
+        ]
+        self.assertEqual(repeated["operation"], "get")
+        self.assertEqual(repeated["read_columns"], ["*"])
+        self.assertEqual(repeated["filter_keys"], ["state", "state", "state"])
+        update = references[
+            (
+                "integrations/n8n/workflows/12-outlook-message-sweep.json",
+                "CAS Update Source Cursor",
+            )
+        ]
+        self.assertEqual(update["operation"], "update")
+        self.assertEqual(update["write_columns"], sorted(update["write_columns"]))
+        self.assertEqual(update["filter_keys"], ["source_code", "cursor_version"])
+
+    def test_consumer_and_producer_unions_are_explicit(self) -> None:
+        columns = {
+            (table["source_table"], column["source_column"]): column
+            for table in self.matrix["tables"]
+            for column in table["columns"]
+        }
+        references = {
+            (reference["table"], f"{reference['file']}#{reference['node']}"): reference
+            for table in self.matrix["tables"]
+            for reference in table["node_references"]
+        }
+        cursor = columns[("finance_source_cursors", "cursor_version")]
+        self.assertIn(
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            cursor["consumer_nodes"],
+        )
+        self.assertIn(
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors",
+            cursor["producer_nodes"],
+        )
+        for (table_name, source_column), column in columns.items():
+            table_refs = [reference for key, reference in references.items() if key[0] == table_name]
+            expected_consumers = sorted(
+                f"{reference['file']}#{reference['node']}"
+                for reference in table_refs
+                if "*" in reference["read_columns"]
+                or source_column in reference["read_columns"]
+                or source_column in reference["filter_keys"]
+            )
+            expected_producers = sorted(
+                f"{reference['file']}#{reference['node']}"
+                for reference in table_refs
+                if reference["operation"] == "create" or source_column in reference["write_columns"]
+            )
+            self.assertEqual(column["consumer_nodes"], expected_consumers, (table_name, source_column))
+            self.assertEqual(column["producer_nodes"], expected_producers, (table_name, source_column))
+
+    def test_generator_output_is_byte_identical_and_check_passes(self) -> None:
+        first = self.generator.render(self.generator.build_matrix())
+        second = self.generator.render(self.generator.build_matrix())
+        self.assertEqual(first, second)
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--check"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(MATRIX_PATH.read_text(encoding="utf-8"), first)
+
+    def test_stale_digest_and_coverage_are_rejected(self) -> None:
+        stale = deepcopy(self.matrix)
+        stale["source_snapshot"]["node_scan_corpus_sha256"] = "0" * 64
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(stale)
+        incomplete = deepcopy(self.matrix)
+        incomplete["tables"][1]["columns"][0]["consumer_nodes"] = []
+        with self.assertRaises(self.generator.MatrixError):
+            self.generator.validate_matrix(incomplete)
+
+
+if __name__ == "__main__":
+    unittest.main()
