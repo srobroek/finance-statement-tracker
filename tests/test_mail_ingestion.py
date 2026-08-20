@@ -1,8 +1,8 @@
+import json
+import subprocess
 import unittest
 from datetime import datetime
-import json
 from pathlib import Path
-import subprocess
 
 from finance_tracker.mail_ingestion import (
     build_ingest_commit_payload,
@@ -194,6 +194,323 @@ try {
         self.assertEqual(
             workflow["connections"]["Attach Immutable Inventory to Sweep"]["main"][0][0]["node"],
             "Archive Enumerated Messages in W01",
+        )
+
+    def test_statement_cycles_delegate_one_immutable_inventory_to_w01(self):
+        """Cycle callers preserve source policy while W12 owns the only listing."""
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        cases = (
+            (
+                "04-ei-monthly-statement.json",
+                {
+                    "source_code": "EI_AMAZON",
+                    "senders": ["estatement@emiratesislamic.ae"],
+                    "subjects": ["Statement of your Emirates Islamic Credit Card"],
+                    "cycle_day": 1,
+                    "deadline_days": 5,
+                },
+            ),
+            (
+                "05-wio-monthly-statement.json",
+                {
+                    "source_code": "WIO_CREDIT",
+                    "senders": [
+                        "communications@email.wio.io",
+                        "communications@mail.wio.io",
+                    ],
+                    "subjects": ["Your Wio Credit statement for this month"],
+                    "cycle_day": 3,
+                    "deadline_days": 5,
+                },
+            ),
+        )
+        for filename, source in cases:
+            with self.subTest(workflow=filename):
+                workflow = self.workflow(filename)
+                nodes = {node["name"]: node for node in workflow["nodes"]}
+                acquire = nodes["Acquire Archive and Read Back"]
+                target = acquire["parameters"]["workflowId"]
+                self.assertEqual(
+                    target["value"], w12["id"],
+                    "cycle must delegate enumeration to W12, never call W01 directly",
+                )
+                self.assertEqual(
+                    target["cachedResultName"], w12["name"]
+                )
+                self.assertTrue(acquire["parameters"]["options"]["waitForSubWorkflow"])
+                self.assertEqual(
+                    workflow["settings"]["errorWorkflow"],
+                    "10000000-0000-4000-8000-000000000016",
+                )
+                self.assertEqual(
+                    nodes["Download Archived Source"]["credentials"][
+                        "microsoftOneDriveOAuth2Api"
+                    ]["id"],
+                    "BIND_ONEDRIVE",
+                )
+                self.assertEqual(
+                    sum(
+                        node["type"] == "n8n-nodes-base.executeWorkflow"
+                        and node.get("parameters", {}).get("workflowId", {}).get("value")
+                        == w01["id"]
+                        for node in workflow["nodes"]
+                    ),
+                    0,
+                )
+                self.assertFalse(
+                    any(node["type"] == "n8n-nodes-base.microsoftOutlook" for node in workflow["nodes"])
+                )
+
+                run = {
+                    "run_id": f"fixture:{source['source_code']}:cycle",
+                    "source_code": source["source_code"],
+                    "folder_id": f"folder:{source['source_code']}",
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "period_key": "2026-08",
+                    "cycle_day": source["cycle_day"],
+                    "deadline_days": source["deadline_days"],
+                    "deadline_at": "2026-08-25T23:59:59.000Z",
+                    "trigger_kind": "SCHEDULE",
+                }
+                contract_row = {
+                    **source,
+                    "config_version": "fixture-v1",
+                    "folder_id": run["folder_id"],
+                    "senders_json": json.dumps(source["senders"]),
+                    "subjects_json": json.dumps(source["subjects"]),
+                    "onedrive_parent_id": f"drive:{source['source_code']}",
+                    "manifest_onedrive_parent_id": f"manifest:{source['source_code']}",
+                    "actual_file_id": f"actual:{source['source_code']}",
+                    "account_id": f"account:{source['source_code']}",
+                    "card_code": source["source_code"],
+                    "cashback_close_required": source["source_code"] == "EI_AMAZON",
+                    "enabled": True,
+                }
+                assembled = self.execute_code_node(
+                    workflow,
+                    "Assemble Trusted Acquisition Contract",
+                    json_value=contract_row,
+                    refs={"Open Configured Cycle Window": run},
+                )
+                self.assertTrue(assembled["ok"], assembled)
+                request = assembled["output"][0]["json"]
+                self.assertEqual(request["operation"], "ENUMERATE")
+                self.assertEqual(request["source_code"], source["source_code"])
+                self.assertEqual(request["senders"], source["senders"])
+                self.assertEqual(request["subjects"], source["subjects"])
+                self.assertEqual(request["cycle_day"], source["cycle_day"])
+                self.assertEqual(request["deadline_days"], source["deadline_days"])
+                self.assertEqual(request["deadline_at"], run["deadline_at"])
+
+                frozen = self.execute_code_node(
+                    w12,
+                    "Freeze Trusted Cursor Window",
+                    json_value=request,
+                )
+                self.assertTrue(frozen["ok"], frozen)
+                frozen_request = frozen["output"][0]["json"]
+                self.assertEqual(frozen_request["run_upper_bound"], run["run_upper_bound"])
+                for sender in source["senders"]:
+                    self.assertIn(
+                        "from/emailAddress/address eq '" + sender + "'",
+                        frozen_request["server_filter"],
+                    )
+                self.assertIn(
+                    "contains(subject,'" + source["subjects"][0] + "')",
+                    frozen_request["server_filter"],
+                )
+
+                def message(index, attachments, source=source):
+                    return {
+                        "id": f"message-{index:03d}",
+                        "receivedDateTime": f"2026-08-19T00:{index % 60:02d}:00.000Z",
+                        "from": {"emailAddress": {"address": source["senders"][0]}},
+                        "subject": source["subjects"][0],
+                        "attachment_inventory": attachments,
+                    }
+
+                cardinalities = {
+                    "zero": [],
+                    "one": [message(1, [{"id": "statement-001", "name": "statement.pdf"}])],
+                    "one-hundred-one": [
+                        message(index, [{"id": f"statement-{index:03d}", "name": "statement.pdf"}])
+                        for index in range(1, 102)
+                    ],
+                    "mixed": [
+                        message(
+                            1,
+                            [
+                                {"id": "statement-001", "name": "statement.pdf"},
+                                {"id": "inline-001", "name": "logo.png", "isInline": True},
+                            ],
+                        ),
+                        message(2, []),
+                    ],
+                }
+                for cardinality, messages in cardinalities.items():
+                    with self.subTest(workflow=filename, cardinality=cardinality):
+                        aggregate = self.execute_code_node(
+                            w12,
+                            "Aggregate Exact Window Heartbeat",
+                            input_items=messages,
+                            refs={"Freeze Trusted Cursor Window": frozen_request},
+                        )
+                        self.assertTrue(aggregate["ok"], aggregate)
+                        sweep = aggregate["output"][0]["json"]
+                        shaped = self.execute_code_node(
+                            w12,
+                            "Shape Immutable Message Inventory",
+                            refs={"Verify Receipt and Return Sweep": sweep},
+                        )
+                        self.assertTrue(shaped["ok"], shaped)
+                        parents = [item["json"] for item in shaped["output"]]
+                        attachment_rows = [
+                            {
+                                "message_id": parent["message_id"],
+                                "attachment": attachment,
+                            }
+                            for parent in parents
+                            for attachment in parent.get("attachment_inventory", [])
+                        ]
+                        inventory = self.execute_code_node(
+                            w12,
+                            "Aggregate Immutable Archive Inventory",
+                            input_items=attachment_rows,
+                            refs={
+                                "Verify Receipt and Return Sweep": sweep,
+                                "Shape Immutable Message Inventory": parents,
+                            },
+                        )
+                        self.assertTrue(inventory["ok"], inventory)
+                        aggregate_inventory = inventory["output"][0]["json"]
+                        attached = self.execute_code_node(
+                            w12,
+                            "Attach Immutable Inventory to Sweep",
+                            json_value={**sweep, "pagination_exhausted": True},
+                            refs={"Aggregate Immutable Archive Inventory": aggregate_inventory},
+                        )
+                        self.assertTrue(attached["ok"], attached)
+                        w01_request = attached["output"][0]["json"]
+                        validated = self.execute_code_node(
+                            w01,
+                            "Validate Bounded Source Request",
+                            json_value=w01_request,
+                        )
+                        self.assertTrue(validated["ok"], validated)
+                        archive_input = self.execute_code_node(
+                            w01,
+                            "Shape Immutable Archive Input",
+                            refs={"Validate Bounded Source Request": validated["output"][0]["json"]},
+                        )
+                        self.assertTrue(archive_input["ok"], archive_input)
+                        shaped_archive = [item["json"] for item in archive_input["output"]]
+                        self.assertEqual(
+                            len(shaped_archive), max(1, len(messages)),
+                            "W01 receives every message, including an explicit empty inventory",
+                        )
+                        if messages:
+                            expected_messages = sorted(
+                                messages,
+                                key=lambda row: (row["receivedDateTime"], row["id"]),
+                            )
+                            self.assertEqual(
+                                [row["message_id"] for row in shaped_archive],
+                                [row["id"] for row in expected_messages],
+                            )
+                            self.assertEqual(
+                                [row["attachment_inventory"] for row in shaped_archive],
+                                [
+                                    sorted(row["attachment_inventory"], key=lambda item: item["id"])
+                                    for row in expected_messages
+                                ],
+                            )
+                        else:
+                            self.assertTrue(shaped_archive[0]["empty_inventory"])
+
+                replay_messages = cardinalities["one-hundred-one"]
+                replay_aggregate = self.execute_code_node(
+                    w12,
+                    "Aggregate Exact Window Heartbeat",
+                    input_items=replay_messages,
+                    refs={"Freeze Trusted Cursor Window": frozen_request},
+                )
+                replay_sweep = replay_aggregate["output"][0]["json"]
+                replay_parents = self.execute_code_node(
+                    w12,
+                    "Shape Immutable Message Inventory",
+                    refs={"Verify Receipt and Return Sweep": replay_sweep},
+                )
+                replay_parent_rows = [item["json"] for item in replay_parents["output"]]
+                replay_inventory = {
+                    "messages": [
+                        {
+                            "message_id": row["message_id"],
+                            "message": row,
+                            "attachment_inventory": row["attachment_inventory"],
+                            "attachment_ids": [attachment["id"] for attachment in row["attachment_inventory"]],
+                            "attachment_identity_keys": [
+                                row["message_id"] + ":" + attachment["id"]
+                                for attachment in row["attachment_inventory"]
+                            ],
+                        }
+                        for row in replay_parent_rows
+                    ],
+                    "attachment_identity_keys": [
+                        row["message_id"] + ":" + attachment["id"]
+                        for row in replay_parent_rows
+                        for attachment in row["attachment_inventory"]
+                    ],
+                    "empty_inventory": False,
+                    "immutable_inventory": True,
+                    "attachment_ids_verified": True,
+                }
+                replay_receipt = {
+                    **{
+                        key: replay_sweep[key]
+                        for key in ("run_id", "source_code", "window_start", "run_upper_bound")
+                    },
+                    "matched_count": len(replay_messages),
+                    "terminal_state": "ENUMERATED",
+                    "pagination_exhausted": True,
+                    "cursor_commit_eligible": False,
+                    "immutable_inventory_json": json.dumps(
+                        replay_inventory, separators=(",", ":")
+                    ),
+                }
+                replay = self.execute_code_node(
+                    w12,
+                    "Return Existing ENUMERATED Receipt",
+                    json_value=replay_receipt,
+                    refs={"Freeze Trusted Cursor Window": frozen_request},
+                )
+                self.assertTrue(replay["ok"], replay)
+                replay_request = replay["output"][0]["json"]
+                self.assertTrue(replay_request["replay_noop"])
+                self.assertEqual(len(replay_request["messages"]), 101)
+                replay_validated = self.execute_code_node(
+                    w01,
+                    "Validate Bounded Source Request",
+                    json_value=replay_request,
+                )
+                self.assertTrue(replay_validated["ok"], replay_validated)
+
+        self.assertEqual(
+            sum(
+                node["type"] == "n8n-nodes-base.microsoftOutlook"
+                and node["parameters"].get("resource") == "folderMessage"
+                for node in w12["nodes"]
+            ),
+            1,
+            "W12 owns the only message listing",
+        )
+        self.assertFalse(
+            any(
+                node["type"] == "n8n-nodes-base.microsoftOutlook"
+                and node["parameters"].get("resource") == "folderMessage"
+                for node in w01["nodes"]
+            )
         )
 
     def test_w01_archive_barrier_covers_zero_one_and_many_attachments(self):

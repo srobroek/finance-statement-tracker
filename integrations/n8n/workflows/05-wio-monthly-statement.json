@@ -83,7 +83,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst w = $('Open Configured Cycle Window').first().json, c = $json;\nreturn [{ json: { ...w, ...c, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst w = $('Open Configured Cycle Window').first().json, c = $json;\nreturn [{ json: { ...w, ...c, operation: 'ENUMERATE', senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
       }
     },
     {
@@ -99,9 +99,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000001",
+          "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Acquire Outlook Documents · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
         },
         "options": {
           "waitForSubWorkflow": true
