@@ -367,8 +367,12 @@ return [{
   json: {
     run_id: contract.run_id,
     source_code: contract.source_code,
+    folder_id: contract.folder_id,
+    senders: contract.senders,
+    subjects: contract.subjects,
     window_start: contract.window_start,
     run_upper_bound: contract.run_upper_bound,
+    onedrive_parent_id: contract.onedrive_parent_id,
     pagination_exhausted: true,
     pages_fetched: null,
     scanned_count: scanned.length,

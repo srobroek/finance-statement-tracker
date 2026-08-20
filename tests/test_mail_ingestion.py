@@ -346,16 +346,30 @@ try {
             refs={"Freeze Trusted Cursor Window": {
                 "run_id": "fixture:zero",
                 "source_code": "FIXTURE",
+                "folder_id": "fixture-folder",
                 "senders": ["fixture@example.test"],
                 "subjects": ["Fixture transaction"],
                 "window_start": "2026-08-19T00:00:00.000Z",
                 "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                "onedrive_parent_id": "fixture-parent",
                 "max_messages": 500,
             }},
         )
         self.assertTrue(zero_aggregate["ok"], zero_aggregate)
-        self.assertEqual(zero_aggregate["output"][0]["json"]["scanned_count"], 0)
-        self.assertTrue(zero_aggregate["output"][0]["json"]["heartbeat"])
+        zero_context = zero_aggregate["output"][0]["json"]
+        self.assertEqual(zero_context["scanned_count"], 0)
+        self.assertTrue(zero_context["heartbeat"])
+        self.assertEqual(
+            {key: zero_context[key] for key in (
+                "folder_id", "senders", "subjects", "onedrive_parent_id",
+            )},
+            {
+                "folder_id": "fixture-folder",
+                "senders": ["fixture@example.test"],
+                "subjects": ["Fixture transaction"],
+                "onedrive_parent_id": "fixture-parent",
+            },
+        )
 
         one = exhaust("one-no-attachments")
         self.assertTrue(one["ok"], one)
