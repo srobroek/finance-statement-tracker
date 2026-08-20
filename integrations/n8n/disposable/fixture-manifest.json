@@ -14,7 +14,7 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "cf483ec878aa90ce859cc7652b3620d8ee713265e8910e2da1a425777ab6d6e6"
+      "sha256": "b967f59f7f68e5643451bb049bd222ee5e2fe33ca4d4f3fd646b33c17173eaf1"
     },
     {
       "file": "91-sweep-zero.json",
@@ -25,6 +25,11 @@
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
       "sha256": "5340bc1e7cbc699efce22d2e9dd33497c097134652430eb388fe668ed4b39f30"
+    },
+    {
+      "file": "108-sweep-one-no-attachments.json",
+      "id": "90000000-0000-4000-8000-000000000913",
+      "sha256": "b3d782baa832fc3aacc481d879f41fdafc39e1b24e71fbd63aaf721124e21e1d"
     },
     {
       "file": "93-sweep-late-order.json",
@@ -107,6 +112,14 @@
       "workflow_id": "90000000-0000-4000-8000-000000000901",
       "expected_exit": 0,
       "expected": {
+        "scanned_count": 0,
+        "heartbeat": true
+      }
+    },
+    "sweep_one_no_attachments": {
+      "workflow_id": "90000000-0000-4000-8000-000000000913",
+      "expected_exit": 0,
+      "expected": {
         "scanned_count": 1,
         "matched_count": 1,
         "attachment_identity_keys": []
@@ -117,7 +130,8 @@
       "expected_exit": 0,
       "expected": {
         "scanned_count": 101,
-        "matched_count": 101
+        "matched_count": 101,
+        "attachment_identity_keys": []
       }
     },
     "sweep_late_order": {

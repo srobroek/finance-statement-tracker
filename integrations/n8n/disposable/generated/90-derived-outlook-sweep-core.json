@@ -204,7 +204,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); if(kind==='zero') return [mk('m001',1000)]; if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
+        "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); if(kind==='zero') return [{json:{}}]; if(kind==='one-no-attachments') return [mk('m001',1000)]; if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
       }
     },
     {
@@ -734,7 +734,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "return $input.all().flatMap(item => (Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []).map(attachment => ({json: attachment})));"
+        "jsCode": "return $input.all().flatMap(item => { const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; return attachments.length ? attachments.map(attachment => ({json: attachment})) : [{json:{}}]; });"
       }
     },
     {

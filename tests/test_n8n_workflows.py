@@ -901,7 +901,7 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 18)
+        self.assertEqual(len(manifest["workflows"]), 19)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
@@ -939,9 +939,12 @@ class N8nWorkflowTests(unittest.TestCase):
     def test_disposable_fixture_matrix_covers_runtime_requested_boundaries(self) -> None:
         manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
         scenarios = manifest["scenario_contract"]
-        self.assertEqual(scenarios["sweep_zero"]["expected"]["scanned_count"], 1)
-        self.assertEqual(scenarios["sweep_zero"]["expected"]["matched_count"], 1)
-        self.assertEqual(scenarios["sweep_zero"]["expected"]["attachment_identity_keys"], [])
+        self.assertEqual(scenarios["sweep_zero"]["expected"]["scanned_count"], 0)
+        self.assertTrue(scenarios["sweep_zero"]["expected"]["heartbeat"])
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["scanned_count"], 1)
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["matched_count"], 1)
+        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["attachment_identity_keys"], [])
+        self.assertEqual(scenarios["sweep_101"]["expected"]["attachment_identity_keys"], [])
         self.assertEqual(scenarios["sweep_101"]["expected"]["scanned_count"], 101)
         self.assertEqual(scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"])
         self.assertEqual(scenarios["sweep_pagination_failure"]["expected_exit"], "nonzero")
