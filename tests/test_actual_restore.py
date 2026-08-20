@@ -133,7 +133,7 @@ if command == 'network':
         if missing_message is None:
             missing_message = f'Error: network {{name}} not found'
         else:
-            missing_message = missing_message.format(name=name)
+            missing_message = missing_message.format(name=name, name_upper=name.upper())
         print(missing_message, file=sys.stderr)
         raise SystemExit(1)
     if action == 'create':
@@ -170,7 +170,7 @@ if command == 'inspect':
     if missing_message is None:
         missing_message = f'Error: no container with name or ID "{{name}}" found: no such container'
     else:
-        missing_message = missing_message.format(name=name)
+        missing_message = missing_message.format(name=name, name_upper=name.upper())
     print(missing_message, file=sys.stderr)
     raise SystemExit(1)
 if command == 'run':
@@ -394,6 +394,55 @@ class ActualRestoreTests(unittest.TestCase):
                 fake_runtime(
                     root,
                     network_missing_message="Error: network {name}: unable to find network with name or ID other-network: network not found",
+                ),
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_network_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_docker_container_case_only_wrong_object_id_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    container_missing_message='Error: NO SUCH OBJECT: "{name_upper}"',
+                    container_missing_stdout="[]",
+                ),
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_docker_network_both_case_only_wrong_object_ids_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    network_missing_message="Error: NETWORK {name_upper}: unable to find network with name or ID {name_upper}: NETWORK NOT FOUND",
+                ),
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_network_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_docker_network_mixed_second_case_only_wrong_object_id_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    network_missing_message="Error: network {name}: unable to find network with name or ID {name_upper}: network not found",
                 ),
             )
             self.assertEqual(result.returncode, 1)

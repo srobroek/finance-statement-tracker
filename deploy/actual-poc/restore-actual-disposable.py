@@ -36,18 +36,18 @@ def is_absent_inspect_response(message: str, object_name: str, kind: str) -> boo
     escaped_name = re.escape(object_name)
     if kind == "container":
         patterns = (
-            rf"\[\]\s*Error: No such object: \"{escaped_name}\"",
-            rf"Error: no container with name or ID \"{escaped_name}\" found: no such container",
+            rf"\[\]\s*(?i:Error:\s+No such object:)\s+\"{escaped_name}\"",
+            rf"(?i:Error:\s+no container with name or ID)\s+\"{escaped_name}\"\s+(?i:found:\s+no such container)",
         )
     elif kind == "network":
         patterns = (
-            rf"Error: No such object: \"{escaped_name}\"",
-            rf"Error: network {escaped_name}: unable to find network with name or ID {escaped_name}: network not found",
-            rf"Error: network {escaped_name} not found",
+            rf"(?i:Error:\s+No such object:)\s+\"{escaped_name}\"",
+            rf"(?i:Error:\s+network)\s+{escaped_name}(?i::\s+unable to find network with name or ID)\s+{escaped_name}(?i::\s+network not found)",
+            rf"(?i:Error:\s+network)\s+{escaped_name}(?i:\s+not found)",
         )
     else:
         raise ValueError(f"unsupported inspect object kind: {kind}")
-    return any(re.fullmatch(pattern, message.strip(), flags=re.IGNORECASE) for pattern in patterns)
+    return any(re.fullmatch(pattern, message.strip()) for pattern in patterns)
 
 
 class DrillError(RuntimeError):
@@ -110,7 +110,7 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     result = runtime_call(runtime, "inspect", sidecar)
     if result.returncode == 0:
         return "present"
-    message = f"{result.stdout}\n{result.stderr}".casefold()
+    message = f"{result.stdout}\n{result.stderr}"
     if is_absent_inspect_response(message, sidecar, "container"):
         return "absent"
     raise DrillError("runtime_inspect_failed", "cleanup")
@@ -120,7 +120,7 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     result = runtime_call(runtime, "network", "inspect", network)
     if result.returncode == 0:
         return "present"
-    message = f"{result.stdout}\n{result.stderr}".casefold()
+    message = f"{result.stdout}\n{result.stderr}"
     if is_absent_inspect_response(message, network, "network"):
         return "absent"
     raise DrillError("runtime_network_inspect_failed", "cleanup")
