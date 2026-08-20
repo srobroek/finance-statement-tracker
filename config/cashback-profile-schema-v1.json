@@ -213,16 +213,9 @@
         "exclusions": {"type": "array", "items": {"type": "string"}},
         "source_references": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["label", "url"],
-            "properties": {
-              "label": {"type": "string", "minLength": 1},
-              "url": {"type": "string", "format": "uri"}
-            },
-            "additionalProperties": false
-          }
+          "items": {"$ref": "#/$defs/issuerEvidenceReference"}
         },
+        "provenance": {"$ref": "#/$defs/programmeProvenance"},
         "safety_target": {"$ref": "#/$defs/nullableMoney"},
         "safety_target_aed": {"$ref": "#/$defs/nullableMoney"},
         "fx_cost_rate": {"$ref": "#/$defs/money"},
@@ -231,6 +224,67 @@
         "tiers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/tier"}},
         "buckets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bucket"}}
       },
+      "additionalProperties": false
+    },
+    "issuerEvidenceReference": {
+      "type": "object",
+      "required": ["id", "label", "url", "effective_start", "effective_end", "authority"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "label": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri"},
+        "effective_start": {"type": ["string", "null"], "format": "date"},
+        "effective_end": {"type": ["string", "null"], "format": "date"},
+        "authority": {"enum": ["AUTHORITATIVE", "NON_AUTHORITATIVE"]},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "fixture": {"type": "string", "pattern": "^tests/fixtures/cashback-provenance/[a-z0-9._-]+$"},
+        "retrieved_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"authority": {"const": "AUTHORITATIVE"}}},
+          "then": {
+            "required": ["sha256"],
+            "properties": {
+              "effective_start": {"type": "string", "format": "date"}
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "provenanceClaim": {
+      "type": "object",
+      "required": ["kind", "path", "reference_ids"],
+      "properties": {
+        "kind": {"enum": ["PROGRAMME", "RATE", "CAP", "EXCLUSION", "TIER"]},
+        "path": {"type": "string", "minLength": 1},
+        "reference_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    },
+    "programmeProvenance": {
+      "type": "object",
+      "required": ["authority", "reason", "claims"],
+      "properties": {
+        "authority": {"enum": ["AUTHORITATIVE", "NON_AUTHORITATIVE"]},
+        "reason": {"type": "string", "minLength": 1},
+        "claims": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/provenanceClaim"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"authority": {"const": "AUTHORITATIVE"}}},
+          "then": {"properties": {"claims": {"minItems": 1}}}
+        }
+      ],
       "additionalProperties": false
     },
     "paymentIntent": {
