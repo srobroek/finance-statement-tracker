@@ -60,6 +60,10 @@ def sha256(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def path_exists(path: Path | None) -> bool:
+    return path is not None and os.path.lexists(path)
+
+
 def write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(f"{path}.tmp")
@@ -300,6 +304,11 @@ def main() -> int:
         "source_provenance": {"commit": source_commit(), "script_sha256": sha256(SCRIPT)},
         "requested_runs": args.repeat,
         "runs": [],
+        "cleanup": {
+            "outer_temp_root": None,
+            "outer_temp_root_removed": False,
+            "retained_paths": [],
+        },
         "cleanup_verified": True,
         "production_mutated": False,
         "retained_mutated": False,
@@ -359,7 +368,7 @@ def main() -> int:
                         ok = False
             elif network_state != "absent":
                 ok = False
-        if current_data and current_data.exists():
+        if current_data and path_exists(current_data):
             if sidecar_state != "absent" or network_state != "absent":
                 ok = False
             else:
@@ -367,10 +376,35 @@ def main() -> int:
                     shutil.rmtree(current_data)
                 except OSError:
                     ok = False
-                ok = ok and not current_data.exists()
+                ok = ok and not path_exists(current_data)
         if ok:
             current_sidecar, current_network, current_data = None, None, None
         return ok
+
+    def cleanup_outer_root() -> bool:
+        if temp_root_for_cleanup is None:
+            return True
+        cleanup_receipt = result["cleanup"]
+        cleanup_receipt["outer_temp_root"] = str(temp_root_for_cleanup)
+        if not path_exists(temp_root_for_cleanup):
+            cleanup_receipt["outer_temp_root_removed"] = True
+            cleanup_receipt["retained_paths"] = []
+            return True
+        try:
+            if temp_root_for_cleanup.is_symlink():
+                raise OSError("refusing to remove symlink at owned temp root")
+            shutil.rmtree(temp_root_for_cleanup)
+        except OSError:
+            cleanup_receipt["outer_temp_root_removed"] = False
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            return False
+        if path_exists(temp_root_for_cleanup):
+            cleanup_receipt["outer_temp_root_removed"] = False
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            return False
+        cleanup_receipt["outer_temp_root_removed"] = True
+        cleanup_receipt["retained_paths"] = []
+        return True
 
     def handle_signal(signum: int, _frame: Any) -> None:
         if not cleanup():
@@ -384,6 +418,7 @@ def main() -> int:
         expected = load_expected(Path(args.expected_readback))
         temp_root_for_cleanup = Path(tempfile.mkdtemp(prefix="finance-actual-restore.", dir=args.temp_root))
         temp_root = temp_root_for_cleanup
+        result["cleanup"]["outer_temp_root"] = str(temp_root_for_cleanup)
         verified = backup_verify(Path(args.backup_root), Path(args.backup_path) if args.backup_path else None, temp_root)
         result["backup"].update({
             "name": verified["backup"],
@@ -502,16 +537,29 @@ def main() -> int:
         result["error"] = {"code": "signal_interrupted", "stage": "cleanup"}
         return_code = exit_error.code if isinstance(exit_error.code, int) else 130
     finally:
-        if current_sidecar or current_data:
+        if current_sidecar or current_network or current_data:
             result["cleanup_verified"] = cleanup() and result["cleanup_verified"]
+        if current_sidecar or current_network or current_data:
+            result["cleanup"]["outer_temp_root_removed"] = False
+            result["cleanup"]["retained_paths"] = [str(temp_root_for_cleanup)] if temp_root_for_cleanup else []
+            outer_cleanup_verified = False
+        else:
+            outer_cleanup_verified = cleanup_outer_root()
+        if not outer_cleanup_verified:
+            result["cleanup_verified"] = False
+            result["status"] = "failed"
+            result["error"] = result["error"] or {
+                "code": "outer_temp_cleanup_failed",
+                "stage": "cleanup",
+                "detail": str(temp_root_for_cleanup),
+            }
+            return_code = 1
         result["completed_at"] = now()
         try:
             write_json(receipt, result)
         except OSError as error:
             print(json.dumps({"level": "error", "event": "restore_receipt_write_failed", "detail": str(error)}), file=sys.stderr)
             return_code = 1
-        if temp_root_for_cleanup and not (current_sidecar or current_network or current_data):
-            shutil.rmtree(temp_root_for_cleanup, ignore_errors=True)
     print(json.dumps({"status": result["status"], "receipt": str(receipt), "error": result["error"]}, sort_keys=True))
     return return_code
 

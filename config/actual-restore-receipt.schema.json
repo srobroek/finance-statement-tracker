@@ -16,6 +16,7 @@
     "source_provenance",
     "requested_runs",
     "runs",
+    "cleanup",
     "cleanup_verified",
     "production_mutated",
     "retained_mutated",
@@ -103,6 +104,20 @@
         }
       }
     },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outer_temp_root", "outer_temp_root_removed", "retained_paths"],
+      "properties": {
+        "outer_temp_root": { "type": ["string", "null"], "minLength": 1 },
+        "outer_temp_root_removed": { "type": "boolean" },
+        "retained_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "cleanup_verified": { "type": "boolean" },
     "production_mutated": { "const": false },
     "retained_mutated": { "const": false },
@@ -127,6 +142,13 @@
           "backup": { "properties": { "verified": { "const": true } } },
           "runtime": { "properties": { "available": { "const": true }, "verified": { "const": true } } },
           "cleanup_verified": { "const": true },
+          "cleanup": {
+            "properties": {
+              "outer_temp_root": { "type": "string", "minLength": 1 },
+              "outer_temp_root_removed": { "const": true },
+              "retained_paths": { "maxItems": 0 }
+            }
+          },
           "error": { "type": "null" },
           "runs": {
             "minItems": 2,

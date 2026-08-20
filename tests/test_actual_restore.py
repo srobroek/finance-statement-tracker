@@ -241,10 +241,13 @@ class ActualRestoreTests(unittest.TestCase):
             '"production_mutated": False',
             '"secret_values_recorded": False',
             '"network_cleanup_verified": False',
+            '"outer_temp_root_removed": False',
+            '"retained_paths": []',
         ):
             self.assertIn(required, source)
         self.assertNotIn("docker compose", source)
         self.assertNotIn('"--network", "none"', source)
+        self.assertNotIn("ignore_errors", source)
 
     def test_hash_mismatch_is_failed_and_not_a_restore(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -293,6 +296,10 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "cleanup_not_verified")
             self.assertFalse(receipt["cleanup_verified"])
+            self.assertFalse(receipt["cleanup"]["outer_temp_root_removed"])
+            retained_root = Path(receipt["cleanup"]["retained_paths"][0])
+            self.assertEqual(retained_root, Path(receipt["cleanup"]["outer_temp_root"]))
+            self.assertTrue(retained_root.is_dir())
             self.assertTrue(list(root.glob("*.container")))
             self.assertTrue(list(root.glob("*.network")))
             self.assertTrue(list(root.glob("finance-actual-restore.*/data-1")))
@@ -305,7 +312,8 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "sidecar_start_failed")
             self.assertTrue(receipt["cleanup_verified"])
-            self.assertFalse(list(root.glob("data-*")))
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
 
     def test_network_create_failure_cleans_the_exact_data_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -315,7 +323,8 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "disposable_network_create_failed")
             self.assertTrue(receipt["cleanup_verified"])
-            self.assertFalse(list(root.glob("finance-actual-restore.*/data-1")))
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
 
     def test_restart_failure_cleans_and_reports_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -325,6 +334,44 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "sidecar_restart_failed")
             self.assertTrue(receipt["cleanup_verified"])
+
+    def test_outer_temp_root_removal_failure_is_nonzero_and_reports_exact_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            breaking_probe = executable(
+                root,
+                "breaking-probe",
+                """
+import json
+import os
+import pathlib
+import shutil
+
+payload = {
+    'accounts': [{'name': 'Current', 'balance_minor': 100, 'closed': False, 'offbudget': False}],
+    'representative_transactions': [{'account_name': 'Current', 'amount_minor': -10, 'date': '2026-08-01', 'imported_id': 'statement:fixture:1', 'payee': 'Merchant'}],
+}
+if os.environ.get('ACTUAL_RESTORE_RUN_INDEX') == '2' and not (pathlib.Path(os.environ['ACTUAL_RESTORE_DATA_DIR']).parent.parent / 'break-once').exists():
+    data_dir = pathlib.Path(os.environ['ACTUAL_RESTORE_DATA_DIR'])
+    outer_root = data_dir.parent
+    (outer_root.parent / 'break-once').write_text('1', encoding='ascii')
+    shutil.rmtree(outer_root)
+    outer_root.symlink_to(outer_root.parent / 'missing-target')
+print(json.dumps({'api': payload, 'ui': payload}))
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=breaking_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["error"]["code"], "outer_temp_cleanup_failed")
+            self.assertFalse(receipt["cleanup_verified"])
+            self.assertFalse(receipt["cleanup"]["outer_temp_root_removed"])
+            retained_root = Path(receipt["cleanup"]["retained_paths"][0])
+            self.assertEqual(retained_root, Path(receipt["cleanup"]["outer_temp_root"]))
+            self.assertTrue(os.path.lexists(retained_root))
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
 
     def test_sigterm_cleans_the_current_sidecar_and_data_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -363,7 +410,10 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(process.returncode, 143)
             self.assertEqual(payload["error"]["code"], "signal_interrupted")
             self.assertTrue(payload["cleanup_verified"])
-            self.assertFalse(list(root.glob("data-*")))
+            self.assertTrue(payload["cleanup"]["outer_temp_root_removed"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
 
     def test_happy_path_proves_two_runs_restart_and_ui_api_parity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -374,6 +424,7 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "passed")
             self.assertEqual(len(receipt["runs"]), 2)
             self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
             for run in receipt["runs"]:
                 self.assertTrue(run["restart_verified"])
                 self.assertTrue(run["repeat_state_match"])
@@ -381,7 +432,9 @@ class ActualRestoreTests(unittest.TestCase):
                 self.assertTrue(run["cleanup_verified"])
                 self.assertTrue(run["network_internal"])
                 self.assertTrue(run["network_cleanup_verified"])
-            self.assertFalse(list(root.glob("data-*")))
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
             run_args = (root / "run-args").read_text(encoding="utf-8")
             self.assertIn("--network finance-actual-restore-net-", run_args)
             self.assertNotIn("--network none", run_args)
@@ -445,6 +498,7 @@ if not os.environ.get('ACTUAL_RESTORE_URL', '').startswith('http://127.0.0.1:'):
             "source_provenance": {"commit": "e" * 40, "script_sha256": "f" * 64},
             "requested_runs": 2,
             "runs": [run, {**run, "run_index": 2, "sidecar_id": "sidecar-2"}],
+            "cleanup": {"outer_temp_root": "/tmp/finance-actual-restore.fixture", "outer_temp_root_removed": True, "retained_paths": []},
             "cleanup_verified": True,
             "production_mutated": False,
             "retained_mutated": False,
