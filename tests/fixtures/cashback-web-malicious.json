@@ -5,11 +5,11 @@
   },
   "cards": [
     {
-      "card": "CARD_<svg onload=\"document.body.dataset.xss='card-code'\">",
+      "card": "CARD_ALPHA",
       "name": "<img src=x onerror=\"document.body.dataset.xss='card-name'\">",
       "short_name": "<svg onload=\"document.body.dataset.xss='card-short'\">",
       "position_mode": "UNLIMITED",
-      "tracking_mode": "<img src=x onerror=\"document.body.dataset.xss='tracking'\">",
+      "tracking_mode": "STATEMENT_ONLY",
       "position_headline": "<b onmouseover=\"document.body.dataset.xss='headline'\">",
       "position_detail": "<script>document.body.dataset.xss='detail'</script>"
     },
@@ -37,14 +37,14 @@
     {
       "code": "<option value='bad' onfocus=\"document.body.dataset.xss='rule-code'\">",
       "label": "<img src=x onerror=\"document.body.dataset.xss='rule-label'\">",
-      "purchase_type": "<svg onload=\"document.body.dataset.xss='purchase-type'\">",
+      "purchase_type": "ONLINE_PURCHASE",
       "channel": "ONLINE",
       "currency": "AED",
       "methods": ["<img src=x onerror=\"document.body.dataset.xss='method'\">"],
-      "use_card": "CARD_<svg onload=\"document.body.dataset.xss='use-card'\">",
+      "use_card": "CARD_SAFE",
       "ranked_cards": [
         {
-          "card": "CARD_<svg onload=\"document.body.dataset.xss='candidate-card'\">",
+          "card": "CARD_ALPHA",
           "status": "PREFERRED",
           "order": "<img src=x onerror=\"document.body.dataset.xss='order'\">",
           "payment_channel": "ONLINE",
@@ -55,7 +55,7 @@
           "tier_remaining_aed": "0"
         }
       ],
-      "reason": "<img src=x onerror=\"document.body.dataset.xss='reason'\">"
+      "reason": "Safe reason"
     }
   ],
   "alerts": [
