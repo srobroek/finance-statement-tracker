@@ -1,9 +1,11 @@
+import json
+import subprocess
+import tempfile
 import unittest
 from datetime import datetime
-import json
 from pathlib import Path
-import subprocess
 
+from finance_tracker.cashback_events import CashbackEventStore, IngestCursorConflict
 from finance_tracker.mail_ingestion import (
     build_ingest_commit_payload,
     build_outlook_envelope,
@@ -126,11 +128,149 @@ try {
             "parse": {"scanned_count": 1, "accepted_count": 0},
             "cursor_candidate": envelope["cursor"],
             "cursor_committed": False,
+            "service_receipt": {
+                "receipt_id": "cashback-ingest:" + "a" * 64,
+                "receipt_sha256": "a" * 64,
+            },
         }
         commit = build_ingest_commit_payload(envelope, response)
         self.assertEqual(commit["scanned_count"], 1)
         self.assertEqual(commit["accepted_count"], 0)
         self.assertEqual(commit["cursor"], envelope["cursor"])
+        self.assertEqual(commit["service_receipt"], response["service_receipt"])
+
+    def test_missing_service_receipt_cannot_create_commit_payload(self):
+        plan = plan_outlook_scan(
+            self.config(),
+            {"cursor": "2026-08-16T23:50:00+04:00"},
+            datetime.fromisoformat("2026-08-17T23:50:00+04:00"),
+        )
+        envelope = build_outlook_envelope(
+            plan,
+            [{"id": "one", "receivedDateTime": "2026-08-17T12:00:00+04:00"}],
+        )
+        response = {
+            "parse": {"scanned_count": 1, "accepted_count": 0},
+            "cursor_candidate": envelope["cursor"],
+            "cursor_committed": False,
+        }
+        receipts = (
+            None,
+            {},
+            {"receipt_id": "cashback-ingest:x"},
+            {"receipt_sha256": "a" * 64},
+        )
+        for receipt in receipts:
+            candidate = dict(response)
+            if receipt is None:
+                candidate.pop("service_receipt", None)
+            else:
+                candidate["service_receipt"] = receipt
+            with self.assertRaisesRegex(ValueError, "service_receipt"):
+                build_ingest_commit_payload(envelope, candidate)
+
+    def test_mismatched_service_receipt_is_rejected_by_companion_cursor_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            receipt = store.create_ingest_receipt({
+                "source": "outlook",
+                "completed_at": "2026-08-17T19:50:00+00:00",
+                "scanned_count": 0,
+                "accepted_count": 0,
+                "cursor": "2026-08-17T19:50:00+00:00",
+            })
+            envelope = {
+                "source": "outlook",
+                "completed_at": receipt["completed_at"],
+                "cursor": receipt["cursor"],
+                "messages": [],
+            }
+            payload = build_ingest_commit_payload(
+                envelope,
+                {
+                    "parse": {"scanned_count": 0, "accepted_count": 0},
+                    "cursor_candidate": envelope["cursor"],
+                    "cursor_committed": False,
+                    "service_receipt": {
+                        "receipt_id": receipt["receipt_id"],
+                        "receipt_sha256": "0" * 64,
+                    },
+                },
+            )
+            with self.assertRaisesRegex(IngestCursorConflict, "unknown or mismatched"):
+                store.record_ingest_success(payload)
+            self.assertIsNone(store.ingest_state("outlook")["cursor"])
+
+    def test_exact_service_receipt_replay_is_a_cursor_noop(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            receipt = store.create_ingest_receipt({
+                "source": "outlook",
+                "completed_at": "2026-08-17T19:50:00+00:00",
+                "scanned_count": 0,
+                "accepted_count": 0,
+                "cursor": "2026-08-17T19:50:00+00:00",
+            })
+            envelope = {
+                "source": "outlook",
+                "completed_at": receipt["completed_at"],
+                "cursor": receipt["cursor"],
+                "messages": [],
+            }
+            payload = build_ingest_commit_payload(
+                envelope,
+                {
+                    "parse": {"scanned_count": 0, "accepted_count": 0},
+                    "cursor_candidate": envelope["cursor"],
+                    "cursor_committed": False,
+                    "service_receipt": receipt,
+                },
+            )
+            first = store.record_ingest_success(payload)
+            replay = store.record_ingest_success(payload)
+            self.assertFalse(first["idempotent_replay"])
+            self.assertTrue(replay["idempotent_replay"])
+            self.assertEqual(replay["receipt_id"], receipt["receipt_id"])
+            self.assertEqual(
+                store.ingest_state("outlook")["cursor"], envelope["cursor"]
+            )
+
+    def test_active_cashback_workflow_forwards_exact_service_receipt_identity(self):
+        workflow = self.workflow("02-rakbank-live-cashback.json")
+        receipt = {
+            "receipt_id": "cashback-ingest:" + "b" * 64,
+            "receipt_sha256": "b" * 64,
+        }
+        envelope = {
+            "source": "outlook:rakbank",
+            "completed_at": "2026-08-20T00:00:00.000Z",
+            "cursor": "2026-08-20T00:00:00.000Z",
+            "messages": [],
+        }
+        verified = self.execute_code_node(
+            workflow,
+            "Verify Service Receipt Before Cursor",
+            json_value={
+                "cursor_candidate": envelope["cursor"],
+                "cursor_committed": False,
+                "parse": {"scanned_count": 0, "accepted_count": 0},
+                "service_receipt": receipt,
+            },
+            refs={"Build Frozen Mailbox Envelope": envelope},
+        )
+        self.assertTrue(verified["ok"], verified)
+        self.assertEqual(verified["output"][0]["json"]["service_receipt"], receipt)
+        self.assert_code_error(
+            workflow,
+            "Verify Service Receipt Before Cursor",
+            "service receipt identity is required",
+            json_value={
+                "cursor_candidate": envelope["cursor"],
+                "cursor_committed": False,
+                "parse": {"scanned_count": 0, "accepted_count": 0},
+            },
+            refs={"Build Frozen Mailbox Envelope": envelope},
+        )
 
     def test_partial_service_result_cannot_create_commit_payload(self):
         plan = plan_outlook_scan(
