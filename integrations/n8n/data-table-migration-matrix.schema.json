@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-n8n-data-table-migration-matrix-v1.json",
+  "title": "Finance n8n Data Table migration matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "artifact_role",
+    "source_contract",
+    "source_snapshot",
+    "scan_roots",
+    "targets",
+    "target_schemas",
+    "invariants",
+    "tables"
+  ],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "schema_version": {"const": 1},
+    "artifact_role": {"const": "GENERATED_SOURCE_MATRIX"},
+    "source_contract": {"const": "integrations/n8n/data-tables.json@schema_version=4"},
+    "source_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finance_commit",
+        "data_tables_sha256",
+        "node_scan_corpus_sha256",
+        "source_ref_selection",
+        "node_scan_digest_method"
+      ],
+      "properties": {
+        "finance_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "data_tables_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "node_scan_corpus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_ref_selection": {"type": "string", "minLength": 32},
+        "node_scan_digest_method": {"type": "string", "minLength": 32}
+      }
+    },
+    "scan_roots": {
+      "type": "array",
+      "const": [
+        "integrations/n8n/workflows/*.json",
+        "integrations/n8n/disposable/generated/*.json",
+        "integrations/n8n/setup-workflows/*.json"
+      ]
+    },
+    "targets": {
+      "type": "array",
+      "const": [
+        "finance_ingestion_state",
+        "finance_documents",
+        "finance_actual_batches",
+        "finance_ai_reviews"
+      ]
+    },
+    "target_schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finance_ingestion_state",
+        "finance_documents",
+        "finance_actual_batches",
+        "finance_ai_reviews"
+      ],
+      "properties": {
+        "finance_ingestion_state": {"$ref": "#/$defs/target_schema"},
+        "finance_documents": {"$ref": "#/$defs/target_schema"},
+        "finance_actual_batches": {"$ref": "#/$defs/target_schema"},
+        "finance_ai_reviews": {"$ref": "#/$defs/target_schema"}
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_tables",
+        "source_columns",
+        "node_references",
+        "consumer_node_edges",
+        "filter_only_consumer_columns",
+        "filter_only_consumer_edges",
+        "write_reference_edges",
+        "producer_node_edges",
+        "every_source_column_has_one_disposition",
+        "node_operations",
+        "read_columns_star_means_full_matching_row",
+        "filter_keys_are_exact_node_parameters",
+        "consumer_nodes_equal_read_and_filter_union",
+        "producer_nodes_equal_write_mapping_plus_schema_creation",
+        "deletion_requires_second_run_noop_and_reverse_rehearsal",
+        "dispositions"
+      ],
+      "properties": {
+        "source_tables": {"type": "integer", "minimum": 1},
+        "source_columns": {"type": "integer", "minimum": 1},
+        "node_references": {"type": "integer", "minimum": 1},
+        "consumer_node_edges": {"type": "integer", "minimum": 0},
+        "filter_only_consumer_columns": {"type": "integer", "minimum": 0},
+        "filter_only_consumer_edges": {"type": "integer", "minimum": 0},
+        "write_reference_edges": {"type": "integer", "minimum": 0},
+        "producer_node_edges": {"type": "integer", "minimum": 1},
+        "every_source_column_has_one_disposition": {"const": true},
+        "node_operations": {
+          "type": "array",
+          "const": ["create", "get", "upsert", "update"]
+        },
+        "read_columns_star_means_full_matching_row": {"const": true},
+        "filter_keys_are_exact_node_parameters": {"const": true},
+        "consumer_nodes_equal_read_and_filter_union": {"const": true},
+        "producer_nodes_equal_write_mapping_plus_schema_creation": {"const": true},
+        "deletion_requires_second_run_noop_and_reverse_rehearsal": {"const": true},
+        "dispositions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keep", "transform", "remove"],
+          "properties": {
+            "keep": {"type": "integer", "minimum": 0},
+            "transform": {"type": "integer", "minimum": 0},
+            "remove": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "tables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/table"}
+    }
+  },
+  "$defs": {
+    "node_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "file", "node", "operation", "read_columns", "write_columns", "filter_keys"],
+      "properties": {
+        "table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "file": {"type": "string", "pattern": "^integrations/n8n/.+\\.json$"},
+        "node": {"type": "string", "minLength": 1},
+        "operation": {"enum": ["create", "get", "upsert", "update"]},
+        "read_columns": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "write_columns": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "filter_keys": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_column",
+        "source_type",
+        "disposition",
+        "target_table",
+        "target_artifact",
+        "target_field",
+        "constraints",
+        "owner",
+        "retention",
+        "privacy",
+        "producer_nodes",
+        "consumer_nodes",
+        "rationale"
+      ],
+      "properties": {
+        "source_column": {"type": "string", "minLength": 1},
+        "source_type": {"enum": ["string", "number", "boolean", "date"]},
+        "disposition": {"enum": ["keep", "transform", "remove"]},
+        "target_table": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^finance_[a-z0-9_]+$"}
+          ]
+        },
+        "target_artifact": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "target_field": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "owner": {"type": "string", "minLength": 1},
+        "retention": {"type": "string", "minLength": 1},
+        "privacy": {"type": "string", "minLength": 1},
+        "producer_nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "consumer_nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "target_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_key", "identity_derivations", "columns"],
+      "properties": {
+        "logical_key": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "identity_derivations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/identity_derivation"}
+        },
+        "columns": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "source_bindings"],
+            "properties": {
+              "type": {"enum": ["string", "number", "boolean", "date"]},
+              "source_bindings": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "pattern": "^finance_[a-z0-9_]+\\.[a-z0-9_]+$"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "identity_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_table", "strategy", "target_key"],
+      "properties": {
+        "source_table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "strategy": {"enum": ["direct", "versioned_length_prefixed_sha256", "join"]},
+        "target_key": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "source_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "identity_kind": {
+          "enum": ["MAIL_LINKED", "BROWSER_CAPTURE", "PROCESSING_ONLY"]
+        },
+        "version": {"type": "string", "minLength": 1},
+        "length_prefix": {"const": "uint64_be"},
+        "tuple_encoding": {"const": "versioned_length_prefixed_binary"},
+        "digest_encoding": {"const": "base64url_unpadded"},
+        "alias_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "legacy_to_canonical": {"$ref": "#/$defs/legacy_to_canonical"},
+        "fallback_identity": {"$ref": "#/$defs/fallback_identity"},
+        "cardinality": {"const": "exactly_one"},
+        "join_key": {"$ref": "#/$defs/join_key"},
+        "join_steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/join_step"}
+        },
+        "terminal_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"strategy": {"const": "direct"}}},
+          "then": {"required": ["source_fields"]}
+        },
+        {
+          "if": {"properties": {"strategy": {"const": "versioned_length_prefixed_sha256"}}},
+          "then": {"required": ["source_fields", "identity_kind", "version", "length_prefix", "tuple_encoding", "digest_encoding", "alias_fields"]}
+        },
+        {
+          "if": {
+            "properties": {
+              "strategy": {"const": "versioned_length_prefixed_sha256"},
+              "alias_fields": {"minItems": 1}
+            }
+          },
+          "then": {"required": ["legacy_to_canonical"]}
+        },
+        {
+          "if": {"properties": {"strategy": {"const": "join"}}},
+          "then": {"required": ["join_steps", "terminal_fields", "cardinality"]}
+        }
+      ]
+    },
+    "join_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_fields", "target_fields"],
+      "properties": {
+        "source_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "target_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "fallback_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_kind", "source_fields"],
+      "properties": {
+        "identity_kind": {"const": "PROCESSING_ONLY"},
+        "source_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "legacy_to_canonical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "legacy_fields", "canonical_target"],
+      "properties": {
+        "adapter": {"const": "document-identity-alias-v1"},
+        "legacy_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "canonical_target": {"const": "finance_documents.document_id"}
+      }
+    },
+    "join_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "left_fields", "right_fields"],
+      "properties": {
+        "table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "left_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "right_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_table",
+        "source_columns_count",
+        "logical_key",
+        "allowed_states",
+        "allowed_review_states",
+        "target_table",
+        "target_artifact",
+        "owner",
+        "retention",
+        "privacy",
+        "rationale",
+        "node_references",
+        "columns"
+      ],
+      "properties": {
+        "source_table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
+        "source_columns_count": {"type": "integer", "minimum": 1},
+        "logical_key": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "allowed_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "allowed_review_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "target_table": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^finance_[a-z0-9_]+$"}
+          ]
+        },
+        "target_artifact": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "owner": {"type": "string", "minLength": 1},
+        "retention": {"type": "string", "minLength": 1},
+        "privacy": {"type": "string", "minLength": 1},
+        "rationale": {"type": "string", "minLength": 1},
+        "node_references": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/node_reference"}
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/column"}
+        }
+      }
+    }
+  }
+}
