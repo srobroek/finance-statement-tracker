@@ -9,8 +9,8 @@ flowchart LR
     R["Versioned provider recipe"] --> B["Headed browser task"]
     B --> U["User completes login and MFA"]
     U --> C["Immutable redacted capture"]
-    C --> N["Inactive n8n handoff"]
-    N --> A["Validate, enrich, match, and archive"]
+    C --> N["Inactive n8n archive and receipt"]
+    N --> A["Validate, enrich, match, retry"]
     A --> W["Single fenced Actual writer"]
     A --> K["Cashback close path"]
 ```
@@ -38,14 +38,22 @@ Each registered provider declares `HEADED_ON_DEMAND` execution,
    provider-native export.
 6. If only visible rows or a balance is available, record the date/as-of value
    and the limitation in the capture. Do not infer omitted values.
-7. Save one redacted capture with a SHA-256 identity and archive it through the
-   inactive `INTERACTIVE_ARTIFACT_HANDOFF` n8n workflow.
-8. Review n8n validation, enrichment, transaction matching, archive receipt,
-   and writer preflight before any production promotion.
+7. Set `artifact.content_sha256` and `provenance.content_sha256` to the
+   original export's SHA-256. Include the capture ID, UTC timestamp, and
+   `SHA-256` algorithm in `provenance`.
+8. Send the capture JSON as binary `data` with an envelope containing only
+   `artifact_id` and the source `expected_sha256` from the capture artifact to the inactive
+   `INTERACTIVE_ARTIFACT_HANDOFF` workflow.
+9. n8n uploads the bounded binary to the configured Finance Evidence root,
+   writes and reads back `finance_document_operations`, validates with AJV,
+   then dispatches to the inactive `SHARED_STATEMENT_PIPELINE` route.
+10. Review n8n validation, enrichment, transaction matching, retry state,
+    archive receipt, and writer preflight before any production promotion.
 
-The handoff request contains only `artifact_id` and `expected_sha256`. n8n
-resolves the archived artifact metadata from durable state, verifies the hash,
-and keeps the browser payload out of the request log.
+The handoff envelope contains only `artifact_id` and the source
+`expected_sha256`; the capture JSON is a single binary attachment. n8n records
+both the source hash and the separately computed archived-binary hash in the
+durable receipt. It does not log the capture payload.
 
 ## Ownership boundary
 

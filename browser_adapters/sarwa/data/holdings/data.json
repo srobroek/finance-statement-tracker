@@ -3,7 +3,7 @@
   "data_id": "holdings",
   "kind": "holdings",
   "acquire": "upload",
-  "inputs": [],
+  "inputs": ["portfolio_ref", "as_of_date"],
   "parser": "sarwa_holdings_v1",
   "recipe": "recipe",
   "verified": true,

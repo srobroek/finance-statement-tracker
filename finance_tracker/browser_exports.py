@@ -303,6 +303,25 @@ _PARSERS: dict[str, Callable[[Path], tuple[list[dict[str, object]], list[str]]]]
 }
 
 
+def _capture_metadata(capture_id: str, captured_at: datetime, digest: str) -> dict[str, object]:
+    return {
+        "capture_contract": {
+            "capture_mode": "HEADED_ON_DEMAND",
+            "redaction": "REDACTED",
+            "immutability": "SHA256_ARCHIVED",
+            "handoff_workflow": "INTERACTIVE_ARTIFACT_HANDOFF",
+            "actual_mutation": False,
+            "cashback_mutation": False,
+        },
+        "provenance": {
+            "capture_id": capture_id,
+            "captured_at": captured_at.isoformat(),
+            "content_sha256": digest,
+            "hash_algorithm": "SHA-256",
+        },
+    }
+
+
 def build_capture_from_export(
     provider_id: str,
     data_id: str,
@@ -330,6 +349,7 @@ def build_capture_from_export(
         return {
             "schema_version": 1,
             "capture_id": capture_id,
+            **_capture_metadata(capture_id, now, digest),
             "source": {
                 "provider": provider["display_name"],
                 "site": provider["display_name"],
@@ -341,6 +361,7 @@ def build_capture_from_export(
             },
             "artifact": {
                 "kind": "STATEMENT_PDF",
+                "content_sha256": digest,
                 "local_path": str(path.resolve()),
                 "file_name": path.name,
                 "mime_type": "application/pdf",
@@ -357,6 +378,7 @@ def build_capture_from_export(
     return {
         "schema_version": 1,
         "capture_id": capture_id,
+        **_capture_metadata(capture_id, now, digest),
         "source": {
             "provider": provider["display_name"],
             "site": provider["display_name"],
@@ -369,6 +391,7 @@ def build_capture_from_export(
         },
         "artifact": {
             "kind": "TRANSACTION_ROWS",
+            "content_sha256": digest,
             "local_path": str(path.resolve()),
             "file_name": path.name,
             "mime_type": (

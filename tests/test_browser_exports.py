@@ -62,6 +62,10 @@ class BrowserExportTests(unittest.TestCase):
                 adapters_root=ROOT / "browser_adapters", captured_at=self.captured_at,
             )
         self.assertEqual("TRANSACTION_ROWS", capture["artifact"]["kind"])
+        self.assertEqual(capture["capture_id"], capture["provenance"]["capture_id"])
+        self.assertEqual(capture["artifact"]["content_sha256"], capture["provenance"]["content_sha256"])
+        self.assertEqual("SHA-256", capture["provenance"]["hash_algorithm"])
+        self.assertFalse(capture["capture_contract"]["actual_mutation"])
         self.assertEqual(["8833", "6838"], [row["account_last4"] for row in capture["rows"]])
         self.assertEqual(["primary", "supplementary"], [row["card_role"] for row in capture["rows"]])
         self.assertEqual("CREDIT", capture["rows"][1]["direction"])
@@ -163,6 +167,8 @@ class BrowserExportTests(unittest.TestCase):
                 adapters_root=ROOT / "browser_adapters", captured_at=self.captured_at,
             )
         self.assertEqual("STATEMENT_PDF", capture["artifact"]["kind"])
+        self.assertEqual(capture["capture_id"], capture["provenance"]["capture_id"])
+        self.assertEqual(capture["artifact"]["content_sha256"], capture["provenance"]["content_sha256"])
         self.assertEqual("OFFICIAL_EXPORT", capture["source"]["capture_method"])
 
 

@@ -21,6 +21,10 @@ class BrowserRecipeTests(unittest.TestCase):
         self.assertFalse(contract["session_persistence"])
         self.assertFalse(contract["actual_mutation"])
         self.assertFalse(contract["cashback_mutation"])
+        self.assertEqual("N8N", contract["archive_owner"])
+        self.assertEqual("FINANCE_BROWSER_ARCHIVE_PARENT_ID", contract["archive_parent_binding"])
+        self.assertEqual("finance_document_operations", contract["archive_receipt_table"])
+        self.assertEqual("SHARED_STATEMENT_PIPELINE", contract["headless_workflow_code"])
         for provider_id in ("fab", "sarwa", "amazon", "adcb"):
             provider = next(
                 row for row in validate_registry(ROOT / "browser_adapters")["providers"]
@@ -42,6 +46,8 @@ class BrowserRecipeTests(unittest.TestCase):
         schema = json.loads(
             (ROOT / "config" / "browser-capture-schema-v1.json").read_text(encoding="utf-8")
         )
+        self.assertIn("capture_contract", schema["required"])
+        self.assertIn("provenance", schema["required"])
         contract = schema["properties"]["capture_contract"]
         self.assertEqual(
             [
@@ -60,6 +66,16 @@ class BrowserRecipeTests(unittest.TestCase):
         self.assertEqual("SHA256_ARCHIVED", properties["immutability"]["const"])
         self.assertIs(properties["actual_mutation"]["const"], False)
         self.assertIs(properties["cashback_mutation"]["const"], False)
+        provenance = schema["properties"]["provenance"]
+        self.assertEqual(
+            ["capture_id", "captured_at", "content_sha256", "hash_algorithm"],
+            provenance["required"],
+        )
+        self.assertEqual("SHA-256", provenance["properties"]["hash_algorithm"]["const"])
+        self.assertEqual(
+            ["kind", "content_sha256"],
+            schema["properties"]["artifact"]["required"],
+        )
     def test_migrated_registry_is_valid(self) -> None:
         result = validate_registry(ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
@@ -98,6 +114,19 @@ class BrowserRecipeTests(unittest.TestCase):
         self.assertEqual(7, len(result["coverage"]))
         self.assertEqual(3, len(result["supplemental"]))
         self.assertEqual("ADAPTER_REQUIRED", result["coverage"][-1]["status"])
+
+    def test_sarwa_holdings_recipe_is_portfolio_and_as_of_bounded(self) -> None:
+        data = json.loads(
+            (ROOT / "browser_adapters" / "sarwa" / "data" / "holdings" / "data.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(["portfolio_ref", "as_of_date"], data["inputs"])
+        recipe = (
+            ROOT / "browser_adapters" / "sarwa" / "data" / "holdings" / "recipe"
+        ).read_text(encoding="utf-8")
+        self.assertIn('SELECT field: portfolio_ref, option: "<portfolio_ref>"', recipe)
+        self.assertIn('SELECT field: as_of_date, option: "<as_of_date>"', recipe)
+        self.assertNotIn("For each Invest account", recipe)
 
     def test_account_last4_must_be_exactly_four_digits(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

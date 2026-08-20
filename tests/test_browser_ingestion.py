@@ -28,12 +28,39 @@ class BrowserIngestionTests(TestCase):
         self.assertTrue(handoff["actual_mutation_forbidden"])
         self.assertTrue(handoff["cashback_mutation_forbidden"])
         names = {node["name"]: node for node in workflow["nodes"]}
+        self.assertEqual("N8N", handoff["archive_owner"])
+        self.assertEqual("BOUNDED_BINARY_UPLOAD", handoff["archive_mode"])
+        self.assertEqual("AJV_REQUIRED_FAIL_CLOSED", handoff["validation_runtime"])
+        self.assertEqual("SHARED_STATEMENT_PIPELINE", handoff["headless_workflow_code"])
+        self.assertIn("Archive Browser Capture in OneDrive", names)
+        self.assertIn("Read Back Durable Browser Archive Receipt", names)
         self.assertIn("Extract Browser Capture JSON", names)
-        validator = names["Validate Browser Capture Boundary"]
+        self.assertIn("Build Browser Headless Handoff", names)
+        self.assertIn("Dispatch Browser Capture to Headless Pipeline", names)
+        self.assertNotIn("Require Typed Browser Capture Validator", names)
+        self.assertNotIn("stopAndError", {node["type"] for node in workflow["nodes"]})
+        handoff = workflow["connections"]["Validate Browser Capture Schema"]["main"][0][0]
+        self.assertEqual("Build Browser Headless Handoff", handoff["node"])
+        dispatch = workflow["connections"]["Build Browser Headless Handoff"]["main"][0][0]
+        self.assertEqual("Dispatch Browser Capture to Headless Pipeline", dispatch["node"])
+        receipt = names["Upsert Durable Browser Archive Receipt"]["parameters"]
+        self.assertIn("source_sha256", receipt["columns"]["value"])
+        self.assertIn("output_sha256", receipt["columns"]["value"])
+        verify_archive = names["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
+        self.assertIn("input_sha256", verify_archive)
+        self.assertIn("archived_sha256", verify_archive)
+        self.assertEqual(
+            "10000000-0000-4000-8000-000000000003",
+            names["Dispatch Browser Capture to Headless Pipeline"]["parameters"]["workflowId"]["value"],
+        )
+        validator = names["Validate Browser Capture Schema"]
         self.assertEqual("n8n-nodes-base.code", validator["type"])
         code = validator["parameters"]["jsCode"]
-        self.assertIn("BROWSER_CAPTURE_CONTRACT_INVALID", code)
-        self.assertIn("BROWSER_CAPTURE_FORBIDDEN_FIELD", code)
+        self.assertIn("require('ajv')", code)
+        self.assertIn(".compile(schema)", code)
+        self.assertIn("BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE", code)
+        self.assertIn("BROWSER_CAPTURE_PROVENANCE_MISMATCH", code)
+        self.assertIn("minLength: 1", code)
         self.assertIn("actual_mutation: false", code)
         self.assertIn("cashback_mutation: false", code)
         self.assertNotIn("n8n-nodes-finance.actualBudget", {node["type"] for node in workflow["nodes"]})

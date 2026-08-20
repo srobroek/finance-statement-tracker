@@ -4,7 +4,7 @@
   "title": "Finance browser capture",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "capture_id", "source", "artifact", "account"],
+  "required": ["schema_version", "capture_id", "capture_contract", "provenance", "source", "artifact", "account"],
   "properties": {
     "schema_version": {"const": 1},
     "capture_id": {"type": "string", "minLength": 1},
@@ -26,6 +26,17 @@
         "handoff_workflow": {"const": "INTERACTIVE_ARTIFACT_HANDOFF"},
         "actual_mutation": {"const": false},
         "cashback_mutation": {"const": false}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture_id", "captured_at", "content_sha256", "hash_algorithm"],
+      "properties": {
+        "capture_id": {"type": "string", "minLength": 1},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "hash_algorithm": {"const": "SHA-256"}
       }
     },
     "approval": {
@@ -67,11 +78,12 @@
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind"],
+      "required": ["kind", "content_sha256"],
       "properties": {
         "kind": {
           "enum": ["ACCOUNT_SNAPSHOT", "STATEMENT_PDF", "STATEMENT_ROWS", "TRANSACTION_ROWS"]
         },
+        "content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "local_path": {"type": "string"},
         "file_name": {"type": "string"},
         "mime_type": {"type": "string"},

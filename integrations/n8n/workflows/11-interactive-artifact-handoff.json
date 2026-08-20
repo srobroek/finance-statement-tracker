@@ -26,17 +26,115 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Reviewed Artifact Reference. Keep this deterministic and fail closed.\nconst request = $json;\nif (!request.artifact_id || !/^[a-f0-9]{64}$/i.test(String(request.expected_sha256 || ''))) {\n    throw new Error('artifact_id and expected_sha256 are required');\n}\nconst forbidden = ['provider', 'path', 'url', 'binary', 'capture_schema', 'review_status'];\nif (forbidden.some(field => Object.hasOwn(request, field))) {\n    throw new Error('Artifact metadata must be resolved from durable server state');\n}\nreturn [{ json: { artifact_id: String(request.artifact_id), expected_sha256: String(request.expected_sha256).toLowerCase() } }];\n"
+        "jsCode": "// Purpose: Validate Reviewed Artifact Reference. Keep this deterministic and fail closed.\nconst request = $json;\nif (!request.artifact_id || !/^[A-Za-z0-9:_-]{1,128}$/.test(String(request.artifact_id))) {\n    throw new Error('artifact_id and expected_sha256 are required');\n}\nif (!/^[a-f0-9]{64}$/i.test(String(request.expected_sha256 || ''))) {\n    throw new Error('expected_sha256 must be a SHA-256 digest');\n}\nif (!$binary?.data) {\n    throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');\n}\nconst forbidden = ['provider', 'path', 'url', 'capture_payload', 'capture_schema', 'review_status'];\nif (forbidden.some(field => Object.hasOwn(request, field))) {\n    throw new Error('Artifact metadata must be resolved from durable server state');\n}\nreturn [{\n        json: {\n            artifact_id: String(request.artifact_id),\n            expected_sha256: String(request.expected_sha256).toLowerCase(),\n        },\n        binary: $binary,\n    }];\n"
       }
     },
     {
       "id": "11003",
-      "name": "Load Durable Document Record",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "alwaysOutputData": true,
+      "name": "SHA-256 Browser Capture Input",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
       "position": [
         -520,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "input_sha256"
+      }
+    },
+    {
+      "id": "11004",
+      "name": "Archive Browser Capture in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "binaryData": true,
+        "fileName": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id + '.browser-capture-v1.json' }}",
+        "parentId": "={{ $vars.FINANCE_BROWSER_ARCHIVE_PARENT_ID }}"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "11005",
+      "name": "Upsert Durable Browser Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "document_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"
+            },
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+            "source_sha256": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}",
+            "document_profile": "BROWSER_CAPTURE_V1",
+            "requested_schema_version": "browser-capture-schema-v1",
+            "onedrive_item_id": "={{ $json.id }}",
+            "source_code": "BROWSER_CAPTURE",
+            "state": "RECEIVED",
+            "attempt_count": 0,
+            "output_sha256": "={{ $('SHA-256 Browser Capture Input').first().json.input_sha256 }}",
+            "error_class": "",
+            "error_detail_redacted": "",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "11006",
+      "name": "Read Back Durable Browser Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
         0
       ],
       "parameters": {
@@ -56,19 +154,30 @@
               "keyName": "document_id",
               "condition": "eq",
               "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"
+            },
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "RECEIVED"
             }
           ]
         },
         "options": {}
-      }
+      },
+      "alwaysOutputData": true
     },
     {
-      "id": "11004",
-      "name": "Download Existing Reviewed Artifact",
+      "id": "11007",
+      "name": "Download Archived Browser Capture",
       "type": "n8n-nodes-base.microsoftOneDrive",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        680,
         0
       ],
       "parameters": {
@@ -76,21 +185,15 @@
         "operation": "download",
         "fileId": "={{ $json.onedrive_item_id }}",
         "binaryPropertyName": "data"
-      },
-      "credentials": {
-        "microsoftOneDriveOAuth2Api": {
-          "id": "BIND_ONEDRIVE",
-          "name": "Finance OneDrive"
-        }
       }
     },
     {
-      "id": "11005",
-      "name": "SHA-256 Reviewed Artifact",
+      "id": "11008",
+      "name": "SHA-256 Archived Browser Capture",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        80,
+        980,
         0
       ],
       "parameters": {
@@ -98,59 +201,71 @@
         "type": "SHA256",
         "binaryData": true,
         "binaryPropertyName": "data",
-        "dataPropertyName": "reviewed_sha256"
+        "dataPropertyName": "archived_sha256"
       }
     },
     {
-      "id": "11006",
-      "name": "Verify Durable Artifact Contract",
+      "id": "11009",
+      "name": "Verify Browser Archive Receipt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        0
+        -1120,
+        380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Durable Artifact Contract. Keep this deterministic and fail closed.\nconst expected = $('Validate Reviewed Artifact Reference').first().json;\nconst record = $('Load Durable Document Record').first().json;\nconst observed = String($json.reviewed_sha256 || '').toLowerCase();\nif (!record.document_id || !record.onedrive_item_id) {\n    throw new Error('DURABLE_ARTIFACT_RECORD_MISSING');\n}\nif (record.source_sha256 !== expected.expected_sha256 || observed !== expected.expected_sha256) {\n    throw new Error('REVIEWED_ARTIFACT_HASH_MISMATCH');\n}\nif (record.document_profile === 'STATEMENT_PDF_V1') {\n    const required = [\n        'source_code',\n        'config_version',\n        'actual_file_id',\n        'account_id',\n        'period_key',\n        'source_message_id',\n        'source_attachment_id',\n    ];\n    for (const field of required) {\n        if (!record[field]) {\n            throw new Error(`DURABLE_STATEMENT_CONTEXT_MISSING:${field}`);\n        }\n    }\n    if (record.state !== 'READY_FOR_PARSE') {\n        throw new Error(`DURABLE_STATEMENT_NOT_READY:${record.state || 'MISSING'}`);\n    }\n}\nreturn [{\n        json: {\n            ...record,\n            run_id: `reviewed:${record.document_id}`,\n            trigger_kind: 'SUBWORKFLOW',\n            message_id: record.source_message_id,\n            attachment_id: record.source_attachment_id,\n            document_sha256: observed,\n        },\n        binary: $binary,\n    }];\n"
+        "jsCode": "// Purpose: Verify Browser Archive Receipt. Keep this deterministic and fail closed.\nconst request = $('Validate Reviewed Artifact Reference').first().json;\nconst input = $('SHA-256 Browser Capture Input').first().json;\nconst receipt = $('Read Back Durable Browser Archive Receipt').first().json;\nconst observed = String($json.archived_sha256 || '').toLowerCase();\nif (!receipt.document_id || !receipt.onedrive_item_id || receipt.source_sha256 !== request.expected_sha256\n    || receipt.output_sha256 !== input.input_sha256) {\n    throw new Error('BROWSER_ARCHIVE_RECEIPT_INVALID');\n}\nif (!/^[a-f0-9]{64}$/.test(observed) || observed !== receipt.output_sha256) {\n    throw new Error('BROWSER_ARCHIVE_HASH_INVALID');\n}\nreturn [{ json: { receipt, document_sha256: request.expected_sha256, archive_sha256: observed }, binary: $binary }];\n"
       }
     },
     {
-      "id": "11007",
-      "name": "Verified Statement PDF?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "id": "11010",
+      "name": "Extract Browser Capture JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
       "position": [
-        680,
-        0
+        -820,
+        380
       ],
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "leftValue": "={{ $json.document_profile }}",
-              "rightValue": "STATEMENT_PDF_V1",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "options": {}
       }
     },
     {
-      "id": "11008",
-      "name": "Run Statement Pipeline",
+      "id": "11011",
+      "name": "Validate Browser Capture Schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Browser Capture Schema. Keep this deterministic and fail closed.\nlet Ajv;\ntry {\n    Ajv = require('ajv');\n}\ncatch (error) {\n    throw new Error('BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE');\n}\nconst schema = {\n    type: 'object',\n    additionalProperties: false,\n    required: ['schema_version', 'capture_id', 'capture_contract', 'provenance', 'source', 'artifact', 'account'],\n    properties: {\n        schema_version: { const: 1 },\n        capture_id: { type: 'string', minLength: 1 },\n        capture_contract: {\n            type: 'object', additionalProperties: false,\n            required: ['capture_mode', 'redaction', 'immutability', 'handoff_workflow', 'actual_mutation', 'cashback_mutation'],\n            properties: {\n                capture_mode: { const: 'HEADED_ON_DEMAND' }, redaction: { const: 'REDACTED' },\n                immutability: { const: 'SHA256_ARCHIVED' }, handoff_workflow: { const: 'INTERACTIVE_ARTIFACT_HANDOFF' },\n                actual_mutation: { const: false }, cashback_mutation: { const: false },\n            },\n        },\n        provenance: {\n            type: 'object', additionalProperties: false,\n            required: ['capture_id', 'captured_at', 'content_sha256', 'hash_algorithm'],\n            properties: {\n                capture_id: { type: 'string', minLength: 1 }, captured_at: { type: 'string', minLength: 1 },\n                content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, hash_algorithm: { const: 'SHA-256' },\n            },\n        },\n        source: {\n            type: 'object', additionalProperties: false,\n            required: ['provider', 'captured_at', 'capture_method'],\n            properties: {\n                provider: { type: 'string', minLength: 1 }, site: { type: 'string' }, url: { type: 'string' },\n                page_context: { type: 'string' }, captured_at: { type: 'string', minLength: 1 },\n                capture_method: { enum: ['ACCOUNT_OVERVIEW', 'OFFICIAL_EXPORT', 'STATEMENT_DOWNLOAD', 'VISIBLE_ROWS'] },\n                date_range: { type: 'object', additionalProperties: false, properties: { start: { type: 'string' }, end: { type: 'string' } } },\n                limitations: { type: 'array', items: { type: 'string' } },\n            },\n        },\n        artifact: {\n            type: 'object', additionalProperties: false,\n            required: ['kind', 'content_sha256'],\n            properties: {\n                kind: { enum: ['ACCOUNT_SNAPSHOT', 'STATEMENT_PDF', 'STATEMENT_ROWS', 'TRANSACTION_ROWS'] },\n                content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, local_path: { type: 'string' },\n                file_name: { type: 'string' }, mime_type: { type: 'string' }, download_reference: { type: 'string' },\n            },\n        },\n        account: {\n            type: 'object', additionalProperties: false,\n            required: ['label'],\n            properties: {\n                label: { type: 'string', minLength: 1 }, actual_account: { type: 'string' }, card_code: { type: 'string' },\n                account_last4: { type: 'string', pattern: '^[0-9]{4}$' }, currency: { type: 'string' },\n                balance: {}, available_balance: {}, balance_as_of: { type: 'string' },\n            },\n        },\n        approval: {\n            type: 'object', additionalProperties: false,\n            required: ['status', 'scope', 'capture_id', 'approved_by', 'approved_at'],\n            properties: {\n                status: { const: 'OWNER_APPROVED' }, scope: { const: 'ALL_VISIBLE_ROWS' },\n                capture_id: { type: 'string', minLength: 1 }, approved_by: { const: 'OWNER' },\n                approved_at: { type: 'string', minLength: 1 },\n            },\n        },\n        statement: {\n            type: 'object', additionalProperties: false,\n            properties: {\n                statement_reference: { type: 'string' }, period_start: { type: 'string' }, period_end: { type: 'string' },\n                payment_due_date: { type: 'string' }, opening_balance_aed: {}, closing_balance_aed: {},\n                balance_convention: { enum: ['ASSET', 'LIABILITY'] },\n            },\n        },\n        rows: {\n            type: 'array',\n            items: {\n                type: 'object', additionalProperties: false,\n                required: ['transaction_date', 'description', 'amount_aed', 'direction'],\n                properties: {\n                    source_id: { type: 'string' }, reference: { type: 'string' }, transaction_date: { type: 'string' },\n                    post_date: { type: 'string' }, description: { type: 'string', minLength: 1 }, amount_aed: {},\n                    amount_original: {}, currency: { type: 'string' }, direction: { enum: ['DEBIT', 'CREDIT'] },\n                    transaction_type: { type: 'string' }, channel: { type: 'string' },\n                    account_last4: { type: 'string', pattern: '^[0-9]{4}$' },\n                    card_role: { enum: ['primary', 'supplementary'] }, status: { type: 'string' }, review_required: { type: 'boolean' },\n                },\n            },\n        },\n    },\n};\nconst validator = new (Ajv.default || Ajv)({ allErrors: true, strict: true }).compile(schema);\nconst capture = $json;\nif (!validator(capture)) {\n    throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);\n}\nconst archive = $('Verify Browser Archive Receipt').first().json;\nif (capture.capture_id !== capture.provenance.capture_id\n    || capture.artifact.content_sha256 !== capture.provenance.content_sha256\n    || capture.provenance.content_sha256 !== archive.document_sha256) {\n    throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');\n}\nreturn [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];\n"
+      }
+    },
+    {
+      "id": "11012",
+      "name": "Build Browser Headless Handoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Browser Headless Handoff. Keep this deterministic and fail closed.\nconst capture = $json;\nconst archive = $('Verify Browser Archive Receipt').first().json;\nconst provider = String(capture.source.provider || '').replaceAll(/[^A-Za-z0-9]+/g, '_').toUpperCase();\nif (!provider || !capture.account?.label || !capture.artifact?.kind) {\n    throw new Error('BROWSER_HEADLESS_HANDOFF_CONTEXT_MISSING');\n}\nreturn [{\n        json: {\n            run_id: `browser:${capture.capture_id}`,\n            source_code: `BROWSER_${provider}`,\n            message_id: capture.capture_id,\n            attachment_id: capture.capture_id,\n            document_sha256: capture.provenance.content_sha256,\n            onedrive_item_id: archive.receipt.onedrive_item_id,\n            document_profile: 'BROWSER_CAPTURE_V1',\n            requested_schema_version: 'browser-capture-schema-v1',\n            config_version: 'browser-sources-v1',\n            actual_file_id: 'BROWSER_CAPTURE_HEADLESS_ROUTE',\n            account_id: capture.account.label,\n            period_key: capture.source.date_range?.start && capture.source.date_range?.end\n                ? `${capture.source.date_range.start}:${capture.source.date_range.end}`\n                : String(capture.provenance.captured_at).slice(0, 10),\n            trigger_kind: 'SUBWORKFLOW',\n            browser_capture: capture,\n            headless_owner: 'N8N',\n            actual_mutation: false,\n            cashback_mutation: false,\n        },\n        binary: $binary,\n    }];\n"
+      }
+    },
+    {
+      "id": "11013",
+      "name": "Dispatch Browser Capture to Headless Pipeline",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        980,
-        0
+        80,
+        380
       ],
       "parameters": {
         "workflowId": {
@@ -165,36 +280,8 @@
       }
     },
     {
-      "id": "11009",
-      "name": "Extract Browser Capture JSON",
-      "type": "n8n-nodes-base.extractFromFile",
-      "typeVersion": 1,
-      "position": [
-        980,
-        380
-      ],
-      "parameters": {
-        "operation": "fromJson",
-        "binaryPropertyName": "data",
-        "options": {}
-      }
-    },
-    {
-      "id": "11010",
-      "name": "Validate Browser Capture Boundary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1280,
-        380
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Validate the redacted headed-browser contract before headless processing.\nconst capture = $json;\nconst record = $('Verify Durable Artifact Contract').first().json;\nif (capture.schema_version !== 1 || !capture.capture_id || !capture.source || !capture.artifact || !capture.account) {\n    throw new Error('BROWSER_CAPTURE_SCHEMA_INVALID');\n}\nconst contract = capture.capture_contract;\nif (!contract || contract.capture_mode !== 'HEADED_ON_DEMAND' || contract.redaction !== 'REDACTED' || contract.immutability !== 'SHA256_ARCHIVED' || contract.handoff_workflow !== 'INTERACTIVE_ARTIFACT_HANDOFF' || contract.actual_mutation !== false || contract.cashback_mutation !== false) {\n    throw new Error('BROWSER_CAPTURE_CONTRACT_INVALID');\n}\nconst forbidden = new Set(['access_token', 'authorization', 'cookie', 'cookies', 'credential', 'credentials', 'cvv', 'full_account_number', 'full_card_number', 'mfa_code', 'otp', 'password', 'passcode', 'pin', 'recovery_code', 'session', 'session_state', 'session_storage', 'token', 'username']);\nconst inspect = (value) => {\n    if (Array.isArray(value)) {\n        value.forEach(inspect);\n        return;\n    }\n    if (!value || typeof value !== 'object')\n        return;\n    for (const [key, child] of Object.entries(value)) {\n        if (forbidden.has(String(key).toLowerCase().replaceAll('-', '_')))\n            throw new Error(`BROWSER_CAPTURE_FORBIDDEN_FIELD:${String(key)}`);\n        inspect(child);\n    }\n};\ninspect(capture);\nreturn [{ json: { handoff_status: 'READY_FOR_HEADLESS', capture_id: String(capture.capture_id), provider: String(capture.source.provider), artifact_kind: String(capture.artifact.kind), source_sha256: String(record.source_sha256), source_code: String(record.source_code), headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false, next_stages: ['VALIDATE', 'ENRICH', 'MATCH', 'ARCHIVE', 'ACTUAL_OUTBOX_REVIEW'] }, binary: $binary }];\n"
-      }
-    },
-    {
       "id": "10000000-0000-4000-8000-000000000011-generated-note-1",
-      "name": "Stage 1 · Reviewed Artifact Reference to Run Statement Pipeline",
+      "name": "Stage 1 · Reviewed Artifact Reference to SHA-256 Archived Browser Capture",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -202,7 +289,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Reviewed Artifact Reference → Run Statement Pipeline\n**Input:** Reviewed Artifact Reference  ·  **Output:** Run Statement Pipeline  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Reviewed Artifact Reference → SHA-256 Archived Browser Capture\n**Input:** Reviewed Artifact Reference  ·  **Output:** SHA-256 Archived Browser Capture  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -210,7 +297,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000011-generated-note-2",
-      "name": "Stage 2 · Extract and Validate Browser Capture",
+      "name": "Stage 2 · Verify Browser Archive Receipt to Dispatch Browser Capture to Headless Pipeline",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -218,7 +305,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Extract and Validate Browser Capture\n**Input:** Downloaded browser-capture-schema-v1 artifact  ·  **Output:** Redacted READY_FOR_HEADLESS receipt  ·  **Nodes:** 9–10\nThe browser branch never enters the statement parser or a finance writer. Any rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Verify Browser Archive Receipt → Dispatch Browser Capture to Headless Pipeline\n**Input:** Verify Browser Archive Receipt  ·  **Output:** Dispatch Browser Capture to Headless Pipeline  ·  **Nodes:** 9–13\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -241,66 +328,81 @@
       "main": [
         [
           {
-            "node": "Load Durable Document Record",
+            "node": "SHA-256 Browser Capture Input",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Load Durable Document Record": {
+    "SHA-256 Browser Capture Input": {
       "main": [
         [
           {
-            "node": "Download Existing Reviewed Artifact",
+            "node": "Archive Browser Capture in OneDrive",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Download Existing Reviewed Artifact": {
+    "Archive Browser Capture in OneDrive": {
       "main": [
         [
           {
-            "node": "SHA-256 Reviewed Artifact",
+            "node": "Upsert Durable Browser Archive Receipt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "SHA-256 Reviewed Artifact": {
+    "Upsert Durable Browser Archive Receipt": {
       "main": [
         [
           {
-            "node": "Verify Durable Artifact Contract",
+            "node": "Read Back Durable Browser Archive Receipt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify Durable Artifact Contract": {
+    "Read Back Durable Browser Archive Receipt": {
       "main": [
         [
           {
-            "node": "Verified Statement PDF?",
+            "node": "Download Archived Browser Capture",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verified Statement PDF?": {
+    "Download Archived Browser Capture": {
       "main": [
         [
           {
-            "node": "Run Statement Pipeline",
+            "node": "SHA-256 Archived Browser Capture",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "SHA-256 Archived Browser Capture": {
+      "main": [
+        [
+          {
+            "node": "Verify Browser Archive Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Browser Archive Receipt": {
+      "main": [
         [
           {
             "node": "Extract Browser Capture JSON",
@@ -314,7 +416,29 @@
       "main": [
         [
           {
-            "node": "Validate Browser Capture Boundary",
+            "node": "Validate Browser Capture Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Browser Capture Schema": {
+      "main": [
+        [
+          {
+            "node": "Build Browser Headless Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Browser Headless Handoff": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Browser Capture to Headless Pipeline",
             "type": "main",
             "index": 0
           }
@@ -344,7 +468,7 @@
       }
     ],
     "durableLookupRequired": true,
-    "reuploadForbidden": true,
+    "reuploadForbidden": false,
     "setupRequired": true,
     "workflowFolder": {
       "id": "f1000000-0000-4000-8000-000000000003",
@@ -360,8 +484,21 @@
       "document_profile": "BROWSER_CAPTURE_V1",
       "capture_schema": "browser-capture-schema-v1",
       "headed_browser": "USER_ASSISTED_ONLY",
+      "archive_owner": "N8N",
+      "archive_mode": "BOUNDED_BINARY_UPLOAD",
+      "archive_parent_binding": "FINANCE_BROWSER_ARCHIVE_PARENT_ID",
+      "archive_receipt_table": "finance_document_operations",
+      "validation_runtime": "AJV_REQUIRED_FAIL_CLOSED",
       "headless_owner": "N8N",
-      "stages": ["VALIDATE", "ENRICH", "MATCH", "ARCHIVE"],
+      "headless_workflow_code": "SHARED_STATEMENT_PIPELINE",
+      "headless_workflow_id": "10000000-0000-4000-8000-000000000003",
+      "stages": [
+        "ARCHIVE",
+        "VALIDATE",
+        "ENRICH",
+        "MATCH",
+        "RETRY"
+      ],
       "actual_writer": "ACTUAL_OUTBOX_APPLY",
       "actual_mutation_forbidden": true,
       "cashback_mutation_forbidden": true,
@@ -370,7 +507,7 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Validate Reviewed Artifact Reference to Run Statement Pipeline",
+      "name": "Stage 1: Validate Reviewed Artifact Reference to SHA-256 Archived Browser Capture",
       "nodeIds": [
         "11002",
         "11003",
@@ -380,15 +517,18 @@
         "11007",
         "11008"
       ],
-      "description": "Finance stage 1. Input starts at Validate Reviewed Artifact Reference; verified output leaves through Run Statement Pipeline."
+      "description": "Finance stage 1. Input starts at Validate Reviewed Artifact Reference; verified output leaves through SHA-256 Archived Browser Capture."
     },
     {
-      "name": "Stage 2: Extract and Validate Browser Capture",
+      "name": "Stage 2: Verify Browser Archive Receipt to Dispatch Browser Capture to Headless Pipeline",
       "nodeIds": [
         "11009",
-        "11010"
+        "11010",
+        "11011",
+        "11012",
+        "11013"
       ],
-      "description": "Finance stage 2. Browser artifacts remain redacted and write-disabled before headless n8n processing."
+      "description": "Finance stage 2. Input starts at Verify Browser Archive Receipt; verified output leaves through Dispatch Browser Capture to Headless Pipeline."
     }
   ],
   "tags": [

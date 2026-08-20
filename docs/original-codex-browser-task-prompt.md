@@ -6,12 +6,31 @@ finance source needs a fresh capture.
 ```text
 Run one on-demand finance browser capture in a headed browser.
 
-Scope:
-- Source: choose exactly one of FAB_DEBIT, SARWA, AMAZON, ADCB, or a provider
-  already registered with the same MFA boundary.
-- Account or portfolio: use one safe user-approved label and last four digits
-  when available.
-- Date or portfolio scope: use the requested bounded range or year.
+Before starting, resolve these non-secret parameters from the registered
+provider and data recipe. Stop if any value is missing or does not match the
+registry:
+- FAB_DEBIT_PROVIDER=fab
+- FAB_DEBIT_DATA_ID=current-account-transactions
+- ACCOUNT_LABEL=<one exact actual_account from config/browser-sources.json>
+- DATE_RANGE_START=<ISO date, inclusive>
+- DATE_RANGE_END=<ISO date, exclusive>
+- SARWA_PORTFOLIO_REF=<one exact portfolio label or last four digits>
+- SARWA_AS_OF_DATE=<ISO date>
+- AMAZON_YEAR=<four-digit year>
+- ADCB_CARD_REF=<one exact registered card reference>
+- ADCB_STATEMENT_PERIOD=<one exact registered statement period when using a PDF>
+
+Scope: choose exactly one source. Use the matching provider/data pair:
+FAB_DEBIT renders `fab/current-account-transactions` with
+`account_ref=ACCOUNT_LABEL`, `from_date=DATE_RANGE_START`, and
+`to_date=DATE_RANGE_END`; SARWA renders `sarwa/holdings` with
+`portfolio_ref=SARWA_PORTFOLIO_REF` and `as_of_date=SARWA_AS_OF_DATE`; AMAZON
+renders `amazon/orders` with `year=AMAZON_YEAR`; ADCB renders
+`adcb/credit-card-transactions` with `card_ref=ADCB_CARD_REF`,
+`from_date=DATE_RANGE_START`, and `to_date=DATE_RANGE_END`, or renders
+`adcb/credit-statement` with `statement_period=ADCB_STATEMENT_PERIOD`. Use one
+safe user-approved account or portfolio label and last four digits when
+available.
 
 Security boundary:
 1. Open only the registered provider URL and follow its deterministic recipe.
@@ -37,30 +56,47 @@ Capture contract:
     "immutability":"SHA256_ARCHIVED",
     "handoff_workflow":"INTERACTIVE_ARTIFACT_HANDOFF",
     "actual_mutation":false,"cashback_mutation":false}
-6. Compute the SHA-256 identity and archive the original through inactive n8n.
-7. Call INTERACTIVE_ARTIFACT_HANDOFF with only artifact_id and expected_sha256.
-   Do not pass local paths, URLs, capture payloads, credentials, or session
-   metadata in the handoff request.
+6. Compute the source content SHA-256 and set both `artifact.content_sha256`
+   and `provenance.content_sha256` to that digest. Set
+   `provenance.capture_id`, `provenance.captured_at`, and
+   `provenance.hash_algorithm` to the capture identity, UTC timestamp, and
+   `SHA-256`.
+7. Send the capture JSON as the single binary `data` attachment to inactive
+   n8n. The JSON envelope contains only `artifact_id` and the source content
+   `expected_sha256` from the capture artifact;
+   do not pass local paths, URLs, capture payloads, credentials, or session
+   metadata as envelope fields.
+8. Call `INTERACTIVE_ARTIFACT_HANDOFF` with `artifact_id` and the matching
+   source `expected_sha256`. n8n uploads the bounded binary to the configured
+   Finance Evidence root, computes a separate archived-binary hash, writes and
+   reads back its durable receipt, validates with runtime AJV, then dispatches
+   to the existing inactive headless route.
 
 Source tasks:
-- FAB_DEBIT: use provider fab and current-account-transactions. Capture the
+- FAB_DEBIT: use provider fab and current-account-transactions with the exact
+  `account_ref`, `from_date`, and `to_date` mappings above. Capture the
   requested debit/current-account balance or transaction export in AED. Keep
   the balance as an as-of snapshot; do not create a balance transaction.
-- SARWA: use provider sarwa and holdings. Capture every requested portfolio's
-  visible positions, cash, value, currency, and as-of timestamp. Keep an
-  approved label or last four digits and exclude insurance coverage from wealth.
-- AMAZON: use provider amazon and orders. Capture order ID, order date, shown
+- SARWA: use provider sarwa and holdings with exactly one `portfolio_ref` and
+  `as_of_date`, never an account-wide holdings view. Capture only that
+  portfolio's visible positions, cash, value,
+  currency, and as-of timestamp. Keep an approved label or last four digits
+  and exclude insurance coverage from wealth.
+- AMAZON: use provider amazon and orders for exactly `year=AMAZON_YEAR`. Capture order ID, order date, shown
   total and currency, product title, stable product reference, and status.
   Treat this as supplemental evidence; never create a ledger transaction.
-- ADCB: use provider adcb and the requested credit-card export or statement.
+- ADCB: use provider adcb and the requested credit-card export or statement,
+  resolving the exact card/date or statement-period parameters above.
   Follow the single-page-app recipe after login and retain only safe card
   identity, date range, rows, and parser limitations.
 - FUTURE_MFA: use a registered provider only. If no provider and data recipe
   exist, stop with a blocker instead of inventing selectors or a login flow.
 
 Headless handoff boundary:
-- Inactive n8n owns archive receipt, schema validation, parse completeness,
-  normalization, enrichment, transaction matching, review gates, and retry.
+- Inactive n8n owns bounded archive upload, hash/readback receipt, strict schema
+  validation, parse completeness, normalization, enrichment, transaction
+  matching, review gates, and retry. The validated capture dispatches to the
+  existing inactive `SHARED_STATEMENT_PIPELINE` route.
 - The single fenced Actual outbox writer owns reviewed ledger mutation.
 - The Cashback companion owns cashback state and close.
 - This headed task never activates n8n, writes Actual, writes Cashback, or
@@ -74,4 +110,5 @@ Completion report:
 ```
 
 The prompt pauses before authentication, produces a hash-bound redacted
-artifact, and sends only its identity to inactive n8n.
+artifact, and sends only its identity plus the binary capture attachment to
+inactive n8n.

@@ -22,10 +22,10 @@ validation, enrichment, match, archive, and finance write step.
    export.
 5. Produce one `browser-capture-schema-v1` artifact with a SHA-256 identity,
    safe labels or last four digits, date/as-of evidence, and limitations.
-6. Archive the original through the inactive
-   `INTERACTIVE_ARTIFACT_HANDOFF` workflow using only its artifact identity and
-   expected hash. Do not pass arbitrary paths or capture payloads in the
-   handoff request.
+6. Send the capture JSON as the single binary `data` attachment to the
+   inactive `INTERACTIVE_ARTIFACT_HANDOFF` workflow. Keep the JSON envelope to
+   the artifact identity and source content hash (`expected_sha256`); do not
+   pass arbitrary paths, URLs, or capture payload fields in that envelope.
 7. Report the capture identity, provider, data scope, date/as-of value, row or
    portfolio count, review count, and blockers.
 
@@ -42,8 +42,9 @@ MUST Keep only a user-approved account label or last four digits.
 MUST Use the versioned provider and data recipes without unbounded selectors,
 new URLs, or inferred values.
 MUST Emit an immutable redacted artifact before any downstream processing.
-MUST Hand the artifact to inactive n8n; n8n owns validation, enrichment,
-transaction matching, archive receipts, and the single fenced Actual writer.
+MUST Hand the binary capture to inactive n8n; n8n owns the bounded archive,
+hash/readback receipt, validation, enrichment, transaction matching, retry,
+and the single fenced Actual writer.
 NOT Write Actual, Cashback, a browser session, a cursor, or a second ledger
 transaction; Amazon order evidence remains supplemental matching input.
 NOT Activate or publish an n8n workflow during acquisition.
