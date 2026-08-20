@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hmac
 import os
 import signal
 import sys
@@ -13,6 +14,13 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from access_auth import (
+    ACCESS_ASSERTION_HEADER,
+    AccessVerificationError,
+    build_access_verifier,
+    local_access_exemption,
+)
 
 APP_ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = APP_ROOT.parent.parent
@@ -46,6 +54,8 @@ DATABASE_PATH = Path(
 INGEST_TOKEN = os.environ.get("CASHBACK_INGEST_TOKEN", "")
 PUBLIC_URL = os.environ.get("CASHBACK_PUBLIC_URL", "").strip()
 PUBLIC_ORIGIN = urlsplit(PUBLIC_URL)
+BIND_HOST = os.environ.get("CASHBACK_HOST", "127.0.0.1").strip()
+ACCESS_VERIFIER = build_access_verifier(bind_host=BIND_HOST, public_url=PUBLIC_URL)
 STORE = CashbackEventStore(DATABASE_PATH)
 PUSH_STORE = WebPushStore(DATABASE_PATH)
 WRITE_LOCK = threading.Lock()
@@ -264,15 +274,13 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/push/subscriptions",
         }
         if path in same_origin_paths:
-            origin = urlsplit(self.headers.get("Origin") or "")
-            if (
-                self.headers.get_content_type() != "application/json"
-                or not origin.netloc
-                or origin.netloc.casefold() != str(self.headers.get("Host") or "").casefold()
-            ):
-                self._json(HTTPStatus.FORBIDDEN, {"error": "Same-origin JSON request required"})
+            if not self._authorize_browser_mutation():
+                self._json(HTTPStatus.FORBIDDEN, {"error": "Browser mutation authorization required"})
                 return
-        elif INGEST_TOKEN and self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
+        elif not INGEST_TOKEN:
+            self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Cashback ingest token is not configured"})
+            return
+        elif self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
             return
         try:
@@ -386,6 +394,29 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authorize_browser_mutation(self) -> bool:
+        """Enforce the public-origin CSRF check and Access session boundary."""
+        origin = self.headers.get("Origin") or ""
+        if (
+            self.headers.get_content_type() != "application/json"
+            or not hmac.compare_digest(origin, PUBLIC_URL)
+            or not hmac.compare_digest(
+                (self.headers.get("Host") or "").casefold(),
+                PUBLIC_ORIGIN.netloc.casefold(),
+            )
+            or self.headers.get("Authorization")
+        ):
+            return False
+        if local_access_exemption(BIND_HOST, self.client_address[0], PUBLIC_URL):
+            return True
+        if ACCESS_VERIFIER is None:
+            return False
+        try:
+            ACCESS_VERIFIER.verify(self.headers.get(ACCESS_ASSERTION_HEADER))
+        except AccessVerificationError:
+            return False
+        return True
+
     def log_message(self, format: str, *args: object) -> None:
         print(json.dumps({
             "timestamp": datetime_now(),
@@ -402,7 +433,7 @@ def datetime_now() -> str:
 
 
 def main() -> None:
-    host = os.environ.get("CASHBACK_HOST", "127.0.0.1")
+    host = BIND_HOST
     port = int(os.environ.get("CASHBACK_PORT", "5010"))
     rebuild_dashboard()
     server = ThreadingHTTPServer((host, port), CashbackHandler)

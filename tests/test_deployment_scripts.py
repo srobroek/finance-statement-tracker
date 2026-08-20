@@ -67,9 +67,41 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('fetch --no-tags --depth 1 origin "$GITHUB_SHA"', deploy)
         self.assertIn('test "$(git -C "$source_dir" rev-parse HEAD)" = "$GITHUB_SHA"', deploy)
 
+    def test_cashback_build_and_ci_use_the_reviewed_uv_lock(self) -> None:
+        dockerfile = Path("apps/cashback-control/Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("COPY pyproject.toml uv.lock README.md ./", dockerfile)
+        self.assertIn("uv sync --frozen --no-dev --no-cache", dockerfile)
+        self.assertNotIn("pip install", dockerfile)
+        workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        self.assertIn('"uv.lock"', workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
+        self.assertIn("uv run --frozen python -m unittest", workflow)
+
+    def test_global_ci_uses_the_reviewed_uv_lock(self) -> None:
+        workflow = Path(".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("astral-sh/setup-uv@v6", workflow)
+        self.assertIn('version: "0.12.5"', workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
+        self.assertIn("uv run --frozen python -m unittest", workflow)
+        self.assertNotIn("pip install", workflow)
+
     def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
+
+    def test_cashback_browser_access_uses_private_origin_contract(self) -> None:
+        compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
+        self.assertIn('"127.0.0.1:5010:5010"', compose)
+        environment = Path("deploy/finance-runtime/finance.env.tpl").read_text(encoding="utf-8")
+        for name in (
+            "CASHBACK_ACCESS_ISSUER",
+            "CASHBACK_ACCESS_AUDIENCE",
+            "CASHBACK_ACCESS_JWKS_URL",
+        ):
+            self.assertIn(name, environment)
+        readme = Path("apps/cashback-control/README.md").read_text(encoding="utf-8")
+        self.assertIn("Cf-Access-Jwt-Assertion", readme)
+        self.assertIn("exactly equals `CASHBACK_PUBLIC_URL`", readme)
 
 
 if __name__ == "__main__":
