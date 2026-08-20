@@ -83,7 +83,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst w = $('Open Configured Cycle Window').first().json, c = $json;\nreturn [{ json: { ...w, ...c, operation: 'ENUMERATE', senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst w = $('Open Configured Cycle Window').first().json, c = $json;\nreturn [{ json: { ...w, ...c, operation: 'ENUMERATE', onedrive_parent_id: c.manifest_onedrive_parent_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
       }
     },
     {

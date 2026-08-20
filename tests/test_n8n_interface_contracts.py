@@ -35,12 +35,16 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Apply Prepared Outbox Safely", "ACTUAL_OUTBOX_APPLY"),
     ),
     "EI_MONTHLY_STATEMENT": (
-        ("Acquire Archive and Read Back", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
+        ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
         ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
+        ("Commit Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
     ),
     "WIO_MONTHLY_STATEMENT": (
-        ("Acquire Archive and Read Back", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
+        ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
         ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
+        ("Commit Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
     ),
     "AI_PROPOSAL": (
         ("Invoke Subscription Agent Adapter", "SUBSCRIPTION_AGENT_ADAPTER"),
@@ -100,6 +104,16 @@ ACQUISITION_CONTEXT = (
     "run_upper_bound",
     "onedrive_item_id",
 )
+MONTHLY_SWEEP_REQUEST = (
+    "run_id",
+    "source_code",
+    "folder_id",
+    "senders",
+    "subjects",
+    "window_start",
+    "run_upper_bound",
+    "onedrive_parent_id",
+)
 STATEMENT_CONTEXT = (
     "run_id",
     "source_code",
@@ -125,7 +139,6 @@ OUTBOX_CONTEXT = (
     "state",
     "attempt_count",
     "account_id",
-    "observed_sha256",
 )
 LEASE_ACQUIRE = ("operation", "resource_key", "lease_owner", "ttl_seconds")
 LEASE_ASSERT = ("operation", "resource_key", "lease_id", "fencing_token")
@@ -143,6 +156,30 @@ SWEEP_CONTEXT = (
     "heartbeat",
     "messages",
 )
+CURSOR_INITIALIZATION_CONTEXT = (
+    "operation",
+    "run_id",
+    "source_code",
+    "config_version",
+    "initial_cursor_value",
+    "initial_cursor_source",
+    "overlap_seconds",
+)
+CURSOR_COMMIT_CONTEXT = (
+    "operation",
+    "run_id",
+    "source_code",
+    "window_start",
+    "run_upper_bound",
+    "expected_cursor_version",
+    "downstream_receipt_sha256",
+    "pagination_exhausted",
+    "cursor_commit_eligible",
+    "attachment_verification_barrier",
+    "email_evidence_receipt_barrier",
+    "archive_ready",
+    "receipt_readback_verified",
+)
 
 # Every direct executeWorkflow edge is represented once. EI and WIO share
 # reviewed contracts, so aliases keep the fixture list small without hiding
@@ -151,10 +188,18 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
     boundary_case(
         "monthly acquisition request",
         ("EI_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),
-        "OUTLOOK_FINANCE_ACQUISITION",
-        ACQUISITION_CONTEXT,
-        ACQUISITION_CONTEXT,
+        "OUTLOOK_MESSAGE_SWEEP",
+        MONTHLY_SWEEP_REQUEST,
+        MONTHLY_SWEEP_REQUEST,
         (("WIO_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),),
+    ),
+    boundary_case(
+        "versioned source cursor initialization",
+        ("EI_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),
+        "OUTLOOK_MESSAGE_SWEEP",
+        CURSOR_INITIALIZATION_CONTEXT,
+        CURSOR_INITIALIZATION_CONTEXT,
+        (("WIO_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline input",
@@ -163,6 +208,14 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         STATEMENT_CONTEXT,
         STATEMENT_CONTEXT,
         (("WIO_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),),
+    ),
+    boundary_case(
+        "durable source cursor commit",
+        ("EI_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),
+        "OUTLOOK_MESSAGE_SWEEP",
+        CURSOR_COMMIT_CONTEXT,
+        CURSOR_COMMIT_CONTEXT,
+        (("WIO_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline to AI proposal",

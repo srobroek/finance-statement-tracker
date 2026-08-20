@@ -168,6 +168,12 @@ def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
     """Reject obsolete W01 enumeration before presentation formatting."""
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        assemble = node_by_name(by_code[code], "Assemble Trusted Acquisition Contract")
+        assemble["parameters"]["jsCode"] = r"""
+const w = $('Open Configured Cycle Window').first().json, c = $json;
+return [{ json: { ...w, ...c, operation: 'ENUMERATE', onedrive_parent_id: c.manifest_onedrive_parent_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];
+""".strip()
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
     legacy_graph = any(
         node["name"] == "Get Messages from Configured Folder"
