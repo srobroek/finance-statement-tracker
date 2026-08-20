@@ -110,7 +110,7 @@ export class ActualSession {
     return this.run(credential, async api => {
       const accounts = await api.getAccounts();
       const categories = await api.getCategories();
-      const balances = await Promise.all(accounts.map(async row => ({ id: row.id, name: row.name, closed: Boolean(row.closed), offbudget: Boolean(row.offbudget), balance: await api.getAccountBalance(String(row.id)) })));
+      const balances = await Promise.all(accounts.map(async row => ({ name: row.name, closed: Boolean(row.closed), offbudget: Boolean(row.offbudget), balance: await api.getAccountBalance(String(row.id)) })));
       return { status: 'ok', server: await api.getServerVersion(), counts: { accounts: accounts.length, categories: categories.length }, accounts: balances };
     });
   }
