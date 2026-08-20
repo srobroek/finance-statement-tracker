@@ -4,6 +4,9 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
+
+from jsonschema import Draft202012Validator
 
 from refactor_workflow_ui import format_code_nodes, layout
 
@@ -15,6 +18,53 @@ SEED_PATH = N8N / "generated" / "ai-policy-contracts.seed.json"
 CONFIG_SEED_PATH = N8N / "generated" / "config-versions.seed.json"
 MANIFEST_PATH = N8N / "generated" / "platform-bootstrap-manifest.json"
 WORKFLOW_PATH = N8N / "workflows" / "19-platform-data-table-bootstrap.json"
+BUNDLE_PATH = N8N / "generated" / "application-contract-bundle.json"
+BUNDLE_SCHEMA_PATH = N8N / "generated" / "application-contract-bundle.schema.json"
+
+APPLICATION_CONFIG_PATHS = (
+    "config/statement-sources.json",
+    "config/transaction-email-sources.json",
+    "config/ai-policies.json",
+)
+SOURCE_CONFIG_SPECS = {
+    "config/statement-sources.json": {"collection": "sources", "identity_key": "card_code"},
+    "config/transaction-email-sources.json": {"collection": "sources", "identity_key": "code"},
+    "config/ai-policies.json": {"collection": "policies", "identity_key": "policy_id"},
+}
+SOURCE_CONTRACT_PATHS = (
+    "config/statement-sources.json",
+    "config/transaction-email-sources.json",
+)
+RESOLVER_WORKFLOWS = (
+    {
+        "workflow_code": "W02",
+        "workflow_path": "integrations/n8n/workflows/02-rakbank-live-cashback.json",
+        "source_path": "config/transaction-email-sources.json",
+        "selection_key": "code",
+        "row_key": "code",
+    },
+    {
+        "workflow_code": "W04",
+        "workflow_path": "integrations/n8n/workflows/04-ei-monthly-statement.json",
+        "source_path": "config/statement-sources.json",
+        "selection_key": "card_code",
+        "row_key": "card_code",
+    },
+    {
+        "workflow_code": "W05",
+        "workflow_path": "integrations/n8n/workflows/05-wio-monthly-statement.json",
+        "source_path": "config/statement-sources.json",
+        "selection_key": "card_code",
+        "row_key": "card_code",
+    },
+    {
+        "workflow_code": "W09",
+        "workflow_path": "integrations/n8n/workflows/09-ai-proposal.json",
+        "source_path": "config/ai-policies.json",
+        "selection_key": "policy_id",
+        "row_key": "policy_id",
+    },
+)
 
 WORKFLOW_ID = "10000000-0000-4000-8000-000000000019"
 ERROR_WORKFLOW_ID = "10000000-0000-4000-8000-000000000016"
@@ -32,7 +82,287 @@ def canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
-def readable_js_literal(value: object, level: int = 0) -> str:
+def load_application_configs() -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+    """Read each resolver input once and retain its Git-canonical fingerprint."""
+    documents: dict[str, dict[str, Any]] = {}
+    sources: list[dict[str, str]] = []
+    for source_path in APPLICATION_CONFIG_PATHS:
+        path = ROOT / source_path
+        raw = path.read_bytes().replace(b"\r\n", b"\n")
+        document = json.loads(raw)
+        if not isinstance(document, dict):
+            raise ValueError(f"application config must be an object: {source_path}")
+        documents[source_path] = document
+        sources.append({"path": source_path, "sha256": hashlib.sha256(raw).hexdigest()})
+    return documents, sources
+
+
+def _source_row(document: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    rows = document.get("sources") if key == "sources" else document.get(key)
+    if not isinstance(rows, list) or not rows or not all(isinstance(row, dict) for row in rows):
+        raise ValueError(f"application config has no valid {key} rows")
+    return rows
+
+
+def _config_rows(documents: dict[str, dict[str, Any]], source_path: str) -> list[dict[str, Any]]:
+    spec = SOURCE_CONFIG_SPECS[source_path]
+    return _source_row(documents[source_path], spec["collection"])
+
+
+def _identity_key(source_path: str) -> str:
+    return SOURCE_CONFIG_SPECS[source_path]["identity_key"]
+
+
+def _validate_unique_identities(
+    rows: list[dict[str, Any]], source_path: str,
+) -> None:
+    identity_key = _identity_key(source_path)
+    identities = [row.get(identity_key) for row in rows]
+    if any(not isinstance(identity, str) or not identity for identity in identities):
+        raise ValueError(f"application config has invalid {identity_key} identity: {source_path}")
+    if len(set(identities)) != len(identities):
+        raise ValueError(f"application config has duplicate {identity_key} identities: {source_path}")
+
+
+def _config_version(document: dict[str, Any], source_path: str) -> str:
+    version = document.get("schema_version")
+    if not isinstance(version, (int, str)) or not str(version):
+        raise ValueError(f"application config has no stable schema_version: {source_path}")
+    return str(version)
+
+
+def build_config_versions(
+    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    by_path = {source["path"]: source["sha256"] for source in sources}
+    return [
+        {
+            "config_name": Path(path).stem,
+            "version": _config_version(documents[path], path),
+            "source_path": path,
+            "content_sha256": by_path[path],
+            "state": "ACTIVE",
+        }
+        for path in APPLICATION_CONFIG_PATHS
+    ]
+
+
+def build_source_contracts(
+    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    by_path = {source["path"]: source["sha256"] for source in sources}
+    result: list[dict[str, Any]] = []
+    for path in SOURCE_CONTRACT_PATHS:
+        rows = _config_rows(documents, path)
+        _validate_unique_identities(rows, path)
+        for row in rows:
+            source_code = row[_identity_key(path)]
+            result.append({
+                "source_code": source_code,
+                "config_version": _config_version(documents[path], path),
+                "source_path": path,
+                "content_sha256": by_path[path],
+                "contract": row,
+            })
+    if len({row["source_code"] for row in result}) != len(result):
+        raise ValueError("application configs have duplicate semantic source_code identities")
+    return result
+
+
+def build_ai_policy_contracts(
+    document: dict[str, Any], source: dict[str, str],
+) -> list[dict[str, Any]]:
+    policies = document.get("policies")
+    if not isinstance(policies, list) or not policies or not all(isinstance(row, dict) for row in policies):
+        raise ValueError("ai-policies.json has no valid policies")
+    _validate_unique_identities(policies, "config/ai-policies.json")
+    result = []
+    for row in policies:
+        policy_id = row.get("policy_id")
+        version = row.get("version")
+        if not isinstance(policy_id, str) or not policy_id or not isinstance(version, int):
+            raise ValueError("AI policy is missing its stable identity")
+        result.append({
+            "policy_id": policy_id,
+            "policy_version": version,
+            "source_path": source["path"],
+            "content_sha256": source["sha256"],
+            "contract": row,
+        })
+    return result
+
+
+def build_resolver_maps(
+    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    source_by_path = {source["path"]: source for source in sources}
+    rows_by_path = {
+        source_path: _config_rows(documents, source_path)
+        for source_path in APPLICATION_CONFIG_PATHS
+    }
+    for source_path, rows in rows_by_path.items():
+        _validate_unique_identities(rows, source_path)
+    result = []
+    for resolver in RESOLVER_WORKFLOWS:
+        source = source_by_path[resolver["source_path"]]
+        entries = [
+            {"key": row[resolver["row_key"]], "value": row}
+            for row in rows_by_path[resolver["source_path"]]
+        ]
+        keys = [entry["key"] for entry in entries]
+        if any(not isinstance(key, str) or not key for key in keys):
+            raise ValueError(f"{resolver['workflow_code']} has an invalid resolver key")
+        if len(set(keys)) != len(keys):
+            raise ValueError(f"{resolver['workflow_code']} has duplicate resolver keys")
+        result.append({
+            "workflow_code": resolver["workflow_code"],
+            "workflow_path": resolver["workflow_path"],
+            "selection_key": resolver["selection_key"],
+            "sources": [source],
+            "entries": entries,
+        })
+    return result
+
+
+def build_application_contract_schema(
+    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+) -> dict[str, Any]:
+    source_paths = list(APPLICATION_CONFIG_PATHS)
+    source_by_path = {source["path"]: source for source in sources}
+    resolver_maps = build_resolver_maps(documents, sources)
+    source_contracts = build_source_contracts(documents, sources)
+    config_versions = build_config_versions(documents, sources)
+    ai_policy_contracts = build_ai_policy_contracts(
+        documents["config/ai-policies.json"], source_by_path["config/ai-policies.json"]
+    )
+
+    def exact_object_schema(value: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "required": sorted(value),
+            "properties": {key: {"const": item} for key, item in value.items()},
+            "additionalProperties": False,
+        }
+
+    def exact_tuple_schema(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "type": "array",
+            "prefixItems": [exact_object_schema(row) for row in rows],
+            "items": False,
+            "minItems": len(rows),
+            "maxItems": len(rows),
+        }
+
+    source_document_schemas = [
+        exact_object_schema(source) for source in sources
+    ]
+    resolver_map_schemas = [exact_object_schema(resolver) for resolver in resolver_maps]
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "finance-application-contract-bundle-v1",
+        "title": "Finance application contract resolver bundle",
+        "type": "object",
+        "required": [
+            "schema_version", "contract_status", "schema_path", "schema_sha256",
+            "content_digest", "bundle_content_sha256", "source_documents",
+            "resolver_order", "resolver_maps", "source_contracts",
+            "config_versions", "ai_policy_contracts",
+        ],
+        "properties": {
+            "schema_version": {"const": 1},
+            "contract_status": {"const": "SPEC_ONLY"},
+            "schema_path": {"const": "integrations/n8n/generated/application-contract-bundle.schema.json"},
+            "schema_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            "content_digest": {
+                "type": "object",
+                "required": ["algorithm", "canonicalization", "excluded_fields"],
+                "properties": {
+                    "algorithm": {"const": "SHA-256"},
+                    "canonicalization": {"const": "sorted-object-keys;array-order-preserved;compact-utf8-json"},
+                    "excluded_fields": {"const": ["bundle_content_sha256"]},
+                },
+                "additionalProperties": False,
+            },
+            "bundle_content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+            "source_documents": {
+                "type": "array",
+                "prefixItems": source_document_schemas,
+                "items": False,
+                "minItems": len(source_paths),
+                "maxItems": len(source_paths),
+            },
+            "resolver_order": {
+                "const": [resolver["workflow_code"] for resolver in RESOLVER_WORKFLOWS]
+            },
+            "resolver_maps": {
+                "type": "array",
+                "prefixItems": resolver_map_schemas,
+                "items": False,
+                "minItems": len(resolver_maps),
+                "maxItems": len(resolver_maps),
+            },
+            "source_contracts": exact_tuple_schema(source_contracts),
+            "config_versions": exact_tuple_schema(config_versions),
+            "ai_policy_contracts": exact_tuple_schema(ai_policy_contracts),
+        },
+        "additionalProperties": False,
+    }
+
+
+def build_application_contract_bundle(
+    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]], schema: dict[str, Any],
+) -> dict[str, Any]:
+    schema_text = json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+    schema_sha256 = hashlib.sha256(schema_text.encode("utf-8")).hexdigest()
+    bundle: dict[str, Any] = {
+        "schema_version": 1,
+        "contract_status": "SPEC_ONLY",
+        "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
+        "schema_sha256": schema_sha256,
+        "content_digest": {
+            "algorithm": "SHA-256",
+            "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
+            "excluded_fields": ["bundle_content_sha256"],
+        },
+        "bundle_content_sha256": "",
+        "source_documents": sources,
+        "resolver_order": [resolver["workflow_code"] for resolver in RESOLVER_WORKFLOWS],
+        "resolver_maps": build_resolver_maps(documents, sources),
+        "source_contracts": build_source_contracts(documents, sources),
+        "config_versions": build_config_versions(documents, sources),
+        "ai_policy_contracts": build_ai_policy_contracts(
+            documents["config/ai-policies.json"],
+            next(source for source in sources if source["path"] == "config/ai-policies.json"),
+        ),
+    }
+    digest_payload = dict(bundle)
+    digest_payload.pop("bundle_content_sha256")
+    bundle["bundle_content_sha256"] = hashlib.sha256(
+        canonical_json(digest_payload).encode("utf-8")
+    ).hexdigest()
+    validate_application_contract_bundle(bundle, schema)
+    return bundle
+
+
+def validate_application_contract_bundle(
+    bundle: dict[str, Any], schema: dict[str, Any],
+) -> None:
+    Draft202012Validator.check_schema(schema)
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(bundle),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+    if errors:
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
+            for error in errors[:3]
+        )
+        raise ValueError(f"application contract bundle schema validation failed: {details}")
+
+
+def readable_js_literal(
+    value: object, level: int = 0, split_long_strings: bool = False,
+) -> str:
     """Render generated configuration as reviewable JavaScript data.
 
     Fields stored canonically as JSON strings are expressed as JSON.stringify
@@ -45,16 +375,30 @@ def readable_js_literal(value: object, level: int = 0) -> str:
         for key in sorted(value):
             item = value[key]
             if key.endswith("_json") and isinstance(item, str):
-                rendered = f"JSON.stringify({readable_js_literal(json.loads(item), level + 1)})"
+                rendered = (
+                    f"JSON.stringify({readable_js_literal(json.loads(item), level + 1, split_long_strings)})"
+                )
             else:
-                rendered = readable_js_literal(item, level + 1)
+                rendered = readable_js_literal(item, level + 1, split_long_strings)
             lines.append(f"{child_indent}{json.dumps(key)}: {rendered}")
         return "{\n" + ",\n".join(lines) + f"\n{indent}}}"
     if isinstance(value, list):
         if not value:
             return "[]"
-        lines = [f"{child_indent}{readable_js_literal(item, level + 1)}" for item in value]
+        lines = [
+            f"{child_indent}{readable_js_literal(item, level + 1, split_long_strings)}"
+            for item in value
+        ]
         return "[\n" + ",\n".join(lines) + f"\n{indent}]"
+    if split_long_strings and isinstance(value, str) and len(value) > 50:
+        chunks = [value[index : index + 50] for index in range(0, len(value), 50)]
+        string_indent = "  " * (level + 1)
+        rendered_chunks = [
+            f"{string_indent}{json.dumps(chunk, ensure_ascii=False)}"
+            + (" +" if index < len(chunks) - 1 else "")
+            for index, chunk in enumerate(chunks)
+        ]
+        return "(\n" + "\n".join(rendered_chunks) + f"\n{'  ' * level})"
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -83,7 +427,14 @@ def create_parameters(table: dict) -> dict:
     }
 
 
-def build_manifest(tables: dict, seed: dict, config_seed: dict) -> dict:
+def build_manifest(
+    tables: dict,
+    seed: dict,
+    config_seed: dict,
+    bundle: dict,
+    bundle_file_sha256: str,
+    bundle_schema_sha256: str,
+) -> dict:
     return {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
@@ -95,6 +446,10 @@ def build_manifest(tables: dict, seed: dict, config_seed: dict) -> dict:
             "ai_policy_seed_sha256": sha256(SEED_PATH),
             "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
             "config_version_seed_sha256": sha256(CONFIG_SEED_PATH),
+            "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
+            "application_contract_bundle_sha256": bundle_file_sha256,
+            "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+            "application_contract_bundle_schema_sha256": bundle_schema_sha256,
         },
         "native_data_table_create_contract": {
             "node_type": "n8n-nodes-base.dataTable",
@@ -138,6 +493,14 @@ def build_manifest(tables: dict, seed: dict, config_seed: dict) -> dict:
                 "git_commit", "state",
             ],
         },
+        "application_contract": {
+            "path": "integrations/n8n/generated/application-contract-bundle.json",
+            "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
+            "schema_version": bundle["schema_version"],
+            "bundle_content_sha256": bundle["bundle_content_sha256"],
+            "resolver_order": bundle["resolver_order"],
+            "source_paths": [source["path"] for source in bundle["source_documents"]],
+        },
         "execution_evidence": {
             "exact_image_import_tested": False,
             "disposable_create_reuse_tested": False,
@@ -166,7 +529,13 @@ def data_table_node(node_id: str, name: str, position: list[int], parameters: di
     }
 
 
-def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) -> dict:
+def build_workflow(
+    tables: dict,
+    seed: dict,
+    config_seed: dict,
+    manifest: dict,
+    bundle: dict,
+) -> dict:
     table_rows = ordered_tables(tables)
     seed_rows = seed["rows"]
     nodes: list[dict] = [
@@ -181,6 +550,100 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
     ]
     connections: dict[str, dict] = {}
     previous = nodes[0]["name"]
+
+    embedded_bundle = readable_js_literal(bundle, split_long_strings=True)
+    load_bundle_name = "Load and Validate Application Contract Bundle"
+    nodes.append(
+        {
+            "id": "19000",
+            "name": load_bundle_name,
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [-1600, 0],
+            "parameters": {
+                "jsCode": (
+                    f"const bundle={embedded_bundle}; "
+                    "if(bundle.schema_version!==1||bundle.contract_status!=='SPEC_ONLY') "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_SCHEMA_MISMATCH'); "
+                    "if(bundle.schema_path!=='integrations/n8n/generated/application-contract-bundle.schema.json') "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_SCHEMA_PATH_MISMATCH'); "
+                    "if(JSON.stringify(bundle.resolver_order)!==JSON.stringify(['W02','W04','W05','W09'])) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_RESOLVER_ORDER_MISMATCH'); "
+                    "if(bundle.content_digest?.algorithm!=='SHA-256'||"
+                    "JSON.stringify(bundle.content_digest?.excluded_fields)!==JSON.stringify(['bundle_content_sha256'])) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_DIGEST_CONTRACT_MISMATCH'); "
+                    "const canonical=value=>Array.isArray(value)?value.map(canonical):"
+                    "(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value); "
+                    "const payload={...bundle}; delete payload.bundle_content_sha256; "
+                    "return [{json:{application_contract_bundle:bundle,"
+                    "bundle_canonical:JSON.stringify(canonical(payload))}}];"
+                )
+            },
+        }
+    )
+    connections[previous] = {
+        "main": [[{"node": load_bundle_name, "type": "main", "index": 0}]]
+    }
+    previous = load_bundle_name
+
+    hash_bundle_name = "SHA-256 Application Contract Bundle"
+    nodes.append(
+        {
+            "id": "19000-hash",
+            "name": hash_bundle_name,
+            "type": "n8n-nodes-base.crypto",
+            "typeVersion": 1,
+            "position": [-1420, 0],
+            "parameters": {
+                "action": "hash",
+                "type": "SHA256",
+                "value": "={{ $json.bundle_canonical }}",
+                "dataPropertyName": "bundle_content_sha256_observed",
+            },
+        }
+    )
+    connections[previous] = {
+        "main": [[{"node": hash_bundle_name, "type": "main", "index": 0}]]
+    }
+    previous = hash_bundle_name
+
+    verify_bundle_name = "Verify Application Contract Bundle Digest and Maps"
+    nodes.append(
+        {
+            "id": "19000-verify",
+            "name": verify_bundle_name,
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [-1240, 0],
+            "parameters": {
+                "jsCode": (
+                    "const bundle=$json.application_contract_bundle; "
+                    "if($json.bundle_content_sha256_observed!==bundle.bundle_content_sha256) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_DIGEST_MISMATCH'); "
+                    "if(!Array.isArray(bundle.source_documents)||bundle.source_documents.length!==3) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_SOURCE_COUNT_MISMATCH'); "
+                    "const paths=bundle.source_documents.map(source=>source.path); "
+                    "if(new Set(paths).size!==paths.length||bundle.source_documents.some(source=>"
+                    "!/^config\\/(statement-sources|transaction-email-sources|ai-policies)\\.json$/.test(source.path)||"
+                    "!/^[a-f0-9]{64}$/.test(source.sha256))) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_SOURCE_HASH_INVALID'); "
+                    "if(!Array.isArray(bundle.resolver_maps)||bundle.resolver_maps.length!==4||"
+                    "bundle.resolver_maps.some((resolver,index)=>resolver.workflow_code!==bundle.resolver_order[index]||"
+                    "!Array.isArray(resolver.entries)||!resolver.entries.length||!Array.isArray(resolver.sources)||"
+                    "resolver.sources.length!==1||new Set(resolver.entries.map(entry=>entry.key)).size!==resolver.entries.length||"
+                    "resolver.sources[0].sha256!==bundle.source_documents.find(source=>source.path===resolver.sources[0].path)?.sha256)) "
+                    "throw new Error('APPLICATION_CONTRACT_BUNDLE_RESOLVER_MAP_INVALID'); "
+                    "return [{json:{application_contract_bundle:bundle,"
+                    "application_contract_bundle_verified:true,"
+                    "bundle_content_sha256:bundle.bundle_content_sha256}}];"
+                )
+            },
+        }
+    )
+    connections[previous] = {
+        "main": [[{"node": verify_bundle_name, "type": "main", "index": 0}]]
+    }
+    previous = verify_bundle_name
 
     for index, table in enumerate(table_rows, start=1):
         name = f"Create or Reuse {table['name']}"
@@ -436,6 +899,9 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
             "sourceContract": "integrations/n8n/data-tables.json",
             "seedContract": "integrations/n8n/generated/ai-policy-contracts.seed.json",
             "configSeedContract": "integrations/n8n/generated/config-versions.seed.json",
+            "applicationContractBundle": "integrations/n8n/generated/application-contract-bundle.json",
+            "applicationContractBundleSchema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+            "applicationContractBundleContentSha256": bundle["bundle_content_sha256"],
             "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
             "activationBlockers": manifest["activation_blockers"],
             "importTested": False,
@@ -446,39 +912,70 @@ def build_workflow(tables: dict, seed: dict, config_seed: dict, manifest: dict) 
     }
 
 
-def render() -> tuple[str, str]:
+def render() -> tuple[str, str, str, str]:
     tables = load_json(TABLES_PATH)
     seed = load_json(SEED_PATH)
     config_seed = load_json(CONFIG_SEED_PATH)
-    manifest = build_manifest(tables, seed, config_seed)
-    workflow = build_workflow(tables, seed, config_seed, manifest)
+    documents, sources = load_application_configs()
+    bundle_schema = build_application_contract_schema(documents, sources)
+    bundle = build_application_contract_bundle(documents, sources, bundle_schema)
+    bundle_text = json.dumps(bundle, indent=2, ensure_ascii=False) + "\n"
+    bundle_schema_text = json.dumps(bundle_schema, indent=2, ensure_ascii=False) + "\n"
+    manifest = build_manifest(
+        tables,
+        seed,
+        config_seed,
+        bundle,
+        hashlib.sha256(bundle_text.encode("utf-8")).hexdigest(),
+        hashlib.sha256(bundle_schema_text.encode("utf-8")).hexdigest(),
+    )
+    workflow = build_workflow(tables, seed, config_seed, manifest, bundle)
     format_code_nodes([workflow])
     layout(workflow)
     return (
+        bundle_text,
+        bundle_schema_text,
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         json.dumps(workflow, indent=2, ensure_ascii=False) + "\n",
     )
 
 
-def main() -> int:
+def generated_artifact_drift(
+    expected: tuple[tuple[Path, str], ...], root: Path = ROOT,
+) -> list[str]:
+    return [
+        path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
+        for path, expected_text in expected
+        if not path.exists() or path.read_text(encoding="utf-8") != expected_text
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate the SPEC_ONLY n8n platform Data Table bootstrap contract."
     )
-    parser.add_argument("--write", action="store_true", help="write generated artifacts")
-    args = parser.parse_args()
-    manifest_text, workflow_text = render()
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true", help="write generated artifacts")
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="check generated artifacts and exit non-zero when stale",
+    )
+    args = parser.parse_args(argv)
+    bundle_text, bundle_schema_text, manifest_text, workflow_text = render()
     if args.write:
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        BUNDLE_PATH.write_text(bundle_text, encoding="utf-8", newline="\n")
+        BUNDLE_SCHEMA_PATH.write_text(bundle_schema_text, encoding="utf-8", newline="\n")
         MANIFEST_PATH.write_text(manifest_text, encoding="utf-8")
         WORKFLOW_PATH.write_text(workflow_text, encoding="utf-8")
         return 0
-    drift = []
-    for path, expected in (
+    drift = generated_artifact_drift((
+        (BUNDLE_PATH, bundle_text),
+        (BUNDLE_SCHEMA_PATH, bundle_schema_text),
         (MANIFEST_PATH, manifest_text),
         (WORKFLOW_PATH, workflow_text),
-    ):
-        if not path.exists() or path.read_text(encoding="utf-8") != expected:
-            drift.append(path.relative_to(ROOT).as_posix())
+    ))
     if drift:
         print("platform bootstrap artifacts are stale: " + ", ".join(drift))
         print("run: python integrations/n8n/generate_platform_bootstrap.py --write")
