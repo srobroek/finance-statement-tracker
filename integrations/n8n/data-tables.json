@@ -72,14 +72,14 @@
       "name": "finance_actual_outbox",
       "purpose": "Fenced idempotent intent for the single Actual writer.",
       "idempotency_key": ["imported_id"],
-      "columns": {"outbox_id":"string","run_id":"string","imported_id":"string","actual_file_id":"string","payload_sha256":"string","artifact_item_id":"string","artifact_etag":"string","artifact_schema_version":"string","config_version":"string","parser_version":"string","state":"string","lease_owner":"string","lease_fence":"number","lease_expires_at":"date","actual_transaction_id":"string","attempt_count":"number","last_error_class":"string","updated_at":"date"},
+      "columns": {"outbox_id":"string","run_id":"string","imported_id":"string","actual_file_id":"string","account_id":"string","card_code":"string","payload_sha256":"string","artifact_item_id":"string","artifact_etag":"string","artifact_schema_version":"string","config_version":"string","parser_version":"string","state":"string","lease_owner":"string","lease_fence":"number","lease_expires_at":"date","actual_transaction_id":"string","attempt_count":"number","last_error_class":"string","updated_at":"date"},
       "allowed_states": ["PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED", "FAILED"]
     },
     {
       "name": "finance_actual_verifications",
       "purpose": "Actual readback proof independent from the write attempt.",
       "idempotency_key": ["outbox_id", "verification_version"],
-      "columns": {"outbox_id":"string","verification_version":"number","actual_file_id":"string","account_id":"string","period_start":"date","period_end":"date","expected_payload_sha256":"string","observed_payload_sha256":"string","expected_count":"number","observed_count":"number","expected_amount_sum_minor":"number","observed_amount_sum_minor":"number","expected_account_balance":"number","observed_account_balance":"number","invariants_passed":"boolean","verified_at":"date"}
+      "columns": {"outbox_id":"string","verification_version":"number","actual_file_id":"string","account_id":"string","card_code":"string","period_start":"date","period_end":"date","expected_payload_sha256":"string","observed_payload_sha256":"string","expected_count":"number","observed_count":"number","expected_amount_sum_minor":"number","observed_amount_sum_minor":"number","expected_account_balance":"number","observed_account_balance":"number","invariants_passed":"boolean","verified_at":"date"}
     },
     {
       "name": "finance_reconciliations",

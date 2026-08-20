@@ -4,7 +4,7 @@
   "n8n_version": "2.36.2",
   "sources": {
     "data_tables": "integrations/n8n/data-tables.json",
-    "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
+    "data_tables_sha256": "f17ae74665621555536314d20c6bb048fc5e89d452f62f516ec5eb2782fc413b",
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "4ad2e1381484dc1a053ecad4ad3a8cbc54b817a754ed451cfdde8290cb983af3",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
@@ -191,6 +191,14 @@
               "type": "string"
             },
             {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
+              "type": "string"
+            },
+            {
               "name": "payload_sha256",
               "type": "string"
             },
@@ -275,6 +283,10 @@
             },
             {
               "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
               "type": "string"
             },
             {

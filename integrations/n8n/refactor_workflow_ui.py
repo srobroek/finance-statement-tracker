@@ -406,7 +406,7 @@ return [{
                 "name": "Browser Capture?",
                 "type": "n8n-nodes-base.if",
                 "typeVersion": 2.2,
-                "position": [-300, 0],
+                "position": [-220, 0],
                 "parameters": {"conditions": {
                     "options": {"caseSensitive": True, "typeValidation": "strict"},
                     "combinator": "and",
@@ -422,7 +422,7 @@ return [{
                 "name": "Parse Browser Capture Adapter",
                 "type": "n8n-nodes-base.code",
                 "typeVersion": 2,
-                "position": [-50, 180],
+                "position": [680, 0],
                 "parameters": {"jsCode": r"""
 const input = $json;
 const capture = input.browser_capture;
@@ -512,7 +512,7 @@ return [{ json: {
                 "name": "Match Browser Capture Rows and Bound Retry",
                 "type": "n8n-nodes-base.code",
                 "typeVersion": 2,
-                "position": [1320, 180],
+                "position": [-820, 380],
                 "parameters": {"jsCode": r"""
 const input = $json;
 if (!String(input.adapter || '').startsWith('browser_capture_v1')) return [{ json: input }];
@@ -536,7 +536,7 @@ return [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser
                 "name": "Browser Capture Write?",
                 "type": "n8n-nodes-base.if",
                 "typeVersion": 2.2,
-                "position": [2280, 0],
+                "position": [980, 380],
                 "parameters": {"conditions": {
                     "options": {"caseSensitive": True, "typeValidation": "strict"},
                     "combinator": "and",
@@ -552,7 +552,7 @@ return [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser
                 "name": "Complete Browser Capture Headless Receipt",
                 "type": "n8n-nodes-base.code",
                 "typeVersion": 2,
-                "position": [2530, -180],
+                "position": [380, 1520],
                 "parameters": {"jsCode": r"""
 const input = $json;
 if (!String(input.adapter || '').startsWith('browser_capture_v1') || input.actual_mutation !== false || input.cashback_mutation !== false) {
@@ -1982,8 +1982,16 @@ return [{
     statement["connections"]["Read Back PREPARED Actual Outbox"] = {
         "main": [[{"node": apply_prepared["name"], "type": "main", "index": 0}]]
     }
+    cashback_entry = (
+        "Build Trusted Cashback Finalization"
+        if any(
+            node["name"] == "Build Trusted Cashback Finalization"
+            for node in statement["nodes"]
+        )
+        else "Cashback Close Required"
+    )
     statement["connections"][apply_prepared["name"]] = {
-        "main": [[{"node": "Cashback Close Required", "type": "main", "index": 0}]]
+        "main": [[{"node": cashback_entry, "type": "main", "index": 0}]]
     }
     statement["meta"]["delegatesActualWritesTo"] = "ACTUAL_OUTBOX_APPLY"
 
@@ -2046,7 +2054,7 @@ return [{
                             "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
                             "reconciliation_version": 1,
                             "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
-                            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_sha256 }}",
+                            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
                             "cashback_close_id": "={{ $json.close_id || '' }}",
                             "state": "COMMITTED",
                             "difference_minor": 0,
@@ -3181,7 +3189,10 @@ def main() -> int:
     workflows = [by_code[path_to_code[path]] for path in paths]
     format_code_nodes(workflows)
     for workflow in workflows:
-        layout(workflow)
+        # W03 is a reviewed migration canvas. Preserve its existing positions
+        # and groups while adding runtime nodes; this task does not redesign UI.
+        if workflow["meta"]["financeWorkflowCode"] not in {"SHARED_STATEMENT_PIPELINE", "ACTUAL_OUTBOX_APPLY"}:
+            layout(workflow)
     rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
     if args.check:
         stale = [

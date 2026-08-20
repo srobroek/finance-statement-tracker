@@ -123,6 +123,11 @@ def _payload_sha256(payload: dict[str, Any], fields: tuple[str, ...], label: str
     return values.pop()
 
 
+def _close_identifier(card_code: str, period_start: str, period_end: str) -> str:
+    """Return the server-owned stable identifier for a finalized card period."""
+    return f"cashback-close:{card_code}:{period_start}:{period_end}"
+
+
 def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Validate and hash the independently read-back Actual verification receipt.
 
@@ -142,8 +147,11 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         "verification_version",
         "actual_file_id",
         "account_id",
+        "card_code",
         "period_start",
         "period_end",
+        "state",
+        "writer_release_verified",
         "invariants_passed",
         "verified_at",
     )
@@ -153,7 +161,7 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
             "actual_import_receipt readback is missing required fields: "
             + ", ".join(missing)
         )
-    for field in ("outbox_id", "actual_file_id", "account_id"):
+    for field in ("outbox_id", "actual_file_id", "account_id", "card_code"):
         if not isinstance(receipt[field], str) or not receipt[field].strip():
             raise ValueError(f"actual_import_receipt.{field} must be a non-empty identity")
     version = receipt["verification_version"]
@@ -161,6 +169,10 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         raise ValueError("actual_import_receipt.verification_version must be a positive integer")
     if receipt["invariants_passed"] is not True:
         raise ValueError("actual_import_receipt invariants must pass")
+    if receipt["state"] != "COMMITTED":
+        raise ValueError("actual_import_receipt state must be COMMITTED")
+    if receipt["writer_release_verified"] is not True:
+        raise ValueError("actual_import_receipt writer release must be verified")
     for field in ("period_start", "period_end"):
         try:
             date.fromisoformat(str(receipt[field]))
@@ -1502,11 +1514,12 @@ class CashbackEventStore:
                     raise ValueError(
                         "actual_import_receipt period does not match the reconciliation receipt"
                     )
-                if str(actual_import_receipt["account_id"]).strip().upper() != str(
-                    run["card_code"]
-                ).strip().upper():
+                receipt_card = str(actual_import_receipt.get("card_code") or "").strip().upper()
+                if not receipt_card:
+                    raise ValueError("actual_import_receipt.card_code is required")
+                if receipt_card != str(run["card_code"]).strip().upper():
                     raise ValueError(
-                        "actual_import_receipt account identity does not match the reconciled card"
+                        "actual_import_receipt account identity/card does not match the reconciled card"
                     )
                 if supplied_content_sha256 is not None and supplied_content_sha256 != str(
                     run["statement_content_sha256"] or ""
@@ -1539,6 +1552,11 @@ class CashbackEventStore:
                             "finalized statement reference was already used for different content, digest, or evidence"
                         )
                     return {
+                        "close_id": _close_identifier(
+                            str(existing["card_code"]),
+                            str(existing["period_start"]),
+                            str(existing["period_end"]),
+                        ),
                         "card_code": existing["card_code"],
                         "period_start": existing["period_start"],
                         "period_end": existing["period_end"],
@@ -1615,6 +1633,11 @@ class CashbackEventStore:
                     (run["card_code"], next_start.isoformat(), next_end.isoformat()),
                 )
         return {
+            "close_id": _close_identifier(
+                str(run["card_code"]),
+                str(run["period_start"]),
+                str(run["period_end"]),
+            ),
             "card_code": run["card_code"],
             "period_start": run["period_start"],
             "period_end": run["period_end"],

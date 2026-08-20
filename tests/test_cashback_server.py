@@ -23,7 +23,8 @@ def actual_receipt(reference: str) -> dict[str, object]:
         "outbox_id": f"outbox:{reference}",
         "verification_version": 1,
         "actual_file_id": f"actual-file:{reference}",
-        "account_id": "RAK_WORLD",
+        "account_id": "actual-account:RAK_WORLD",
+        "card_code": "RAK_WORLD",
         "period_start": "2026-08-06",
         "period_end": "2026-09-05",
         "expected_payload_sha256": payload_digest,
@@ -33,6 +34,8 @@ def actual_receipt(reference: str) -> dict[str, object]:
         "expected_amount_sum_minor": 800,
         "observed_amount_sum_minor": 800,
         "invariants_passed": True,
+        "state": "COMMITTED",
+        "writer_release_verified": True,
         "verified_at": "2026-08-20T00:00:00+00:00",
     }
 
@@ -208,6 +211,56 @@ class CashbackServerTests(unittest.TestCase):
                     "statement_document_url": "https://evidence.example/statement.pdf",
                 })
                 self.assertEqual(finalized["period"]["status"], "FINALIZED")
+                self.assertEqual(
+                    finalized["period"]["close_id"],
+                    "cashback-close:RAK_WORLD:2026-08-06:2026-09-05",
+                )
+                replayed = post("periods/finalize", {
+                    "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
+                    "statement_sha256": hashlib.sha256(
+                        b"synthetic-statement-2026-08-06--2026-09-05"
+                    ).hexdigest(),
+                    "actual_import_receipt": receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(receipt),
+                    "statement_evidence_reference": "sha256:synthetic",
+                    "statement_document_url": "https://evidence.example/statement.pdf",
+                })
+                self.assertTrue(replayed["period"]["idempotent_replay"])
+                self.assertEqual(replayed["period"]["close_id"], finalized["period"]["close_id"])
+                missing_receipt = {
+                    key: value
+                    for key, value in {
+                        "statement_reference": "synthetic-statement-2026-08-06--2026-09-05-missing",
+                        "statement_sha256": hashlib.sha256(
+                            b"synthetic-statement-2026-08-06--2026-09-05-missing"
+                        ).hexdigest(),
+                        "statement_evidence_reference": "sha256:synthetic-missing",
+                        "statement_document_url": "https://evidence.example/missing.pdf",
+                    }.items()
+                }
+                with self.assertRaises(urllib.error.HTTPError) as missing:
+                    post("periods/finalize", missing_receipt)
+                self.assertEqual(missing.exception.code, 400)
+                missing.exception.close()
+
+                stale_receipt = actual_receipt(
+                    "synthetic-statement-2026-08-06--2026-09-05-stale"
+                )
+                stale_receipt["state"] = "ACTUAL_OBSERVED"
+                with self.assertRaises(urllib.error.HTTPError) as stale:
+                    post("periods/finalize", {
+                        "statement_reference": "synthetic-statement-2026-08-06--2026-09-05-stale",
+                        "statement_sha256": hashlib.sha256(
+                            b"synthetic-statement-2026-08-06--2026-09-05-stale"
+                        ).hexdigest(),
+                        "actual_import_receipt": stale_receipt,
+                        "actual_import_receipt_sha256": actual_receipt_digest(stale_receipt),
+                        "statement_evidence_reference": "sha256:synthetic-stale",
+                        "statement_document_url": "https://evidence.example/stale.pdf",
+                    })
+                self.assertEqual(stale.exception.code, 400)
+                stale.exception.close()
+
                 changed_finalization = {
                     "statement_reference": "synthetic-statement-2026-08-06--2026-09-05",
                     "statement_sha256": hashlib.sha256(

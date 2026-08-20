@@ -244,6 +244,14 @@
               "type": "string"
             },
             {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
+              "type": "string"
+            },
+            {
               "name": "payload_sha256",
               "type": "string"
             },
@@ -335,6 +343,10 @@
             },
             {
               "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
               "type": "string"
             },
             {
