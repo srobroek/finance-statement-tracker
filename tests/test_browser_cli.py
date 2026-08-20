@@ -12,6 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserCliTests(unittest.TestCase):
+    def test_original_codex_prompt_covers_sources_and_security_boundary(self) -> None:
+        prompt = (ROOT / "docs" / "original-codex-browser-task-prompt.md").read_text(encoding="utf-8")
+        for source in ("FAB_DEBIT", "SARWA", "AMAZON", "ADCB", "FUTURE_MFA"):
+            self.assertIn(source, prompt)
+        for forbidden in (
+            "credentials",
+            "OTP",
+            "cookies",
+            "session state",
+            "PIN",
+            "CVV",
+            "full account number",
+        ):
+            self.assertIn(forbidden, prompt)
+        self.assertIn('"actual_mutation":false', prompt)
+        self.assertIn('"cashback_mutation":false', prompt)
+        self.assertIn("INTERACTIVE_ARTIFACT_HANDOFF", prompt)
+
     def test_status_and_recipe_commands_write_machine_readable_results(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

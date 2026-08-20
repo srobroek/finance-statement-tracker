@@ -13,6 +13,53 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserRecipeTests(unittest.TestCase):
+    def test_mfa_sources_declare_the_headed_write_disabled_boundary(self) -> None:
+        sources = load_browser_sources(ROOT / "config" / "browser-sources.json")
+        contract = sources["browser_contract"]
+        self.assertEqual("HEADED_ON_DEMAND", contract["capture_mode"])
+        self.assertEqual("USER_COMPLETED", contract["authentication"])
+        self.assertFalse(contract["session_persistence"])
+        self.assertFalse(contract["actual_mutation"])
+        self.assertFalse(contract["cashback_mutation"])
+        for provider_id in ("fab", "sarwa", "amazon", "adcb"):
+            provider = next(
+                row for row in validate_registry(ROOT / "browser_adapters")["providers"]
+                if row["provider_id"] == provider_id
+            )
+            metadata = json.loads(
+                (ROOT / "browser_adapters" / provider_id / "provider.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("HEADED_ON_DEMAND", metadata["execution"]["mode"])
+            self.assertEqual("USER_COMPLETED", metadata["execution"]["authentication"])
+            self.assertFalse(metadata["execution"]["session_persistence"])
+            self.assertFalse(metadata["execution"]["actual_mutation"])
+            self.assertFalse(metadata["execution"]["cashback_mutation"])
+            recipe = (ROOT / "browser_adapters" / provider_id / "provider.recipe").read_text(encoding="utf-8")
+            self.assertIn("PAUSE_FOR_USER reason:", recipe)
+            self.assertIn("never type, inspect, copy, log, or store", recipe)
+
+    def test_browser_capture_schema_contract_is_immutable_redacted_and_write_disabled(self) -> None:
+        schema = json.loads(
+            (ROOT / "config" / "browser-capture-schema-v1.json").read_text(encoding="utf-8")
+        )
+        contract = schema["properties"]["capture_contract"]
+        self.assertEqual(
+            [
+                "capture_mode",
+                "redaction",
+                "immutability",
+                "handoff_workflow",
+                "actual_mutation",
+                "cashback_mutation",
+            ],
+            contract["required"],
+        )
+        properties = contract["properties"]
+        self.assertEqual("HEADED_ON_DEMAND", properties["capture_mode"]["const"])
+        self.assertEqual("REDACTED", properties["redaction"]["const"])
+        self.assertEqual("SHA256_ARCHIVED", properties["immutability"]["const"])
+        self.assertIs(properties["actual_mutation"]["const"], False)
+        self.assertIs(properties["cashback_mutation"]["const"], False)
     def test_migrated_registry_is_valid(self) -> None:
         result = validate_registry(ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])

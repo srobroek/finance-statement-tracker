@@ -15,6 +15,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserIngestionTests(TestCase):
+    def test_inactive_n8n_handoff_validates_browser_capture_before_writes(self):
+        workflow = json.loads(
+            (ROOT / "integrations" / "n8n" / "workflows" / "11-interactive-artifact-handoff.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertFalse(workflow["active"])
+        handoff = workflow["meta"]["browserHandoff"]
+        self.assertEqual("BROWSER_CAPTURE_V1", handoff["document_profile"])
+        self.assertEqual("browser-capture-schema-v1", handoff["capture_schema"])
+        self.assertEqual("N8N", handoff["headless_owner"])
+        self.assertTrue(handoff["actual_mutation_forbidden"])
+        self.assertTrue(handoff["cashback_mutation_forbidden"])
+        names = {node["name"]: node for node in workflow["nodes"]}
+        self.assertIn("Extract Browser Capture JSON", names)
+        validator = names["Validate Browser Capture Boundary"]
+        self.assertEqual("n8n-nodes-base.code", validator["type"])
+        code = validator["parameters"]["jsCode"]
+        self.assertIn("BROWSER_CAPTURE_CONTRACT_INVALID", code)
+        self.assertIn("BROWSER_CAPTURE_FORBIDDEN_FIELD", code)
+        self.assertIn("actual_mutation: false", code)
+        self.assertIn("cashback_mutation: false", code)
+        self.assertNotIn("n8n-nodes-finance.actualBudget", {node["type"] for node in workflow["nodes"]})
     def config(self):
         return {
             "schema_version": 1,

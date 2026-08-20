@@ -8,6 +8,26 @@
   "properties": {
     "schema_version": {"const": 1},
     "capture_id": {"type": "string", "minLength": 1},
+    "capture_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capture_mode",
+        "redaction",
+        "immutability",
+        "handoff_workflow",
+        "actual_mutation",
+        "cashback_mutation"
+      ],
+      "properties": {
+        "capture_mode": {"const": "HEADED_ON_DEMAND"},
+        "redaction": {"const": "REDACTED"},
+        "immutability": {"const": "SHA256_ARCHIVED"},
+        "handoff_workflow": {"const": "INTERACTIVE_ARTIFACT_HANDOFF"},
+        "actual_mutation": {"const": false},
+        "cashback_mutation": {"const": false}
+      }
+    },
     "approval": {
       "type": "object",
       "additionalProperties": false,

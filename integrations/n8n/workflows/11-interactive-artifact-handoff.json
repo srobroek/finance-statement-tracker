@@ -166,15 +166,30 @@
     },
     {
       "id": "11009",
-      "name": "Require Typed Browser Capture Validator",
-      "type": "n8n-nodes-base.stopAndError",
+      "name": "Extract Browser Capture JSON",
+      "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        -1120,
+        980,
         380
       ],
       "parameters": {
-        "errorMessage": "BROWSER_CAPTURE_VALIDATOR_REQUIRED: non-statement artifacts never enter the statement parser"
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "11010",
+      "name": "Validate Browser Capture Boundary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate the redacted headed-browser contract before headless processing.\nconst capture = $json;\nconst record = $('Verify Durable Artifact Contract').first().json;\nif (capture.schema_version !== 1 || !capture.capture_id || !capture.source || !capture.artifact || !capture.account) {\n    throw new Error('BROWSER_CAPTURE_SCHEMA_INVALID');\n}\nconst contract = capture.capture_contract;\nif (!contract || contract.capture_mode !== 'HEADED_ON_DEMAND' || contract.redaction !== 'REDACTED' || contract.immutability !== 'SHA256_ARCHIVED' || contract.handoff_workflow !== 'INTERACTIVE_ARTIFACT_HANDOFF' || contract.actual_mutation !== false || contract.cashback_mutation !== false) {\n    throw new Error('BROWSER_CAPTURE_CONTRACT_INVALID');\n}\nconst forbidden = new Set(['access_token', 'authorization', 'cookie', 'cookies', 'credential', 'credentials', 'cvv', 'full_account_number', 'full_card_number', 'mfa_code', 'otp', 'password', 'passcode', 'pin', 'recovery_code', 'session', 'session_state', 'session_storage', 'token', 'username']);\nconst inspect = (value) => {\n    if (Array.isArray(value)) {\n        value.forEach(inspect);\n        return;\n    }\n    if (!value || typeof value !== 'object')\n        return;\n    for (const [key, child] of Object.entries(value)) {\n        if (forbidden.has(String(key).toLowerCase().replaceAll('-', '_')))\n            throw new Error(`BROWSER_CAPTURE_FORBIDDEN_FIELD:${String(key)}`);\n        inspect(child);\n    }\n};\ninspect(capture);\nreturn [{ json: { handoff_status: 'READY_FOR_HEADLESS', capture_id: String(capture.capture_id), provider: String(capture.source.provider), artifact_kind: String(capture.artifact.kind), source_sha256: String(record.source_sha256), source_code: String(record.source_code), headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false, next_stages: ['VALIDATE', 'ENRICH', 'MATCH', 'ARCHIVE', 'ACTUAL_OUTBOX_REVIEW'] }, binary: $binary }];\n"
       }
     },
     {
@@ -195,7 +210,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000011-generated-note-2",
-      "name": "Stage 2 · Require Typed Browser Capture Validator to Require Typed Browser Capture Validator",
+      "name": "Stage 2 · Extract and Validate Browser Capture",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -203,7 +218,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Require Typed Browser Capture Validator → Require Typed Browser Capture Validator\n**Input:** Require Typed Browser Capture Validator  ·  **Output:** Require Typed Browser Capture Validator  ·  **Nodes:** 9–9\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Extract and Validate Browser Capture\n**Input:** Downloaded browser-capture-schema-v1 artifact  ·  **Output:** Redacted READY_FOR_HEADLESS receipt  ·  **Nodes:** 9–10\nThe browser branch never enters the statement parser or a finance writer. Any rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -288,7 +303,18 @@
         ],
         [
           {
-            "node": "Require Typed Browser Capture Validator",
+            "node": "Extract Browser Capture JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Browser Capture JSON": {
+      "main": [
+        [
+          {
+            "node": "Validate Browser Capture Boundary",
             "type": "main",
             "index": 0
           }
@@ -329,7 +355,18 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "browserHandoff": {
+      "document_profile": "BROWSER_CAPTURE_V1",
+      "capture_schema": "browser-capture-schema-v1",
+      "headed_browser": "USER_ASSISTED_ONLY",
+      "headless_owner": "N8N",
+      "stages": ["VALIDATE", "ENRICH", "MATCH", "ARCHIVE"],
+      "actual_writer": "ACTUAL_OUTBOX_APPLY",
+      "actual_mutation_forbidden": true,
+      "cashback_mutation_forbidden": true,
+      "workflow_state": "INACTIVE"
+    }
   },
   "nodeGroups": [
     {
@@ -344,6 +381,14 @@
         "11008"
       ],
       "description": "Finance stage 1. Input starts at Validate Reviewed Artifact Reference; verified output leaves through Run Statement Pipeline."
+    },
+    {
+      "name": "Stage 2: Extract and Validate Browser Capture",
+      "nodeIds": [
+        "11009",
+        "11010"
+      ],
+      "description": "Finance stage 2. Browser artifacts remain redacted and write-disabled before headless n8n processing."
     }
   ],
   "tags": [
