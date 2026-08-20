@@ -272,7 +272,10 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             ):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Same-origin JSON request required"})
                 return
-        elif INGEST_TOKEN and self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
+        elif not INGEST_TOKEN:
+            self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Cashback ingest token is not configured"})
+            return
+        elif self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
             return
         try:
