@@ -6,6 +6,9 @@ umask 077
 # sidecars. It never reads the retained env file or a live Compose project.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERIFY_SCRIPT="${SCRIPT_DIR}/verify-backup.py"
+SOURCE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+SOURCE_SCRIPT_SHA256="$(sha256sum "${BASH_SOURCE[0]}" | awk '{print $1}')"
+SOURCE_COMMIT="$(git -C "${SOURCE_ROOT}" rev-parse HEAD 2>/dev/null || true)"
 REPEAT_COUNT="${FINANCE_CASHBACK_RESTORE_RUNS:-2}"
 BACKUP_ROOT="${FINANCE_CASHBACK_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
 BACKUP_PATH="${FINANCE_CASHBACK_BACKUP_PATH:-}"
@@ -23,6 +26,7 @@ backup_root_dir=""
 runtime_name=""
 runtime_available=false
 runtime_verified=false
+image_digest=""
 backup_name=""
 archive_sha256=""
 archive_bytes=""
@@ -141,10 +145,14 @@ with sqlite3.connect(uri, uri=True) as connection:
             }
             for row in connection.execute(f"PRAGMA table_info({identifier(table)})")
         ]
-        rows = [
-            [encoded(value) for value in row]
-            for row in connection.execute(f"SELECT * FROM {identifier(table)}")
-        ]
+        raw_rows = list(connection.execute(f"SELECT * FROM {identifier(table)}"))
+        if table in {"push_subscriptions", "push_deliveries"} and raw_rows:
+            raise SystemExit(f"{table} must be empty in a restore proof")
+        if table == "push_state":
+            if any(str(row[0]) != "routing-map" for row in raw_rows):
+                raise SystemExit("push_state contains an unallowed key")
+            raw_rows = []
+        rows = [[encoded(value) for value in row] for row in raw_rows]
         rows.sort(key=lambda row: json.dumps(row, sort_keys=True, separators=(",", ":")))
         row_count += len(rows)
         tables[table] = {"columns": columns, "rows": rows}
@@ -191,7 +199,8 @@ PY
 write_receipt() {
   python3 - "${RECEIPT_PATH}" "${status}" "${started_at}" "${finished_at}" \
     "${backup_name}" "${archive_sha256}" "${archive_bytes}" "${backup_verified}" \
-    "${runtime_name}" "${IMAGE}" "${runtime_available}" "${runtime_verified}" \
+    "${runtime_name}" "${IMAGE}" "${image_digest}" "${runtime_available}" "${runtime_verified}" \
+    "${SOURCE_COMMIT}" "${SOURCE_SCRIPT_SHA256}" \
     "${REPEAT_COUNT}" "${cleanup_verified}" "${failure_code}" "${failure_stage}" \
     "${failure_detail}" \
     "${run_records[@]}" <<'PY'
@@ -211,8 +220,11 @@ import sys
     backup_verified,
     runtime_name,
     image,
+    image_digest,
     runtime_available,
     runtime_verified,
+    source_commit,
+    source_script_sha256,
     requested_runs,
     cleanup_verified,
     failure_code,
@@ -247,8 +259,13 @@ receipt = {
     "runtime": {
         "engine": optional(runtime_name),
         "image": image,
+        "image_digest": optional(image_digest),
         "available": runtime_available == "true",
         "verified": runtime_verified == "true",
+    },
+    "source_provenance": {
+        "commit": optional(source_commit),
+        "script_sha256": source_script_sha256,
     },
     "requested_runs": int(requested_runs),
     "runs": records,
@@ -631,6 +648,24 @@ if ! "${RUNTIME}" version >/dev/null 2>"${temp_dir}/runtime-version.stderr"; the
   classify_runtime_failure "${temp_dir}/runtime-version.stderr"
   status="blocked"
   record_failure "container_runtime_unavailable" "runtime"
+  exit 2
+fi
+image_digest_raw=""
+if ! image_digest_raw="$("${RUNTIME}" image inspect --format '{{.Id}}' "${IMAGE}" 2>"${temp_dir}/image-inspect.stderr")"; then
+  status="blocked"
+  failure_detail="cashback image digest unavailable"
+  record_failure "image_digest_unavailable" "runtime"
+  exit 2
+fi
+image_digest_raw="${image_digest_raw//$'\n'/}"
+if [[ "${image_digest_raw}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  image_digest="${image_digest_raw}"
+elif [[ "${image_digest_raw}" =~ ^[0-9a-f]{64}$ ]]; then
+  image_digest="sha256:${image_digest_raw}"
+else
+  status="blocked"
+  failure_detail="cashback image digest malformed"
+  record_failure "image_digest_malformed" "runtime"
   exit 2
 fi
 runtime_available=true

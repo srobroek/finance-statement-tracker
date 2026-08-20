@@ -13,6 +13,7 @@
     "completed_at",
     "backup",
     "runtime",
+    "source_provenance",
     "requested_runs",
     "runs",
     "cleanup_verified",
@@ -45,12 +46,28 @@
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["engine", "image", "available", "verified"],
+      "required": ["engine", "image", "image_digest", "available", "verified"],
       "properties": {
         "engine": {"type": ["string", "null"]},
         "image": {"type": "string", "minLength": 1},
+        "image_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "available": {"type": "boolean"},
         "verified": {"type": "boolean"}
+      }
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "script_sha256"],
+      "properties": {
+        "commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "script_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
     "requested_runs": {"type": "integer", "minimum": 2},
@@ -113,7 +130,8 @@
           "runtime": {
             "properties": {
               "available": {"const": true},
-              "verified": {"const": true}
+              "verified": {"const": true},
+              "image_digest": {"type": "string"}
             }
           },
           "runs": {
