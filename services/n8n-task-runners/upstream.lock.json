@@ -26,7 +26,7 @@
     "golang": "docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69"
   },
   "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
-  "official_runner_input": {
+  "official_runner_comparison": {
     "reference": "docker.io/n8nio/runners:2.36.2@sha256:db070aa0a7a294335680dbc33a66acfa076ce1dd3fca5e51414c5bdfce8b2119",
     "source_repository": "https://hub.docker.com/r/n8nio/runners",
     "source_version": "2.36.2",
@@ -43,7 +43,8 @@
       "high": 11,
       "critical": 0,
       "policy": "FAIL",
-      "promotion_blocker": "Official upstream runner image contains 11 HIGH findings and is not promoted as an executable finance image."
+      "disposition": "COMPARISON_ONLY_NOT_A_BUILD_INPUT",
+      "promotion_blocker": "Official upstream runner image contains 11 HIGH findings and is not used as a custom runner build input."
     }
   }
 }
