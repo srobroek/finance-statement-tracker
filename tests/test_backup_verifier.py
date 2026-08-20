@@ -102,7 +102,7 @@ class BackupVerifierTests(unittest.TestCase):
         (backup / "manifest.json").write_text(
             json.dumps(
                 {
-                    "schema_version": 3,
+                    "schema_version": 4,
                     "created_at": backup.name,
                     "includes": ["actual-data", "cashback-data", "configuration"],
                     "secrets_included": False,
@@ -147,6 +147,19 @@ class BackupVerifierTests(unittest.TestCase):
             backup = self._backup(root, push_data=True)
 
             with self.assertRaisesRegex(verifier.VerificationError, "excluded push state"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_unclassified_legacy_v3_backup_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root)
+            manifest_path = backup / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["schema_version"] = 3
+            manifest.pop("excluded_data")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(verifier.VerificationError, "legacy v3"):
                 verifier.verify_backup(root, backup, None)
 
     def test_rejects_checksum_mismatch(self) -> None:

@@ -65,7 +65,13 @@ wait_for_url() {
   local label="$1"
   local url="$2"
   for _ in $(seq 1 90); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then return 0; fi
+    if [[ "${label}" == "cashback" ]]; then
+      if docker exec finance-cashback-control python apps/cashback-control/probe_health.py >/dev/null 2>&1; then
+        return 0
+      fi
+    elif curl -fsS "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
     sleep 1
   done
   printf '{"level":"error","event":"backup_resume_unhealthy","service":"%s"}\n' "${label}" >&2
@@ -105,7 +111,7 @@ rm -rf -- "${payload}"
   sha256sum -c SHA256SUMS >/dev/null
 )
 cat > "${working}/manifest.json" <<EOF
-{"schema_version":3,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
+{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 
 resume_services

@@ -36,6 +36,8 @@ EXCLUDED_PUSH_DATA = {
     "cashback-data/cashback-events.sqlite3:push_deliveries",
     "cashback-data/cashback-events.sqlite3:push_state",
 }
+CURRENT_MANIFEST_SCHEMA = 4
+LEGACY_MANIFEST_SCHEMA = 3
 
 
 class VerificationError(RuntimeError):
@@ -81,7 +83,8 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
     manifest = _load_json(backup / "manifest.json")
     if not isinstance(manifest, dict):
         raise VerificationError("backup manifest must be an object")
-    if manifest.get("schema_version") != 3:
+    schema_version = manifest.get("schema_version")
+    if schema_version not in {CURRENT_MANIFEST_SCHEMA, LEGACY_MANIFEST_SCHEMA}:
         raise VerificationError("unsupported backup manifest schema")
     if manifest.get("secrets_included") is not False:
         raise VerificationError("backup manifest does not assert secret exclusion")
@@ -94,6 +97,8 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
         raise VerificationError("backup manifest has incomplete scope")
     excluded_data = manifest.get("excluded_data")
     if not isinstance(excluded_data, list) or set(excluded_data) != EXCLUDED_PUSH_DATA:
+        if schema_version == LEGACY_MANIFEST_SCHEMA:
+            raise VerificationError("legacy v3 backup requires push-state classification")
         raise VerificationError("backup manifest does not classify excluded push state")
     return manifest
 

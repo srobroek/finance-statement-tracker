@@ -35,6 +35,9 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("sha256sum -c SHA256SUMS", script)
         self.assertIn('python3 "${VERIFY_SCRIPT}"', script)
         self.assertIn('python3 "${SANITIZE_SCRIPT}"', script)
+        self.assertIn("docker exec finance-cashback-control python apps/cashback-control/probe_health.py", script)
+        self.assertNotIn("CASHBACK_INGEST_TOKEN", script)
+        self.assertIn('"schema_version":4', script)
         self.assertIn("excluded_data", script)
         self.assertIn("--write-receipt", script)
 
@@ -56,6 +59,11 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("--pull never", script)
         self.assertNotIn("docker compose down", script)
         self.assertNotIn("docker compose pull", script)
+        probe_body = script.split("probe() {", 1)[1].split("probe_twice()", 1)[0]
+        self.assertIn("docker exec \"${container}\" python apps/cashback-control/probe_health.py", probe_body)
+        self.assertNotIn("5010/api/health", probe_body)
+        self.assertIn("finance-cashback-control || failed=1", script)
+        self.assertEqual(script.count('docker restart "${name}"'), 1)
         self.assertIn("backup_stale", script)
         self.assertIn("backup_unverified", script)
 
@@ -90,6 +98,11 @@ class DeploymentScriptTests(unittest.TestCase):
     def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
+        self.assertIn(
+            'test: ["CMD", "python", "apps/cashback-control/probe_health.py"]',
+            compose,
+        )
+        self.assertNotIn("CASHBACK_INGEST_TOKEN']}),", compose)
 
     def test_cashback_browser_access_uses_private_origin_contract(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
@@ -104,6 +117,20 @@ class DeploymentScriptTests(unittest.TestCase):
         readme = Path("apps/cashback-control/README.md").read_text(encoding="utf-8")
         self.assertIn("Cf-Access-Jwt-Assertion", readme)
         self.assertIn("exactly equals `CASHBACK_PUBLIC_URL`", readme)
+
+    def test_cashback_deployment_uses_container_local_probes_and_installs_sanitizer(self) -> None:
+        workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        self.assertIn("apps/cashback-control/probe_health.py", workflow)
+        self.assertIn("deploy/actual-poc/sanitize-cashback-backup.py", workflow)
+        self.assertIn("sudo install -m 0750 deploy/actual-poc/sanitize-cashback-backup.py", workflow)
+        self.assertIn("sudo test -x \"$sanitizer\"", workflow)
+        self.assertIn("/var/lib/cashback-control/cashback-dashboard.json", workflow)
+        self.assertNotIn("curl -fsS http://127.0.0.1:5010/api/health", workflow)
+        self.assertNotIn("curl -fsS http://127.0.0.1:5010/api/dashboard", workflow)
+
+        probe = Path("apps/cashback-control/probe_health.py").read_text(encoding="utf-8")
+        self.assertIn("os.environ.get(\"CASHBACK_INGEST_TOKEN\", \"\")", probe)
+        self.assertNotIn("print(token", probe)
 
 
 if __name__ == "__main__":

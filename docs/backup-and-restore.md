@@ -18,12 +18,15 @@ and cashback, copies the two data stores plus secret-free configuration, writes
 checksums, and runs `verify-backup.py` in a disposable extraction directory. It
 does not know about or pause n8n.
 
-The cashback archive excludes `push_subscriptions`, `push_deliveries`, and
+The version 4 cashback archive excludes `push_subscriptions`, `push_deliveries`, and
 `push_state` from `cashback-events.sqlite3`. These tables contain browser push
 credentials or ephemeral delivery state. The backup manifest lists the three
 exclusions, and the verifier rejects an archive that contains rows in them.
 Push subscriptions are recreated by the browser after restore; cashback events,
 period state, and configuration remain restorable.
+
+The verifier recognizes legacy version 3 manifests but rejects one without the
+push-state classification. Create a new version 4 backup before restore.
 
 Backups live at `/opt/backups/finance-actual-poc/<UTC timestamp>/`. Restore only
 after checksum verification, with Actual and cashback stopped, and retain the

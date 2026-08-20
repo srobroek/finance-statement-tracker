@@ -26,7 +26,7 @@ services:
       - ./static-rules.json:/etc/cashback/static-rules.json:ro
       - ./transaction-email-sources.json:/etc/cashback/transaction-email-sources.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os, urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:5010/api/health', headers={'Authorization': 'Bearer ' + os.environ['CASHBACK_INGEST_TOKEN']}), timeout=5)\""]
+      test: ["CMD", "python", "apps/cashback-control/probe_health.py"]
       interval: 60s
       timeout: 10s
       retries: 3
