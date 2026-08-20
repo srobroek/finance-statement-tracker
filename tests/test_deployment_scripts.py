@@ -77,6 +77,14 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
         self.assertIn("uv run --frozen python -m unittest", workflow)
 
+    def test_global_ci_uses_the_reviewed_uv_lock(self) -> None:
+        workflow = Path(".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("astral-sh/setup-uv@v6", workflow)
+        self.assertIn('version: "0.12.5"', workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
+        self.assertIn("uv run --frozen python -m unittest", workflow)
+        self.assertNotIn("pip install", workflow)
+
     def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
