@@ -666,10 +666,16 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
             "parameters": {"jsCode": r"""
 const request = $json;
 if (!request.artifact_id || !/^[A-Za-z0-9:_-]{1,128}$/.test(String(request.artifact_id))) {
-  throw new Error('artifact_id and expected_sha256 are required');
+  throw new Error('artifact_id, expected_source_sha256, and expected_capture_sha256 are required');
 }
-if (!/^[a-f0-9]{64}$/i.test(String(request.expected_sha256 || ''))) {
-  throw new Error('expected_sha256 must be a SHA-256 digest');
+if (!/^[a-f0-9]{64}$/i.test(String(request.expected_source_sha256 || ''))) {
+  throw new Error('expected_source_sha256 must be a SHA-256 digest');
+}
+if (!/^[a-f0-9]{64}$/i.test(String(request.expected_capture_sha256 || ''))) {
+  throw new Error('expected_capture_sha256 must be a SHA-256 digest');
+}
+if (Object.hasOwn(request, 'expected_sha256')) {
+  throw new Error('Use separate source and capture binary SHA-256 fields');
 }
 if (!$binary?.data) {
   throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
@@ -681,7 +687,8 @@ if (forbidden.some(field => Object.hasOwn(request, field))) {
 return [{
   json: {
     artifact_id: String(request.artifact_id),
-    expected_sha256: String(request.expected_sha256).toLowerCase(),
+    expected_source_sha256: String(request.expected_source_sha256).toLowerCase(),
+    expected_capture_sha256: String(request.expected_capture_sha256).toLowerCase(),
   },
   binary: $binary,
 }];
@@ -752,7 +759,7 @@ const observed = String($json.reviewed_sha256 || '').toLowerCase();
 if (!record.document_id || !record.onedrive_item_id) {
   throw new Error('DURABLE_ARTIFACT_RECORD_MISSING');
 }
-if (record.source_sha256 !== expected.expected_sha256 || observed !== expected.expected_sha256) {
+if (record.source_sha256 !== expected.expected_source_sha256 || observed !== expected.expected_source_sha256) {
   throw new Error('REVIEWED_ARTIFACT_HASH_MISMATCH');
 }
 if (record.document_profile === 'STATEMENT_PDF_V1') {
@@ -868,7 +875,7 @@ return [{
                 "mappingMode": "defineBelow",
                 "value": {
                     "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                    "source_sha256": "={{ $('Validate Reviewed Artifact Reference').first().json.expected_sha256 }}",
+                    "source_sha256": "={{ $('Validate Browser Capture Schema').first().json.provenance.source_content_sha256 }}",
                     "document_profile": "BROWSER_CAPTURE_V1",
                     "requested_schema_version": "browser-capture-schema-v1",
                     "onedrive_item_id": "={{ $json.id }}",
@@ -942,14 +949,14 @@ const request = $('Validate Reviewed Artifact Reference').first().json;
 const input = $('SHA-256 Browser Capture Input').first().json;
 const receipt = $('Read Back Durable Browser Archive Receipt').first().json;
 const observed = String($json.archived_sha256 || '').toLowerCase();
-if (!receipt.document_id || !receipt.onedrive_item_id || receipt.source_sha256 !== request.expected_sha256
+if (!receipt.document_id || !receipt.onedrive_item_id || receipt.source_sha256 !== request.expected_source_sha256
     || receipt.output_sha256 !== input.input_sha256) {
   throw new Error('BROWSER_ARCHIVE_RECEIPT_INVALID');
 }
 if (!/^[a-f0-9]{64}$/.test(observed) || observed !== receipt.output_sha256) {
   throw new Error('BROWSER_ARCHIVE_HASH_INVALID');
 }
-return [{ json: { receipt, document_sha256: request.expected_sha256, archive_sha256: observed }, binary: $binary }];
+return [{ json: { receipt, source_content_sha256: request.expected_source_sha256, capture_binary_sha256: observed }, binary: $binary }];
 """.strip()},
     })
     handoff["nodes"].extend([
@@ -1008,17 +1015,19 @@ return [{ json: capture, binary: $binary }];
 const existing = $json;
 const request = $('Validate Reviewed Artifact Reference').first().json;
 const captureBinary = $('Validate Browser Capture Schema').first().binary;
+const captureBinarySha256 = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
 if (!existing.document_id) {
-  return [{ json: { idempotency_action: 'CREATE', artifact_id: request.artifact_id, expected_sha256: request.expected_sha256 }, binary: captureBinary }];
+  return [{ json: { idempotency_action: 'CREATE', artifact_id: request.artifact_id, expected_source_sha256: request.expected_source_sha256, capture_binary_sha256: captureBinarySha256 }, binary: captureBinary }];
 }
 if (String(existing.document_id) !== request.artifact_id) throw new Error('BROWSER_ARTIFACT_RECORD_ID_MISMATCH');
-if (String(existing.source_sha256 || '').toLowerCase() !== request.expected_sha256) {
+if (String(existing.source_sha256 || '').toLowerCase() !== request.expected_source_sha256
+    || String(existing.output_sha256 || '').toLowerCase() !== captureBinarySha256) {
   throw new Error('BROWSER_ARTIFACT_ID_HASH_CONFLICT');
 }
 if (!existing.onedrive_item_id || existing.document_profile !== 'BROWSER_CAPTURE_V1') {
   throw new Error('BROWSER_ARTIFACT_IDEMPOTENCY_RECORD_INVALID');
 }
-return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.artifact_id, expected_sha256: request.expected_sha256 }, binary: captureBinary }];
+return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.artifact_id, expected_source_sha256: request.expected_source_sha256, capture_binary_sha256: captureBinarySha256 }, binary: captureBinary }];
 """.strip()},
         },
         {
@@ -1076,10 +1085,10 @@ const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
     },
     provenance: {
       type: 'object', additionalProperties: false,
-      required: ['capture_id', 'captured_at', 'content_sha256', 'hash_algorithm'],
+      required: ['capture_id', 'captured_at', 'source_content_sha256', 'hash_algorithm'],
       properties: {
         capture_id: { type: 'string', minLength: 1 }, captured_at: { type: 'string', minLength: 1 },
-        content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, hash_algorithm: { const: 'SHA-256' },
+        source_content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, hash_algorithm: { const: 'SHA-256' },
       },
     },
     source: {
@@ -1095,10 +1104,10 @@ const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
     },
     artifact: {
       type: 'object', additionalProperties: false,
-      required: ['kind', 'content_sha256'],
+      required: ['kind', 'source_content_sha256'],
       properties: {
         kind: { enum: ['ACCOUNT_SNAPSHOT', 'STATEMENT_PDF', 'STATEMENT_ROWS', 'TRANSACTION_ROWS'] },
-        content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, local_path: { type: 'string' },
+        source_content_sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' }, local_path: { type: 'string' },
         file_name: { type: 'string' }, mime_type: { type: 'string' }, download_reference: { type: 'string' },
       },
     },
@@ -1179,12 +1188,12 @@ if (!validator(capture)) {
   throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
 }
 const request = $('Validate Reviewed Artifact Reference').first().json;
-if (inputHash !== request.expected_sha256) {
-  throw new Error('BROWSER_CAPTURE_INPUT_HASH_MISMATCH');
+if (inputHash !== request.expected_capture_sha256) {
+  throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISMATCH');
 }
 if (capture.capture_id !== capture.provenance.capture_id
-    || capture.artifact.content_sha256 !== capture.provenance.content_sha256
-    || capture.provenance.content_sha256 !== request.expected_sha256) {
+    || capture.artifact.source_content_sha256 !== capture.provenance.source_content_sha256
+    || capture.provenance.source_content_sha256 !== request.expected_source_sha256) {
   throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');
 }
 return [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];
@@ -1209,7 +1218,9 @@ return [{
     source_code: `BROWSER_${provider}`,
     message_id: capture.capture_id,
     attachment_id: capture.capture_id,
-    document_sha256: capture.provenance.content_sha256,
+    document_sha256: capture.provenance.source_content_sha256,
+    source_content_sha256: capture.provenance.source_content_sha256,
+    capture_binary_sha256: archive.capture_binary_sha256,
     onedrive_item_id: archive.receipt.onedrive_item_id,
     document_profile: 'BROWSER_CAPTURE_V1',
     requested_schema_version: 'browser-capture-schema-v1',

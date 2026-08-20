@@ -60,6 +60,8 @@ class BrowserIngestionTests(TestCase):
         self.assertIn(".compile(schema)", code)
         self.assertIn("BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE", code)
         self.assertIn("BROWSER_CAPTURE_PROVENANCE_MISMATCH", code)
+        self.assertIn("BROWSER_CAPTURE_BINARY_HASH_MISMATCH", code)
+        self.assertIn("source_content_sha256", code)
         self.assertIn("minLength: 1", code)
         self.assertIn("actual_mutation: false", code)
         self.assertIn("cashback_mutation: false", code)

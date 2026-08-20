@@ -12,7 +12,7 @@
   "provenance": {
     "capture_id": "fixture-browser-2026-08-20",
     "captured_at": "2026-08-20T08:00:00Z",
-    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "hash_algorithm": "SHA-256"
   },
   "source": {
@@ -28,7 +28,7 @@
   },
   "artifact": {
     "kind": "TRANSACTION_ROWS",
-    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "file_name": "fixture-browser-capture.json",
     "mime_type": "application/json"
   },

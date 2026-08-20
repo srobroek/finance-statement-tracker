@@ -38,27 +38,31 @@ Each registered provider declares `HEADED_ON_DEMAND` execution,
    provider-native export.
 6. If only visible rows or a balance is available, record the date/as-of value
    and the limitation in the capture. Do not infer omitted values.
-7. Set `artifact.content_sha256` and `provenance.content_sha256` to the
-   original export's SHA-256. Include the capture ID, UTC timestamp, and
-   `SHA-256` algorithm in `provenance`.
-8. Send the capture JSON as binary `data` with an envelope containing only
-   `artifact_id` and the source `expected_sha256` from the capture artifact to the inactive
+7. Set `artifact.source_content_sha256` and
+   `provenance.source_content_sha256` to the original export's SHA-256.
+   Include the capture ID, UTC timestamp, and `SHA-256` algorithm in
+   `provenance`.
+8. Serialize the capture with sorted keys, UTF-8, and compact JSON separators.
+   Set the envelope's `expected_capture_sha256` to the SHA-256 of those exact
+   bytes. Send the same bytes as binary `data` with `artifact_id` and
+   `expected_source_sha256` in the envelope to the inactive
    `INTERACTIVE_ARTIFACT_HANDOFF` workflow.
 9. n8n parses the binary, rejects forbidden fields, validates the canonical
    schema with AJV, and checks the artifact identity before any upload.
 10. A new artifact is uploaded to the configured Finance Evidence root. An
-    exact duplicate reuses its durable receipt without uploading again. A
-    changed hash for an existing `artifact_id` fails with an exact conflict.
+    exact match of both source and capture-binary hashes reuses its durable
+    receipt without uploading again. A changed source or capture-binary hash
+    for an existing `artifact_id` fails with an exact conflict.
 11. n8n writes and reads back `finance_document_operations`, verifies the
     archived hash, and dispatches to the inactive `SHARED_STATEMENT_PIPELINE`
     route.
 12. Review n8n validation, enrichment, transaction matching, retry state,
     archive receipt, and writer preflight before any production promotion.
 
-The handoff envelope contains only `artifact_id` and the source
-`expected_sha256`; the capture JSON is a single binary attachment. n8n records
-both the source hash and the separately computed archived-binary hash in the
-durable receipt. It does not log the capture payload.
+The handoff envelope contains only `artifact_id`, `expected_source_sha256`, and
+`expected_capture_sha256`; the capture JSON is a single binary attachment. n8n
+records the source hash and the capture-binary hash separately in the durable
+receipt. It does not log the capture payload.
 
 ## Ownership boundary
 

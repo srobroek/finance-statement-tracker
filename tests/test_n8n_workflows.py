@@ -1092,12 +1092,15 @@ class N8nWorkflowTests(unittest.TestCase):
         )
         idempotency = nodes["Check Existing Browser Artifact"]["parameters"]["jsCode"]
         self.assertIn("BROWSER_ARTIFACT_ID_HASH_CONFLICT", idempotency)
+        self.assertIn("existing.output_sha256", idempotency)
         self.assertIn("idempotency_action: 'NOOP'", idempotency)
         verify = nodes["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
         self.assertIn("BROWSER_ARCHIVE_HASH_INVALID", verify)
         self.assertTrue(nodes["Parse Browser Capture JSON Before Archive"]["type"] == "n8n-nodes-base.code")
         validate = nodes["Validate Browser Capture Schema"]["parameters"]["jsCode"]
-        self.assertIn("BROWSER_CAPTURE_INPUT_HASH_MISMATCH", validate)
+        self.assertIn("BROWSER_CAPTURE_BINARY_HASH_MISMATCH", validate)
+        self.assertIn("expected_source_sha256", validate)
+        self.assertIn("expected_capture_sha256", validate)
         self.assertTrue(self.workflow("11-interactive-artifact-handoff.json")["meta"]["reuploadForbidden"])
         self.assertEqual(
             self.workflow("11-interactive-artifact-handoff.json")["meta"]["artifactIdHashConflict"],
@@ -1116,19 +1119,54 @@ class N8nWorkflowTests(unittest.TestCase):
 
         valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
         validate_fixture_against_schema(embedded, valid)
+        capture_binary = json.dumps(
+            valid,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        capture_binary_sha256 = hashlib.sha256(capture_binary).hexdigest()
+        source_content_sha256 = valid["artifact"]["source_content_sha256"]
+        self.assertNotEqual(capture_binary_sha256, source_content_sha256)
+        self.assertEqual(valid, json.loads(capture_binary))
 
         invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
         durable_storage: list[dict] = []
 
-        def archive_if_valid(capture: dict) -> None:
+        def archive_if_valid(capture: dict, expected_source: str, expected_binary: str) -> None:
             validate_fixture_against_schema(embedded, capture)
+            self.assertEqual(capture["artifact"]["source_content_sha256"], expected_source)
+            actual_binary = hashlib.sha256(json.dumps(
+                capture,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            self.assertEqual(actual_binary, expected_binary)
             durable_storage.append(capture)
 
         with self.assertRaises(AssertionError):
-            archive_if_valid(invalid)
+            archive_if_valid(invalid, source_content_sha256, capture_binary_sha256)
         self.assertEqual(durable_storage, [])
-        archive_if_valid(valid)
+        archive_if_valid(valid, source_content_sha256, capture_binary_sha256)
         self.assertEqual([row["capture_id"] for row in durable_storage], [valid["capture_id"]])
+
+        receipt = {
+            "document_id": valid["capture_id"],
+            "source_sha256": source_content_sha256,
+            "output_sha256": capture_binary_sha256,
+        }
+
+        def replay(source_hash: str, binary_hash: str) -> str:
+            if receipt["source_sha256"] != source_hash or receipt["output_sha256"] != binary_hash:
+                raise ValueError("BROWSER_ARTIFACT_ID_HASH_CONFLICT")
+            return "NOOP"
+
+        self.assertEqual(replay(source_content_sha256, capture_binary_sha256), "NOOP")
+        with self.assertRaisesRegex(ValueError, "BROWSER_ARTIFACT_ID_HASH_CONFLICT"):
+            replay(source_content_sha256, "c" * 64)
+        with self.assertRaisesRegex(ValueError, "BROWSER_ARTIFACT_ID_HASH_CONFLICT"):
+            replay("d" * 64, capture_binary_sha256)
 
     def test_browser_capture_pipeline_is_write_disabled_and_skips_pdf_and_cashback(self) -> None:
         workflow = self.workflow("03-shared-statement-pipeline.json")

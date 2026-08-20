@@ -303,7 +303,22 @@ _PARSERS: dict[str, Callable[[Path], tuple[list[dict[str, object]], list[str]]]]
 }
 
 
-def _capture_metadata(capture_id: str, captured_at: datetime, digest: str) -> dict[str, object]:
+def serialize_capture_for_handoff(capture: Mapping[str, Any]) -> bytes:
+    """Serialize one capture to the immutable binary sent to the handoff."""
+    return json.dumps(
+        capture,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def capture_binary_sha256(capture: Mapping[str, Any]) -> str:
+    """Return the SHA-256 of the canonical capture JSON binary."""
+    return hashlib.sha256(serialize_capture_for_handoff(capture)).hexdigest()
+
+
+def _capture_metadata(capture_id: str, captured_at: datetime, source_digest: str) -> dict[str, object]:
     return {
         "capture_contract": {
             "capture_mode": "HEADED_ON_DEMAND",
@@ -316,7 +331,7 @@ def _capture_metadata(capture_id: str, captured_at: datetime, digest: str) -> di
         "provenance": {
             "capture_id": capture_id,
             "captured_at": captured_at.isoformat(),
-            "content_sha256": digest,
+            "source_content_sha256": source_digest,
             "hash_algorithm": "SHA-256",
         },
     }
@@ -361,7 +376,7 @@ def build_capture_from_export(
             },
             "artifact": {
                 "kind": "STATEMENT_PDF",
-                "content_sha256": digest,
+                "source_content_sha256": digest,
                 "local_path": str(path.resolve()),
                 "file_name": path.name,
                 "mime_type": "application/pdf",
@@ -391,7 +406,7 @@ def build_capture_from_export(
         },
         "artifact": {
             "kind": "TRANSACTION_ROWS",
-            "content_sha256": digest,
+            "source_content_sha256": digest,
             "local_path": str(path.resolve()),
             "file_name": path.name,
             "mime_type": (

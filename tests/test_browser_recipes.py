@@ -68,12 +68,12 @@ class BrowserRecipeTests(unittest.TestCase):
         self.assertIs(properties["cashback_mutation"]["const"], False)
         provenance = schema["properties"]["provenance"]
         self.assertEqual(
-            ["capture_id", "captured_at", "content_sha256", "hash_algorithm"],
+            ["capture_id", "captured_at", "source_content_sha256", "hash_algorithm"],
             provenance["required"],
         )
         self.assertEqual("SHA-256", provenance["properties"]["hash_algorithm"]["const"])
         self.assertEqual(
-            ["kind", "content_sha256"],
+            ["kind", "source_content_sha256"],
             schema["properties"]["artifact"]["required"],
         )
     def test_migrated_registry_is_valid(self) -> None:

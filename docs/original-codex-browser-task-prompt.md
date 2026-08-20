@@ -56,20 +56,23 @@ Capture contract:
     "immutability":"SHA256_ARCHIVED",
     "handoff_workflow":"INTERACTIVE_ARTIFACT_HANDOFF",
     "actual_mutation":false,"cashback_mutation":false}
-6. Compute the source content SHA-256 and set both `artifact.content_sha256`
-   and `provenance.content_sha256` to that digest. Set
+6. Compute the source/export content SHA-256 and set both
+   `artifact.source_content_sha256` and `provenance.source_content_sha256` to
+   that digest. Set
    `provenance.capture_id`, `provenance.captured_at`, and
    `provenance.hash_algorithm` to the capture identity, UTC timestamp, and
    `SHA-256`.
-7. Send the capture JSON as the single binary `data` attachment to inactive
-   n8n. The JSON envelope contains only `artifact_id` and the source content
-   `expected_sha256` from the capture artifact;
+7. Serialize the capture JSON with sorted keys, UTF-8, and compact separators.
+   Compute `expected_capture_sha256` from those exact bytes. Send the same
+   bytes as the single binary `data` attachment to inactive n8n. The JSON
+   envelope contains only `artifact_id`, `expected_source_sha256`, and
+   `expected_capture_sha256`;
    do not pass local paths, URLs, capture payloads, credentials, or session
    metadata as envelope fields.
-8. Call `INTERACTIVE_ARTIFACT_HANDOFF` with `artifact_id` and the matching
-   source `expected_sha256`. n8n parses and validates the binary with runtime
-   AJV before upload. An exact duplicate is a deterministic no-op, while a
-   changed hash for the same artifact ID is rejected.
+8. Call `INTERACTIVE_ARTIFACT_HANDOFF` with the three envelope fields. n8n
+   parses and validates the binary with runtime AJV before upload. An exact
+   match of both source and capture-binary hashes is a deterministic no-op,
+   while either changed hash for the same artifact ID is rejected.
 9. n8n uploads a new capture to the configured Finance Evidence root, computes
    a separate archived-binary hash, writes and reads back its durable receipt,
    then dispatches to the existing inactive headless route.
