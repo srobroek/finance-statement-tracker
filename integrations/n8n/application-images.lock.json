@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status": "SPEC_ONLY",
+  "application": "finance-statement-tracker",
+  "generated_at_utc": null,
+  "source_commit": null,
+  "base_image": {
+    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "source_path": "packages/n8n-nodes-finance/base-image.txt"
+  },
+  "extension_image": {
+    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
+    "image_digest": null,
+    "source_commit": null,
+    "base_image_digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "sbom_sha256": null,
+    "scan_sha256": null,
+    "scan": {"tool": null, "result": "NOT_RUN", "high": null, "critical": null},
+    "attestation": {
+      "type": null,
+      "predicate_type": null,
+      "subject_digest": null,
+      "source_commit": null,
+      "sha256": null,
+      "status": "NOT_AVAILABLE"
+    },
+    "receipt": {
+      "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
+      "sha256": "d2fec4be9bf035bc3e7753baa7d754f5a7b1accb4a5dc9127de306a00f669485"
+    }
+  },
+  "finance_package": {
+    "name": "n8n-nodes-finance",
+    "version": "0.1.0",
+    "lockfile": "packages/n8n-nodes-finance/package-lock.json",
+    "lockfile_sha256": "9ad70e4f2892da6fd13f8f4a19df812c25cd42d16a559de1ed17073a1d147f21"
+  },
+  "community_node_lock": {
+    "path": "integrations/n8n/community-node-lock.json",
+    "sha256": "1247f8929e3c7131d1e26cdda17cdbeb5311943fae1967be1e78fa2524c497e0"
+  }
+}

@@ -31,5 +31,20 @@
     "thread_mode": "new",
     "proposal_only": true,
     "downstream_schema_validation_required": true
+  },
+  "lockfile": {
+    "path": "packages/n8n-nodes-finance/community-ai/package-lock.json",
+    "sha256": "465d5fac59af9a5b46b3eed4720076da5a939655f01191661ed37662a1b24a34"
+  },
+  "registration": {
+    "status": "SPEC_ONLY",
+    "assertion_script": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs",
+    "nodes": [
+      "n8n-nodes-prodex.prodex",
+      "n8n-nodes-prodex.prodexChatModel",
+      "n8n-nodes-prodex.prodexSetup",
+      "@ggomez91npm/n8n-nodes-claude-code.claude"
+    ],
+    "credentials": ["prodexAuthApi"]
   }
 }
