@@ -4,7 +4,7 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "926a99a40901fad5f40b15f129e5a0a5fca3cf69",
+    "finance_commit": "41536a92ef846f20a0e25a4d9d71a1207a759117",
     "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
     "node_scan_corpus_sha256": "8bdd8feedee1c07ece5548578d3965c6fdbb8ee972b8bc6c15d374171b5600d9",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
