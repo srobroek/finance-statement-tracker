@@ -45,9 +45,10 @@ function transactionKey(row, index = 0) {
   return importedId || `unimported:${index}`;
 }
 
-function canonicalTransactionIdentity(row) {
+function canonicalTransactionIdentity(row, index = 0) {
   if (!row) return null;
   return {
+    key: transactionKey(row, index),
     account: String(row.account_name ?? ""),
     date: String(row.date ?? ""),
     amount: Number(row.amount ?? 0),
@@ -92,17 +93,23 @@ function canonicalEconomicRecord(row, index) {
   };
 }
 
-function canonicalManualRecord(row, index, { rowsById = new Map(), schedulesById = new Map() } = {}) {
+function canonicalManualRecord(row, index, {
+  rowsById = new Map(),
+  rowIndexesById = new Map(),
+  schedulesById = new Map(),
+} = {}) {
   const transferPeer = row.transfer_id ? rowsById.get(row.transfer_id) : undefined;
   const parent = row.parent_id ? rowsById.get(row.parent_id) : undefined;
   const schedule = row.schedule ? schedulesById.get(row.schedule) : undefined;
+  const transferPeerIndex = transferPeer ? rowIndexesById.get(transferPeer.id) ?? 0 : 0;
+  const parentIndex = parent ? rowIndexesById.get(parent.id) ?? 0 : 0;
   return {
     key: transactionKey(row, index),
     notes: String(row.notes ?? ""),
     cleared: Boolean(row.cleared),
     reconciled: Boolean(row.reconciled),
     transfer: row.transfer_id
-      ? { present: true, peer: canonicalTransactionIdentity(transferPeer) }
+      ? { present: true, peer: canonicalTransactionIdentity(transferPeer, transferPeerIndex) }
       : null,
     schedule: row.schedule
       ? { present: true, semantic: canonicalSchedule(schedule), missing: !schedule }
@@ -110,7 +117,11 @@ function canonicalManualRecord(row, index, { rowsById = new Map(), schedulesById
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
     parent: row.parent_id
-      ? { present: true, semantic: canonicalTransactionIdentity(parent), missing: !parent }
+      ? {
+          present: true,
+          semantic: canonicalTransactionIdentity(parent, parentIndex),
+          missing: !parent,
+        }
       : null,
     subtransactions: semanticSubtransactions(row.subtransactions),
   };
@@ -147,10 +158,11 @@ export function summarizeRebuildState(snapshotDocument, {
     : [];
   const active = transactions.filter(row => !row.tombstone);
   const rowsById = new Map(active.filter(row => row.id).map(row => [row.id, row]));
+  const rowIndexesById = new Map(active.filter(row => row.id).map((row, index) => [row.id, index]));
   const schedulesById = new Map(schedules.filter(row => row.id).map(row => [row.id, row]));
   const economic = sortByKey(active.map(canonicalEconomicRecord));
   const manual = sortByKey(active.map((row, index) =>
-    canonicalManualRecord(row, index, { rowsById, schedulesById })));
+    canonicalManualRecord(row, index, { rowsById, rowIndexesById, schedulesById })));
   const notes = manual.filter(row => row.notes.length > 0);
   const splits = manual.filter(row =>
     row.is_parent || row.is_child || row.parent || row.subtransactions.length > 0);
@@ -175,7 +187,7 @@ export function summarizeRebuildState(snapshotDocument, {
     ...canonicalEconomicRecord(row, index),
     notes: String(row.notes ?? ""),
     reconciled: Boolean(row.reconciled),
-    ...canonicalManualRecord(row, index, { rowsById, schedulesById }),
+    ...canonicalManualRecord(row, index, { rowsById, rowIndexesById, schedulesById }),
     is_parent: Boolean(row.is_parent),
     is_child: Boolean(row.is_child),
   })));
@@ -194,6 +206,19 @@ export function summarizeRebuildState(snapshotDocument, {
   const scheduleLinks = active.filter(row => row.schedule).length;
   const splitParents = active.filter(row => row.is_parent || row.subtransactions?.length).length;
   const splitChildRows = active.filter(row => row.is_child || row.parent_id).length;
+  const unresolvedTransferLinks = active.filter(row => row.transfer_id && !rowsById.has(row.transfer_id)).length;
+  const unresolvedParentLinks = active.filter(row => row.parent_id && !rowsById.has(row.parent_id)).length;
+  const unresolvedScheduleLinks = active.filter(row => row.schedule && !schedulesById.has(row.schedule)).length;
+  const transferCoverage = transferLinks
+    ? unresolvedTransferLinks ? "unresolved" : "verified"
+    : "not-applicable";
+  const splitCoverage = splitParents || splitChildRows
+    ? unresolvedParentLinks ? "unresolved" : "verified"
+    : "not-applicable";
+  const scheduleCoverage = scheduleRows.length ? "verified" : "not-applicable";
+  const scheduleLinkCoverage = scheduleLinks
+    ? unresolvedScheduleLinks ? "unresolved" : "verified"
+    : "not-applicable";
 
   return {
     schema_version: "actual-disposable-replay-state-v1",
@@ -204,6 +229,9 @@ export function summarizeRebuildState(snapshotDocument, {
       schedules: scheduleRows.length,
       transfer_links: transferLinks,
       schedule_links: scheduleLinks,
+      unresolved_transfer_links: unresolvedTransferLinks,
+      unresolved_parent_links: unresolvedParentLinks,
+      unresolved_schedule_links: unresolvedScheduleLinks,
       notes: notes.length,
       reconciled: active.filter(row => row.reconciled).length,
       split_parents: splitParents,
@@ -229,9 +257,10 @@ export function summarizeRebuildState(snapshotDocument, {
     },
     coverage: {
       manual_correction: manualCorrectionStatus,
-      transfers: transferLinks ? "verified" : "not-applicable",
-      splits: splitParents || splitChildRows ? "verified" : "not-applicable",
-      schedules: scheduleLinks ? "verified" : "not-applicable",
+      transfers: transferCoverage,
+      splits: splitCoverage,
+      schedules: scheduleCoverage,
+      schedule_links: scheduleLinkCoverage,
       manual_state: active.length ? "verified" : "not-applicable",
     },
   };
@@ -244,6 +273,9 @@ const replayChecks = [
   ["counts.schedules", state => state.counts.schedules],
   ["counts.transfer_links", state => state.counts.transfer_links],
   ["counts.schedule_links", state => state.counts.schedule_links],
+  ["counts.unresolved_transfer_links", state => state.counts.unresolved_transfer_links],
+  ["counts.unresolved_parent_links", state => state.counts.unresolved_parent_links],
+  ["counts.unresolved_schedule_links", state => state.counts.unresolved_schedule_links],
   ["counts.notes", state => state.counts.notes],
   ["counts.reconciled", state => state.counts.reconciled],
   ["counts.split_parents", state => state.counts.split_parents],
@@ -272,14 +304,18 @@ export function compareRebuildStates(first, replay, { enforceCoverage = false } 
   }
   const blockers = [];
   if (enforceCoverage) {
-    for (const dimension of ["manual_correction", "transfers", "splits", "schedules", "manual_state"]) {
+    for (const dimension of [
+      "manual_correction",
+      "transfers",
+      "splits",
+      "schedules",
+      "schedule_links",
+      "manual_state",
+    ]) {
       const firstCoverage = first.coverage?.[dimension] ?? "missing";
       const replayCoverage = replay.coverage?.[dimension] ?? "missing";
-      if (firstCoverage === "not-applicable" || replayCoverage === "not-applicable") {
-        blockers.push(`${dimension}:not-applicable`);
-      } else if (firstCoverage !== "verified" || replayCoverage !== "verified") {
-        blockers.push(`${dimension}:unverified`);
-      }
+      if (firstCoverage !== "verified") blockers.push(`${dimension}:${firstCoverage}`);
+      if (replayCoverage !== "verified") blockers.push(`${dimension}:${replayCoverage}`);
     }
   }
   return {
@@ -517,6 +553,9 @@ export function verifyManualCorrectionDelta(baseline, corrected, manualCorrectio
     "counts.schedules",
     "counts.transfer_links",
     "counts.schedule_links",
+    "counts.unresolved_transfer_links",
+    "counts.unresolved_parent_links",
+    "counts.unresolved_schedule_links",
     "counts.split_parents",
     "counts.split_children",
     "economics.amount_sum_minor",

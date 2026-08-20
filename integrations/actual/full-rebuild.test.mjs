@@ -181,6 +181,20 @@ test("full rebuild uses semantic link endpoints and child fields, not provider I
   assert.equal(transferVerification.status, "FAIL");
   assert.ok(transferVerification.differences.some(row => row.field === "hashes.manual_state_sha256"));
 
+  const duplicatePeer = structuredClone(fixture);
+  duplicatePeer.snapshot.transactions.push({
+    ...fixture.snapshot.transactions[1],
+    id: "provider-transfer-peer-duplicate",
+    imported_id: "provider:transaction:transfer-peer-duplicate",
+  });
+  duplicatePeer.snapshot.transactions[0].transfer_id = "provider-transfer-peer-duplicate";
+  const duplicatePeerVerification = compareRebuildStates(
+    first,
+    summarizeRebuildState(duplicatePeer.snapshot, duplicatePeer),
+  );
+  assert.equal(duplicatePeerVerification.status, "FAIL");
+  assert.ok(duplicatePeerVerification.differences.some(row => row.field === "hashes.manual_state_sha256"));
+
   const scheduleRewired = structuredClone(fixture);
   scheduleRewired.schedules.push({
     id: "provider-schedule-other",
@@ -210,6 +224,24 @@ test("full rebuild uses semantic link endpoints and child fields, not provider I
   const childVerification = compareRebuildStates(first, summarizeRebuildState(childChanged, fixture));
   assert.equal(childVerification.status, "FAIL");
   assert.ok(childVerification.differences.some(row => row.field === "hashes.splits_sha256"));
+});
+
+test("full rebuild blocks dangling transfer, parent, and schedule links", () => {
+  const fixture = replayFixture();
+  const dangling = structuredClone(fixture.snapshot);
+  dangling.transactions[0].transfer_id = "provider-transfer-missing";
+  dangling.transactions[0].parent_id = "provider-parent-missing";
+  dangling.transactions[0].is_child = true;
+  dangling.transactions[0].schedule = "provider-schedule-missing";
+  const state = summarizeRebuildState(dangling, fixture);
+  const verification = compareRebuildStates(state, state, { enforceCoverage: true });
+  assert.equal(verification.status, "BLOCKED");
+  assert.ok(verification.blockers.includes("transfers:unresolved"));
+  assert.ok(verification.blockers.includes("splits:unresolved"));
+  assert.ok(verification.blockers.includes("schedule_links:unresolved"));
+  assert.equal(state.counts.unresolved_transfer_links, 1);
+  assert.equal(state.counts.unresolved_parent_links, 1);
+  assert.equal(state.counts.unresolved_schedule_links, 1);
 });
 
 test("full rebuild blocks acceptance when required dimensions are not applicable", () => {
