@@ -1,15 +1,29 @@
-# Statement-cycle runbook
+# Statement-cycle review runbook
 
-Use this runbook for one configured card statement. The scheduled prompt supplies the card code and intended execution day.
+n8n owns the schedule and deterministic workflow. Use this runbook only for an
+AI proposal/review handoff or an operator-triggered replay; do not search email
+or submit an ingestion job independently.
 
-1. Read `AGENTS.md`, `config/deployment.json`, `config/statement-sources.json`, `config/actual-bootstrap.json`, `config/static-rules.seed.json`, `config/ai-policies.json`, `config/evidence-search-policy.json`, `config/cashback-programs.json`, `docs/actual-production.md`, and `docs/backup-and-restore.md`.
-2. Resolve the exact card source and derive the expected closed period from its configured cycle. Search Outlook only with its exact allowlisted senders and subjects, selecting the latest unprocessed PDF for that card and expected period. If either email or adapter status is a placeholder, leave the period open and do not invent a format.
-3. Preserve message ID, attachment ID, sender, subject, received time, web link, original filename, SHA-256, card code, and parsed period. Archive the original in `Finance Evidence/YYYY/MM/vendor-slug/` and update `Finance Evidence/catalogue.json`. Read a declared PDF password only from the runtime secret provider and never print or persist it.
-4. Submit the archived PDF through `scripts/push-actual-ingestion-job.ps1` in `STAGE` mode with the exact Outlook identities. Require tied statement arithmetic, complete account mapping, stable imported IDs, and `READY_FOR_LEDGER_MATCH`. Persist the returned `job_id` in the task result. Keep the returned `ai_handoff`; do not treat the first STAGE as approval to contact Actual. After a task interruption, recover the exact durable result with `scripts/get-actual-ingestion-job.ps1 -JobId <job-id>` (or add `-AIHandoffOnly`) instead of re-searching Outlook or reconstructing requests.
-5. Answer every current `ai_handoff.requests` row exactly once. Resolve its policy through `policies[policy_id]` and its exact policy-time transaction snapshot through `transactions[transaction_ref]`. Propose only listed `allowed_fields`, values, and tags. AI cannot alter protected facts, amounts, source identity, reconciliation, or reward arithmetic. Use an empty `proposals` list when evidence is insufficient; never omit a request. Re-submit the cumulative response array in `STAGE` mode without `-AIHandoffComplete`, then compare the returned request identities with the answered identities. A classification may activate a later subscription, property, evidence, or rule-recommendation policy. Add responses for newly emitted identities and repeat until a STAGE returns no unanswered pair. Only then set `-AIHandoffComplete`; never assume the first handoff is the fixed point.
-6. Before the authoritative import, run the selective evidence pass over the staged transactions. Follow `config/evidence-search-policy.json`, require its minimum strong facts, and never accept vendor similarity alone. Prefer original attachments; otherwise create a sanitized exact-message snapshot. Archive and hash-deduplicate every confirmed document, then create one evidence-link row per exact transaction with `transaction_id`, `evidence_id` (`sha256:<digest>`), and the returned `Finance Evidence/...` relative path. Grouped documents produce one row for each linked transaction. Ambiguous candidates remain unmatched.
-7. Save the fixed-point AI response array and evidence-link array as retry artifacts. Re-submit the same source in `STAGE` mode with `-AIResponsesPath`, `-AIHandoffComplete`, and, when non-empty, `-EvidenceLinksPath`. Require the AI response count to equal the request count, zero rejected proposals, zero review rows, exact evidence-link counts, and `READY_FOR_LEDGER_MATCH`. Deliberately unresolved optional fields may remain; any row marked review-required blocks the import.
-8. Run Actual `PREFLIGHT`, then `COMMIT` with the same AI and evidence files only when both write gates are enabled. Require `reimportDeleted=false`, cleared statement rows, exact account mapping, evidence paths in the intended transaction notes, and post-write verification of every imported ID. Never add evidence only after the first commit because stable imported IDs intentionally prevent a second import from rewriting an existing transaction.
-9. For cards in the live cashback profile, reconcile notification-derived rows against the statement. Preserve matches, statement-only rows, notification-only variances, refunds, and reversals. Do not acknowledge a variance automatically. Finalize only after statement evidence, verified Actual import, reconciliation, and any explicit variance approval; then open the next card period. Cards outside the live cashback profile skip companion reconciliation and finalization.
-10. Use the statement's actual payment due date when available; configured offsets are forecasts only. Create or update only the non-posting reminder supported by the Actual bridge. Preserve all source, AI, evidence, preflight, commit, and reconciliation artifacts after any partial failure.
-11. After every verification passes, call `codex_app__set_thread_archived` with `archived=true` and omit `threadId`. Do not call it for a failed, partial, blocked, or review-required run.
+1. Read the n8n execution receipt and resolve the exact statement source,
+   archived OneDrive identity, SHA-256, message/attachment IDs, card, and period.
+2. Refuse any handoff whose deterministic stages have not tied statement
+   arithmetic, mapped the account, and finalized source direction/topic.
+3. Answer each bounded AI request once. Propose only allowed categories, tags,
+   vendors, or evidence policies. Never change amounts, dates, source IDs,
+   account/card identity, reconciliation, reward arithmetic, or dedupe keys.
+4. Use an empty proposal when evidence is insufficient. Any unresolved required
+   field or low-confidence result remains in review.
+5. For selective evidence, require strong transaction facts. Archive confirmed
+   documents under the standard OneDrive path and return only their immutable
+   evidence identities and catalogue links.
+6. Resume the exact n8n execution/sub-workflow with the proposal set. Do not
+   reconstruct the source or call Actual directly.
+7. Require n8n preflight, direct Actual-node write, imported-ID readback, and a
+   durable Postgres receipt before the source cursor advances.
+8. Reconcile cashback notifications to the statement. Finalize the card period
+   only after discrepancies are resolved; then open the next period.
+9. Use the statement's due date when present. Configured offsets are forecasts.
+
+Failed, partial, quarantined, or review-required executions remain visible in
+n8n. Successful execution retention is controlled by n8n; this runbook does not
+create or archive a Codex scheduled task.

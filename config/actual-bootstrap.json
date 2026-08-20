@@ -206,38 +206,6 @@
   ],
   "rules": [
     {
-      "name": "[guard:card-payment-sign] Incoming credit-card payments are inflows",
-      "stage": "pre",
-      "conditionsOp": "and",
-      "conditions": [
-        {
-          "field": "account",
-          "op": "oneOf",
-          "value": [
-            {"ref": "account", "name": "ADCB Credit Card · 8833 / 6838"},
-            {"ref": "account", "name": "Emirates Islamic Amazon Credit Card · 0082"},
-            {"ref": "account", "name": "FAB Credit Card · 6031"},
-            {"ref": "account", "name": "RAKBANK World Credit Card"},
-            {"ref": "account", "name": "Standard Chartered Platinum X Credit Card"},
-            {"ref": "account", "name": "Wio Credit Card · 4113 / 5009"}
-          ]
-        },
-        {
-          "field": "imported_payee",
-          "op": "matches",
-          "value": "(?:payment received|credit repayment|card repayment)"
-        }
-      ],
-      "actions": [
-        {
-          "field": "amount",
-          "op": "set",
-          "value": null,
-          "options": {"formula": "=ABS(amount / 100)"}
-        }
-      ]
-    },
-    {
       "name": "[loan:ADIB_BLUEWATERS_B7_306] Split payment into interest and principal",
       "enabled": false,
       "activation_requirements": [

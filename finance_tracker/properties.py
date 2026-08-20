@@ -130,5 +130,19 @@ def project_property_tags(
         transaction.property_code = resolved.property_code
     if not transaction.rental_unit and resolved.rental_unit:
         transaction.rental_unit = resolved.rental_unit
+    if resolved.occupancy == "RENTAL":
+        transaction.tags.discard("home")
+        transaction.tags = {
+            tag
+            for tag in transaction.tags
+            if not str(tag).casefold().startswith("rental:")
+        }
+    elif resolved.occupancy == "OWNER_OCCUPIED":
+        transaction.tags = {
+            tag
+            for tag in transaction.tags
+            if str(tag).casefold() != "rental"
+            and not str(tag).casefold().startswith("rental:")
+        }
     transaction.tags.update(resolved.tags)
     return resolved

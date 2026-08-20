@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "default_policy": "LOCAL_FIRST",
+  "limits": {
+    "max_bytes": 26214400,
+    "max_pages": 100,
+    "decrypt_timeout_seconds": 30,
+    "extract_timeout_seconds": 90,
+    "ocr_timeout_seconds": 300
+  },
+  "providers": [
+    {
+      "code": "N8N_EXTRACT_FROM_FILE",
+      "enabled": true,
+      "location": "LOCAL",
+      "purpose": "born-digital text extraction"
+    },
+    {
+      "code": "QPDF_UNLOCK",
+      "enabled": true,
+      "location": "LOCAL",
+      "purpose": "fixed-purpose password removal"
+    },
+    {
+      "code": "STIRLING_OCR",
+      "enabled": false,
+      "location": "SELF_HOSTED",
+      "purpose": "OCR and repair fallback"
+    },
+    {
+      "code": "PDF_VECTOR",
+      "enabled": false,
+      "location": "EXTERNAL_SAAS",
+      "purpose": "approved bank-statement extraction fallback",
+      "requires_explicit_document_approval": true
+    },
+    {
+      "code": "PDF4ME",
+      "enabled": false,
+      "location": "EXTERNAL_SAAS",
+      "purpose": "evaluation-only extraction fallback",
+      "requires_explicit_document_approval": true
+    },
+    {
+      "code": "PDF_CO",
+      "enabled": false,
+      "location": "EXTERNAL_SAAS",
+      "purpose": "evaluation-only OCR/table fallback",
+      "requires_explicit_document_approval": true
+    }
+  ],
+  "model_tool": {
+    "allowed_input_fields": [
+      "document_id",
+      "expected_sha256",
+      "document_profile",
+      "requested_schema_version"
+    ],
+    "forbidden_input_fields": [
+      "url",
+      "filesystem_path",
+      "provider",
+      "password",
+      "credential",
+      "actual_account_id",
+      "commit"
+    ]
+  }
+}

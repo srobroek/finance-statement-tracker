@@ -1,0 +1,370 @@
+{
+  "id": "10000000-0000-4000-8000-000000000013",
+  "name": "Finance · Request Document Extraction · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "13001",
+      "name": "Called by Trusted Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "13002",
+      "name": "Validate Narrow Tool Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Narrow Tool Input. Keep this deterministic and fail closed.\nconst allowed = ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'];\nconst forbidden = ['url', 'filesystem_path', 'path', 'provider', 'password', 'credential', 'actual_account_id', 'actual_id', 'commit', 'command', 'folder_id', 'sender', 'subject'];\nfor (const k of allowed)\n    if (!$json[k])\n        throw new Error(`Missing ${k}`);\nfor (const k of forbidden)\n    if (Object.hasOwn($json, k))\n        throw new Error(`Forbidden input ${k}`);\nif (!/^[a-f0-9]{64}$/i.test(String($json.expected_sha256)))\n    throw new Error('expected_sha256 must be SHA-256 hex');\nreturn [{ json: Object.fromEntries(allowed.map(k => [k, String($json[k])])) }];\n"
+      }
+    },
+    {
+      "id": "13003",
+      "name": "Load Immutable Document Record",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "document_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.document_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "13004",
+      "name": "Verify Hash Profile and State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Hash Profile and State. Keep this deterministic and fail closed.\nconst req = $('Validate Narrow Tool Input').first().json, row = $json;\nif (row.source_sha256 !== req.expected_sha256 || row.document_profile !== req.document_profile || row.requested_schema_version !== req.requested_schema_version)\n    throw new Error('Document identity mismatch');\nif (['COMMITTED', 'QUARANTINED', 'UNSUPPORTED', 'PASSWORD_FAILED'].includes(row.state))\n    throw new Error(`Document is terminal: ${row.state}`);\nreturn [{ json: row }];\n"
+      }
+    },
+    {
+      "id": "13005",
+      "name": "Download Staged Original",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.onedrive_item_id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "13006",
+      "name": "Run Local Extraction Ladder",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000014",
+          "mode": "list",
+          "cachedResultName": "Finance · Local PDF Extraction Ladder · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "13007",
+      "name": "Upsert Redacted Extraction Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "document_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Narrow Tool Input').first().json.document_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "document_id": "={{ $('Validate Narrow Tool Input').first().json.document_id }}",
+            "source_sha256": "={{ $('Validate Narrow Tool Input').first().json.expected_sha256 }}",
+            "document_profile": "={{ $('Validate Narrow Tool Input').first().json.document_profile }}",
+            "requested_schema_version": "={{ $('Validate Narrow Tool Input').first().json.requested_schema_version }}",
+            "state": "READY_FOR_PARSE",
+            "attempt_count": "={{ Number($('Load Immutable Document Record').first().json.attempt_count || 0) + 1 }}",
+            "last_execution_id": "={{ $execution.id }}",
+            "parser_version": "={{ $json.parser_version }}",
+            "output_sha256": "={{ $json.output_sha256 }}",
+            "error_class": "",
+            "error_detail_redacted": "",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "13008",
+      "name": "Read Back Redacted Extraction Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "document_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Narrow Tool Input').first().json.document_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "READY_FOR_PARSE"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000013-generated-note-1",
+      "name": "Stage 1 · Called by Trusted Workflow to Read Back Redacted Extraction Receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Called by Trusted Workflow → Read Back Redacted Extraction Receipt\n**Input:** Called by Trusted Workflow  ·  **Output:** Read Back Redacted Extraction Receipt  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Called by Trusted Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validate Narrow Tool Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Narrow Tool Input": {
+      "main": [
+        [
+          {
+            "node": "Load Immutable Document Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Immutable Document Record": {
+      "main": [
+        [
+          {
+            "node": "Verify Hash Profile and State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Hash Profile and State": {
+      "main": [
+        [
+          {
+            "node": "Download Staged Original",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Staged Original": {
+      "main": [
+        [
+          {
+            "node": "Run Local Extraction Ladder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Local Extraction Ladder": {
+      "main": [
+        [
+          {
+            "node": "Upsert Redacted Extraction Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Redacted Extraction Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Redacted Extraction Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "DOCUMENT_EXTRACTION_REQUEST",
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "terminalReceiptTable": "finance_document_operations",
+    "terminalReceiptReadbackRequired": true,
+    "sensitivePayloadPersistenceForbidden": true,
+    "importTested": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000003",
+      "name": "03 Documents & Evidence",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Validate Narrow Tool Input to Read Back Redacted Extraction Receipt",
+      "nodeIds": [
+        "13002",
+        "13003",
+        "13004",
+        "13005",
+        "13006",
+        "13007",
+        "13008"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Narrow Tool Input; verified output leaves through Read Back Redacted Extraction Receipt."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

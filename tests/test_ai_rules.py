@@ -249,6 +249,36 @@ class AIRuleTests(TestCase):
                 trigger_fields=("vendor",),
             ))
 
+    def test_agent_profile_is_loaded_and_forwarded_to_resolver(self) -> None:
+        policies = load_ai_policies(ROOT / "config" / "ai-policies.json")
+        policy = next(item for item in policies if item.policy_id == "recommend-category")
+        self.assertEqual("SOL_XHIGH", policy.agent_profile)
+
+        transaction = Transaction(
+            "ai-profile",
+            datetime(2026, 8, 16),
+            "ADCB_CASHBACK",
+            "UNKNOWN SPECIALIST MERCHANT",
+            "100",
+        )
+        request = AIEnrichmentEngine([policy])._request(
+            transaction,
+            policy,
+            ["category_recommendation"],
+        )
+        self.assertEqual("SOL_XHIGH", request["agent_profile"])
+
+    def test_unknown_agent_profile_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "agent_profile"):
+            validate_policy(AIPolicy(
+                policy_id="bad-profile",
+                name="Bad profile",
+                priority=1,
+                instruction="Do nothing",
+                target_fields=("category",),
+                agent_profile="gpt-5-mini",
+            ))
+
     def test_human_correction_is_recorded_and_locked(self) -> None:
         review = record_ai_review(
             self.transaction,

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/account-completeness-v1.json",
+  "title": "Expected finance account inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scope", "providers", "accounts"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scope": {"type": "array", "items": {"type": "string"}},
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider_id", "inventory_status", "discovery_required"],
+        "properties": {
+          "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "inventory_status": {"enum": ["COMPLETE", "INCOMPLETE"]},
+          "discovery_required": {"type": "boolean"},
+          "blocker": {"type": ["string", "null"]},
+          "evidence": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider_id", "provider_account_id", "display_name", "account_type",
+          "currency", "lifecycle_status", "active", "retain_history",
+          "include_in_active_routing", "include_in_actual", "include_in_net_worth",
+          "balance_reconciliation_required"
+        ],
+        "properties": {
+          "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "provider_account_id": {"type": "string", "pattern": "^[a-z0-9]+(?::[a-z0-9-]+)+$"},
+          "display_name": {"type": "string", "minLength": 1},
+          "actual_account_name": {"type": ["string", "null"]},
+          "account_type": {"enum": ["checking", "savings", "investment", "trade", "credit", "mortgage"]},
+          "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+          "last4": {"type": ["string", "null"], "pattern": "^[0-9]{4}$"},
+          "owner": {"type": ["string", "null"]},
+          "lifecycle_status": {"enum": ["ACTIVE", "CLOSED"]},
+          "active": {"type": "boolean"},
+          "retain_history": {"type": "boolean"},
+          "include_in_active_routing": {"type": "boolean"},
+          "include_in_actual": {"type": "boolean"},
+          "actual_offbudget": {"type": "boolean"},
+          "include_in_net_worth": {"type": "boolean"},
+          "balance_sign": {"enum": ["ASSET_POSITIVE", "LIABILITY_NEGATIVE"]},
+          "expected_balance_minor": {"type": ["integer", "null"]},
+          "balance_reconciliation_required": {"type": "boolean"},
+          "balance_source": {"type": ["string", "null"]},
+          "balance_as_of": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

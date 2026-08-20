@@ -1,0 +1,1411 @@
+{
+  "id": "10000000-0000-4000-8000-000000000003",
+  "name": "Finance · Shared Deterministic Statement Pipeline · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "3001",
+      "name": "Trusted Statement Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "3002",
+      "name": "Verify Archive and Execution Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const k of ['run_id', 'source_code', 'message_id', 'attachment_id', 'document_sha256', 'onedrive_item_id', 'config_version', 'actual_file_id', 'account_id', 'period_key'])\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind))\n    throw new Error('Manual and MCP mutation are forbidden');\nreturn [{ json: r, binary: $binary }];\n"
+      }
+    },
+    {
+      "id": "3006",
+      "name": "Parse Verified Statement Profile",
+      "type": "n8n-nodes-finance.financeStatement",
+      "typeVersion": 1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "operation": "parse"
+      }
+    },
+    {
+      "id": "3007",
+      "name": "Normalize Locked Source Semantics",
+      "type": "n8n-nodes-finance.financeRules",
+      "typeVersion": 1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "operation": "normalize"
+      }
+    },
+    {
+      "id": "3008",
+      "name": "Apply N8N Only Rules",
+      "type": "n8n-nodes-finance.financeRules",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "operation": "applyNonRepresentableRules"
+      }
+    },
+    {
+      "id": "3009",
+      "name": "Unresolved Fields",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ Array.isArray($json.ai_requests) ? $json.ai_requests.length : 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3059",
+      "name": "Build Bounded AI Policy Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Bounded AI Policy Requests. Keep this deterministic and fail closed.\nconst requests = $json.ai_requests;\nif (!Array.isArray(requests) || !requests.length || requests.length > 20)\n    throw new Error('INVALID_AI_REQUEST_BATCH');\nreturn requests.map(r => {\n    if (!r.policy_id || !Array.isArray(r.unresolved) || !r.unresolved.length)\n        throw new Error('INVALID_AI_POLICY_REQUEST');\n    return { json: { policy_id: String(r.policy_id), unresolved: r.unresolved.map(x => ({ transaction_id: x.transaction_id, allowed_fields: x.allowed_fields, redacted_context: x.redacted_context || {} })) } };\n});\n"
+      }
+    },
+    {
+      "id": "3010",
+      "name": "Request Scoped AI Proposals",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000009",
+          "mode": "list",
+          "cachedResultName": "Finance · Subscription Agent Proposal · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "3011",
+      "name": "Merge Allowed AI Proposals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Merge Allowed AI Proposals. Keep this deterministic and fail closed.\nconst base = $('Apply N8N Only Rules').first().json;\nconst proposals = $input.all().flatMap(item => (Array.isArray(item.json.proposals) ? item.json.proposals : []));\nconst locked = new Set([\n    'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',\n    'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',\n]);\nconst pairs = new Set();\nfor (const proposal of proposals) {\n    const pair = JSON.stringify([\n        String(proposal.transaction_id),\n        String(proposal.field),\n    ]);\n    if (locked.has(String(proposal.field)) || pairs.has(pair)) {\n        throw new Error('AI_LOCKED_OR_DUPLICATE_FIELD_REJECTED');\n    }\n    pairs.add(pair);\n}\nreturn [{ json: { ...base, accepted_ai_proposals: proposals } }];\n"
+      }
+    },
+    {
+      "id": "3012",
+      "name": "Validate Statement Reconciliation and IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Statement Reconciliation and IDs. Keep this deterministic and fail closed.\nconst r = $json;\nif (!Array.isArray(r.transactions) || !r.transactions.length)\n    throw new Error('EMPTY_STATEMENT');\nconst ids = r.transactions.map(t => t.transaction_id);\nif (ids.some(x => !x) || new Set(ids).size !== ids.length)\n    throw new Error('INVALID_OR_DUPLICATE_SOURCE_TRANSACTION_ID');\nif (r.reconciliation?.balanced !== true)\n    throw new Error('STATEMENT_RECONCILIATION_FAILED');\nreturn [{ json: r }];\n"
+      }
+    },
+    {
+      "id": "3048",
+      "name": "Project Actual Import Rows",
+      "type": "n8n-nodes-finance.financeRules",
+      "typeVersion": 1,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "operation": "projectActualImport"
+      }
+    },
+    {
+      "id": "3030",
+      "name": "Build Canonical Delta Artifact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = { schema_version: 'actual-delta-v1', source_code: s.source_code, document_sha256: s.document_sha256, config_version: s.config_version, parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0', actual_file_id: s.actual_file_id, account_id: s.account_id, period_start: r.period_start, period_end: r.period_end, expected_statement_balance_minor: r.reconciliation?.ending_balance_minor, transactions: r.actual_transactions };\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
+      }
+    },
+    {
+      "id": "3031",
+      "name": "Convert Canonical Delta to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "operation": "toJson",
+        "sourceProperty": "manifest",
+        "options": {
+          "fileName": "={{ $json.file_name }}"
+        }
+      }
+    },
+    {
+      "id": "3032",
+      "name": "SHA-256 Canonical Delta",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "canonical_delta_sha256"
+      }
+    },
+    {
+      "id": "3033",
+      "name": "Archive Canonical Delta in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "fileName": "={{ $('Build Canonical Delta Artifact').item.json.file_name }}",
+        "parentId": "={{ $('Verify Archive and Execution Context').item.json.manifest_onedrive_parent_id }}",
+        "binaryData": true
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "3034",
+      "name": "Download Canonical Delta Readback",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "3035",
+      "name": "SHA-256 Canonical Delta Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "readback_sha256"
+      }
+    },
+    {
+      "id": "3036",
+      "name": "Verify Durable Canonical Delta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Durable Canonical Delta. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Canonical Delta').first().json.canonical_delta_sha256, observed = $json.readback_sha256, upload = $('Archive Canonical Delta in OneDrive').first().json;\nif (!expected || expected !== observed || !upload.id)\n    throw new Error('CANONICAL_DELTA_ARCHIVE_READBACK_FAILED');\nreturn [{ json: { artifact_item_id: String(upload.id), artifact_etag: String(upload.eTag || upload.etag || ''), artifact_sha256: expected, artifact_schema_version: 'actual-delta-v1' } }];\n"
+      }
+    },
+    {
+      "id": "3013",
+      "name": "Prepare Outbox Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nreturn [{ json: { outbox_id: `${source.run_id}:${source.document_sha256}`, run_id: source.run_id, imported_id: `statement:${source.document_sha256}`, actual_file_id: source.actual_file_id, payload_sha256: a.artifact_sha256, artifact_item_id: a.artifact_item_id, artifact_etag: a.artifact_etag, artifact_schema_version: a.artifact_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
+      }
+    },
+    {
+      "id": "3014",
+      "name": "Upsert PREPARED Actual Outbox",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "imported_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.imported_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $json.outbox_id }}",
+            "run_id": "={{ $json.run_id }}",
+            "imported_id": "={{ $json.imported_id }}",
+            "actual_file_id": "={{ $json.actual_file_id }}",
+            "payload_sha256": "={{ $json.payload_sha256 }}",
+            "artifact_item_id": "={{ $json.artifact_item_id }}",
+            "artifact_etag": "={{ $json.artifact_etag }}",
+            "artifact_schema_version": "={{ $json.artifact_schema_version }}",
+            "config_version": "={{ $json.config_version }}",
+            "parser_version": "={{ $json.parser_version }}",
+            "state": "PREPARED",
+            "attempt_count": 0,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "3015",
+      "name": "Read Back PREPARED Actual Outbox",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Outbox Intent').item.json.outbox_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "PREPARED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3028",
+      "name": "Upsert Terminal Pipeline Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "SHARED_STATEMENT_PIPELINE"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $('Verify Archive and Execution Context').item.json.run_id }}",
+            "workflow_code": "SHARED_STATEMENT_PIPELINE",
+            "source_code": "={{ $('Verify Archive and Execution Context').item.json.source_code }}",
+            "trigger_kind": "={{ $('Verify Archive and Execution Context').item.json.trigger_kind }}",
+            "config_version": "={{ $('Verify Archive and Execution Context').item.json.config_version }}",
+            "state": "SUCCEEDED",
+            "receipt_sha256": "={{ $('Validate Statement Reconciliation and IDs').item.json.payload_sha256 || $('Verify Archive and Execution Context').item.json.document_sha256 }}",
+            "terminal_readback_verified": false,
+            "completed_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "3029",
+      "name": "Read Back Terminal Pipeline Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "SHARED_STATEMENT_PIPELINE"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "SUCCEEDED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3045",
+      "name": "Compare Terminal Receipt Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare Terminal Receipt Readback. Keep this deterministic and fail closed.\nconst expected = $('Upsert Terminal Pipeline Receipt').first().json, observed = $json;\nif (observed.run_id !== expected.run_id || observed.workflow_code !== 'SHARED_STATEMENT_PIPELINE' || observed.state !== 'SUCCEEDED' || observed.receipt_sha256 !== expected.receipt_sha256)\n    throw new Error('TERMINAL_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: observed }];\n"
+      }
+    },
+    {
+      "id": "3046",
+      "name": "Mark Terminal Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "SHARED_STATEMENT_PIPELINE"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $json.run_id }}",
+            "workflow_code": "SHARED_STATEMENT_PIPELINE",
+            "terminal_readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "3047",
+      "name": "Read Back Verified Terminal Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        1520
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_pipeline_runs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+            },
+            {
+              "keyName": "workflow_code",
+              "condition": "eq",
+              "keyValue": "SHARED_STATEMENT_PIPELINE"
+            },
+            {
+              "keyName": "terminal_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3020-pdf-subworkflow",
+      "name": "Run Isolated PDF Extraction",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000014",
+          "mode": "list",
+          "cachedResultName": "Finance · Local PDF Extraction Ladder · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "3060",
+      "name": "Apply Prepared Outbox Safely",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000020",
+          "mode": "list",
+          "cachedResultName": "Finance · Apply Prepared Actual Outbox · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "3024",
+      "name": "Cashback Close Required",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        1140
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $('Verify Archive and Execution Context').first().json.cashback_close_required === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3025",
+      "name": "Finalize Eligible Cashback Period",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -820,
+        1140
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/periods/finalize",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Validate Statement Reconciliation and IDs').first().json.cashback_finalization }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
+      }
+    },
+    {
+      "id": "3026",
+      "name": "Upsert Reconciliation Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_reconciliations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}"
+            },
+            {
+              "keyName": "period_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}"
+            },
+            {
+              "keyName": "reconciliation_version",
+              "condition": "eq",
+              "keyValue": 1
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source_code": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+            "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+            "reconciliation_version": 1,
+            "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
+            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_sha256 }}",
+            "cashback_close_id": "={{ $json.close_id || '' }}",
+            "state": "COMMITTED",
+            "difference_minor": 0,
+            "verified_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "3027",
+      "name": "Read Back Reconciliation Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_reconciliations",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}"
+            },
+            {
+              "keyName": "period_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "COMMITTED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-config",
+      "name": "Statement Pipeline Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-1",
+              "name": "pipeline_contract",
+              "type": "string",
+              "value": "STATEMENT_PIPELINE_V1"
+            },
+            {
+              "id": "config-2",
+              "name": "actual_writer_workflow",
+              "type": "string",
+              "value": "ACTUAL_OUTBOX_APPLY"
+            },
+            {
+              "id": "config-3",
+              "name": "source_mutation_forbidden",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-generated-note-1",
+      "name": "Stage 1 · Trusted Statement Input to Unresolved Fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Trusted Statement Input → Unresolved Fields\n**Input:** Trusted Statement Input  ·  **Output:** Unresolved Fields  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-generated-note-2",
+      "name": "Stage 2 · Build Bounded AI Policy Requests to SHA-256 Canonical Delta",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Build Bounded AI Policy Requests → SHA-256 Canonical Delta\n**Input:** Build Bounded AI Policy Requests  ·  **Output:** SHA-256 Canonical Delta  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-generated-note-3",
+      "name": "Stage 3 · Archive Canonical Delta in OneDrive to Apply Prepared Outbox Safely",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Archive Canonical Delta in OneDrive → Apply Prepared Outbox Safely\n**Input:** Archive Canonical Delta in OneDrive  ·  **Output:** Apply Prepared Outbox Safely  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-generated-note-4",
+      "name": "Stage 4 · Cashback Close Required to Mark Terminal Readback Verified",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Cashback Close Required → Mark Terminal Readback Verified\n**Input:** Cashback Close Required  ·  **Output:** Mark Terminal Readback Verified  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003-generated-note-5",
+      "name": "Stage 5 · Read Back Verified Terminal Receipt to Read Back Verified Terminal Receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        1340
+      ],
+      "parameters": {
+        "content": "## Stage 5 · Read Back Verified Terminal Receipt → Read Back Verified Terminal Receipt\n**Input:** Read Back Verified Terminal Receipt  ·  **Output:** Read Back Verified Terminal Receipt  ·  **Nodes:** 33–33\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Trusted Statement Input": {
+      "main": [
+        [
+          {
+            "node": "Statement Pipeline Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Archive and Execution Context": {
+      "main": [
+        [
+          {
+            "node": "Run Isolated PDF Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Verified Statement Profile": {
+      "main": [
+        [
+          {
+            "node": "Normalize Locked Source Semantics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Locked Source Semantics": {
+      "main": [
+        [
+          {
+            "node": "Apply N8N Only Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply N8N Only Rules": {
+      "main": [
+        [
+          {
+            "node": "Unresolved Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unresolved Fields": {
+      "main": [
+        [
+          {
+            "node": "Build Bounded AI Policy Requests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Statement Reconciliation and IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Bounded AI Policy Requests": {
+      "main": [
+        [
+          {
+            "node": "Request Scoped AI Proposals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Scoped AI Proposals": {
+      "main": [
+        [
+          {
+            "node": "Merge Allowed AI Proposals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Allowed AI Proposals": {
+      "main": [
+        [
+          {
+            "node": "Validate Statement Reconciliation and IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Statement Reconciliation and IDs": {
+      "main": [
+        [
+          {
+            "node": "Project Actual Import Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Actual Import Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Canonical Delta Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Canonical Delta Artifact": {
+      "main": [
+        [
+          {
+            "node": "Convert Canonical Delta to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Canonical Delta to File": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Canonical Delta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Canonical Delta": {
+      "main": [
+        [
+          {
+            "node": "Archive Canonical Delta in OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Canonical Delta in OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Download Canonical Delta Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Canonical Delta Readback": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Canonical Delta Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Canonical Delta Readback": {
+      "main": [
+        [
+          {
+            "node": "Verify Durable Canonical Delta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Durable Canonical Delta": {
+      "main": [
+        [
+          {
+            "node": "Prepare Outbox Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Outbox Intent": {
+      "main": [
+        [
+          {
+            "node": "Upsert PREPARED Actual Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert PREPARED Actual Outbox": {
+      "main": [
+        [
+          {
+            "node": "Read Back PREPARED Actual Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back PREPARED Actual Outbox": {
+      "main": [
+        [
+          {
+            "node": "Apply Prepared Outbox Safely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Terminal Pipeline Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Terminal Pipeline Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Terminal Pipeline Receipt": {
+      "main": [
+        [
+          {
+            "node": "Compare Terminal Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Terminal Receipt Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark Terminal Readback Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Terminal Readback Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Isolated PDF Extraction": {
+      "main": [
+        [
+          {
+            "node": "Parse Verified Statement Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Prepared Outbox Safely": {
+      "main": [
+        [
+          {
+            "node": "Cashback Close Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cashback Close Required": {
+      "main": [
+        [
+          {
+            "node": "Finalize Eligible Cashback Period",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Reconciliation Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Eligible Cashback Period": {
+      "main": [
+        [
+          {
+            "node": "Upsert Reconciliation Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Reconciliation Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Reconciliation Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Reconciliation Receipt": {
+      "main": [
+        [
+          {
+            "node": "Upsert Terminal Pipeline Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Statement Pipeline Parameters": {
+      "main": [
+        [
+          {
+            "node": "Verify Archive and Execution Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "SHARED_STATEMENT_PIPELINE",
+    "migrationStatus": "SPEC_ONLY",
+    "requiresFinanceNodes": true,
+    "customNodePackage": "n8n-nodes-finance@0.1.0",
+    "terminalReceiptTable": "finance_pipeline_runs",
+    "terminalReceiptReadback": true,
+    "actualOutboxStates": [
+      "PREPARED",
+      "ACTUAL_OBSERVED",
+      "VERIFIED",
+      "COMMITTED"
+    ],
+    "manualAndMcpMutationForbidden": true,
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_CASHBACK_INGEST",
+        "configured": false,
+        "action_required": true
+      },
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "delegatesActualWritesTo": "ACTUAL_OUTBOX_APPLY",
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000002",
+      "name": "02 Statements",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Statement Pipeline Parameters to Unresolved Fields",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000003-config",
+        "3002",
+        "3020-pdf-subworkflow",
+        "3006",
+        "3007",
+        "3008",
+        "3009"
+      ],
+      "description": "Finance stage 1. Input starts at Statement Pipeline Parameters; verified output leaves through Unresolved Fields."
+    },
+    {
+      "name": "Stage 2: Build Bounded AI Policy Requests to SHA-256 Canonical Delta",
+      "nodeIds": [
+        "3059",
+        "3010",
+        "3011",
+        "3012",
+        "3048",
+        "3030",
+        "3031",
+        "3032"
+      ],
+      "description": "Finance stage 2. Input starts at Build Bounded AI Policy Requests; verified output leaves through SHA-256 Canonical Delta."
+    },
+    {
+      "name": "Stage 3: Archive Canonical Delta in OneDrive to Apply Prepared Outbox Safely",
+      "nodeIds": [
+        "3033",
+        "3034",
+        "3035",
+        "3036",
+        "3013",
+        "3014",
+        "3015",
+        "3060"
+      ],
+      "description": "Finance stage 3. Input starts at Archive Canonical Delta in OneDrive; verified output leaves through Apply Prepared Outbox Safely."
+    },
+    {
+      "name": "Stage 4: Cashback Close Required to Mark Terminal Readback Verified",
+      "nodeIds": [
+        "3024",
+        "3025",
+        "3026",
+        "3027",
+        "3028",
+        "3029",
+        "3045",
+        "3046"
+      ],
+      "description": "Finance stage 4. Input starts at Cashback Close Required; verified output leaves through Mark Terminal Readback Verified."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

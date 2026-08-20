@@ -229,6 +229,11 @@ export function validateBootstrapConfig(config) {
     if (!String(rule.name ?? "").trim()) throw new Error("rules require a name");
     if (rule.enabled === false) continue;
     for (const action of rule.actions ?? []) {
+      if (action.field === "amount" || action.op === "set-split-amount") {
+        throw new Error(
+          `active rule ${rule.name} must not mutate source amounts; normalize direction in the ingestion adapter`,
+        );
+      }
       if (action.options?.formula && !String(action.options.formula).startsWith("=")) {
         throw new Error(`rule ${rule.name} formulas must start with =`);
       }

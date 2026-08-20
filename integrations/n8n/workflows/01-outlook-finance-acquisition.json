@@ -1,0 +1,1187 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "name": "Finance · Acquire Outlook Documents · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "10000000-0000-4000-8000-000000000102",
+      "name": "Called by Trusted Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000103",
+      "name": "Validate Bounded Source Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Bounded Source Request. Keep this deterministic and fail closed.\nconst request = $json;\nconst required = [\n    'run_id',\n    'source_code',\n    'folder_id',\n    'senders',\n    'subjects',\n    'window_start',\n    'run_upper_bound',\n    'onedrive_parent_id',\n];\nfor (const field of required) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing trusted contract field ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst windowStart = new Date(request.window_start);\nconst runUpperBound = new Date(request.run_upper_bound);\nif (!(windowStart < runUpperBound) || runUpperBound > new Date()) {\n    throw new Error('Acquisition window must be positive and frozen no later than now');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders\n    .map(sender => `from/emailAddress/address eq ${quoteOData(sender)}`)\n    .join(' or ');\nconst subjectFilter = subjects\n    .map(subject => `contains(subject,${quoteOData(subject)})`)\n    .join(' or ');\nreturn [{\n        json: {\n            ...request,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            window_end: runUpperBound.toISOString(),\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000104",
+      "name": "Get Messages from Configured Folder",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "folderMessage",
+        "operation": "getAll",
+        "folderId": "={{ $('Validate Bounded Source Request').first().json.folder_id }}",
+        "returnAll": true,
+        "output": "raw",
+        "filtersUI": {
+          "values": {
+            "filterBy": "filters",
+            "filters": {
+              "receivedAfter": "={{ $('Validate Bounded Source Request').first().json.window_start }}",
+              "receivedBefore": "={{ $('Validate Bounded Source Request').first().json.window_end }}",
+              "readStatus": "both",
+              "custom": "={{ $('Validate Bounded Source Request').first().json.server_filter }}"
+            }
+          }
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "BIND_OUTLOOK",
+          "name": "Finance Outlook"
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000113",
+      "name": "Read Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000114",
+      "name": "Gate Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Gate Microsoft Graph Circuit. Keep this deterministic and fail closed.\nconst now = new Date(), row = $json?.provider_code ? $json : { state: 'CLOSED', transient_failure_count: 0 }, retry = row.retry_after ? new Date(row.retry_after) : null;\nif (row.state === 'OPEN' && retry && retry > now)\n    throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH');\nreturn [{ json: { provider_code: 'MICROSOFT_GRAPH', state: row.state === 'OPEN' ? 'HALF_OPEN' : 'CLOSED', transient_failure_count: Number(row.transient_failure_count || 0), last_error_class: row.last_error_class || '', opened_at: row.opened_at || null, retry_after: row.retry_after || null, readback_verified: false, updated_at: now.toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000115",
+      "name": "Persist Microsoft Graph Circuit Gate",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "MICROSOFT_GRAPH",
+            "state": "={{ $json.state }}",
+            "transient_failure_count": "={{ $json.transient_failure_count }}",
+            "last_error_class": "={{ $json.last_error_class }}",
+            "opened_at": "={{ $json.opened_at }}",
+            "retry_after": "={{ $json.retry_after }}",
+            "readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000105",
+      "name": "Exact Sender Subject and Window Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Exact Sender Subject and Window Filter. Keep this deterministic and fail closed.\nconst contract = $('Validate Bounded Source Request').first().json;\nconst candidates = $('Get Messages from Configured Folder').all();\nif (candidates.length > contract.max_messages) {\n    throw new Error(`SOURCE_RESULT_LIMIT_EXCEEDED:${candidates.length}`);\n}\nconst start = new Date(contract.window_start);\nconst end = new Date(contract.window_end);\nreturn candidates\n    .filter(item => {\n    const message = item.json;\n    const sender = String(message.from?.emailAddress?.address\n        || message.sender?.emailAddress?.address\n        || '').toLowerCase();\n    const subject = String(message.subject || '').toLowerCase();\n    const received = new Date(message.receivedDateTime);\n    return contract.senders.includes(sender)\n        && contract.subjects.some(fragment => subject.includes(fragment.toLowerCase()))\n        && received >= start\n        && received < end;\n})\n    .map(item => ({\n    json: {\n        ...item.json,\n        source_code: contract.source_code,\n        window_start: contract.window_start,\n        window_end: contract.window_end,\n        onedrive_parent_id: contract.onedrive_parent_id,\n    },\n}));\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000106",
+      "name": "List Message Attachments",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "getAll",
+        "messageId": "={{ $json.id }}",
+        "returnAll": true
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "BIND_OUTLOOK",
+          "name": "Finance Outlook"
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000107",
+      "name": "Preserve Every Attachment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Preserve Every Attachment. Keep this deterministic and fail closed.\nconst message = $('Exact Sender Subject and Window Filter').item.json;\nreturn $input.all().map(item => {\n    const name = String(item.json.name || 'attachment.bin');\n    const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : 'bin';\n    return {\n        json: {\n            ...item.json,\n            message_id: message.id,\n            source_code: message.source_code,\n            onedrive_parent_id: message.onedrive_parent_id,\n            extension,\n            is_pdf: extension === 'pdf',\n            is_inline: Boolean(item.json.isInline),\n        },\n    };\n});\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000108",
+      "name": "Download Original Attachment",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "download",
+        "messageId": "={{ $('Preserve Every Attachment').item.json.message_id }}",
+        "attachmentId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "BIND_OUTLOOK",
+          "name": "Finance Outlook"
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000109",
+      "name": "SHA-256 Original",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "document_sha256"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000110",
+      "name": "Archive Original in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "fileName": "={{ $json.document_sha256 + '.' + $('Preserve Every Attachment').item.json.extension }}",
+        "parentId": "={{ $('Preserve Every Attachment').item.json.onedrive_parent_id }}",
+        "binaryData": true
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000111",
+      "name": "Upsert Durable Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_archive_receipts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Bounded Source Request').first().json.source_code }}"
+            },
+            {
+              "keyName": "source_message_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Exact Sender Subject and Window Filter').item.json.id }}"
+            },
+            {
+              "keyName": "source_attachment_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Preserve Every Attachment').item.json.id }}"
+            },
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 Original').item.json.document_sha256 }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "archive_receipt_id": "={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $('SHA-256 Original').item.json.document_sha256 }}",
+            "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
+            "source_code": "={{ $('Validate Bounded Source Request').first().json.source_code }}",
+            "source_message_id": "={{ $('Exact Sender Subject and Window Filter').item.json.id }}",
+            "source_attachment_id": "={{ $('Preserve Every Attachment').item.json.id }}",
+            "source_sha256": "={{ $('SHA-256 Original').item.json.document_sha256 }}",
+            "onedrive_item_id": "={{ $('Archive Original in OneDrive').item.json.id }}",
+            "onedrive_etag": "={{ $('Archive Original in OneDrive').item.json.eTag || $('Archive Original in OneDrive').item.json.etag || '' }}",
+            "archive_state": "HASH_VERIFIED",
+            "verified_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000116",
+      "name": "Close Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "MICROSOFT_GRAPH"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "MICROSOFT_GRAPH",
+            "state": "CLOSED",
+            "transient_failure_count": 0,
+            "last_error_class": "",
+            "opened_at": null,
+            "retry_after": null,
+            "readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000112",
+      "name": "Read Back Archive Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_archive_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "archive_receipt_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.archive_receipt_id }}"
+            },
+            {
+              "keyName": "archive_state",
+              "condition": "eq",
+              "keyValue": "HASH_VERIFIED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "10117",
+      "name": "Enforce Native Upload Size",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Enforce Native Upload Size. Keep this deterministic and fail closed.\nconst rawSize = String($binary?.data?.fileSize || '').trim().toLowerCase();\nconst match = rawSize.match(/^([0-9]+(?:\\.[0-9]+)?)\\s*(b|kb|mb)?$/);\nlet bytes = null;\nif (match) {\n    const scale = { b: 1, kb: 1024, mb: 1024 * 1024, '': 1 }[match[2] || ''];\n    bytes = Math.ceil(Number(match[1]) * scale);\n}\nif (bytes !== null && bytes > 4 * 1024 * 1024) {\n    throw new Error('LARGE_EVIDENCE_UPLOAD_SESSION_REQUIRED');\n}\nreturn [{ json: { ...$json, observed_binary_bytes: bytes }, binary: $binary }];\n"
+      }
+    },
+    {
+      "id": "10118",
+      "name": "Download Archived Original Readback",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $('Archive Original in OneDrive').item.json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "10119",
+      "name": "SHA-256 Archived Original Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "archive_readback_sha256"
+      }
+    },
+    {
+      "id": "10120",
+      "name": "Verify Archived Original Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Archived Original Readback. Keep this deterministic and fail closed.\nconst expected = String($('SHA-256 Original').item.json.document_sha256 || '').toLowerCase();\nconst observed = String($json.archive_readback_sha256 || '').toLowerCase();\nif (!expected || observed !== expected) {\n    throw new Error('ARCHIVE_ORIGINAL_READBACK_HASH_MISMATCH');\n}\nreturn [{ json: { ...$json, archive_readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "10121",
+      "name": "Build Original Email Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Original Email Evidence. Keep this deterministic and fail closed.\nconst message = $json;\nconst archivePayload = {\n    schema_version: 1,\n    message_id: message.id,\n    internet_message_id: message.internetMessageId || null,\n    received_at: message.receivedDateTime,\n    sender: message.from?.emailAddress?.address || message.sender?.emailAddress?.address || null,\n    subject: message.subject || '',\n    body_type: message.body?.contentType || null,\n    body: message.body?.content || '',\n};\nreturn [{\n        json: {\n            archive_payload: archivePayload,\n            source_message_id: message.id,\n            onedrive_parent_id: message.onedrive_parent_id,\n        },\n    }];\n"
+      }
+    },
+    {
+      "id": "10122",
+      "name": "Convert Email Evidence to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "operation": "toJson",
+        "sourceProperty": "archive_payload",
+        "options": {
+          "fileName": "email-evidence.json"
+        }
+      }
+    },
+    {
+      "id": "10123",
+      "name": "SHA-256 Email Evidence",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        680,
+        760
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "email_evidence_sha256"
+      }
+    },
+    {
+      "id": "10124",
+      "name": "Archive Email Evidence in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "fileName": "={{ $json.email_evidence_sha256 + '.email-evidence-v1.json' }}",
+        "parentId": "={{ $('Build Original Email Evidence').item.json.onedrive_parent_id }}"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "10125",
+      "name": "Download Email Evidence Readback",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        1140
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "10126",
+      "name": "SHA-256 Email Evidence Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        1140
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "email_readback_sha256"
+      }
+    },
+    {
+      "id": "10127",
+      "name": "Verify Email Evidence Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Email Evidence Readback. Keep this deterministic and fail closed.\nconst expected = String($('SHA-256 Email Evidence').item.json.email_evidence_sha256 || '').toLowerCase();\nconst observed = String($json.email_readback_sha256 || '').toLowerCase();\nif (!expected || observed !== expected) {\n    throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');\n}\nreturn [{ json: { email_evidence_sha256: observed, archive_readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "10128",
+      "name": "Record Email PDF Render Requirement",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_document_operations",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $json.email_evidence_sha256 }}"
+            },
+            {
+              "keyName": "document_profile",
+              "condition": "eq",
+              "keyValue": "EMAIL_BODY_JSON_TO_PDF_V1"
+            },
+            {
+              "keyName": "requested_schema_version",
+              "condition": "eq",
+              "keyValue": "1"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "document_id": "={{ 'inline-email:' + $json.email_evidence_sha256 }}",
+            "source_sha256": "={{ $json.email_evidence_sha256 }}",
+            "document_profile": "EMAIL_BODY_JSON_TO_PDF_V1",
+            "requested_schema_version": "1",
+            "onedrive_item_id": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
+            "source_message_id": "={{ $('Build Original Email Evidence').item.json.source_message_id }}",
+            "source_attachment_id": "INLINE_BODY",
+            "state": "UNSUPPORTED",
+            "attempt_count": 0,
+            "error_class": "EMAIL_TO_PDF_RENDERER_REQUIRED",
+            "error_detail_redacted": "Original email archived and hash-verified; fixed renderer is not yet available.",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001-config",
+      "name": "Acquisition Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-1",
+              "name": "max_messages",
+              "type": "number",
+              "value": "={{ $json.max_messages ?? 500 }}"
+            },
+            {
+              "id": "config-2",
+              "name": "subject_match",
+              "type": "string",
+              "value": "PARTIAL_CASE_INSENSITIVE"
+            },
+            {
+              "id": "config-3",
+              "name": "archive_readback_required",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001-generated-note-1",
+      "name": "Stage 1 · Called by Trusted Workflow to Close Microsoft Graph Circuit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Called by Trusted Workflow → Close Microsoft Graph Circuit\n**Input:** Called by Trusted Workflow  ·  **Output:** Close Microsoft Graph Circuit  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001-generated-note-2",
+      "name": "Stage 2 · Exact Sender Subject and Window Filter to Download Archived Original Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Exact Sender Subject and Window Filter → Download Archived Original Readback\n**Input:** Exact Sender Subject and Window Filter  ·  **Output:** Download Archived Original Readback  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001-generated-note-3",
+      "name": "Stage 3 · SHA-256 Archived Original Readback to Archive Email Evidence in OneDrive",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · SHA-256 Archived Original Readback → Archive Email Evidence in OneDrive\n**Input:** SHA-256 Archived Original Readback  ·  **Output:** Archive Email Evidence in OneDrive  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000001-generated-note-4",
+      "name": "Stage 4 · Download Email Evidence Readback to Record Email PDF Render Requirement",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Download Email Evidence Readback → Record Email PDF Render Requirement\n**Input:** Download Email Evidence Readback  ·  **Output:** Record Email PDF Render Requirement  ·  **Nodes:** 25–28\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Called by Trusted Workflow": {
+      "main": [
+        [
+          {
+            "node": "Acquisition Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Bounded Source Request": {
+      "main": [
+        [
+          {
+            "node": "Read Microsoft Graph Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Microsoft Graph Circuit": {
+      "main": [
+        [
+          {
+            "node": "Gate Microsoft Graph Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Microsoft Graph Circuit": {
+      "main": [
+        [
+          {
+            "node": "Persist Microsoft Graph Circuit Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Microsoft Graph Circuit Gate": {
+      "main": [
+        [
+          {
+            "node": "Get Messages from Configured Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Messages from Configured Folder": {
+      "main": [
+        [
+          {
+            "node": "Close Microsoft Graph Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exact Sender Subject and Window Filter": {
+      "main": [
+        [
+          {
+            "node": "List Message Attachments",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Original Email Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Message Attachments": {
+      "main": [
+        [
+          {
+            "node": "Preserve Every Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Original Attachment": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Original",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Original": {
+      "main": [
+        [
+          {
+            "node": "Enforce Native Upload Size",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Original in OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Download Archived Original Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close Microsoft Graph Circuit": {
+      "main": [
+        [
+          {
+            "node": "Exact Sender Subject and Window Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Durable Archive Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Archive Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preserve Every Attachment": {
+      "main": [
+        [
+          {
+            "node": "Download Original Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enforce Native Upload Size": {
+      "main": [
+        [
+          {
+            "node": "Archive Original in OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Archived Original Readback": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Archived Original Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Archived Original Readback": {
+      "main": [
+        [
+          {
+            "node": "Verify Archived Original Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Archived Original Readback": {
+      "main": [
+        [
+          {
+            "node": "Upsert Durable Archive Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Original Email Evidence": {
+      "main": [
+        [
+          {
+            "node": "Convert Email Evidence to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Email Evidence to File": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Email Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Email Evidence": {
+      "main": [
+        [
+          {
+            "node": "Archive Email Evidence in OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Email Evidence in OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Download Email Evidence Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Email Evidence Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "node": "Verify Email Evidence Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "node": "Record Email PDF Render Requirement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquisition Parameters": {
+      "main": [
+        [
+          {
+            "node": "Validate Bounded Source Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION",
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "terminalReceiptTable": "finance_archive_receipts",
+    "terminalReceiptReadback": true,
+    "providerCircuitTable": "finance_provider_circuits",
+    "manualMutationForbidden": true,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      },
+      {
+        "placeholder": "BIND_OUTLOOK",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000001",
+      "name": "01 Acquisition",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Acquisition Parameters to Close Microsoft Graph Circuit",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000001-config",
+        "10000000-0000-4000-8000-000000000103",
+        "10000000-0000-4000-8000-000000000113",
+        "10000000-0000-4000-8000-000000000114",
+        "10000000-0000-4000-8000-000000000115",
+        "10000000-0000-4000-8000-000000000104",
+        "10000000-0000-4000-8000-000000000116"
+      ],
+      "description": "Finance stage 1. Input starts at Acquisition Parameters; verified output leaves through Close Microsoft Graph Circuit."
+    },
+    {
+      "name": "Stage 2: Exact Sender Subject and Window Filter to Download Archived Original Readback",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000105",
+        "10000000-0000-4000-8000-000000000106",
+        "10000000-0000-4000-8000-000000000107",
+        "10000000-0000-4000-8000-000000000108",
+        "10000000-0000-4000-8000-000000000109",
+        "10117",
+        "10000000-0000-4000-8000-000000000110",
+        "10118"
+      ],
+      "description": "Finance stage 2. Input starts at Exact Sender Subject and Window Filter; verified output leaves through Download Archived Original Readback."
+    },
+    {
+      "name": "Stage 3: SHA-256 Archived Original Readback to Read Back Archive Receipt",
+      "nodeIds": [
+        "10119",
+        "10120",
+        "10000000-0000-4000-8000-000000000111",
+        "10000000-0000-4000-8000-000000000112"
+      ],
+      "description": "Finance stage 3. Input starts at SHA-256 Archived Original Readback; verified output leaves through Read Back Archive Receipt."
+    },
+    {
+      "name": "Stage 3: Build Original Email Evidence to Archive Email Evidence in OneDrive",
+      "nodeIds": [
+        "10121",
+        "10122",
+        "10123",
+        "10124"
+      ],
+      "description": "Finance stage 3. Input starts at Build Original Email Evidence; verified output leaves through Archive Email Evidence in OneDrive."
+    },
+    {
+      "name": "Stage 4: Download Email Evidence Readback to Record Email PDF Render Requirement",
+      "nodeIds": [
+        "10125",
+        "10126",
+        "10127",
+        "10128"
+      ],
+      "description": "Finance stage 4. Input starts at Download Email Evidence Readback; verified output leaves through Record Email PDF Render Requirement."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "psql_version": "16.14",
+  "cases": [
+    {
+      "name": "absent",
+      "value": null,
+      "outcome": "ROLLBACK",
+      "persisted_rows": 0
+    },
+    {
+      "name": "malformed",
+      "value": "definitely-not-boolean",
+      "outcome": "ROLLBACK",
+      "persisted_rows": 0
+    },
+    {
+      "name": "false",
+      "value": "off",
+      "outcome": "ROLLBACK",
+      "persisted_rows": 0
+    },
+    {
+      "name": "true",
+      "value": "on",
+      "outcome": "COMMIT",
+      "persisted_rows": 1
+    }
+  ]
+}

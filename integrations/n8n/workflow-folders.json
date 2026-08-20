@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "n8n_version": "2.36.2",
+  "contract_status": "SETUP_REQUIRED",
+  "project_id_binding": "N8N_FINANCE_PROJECT_ID",
+  "folders": [
+    {"id": "f1000000-0000-4000-8000-000000000001", "name": "01 Acquisition", "workflow_codes": ["OUTLOOK_FINANCE_ACQUISITION", "OUTLOOK_MESSAGE_SWEEP"]},
+    {"id": "f1000000-0000-4000-8000-000000000002", "name": "02 Statements", "workflow_codes": ["SHARED_STATEMENT_PIPELINE", "EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT", "RAK_MONTHLY_STATEMENT", "SC_MONTHLY_STATEMENT"]},
+    {"id": "f1000000-0000-4000-8000-000000000003", "name": "03 Documents & Evidence", "workflow_codes": ["INTERACTIVE_ARTIFACT_HANDOFF", "DOCUMENT_EXTRACTION_REQUEST", "LOCAL_PDF_EXTRACTION"]},
+    {"id": "f1000000-0000-4000-8000-000000000004", "name": "04 Agent Enrichment", "workflow_codes": ["AI_PROPOSAL", "SUBSCRIPTION_AGENT_ADAPTER"]},
+    {"id": "f1000000-0000-4000-8000-000000000005", "name": "05 Actual Ledger", "workflow_codes": ["ACTUAL_OUTBOX_APPLY"]},
+    {"id": "f1000000-0000-4000-8000-000000000006", "name": "06 Cashback", "workflow_codes": ["RAKBANK_LIVE_CASHBACK", "SC_LIVE_CASHBACK"]},
+    {"id": "f1000000-0000-4000-8000-000000000007", "name": "07 Operations & Recovery", "workflow_codes": ["FINANCE_OPERATIONS_STATUS", "FINANCE_MCP_FACADE", "OPERATIONS_ERROR_HANDLER", "ACTUAL_OUTBOX_RECOVERY", "FINANCE_WRITER_LEASE"]},
+    {"id": "f1000000-0000-4000-8000-000000000090", "name": "90 Platform & Admin", "workflow_codes": ["PLATFORM_DATA_TABLE_BOOTSTRAP"]}
+  ],
+  "tags": ["finance", "setup-required", "inactive"]
+}

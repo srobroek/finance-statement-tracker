@@ -1,0 +1,94 @@
+-- n8n 2.36.2 only. Run after inactive workflow import in the reviewed finance
+-- project. psql must provide: -v finance_project_id='<exact project id>'.
+-- This script never activates or publishes a workflow.
+\if :{?finance_project_id}
+\else
+  \quit 3
+\endif
+
+BEGIN;
+
+CREATE TEMP TABLE finance_folder_context (project_id varchar(36) PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO finance_folder_context VALUES (:'finance_project_id');
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM project p
+    JOIN finance_folder_context c ON c.project_id = p.id
+  ) THEN
+    RAISE EXCEPTION 'FINANCE_PROJECT_NOT_FOUND';
+  END IF;
+END $$;
+
+INSERT INTO folder (id, name, "projectId", "parentFolderId", "createdAt", "updatedAt") VALUES
+  ('f1000000-0000-4000-8000-000000000001', '01 Acquisition', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000002', '02 Statements', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000003', '03 Documents & Evidence', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000004', '04 Agent Enrichment', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000005', '05 Actual Ledger', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000006', '06 Cashback', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000007', '07 Operations & Recovery', :'finance_project_id', NULL, NOW(), NOW()),
+  ('f1000000-0000-4000-8000-000000000090', '90 Platform & Admin', :'finance_project_id', NULL, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name, "updatedAt" = NOW()
+WHERE folder."projectId" = EXCLUDED."projectId";
+
+CREATE TEMP TABLE finance_workflow_folder_map (workflow_id varchar(36) PRIMARY KEY, folder_id varchar(36) NOT NULL) ON COMMIT DROP;
+INSERT INTO finance_workflow_folder_map VALUES
+  ('10000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001'),
+  ('10000000-0000-4000-8000-000000000012','f1000000-0000-4000-8000-000000000001'),
+  ('10000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-000000000002'),
+  ('10000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-000000000002'),
+  ('10000000-0000-4000-8000-000000000005','f1000000-0000-4000-8000-000000000002'),
+  ('10000000-0000-4000-8000-000000000006','f1000000-0000-4000-8000-000000000002'),
+  ('10000000-0000-4000-8000-000000000007','f1000000-0000-4000-8000-000000000002'),
+  ('10000000-0000-4000-8000-000000000011','f1000000-0000-4000-8000-000000000003'),
+  ('10000000-0000-4000-8000-000000000013','f1000000-0000-4000-8000-000000000003'),
+  ('10000000-0000-4000-8000-000000000014','f1000000-0000-4000-8000-000000000003'),
+  ('10000000-0000-4000-8000-000000000009','f1000000-0000-4000-8000-000000000004'),
+  ('10000000-0000-4000-8000-000000000021','f1000000-0000-4000-8000-000000000004'),
+  ('10000000-0000-4000-8000-000000000020','f1000000-0000-4000-8000-000000000005'),
+  ('10000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000006'),
+  ('10000000-0000-4000-8000-000000000008','f1000000-0000-4000-8000-000000000006'),
+  ('10000000-0000-4000-8000-000000000010','f1000000-0000-4000-8000-000000000007'),
+  ('10000000-0000-4000-8000-000000000015','f1000000-0000-4000-8000-000000000007'),
+  ('10000000-0000-4000-8000-000000000016','f1000000-0000-4000-8000-000000000007'),
+  ('10000000-0000-4000-8000-000000000017','f1000000-0000-4000-8000-000000000007'),
+  ('10000000-0000-4000-8000-000000000018','f1000000-0000-4000-8000-000000000007'),
+  ('10000000-0000-4000-8000-000000000019','f1000000-0000-4000-8000-000000000090');
+
+DO $$
+BEGIN
+  IF (SELECT COUNT(*) FROM finance_workflow_folder_map) <> 21 THEN
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_MAP_COUNT_MISMATCH';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM finance_workflow_folder_map m
+    LEFT JOIN workflow_entity w ON w.id = m.workflow_id
+    LEFT JOIN shared_workflow s ON s."workflowId" = w.id
+    LEFT JOIN finance_folder_context c ON c.project_id = s."projectId"
+    WHERE w.id IS NULL OR s."workflowId" IS NULL OR c.project_id IS NULL OR w.active = TRUE
+  ) THEN
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_SCOPE_OR_INACTIVE_GUARD_FAILED';
+  END IF;
+END $$;
+
+UPDATE workflow_entity w
+SET "parentFolderId" = m.folder_id, "updatedAt" = NOW()
+FROM finance_workflow_folder_map m
+WHERE w.id = m.workflow_id;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM finance_workflow_folder_map m
+    JOIN workflow_entity w ON w.id = m.workflow_id
+    WHERE w."parentFolderId" IS DISTINCT FROM m.folder_id
+  ) THEN
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_READBACK_MISMATCH';
+  END IF;
+END $$;
+
+COMMIT;

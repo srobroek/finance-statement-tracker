@@ -1,0 +1,214 @@
+{
+  "id": "10000000-0000-4000-8000-000000000015",
+  "name": "Finance · Bounded MCP Facade · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "15001",
+      "name": "Finance MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "path": "finance-operations",
+        "authentication": "bearerAuth"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "BIND_FINANCE_MCP_FACADE",
+          "name": "Finance MCP Facade Bearer"
+        }
+      }
+    },
+    {
+      "id": "15002",
+      "name": "finance.status",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "name": "finance_status",
+        "description": "Read redacted finance workflow and receipt status. This tool performs no finance mutation.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':finance-status' }}",
+            "operation_code": "finance.status"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "15003",
+      "name": "artifact.submit_reviewed",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "name": "artifact_submit_reviewed",
+        "description": "Submit an already staged and human-reviewed artifact by immutable artifact ID and SHA-256. URLs, paths, providers, credentials, account IDs, and commit flags are forbidden.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':artifact-submit-reviewed' }}",
+            "operation_code": "artifact.submit_reviewed",
+            "artifact_id": "={{ $fromAI('artifact_id','Immutable reviewed artifact identifier','string') }}",
+            "expected_sha256": "={{ $fromAI('expected_sha256','Expected lowercase SHA-256 hex','string') }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "15004",
+      "name": "document.request",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "name": "document_request",
+        "description": "Request extraction of an existing immutable document record using only its ID, expected hash, profile, and schema version.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':document-request' }}",
+            "operation_code": "document.request",
+            "document_id": "={{ $fromAI('document_id','Immutable document identifier','string') }}",
+            "expected_sha256": "={{ $fromAI('expected_sha256','Expected lowercase SHA-256 hex','string') }}",
+            "document_profile": "={{ $fromAI('document_profile','Trusted configured document profile code','string') }}",
+            "requested_schema_version": "={{ $fromAI('requested_schema_version','Requested registered schema version','string') }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000015-generated-note-1",
+      "name": "Stage 1 · Finance MCP Server Trigger to document.request",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Finance MCP Server Trigger → document.request\n**Input:** Finance MCP Server Trigger  ·  **Output:** document.request  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Finance MCP Server Trigger": {
+      "ai_tool": [
+        [
+          {
+            "node": "finance.status",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "artifact.submit_reviewed",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "document.request",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "FINANCE_MCP_FACADE",
+    "mcpSafe": true,
+    "migrationStatus": "SPEC_ONLY",
+    "instanceMcpRequired": false,
+    "allowedOperationCodes": [
+      "finance.status",
+      "artifact.submit_reviewed",
+      "document.request"
+    ],
+    "auditTable": "finance_mcp_requests",
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_FINANCE_MCP_FACADE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000007",
+      "name": "07 Operations & Recovery",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

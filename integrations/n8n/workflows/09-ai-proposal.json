@@ -1,0 +1,1332 @@
+{
+  "id": "10000000-0000-4000-8000-000000000009",
+  "name": "Finance · Subscription Agent Proposal · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "9001",
+      "name": "Trusted Agent Proposal Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "9002",
+      "name": "Validate Untrusted Proposal Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Untrusted Proposal Request. Keep this deterministic and fail closed.\nconst r = $json;\nfor (const forbidden of ['policy_class', 'agent_profile', 'policy_sha256', 'config_sha256', 'output_schema_sha256', 'allowed_values', 'instruction', 'prompt', 'model', 'reasoning_effort', 'auth_mode', 'api_key', 'command', 'path', 'url', 'provider', 'credential'])\n    if (Object.hasOwn(r, forbidden))\n        throw new Error(`Forbidden agent input ${forbidden}`);\nif (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(r.policy_id || '')))\n    throw new Error('Invalid policy id');\nif (!Array.isArray(r.unresolved) || !r.unresolved.length || r.unresolved.length > 100)\n    throw new Error('Invalid unresolved batch');\nconst allowed = new Set(['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'category_recommendation', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket', 'rule_recommendation']), locked = new Set(['amount', 'date', 'source_id', 'imported_id', 'direction', 'topic', 'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount']), ids = new Set();\nconst unresolved = r.unresolved.map(x => {\n    const id = String(x.transaction_id || '');\n    if (!id || id.length > 256 || ids.has(id))\n        throw new Error('Invalid or duplicate transaction id');\n    ids.add(id);\n    if (!Array.isArray(x.allowed_fields) || !x.allowed_fields.length || new Set(x.allowed_fields).size !== x.allowed_fields.length || x.allowed_fields.some(f => locked.has(f) || !allowed.has(f)))\n        throw new Error('Forbidden proposal field');\n    const context = x.redacted_context || {};\n    if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).length > 24)\n        throw new Error('Invalid redacted context');\n    const redacted_context = {};\n    for (const [k, v] of Object.entries(context)) {\n        if (locked.has(k) || /message|email|account|card_number|password|token/i.test(k))\n            continue;\n        if (v === null || ['string', 'number', 'boolean'].includes(typeof v))\n            redacted_context[k] = typeof v === 'string' ? v.slice(0, 500) : v;\n    }\n    return { transaction_id: id, requested_fields: [...x.allowed_fields].sort(), redacted_context };\n});\nreturn [{ json: { policy_id: String(r.policy_id), unresolved } }];\n"
+      }
+    },
+    {
+      "id": "9015",
+      "name": "Read Active Server AI Policy Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ai_policy_contracts",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "policy_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Untrusted Proposal Request').item.json.policy_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACTIVE"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9016",
+      "name": "Build Authoritative Redacted Proposal Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Authoritative Redacted Proposal Job. Keep this deterministic and fail closed.\nconst request = $('Validate Untrusted Proposal Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');\nif (rows.length !== 1)\n    throw new Error('AI_POLICY_ACTIVE_VERSION_AMBIGUOUS_OR_MISSING');\nconst p = rows[0], profileClass = { LUNA_MAX: 'NORMAL', SOL_XHIGH: 'EXCEPTION' }, policy_class = profileClass[p.agent_profile], agent_provider = String(p.agent_provider || ''), sha = v => /^[a-f0-9]{64}$/.test(String(v));\nif (!policy_class || !['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(agent_provider))\n    throw new Error('Unregistered server agent profile');\nif (!sha(p.policy_sha256) || !sha(p.config_sha256) || !sha(p.output_schema_sha256))\n    throw new Error('Invalid server policy hashes');\nlet policyFields, policyDomains;\ntry {\n    policyFields = JSON.parse(p.allowed_fields_json);\n    policyDomains = JSON.parse(p.allowed_values_json);\n}\ncatch {\n    throw new Error('Invalid server policy domain JSON');\n}\nif (!Array.isArray(policyFields) || !policyFields.length || new Set(policyFields).size !== policyFields.length || !policyDomains || typeof policyDomains !== 'object' || Array.isArray(policyDomains))\n    throw new Error('Invalid server policy contract');\nconst permitted = new Set(policyFields), domainFields = new Set(['category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket']);\nconst unresolved = request.unresolved.map(x => {\n    if (x.requested_fields.some(f => !permitted.has(f)))\n        throw new Error('Requested field not owned by active policy');\n    const allowed_values = {};\n    for (const field of x.requested_fields.filter(f => domainFields.has(f))) {\n        const values = policyDomains[field];\n        if (!Array.isArray(values) || !values.length || values.length > 512 || new Set(values).size !== values.length || values.some(v => !['string', 'boolean'].includes(typeof v) || typeof v === 'string' && (!v.length || v.length > 128)))\n            throw new Error(`Missing bounded server value domain for ${field}`);\n        allowed_values[field] = values;\n    }\n    return { transaction_id: x.transaction_id, allowed_fields: x.requested_fields, allowed_values, redacted_context: x.redacted_context };\n});\nconst body = { schema_version: 1, operation_code: 'FINANCE_AI_PROPOSAL', agent_provider, policy_id: request.policy_id, policy_class, policy_sha256: String(p.policy_sha256), config_sha256: String(p.config_sha256), output_schema_sha256: String(p.output_schema_sha256), unresolved }, canonical = v => Array.isArray(v) ? v.map(canonical) : (v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v);\nreturn [{ json: { ...body, request_canonical: JSON.stringify(canonical(body)) } }];\n"
+      }
+    },
+    {
+      "id": "9003",
+      "name": "SHA-256 Agent Request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.request_canonical }}",
+        "dataPropertyName": "request_sha256"
+      }
+    },
+    {
+      "id": "9004",
+      "name": "Build Idempotent Agent Handoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Idempotent Agent Handoff. Keep this deterministic and fail closed.\nconst request = $json;\nconst requestSha256 = String(request.request_sha256 || '');\nif (!/^[a-f0-9]{64}$/.test(requestSha256)) {\n    throw new Error('Agent request hash missing');\n}\nif (!['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(request.agent_provider)) {\n    throw new Error('Agent provider missing from authoritative handoff');\n}\nreturn [{ json: {\n            schema_version: 1,\n            job_id: `finance-ai:${requestSha256}`,\n            idempotency_key: requestSha256,\n            operation_code: request.operation_code,\n            agent_provider: request.agent_provider,\n            policy_id: request.policy_id,\n            policy_class: request.policy_class,\n            policy_sha256: request.policy_sha256,\n            config_sha256: request.config_sha256,\n            output_schema_sha256: request.output_schema_sha256,\n            unresolved: request.unresolved,\n        } }];\n"
+      }
+    },
+    {
+      "id": "9005",
+      "name": "Upsert SUBMITTED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{ $json.job_id }}",
+            "idempotency_key": "={{ $json.idempotency_key }}",
+            "operation_code": "FINANCE_AI_PROPOSAL",
+            "policy_id": "={{ $json.policy_id }}",
+            "policy_sha256": "={{ $json.policy_sha256 }}",
+            "config_sha256": "={{ $json.config_sha256 }}",
+            "output_schema_sha256": "={{ $json.output_schema_sha256 }}",
+            "request_sha256": "={{ $json.request_sha256 }}",
+            "state": "SUBMITTED",
+            "terminal_readback_verified": false,
+            "attempt_count": 1,
+            "created_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "9006",
+      "name": "Read Back SUBMITTED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "SUBMITTED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9017",
+      "name": "Compare SUBMITTED Agent Job Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare SUBMITTED Agent Job Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Idempotent Agent Handoff').first().json, observed = $json;\nfor (const k of ['job_id', 'idempotency_key', 'policy_id', 'policy_sha256', 'config_sha256', 'output_schema_sha256', 'request_sha256'])\n    if (String(observed[k]) !== String(expected[k]))\n        throw new Error(`AGENT_SUBMITTED_RECEIPT_MISMATCH:${k}`);\nreturn [{ json: observed }];\n"
+      }
+    },
+    {
+      "id": "9007",
+      "name": "Invoke Subscription Agent Adapter",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        380
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000021",
+          "mode": "list",
+          "cachedResultName": "Finance · Subscription Agent Adapter · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "9027",
+      "name": "Read Agent Runner Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        380
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "CODEX_AGENT_RUNNER"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9028",
+      "name": "Gate Agent Runner Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Gate Agent Runner Circuit. Keep this deterministic and fail closed.\nconst now = new Date(), row = $json?.provider_code ? $json : { state: 'CLOSED', transient_failure_count: 0 }, retry = row.retry_after ? new Date(row.retry_after) : null;\nif (row.state === 'OPEN' && retry && retry > now)\n    throw new Error('PROVIDER_CIRCUIT_OPEN:CODEX_AGENT_RUNNER');\nreturn [{ json: { provider_code: 'CODEX_AGENT_RUNNER', state: row.state === 'OPEN' ? 'HALF_OPEN' : 'CLOSED', transient_failure_count: Number(row.transient_failure_count || 0), last_error_class: row.last_error_class || '', opened_at: row.opened_at || null, retry_after: row.retry_after || null, readback_verified: false, updated_at: now.toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "9029",
+      "name": "Persist Agent Runner Circuit Gate",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "CODEX_AGENT_RUNNER"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "CODEX_AGENT_RUNNER",
+            "state": "={{ $json.state }}",
+            "transient_failure_count": "={{ $json.transient_failure_count }}",
+            "last_error_class": "={{ $json.last_error_class }}",
+            "opened_at": "={{ $json.opened_at }}",
+            "retry_after": "={{ $json.retry_after }}",
+            "readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "9008",
+      "name": "Validate Proposal Schema and Policy Boundary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Proposal Schema and Policy Boundary. Keep this deterministic and fail closed.\nconst request = $('Build Idempotent Agent Handoff').first().json;\nconst response = $json;\nconst envelopeFields = new Set([\n    'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',\n    'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',\n    'runner_receipt_id', 'runner_model', 'runner_reasoning_effort', 'auth_mode',\n    'proposals',\n]);\nif (Object.keys(response).some(field => !envelopeFields.has(field))) {\n    throw new Error('Agent proposal has unknown envelope field');\n}\nfor (const field of envelopeFields) {\n    if (response[field] === undefined) {\n        throw new Error(`Agent proposal schema missing ${field}`);\n    }\n}\nif (response.schema_version !== 1\n    || response.job_id !== request.job_id\n    || response.idempotency_key !== request.idempotency_key\n    || response.agent_provider !== request.agent_provider\n    || response.policy_id !== request.policy_id\n    || response.policy_class !== request.policy_class\n    || response.policy_sha256 !== request.policy_sha256\n    || response.config_sha256 !== request.config_sha256\n    || response.output_schema_sha256 !== request.output_schema_sha256) {\n    throw new Error('Agent proposal envelope mismatch');\n}\nif (typeof response.runner_receipt_id !== 'string'\n    || !response.runner_receipt_id.length\n    || response.runner_receipt_id.length > 256) {\n    throw new Error('Invalid runner receipt identity');\n}\nconst providerPolicy = {\n    CODEX_SUBSCRIPTION: {\n        NORMAL: ['gpt-5.6-luna', 'max', 'CHATGPT_SUBSCRIPTION'],\n        EXCEPTION: ['gpt-5.6-sol', 'xhigh', 'CHATGPT_SUBSCRIPTION'],\n    },\n    CLAUDE_SUBSCRIPTION: {\n        NORMAL: ['claude-sonnet-4-6', 'default', 'CLAUDE_SUBSCRIPTION'],\n        EXCEPTION: ['claude-sonnet-4-6', 'default', 'CLAUDE_SUBSCRIPTION'],\n    },\n};\nconst expectedRunner = providerPolicy[request.agent_provider]?.[request.policy_class];\nif (!expectedRunner\n    || response.runner_model !== expectedRunner[0]\n    || response.runner_reasoning_effort !== expectedRunner[1]\n    || response.auth_mode !== expectedRunner[2]) {\n    throw new Error('Agent runner auth or model policy mismatch');\n}\nconst maxProposals = Math.min(600, request.unresolved.reduce((count, item) => count + item.allowed_fields.length, 0));\nif (!Array.isArray(response.proposals) || response.proposals.length > maxProposals) {\n    throw new Error('Invalid proposal count');\n}\nconst requestById = new Map(request.unresolved.map(item => [item.transaction_id, item]));\nconst seenPairs = new Set();\nconst lockedFields = new Set([\n    'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',\n    'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',\n]);\nconst stringFields = new Set([\n    'vendor', 'category', 'subcategory', 'evidence_policy', 'property_code',\n    'rental_unit', 'channel', 'reward_bucket',\n]);\nconst proposalFields = new Set([\n    'transaction_id', 'field', 'value', 'confidence', 'reason_code',\n]);\nfor (const proposal of response.proposals) {\n    if (!proposal\n        || typeof proposal !== 'object'\n        || Array.isArray(proposal)\n        || Object.keys(proposal).some(field => !proposalFields.has(field))) {\n        throw new Error('Invalid proposal object');\n    }\n    if (typeof proposal.transaction_id !== 'string'\n        || !proposal.transaction_id.length\n        || proposal.transaction_id.length > 256\n        || typeof proposal.field !== 'string') {\n        throw new Error('Invalid proposal identity');\n    }\n    const item = requestById.get(proposal.transaction_id);\n    const allowedFields = new Set(item?.allowed_fields || []);\n    const pair = JSON.stringify([proposal.transaction_id, proposal.field]);\n    if (seenPairs.has(pair)) {\n        throw new Error('Duplicate proposal field');\n    }\n    seenPairs.add(pair);\n    if (!item || lockedFields.has(proposal.field) || !allowedFields.has(proposal.field)) {\n        throw new Error('Agent proposed forbidden field');\n    }\n    if (typeof proposal.confidence !== 'number'\n        || proposal.confidence < 0\n        || proposal.confidence > 1) {\n        throw new Error('Invalid proposal confidence');\n    }\n    if (typeof proposal.reason_code !== 'string'\n        || !/^[A-Z0-9_:-]{0,128}$/.test(proposal.reason_code)) {\n        throw new Error('Invalid proposal reason');\n    }\n    if (proposal.field === 'tags'\n        && (!Array.isArray(proposal.value)\n            || !proposal.value.length\n            || proposal.value.length > 12\n            || new Set(proposal.value).size !== proposal.value.length\n            || proposal.value.some(value => (typeof value !== 'string'\n                || value.length > 64\n                || !/^[a-z0-9:_-]+$/.test(value))))) {\n        throw new Error('Invalid tags proposal');\n    }\n    if (['review_required', 'is_subscription'].includes(proposal.field)\n        && typeof proposal.value !== 'boolean') {\n        throw new Error('Invalid boolean proposal');\n    }\n    if (stringFields.has(proposal.field)\n        && (typeof proposal.value !== 'string'\n            || !proposal.value.length\n            || proposal.value.length > 128)) {\n        throw new Error('Invalid string proposal');\n    }\n    if (proposal.field === 'category_recommendation'\n        && (!proposal.value\n            || typeof proposal.value !== 'object'\n            || Array.isArray(proposal.value)\n            || Object.keys(proposal.value).some(field => !['name', 'group', 'reason'].includes(field))\n            || typeof proposal.value.name !== 'string'\n            || !proposal.value.name.length\n            || proposal.value.name.length > 80\n            || typeof proposal.value.group !== 'string'\n            || !proposal.value.group.length\n            || proposal.value.group.length > 80\n            || typeof proposal.value.reason !== 'string'\n            || !proposal.value.reason.length\n            || proposal.value.reason.length > 300)) {\n        throw new Error('Invalid category recommendation');\n    }\n    if (proposal.field === 'rule_recommendation'\n        && (!proposal.value\n            || typeof proposal.value !== 'object'\n            || Array.isArray(proposal.value)\n            || Object.keys(proposal.value).some(field => !['enabled', 'evidence_count'].includes(field))\n            || proposal.value.enabled !== false\n            || !Number.isInteger(proposal.value.evidence_count)\n            || proposal.value.evidence_count < 3\n            || proposal.value.evidence_count > 10000)) {\n        throw new Error('Invalid rule recommendation');\n    }\n    const domain = item.allowed_values?.[proposal.field];\n    if (Array.isArray(domain)) {\n        if (proposal.field === 'tags' && !proposal.value.every(value => domain.includes(value))) {\n            throw new Error('Tag proposal outside configured domain');\n        }\n        if (proposal.field !== 'tags' && !domain.includes(proposal.value)) {\n            throw new Error('Proposal outside configured domain');\n        }\n    }\n}\nreturn [{ json: response }];\n"
+      }
+    },
+    {
+      "id": "9030",
+      "name": "Close Agent Runner Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "CODEX_AGENT_RUNNER"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "CODEX_AGENT_RUNNER",
+            "state": "CLOSED",
+            "transient_failure_count": 0,
+            "last_error_class": "",
+            "opened_at": null,
+            "retry_after": null,
+            "readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "9009",
+      "name": "Build Canonical Proposal Artifact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Canonical Proposal Artifact. Keep this deterministic and fail closed.\nconst proposal = $('Validate Proposal Schema and Policy Boundary').first().json, artifact_text = JSON.stringify(proposal);\nreturn [{ json: { ...proposal, artifact_text, artifact_schema: 'finance-ai-proposal-v1' } }];\n"
+      }
+    },
+    {
+      "id": "9019",
+      "name": "SHA-256 Canonical Proposal Artifact",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.artifact_text }}",
+        "dataPropertyName": "proposal_sha256"
+      }
+    },
+    {
+      "id": "9020",
+      "name": "Convert Proposal Artifact to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "artifact_text",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "={{ $json.job_id + '.finance-ai-proposal-v1.json' }}",
+          "encoding": "utf8"
+        }
+      }
+    },
+    {
+      "id": "9026",
+      "name": "Attach Trusted Proposal Archive Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Attach Trusted Proposal Archive Payload. Keep this deterministic and fail closed.\nconst contract = $json, artifact = $('SHA-256 Canonical Proposal Artifact').first().json;\nif (!contract.onedrive_parent_id)\n    throw new Error('AI_PROPOSAL_ARCHIVE_PARENT_MISSING');\nreturn [{ json: { ...artifact, onedrive_parent_id: contract.onedrive_parent_id } }];\n"
+      }
+    },
+    {
+      "id": "9021",
+      "name": "Load Trusted Proposal Archive Contract",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_contracts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "AI_PROPOSAL_ARCHIVE"
+            },
+            {
+              "keyName": "enabled",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9022",
+      "name": "Archive Proposal Artifact in OneDrive",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "fileName": "={{ $('Build Idempotent Agent Handoff').item.json.job_id + '.finance-ai-proposal-v1.json' }}",
+        "parentId": "={{ $json.onedrive_parent_id }}",
+        "binaryData": true
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "9023",
+      "name": "Read Back Proposal Artifact",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        680,
+        760
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $('Archive Proposal Artifact in OneDrive').item.json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "9024",
+      "name": "SHA-256 Proposal Artifact Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "proposal_readback_sha256"
+      }
+    },
+    {
+      "id": "9025",
+      "name": "Verify Proposal Artifact Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Proposal Artifact Readback. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Canonical Proposal Artifact').first().json.proposal_sha256, observed = $json.proposal_readback_sha256;\nif (observed !== expected)\n    throw new Error('AGENT_PROPOSAL_ARTIFACT_HASH_MISMATCH');\nconst uploaded = $('Archive Proposal Artifact in OneDrive').first().json;\nif (!uploaded.id || !(uploaded.eTag || uploaded.etag))\n    throw new Error('AGENT_PROPOSAL_ARTIFACT_IDENTITY_MISSING');\nreturn [{ json: { proposal_sha256: expected, proposal_artifact_item_id: uploaded.id, proposal_artifact_etag: uploaded.eTag || uploaded.etag, proposal_artifact_schema: 'finance-ai-proposal-v1' } }];\n"
+      }
+    },
+    {
+      "id": "9010",
+      "name": "Upsert SUCCEEDED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{ $('Build Idempotent Agent Handoff').item.json.job_id }}",
+            "idempotency_key": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}",
+            "state": "SUCCEEDED",
+            "runner_receipt_id": "={{ $('Validate Proposal Schema and Policy Boundary').item.json.runner_receipt_id }}",
+            "proposal_sha256": "={{ $json.proposal_sha256 }}",
+            "proposal_artifact_item_id": "={{ $json.proposal_artifact_item_id }}",
+            "proposal_artifact_etag": "={{ $json.proposal_artifact_etag }}",
+            "proposal_artifact_schema": "={{ $json.proposal_artifact_schema }}",
+            "review_state": "PENDING",
+            "review_decision": "",
+            "reviewed_by_hash": "",
+            "reviewed_at": null,
+            "terminal_readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "9011",
+      "name": "Read Back SUCCEEDED Agent Job",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "SUCCEEDED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9018",
+      "name": "Compare SUCCEEDED Agent Job Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare SUCCEEDED Agent Job Readback. Keep this deterministic and fail closed.\nconst request = $('Build Idempotent Agent Handoff').first().json, proposal = $('Validate Proposal Schema and Policy Boundary').first().json, artifact = $('Verify Proposal Artifact Readback').first().json, observed = $json;\nif (observed.job_id !== request.job_id || observed.idempotency_key !== request.idempotency_key || observed.runner_receipt_id !== proposal.runner_receipt_id || observed.proposal_sha256 !== artifact.proposal_sha256 || observed.proposal_artifact_item_id !== artifact.proposal_artifact_item_id || observed.proposal_artifact_etag !== artifact.proposal_artifact_etag || observed.review_state !== 'PENDING')\n    throw new Error('AGENT_SUCCEEDED_RECEIPT_MISMATCH');\nreturn [{ json: observed }];\n"
+      }
+    },
+    {
+      "id": "9012",
+      "name": "Mark Agent Receipt Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idempotency_key": "={{ $json.idempotency_key }}",
+            "terminal_readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "9013",
+      "name": "Read Back Verified Agent Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_agent_jobs",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Idempotent Agent Handoff').item.json.idempotency_key }}"
+            },
+            {
+              "keyName": "terminal_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9014",
+      "name": "Return Proposal Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Proposal Only. Keep this deterministic and fail closed.\nconst p = $('Validate Proposal Schema and Policy Boundary').first().json;\nreturn [{ json: { policy_id: p.policy_id, job_id: p.job_id, idempotency_key: p.idempotency_key, proposals: p.proposals } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009-config",
+      "name": "Agent Proposal Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-1",
+              "name": "provider_selection",
+              "type": "string",
+              "value": "SERVER_AI_POLICY_CONTRACT"
+            },
+            {
+              "id": "config-2",
+              "name": "supported_providers",
+              "type": "string",
+              "value": "CODEX_SUBSCRIPTION|CLAUDE_SUBSCRIPTION"
+            },
+            {
+              "id": "config-3",
+              "name": "proposal_only",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009-generated-note-1",
+      "name": "Stage 1 · Trusted Agent Proposal Input to Upsert SUBMITTED Agent Job",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Trusted Agent Proposal Input → Upsert SUBMITTED Agent Job\n**Input:** Trusted Agent Proposal Input  ·  **Output:** Upsert SUBMITTED Agent Job  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009-generated-note-2",
+      "name": "Stage 2 · Read Back SUBMITTED Agent Job to Close Agent Runner Circuit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Read Back SUBMITTED Agent Job → Close Agent Runner Circuit\n**Input:** Read Back SUBMITTED Agent Job  ·  **Output:** Close Agent Runner Circuit  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009-generated-note-3",
+      "name": "Stage 3 · Build Canonical Proposal Artifact to SHA-256 Proposal Artifact Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Build Canonical Proposal Artifact → SHA-256 Proposal Artifact Readback\n**Input:** Build Canonical Proposal Artifact  ·  **Output:** SHA-256 Proposal Artifact Readback  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009-generated-note-4",
+      "name": "Stage 4 · Verify Proposal Artifact Readback to Return Proposal Only",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Verify Proposal Artifact Readback → Return Proposal Only\n**Input:** Verify Proposal Artifact Readback  ·  **Output:** Return Proposal Only  ·  **Nodes:** 25–31\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Validate Untrusted Proposal Request": {
+      "main": [
+        [
+          {
+            "node": "Read Active Server AI Policy Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Active Server AI Policy Contract": {
+      "main": [
+        [
+          {
+            "node": "Build Authoritative Redacted Proposal Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Authoritative Redacted Proposal Job": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Agent Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Agent Request": {
+      "main": [
+        [
+          {
+            "node": "Build Idempotent Agent Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Idempotent Agent Handoff": {
+      "main": [
+        [
+          {
+            "node": "Upsert SUBMITTED Agent Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert SUBMITTED Agent Job": {
+      "main": [
+        [
+          {
+            "node": "Read Back SUBMITTED Agent Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back SUBMITTED Agent Job": {
+      "main": [
+        [
+          {
+            "node": "Compare SUBMITTED Agent Job Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare SUBMITTED Agent Job Readback": {
+      "main": [
+        [
+          {
+            "node": "Read Agent Runner Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Proposal Schema and Policy Boundary": {
+      "main": [
+        [
+          {
+            "node": "Close Agent Runner Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Canonical Proposal Artifact": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Canonical Proposal Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Canonical Proposal Artifact": {
+      "main": [
+        [
+          {
+            "node": "Load Trusted Proposal Archive Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Trusted Proposal Archive Contract": {
+      "main": [
+        [
+          {
+            "node": "Attach Trusted Proposal Archive Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Trusted Proposal Archive Payload": {
+      "main": [
+        [
+          {
+            "node": "Convert Proposal Artifact to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Proposal Artifact to File": {
+      "main": [
+        [
+          {
+            "node": "Archive Proposal Artifact in OneDrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Proposal Artifact in OneDrive": {
+      "main": [
+        [
+          {
+            "node": "Read Back Proposal Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Proposal Artifact": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Proposal Artifact Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Proposal Artifact Readback": {
+      "main": [
+        [
+          {
+            "node": "Verify Proposal Artifact Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Proposal Artifact Readback": {
+      "main": [
+        [
+          {
+            "node": "Upsert SUCCEEDED Agent Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert SUCCEEDED Agent Job": {
+      "main": [
+        [
+          {
+            "node": "Read Back SUCCEEDED Agent Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back SUCCEEDED Agent Job": {
+      "main": [
+        [
+          {
+            "node": "Compare SUCCEEDED Agent Job Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare SUCCEEDED Agent Job Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark Agent Receipt Readback Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Agent Receipt Readback Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified Agent Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Agent Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return Proposal Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trusted Agent Proposal Input": {
+      "main": [
+        [
+          {
+            "node": "Agent Proposal Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Agent Runner Circuit": {
+      "main": [
+        [
+          {
+            "node": "Gate Agent Runner Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Agent Runner Circuit": {
+      "main": [
+        [
+          {
+            "node": "Persist Agent Runner Circuit Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Agent Runner Circuit Gate": {
+      "main": [
+        [
+          {
+            "node": "Invoke Subscription Agent Adapter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close Agent Runner Circuit": {
+      "main": [
+        [
+          {
+            "node": "Build Canonical Proposal Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Proposal Parameters": {
+      "main": [
+        [
+          {
+            "node": "Validate Untrusted Proposal Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoke Subscription Agent Adapter": {
+      "main": [
+        [
+          {
+            "node": "Validate Proposal Schema and Policy Boundary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "AI_PROPOSAL",
+    "migrationStatus": "SPEC_ONLY",
+    "provider": "SUBSCRIPTION_AGENT_HANDOFF",
+    "authMode": "CHATGPT_SUBSCRIPTION",
+    "normalModel": "gpt-5.6-luna",
+    "exceptionModel": "gpt-5.6-sol",
+    "requestSchema": "contracts/codex-agent-handoff-v1.schema.json",
+    "outputSchema": "contracts/ai-proposal-v1.schema.json",
+    "policyContractTable": "finance_ai_policy_contracts",
+    "terminalReceiptTable": "finance_agent_jobs",
+    "terminalReceiptReadback": true,
+    "proposalArtifactStore": "OneDrive",
+    "proposalReviewRequired": true,
+    "activationBlockers": [
+      "CODEX_AGENT_RUNNER_REQUIRED",
+      "CHATGPT_SUBSCRIPTION_LOGIN_REQUIRED",
+      "AI_POLICY_CONTRACT_SEED_REQUIRED",
+      "AI_PROPOSAL_ARCHIVE_CONTRACT_REQUIRED",
+      "RUNNER_EXACT_IMAGE_REQUIRED",
+      "THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"
+    ],
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "supportedProviders": [
+      "CODEX_SUBSCRIPTION",
+      "CLAUDE_SUBSCRIPTION"
+    ],
+    "providerSelectionCallerControlled": false,
+    "protectedFieldPolicyIdenticalAcrossProviders": true,
+    "providerAdapterWorkflow": "SUBSCRIPTION_AGENT_ADAPTER",
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000004",
+      "name": "04 Agent Enrichment",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ],
+    "providerSelection": "SERVER_AI_POLICY_CONTRACT",
+    "providerBranchesEnabled": [
+      "CODEX_SUBSCRIPTION",
+      "CLAUDE_SUBSCRIPTION"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Agent Proposal Parameters to Upsert SUBMITTED Agent Job",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000009-config",
+        "9002",
+        "9015",
+        "9016",
+        "9003",
+        "9004",
+        "9005"
+      ],
+      "description": "Finance stage 1. Input starts at Agent Proposal Parameters; verified output leaves through Upsert SUBMITTED Agent Job."
+    },
+    {
+      "name": "Stage 2: Read Back SUBMITTED Agent Job to Close Agent Runner Circuit",
+      "nodeIds": [
+        "9006",
+        "9017",
+        "9027",
+        "9028",
+        "9029",
+        "9007",
+        "9008",
+        "9030"
+      ],
+      "description": "Finance stage 2. Input starts at Read Back SUBMITTED Agent Job; verified output leaves through Close Agent Runner Circuit."
+    },
+    {
+      "name": "Stage 3: Build Canonical Proposal Artifact to SHA-256 Proposal Artifact Readback",
+      "nodeIds": [
+        "9009",
+        "9019",
+        "9021",
+        "9026",
+        "9020",
+        "9022",
+        "9023",
+        "9024"
+      ],
+      "description": "Finance stage 3. Input starts at Build Canonical Proposal Artifact; verified output leaves through SHA-256 Proposal Artifact Readback."
+    },
+    {
+      "name": "Stage 4: Verify Proposal Artifact Readback to Return Proposal Only",
+      "nodeIds": [
+        "9025",
+        "9010",
+        "9011",
+        "9018",
+        "9012",
+        "9013",
+        "9014"
+      ],
+      "description": "Finance stage 4. Input starts at Verify Proposal Artifact Readback; verified output leaves through Return Proposal Only."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

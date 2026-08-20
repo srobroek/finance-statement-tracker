@@ -1,10 +1,13 @@
-# Finance Statement Worker POC
+# Finance Statement Tracker
 
-This project is the deterministic automation layer for an Actual-first personal finance tracker. It performs statement parsing, ordered multi-condition rules, idempotent ingestion, evidence matching, cashback tier simulation, and month-close validation.
+This project contains the deterministic finance contracts and n8n workflows for
+an Actual-first personal finance tracker. n8n owns scheduling and orchestration;
+Actual owns the ledger, the cashback app owns live routing state, and OneDrive
+owns evidence.
 
 The deterministic parser and rule engine use a small pinned Python dependency set. The continuously running cashback companion uses SQLite for durable operational state and `pywebpush` for iOS Declarative Web Push delivery.
 
-The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, `docs/cashback-companion-decision.md`, and the current `docs/production-readiness-2026-08-17.md` audit.
+The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, `docs/cashback-companion-decision.md`, and `config/project-acceptance.json`.
 
 ## Included
 
@@ -38,7 +41,7 @@ Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schem
 
 ## Bank adapter API
 
-`finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the Actual bridge consume only those normalized objects.
+`finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the n8n Actual node consume only those normalized objects.
 
 The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered remain explicitly non-importing placeholders until real fixtures pass parser and arithmetic tests. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
 
@@ -55,7 +58,9 @@ python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
 
-PDF extraction is isolated in the Actual ingestion container. Install the `statements` optional dependency only in an environment that parses statements; the deterministic normalization and calculation modules remain dependency-free.
+PDF extraction is an explicit n8n sub-workflow. Install the `statements`
+optional dependency only for local parser development; production extraction
+uses reviewed fixed-purpose n8n nodes.
 
 ## Run
 
@@ -69,7 +74,10 @@ python -m finance_tracker.cli browser-adapters-status --sources config\browser-s
 
 Browser acquisition is an alternate source, not a second ledger. Provider/data recipes describe the exact authenticated UI path; official CSV/XLSX/PDF artifacts are normalized into the same staging, rules, review, and Actual import pipeline as email statements. See `docs/browser-ingestion.md`.
 
-The continuously running `actual-ingestion` container accepts statement PDFs, normalized browser captures, and official browser exports through one authenticated job API. `scripts/push-actual-ingestion-job.ps1` reads its SSH target and container name from the environment-neutral `config/deployment.json`, an ignored `config/deployment.local.json`, or `FINANCE_DEPLOYMENT_CONFIG`, uploads one content-addressed artifact, and submits an idempotent STAGE, PREFLIGHT, or explicitly gated COMMIT job. The container is published to GHCR and deployed by `.github/workflows/actual-ingestion-image.yml`.
+Statement PDFs, normalized browser captures, and official browser exports enter
+the versioned workflows under `integrations/n8n`. There is no ingestion bridge,
+SSH submission wrapper, or second transaction store. The fixed-purpose Actual
+node writes through `@actual-app/api` only after validation and review gates.
 
 ## Runtime model
 
@@ -86,7 +94,7 @@ python -m finance_tracker.cli automation-audit `
   --automation-root "$env:USERPROFILE\.codex\automations"
 ```
 
-The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual, Cashback Control, and the ingestion worker, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails.
+The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual and Cashback Control, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails. n8n and its Postgres database use their own stack health checks.
 
 Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.
 

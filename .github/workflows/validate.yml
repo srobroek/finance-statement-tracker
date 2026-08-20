@@ -1,0 +1,53 @@
+name: Validate finance tracker
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finance-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python package
+        run: python -m pip install ".[statements,test]"
+
+      - name: Run Python regression suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/actual/package-lock.json
+
+      - name: Install Actual integration
+        working-directory: integrations/actual
+        run: npm ci
+
+      - name: Run Actual integration tests
+        working-directory: integrations/actual
+        run: npm test
+
+      - name: Run offline Actual integration
+        working-directory: integrations/actual
+        run: npm run integration

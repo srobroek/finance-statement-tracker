@@ -1,0 +1,64 @@
+{
+  "$id": "https://vxsan.com/schemas/wealth-acceptance-evidence-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "archive_path": {"minLength": 1, "type": "string"},
+          "archive_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+          "id": {"minLength": 1, "type": "string"},
+          "kind": {"enum": ["FAB_ACCOUNT_INVENTORY", "SARWA_WEALTH_SNAPSHOT", "FX_SNAPSHOT", "ADCB_ZERO_EVIDENCE", "ACTUAL_API_READBACK", "ACTUAL_UI_READBACK"]},
+          "non_empty": {"const": true},
+          "observed_at": {"format": "date-time", "type": "string"},
+          "reviewer": {"minLength": 1, "type": "string"},
+          "source_path": {"minLength": 1, "type": "string"},
+          "source_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+        },
+        "required": ["id", "kind", "source_path", "source_sha256", "archive_path", "archive_sha256", "observed_at", "reviewer", "non_empty"],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_sync_id": {"minLength": 1, "type": "string"},
+        "git_commit": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "id": {"minLength": 1, "type": "string"},
+        "kind": {"enum": ["DISPOSABLE", "PRODUCTION"]}
+      },
+      "required": ["id", "kind", "git_commit", "actual_sync_id"],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_api_artifact_id": {"minLength": 1, "type": "string"},
+        "actual_ui_artifact_id": {"minLength": 1, "type": "string"},
+        "adcb_account_id": {"minLength": 1, "type": "string"},
+        "adcb_zero_artifact_id": {"minLength": 1, "type": "string"},
+        "aggregate_only_sarwa_account_ids": {"items": {"type": "string"}, "type": "array"},
+        "evaluated_at": {"format": "date-time", "type": "string"},
+        "excluded_sarwa_account_ids": {"items": {"type": "string"}, "type": "array"},
+        "expected_fab_account_ids": {"items": {"type": "string"}, "type": "array"},
+        "expected_sarwa_account_ids": {"items": {"type": "string"}, "type": "array"},
+        "fab_inventory_artifact_id": {"minLength": 1, "type": "string"},
+        "fx_snapshot_artifact_ids": {"maxItems": 2, "minItems": 2, "items": {"type": "string"}, "type": "array"},
+        "initial_observed_balances_minor": {"additionalProperties": {"type": "integer"}, "type": "object"},
+        "position_tolerance": {"pattern": "^[0-9]+(?:\\.[0-9]+)?$", "type": "string"},
+        "sarwa_snapshot_artifact_ids": {"maxItems": 2, "minItems": 2, "items": {"type": "string"}, "type": "array"},
+        "wealth_stale_after_seconds": {"minimum": 1, "type": "integer"}
+      },
+      "required": ["actual_api_artifact_id", "actual_ui_artifact_id", "fab_inventory_artifact_id", "sarwa_snapshot_artifact_ids", "fx_snapshot_artifact_ids", "adcb_zero_artifact_id", "expected_fab_account_ids", "expected_sarwa_account_ids", "excluded_sarwa_account_ids", "aggregate_only_sarwa_account_ids", "adcb_account_id", "initial_observed_balances_minor", "position_tolerance", "wealth_stale_after_seconds", "evaluated_at"],
+      "type": "object"
+    },
+    "schema_version": {"const": 1}
+  },
+  "required": ["schema_version", "environment", "artifacts", "policy"],
+  "title": "Read-only wealth/account acceptance evidence bundle",
+  "type": "object"
+}

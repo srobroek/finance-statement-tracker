@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "capture_id": "fab-non-credit-inventory-2026-08-19",
+  "approval": {
+    "status": "OWNER_EVIDENCED",
+    "scope": "ALL_VISIBLE_NON_CREDIT_ACCOUNTS_AND_LOANS",
+    "approved_on": "2026-08-19"
+  },
+  "source": {
+    "provider": "FAB",
+    "captured_on": "2026-08-19",
+    "capture_method": "USER_ASSISTED_VISIBLE_PORTAL_INVENTORY",
+    "pages": [
+      "https://online.bankfab.com/PersonalBankingWeb/accounts",
+      "https://online.bankfab.com/PersonalBankingWeb/loans/loansOverview"
+    ],
+    "limitations": [
+      "Balances are date-precision observations because the portal evidence did not expose a separate balance timestamp.",
+      "Full account and loan identifiers are intentionally not persisted; stable opaque identities and last four digits are retained."
+    ]
+  },
+  "inventory_complete": true,
+  "accounts": [
+    {"provider_account_id": "fab:savings:isave-2002", "display_name": "FAB iSave · 2002", "product_type": "SAVINGS", "currency": "AED", "last4": "2002", "observed_balance_minor": 0, "balance_as_of": "2026-08-19", "balance_sign": "ASSET_POSITIVE"},
+    {"provider_account_id": "fab:current:2008", "display_name": "FAB Elite Gold Current Account · 2008", "product_type": "CHECKING", "currency": "EUR", "last4": "2008", "observed_balance_minor": 0, "balance_as_of": "2026-08-19", "balance_sign": "ASSET_POSITIVE"},
+    {"provider_account_id": "fab:current:2001", "display_name": "FAB Elite Gold Current Account · 2001", "product_type": "CHECKING", "currency": "AED", "last4": "2001", "observed_balance_minor": 22501145, "balance_as_of": "2026-08-19", "balance_sign": "ASSET_POSITIVE", "historical_activity_evidence": "runtime/browser-captures/fab-account-2001-2026-08-18.json"},
+    {"provider_account_id": "fab:savings:shared-property-eur-2007", "display_name": "FAB EUR Savings Shared Property · 2007", "product_type": "SAVINGS", "currency": "EUR", "last4": "2007", "observed_balance_minor": 0, "balance_as_of": "2026-08-19", "balance_sign": "ASSET_POSITIVE"},
+    {"provider_account_id": "fab:savings:shared-property-aed-2006", "display_name": "FAB AED Savings Shared Property · 2006", "product_type": "SAVINGS", "currency": "AED", "last4": "2006", "observed_balance_minor": 0, "balance_as_of": "2026-08-19", "balance_sign": "ASSET_POSITIVE"},
+    {"provider_account_id": "fab:loan:mortgage-0203", "display_name": "FAB Mortgage · 0203", "product_type": "MORTGAGE", "currency": "AED", "last4": "0203", "observed_outstanding_minor": 260595200, "actual_signed_balance_minor": -260595200, "balance_as_of": "2026-08-19", "balance_sign": "LIABILITY_NEGATIVE"}
+  ]
+}

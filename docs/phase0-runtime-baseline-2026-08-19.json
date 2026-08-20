@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-08-19T07:48:03Z",
+  "environment_id": "nightwatch-ci-rootful-podman",
+  "repository": {
+    "branch": "codex/n8n-finance-orchestration",
+    "baseline_commit": "f85fbda2a9fc51fb10cd67deb30dfc5a465414d8",
+    "orchestrator_repository_commit": "ce4b2cc85706d880beddf4773b612d1b11e88264"
+  },
+  "rootless_context_warning": "The ci user's unprivileged podman context does not enumerate Dockge stacks; runtime inspection requires sudo and the rootful context.",
+  "actual_identity": {
+    "configured_sync_id_sha256": "5cbd9e556411bb31254909548e1a2eef267f1fb4538c651cb74f2caa826e654f",
+    "server_file": "group-e3714853-db8f-4286-8b2b-3cb1a7370b44.sqlite",
+    "plaintext_sync_id_recorded": false
+  },
+  "containers_before_retirement": [
+    {
+      "name": "finance-actual-poc",
+      "container_id": "0f71a931aa98e978ccf137022c9fce4035db71ed3781e2ccc28c9145a2fc70d0",
+      "image_id": "28ee4cee30857837b55e33c776dcc96f013053ff61eed823cd80d37ba1b43f99",
+      "status": "healthy"
+    },
+    {
+      "name": "finance-actual-proxy",
+      "container_id": "d0c44d0c937c6de5c9108fc8325f4f6f1ebd5aef8bc3c302c41668a7f15ce239",
+      "image_id": "368c2b77d1129199a3e4cd5c3ca609316f3e3721df161f9ebc71928c65d760eb",
+      "status": "healthy"
+    },
+    {
+      "name": "finance-cashback-control",
+      "container_id": "7e050e4ad5ee789ac9d9d42a352d51e40b17cdd966e6de2d6e387f815bfb0544",
+      "image_id": "802159ffa07bce81c622d4ff44cc566f40dce8f54a11892207dbbbb71b893cfa",
+      "status": "healthy"
+    },
+    {
+      "name": "finance-actual-ingestion",
+      "container_id": "db64397a550a1d251c46b644dbe55bb834890305df302aa0c382456f264cbfab",
+      "image_id": "d500a8f3f4448c14ebd3923d684e0f0fbfd5123891e0b785df555cc736ae13ac",
+      "status": "retired",
+      "pipeline_revision": "95fccc3eea9a70495bcd5b35b8d0356e7c9e0a4c",
+      "writes_were_enabled": true
+    }
+  ],
+  "final_legacy_snapshot": {
+    "backup": "20260819T074518Z",
+    "schema_version": 2,
+    "archive_sha256": "e589f03350dee3c4cb30689a390845e8af3e783bd29344df8210b296d7f437e4",
+    "status": "ok",
+    "purpose": "immutable forensic archive only; no job or cache state may be migrated"
+  },
+  "post_retirement_snapshot": {
+    "backup": "20260819T074802Z",
+    "schema_version": 3,
+    "archive_sha256": "0e4f7bf78b2a04f69ff1511111952098f581cdeb58577b4bf10aec399e1a348d",
+    "status": "ok",
+    "sqlite_databases": [
+      "actual-data/server-files/account.sqlite",
+      "cashback-data/cashback-events.sqlite3",
+      "actual-data/user-files/group-e3714853-db8f-4286-8b2b-3cb1a7370b44.sqlite"
+    ]
+  },
+  "legacy_retirement": {
+    "container_absent": true,
+    "stack_path_absent": true,
+    "active_cache_path_absent": true,
+    "port_5020_absent": true,
+    "bridge_only_env_keys_removed": [
+      "FINANCE_INGEST_TOKEN",
+      "ALLOW_ACTUAL_WRITES",
+      "FINANCE_APP_CONTEXT"
+    ],
+    "health_monitor_reenabled": true,
+    "bridge_free_backup_verified_after_removal": true
+  },
+  "cloudflare_topology_requirement": {
+    "tunnel_count": 2,
+    "origin_model": "two tunnel containers use private Docker DNS through an allowlisting proxy",
+    "host_or_lan_published_n8n_port_allowed": false
+  },
+  "known_finance_scope_gaps": [
+    "FAB portal account inventory and opening-balance evidence incomplete",
+    "Sarwa accounts not present in Actual",
+    "ADCB closed-card zero readback not proven",
+    "Actual UI and API identity and balance parity not proven"
+  ]
+}

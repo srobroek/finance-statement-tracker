@@ -3,7 +3,6 @@ set -euo pipefail
 
 ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
-INGESTION_STACK_DIR="${FINANCE_INGESTION_STACK_DIR:-/opt/stacks/finance-ingestion}"
 BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
 MAX_BACKUP_AGE_HOURS="${FINANCE_MAX_BACKUP_AGE_HOURS:-48}"
 
@@ -27,7 +26,6 @@ resolved() {
 if [[ "${EUID}" -ne 0 ]]; then fail root_required; fi
 [[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual-poc" ]] || fail unexpected_actual_stack_path
 [[ "$(resolved "${CASHBACK_STACK_DIR}")" == "/opt/stacks/finance-cashback" ]] || fail unexpected_cashback_stack_path
-[[ "$(resolved "${INGESTION_STACK_DIR}")" == "/opt/stacks/finance-ingestion" ]] || fail unexpected_ingestion_stack_path
 [[ "$(resolved "${BACKUP_ROOT}")" == "/opt/backups/finance-actual-poc" ]] || fail unexpected_backup_root
 [[ "${MAX_BACKUP_AGE_HOURS}" =~ ^[0-9]+$ ]] || fail invalid_backup_age
 
@@ -115,9 +113,6 @@ fi
 
 ensure_service finance-cashback-control "${CASHBACK_STACK_DIR}" finance-cashback cashback-control \
   http://127.0.0.1:5010/api/health '"status": "ok"' || failed=1
-ensure_service finance-actual-ingestion "${INGESTION_STACK_DIR}" finance-ingestion actual-ingestion \
-  http://127.0.0.1:5020/api/health '"status": "ok"' || failed=1
-
 latest_backup="$(find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 || true)"
 if [[ -z "${latest_backup}" ]]; then
   log error backup_missing finance-backup >&2

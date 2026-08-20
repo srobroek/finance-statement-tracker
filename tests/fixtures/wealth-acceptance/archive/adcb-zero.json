@@ -1,0 +1,24 @@
+{
+  "account_id": "adcb:credit:8833-6838",
+  "closed_at": "2026-08-18T00:00:00Z",
+  "closing_balance_minor": 0,
+  "currency": "AED",
+  "evidence_type": "ISSUER_CLOSING_STATEMENT",
+  "retain_history": true,
+  "schema_version": 1,
+  "statement_chain": [
+    {
+      "activity_minor": -1238,
+      "closing_balance_minor": -238,
+      "opening_balance_minor": 1000,
+      "source_id": "adcb-disposable-statement-1"
+    },
+    {
+      "activity_minor": 238,
+      "closing_balance_minor": 0,
+      "opening_balance_minor": -238,
+      "source_id": "adcb-disposable-closing-statement"
+    }
+  ],
+  "synthetic_adjustment": false
+}

@@ -1,0 +1,1857 @@
+{
+  "id": "10000000-0000-4000-8000-000000000019",
+  "name": "Finance · Platform Data Table Bootstrap · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "19001",
+      "name": "Manual Platform Bootstrap Only",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "19002",
+      "name": "Create or Reuse finance_execution_failures",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_execution_failures",
+        "columns": {
+          "column": [
+            {
+              "name": "execution_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_name",
+              "type": "string"
+            },
+            {
+              "name": "workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "provider_code",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_message_redacted",
+              "type": "string"
+            },
+            {
+              "name": "first_seen_at",
+              "type": "date"
+            },
+            {
+              "name": "acknowledged_at",
+              "type": "date"
+            },
+            {
+              "name": "replay_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19003",
+      "name": "Create or Reuse finance_acquisition_receipts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_acquisition_receipts",
+        "columns": {
+          "column": [
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "window_start",
+              "type": "date"
+            },
+            {
+              "name": "run_upper_bound",
+              "type": "date"
+            },
+            {
+              "name": "pages_fetched",
+              "type": "number"
+            },
+            {
+              "name": "pagination_exhausted",
+              "type": "boolean"
+            },
+            {
+              "name": "scanned_count",
+              "type": "number"
+            },
+            {
+              "name": "matched_count",
+              "type": "number"
+            },
+            {
+              "name": "heartbeat",
+              "type": "boolean"
+            },
+            {
+              "name": "terminal_state",
+              "type": "string"
+            },
+            {
+              "name": "cursor_commit_eligible",
+              "type": "boolean"
+            },
+            {
+              "name": "downstream_receipt_sha256",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "created_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19004",
+      "name": "Create or Reuse finance_actual_outbox",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_actual_outbox",
+        "columns": {
+          "column": [
+            {
+              "name": "outbox_id",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "imported_id",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "payload_sha256",
+              "type": "string"
+            },
+            {
+              "name": "artifact_item_id",
+              "type": "string"
+            },
+            {
+              "name": "artifact_etag",
+              "type": "string"
+            },
+            {
+              "name": "artifact_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "parser_version",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "lease_owner",
+              "type": "string"
+            },
+            {
+              "name": "lease_fence",
+              "type": "number"
+            },
+            {
+              "name": "lease_expires_at",
+              "type": "date"
+            },
+            {
+              "name": "actual_transaction_id",
+              "type": "string"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "last_error_class",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19005",
+      "name": "Create or Reuse finance_actual_verifications",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_actual_verifications",
+        "columns": {
+          "column": [
+            {
+              "name": "outbox_id",
+              "type": "string"
+            },
+            {
+              "name": "verification_version",
+              "type": "number"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_start",
+              "type": "date"
+            },
+            {
+              "name": "period_end",
+              "type": "date"
+            },
+            {
+              "name": "expected_payload_sha256",
+              "type": "string"
+            },
+            {
+              "name": "observed_payload_sha256",
+              "type": "string"
+            },
+            {
+              "name": "expected_count",
+              "type": "number"
+            },
+            {
+              "name": "observed_count",
+              "type": "number"
+            },
+            {
+              "name": "expected_amount_sum_minor",
+              "type": "number"
+            },
+            {
+              "name": "observed_amount_sum_minor",
+              "type": "number"
+            },
+            {
+              "name": "expected_account_balance",
+              "type": "number"
+            },
+            {
+              "name": "observed_account_balance",
+              "type": "number"
+            },
+            {
+              "name": "invariants_passed",
+              "type": "boolean"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19006",
+      "name": "Create or Reuse finance_agent_jobs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_agent_jobs",
+        "columns": {
+          "column": [
+            {
+              "name": "job_id",
+              "type": "string"
+            },
+            {
+              "name": "idempotency_key",
+              "type": "string"
+            },
+            {
+              "name": "operation_code",
+              "type": "string"
+            },
+            {
+              "name": "policy_id",
+              "type": "string"
+            },
+            {
+              "name": "policy_sha256",
+              "type": "string"
+            },
+            {
+              "name": "config_sha256",
+              "type": "string"
+            },
+            {
+              "name": "output_schema_sha256",
+              "type": "string"
+            },
+            {
+              "name": "request_sha256",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "runner_receipt_id",
+              "type": "string"
+            },
+            {
+              "name": "proposal_sha256",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_item_id",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_etag",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_schema",
+              "type": "string"
+            },
+            {
+              "name": "review_state",
+              "type": "string"
+            },
+            {
+              "name": "review_decision",
+              "type": "string"
+            },
+            {
+              "name": "reviewed_by_hash",
+              "type": "string"
+            },
+            {
+              "name": "reviewed_at",
+              "type": "date"
+            },
+            {
+              "name": "terminal_readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "created_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19007",
+      "name": "Create or Reuse finance_ai_policy_contracts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_ai_policy_contracts",
+        "columns": {
+          "column": [
+            {
+              "name": "policy_id",
+              "type": "string"
+            },
+            {
+              "name": "policy_version",
+              "type": "number"
+            },
+            {
+              "name": "agent_profile",
+              "type": "string"
+            },
+            {
+              "name": "agent_provider",
+              "type": "string"
+            },
+            {
+              "name": "policy_sha256",
+              "type": "string"
+            },
+            {
+              "name": "config_sha256",
+              "type": "string"
+            },
+            {
+              "name": "output_schema_sha256",
+              "type": "string"
+            },
+            {
+              "name": "allowed_fields_json",
+              "type": "string"
+            },
+            {
+              "name": "allowed_values_json",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19008",
+      "name": "Create or Reuse finance_archive_receipts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_archive_receipts",
+        "columns": {
+          "column": [
+            {
+              "name": "archive_receipt_id",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "source_message_id",
+              "type": "string"
+            },
+            {
+              "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_sha256",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_item_id",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_etag",
+              "type": "string"
+            },
+            {
+              "name": "archive_state",
+              "type": "string"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19009",
+      "name": "Create or Reuse finance_config_versions",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_config_versions",
+        "columns": {
+          "column": [
+            {
+              "name": "config_name",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "source_path",
+              "type": "string"
+            },
+            {
+              "name": "content_sha256",
+              "type": "string"
+            },
+            {
+              "name": "git_commit",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "activated_at",
+              "type": "date"
+            },
+            {
+              "name": "retired_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19010",
+      "name": "Create or Reuse finance_document_operations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_document_operations",
+        "columns": {
+          "column": [
+            {
+              "name": "document_id",
+              "type": "string"
+            },
+            {
+              "name": "source_sha256",
+              "type": "string"
+            },
+            {
+              "name": "document_profile",
+              "type": "string"
+            },
+            {
+              "name": "requested_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_item_id",
+              "type": "string"
+            },
+            {
+              "name": "source_message_id",
+              "type": "string"
+            },
+            {
+              "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "last_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "parser_version",
+              "type": "string"
+            },
+            {
+              "name": "output_sha256",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_detail_redacted",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19011",
+      "name": "Create or Reuse finance_mcp_requests",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_mcp_requests",
+        "columns": {
+          "column": [
+            {
+              "name": "request_id",
+              "type": "string"
+            },
+            {
+              "name": "request_sha256",
+              "type": "string"
+            },
+            {
+              "name": "operation_code",
+              "type": "string"
+            },
+            {
+              "name": "caller_subject_hash",
+              "type": "string"
+            },
+            {
+              "name": "target_workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "result_sha256",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_message_redacted",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "created_at",
+              "type": "date"
+            },
+            {
+              "name": "completed_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19012",
+      "name": "Create or Reuse finance_pipeline_runs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_pipeline_runs",
+        "columns": {
+          "column": [
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "trigger_kind",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "receipt_sha256",
+              "type": "string"
+            },
+            {
+              "name": "terminal_readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "started_at",
+              "type": "date"
+            },
+            {
+              "name": "completed_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19013",
+      "name": "Create or Reuse finance_provider_circuits",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_provider_circuits",
+        "columns": {
+          "column": [
+            {
+              "name": "provider_code",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "transient_failure_count",
+              "type": "number"
+            },
+            {
+              "name": "last_error_class",
+              "type": "string"
+            },
+            {
+              "name": "opened_at",
+              "type": "date"
+            },
+            {
+              "name": "retry_after",
+              "type": "date"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19014",
+      "name": "Create or Reuse finance_reconciliations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_reconciliations",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "reconciliation_version",
+              "type": "number"
+            },
+            {
+              "name": "statement_sha256",
+              "type": "string"
+            },
+            {
+              "name": "actual_verification_sha256",
+              "type": "string"
+            },
+            {
+              "name": "cashback_close_id",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "difference_minor",
+              "type": "number"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19015",
+      "name": "Create or Reuse finance_source_contracts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_source_contracts",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "folder_id",
+              "type": "string"
+            },
+            {
+              "name": "senders_json",
+              "type": "string"
+            },
+            {
+              "name": "subjects_json",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_parent_id",
+              "type": "string"
+            },
+            {
+              "name": "manifest_onedrive_parent_id",
+              "type": "string"
+            },
+            {
+              "name": "overlap_seconds",
+              "type": "number"
+            },
+            {
+              "name": "cycle_day",
+              "type": "number"
+            },
+            {
+              "name": "deadline_days",
+              "type": "number"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
+              "type": "string"
+            },
+            {
+              "name": "cashback_close_required",
+              "type": "boolean"
+            },
+            {
+              "name": "enabled",
+              "type": "boolean"
+            },
+            {
+              "name": "content_sha256",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19016",
+      "name": "Create or Reuse finance_source_cursors",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_source_cursors",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "cursor_value",
+              "type": "date"
+            },
+            {
+              "name": "committed_run_id",
+              "type": "string"
+            },
+            {
+              "name": "run_upper_bound",
+              "type": "date"
+            },
+            {
+              "name": "overlap_seconds",
+              "type": "number"
+            },
+            {
+              "name": "scanned_count",
+              "type": "number"
+            },
+            {
+              "name": "matched_count",
+              "type": "number"
+            },
+            {
+              "name": "cursor_version",
+              "type": "number"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "19050",
+      "name": "Emit Versioned AI Policy Seed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Emit Versioned AI Policy Seed. Keep this deterministic and fail closed.\nconst rows = [\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"vendor\",\n            \"category\",\n            \"subcategory\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"category\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"subcategory\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"tags\": [\n                \"home\",\n                \"grocery\",\n                \"dining\",\n                \"transport\",\n                \"travel\",\n                \"online\",\n                \"health\",\n                \"education\",\n                \"gift\",\n                \"business\",\n                \"shared\",\n                \"review\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"classify-unresolved\",\n        \"policy_sha256\": \"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"category_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"recommend-category\",\n        \"policy_sha256\": \"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"is_subscription\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"is_subscription\": [\n                true\n            ],\n            \"tags\": [\n                \"subscription\",\n                \"recurring\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"detect-subscription\",\n        \"policy_sha256\": \"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"property_code\",\n            \"rental_unit\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"property_code\": [\n                \"BLUEWATERS_B7_306\",\n                \"INDIGO1414\",\n                \"LT713\"\n            ],\n            \"rental_unit\": [\n                \"Indigo1414\",\n                \"LT713\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"enrich-property\",\n        \"policy_sha256\": \"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"evidence_policy\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"evidence_policy\": [\n                \"SEARCH_RELATED_EMAIL\",\n                \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                \"MATCH_AMOUNT_AND_PERIOD\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"find-purchase-evidence\",\n        \"policy_sha256\": \"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"channel\",\n            \"reward_bucket\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"channel\": [\n                \"ONLINE\",\n                \"PHYSICAL_POS\",\n                \"APPLE_PAY_POS\",\n                \"UNKNOWN\"\n            ],\n            \"reward_bucket\": [\n                \"EI_AMAZON\",\n                \"RAK_DINING\",\n                \"RAK_EWALLET\",\n                \"RAK_GROCERY\",\n                \"RAK_STANDARD\",\n                \"RAK_TRAVEL\",\n                \"SC_FILLER\",\n                \"SC_FOREIGN\",\n                \"SC_ONLINE\",\n                \"SC_WALLET\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"enrich-cashback-classification\",\n        \"policy_sha256\": \"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"rule_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"recommend-static-rule\",\n        \"policy_sha256\": \"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    }\n];\nconst updated_at = new Date().toISOString();\nreturn rows.map(row => ({ json: { ...row, updated_at } }));\n"
+      }
+    },
+    {
+      "id": "19051",
+      "name": "Upsert AI Policy Contracts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ai_policy_contracts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "policy_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.policy_id }}"
+            },
+            {
+              "keyName": "policy_version",
+              "condition": "eq",
+              "keyValue": "={{ $json.policy_version }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "policy_id": "={{ $json.policy_id }}",
+            "policy_version": "={{ $json.policy_version }}",
+            "agent_profile": "={{ $json.agent_profile }}",
+            "agent_provider": "={{ $json.agent_provider }}",
+            "policy_sha256": "={{ $json.policy_sha256 }}",
+            "config_sha256": "={{ $json.config_sha256 }}",
+            "output_schema_sha256": "={{ $json.output_schema_sha256 }}",
+            "allowed_fields_json": "={{ $json.allowed_fields_json }}",
+            "allowed_values_json": "={{ $json.allowed_values_json }}",
+            "state": "={{ $json.state }}",
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "19052",
+      "name": "Collapse Seed Writes to One Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Collapse Seed Writes to One Readback. Keep this deterministic and fail closed.\nconst rows = $input.all();\nif (rows.length !== 7)\n    throw new Error('AI_POLICY_SEED_UPSERT_COUNT_MISMATCH');\nreturn [{ json: { seed_write_count: rows.length } }];\n"
+      }
+    },
+    {
+      "id": "19053",
+      "name": "Read Back All ACTIVE AI Policy Contracts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ai_policy_contracts",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACTIVE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "19054",
+      "name": "Exact Compare AI Policy Seed Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Exact Compare AI Policy Seed Readback. Keep this deterministic and fail closed.\nconst expected = [\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"vendor\",\n            \"category\",\n            \"subcategory\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"category\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"subcategory\": [\n                \"Accommodation\",\n                \"Bank Fees\",\n                \"Card Payments\",\n                \"Cashback & Rewards\",\n                \"Charity\",\n                \"Clothing\",\n                \"Cloud Services\",\n                \"Coffee & Snacks\",\n                \"Dining Out\",\n                \"District Cooling\",\n                \"Education\",\n                \"Electricity & Water\",\n                \"Electronics\",\n                \"Emergency Fund\",\n                \"Events & Attractions\",\n                \"Family Support\",\n                \"Fitness\",\n                \"Flights\",\n                \"Food Delivery\",\n                \"Foreign Fees\",\n                \"Fuel\",\n                \"Furniture & Appliances\",\n                \"General Retail\",\n                \"Gifts\",\n                \"Groceries\",\n                \"Hobbies & Entertainment\",\n                \"Household Supplies\",\n                \"Insurance\",\n                \"Interest & Dividends\",\n                \"Investments\",\n                \"Maintenance & Repairs\",\n                \"Media Subscriptions\",\n                \"Medical\",\n                \"Mobile & Internet\",\n                \"Monthly Buffer\",\n                \"Mortgage Interest\",\n                \"Needs Review\",\n                \"Online Shopping\",\n                \"Other Income\",\n                \"Parking & Tolls\",\n                \"Personal Care\",\n                \"Pharmacy\",\n                \"Professional Services\",\n                \"Public Transport\",\n                \"Refunds & Reimbursements\",\n                \"Rent & Mortgage\",\n                \"Rental Income\",\n                \"Retirement\",\n                \"Ride Hailing\",\n                \"Salary\",\n                \"Savings Goals\",\n                \"Service Charges\",\n                \"Shipping & Delivery\",\n                \"Software & App Subscriptions\",\n                \"Taxes & Government\",\n                \"Travel Activities\",\n                \"Travel Transport\",\n                \"Utilities Buffer\",\n                \"Vehicle Maintenance\"\n            ],\n            \"tags\": [\n                \"home\",\n                \"grocery\",\n                \"dining\",\n                \"transport\",\n                \"travel\",\n                \"online\",\n                \"health\",\n                \"education\",\n                \"gift\",\n                \"business\",\n                \"shared\",\n                \"review\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"classify-unresolved\",\n        \"policy_sha256\": \"80a691cf88f611477db31cb12e5833f8a2768849a2009693b171066eb91d96c5\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"category_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"recommend-category\",\n        \"policy_sha256\": \"9cdf32cb82cf305f3a983687225359f1ff26411d395f666118eb5eb4d55a9a04\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"is_subscription\",\n            \"tags\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"is_subscription\": [\n                true\n            ],\n            \"tags\": [\n                \"subscription\",\n                \"recurring\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"detect-subscription\",\n        \"policy_sha256\": \"1f2a190cb62070ade3a3e8bee8a151f756103e495675eb608277e1250e1189ea\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"property_code\",\n            \"rental_unit\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"property_code\": [\n                \"BLUEWATERS_B7_306\",\n                \"INDIGO1414\",\n                \"LT713\"\n            ],\n            \"rental_unit\": [\n                \"Indigo1414\",\n                \"LT713\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"enrich-property\",\n        \"policy_sha256\": \"e230f4fbe21adadf0ce834ce10c4f13029e56e3dbe97dcef01950d67409217e3\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"evidence_policy\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"evidence_policy\": [\n                \"SEARCH_RELATED_EMAIL\",\n                \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                \"MATCH_AMOUNT_AND_PERIOD\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"find-purchase-evidence\",\n        \"policy_sha256\": \"ef9caddc198b54f4b813ee9968ce338a5543811327a43c82eb89241e0786ee2a\",\n        \"policy_version\": 2,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"LUNA_MAX\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"channel\",\n            \"reward_bucket\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({\n            \"channel\": [\n                \"ONLINE\",\n                \"PHYSICAL_POS\",\n                \"APPLE_PAY_POS\",\n                \"UNKNOWN\"\n            ],\n            \"reward_bucket\": [\n                \"EI_AMAZON\",\n                \"RAK_DINING\",\n                \"RAK_EWALLET\",\n                \"RAK_GROCERY\",\n                \"RAK_STANDARD\",\n                \"RAK_TRAVEL\",\n                \"SC_FILLER\",\n                \"SC_FOREIGN\",\n                \"SC_ONLINE\",\n                \"SC_WALLET\"\n            ]\n        }),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"enrich-cashback-classification\",\n        \"policy_sha256\": \"09f2e7b88d6bba0627d495490fc03b89f818a04167f43986619a32e516eb8c6c\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    },\n    {\n        \"agent_profile\": \"SOL_XHIGH\",\n        \"agent_provider\": \"CODEX_SUBSCRIPTION\",\n        \"allowed_fields_json\": JSON.stringify([\n            \"rule_recommendation\"\n        ]),\n        \"allowed_values_json\": JSON.stringify({}),\n        \"config_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"output_schema_sha256\": \"09a19e762b63a604fc1ca7b63f7620cb165992e07f704848e75b15412543bf2b\",\n        \"policy_id\": \"recommend-static-rule\",\n        \"policy_sha256\": \"e485a3c59a3591a4ce07b568fd9e2d3cef39f0ee66c42276f2ac6e97df105014\",\n        \"policy_version\": 1,\n        \"state\": \"ACTIVE\"\n    }\n];\nconst fields = [\n    \"policy_id\",\n    \"policy_version\",\n    \"agent_profile\",\n    \"agent_provider\",\n    \"policy_sha256\",\n    \"config_sha256\",\n    \"output_schema_sha256\",\n    \"allowed_fields_json\",\n    \"allowed_values_json\",\n    \"state\"\n];\nconst observed = $input.all().map(item => item.json).filter(row => row && row.state === 'ACTIVE');\nif (observed.length !== expected.length)\n    throw new Error('AI_POLICY_ACTIVE_COUNT_MISMATCH');\nconst key = row => JSON.stringify([row.policy_id, Number(row.policy_version)]);\nconst byKey = new Map();\nfor (const row of observed) {\n    const k = key(row);\n    if (byKey.has(k))\n        throw new Error('AI_POLICY_DUPLICATE_ACTIVE_VERSION');\n    byKey.set(k, row);\n}\nfor (const row of expected) {\n    const actual = byKey.get(key(row));\n    if (!actual)\n        throw new Error(`AI_POLICY_READBACK_MISSING:${row.policy_id}`);\n    for (const field of fields)\n        if (String(actual[field]) !== String(row[field]))\n            throw new Error(`AI_POLICY_READBACK_MISMATCH:${row.policy_id}:${field}`);\n    if (!actual.updated_at || Number.isNaN(Date.parse(actual.updated_at)))\n        throw new Error(`AI_POLICY_UPDATED_AT_INVALID:${row.policy_id}`);\n}\nreturn [{ json: { status: 'VERIFIED', tables_created_or_reused: 15, ai_policy_rows_verified: 7, finance_ledger_writes: false, actual_writes: false, contract_status: 'SPEC_ONLY' } }];\n"
+      }
+    },
+    {
+      "id": "19055",
+      "name": "Emit Versioned Config Fingerprints",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Emit Versioned Config Fingerprints. Keep this deterministic and fail closed.\nconst rows = [\n    {\n        \"config_name\": \"ai-policies\",\n        \"content_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/ai-policies.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"agent-providers\",\n        \"content_sha256\": \"d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/agent-providers.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"static-rules.seed\",\n        \"content_sha256\": \"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/static-rules.seed.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"sha256-92680d5c55464a77\"\n    },\n    {\n        \"config_name\": \"transaction-email-sources\",\n        \"content_sha256\": \"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/transaction-email-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"statement-sources\",\n        \"content_sha256\": \"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/statement-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"browser-sources\",\n        \"content_sha256\": \"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/browser-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"cashback-programs\",\n        \"content_sha256\": \"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/cashback-programs.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"document-processing\",\n        \"content_sha256\": \"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/document-processing.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"evidence-search-policy\",\n        \"content_sha256\": \"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/evidence-search-policy.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    }\n];\nconst activated_at = new Date().toISOString();\nreturn rows.map(row => ({ json: { ...row, activated_at } }));\n"
+      }
+    },
+    {
+      "id": "19056",
+      "name": "Upsert Config Version Fingerprints",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_config_versions",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "config_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.config_name }}"
+            },
+            {
+              "keyName": "version",
+              "condition": "eq",
+              "keyValue": "={{ $json.version }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "config_name": "={{ $json.config_name }}",
+            "version": "={{ $json.version }}",
+            "source_path": "={{ $json.source_path }}",
+            "content_sha256": "={{ $json.content_sha256 }}",
+            "git_commit": "={{ $json.git_commit }}",
+            "state": "={{ $json.state }}",
+            "readback_verified": "={{ $json.readback_verified }}",
+            "activated_at": "={{ $json.activated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "19057",
+      "name": "Collapse Config Writes to One Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Collapse Config Writes to One Readback. Keep this deterministic and fail closed.\nconst rows = $input.all();\nif (rows.length !== 9)\n    throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH');\nreturn [{ json: { config_write_count: rows.length } }];\n"
+      }
+    },
+    {
+      "id": "19058",
+      "name": "Read Back ACTIVE Config Fingerprints",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_config_versions",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACTIVE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "19059",
+      "name": "Exact Compare Config Fingerprint Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Exact Compare Config Fingerprint Readback. Keep this deterministic and fail closed.\nconst expected = [\n    {\n        \"config_name\": \"ai-policies\",\n        \"content_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/ai-policies.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"agent-providers\",\n        \"content_sha256\": \"d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/agent-providers.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"static-rules.seed\",\n        \"content_sha256\": \"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/static-rules.seed.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"sha256-92680d5c55464a77\"\n    },\n    {\n        \"config_name\": \"transaction-email-sources\",\n        \"content_sha256\": \"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/transaction-email-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"statement-sources\",\n        \"content_sha256\": \"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/statement-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"browser-sources\",\n        \"content_sha256\": \"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/browser-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"cashback-programs\",\n        \"content_sha256\": \"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/cashback-programs.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"document-processing\",\n        \"content_sha256\": \"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/document-processing.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"evidence-search-policy\",\n        \"content_sha256\": \"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/evidence-search-policy.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    }\n], fields = [\n    \"config_name\",\n    \"version\",\n    \"source_path\",\n    \"content_sha256\",\n    \"git_commit\",\n    \"state\"\n];\nconst rows = $input.all().map(i => i.json).filter(r => r && r.state === 'ACTIVE'), byKey = new Map(rows.map(r => [JSON.stringify([r.config_name, String(r.version)]), r]));\nfor (const row of expected) {\n    const actual = byKey.get(JSON.stringify([row.config_name, String(row.version)]));\n    if (!actual)\n        throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`);\n    for (const field of fields) {\n        const value = field === 'git_commit' && row[field] === 'RUNTIME_BIND_GIT_COMMIT' ? actual[field] : row[field];\n        if (String(actual[field]) !== String(value))\n            throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);\n    }\n}\nreturn [{ json: { status: 'VERIFIED', tables_created_or_reused: 15, ai_policy_rows_verified: 7, config_rows_verified: 9, finance_ledger_writes: false, actual_writes: false, contract_status: 'SPEC_ONLY' } }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
+      "name": "Stage 1 · Manual Platform Bootstrap Only to Create or Reuse finance_archive_receipts",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Manual Platform Bootstrap Only → Create or Reuse finance_archive_receipts\n**Input:** Manual Platform Bootstrap Only  ·  **Output:** Create or Reuse finance_archive_receipts  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-2",
+      "name": "Stage 2 · Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Create or Reuse finance_config_versions → Create or Reuse finance_source_cursors\n**Input:** Create or Reuse finance_config_versions  ·  **Output:** Create or Reuse finance_source_cursors  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-3",
+      "name": "Stage 3 · Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Emit Versioned AI Policy Seed → Collapse Config Writes to One Readback\n**Input:** Emit Versioned AI Policy Seed  ·  **Output:** Collapse Config Writes to One Readback  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019-generated-note-4",
+      "name": "Stage 4 · Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Read Back ACTIVE Config Fingerprints → Exact Compare Config Fingerprint Readback\n**Input:** Read Back ACTIVE Config Fingerprints  ·  **Output:** Exact Compare Config Fingerprint Readback  ·  **Nodes:** 25–26\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Manual Platform Bootstrap Only": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_execution_failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_execution_failures": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_acquisition_receipts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_acquisition_receipts": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_actual_outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_actual_outbox": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_actual_verifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_actual_verifications": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_agent_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_agent_jobs": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_ai_policy_contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_ai_policy_contracts": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_archive_receipts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_archive_receipts": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_config_versions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_config_versions": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_document_operations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_document_operations": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_mcp_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_mcp_requests": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_pipeline_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_pipeline_runs": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_provider_circuits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_provider_circuits": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_reconciliations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_reconciliations": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_source_contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_source_contracts": {
+      "main": [
+        [
+          {
+            "node": "Create or Reuse finance_source_cursors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_source_cursors": {
+      "main": [
+        [
+          {
+            "node": "Emit Versioned AI Policy Seed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit Versioned AI Policy Seed": {
+      "main": [
+        [
+          {
+            "node": "Upsert AI Policy Contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert AI Policy Contracts": {
+      "main": [
+        [
+          {
+            "node": "Collapse Seed Writes to One Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collapse Seed Writes to One Readback": {
+      "main": [
+        [
+          {
+            "node": "Read Back All ACTIVE AI Policy Contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back All ACTIVE AI Policy Contracts": {
+      "main": [
+        [
+          {
+            "node": "Exact Compare AI Policy Seed Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exact Compare AI Policy Seed Readback": {
+      "main": [
+        [
+          {
+            "node": "Emit Versioned Config Fingerprints",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit Versioned Config Fingerprints": {
+      "main": [
+        [
+          {
+            "node": "Upsert Config Version Fingerprints",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Config Version Fingerprints": {
+      "main": [
+        [
+          {
+            "node": "Collapse Config Writes to One Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collapse Config Writes to One Readback": {
+      "main": [
+        [
+          {
+            "node": "Read Back ACTIVE Config Fingerprints",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back ACTIVE Config Fingerprints": {
+      "main": [
+        [
+          {
+            "node": "Exact Compare Config Fingerprint Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "PLATFORM_DATA_TABLE_BOOTSTRAP",
+    "migrationStatus": "SPEC_ONLY",
+    "manualOnly": true,
+    "platformBootstrapOnly": true,
+    "financeLedgerMutationForbidden": true,
+    "actualMutationForbidden": true,
+    "sourceContract": "integrations/n8n/data-tables.json",
+    "seedContract": "integrations/n8n/generated/ai-policy-contracts.seed.json",
+    "configSeedContract": "integrations/n8n/generated/config-versions.seed.json",
+    "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
+    "activationBlockers": [
+      "EXACT_IMAGE_IMPORT_REQUIRED",
+      "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"
+    ],
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000090",
+      "name": "90 Platform & Admin",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Create or Reuse finance_execution_failures to Create or Reuse finance_archive_receipts",
+      "nodeIds": [
+        "19002",
+        "19003",
+        "19004",
+        "19005",
+        "19006",
+        "19007",
+        "19008"
+      ],
+      "description": "Finance stage 1. Input starts at Create or Reuse finance_execution_failures; verified output leaves through Create or Reuse finance_archive_receipts."
+    },
+    {
+      "name": "Stage 2: Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "nodeIds": [
+        "19009",
+        "19010",
+        "19011",
+        "19012",
+        "19013",
+        "19014",
+        "19015",
+        "19016"
+      ],
+      "description": "Finance stage 2. Input starts at Create or Reuse finance_config_versions; verified output leaves through Create or Reuse finance_source_cursors."
+    },
+    {
+      "name": "Stage 3: Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "nodeIds": [
+        "19050",
+        "19051",
+        "19052",
+        "19053",
+        "19054",
+        "19055",
+        "19056",
+        "19057"
+      ],
+      "description": "Finance stage 3. Input starts at Emit Versioned AI Policy Seed; verified output leaves through Collapse Config Writes to One Readback."
+    },
+    {
+      "name": "Stage 4: Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "nodeIds": [
+        "19058",
+        "19059"
+      ],
+      "description": "Finance stage 4. Input starts at Read Back ACTIVE Config Fingerprints; verified output leaves through Exact Compare Config Fingerprint Readback."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

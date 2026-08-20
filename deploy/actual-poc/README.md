@@ -14,8 +14,9 @@ but its service is owned by the independent `/opt/stacks/finance-cashback`
 project.
 
 Actual and its Nginx proxy are the only services in this Compose project.
-Cashback and ingestion use independent projects under `deploy/cashback` and
-`deploy/ingestion`; deploying either one cannot recreate or stop Actual.
+Cashback is an independent project under `deploy/cashback`. n8n owns ingestion
+orchestration in its own stack and reaches Actual over the private Docker
+network through a fixed-purpose custom node using `@actual-app/api`.
 
 The GHCR package inherits the repository's visibility. If it is private, log
 the container host in to `ghcr.io` once with a token that has `read:packages`.
@@ -29,10 +30,9 @@ sudo docker compose ps
 curl -fsSI http://127.0.0.1:5006/ | grep -E 'Cross-Origin-(Embedder|Opener)-Policy'
 ```
 
-Use `scripts/actual-setup.ps1` for declarative bootstrap operations and the
-statement/browser ingestion wrappers for transaction imports. The ingestion
-wrappers always use the independent worker; they never call the Actual bridge
-directly. Bootstrap defaults to planning, ingestion defaults to staging, and
-writes require explicit mode plus the production write gate. See
+Use `scripts/actual-setup.ps1` for declarative bootstrap operations. All new
+statement and browser imports enter the inactive-first n8n workflows; there is
+no HTTP ingestion bridge or SSH upload wrapper. Bootstrap defaults to planning,
+and writes require explicit mode plus the production write gate. See
 `docs/actual-production.md` and `docs/backup-and-restore.md` for the operating
 and recovery procedures.

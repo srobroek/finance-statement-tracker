@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "contract_status": "DISPOSABLE_ONLY",
+  "production_import_forbidden": true,
+  "required_acknowledgement": "DISPOSABLE_ONLY",
+  "source_workflow_sha256": {
+    "09-ai-proposal.json": "28ccc990f71dd0801238046f8b413697971719f434870170d60a221faf9fa0f3",
+    "12-outlook-message-sweep.json": "fed17b2885a2d110c4793abe76146d1d7dedb9255d892d9bc14b4f1ee2c42f52",
+    "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
+    "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",
+    "18-finance-writer-lease.json": "e03e6d3defba9a30564db0b227cd0fa714a5676ba131ff0b679deeeb960abfc4"
+  },
+  "workflows": [
+    {
+      "file": "90-derived-outlook-sweep-core.json",
+      "id": "90000000-0000-4000-8000-000000000012",
+      "sha256": "a625c2df8c373929c5aefd9321666fe93c4ed673ec43300fdfc4b54e3e507c3c"
+    },
+    {
+      "file": "91-sweep-zero.json",
+      "id": "90000000-0000-4000-8000-000000000901",
+      "sha256": "b14c0a2a986b03b2382b3d3c02d9734a71bf19842e17346a0d5230fbbbf86fce"
+    },
+    {
+      "file": "92-sweep-101.json",
+      "id": "90000000-0000-4000-8000-000000000902",
+      "sha256": "5340bc1e7cbc699efce22d2e9dd33497c097134652430eb388fe668ed4b39f30"
+    },
+    {
+      "file": "93-sweep-late-order.json",
+      "id": "90000000-0000-4000-8000-000000000903",
+      "sha256": "c95ece6e575c8a851cc820cdbebfaa13ef32997dfa2623d0e6948dcded384448"
+    },
+    {
+      "file": "94-sweep-pagination-failure.json",
+      "id": "90000000-0000-4000-8000-000000000904",
+      "sha256": "1641edde5dfda67778741e7eeed7ee16c5cfa24cde01414e5b9993ae16972333"
+    },
+    {
+      "file": "95-lease-acquire-a.json",
+      "id": "90000000-0000-4000-8000-000000000905",
+      "sha256": "3b9bc15096e358e3d9f7afb48f508b2ff98c131c5f8159b876939bd390ad1482"
+    },
+    {
+      "file": "96-lease-acquire-b.json",
+      "id": "90000000-0000-4000-8000-000000000906",
+      "sha256": "27c74b0b46ec2533d8f876a74ea64c0be1efc7a05c5be32e662fc134d52f4e0a"
+    },
+    {
+      "file": "97-lease-stale-assert.json",
+      "id": "90000000-0000-4000-8000-000000000907",
+      "sha256": "f0bbb16b85e26686b980ae2f5240cbb8ca40b4b3c8fad94664ad7888d4db3c4f"
+    },
+    {
+      "file": "98-ai-caller-model-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000908",
+      "sha256": "f3274618ea55751ccee0dce4326983dd9e0ad1d3ffe50af6cb2b47ae4c8af1e3"
+    },
+    {
+      "file": "99-ai-locked-field-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000909",
+      "sha256": "49b9edc8e955408a36d828cba82ab43177afe9ebb8dbd82dec6459883bc3f400"
+    },
+    {
+      "file": "100-ai-missing-policy-rejected.json",
+      "id": "90000000-0000-4000-8000-000000000910",
+      "sha256": "5c1d4e59c3a1232249df078d7085fc6ef6060460b72b1ef9f5cec4f9efc3094a"
+    },
+    {
+      "file": "106-ai-positive-luna.json",
+      "id": "90000000-0000-4000-8000-000000000911",
+      "sha256": "34a0f91419e6ada2302335e20c100294dac12654201fa970de276f72e5f28ede"
+    },
+    {
+      "file": "107-ai-positive-sol-gated.json",
+      "id": "90000000-0000-4000-8000-000000000912",
+      "sha256": "f953e1f9fae8e4988e7d3f301efdbd303246d60d0ba50a70e107481d1238a576"
+    },
+    {
+      "file": "101-error-redaction.json",
+      "id": "90000000-0000-4000-8000-000000000916",
+      "sha256": "214ef01661e54c161ada47c96e7e4af32d136649c6f03c2a7686359aadcd85ef"
+    },
+    {
+      "file": "102-derived-recovery-core.json",
+      "id": "90000000-0000-4000-8000-000000000017",
+      "sha256": "0c837bd7fca573848ad1e6b5ac87c87c24bf6b44f63068bae1bd12a3387c5553"
+    },
+    {
+      "file": "103-recover-prepared.json",
+      "id": "90000000-0000-4000-8000-000000000918",
+      "sha256": "646122751e16a0e82d7f43ecc4d4a5cbe2287588cff36f20a4d0f7b6e5649921"
+    },
+    {
+      "file": "104-recover-actual-observed.json",
+      "id": "90000000-0000-4000-8000-000000000919",
+      "sha256": "278740d4d298b05a9c5a4b2444005b63ffa0ed86c2ddc6364941cdf9be12996f"
+    },
+    {
+      "file": "105-recover-verified.json",
+      "id": "90000000-0000-4000-8000-000000000920",
+      "sha256": "d6ea618518eb5338675669595cdb81437398840e579d26e09f6169e080e1b971"
+    }
+  ],
+  "scenario_contract": {
+    "sweep_zero": {
+      "workflow_id": "90000000-0000-4000-8000-000000000901",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 0,
+        "heartbeat": true
+      }
+    },
+    "sweep_101": {
+      "workflow_id": "90000000-0000-4000-8000-000000000902",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 101,
+        "matched_count": 101
+      }
+    },
+    "sweep_late_order": {
+      "workflow_id": "90000000-0000-4000-8000-000000000903",
+      "expected_exit": 0,
+      "expected_ids": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    },
+    "sweep_pagination_failure": {
+      "workflow_id": "90000000-0000-4000-8000-000000000904",
+      "expected_exit": "nonzero"
+    },
+    "lease_concurrency": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000905",
+        "90000000-0000-4000-8000-000000000906"
+      ],
+      "run_concurrently": true,
+      "expected_successes": 1
+    },
+    "lease_stale": {
+      "workflow_id": "90000000-0000-4000-8000-000000000907",
+      "expected_exit": "nonzero",
+      "expected_error": "WRITER_LEASE_STALE"
+    },
+    "ai_negative": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000908",
+        "90000000-0000-4000-8000-000000000909",
+        "90000000-0000-4000-8000-000000000910"
+      ],
+      "expected_exit": "nonzero",
+      "runner_calls": 0
+    },
+    "ai_positive_luna": {
+      "workflow_id": "90000000-0000-4000-8000-000000000911",
+      "expected_exit": 0,
+      "policy_id": "classify-unresolved",
+      "expected_model": "gpt-5.6-luna",
+      "expected_reasoning_effort": "max",
+      "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+      "finance_writes": 0
+    },
+    "ai_positive_sol_gated": {
+      "workflow_id": "90000000-0000-4000-8000-000000000912",
+      "expected_exit": 0,
+      "policy_id": "recommend-category",
+      "expected_model": "gpt-5.6-sol",
+      "expected_reasoning_effort": "xhigh",
+      "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+      "finance_writes": 0,
+      "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH",
+      "default_execution_forbidden": true
+    },
+    "error_redaction": {
+      "workflow_id": "90000000-0000-4000-8000-000000000916",
+      "expected_exit": 0,
+      "receipt_table": "finance_execution_failures",
+      "forbidden_readback": [
+        "DontLeak",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+        "4111111111111111"
+      ]
+    },
+    "outbox_recovery": {
+      "workflow_ids": [
+        "90000000-0000-4000-8000-000000000918",
+        "90000000-0000-4000-8000-000000000919",
+        "90000000-0000-4000-8000-000000000920"
+      ],
+      "expected_exit": 0,
+      "expected_state": "COMMITTED",
+      "finance_writes": 0
+    }
+  },
+  "blocked_runtime_scenarios": {
+    "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
+    "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements."
+  },
+  "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called."
+}

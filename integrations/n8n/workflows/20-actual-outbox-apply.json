@@ -1,0 +1,1268 @@
+{
+  "id": "10000000-0000-4000-8000-000000000020",
+  "name": "Finance · Apply Prepared Actual Outbox · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "20001",
+      "name": "Prepared Outbox Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "17003",
+      "name": "Download Immutable Delta Artifact",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.artifact_item_id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "17004",
+      "name": "SHA-256 Recovered Delta",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "recovered_sha256"
+      }
+    },
+    {
+      "id": "17005",
+      "name": "Extract Recovered Delta JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "17006",
+      "name": "Verify Recovery Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nif (h !== o.payload_sha256 || m.schema_version !== o.artifact_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
+      }
+    },
+    {
+      "id": "17007",
+      "name": "Build Recovery Lease Acquire Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Recovery Lease Acquire Request. Keep this deterministic and fail closed.\nconst r = $json;\nreturn [{ json: { operation: 'ACQUIRE', resource_key: `actual:${r.outbox_row.actual_file_id}`, lease_owner: `n8n:recovery:${r.outbox_row.outbox_id}`, ttl_seconds: 120 } }];\n"
+      }
+    },
+    {
+      "id": "17015",
+      "name": "Acquire Recovery Writer Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "17008",
+      "name": "Build Fenced Recovery Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.\nconst r = $('Verify Recovery Contract').first().json, l = $json;\nif (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date())\n    throw new Error('RECOVERY_WRITER_LEASE_INVALID');\nreturn [{ json: { original_state: r.outbox_row.state, outbox: { state: 'PREPARED', outbox_id: r.outbox_row.outbox_id, actual_file_id: r.outbox_row.actual_file_id, account_id: r.manifest.account_id, transactions: r.manifest.transactions, reimportDeleted: false, writer_lease: { lease_id: String(l.lease_id), fencing_token: Number(l.fencing_token), expires_at: String(l.expires_at) } }, verification: r.verification } }];\n"
+      }
+    },
+    {
+      "id": "17009",
+      "name": "Recovery State",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.original_state }}",
+                    "rightValue": "PREPARED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.original_state }}",
+                    "rightValue": "ACTUAL_OBSERVED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.original_state }}",
+                    "rightValue": "VERIFIED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
+      "id": "17010",
+      "name": "Recovery Actual Preflight",
+      "type": "n8n-nodes-finance.actualBudget",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "operation": "preflight"
+      },
+      "credentials": {
+        "actualBudgetApi": {
+          "id": "BIND_ACTUAL",
+          "name": "Finance Actual"
+        }
+      }
+    },
+    {
+      "id": "17016",
+      "name": "Build Recovery Fence Assert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Recovery Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', resource_key: l.resource_key, lease_id: l.lease_id, fencing_token: l.fencing_token } }];\n"
+      }
+    },
+    {
+      "id": "17017",
+      "name": "Assert Recovery Fence Before Import",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "17018",
+      "name": "Rebuild Asserted Recovery Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Rebuild Asserted Recovery Envelope. Keep this deterministic and fail closed.\nif ($json.valid !== true)\n    throw new Error('RECOVERY_FENCE_ASSERTION_FAILED');\nreturn [{ json: $('Build Fenced Recovery Envelope').first().json }];\n"
+      }
+    },
+    {
+      "id": "17011",
+      "name": "Recovery Import PREPARED",
+      "type": "n8n-nodes-finance.actualBudget",
+      "typeVersion": 1,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "operation": "import"
+      },
+      "credentials": {
+        "actualBudgetApi": {
+          "id": "BIND_ACTUAL",
+          "name": "Finance Actual"
+        }
+      }
+    },
+    {
+      "id": "17021",
+      "name": "Upsert ACTUAL OBSERVED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}",
+            "state": "ACTUAL_OBSERVED",
+            "actual_transaction_id": "={{ $json.actual_transaction_ids?.[0] || '' }}",
+            "attempt_count": "={{ Number($('Verify Recovery Contract').item.json.outbox_row.attempt_count || 0) + 1 }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "17022",
+      "name": "Read Back ACTUAL OBSERVED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "ACTUAL_OBSERVED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17023",
+      "name": "Build Recovery Verification Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.\nreturn [{ json: { verification: $('Verify Recovery Contract').first().json.verification } }];\n"
+      }
+    },
+    {
+      "id": "17012",
+      "name": "Recovery Verify Actual",
+      "type": "n8n-nodes-finance.actualBudget",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "operation": "verify"
+      },
+      "credentials": {
+        "actualBudgetApi": {
+          "id": "BIND_ACTUAL",
+          "name": "Finance Actual"
+        }
+      }
+    },
+    {
+      "id": "17024",
+      "name": "Upsert VERIFIED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}",
+            "state": "VERIFIED",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "17025",
+      "name": "Read Back VERIFIED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "VERIFIED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17013",
+      "name": "Upsert COMMITTED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}",
+            "state": "COMMITTED",
+            "attempt_count": "={{ Number($('Verify Recovery Contract').item.json.outbox_row.attempt_count || 0) + 1 }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "17014",
+      "name": "Read Back COMMITTED Recovery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        1140
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_outbox",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').item.json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "COMMITTED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "17019",
+      "name": "Build Recovery Fence Release",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, fencing_token: l.fencing_token } }];\n"
+      }
+    },
+    {
+      "id": "17020",
+      "name": "Release Recovery Writer Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -220,
+        1140
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "20002",
+      "name": "Return Verified Commit Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        1140
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst verification = $('Recovery Verify Actual').first().json;\nreturn [{\n        json: {\n            outbox_id: committed.outbox_id,\n            account_id: committed.account_id,\n            state: committed.state,\n            observed_sha256: verification.observed_sha256,\n            expected_sha256: verification.expected_sha256,\n            current_balance: verification.current_balance,\n            writer_release_verified: true,\n        },\n    }];\n"
+      }
+    },
+    {
+      "id": "20003",
+      "name": "Upsert Exact Actual Verification Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_verifications",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "verification_version",
+              "condition": "eq",
+              "keyValue": 1
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}",
+            "verification_version": 1,
+            "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
+            "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
+            "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
+            "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
+            "expected_payload_sha256": "={{ $json.expected_sha256 }}",
+            "observed_payload_sha256": "={{ $json.observed_sha256 }}",
+            "expected_count": "={{ $json.transaction_count }}",
+            "observed_count": "={{ $json.transaction_count }}",
+            "expected_amount_sum_minor": "={{ $json.amount_sum }}",
+            "observed_amount_sum_minor": "={{ $json.amount_sum }}",
+            "expected_account_balance": "={{ $('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor }}",
+            "observed_account_balance": "={{ $json.account_balance }}",
+            "invariants_passed": true,
+            "verified_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "20004",
+      "name": "Read Back Exact Actual Verification Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "position": [
+        80,
+        760
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_verifications",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "outbox_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"
+            },
+            {
+              "keyName": "verification_version",
+              "condition": "eq",
+              "keyValue": 1
+            },
+            {
+              "keyName": "invariants_passed",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "20005",
+      "name": "Compare Exact Actual Verification Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json;\nif (observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || Number(observed.observed_account_balance) !== Number(result.account_balance)\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020-config",
+      "name": "Actual Writer Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-1",
+              "name": "writer_contract",
+              "type": "string",
+              "value": "FENCED_ACTUAL_COMMIT_VERIFY_V1"
+            },
+            {
+              "id": "config-2",
+              "name": "lease_required",
+              "type": "boolean",
+              "value": true
+            },
+            {
+              "id": "config-3",
+              "name": "exact_readback_required",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020-generated-note-1",
+      "name": "Stage 1 · Prepared Outbox Input to Acquire Recovery Writer Fence",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Prepared Outbox Input → Acquire Recovery Writer Fence\n**Input:** Prepared Outbox Input  ·  **Output:** Acquire Recovery Writer Fence  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020-generated-note-2",
+      "name": "Stage 2 · Build Fenced Recovery Envelope to Upsert ACTUAL OBSERVED Recovery",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Build Fenced Recovery Envelope → Upsert ACTUAL OBSERVED Recovery\n**Input:** Build Fenced Recovery Envelope  ·  **Output:** Upsert ACTUAL OBSERVED Recovery  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020-generated-note-3",
+      "name": "Stage 3 · Read Back ACTUAL OBSERVED Recovery to Read Back VERIFIED Recovery",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Read Back ACTUAL OBSERVED Recovery → Read Back VERIFIED Recovery\n**Input:** Read Back ACTUAL OBSERVED Recovery  ·  **Output:** Read Back VERIFIED Recovery  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020-generated-note-4",
+      "name": "Stage 4 · Upsert COMMITTED Recovery to Return Verified Commit Receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        960
+      ],
+      "parameters": {
+        "content": "## Stage 4 · Upsert COMMITTED Recovery → Return Verified Commit Receipt\n**Input:** Upsert COMMITTED Recovery  ·  **Output:** Return Verified Commit Receipt  ·  **Nodes:** 25–29\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Download Immutable Delta Artifact": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Recovered Delta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Recovered Delta": {
+      "main": [
+        [
+          {
+            "node": "Extract Recovered Delta JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Recovered Delta JSON": {
+      "main": [
+        [
+          {
+            "node": "Verify Recovery Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Recovery Contract": {
+      "main": [
+        [
+          {
+            "node": "Build Recovery Lease Acquire Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Recovery Lease Acquire Request": {
+      "main": [
+        [
+          {
+            "node": "Acquire Recovery Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Recovery Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Build Fenced Recovery Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Fenced Recovery Envelope": {
+      "main": [
+        [
+          {
+            "node": "Recovery State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery State": {
+      "main": [
+        [
+          {
+            "node": "Recovery Actual Preflight",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Back ACTUAL OBSERVED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Back VERIFIED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery Actual Preflight": {
+      "main": [
+        [
+          {
+            "node": "Build Recovery Fence Assert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Recovery Fence Assert": {
+      "main": [
+        [
+          {
+            "node": "Assert Recovery Fence Before Import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Recovery Fence Before Import": {
+      "main": [
+        [
+          {
+            "node": "Rebuild Asserted Recovery Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rebuild Asserted Recovery Envelope": {
+      "main": [
+        [
+          {
+            "node": "Recovery Import PREPARED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery Import PREPARED": {
+      "main": [
+        [
+          {
+            "node": "Upsert ACTUAL OBSERVED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert ACTUAL OBSERVED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Read Back ACTUAL OBSERVED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back ACTUAL OBSERVED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Build Recovery Verification Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Recovery Verification Contract": {
+      "main": [
+        [
+          {
+            "node": "Recovery Verify Actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery Verify Actual": {
+      "main": [
+        [
+          {
+            "node": "Upsert Exact Actual Verification Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert VERIFIED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Read Back VERIFIED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back VERIFIED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Upsert COMMITTED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert COMMITTED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Read Back COMMITTED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back COMMITTED Recovery": {
+      "main": [
+        [
+          {
+            "node": "Build Recovery Fence Release",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Recovery Fence Release": {
+      "main": [
+        [
+          {
+            "node": "Release Recovery Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepared Outbox Input": {
+      "main": [
+        [
+          {
+            "node": "Actual Writer Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Recovery Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Commit Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Exact Actual Verification Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Exact Actual Verification Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Exact Actual Verification Receipt": {
+      "main": [
+        [
+          {
+            "node": "Compare Exact Actual Verification Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Exact Actual Verification Receipt": {
+      "main": [
+        [
+          {
+            "node": "Upsert VERIFIED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actual Writer Parameters": {
+      "main": [
+        [
+          {
+            "node": "Download Immutable Delta Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "ACTUAL_OUTBOX_APPLY",
+    "migrationStatus": "SPEC_ONLY",
+    "reusableBoundary": "FENCED_ACTUAL_COMMIT_VERIFY",
+    "singleActualWriter": true,
+    "requiresPreparedOutbox": true,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_ACTUAL",
+        "configured": false,
+        "action_required": true
+      },
+      {
+        "placeholder": "BIND_ONEDRIVE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000005",
+      "name": "05 Actual Ledger",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Actual Writer Parameters to Acquire Recovery Writer Fence",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000020-config",
+        "17003",
+        "17004",
+        "17005",
+        "17006",
+        "17007",
+        "17015"
+      ],
+      "description": "Finance stage 1. Input starts at Actual Writer Parameters; verified output leaves through Acquire Recovery Writer Fence."
+    },
+    {
+      "name": "Stage 2: Build Fenced Recovery Envelope to Upsert ACTUAL OBSERVED Recovery",
+      "nodeIds": [
+        "17008",
+        "17009",
+        "17010",
+        "17016",
+        "17017",
+        "17018",
+        "17011",
+        "17021"
+      ],
+      "description": "Finance stage 2. Input starts at Build Fenced Recovery Envelope; verified output leaves through Upsert ACTUAL OBSERVED Recovery."
+    },
+    {
+      "name": "Stage 3: Read Back ACTUAL OBSERVED Recovery to Read Back VERIFIED Recovery",
+      "nodeIds": [
+        "17022",
+        "17023",
+        "17012",
+        "20003",
+        "20004",
+        "20005",
+        "17024",
+        "17025"
+      ],
+      "description": "Finance stage 3. Input starts at Read Back ACTUAL OBSERVED Recovery; verified output leaves through Read Back VERIFIED Recovery."
+    },
+    {
+      "name": "Stage 4: Upsert COMMITTED Recovery to Return Verified Commit Receipt",
+      "nodeIds": [
+        "17013",
+        "17014",
+        "17019",
+        "17020",
+        "20002"
+      ],
+      "description": "Finance stage 4. Input starts at Upsert COMMITTED Recovery; verified output leaves through Return Verified Commit Receipt."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
+
+USER root
+RUN apk add --no-cache \
+      g++=15.2.0-r5 \
+      make=4.4.1-r4 \
+      python3=3.14.7-r1
+WORKDIR /tmp/n8n-nodes-finance
+COPY packages/n8n-nodes-finance/package.json packages/n8n-nodes-finance/package-lock.json packages/n8n-nodes-finance/tsconfig.json packages/n8n-nodes-finance/tsconfig.build.json ./
+RUN npm ci --include=dev
+COPY packages/n8n-nodes-finance/src ./src
+COPY packages/n8n-nodes-finance/CONTRACT.md ./
+RUN npm run build \
+    && npm prune --omit=dev --omit=peer \
+    && npm cache clean --force
+
+WORKDIR /tmp/community-ai
+COPY packages/n8n-nodes-finance/community-ai/package.json packages/n8n-nodes-finance/community-ai/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --legacy-peer-deps \
+    && npm audit --omit=dev --audit-level=high \
+    && test "$(node -p "require('./node_modules/n8n-nodes-prodex/package.json').version")" = "0.5.1" \
+    && test "$(node -p "require('./node_modules/@ggomez91npm/n8n-nodes-claude-code/package.json').version")" = "0.8.0" \
+    && test "$(node -p "require('./node_modules/@anthropic-ai/claude-code/package.json').version")" = "2.1.235" \
+    && test "$(node -p "require('./node_modules/@openai/codex/package.json').version")" = "0.142.1" \
+    && node node_modules/@anthropic-ai/claude-code/install.cjs \
+    && test "$(./node_modules/.bin/claude --version)" = "2.1.235 (Claude Code)"
+COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-community-ai.cjs
+RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
+    && npm cache clean --force
+
+RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt \
+    && test "$(cat /tmp/nodemailer-pack.txt)" = "nodemailer-9.0.1.tgz" \
+    && echo "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3  /tmp/nodemailer-9.0.1.tgz" | sha256sum -c -
+
+# n8n 2.36.2 ships nodemailer 8.0.10, which is affected by
+# GHSA-p6gq-j5cr-w38f. Keep the upstream n8n image immutable and replace only
+# the dependency payload at its existing pnpm target with the compatible fixed
+# 9.0.1 package. The exact registry archive is fetched in the audited builder
+# and hash-verified before this stage, which works with both BuildKit and the
+# rootless Podman build engine used by the CI host.
+FROM node-builder AS nodemailer-security-patch
+RUN mkdir -p /tmp/nodemailer-9.0.1 \
+    && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
+    && node -e "if(require('/tmp/nodemailer-9.0.1/package.json').version!=='9.0.1') process.exit(1)"
+
+FROM ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
+
+USER root
+RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
+    && rm -rf /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
+    && mkdir -p /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer
+COPY --from=nodemailer-security-patch /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
+RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const t=n.createTransport({jsonTransport:true}); if(p.version!=='9.0.1'||typeof t.sendMail!=='function') process.exit(1)"
+RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /opt/finance-n8n/custom-extensions/n8n-nodes-finance/package.json
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /opt/finance-n8n/custom-extensions/n8n-nodes-finance/CONTRACT.md
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/dist /opt/finance-n8n/custom-extensions/n8n-nodes-finance/dist
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/node_modules /opt/finance-n8n/custom-extensions/n8n-nodes-finance/node_modules
+COPY --from=node-builder --chown=node:node /tmp/community-ai/package.json /opt/finance-n8n/community-extensions/package.json
+COPY --from=node-builder --chown=node:node /tmp/community-ai/package-lock.json /opt/finance-n8n/community-extensions/package-lock.json
+COPY --from=node-builder --chown=node:node /tmp/community-ai/node_modules /opt/finance-n8n/community-extensions/node_modules
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs /opt/finance-n8n/assert-runtime-registration.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs /opt/finance-n8n/verify-immutable-extension.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh /opt/finance-n8n/finance-entrypoint.sh
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/claude-finance-wrapper.cjs /opt/finance-n8n/community-bin/claude-finance
+RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
+    && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
+    && chmod 0555 /opt/finance-n8n/community-bin/claude-finance \
+    && chmod 0444 /opt/finance-n8n/extension-tree.sha256
+USER node
+ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]

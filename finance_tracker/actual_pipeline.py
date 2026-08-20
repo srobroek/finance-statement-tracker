@@ -19,6 +19,8 @@ from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
+from .transaction_semantics import finalize_transaction_topic
+from .classification_audit import enforce_transaction_invariants
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,11 +162,12 @@ def build_actual_statement_run(
     for transaction in staged.transactions:
         transaction.account = account_by_card[transaction.card]
         transaction.owner = owner_by_card.get(transaction.card)
+        traces.extend(engine.apply_stages(transaction, ("TRANSACTION_NORMALIZATION",)))
+        finalize_transaction_topic(transaction)
         traces.extend(
             engine.apply_stages(
                 transaction,
                 (
-                    "TRANSACTION_NORMALIZATION",
                     "VENDOR_NORMALIZATION",
                     "CLASSIFICATION",
                     "TAGGING",
@@ -179,6 +182,7 @@ def build_actual_statement_run(
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
+        enforce_transaction_invariants(transaction)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
     period_start = statement.period_start or min(
@@ -204,7 +208,7 @@ def build_actual_statement_run(
         if transaction.card not in supported_cashback_cards:
             continue
         transaction_type = transaction.transaction_type.upper()
-        if transaction_type not in {"PURCHASE", "REFUND"}:
+        if transaction_type not in {"PURCHASE", "REFUND", "REVERSAL"}:
             continue
         purchase_type = str(
             transaction.metadata.get("purchase_type")

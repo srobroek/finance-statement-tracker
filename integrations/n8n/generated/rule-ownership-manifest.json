@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "authoring_source": "config/static-rules.seed.json",
+  "authoring_source_sha256": "d88d96f7097f1aaf13ab29cacced7aa52f841376ae923d15fb3123727b85893f",
+  "capability_version": "actual-rule-capability-v1",
+  "ownership": [
+    {
+      "rule_id": "cashback-ei-amazon",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-ei-amazon",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-rak-dining",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-rak-dining",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-rak-grocery",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-rak-grocery",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-rak-travel",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-rak-travel",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-sc-filler",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-sc-filler",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-sc-foreign",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-sc-foreign",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-sc-online",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-sc-online",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "cashback-sc-wallet",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "cashback-sc-wallet",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-ace-maintenance",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-al-futtaim-ecommerce",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-aliexpress-online",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-amazon",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-amazon",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-amazon-grocery",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-amazon-grocery",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-apple-subscription",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-aws-cloud-services",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-bank-fees",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-blue-box-vending",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-blue-box-vending",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-cabincamp-accommodation",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-electronics-descriptors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-events-descriptors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-fab-mortgage",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-fab-transfer-fees",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-flights",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-flights",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-food-delivery",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-food-delivery",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-foreign-fees",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-fuel",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-furniture",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-general-subscriptions",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-government-fee-descriptors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-groceries",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-groceries",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-grocery-descriptor-fallback",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-grocery-descriptor-fallback",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-hobby-vendors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-home-maintenance",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-hotels",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-hotels",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-istyle-electronics",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-known-cafes",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-known-dining",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-known-medical-providers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-known-pharmacies",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-known-subscription-vendors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-medical",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-medical-descriptor-fallback",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-mobile",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-office-catering",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-parking-tolls",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-personal-care-vendors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-regex-airlines",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-airlines",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-regex-cafes",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-entertainment-venues",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-fuel-stations",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-fuel-stations",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-regex-hotels",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-hotels",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-regex-insurance-providers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-medical-providers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-parking-tolls",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-pharmacies",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-restaurants",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-shipping-carriers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-supermarkets",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-regex-supermarkets",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "class-regex-vehicle-services",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-rental-income",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-ride-hailing",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-ritz-auto-care",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-service-charges",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-service-market",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-shipping-vendors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-skyhound-travel",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-smart-dubai-government",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-smart-dubai-parking",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-smart-dubai-tolls",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-stake-investment",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-sukoon-insurance",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-travel-activities-descriptors",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-unrwa-charity",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "reason": "ACTUAL_CAPABILITY_MATRIX_MATCH"
+    },
+    {
+      "rule_id": "class-utilities-dewa",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-utilities-empower",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "class-vat-fees",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "evidence-purchases",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "evidence-utilities",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-ambiguous-incoming-transfer",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-card-payment",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-cashback-credit",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-explicit-account-transfer",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-fab-installment-adjustment",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-fab-merchant-credit",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-inward-bill-reimbursement",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-outgoing-bank-transfer",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-outgoing-card-payment",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-refund",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "normalize-refund",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "normalize-salary-credit",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "tag-foreign",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "tag-property-unit",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "tag-shared-expense",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "tag-subscription",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-ace",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-adnh-catering",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-adnh-catering",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-airlines",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-airlines",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-al-futtaim-ecommerce",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-aliexpress",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-amazon",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-amazon",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-anthropic",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-apple",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-aramex",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-art-fertility",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-aws",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-best-vends",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-best-vends",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-blue-box",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-blue-box",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-cabincamp",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-carrefour",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-carrefour",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-cloudflare",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-cults3d",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-darkmoon-3d",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-dewa",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-dhl",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-emirates-delivers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-emirates-post",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-empower",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-fab-services",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-farzana",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-farzana",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-food-delivery",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-food-delivery",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-franklin-chiropractic",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-fresha",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-german-neuroscience",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-glucare",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-gmg-consumer",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-gmg-consumer",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-hotels",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-hotels",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-ikea",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-instashop",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-instashop",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-istyle",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-james-pro-barbers",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-jbr-shams-pharmacy",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-keyani-health",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-kibsons",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-kibsons",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-life-pharmacy",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-lulu",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-mobile",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-move-shoot-move",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-naqel",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-one-central-parking",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-openai",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-porkbun",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-real-debrid",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-ride-hailing",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-ritz-auto-care",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-service-market",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-skyhound",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-spinneys",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-spinneys",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-stake",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-steam",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-sukoon-insurance",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-unrwa",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-urban-company",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-urban-foods",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-urban-foods",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-waitrose",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-waitrose",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    }
+  ],
+  "overlap": [],
+  "unowned": [],
+  "actual_rule_count": 7,
+  "n8n_rule_count": 182,
+  "warning": "Generated ownership is not evidence that Actual rules were imported or parity-tested."
+}

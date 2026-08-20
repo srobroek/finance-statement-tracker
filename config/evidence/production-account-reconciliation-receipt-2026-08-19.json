@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "receipt_id": "production-account-reconciliation-2026-08-19",
+  "environment": "PRODUCTION_ACTUAL",
+  "execution_date": "2026-08-19",
+  "source_commit": "76cab8d98c79440ad11701e9685dbdab73e7c85b",
+  "source_archive_sha256": "3996fe4067513a3d326e3eb1016d4998f84beeff21198866458ee215bfce1619",
+  "plan_file_sha256": "d62cafa5fb4aa7e9a0191c1ad3c17c14775d2fead8dba3714e2737fab8e975d7",
+  "plan_canonical_sha256": "91ca846750d91ba8c515ea5c5eb95fc55271833e23c8be7849c2eb5e58141886",
+  "source_evidence": [
+    {
+      "scope": "FAB_NON_CREDIT_CURRENT_BALANCES",
+      "sha256": "f5102f8468b0230e6cae35a6aa66bd426fad00a6c839304f1f2ec22aced1f5f3"
+    },
+    {
+      "scope": "ADCB_CLOSED_HISTORICAL_ZERO_TARGET",
+      "sha256": "ddc6eedde6bd361f2ff7a0ed258da6b243925b8eedd2da8a3e1a2c3a1224148e"
+    }
+  ],
+  "runtime_artifacts": {
+    "before_api_sha256": "8421a425ac2f5322958343b594fcbff674c60498ca41959ef8f256ad9a610c56",
+    "dry_run_sha256": "4d79dd502fcb32e64d45f7789fa446b2ddd80beaad58edb4ca816493910b7309",
+    "apply_sha256": "eba236217c84fb154d8614b6b73d302cfeba029abe54821551068d01b4117d48",
+    "after_api_sha256": "05a59a69cb223da7bf228ea43b7b574d307a51249d3b684029049a1d0ef8b982",
+    "after_transactions_sha256": "3ec4d28fc850020b4188591b6972ebc91602947c126f0fa86c178cf409938558"
+  },
+  "summary": {
+    "target_account_count": 7,
+    "created_account_count": 5,
+    "reconciliation_adjustment_count": 3,
+    "closed_account_count": 1,
+    "unrelated_account_mutation_count": 0
+  },
+  "account_assertions": [
+    {
+      "provider_account_id": "fab:current:2001",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": false
+    },
+    {
+      "provider_account_id": "fab:current:2008",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": false
+    },
+    {
+      "provider_account_id": "fab:savings:isave-2002",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": false
+    },
+    {
+      "provider_account_id": "fab:savings:shared-property-aed-2006",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": false
+    },
+    {
+      "provider_account_id": "fab:savings:shared-property-eur-2007",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": false
+    },
+    {
+      "provider_account_id": "fab:loan:mortgage-0203",
+      "balance_matches_source_evidence": true,
+      "closed": false,
+      "offbudget": true
+    },
+    {
+      "provider_account_id": "adcb:credit:8833-6838",
+      "balance_matches_authorized_zero_target": true,
+      "closed": true,
+      "offbudget": false,
+      "history_retained": true
+    }
+  ],
+  "transaction_assertions": {
+    "count": 3,
+    "stable_imported_ids_unique": true,
+    "amounts_match_exact_plan": true,
+    "cleared": true,
+    "ordinary_payees_absent": true,
+    "notes_prefix": "Reconciliation balance adjustment"
+  },
+  "verification": {
+    "guarded_preflight": "PASS",
+    "guarded_apply": "PASS",
+    "api_readback": "PASS",
+    "transaction_readback": "PASS",
+    "ui_readback": "PENDING_USER_CLOUDFLARE_AUTH"
+  }
+}

@@ -4,7 +4,7 @@ Static rules are ordered AutoCat-style records. A rule owns its conditions and a
 
 ## Evaluation
 
-1. Stages run in this order: transaction normalization, vendor normalization, classification, tagging, evidence, cashback.
+1. Transaction-normalization rules run first, then the worker resolves and locks the canonical topic from source direction; vendor normalization, classification, tagging, evidence, and cashback follow.
 2. Lower priority numbers run first within a stage.
 3. A rule matches when any condition group matches.
 4. A condition group matches when every condition in the group matches.
@@ -33,7 +33,7 @@ Static rules are ordered AutoCat-style records. A rule owns its conditions and a
 
 ## Condition fields
 
-- Source facts: `transaction_at`, `card`, `account`, `institution`, `account_last4`, `merchant_raw`, `amount_aed`, `amount_original`, `currency`, `channel`, `source_type`, `reference`, `mcc`
+- Source facts: `transaction_at`, `card`, `account`, `institution`, `account_last4`, `merchant_raw`, `amount_aed`, `amount_original`, `source_direction`, `currency`, `channel`, `source_type`, `reference`, `mcc`
 - Derived fields: `spend_aed`, `vendor`, `category`, `subcategory`, `transaction_type`, `reward_bucket`, `tags`, `owner`, `property_code`, `rental_unit`
 - Workflow fields: `evidence_policy`, `evidence_status`, `review_required`, `is_refund`, `is_foreign`, `is_subscription`
 
@@ -55,6 +55,10 @@ All text comparisons are case-insensitive by default. Set `case_sensitive` only 
 - `require_review`: send the transaction to review.
 
 Static rules cannot write transaction amounts, source IDs, deduplication keys, reconciliation state, or other protected facts. AI enrichment runs only after these rules and has a narrower permission set.
+`source_direction` is the adapter-supplied `CREDIT`/`DEBIT` fact. The worker
+uses it to default an otherwise unexplained merchant credit to `REFUND`, then
+locks `transaction_type`, `is_refund`, source direction, and amounts before
+later rule and AI stages.
 
 The starter library is `config/static-rules.seed.json`. It is a new taxonomy inspired by the previous Tiller and legacy worker behavior; it is not a direct import of either ruleset.
 

@@ -258,7 +258,7 @@ def _suppressed_statement_duplicates(
     actual_by_id: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], set[str]]:
     expected_rows = list(expected)
-    # The Actual bridge partitions one statement import at a time. Browser rows
+    # The direct Actual import path partitions one statement import at a time. Browser rows
     # are existing candidates, not part of the incoming statement multiplicity.
     incoming_counts = Counter(
         _economic_key(item.record)

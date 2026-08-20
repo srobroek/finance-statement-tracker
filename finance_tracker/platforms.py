@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Iterable, Protocol
 
 from .actual_notes import format_actual_notes, normalize_actual_tag
+from .classification_audit import enforce_transaction_invariants
 from .models import Transaction
 
 
@@ -166,6 +167,7 @@ class ActualBudgetAdapter:
     def serialize_import(self, transactions: Iterable[Transaction]) -> list[ImportEnvelope]:
         grouped: dict[str, list[dict[str, object]]] = {}
         for transaction in transactions:
+            enforce_transaction_invariants(transaction)
             if not transaction.account:
                 raise ValueError(
                     f"transaction {transaction.transaction_id!r} has no destination account"
@@ -194,19 +196,9 @@ class ActualBudgetAdapter:
                 semantic_tags.extend(_actual_tag(tag) for tag in transaction.tags)
             if transaction.owner:
                 semantic_tags.append(f"owner-{_actual_tag(transaction.owner)}")
-            if transaction.reward_bucket:
-                semantic_tags.append(f"cashback-{_actual_tag(transaction.reward_bucket)}")
             if transaction.review_required:
                 semantic_tags.append("needs-review")
-            fx_parts: list[str] = []
-            if transaction.currency != "AED":
-                original = (
-                    f" {transaction.amount_original}"
-                    if transaction.amount_original is not None
-                    else ""
-                )
-                fx_parts.append(f"{transaction.currency}{original}")
-            record["notes"] = format_actual_notes(tags=semantic_tags, fx=fx_parts)
+            record["notes"] = format_actual_notes(tags=semantic_tags)
             grouped.setdefault(transaction.account, []).append(record)
 
         return [

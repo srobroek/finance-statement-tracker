@@ -1,0 +1,624 @@
+{
+  "id": "10000000-0000-4000-8000-000000000016",
+  "name": "Finance · Redacted Operations Error Handler · Setup Required",
+  "active": false,
+  "nodes": [
+    {
+      "id": "16001",
+      "name": "Finance Workflow Failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "16002",
+      "name": "Redact and Classify Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 500), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Agent Runner/i.test(last) ? 'CODEX_AGENT_RUNNER' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
+      }
+    },
+    {
+      "id": "16003",
+      "name": "Upsert Durable Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.execution_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "execution_id": "={{ $json.execution_id }}",
+            "workflow_id": "={{ $json.workflow_id }}",
+            "workflow_name": "={{ $json.workflow_name }}",
+            "workflow_code": "={{ $json.workflow_code }}",
+            "run_id": "={{ $json.run_id }}",
+            "provider_code": "={{ $json.provider_code }}",
+            "error_class": "={{ $json.error_class }}",
+            "error_message_redacted": "={{ $json.error_message_redacted }}",
+            "first_seen_at": "={{ $json.first_seen_at }}",
+            "readback_verified": false
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16004",
+      "name": "Read Back Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16005",
+      "name": "Compare Failure Receipt Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Compare Failure Receipt Readback. Keep this deterministic and fail closed.\nconst expected = $('Redact and Classify Failure').first().json, observed = $json;\nif (observed.execution_id !== expected.execution_id || observed.workflow_id !== expected.workflow_id || observed.error_class !== expected.error_class || observed.error_message_redacted !== expected.error_message_redacted)\n    throw new Error('FAILURE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: observed }];\n"
+      }
+    },
+    {
+      "id": "16006",
+      "name": "Mark Failure Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.execution_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "execution_id": "={{ $json.execution_id }}",
+            "readback_verified": true
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16007",
+      "name": "Read Back Verified Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16008",
+      "name": "Route Retryable Provider Failure",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error_class }}",
+              "rightValue": "TRANSIENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.provider_code }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "16009",
+      "name": "Read Provider Circuit after Failure",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        380
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Redact and Classify Failure').item.json.provider_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16010",
+      "name": "Build OPEN Provider Circuit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build OPEN Provider Circuit. Keep this deterministic and fail closed.\nconst failure = $('Redact and Classify Failure').first().json, row = $json?.provider_code ? $json : {}, count = Math.min(12, Number(row.transient_failure_count || 0) + 1), seconds = Math.min(3600, 60 * (2 ** Math.min(count - 1, 6))), now = new Date();\nreturn [{ json: { provider_code: failure.provider_code, state: 'OPEN', transient_failure_count: count, last_error_class: failure.error_class, opened_at: now.toISOString(), retry_after: new Date(now.getTime() + seconds * 1000).toISOString(), readback_verified: false, updated_at: now.toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "16011",
+      "name": "Upsert OPEN Provider Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $json.provider_code }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_code": "={{ $json.provider_code }}",
+            "state": "OPEN",
+            "transient_failure_count": "={{ $json.transient_failure_count }}",
+            "last_error_class": "={{ $json.last_error_class }}",
+            "opened_at": "={{ $json.opened_at }}",
+            "retry_after": "={{ $json.retry_after }}",
+            "readback_verified": false,
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "16012",
+      "name": "Read Back OPEN Provider Circuit",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        380
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_provider_circuits",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "provider_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build OPEN Provider Circuit').item.json.provider_code }}"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "OPEN"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "16013",
+      "name": "Verify OPEN Circuit Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify OPEN Circuit Readback. Keep this deterministic and fail closed.\nconst e = $('Build OPEN Provider Circuit').first().json, o = $json;\nif (o.provider_code !== e.provider_code || o.state !== 'OPEN' || Number(o.transient_failure_count) !== e.transient_failure_count || o.retry_after !== e.retry_after)\n    throw new Error('PROVIDER_CIRCUIT_READBACK_MISMATCH');\nreturn [{ json: o }];\n"
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000016-generated-note-1",
+      "name": "Stage 1 · Finance Workflow Failed to Route Retryable Provider Failure",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · Finance Workflow Failed → Route Retryable Provider Failure\n**Input:** Finance Workflow Failed  ·  **Output:** Route Retryable Provider Failure  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000016-generated-note-2",
+      "name": "Stage 2 · Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        200
+      ],
+      "parameters": {
+        "content": "## Stage 2 · Read Provider Circuit after Failure → Verify OPEN Circuit Readback\n**Input:** Read Provider Circuit after Failure  ·  **Output:** Verify OPEN Circuit Readback  ·  **Nodes:** 9–13\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Finance Workflow Failed": {
+      "main": [
+        [
+          {
+            "node": "Redact and Classify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redact and Classify Failure": {
+      "main": [
+        [
+          {
+            "node": "Upsert Durable Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Durable Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Read Back Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Compare Failure Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Failure Receipt Readback": {
+      "main": [
+        [
+          {
+            "node": "Mark Failure Readback Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failure Readback Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Route Retryable Provider Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Retryable Provider Failure": {
+      "main": [
+        [
+          {
+            "node": "Read Provider Circuit after Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Provider Circuit after Failure": {
+      "main": [
+        [
+          {
+            "node": "Build OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Upsert OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Read Back OPEN Provider Circuit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back OPEN Provider Circuit": {
+      "main": [
+        [
+          {
+            "node": "Verify OPEN Circuit Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "OPERATIONS_ERROR_HANDLER",
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "redactedOnly": true,
+    "terminalReceiptTable": "finance_execution_failures",
+    "terminalReceiptReadback": true,
+    "importTested": false,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000007",
+      "name": "07 Operations & Recovery",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Redact and Classify Failure to Route Retryable Provider Failure",
+      "nodeIds": [
+        "16002",
+        "16003",
+        "16004",
+        "16005",
+        "16006",
+        "16007",
+        "16008"
+      ],
+      "description": "Finance stage 1. Input starts at Redact and Classify Failure; verified output leaves through Route Retryable Provider Failure."
+    },
+    {
+      "name": "Stage 2: Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
+      "nodeIds": [
+        "16009",
+        "16010",
+        "16011",
+        "16012",
+        "16013"
+      ],
+      "description": "Finance stage 2. Input starts at Read Provider Circuit after Failure; verified output leaves through Verify OPEN Circuit Readback."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

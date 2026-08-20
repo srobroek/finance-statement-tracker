@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "SPEC_ONLY",
+  "n8n": {
+    "version": "2.36.2",
+    "source_repository": "https://github.com/n8n-io/n8n.git",
+    "source_commit": "bc9090e8c61d0dc84aa85528e62142dfb7001243",
+    "javascript_runner_package": "@n8n/task-runner@2.36.1",
+    "node_version": "24.18.1",
+    "pnpm_version": "10.32.1",
+    "python_version": "3.13",
+    "uv_version": "0.8.14"
+  },
+  "launcher": {
+    "version": "1.4.7",
+    "source_repository": "https://github.com/n8n-io/task-runner-launcher.git",
+    "source_commit": "fad71fc0dab52a6b6558765d1431c7846cfd816f",
+    "go_version": "1.25.13",
+    "security_overrides": {
+      "golang.org/x/text": "0.39.0"
+    }
+  },
+  "base_images": {
+    "node": "docker.io/library/node@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3",
+    "python": "docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1",
+    "golang": "docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69"
+  },
+  "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+}
