@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = Path(__file__).with_name("workflow-parameter-ownership.json")
 SCHEMA_PATH = Path(__file__).with_name("workflow-parameter-ownership.schema.json")
 EXPRESSION_PREFIX = "={{"
-CALLER_EXPRESSION = re.compile(r"(?:\$json|\$input|\$fromAI\b)")
 # n8n supports several equivalent ways to read another node. Keep these
 # deliberately syntax-oriented: a named parameter node is trusted only when
 # the referenced field can be shown not to be protected.
@@ -369,8 +368,8 @@ def scan(
                                 findings.append(_finding("GLOBAL_DOCUMENT_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value does not equal the complete document at {source['path']}"))
                         elif source["selector"] != "$" and value not in allowed:
                             findings.append(_finding("GLOBAL_VALUE_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value is not present at {source['path']}::{source['selector']}"))
-                if category == "workflow_local_input" and expression and _is_protected_field(field, protected_names) and isinstance(value, str) and CALLER_EXPRESSION.search(value):
-                    findings.append(_finding("PROTECTED_CALLER_INPUT", workflow=workflow, node=node_name, field=field, detail="caller expression targets a protected field"))
+                if category == "workflow_local_input" and expression and _is_protected_field(field, protected_names):
+                    findings.append(_finding("PROTECTED_CALLER_INPUT", workflow=workflow, node=node_name, field=field, detail="dynamic expression targets a protected field"))
                 if category in {"workflow_local_input", "workflow_local_constant"} and isinstance(value, str) and not expression and len(value) >= MIN_SHARED_LITERAL_LENGTH:
                     if value in global_values:
                         findings.append(_finding("SHARED_LITERAL_COPIED", workflow=workflow, node=node_name, field=field, detail="literal belongs to a generated global contract; resolve it through the contract"))
