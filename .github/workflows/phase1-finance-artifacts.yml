@@ -1,21 +1,8 @@
 name: Phase 1 finance artifacts
 
 on:
-  pull_request:
-    paths:
-      - "packages/n8n-nodes-finance/**"
-      - "tests/test_n8n_custom_image.py"
-      - "services/pdf-utility/**"
-      - "services/codex-agent-runner/**"
-      - "services/n8n-task-runners/**"
-      - "tests/test_n8n_task_runners_image.py"
-      - "services/cloudflared/**"
-      - "config/ai-policies.json"
-      - "integrations/n8n/contracts/ai-proposal-v1.schema.json"
-      - "integrations/n8n/generated/ai-policy-contracts.seed.json"
-      - ".github/workflows/phase1-finance-artifacts.yml"
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
     paths:
       - "packages/n8n-nodes-finance/**"
       - "tests/test_n8n_custom_image.py"
@@ -28,6 +15,7 @@ on:
       - "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       - "integrations/n8n/generated/ai-policy-contracts.seed.json"
       - ".github/workflows/phase1-finance-artifacts.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
