@@ -16,6 +16,7 @@
     "fixture_manifest",
     "inactive_corpus",
     "credentials",
+    "mcp",
     "validators",
     "blockers"
   ],
@@ -64,6 +65,41 @@
           "type": "array",
           "uniqueItems": true,
           "items": {"type": "string", "enum": ["id", "value", "token", "secret", "password", "client_secret"]}
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "path",
+        "transport",
+        "edge_auth",
+        "origin_auth",
+        "enabled",
+        "instance_mcp",
+        "operations"
+      ],
+      "properties": {
+        "contract": {
+          "allOf": [
+            {"$ref": "#/$defs/artifact"},
+            {"properties": {"path": {"const": "config/mcp-facade.json"}}}
+          ]
+        },
+        "path": {"const": "/mcp/finance-operations-v1"},
+        "transport": {"const": "n8n-mcp-server-trigger"},
+        "edge_auth": {"const": "CLOUDFLARE_ACCESS_SERVICE_AUTH"},
+        "origin_auth": {"const": "APPLICATION_SUPPLIED_BEARER"},
+        "enabled": {"const": false},
+        "instance_mcp": {"const": false},
+        "operations": {
+          "const": [
+            "finance.status.v1",
+            "finance.document.request.v1",
+            "finance.reviewed-artifact.handoff.v1"
+          ]
         }
       }
     },

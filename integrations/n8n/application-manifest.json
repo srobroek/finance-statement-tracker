@@ -26,7 +26,7 @@
   },
   "workflow_manifest": {
     "path": "integrations/n8n/pipeline-registry.json",
-    "sha256": "c36ffa113583fb5047fac63747a89a6902303a4617243556a10498743c459355"
+    "sha256": "e293bad12ea67a6354e0077b3da77224713ed8f8bf3b224521631d4adece2c68"
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
@@ -35,7 +35,7 @@
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 21,
-    "sha256": "af2f14aa60f6f1e684f0b87aab1aae1b00f2508f881ca96608e61cbaba136115",
+    "sha256": "99a5a7e438682d0f9190a9e07204608777be79a15b3eccbb6cca1dd6714e9eb0",
     "required_state": {
       "active": false,
       "published": false,
@@ -57,6 +57,23 @@
     ],
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
+  },
+  "mcp": {
+    "contract": {
+      "path": "config/mcp-facade.json",
+      "sha256": "36cec807620807439e4e23d6adfe0e6d99e4d77751dc4421773bed1a86842424"
+    },
+    "path": "/mcp/finance-operations-v1",
+    "transport": "n8n-mcp-server-trigger",
+    "edge_auth": "CLOUDFLARE_ACCESS_SERVICE_AUTH",
+    "origin_auth": "APPLICATION_SUPPLIED_BEARER",
+    "enabled": false,
+    "instance_mcp": false,
+    "operations": [
+      "finance.status.v1",
+      "finance.document.request.v1",
+      "finance.reviewed-artifact.handoff.v1"
+    ]
   },
   "validators": [
     {"kind": "BUILD", "path": "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh", "command": "bash packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh"},

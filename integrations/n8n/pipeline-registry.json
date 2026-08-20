@@ -41,7 +41,7 @@
   "mcp": {
     "instance_mcp_enabled": false,
     "facade_workflow_code": "FINANCE_MCP_FACADE",
-    "allowed_operation_codes": ["finance.status", "artifact.submit_reviewed", "document.request"],
+    "allowed_operation_codes": ["finance.status.v1", "finance.document.request.v1", "finance.reviewed-artifact.handoff.v1"],
     "caller_forbidden_fields": ["folder_id", "sender", "subject", "url", "path", "provider", "credential", "actual_id", "commit", "command"]
   },
   "workflows": [
