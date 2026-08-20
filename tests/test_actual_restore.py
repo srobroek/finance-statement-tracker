@@ -105,6 +105,7 @@ def fake_runtime(
     network_failure: bool = False,
     container_missing_message: str | None = None,
     network_missing_message: str | None = None,
+    container_missing_stdout: str = "",
     start_failure: bool = False,
     restart_failure: bool = False,
 ) -> Path:
@@ -163,6 +164,8 @@ if command == 'inspect':
         raise SystemExit(0)
     if marker.exists():
         raise SystemExit(0)
+    if {container_missing_stdout!r}:
+        print({container_missing_stdout!r})
     missing_message = {container_missing_message!r}
     if missing_message is None:
         missing_message = f'Error: no container with name or ID "{{name}}" found: no such container'
@@ -309,8 +312,9 @@ class ActualRestoreTests(unittest.TestCase):
                 root,
                 fake_runtime(
                     root,
-                    container_missing_message="Error: No such object: {name}",
-                    network_missing_message="Error: No such object: {name}",
+                    container_missing_message='Error: No such object: "{name}"',
+                    network_missing_message="Error: network {name}: unable to find network with name or ID {name}: network not found",
+                    container_missing_stdout="[]",
                 ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -378,6 +382,22 @@ class ActualRestoreTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "runtime_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_docker_network_absent_with_mismatched_repeated_object_id_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    network_missing_message="Error: network {name}: unable to find network with name or ID other-network: network not found",
+                ),
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_network_inspect_failed")
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
 

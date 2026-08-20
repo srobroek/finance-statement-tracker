@@ -36,12 +36,13 @@ def is_absent_inspect_response(message: str, object_name: str, kind: str) -> boo
     escaped_name = re.escape(object_name)
     if kind == "container":
         patterns = (
-            rf"Error: No such object: {escaped_name}",
+            rf"\[\]\s*Error: No such object: \"{escaped_name}\"",
             rf"Error: no container with name or ID \"{escaped_name}\" found: no such container",
         )
     elif kind == "network":
         patterns = (
-            rf"Error: No such object: {escaped_name}",
+            rf"Error: No such object: \"{escaped_name}\"",
+            rf"Error: network {escaped_name}: unable to find network with name or ID {escaped_name}: network not found",
             rf"Error: network {escaped_name} not found",
         )
     else:
