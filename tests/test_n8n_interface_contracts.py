@@ -72,54 +72,38 @@ def boundary_case(
     name: str,
     edge: tuple[str, str],
     target: str,
-    input_fields: tuple[str, ...],
-    output_fields: tuple[str, ...],
-    declared_in: tuple[str, str],
+    producer_fields: tuple[str, ...],
+    consumer_fields: tuple[str, ...],
     aliases: tuple[tuple[str, str], ...] = (),
+    adapters: dict[str, str] | None = None,
 ) -> dict:
     return {
         "name": name,
         "edge": edge,
         "edges": (edge, *aliases),
         "target": target,
-        "input_fields": input_fields,
-        "output_fields": output_fields,
-        "declared_in": declared_in,
+        "producer_fields": producer_fields,
+        "consumer_fields": consumer_fields,
+        "adapters": adapters or {},
     }
 
 
+ACQUISITION_CONTEXT = (
+    "run_id",
+    "source_code",
+    "senders",
+    "subjects",
+    "window_start",
+    "run_upper_bound",
+    "onedrive_item_id",
+)
 STATEMENT_CONTEXT = (
     "run_id",
     "source_code",
-    "message_id",
-    "attachment_id",
-    "document_sha256",
     "onedrive_item_id",
     "config_version",
-    "actual_file_id",
-    "account_id",
     "period_key",
     "trigger_kind",
-)
-ACQUISITION_REQUEST = (
-    "run_id",
-    "source_code",
-    "folder_id",
-    "senders",
-    "subjects",
-    "window_start",
-    "run_upper_bound",
-    "onedrive_parent_id",
-)
-SWEEP_REQUEST = (
-    "run_id",
-    "source_code",
-    "folder_id",
-    "senders",
-    "subjects",
-    "window_start",
-    "run_upper_bound",
-    "max_messages",
 )
 DOCUMENT_REQUEST = (
     "document_id",
@@ -128,7 +112,7 @@ DOCUMENT_REQUEST = (
     "requested_schema_version",
 )
 EXTRACTION_DOCUMENT = ("document_id", "source_sha256", "document_profile")
-OUTBOX_INPUT = (
+OUTBOX_CONTEXT = (
     "outbox_id",
     "payload_sha256",
     "artifact_item_id",
@@ -137,6 +121,24 @@ OUTBOX_INPUT = (
     "config_version",
     "state",
     "attempt_count",
+    "account_id",
+    "observed_sha256",
+)
+LEASE_ACQUIRE = ("operation", "resource_key", "lease_owner", "ttl_seconds")
+LEASE_ASSERT = ("operation", "resource_key", "lease_id", "fencing_token")
+SWEEP_CONTEXT = (
+    "run_id",
+    "source_code",
+    "folder_id",
+    "senders",
+    "subjects",
+    "window_start",
+    "run_upper_bound",
+    "scanned_count",
+    "matched_count",
+    "pagination_exhausted",
+    "heartbeat",
+    "messages",
 )
 
 # Every direct executeWorkflow edge is represented once. EI and WIO share
@@ -147,15 +149,8 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         "monthly acquisition request",
         ("EI_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),
         "OUTLOOK_FINANCE_ACQUISITION",
-        ACQUISITION_REQUEST,
-        (
-            "message_id",
-            "source_attachment_id",
-            "document_sha256",
-            "onedrive_item_id",
-            "archive_readback_verified",
-        ),
-        ("EI_MONTHLY_STATEMENT", "OUTLOOK_FINANCE_ACQUISITION"),
+        ACQUISITION_CONTEXT,
+        ACQUISITION_CONTEXT,
         (("WIO_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),),
     ),
     boundary_case(
@@ -163,47 +158,33 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         ("EI_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),
         "SHARED_STATEMENT_PIPELINE",
         STATEMENT_CONTEXT,
-        (
-            "run_id",
-            "workflow_code",
-            "state",
-            "receipt_sha256",
-            "terminal_readback_verified",
-        ),
-        ("EI_MONTHLY_STATEMENT", "SHARED_STATEMENT_PIPELINE"),
+        STATEMENT_CONTEXT,
         (("WIO_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),),
     ),
     boundary_case(
         "statement pipeline to AI proposal",
         ("SHARED_STATEMENT_PIPELINE", "Request Scoped AI Proposals"),
         "AI_PROPOSAL",
+        ("policy_id", "unresolved", "proposals"),
         ("policy_id", "unresolved"),
-        ("policy_id", "job_id", "idempotency_key", "proposals"),
-        ("SHARED_STATEMENT_PIPELINE", "AI_PROPOSAL"),
     ),
     boundary_case(
         "statement pipeline to PDF extraction",
         ("SHARED_STATEMENT_PIPELINE", "Run Isolated PDF Extraction"),
         "LOCAL_PDF_EXTRACTION",
-        EXTRACTION_DOCUMENT,
-        ("extracted_text", "text_quality", "parser", "validation_status", "result_ref"),
-        ("SHARED_STATEMENT_PIPELINE", "LOCAL_PDF_EXTRACTION"),
+        ("id", "readback_sha256"),
+        ("document_id", "source_sha256"),
+        adapters={
+            "document_id": "id",
+            "source_sha256": "readback_sha256",
+        },
     ),
     boundary_case(
         "statement pipeline to Actual outbox apply",
         ("SHARED_STATEMENT_PIPELINE", "Apply Prepared Outbox Safely"),
         "ACTUAL_OUTBOX_APPLY",
-        OUTBOX_INPUT,
-        (
-            "outbox_id",
-            "account_id",
-            "state",
-            "observed_sha256",
-            "expected_sha256",
-            "current_balance",
-            "writer_release_verified",
-        ),
-        ("SHARED_STATEMENT_PIPELINE", "ACTUAL_OUTBOX_APPLY"),
+        OUTBOX_CONTEXT,
+        OUTBOX_CONTEXT,
     ),
     boundary_case(
         "AI proposal to subscription adapter",
@@ -213,7 +194,19 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
             "schema_version",
             "job_id",
             "idempotency_key",
-            "operation_code",
+            "agent_provider",
+            "policy_id",
+            "policy_class",
+            "policy_sha256",
+            "config_sha256",
+            "output_schema_sha256",
+            "unresolved",
+            "proposals",
+        ),
+        (
+            "schema_version",
+            "job_id",
+            "idempotency_key",
             "agent_provider",
             "policy_id",
             "policy_class",
@@ -222,117 +215,114 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
             "output_schema_sha256",
             "unresolved",
         ),
-        (
-            "agent_provider",
-            "provider_model",
-            "provider_reasoning_effort",
-            "provider_auth_mode",
-            "schema_version",
-            "proposals",
-        ),
-        ("AI_PROPOSAL", "SUBSCRIPTION_AGENT_ADAPTER"),
     ),
     boundary_case(
         "operations status to artifact handoff",
         ("FINANCE_OPERATIONS_STATUS", "Dispatch Reviewed Artifact"),
         "INTERACTIVE_ARTIFACT_HANDOFF",
-        ("operation_code", "artifact_id", "expected_sha256"),
-        ("run_id", "trigger_kind", "message_id", "attachment_id", "document_sha256"),
-        ("FINANCE_OPERATIONS_STATUS", "INTERACTIVE_ARTIFACT_HANDOFF"),
+        ("artifact_id", "expected_sha256"),
+        ("artifact_id", "expected_sha256"),
     ),
     boundary_case(
         "operations status to document request",
         ("FINANCE_OPERATIONS_STATUS", "Dispatch Document Request"),
         "DOCUMENT_EXTRACTION_REQUEST",
-        ("operation_code", *DOCUMENT_REQUEST),
         DOCUMENT_REQUEST,
-        ("FINANCE_OPERATIONS_STATUS", "DOCUMENT_EXTRACTION_REQUEST"),
+        DOCUMENT_REQUEST,
     ),
     boundary_case(
         "artifact handoff to statement pipeline",
         ("INTERACTIVE_ARTIFACT_HANDOFF", "Run Statement Pipeline"),
         "SHARED_STATEMENT_PIPELINE",
-        STATEMENT_CONTEXT,
-        ("run_id", "state"),
-        ("INTERACTIVE_ARTIFACT_HANDOFF", "SHARED_STATEMENT_PIPELINE"),
+        (
+            "run_id",
+            "source_code",
+            "message_id",
+            "attachment_id",
+            "document_sha256",
+            "onedrive_item_id",
+            "config_version",
+            "actual_file_id",
+            "account_id",
+            "period_key",
+            "trigger_kind",
+        ),
+        (
+            "run_id",
+            "source_code",
+            "message_id",
+            "attachment_id",
+            "document_sha256",
+            "onedrive_item_id",
+            "config_version",
+            "actual_file_id",
+            "account_id",
+            "period_key",
+            "trigger_kind",
+        ),
     ),
     boundary_case(
         "document request to local extraction",
         ("DOCUMENT_EXTRACTION_REQUEST", "Run Local Extraction Ladder"),
         "LOCAL_PDF_EXTRACTION",
         EXTRACTION_DOCUMENT,
-        ("extracted_text", "text_quality", "result_ref"),
-        ("DOCUMENT_EXTRACTION_REQUEST", "LOCAL_PDF_EXTRACTION"),
+        EXTRACTION_DOCUMENT,
     ),
     boundary_case(
         "status facade",
         ("FINANCE_MCP_FACADE", "finance.status"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code"),
-        ("status", "execution_count", "failed_count", "running_count", "checked_at"),
-        ("FINANCE_MCP_FACADE", "FINANCE_OPERATIONS_STATUS"),
+        ("_mcp_request_id", "operation_code"),
     ),
     boundary_case(
         "artifact facade",
         ("FINANCE_MCP_FACADE", "artifact.submit_reviewed"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code", "artifact_id", "expected_sha256"),
-        ("request_id", "operation_code", "target_workflow_code"),
-        ("FINANCE_MCP_FACADE", "FINANCE_OPERATIONS_STATUS"),
+        ("_mcp_request_id", "operation_code", "artifact_id", "expected_sha256"),
     ),
     boundary_case(
         "document facade",
         ("FINANCE_MCP_FACADE", "document.request"),
         "FINANCE_OPERATIONS_STATUS",
         ("_mcp_request_id", "operation_code", *DOCUMENT_REQUEST),
-        ("request_id", "operation_code", "target_workflow_code"),
-        ("FINANCE_MCP_FACADE", "FINANCE_OPERATIONS_STATUS"),
+        ("_mcp_request_id", "operation_code", *DOCUMENT_REQUEST),
     ),
     boundary_case(
         "outbox recovery",
         ("ACTUAL_OUTBOX_RECOVERY", "Apply Nonterminal Outbox Safely"),
         "ACTUAL_OUTBOX_APPLY",
-        OUTBOX_INPUT,
-        ("outbox_id", "state", "writer_release_verified"),
-        ("ACTUAL_OUTBOX_RECOVERY", "ACTUAL_OUTBOX_APPLY"),
+        ("state",),
+        ("state",),
     ),
     boundary_case(
-        "writer lease",
+        "writer lease acquire",
         ("ACTUAL_OUTBOX_APPLY", "Acquire Recovery Writer Fence"),
         "FINANCE_WRITER_LEASE",
-        ("operation", "resource_key", "lease_owner", "ttl_seconds"),
-        (
-            "operation",
-            "resource_key",
-            "lease_id",
-            "lease_owner",
-            "fencing_token",
-            "expires_at",
-        ),
-        ("ACTUAL_OUTBOX_APPLY", "FINANCE_WRITER_LEASE"),
-        (
-            ("ACTUAL_OUTBOX_APPLY", "Assert Recovery Fence Before Import"),
-            ("ACTUAL_OUTBOX_APPLY", "Release Recovery Writer Fence"),
-        ),
+        LEASE_ACQUIRE,
+        LEASE_ACQUIRE,
+    ),
+    boundary_case(
+        "writer lease assert",
+        ("ACTUAL_OUTBOX_APPLY", "Assert Recovery Fence Before Import"),
+        "FINANCE_WRITER_LEASE",
+        LEASE_ASSERT,
+        LEASE_ASSERT,
+    ),
+    boundary_case(
+        "writer lease release",
+        ("ACTUAL_OUTBOX_APPLY", "Release Recovery Writer Fence"),
+        "FINANCE_WRITER_LEASE",
+        LEASE_ASSERT,
+        LEASE_ASSERT,
     ),
     boundary_case(
         "cashback sweep",
         ("RAKBANK_LIVE_CASHBACK", "Sweep Exact Outlook Messages"),
         "OUTLOOK_MESSAGE_SWEEP",
-        SWEEP_REQUEST,
-        (
-            "run_id",
-            "source_code",
-            "window_start",
-            "run_upper_bound",
-            "scanned_count",
-            "matched_count",
-            "pagination_exhausted",
-            "heartbeat",
-            "messages",
-            "cursor_commit_eligible",
-        ),
-        ("RAKBANK_LIVE_CASHBACK", "OUTLOOK_MESSAGE_SWEEP"),
+        SWEEP_CONTEXT,
+        SWEEP_CONTEXT,
     ),
 )
 
@@ -379,6 +369,41 @@ def synthetic_fixture(fields: tuple[str, ...]) -> dict:
         else:
             values[field] = f"fixture-{field}"
     return values
+
+
+def assert_directional_compatibility(
+    producer_fields: tuple[str, ...],
+    consumer_fields: tuple[str, ...],
+    adapters: dict[str, str] | None = None,
+) -> None:
+    """Require every consumer field from the producer or an explicit adapter."""
+    adapters = adapters or {}
+    unknown_adapters = set(adapters) - set(consumer_fields)
+    if unknown_adapters:
+        raise AssertionError(
+            f"adapter keys are not consumer fields: {unknown_adapters}"
+        )
+    missing = {
+        field
+        for field in consumer_fields
+        if field not in producer_fields and field not in adapters
+    }
+    if missing:
+        raise AssertionError(f"consumer fields missing from producer output: {missing}")
+    for consumer_field, producer_field in adapters.items():
+        if not producer_field:
+            raise AssertionError(f"adapter for {consumer_field} has no producer source")
+        if producer_field not in producer_fields:
+            raise AssertionError(
+                f"adapter for {consumer_field} references undeclared producer field "
+                f"{producer_field}"
+            )
+
+
+ATTACHMENT_ALIAS_NEGATIVE_FIXTURE = {
+    "producer_fields": ("source_attachment_id",),
+    "consumer_fields": ("attachment_id",),
+}
 
 
 class N8nInterfaceContractTests(unittest.TestCase):
@@ -442,7 +467,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
                     filename,
                 )
 
-    def test_boundary_fixtures_cover_reviewed_caller_callee_fields(self) -> None:
+    def test_boundary_fixtures_cover_directional_contracts(self) -> None:
         by_edge = {
             edge: fixture for fixture in BOUNDARY_FIXTURES for edge in fixture["edges"]
         }
@@ -458,37 +483,55 @@ class N8nInterfaceContractTests(unittest.TestCase):
             "every executeWorkflow edge needs one explicit boundary fixture",
         )
 
-        for fixture in BOUNDARY_FIXTURES:
-            caller_code, node_name = fixture["edge"]
-            with self.subTest(boundary=fixture["name"]):
-                self.assertEqual(
-                    observed_edges[(caller_code, node_name)], fixture["target"]
+        for edge, fixture in by_edge.items():
+            caller_code, _node_name = edge
+            producer_document = self._document(caller_code)
+            consumer_document = self._document(fixture["target"])
+            with self.subTest(boundary=fixture["name"], edge=edge):
+                self.assertEqual(observed_edges[edge], fixture["target"])
+                assert_directional_compatibility(
+                    fixture["producer_fields"],
+                    fixture["consumer_fields"],
+                    fixture["adapters"],
                 )
-                input_fixture = synthetic_fixture(fixture["input_fields"])
-                output_fixture = synthetic_fixture(fixture["output_fields"])
-                self.assertEqual(set(input_fixture), set(fixture["input_fields"]))
-                self.assertEqual(set(output_fixture), set(fixture["output_fields"]))
-                documents = [
-                    json.dumps(self.workflow_for_code(code), ensure_ascii=True).replace(
-                        '\\"', '"'
+                producer_fixture = synthetic_fixture(fixture["producer_fields"])
+                consumer_fixture = synthetic_fixture(fixture["consumer_fields"])
+                self.assertEqual(set(producer_fixture), set(fixture["producer_fields"]))
+                self.assertEqual(set(consumer_fixture), set(fixture["consumer_fields"]))
+                for field in fixture["producer_fields"]:
+                    self.assertRegex(
+                        producer_document,
+                        rf"(?<![A-Za-z0-9_]){re.escape(field)}(?![A-Za-z0-9_])",
+                        f"{fixture['name']} producer field {field} missing from {caller_code}",
                     )
-                    for code in fixture["declared_in"]
-                ]
-                for field in (*fixture["input_fields"], *fixture["output_fields"]):
-                    self.assertTrue(
-                        any(
-                            re.search(
-                                rf"(?<![A-Za-z0-9_]){re.escape(field)}(?![A-Za-z0-9_])",
-                                document,
-                            )
-                            for document in documents
-                        ),
-                        f"{fixture['name']} field {field} missing from declared boundary",
+                for field in fixture["consumer_fields"]:
+                    self.assertRegex(
+                        consumer_document,
+                        rf"(?<![A-Za-z0-9_]){re.escape(field)}(?![A-Za-z0-9_])",
+                        f"{fixture['name']} consumer field {field} missing from {fixture['target']}",
                     )
+
+    def test_attachment_alias_requires_explicit_adapter(self) -> None:
+        producer = self._document("OUTLOOK_FINANCE_ACQUISITION")
+        consumer = self._document("SHARED_STATEMENT_PIPELINE")
+        self.assertRegex(
+            producer, r"(?<![A-Za-z0-9_])source_attachment_id(?![A-Za-z0-9_])"
+        )
+        self.assertRegex(consumer, r"(?<![A-Za-z0-9_])attachment_id(?![A-Za-z0-9_])")
+        with self.assertRaisesRegex(AssertionError, "attachment_id"):
+            assert_directional_compatibility(
+                ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["producer_fields"],
+                ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["consumer_fields"],
+            )
+        assert_directional_compatibility(
+            ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["producer_fields"],
+            ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["consumer_fields"],
+            {"attachment_id": "source_attachment_id"},
+        )
 
     def test_error_and_lease_boundaries_have_redacted_fixed_shapes(self) -> None:
         error = self.workflow_for_code("OPERATIONS_ERROR_HANDLER")
-        error_text = json.dumps(error, ensure_ascii=True).replace('\\"', '"')
+        error_text = json.dumps(error, ensure_ascii=True).replace('"', '"')
         for field in (*ERROR_INPUT_FIELDS, *ERROR_OUTPUT_FIELDS):
             self.assertRegex(
                 error_text,
@@ -503,7 +546,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
         self.assertIn("readback_verified: false", error_code)
 
         lease = self.workflow_for_code("FINANCE_WRITER_LEASE")
-        lease_text = json.dumps(lease, ensure_ascii=True).replace('\\"', '"')
+        lease_text = json.dumps(lease, ensure_ascii=True).replace('"', '"')
         for field in (
             "operation",
             "resource_key",
@@ -526,6 +569,11 @@ class N8nInterfaceContractTests(unittest.TestCase):
         )
         for operation in ("ACQUIRE", "ASSERT", "RELEASE"):
             self.assertIn(operation, lease_code)
+
+    def _document(self, code: str) -> str:
+        return json.dumps(self.workflow_for_code(code), ensure_ascii=True).replace(
+            '"', '"'
+        )
 
     def _target_code(self, node: dict) -> str:
         target_id = node["parameters"]["workflowId"]["value"]
