@@ -1054,6 +1054,16 @@ try {{
         self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["scanned_count"], 1)
         self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["matched_count"], 1)
         self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["attachment_identity_keys"], [])
+        fixture_ids = {row["id"] for row in manifest["workflows"]}
+        scenario_ids = {
+            workflow_id
+            for scenario in scenarios.values()
+            for workflow_id in (
+                ([scenario["workflow_id"]] if "workflow_id" in scenario else [])
+                + scenario.get("workflow_ids", [])
+            )
+        }
+        self.assertTrue(scenario_ids <= fixture_ids)
         self.assertEqual(scenarios["sweep_101"]["expected"]["attachment_identity_keys"], [])
         self.assertEqual(scenarios["sweep_101"]["expected"]["scanned_count"], 101)
         self.assertEqual(scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"])

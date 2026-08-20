@@ -452,6 +452,37 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "18-finance-writer-lease.json",
         )
     }
+    scenario_contract = {
+            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
+            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000012", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
+            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
+            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
+            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
+            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
+            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
+            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
+            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
+            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
+            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
+            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
+        }
+    fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}
+    scenario_workflow_ids: set[str] = set()
+    for scenario in scenario_contract.values():
+        workflow_id = scenario.get("workflow_id")
+        if isinstance(workflow_id, str):
+            scenario_workflow_ids.add(workflow_id)
+        workflow_ids = scenario.get("workflow_ids")
+        if isinstance(workflow_ids, list):
+            scenario_workflow_ids.update(
+                workflow_id for workflow_id in workflow_ids if isinstance(workflow_id, str)
+            )
+    missing_workflow_ids = sorted(scenario_workflow_ids - fixture_workflow_ids)
+    if missing_workflow_ids:
+        raise ValueError(
+            "scenario workflow IDs are missing from fixture manifest: "
+            + ", ".join(missing_workflow_ids)
+        )
     return {
         "schema_version": 1,
         "contract_status": "DISPOSABLE_ONLY",
@@ -466,20 +497,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             }
             for name, workflow in workflows.items()
         ],
-        "scenario_contract": {
-            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
-            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000913", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
-            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
-            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
-            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
-            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
-            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
-            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
-            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
-            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
-            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
-        },
+        "scenario_contract": scenario_contract,
         "blocked_runtime_scenarios": {
             "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
             "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements.",

@@ -112,7 +112,7 @@
       }
     },
     "sweep_one_no_attachments": {
-      "workflow_id": "90000000-0000-4000-8000-000000000913",
+      "workflow_id": "90000000-0000-4000-8000-000000000012",
       "expected_exit": 0,
       "expected": {
         "scanned_count": 1,
