@@ -274,6 +274,28 @@ try {
             w12["connections"]["Verify Attachment Archive Barrier"]["main"][0][0]["node"],
             "Build Durable Archive Barrier Receipt",
         )
+        self.assertEqual(
+            w12["connections"]["Read Authoritative Source Cursor"]["main"][0][0]["node"],
+            "Determine Existing Cursor Commit",
+        )
+        self.assertEqual(
+            w12["connections"]["Cursor Commit Already Applied"]["main"][0][0]["node"],
+            "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+        )
+        self.assertEqual(
+            w12["connections"]["Cursor Commit Already Applied"]["main"][1][0]["node"],
+            "Build Cursor CAS Update",
+        )
+        self.assertEqual(
+            w12["connections"]["Verify Terminal Acquisition Receipt"]["main"][0][0]["node"],
+            "Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+        )
+        self.assertFalse(
+            w12_nodes["Mark Acquisition DOWNSTREAM_VERIFIED"]["parameters"]["columns"]["value"]["readback_verified"]
+        )
+        self.assertTrue(
+            w12_nodes["Mark DOWNSTREAM_VERIFIED Receipt Readback Verified"]["parameters"]["columns"]["value"]["readback_verified"]
+        )
         self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
         self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
         self.assertIn("ARCHIVE_RECEIPT_REPLAY_NOT_SAFE", w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"]["jsCode"])
@@ -675,6 +697,24 @@ try {
                 "run_upper_bound": "2026-08-20T00:00:00.000Z",
             }},
         )
+        self.assert_code_error(
+            w12,
+            "Determine Existing Cursor Commit",
+            "SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH",
+            json_value={
+                "source_code": "FIXTURE",
+                "cursor_version": 8,
+                "cursor_value": "2026-08-20T00:00:00.000Z",
+                "run_upper_bound": "2026-08-21T00:00:00.000Z",
+                "committed_run_id": "fixture:cas",
+            },
+            refs={"Verify Downstream Persistence Proof": {
+                "run_id": "fixture:cas",
+                "source_code": "FIXTURE",
+                "expected_cursor_version": 7,
+                "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            }},
+        )
 
     def test_executable_mixed_new_and_replay_branches_reach_barrier(self):
         w01 = self.workflow("01-outlook-finance-acquisition.json")
@@ -844,6 +884,7 @@ try {
                     "cursor_version": expected_version + 1,
                     "cursor_value": cursor_value,
                     "committed_run_id": run_id,
+                    "run_upper_bound": cursor_value,
                 }
                 self.writes += 1
                 return dict(self.row)
@@ -1137,14 +1178,18 @@ try {
                 )
                 self.assertTrue(proof["ok"], proof)
                 committed_proof = proof["output"][0]["json"]
+                determined = self.execute_code_node(
+                    w12,
+                    "Determine Existing Cursor Commit",
+                    json_value=cursor,
+                    refs={"Verify Downstream Persistence Proof": committed_proof},
+                )
+                self.assertTrue(determined["ok"], determined)
+                self.assertFalse(determined["output"][0]["json"]["cursor_recovery"])
                 cas = self.execute_code_node(
                     w12,
                     "Build Cursor CAS Update",
-                    json_value={
-                        "source_code": "FIXTURE",
-                        "cursor_version": cursor["cursor_version"],
-                        "cursor_value": cursor["cursor_value"],
-                    },
+                    json_value=determined["output"][0]["json"],
                     refs={"Verify Downstream Persistence Proof": committed_proof},
                 )
                 self.assertTrue(cas["ok"], cas)
@@ -1165,17 +1210,8 @@ try {
                     refs={"Build Cursor CAS Update": cas_row},
                 )
                 self.assertTrue(readback["ok"], readback)
-                terminal = self.execute_code_node(
-                    w12,
-                    "Return Verified Cursor Commit",
-                    json_value={
-                        "downstream_receipt_sha256": durable_hash,
-                        "cursor_commit_eligible": True,
-                    },
-                    refs={"Build Cursor CAS Update": cas_row},
-                )
-                self.assertTrue(terminal["ok"], terminal)
-                self.assertEqual(terminal["output"][0]["json"]["status"], "CURSOR_COMMITTED")
+                # Inject a process restart after CAS readback, before the terminal receipt update.
+                self.assertEqual(cursor_cas.writes, 1)
             else:
                 self.assertEqual(cursor["cursor_version"], 1)
                 self.assertEqual(cursor["cursor_value"], request()["run_upper_bound"])
@@ -1200,23 +1236,46 @@ try {
                     refs={"Validate Sweep or Commit": {
                         **request(),
                         "operation": "COMMIT",
-                        "expected_cursor_version": cursor["cursor_version"],
+                        "expected_cursor_version": 0,
                     }},
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)
-                self.assert_code_error(
+                recovered = self.execute_code_node(
                     w12,
-                    "Build Cursor CAS Update",
-                    "SOURCE_CURSOR_NON_MONOTONIC",
-                    json_value={
-                        "source_code": "FIXTURE",
-                        "cursor_version": cursor["cursor_version"],
-                        "cursor_value": cursor["cursor_value"],
-                        "committed_run_id": cursor["committed_run_id"],
-                    },
-                    refs={"Verify Downstream Persistence Proof":
-                          replay_proof["output"][0]["json"]},
+                    "Determine Existing Cursor Commit",
+                    json_value=cursor,
+                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
                 )
+                self.assertTrue(recovered["ok"], recovered)
+                recovered_row = recovered["output"][0]["json"]
+                self.assertTrue(recovered_row["cursor_recovery"])
+                terminal_readback = self.execute_code_node(
+                    w12,
+                    "Verify Terminal Acquisition Receipt",
+                    json_value={
+                        "run_id": request()["run_id"],
+                        "source_code": "FIXTURE",
+                        "terminal_state": "DOWNSTREAM_VERIFIED",
+                        "cursor_commit_eligible": True,
+                        "downstream_receipt_sha256": durable_hash,
+                        "readback_verified": False,
+                    },
+                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
+                )
+                self.assertTrue(terminal_readback["ok"], terminal_readback)
+                terminal = self.execute_code_node(
+                    w12,
+                    "Return Verified Cursor Commit",
+                    refs={
+                        "Verify Downstream Persistence Proof": replay_proof["output"][0]["json"],
+                        "Determine Existing Cursor Commit": recovered_row,
+                        "Verify Terminal Acquisition Receipt": terminal_readback["output"][0]["json"],
+                    },
+                )
+                self.assertTrue(terminal["ok"], terminal)
+                self.assertTrue(terminal["output"][0]["json"]["recovered_after_cas"])
+                self.assertEqual(terminal["output"][0]["json"]["cursor_version"], 1)
+                self.assertEqual(cursor_cas.writes, 1)
 
         self.assertEqual(len(archive_table.rows), 101)
         self.assertEqual(len(email_table.rows), 101)
