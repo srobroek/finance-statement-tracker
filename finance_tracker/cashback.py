@@ -243,7 +243,8 @@ def total_spend(transactions: Iterable[Transaction], card: str) -> Decimal:
         (
             transaction.spend_aed
             for transaction in transactions
-            if transaction.card == card and transaction.transaction_type in {"PURCHASE", "REFUND"}
+            if transaction.card == card
+            and transaction.transaction_type in {"PURCHASE", "REFUND", "REVERSAL"}
         ),
         Decimal("0"),
     )
@@ -254,7 +255,7 @@ def bucket_spend(transactions: Iterable[Transaction], card: str) -> dict[str, De
     for transaction in transactions:
         if (
             transaction.card != card
-            or transaction.transaction_type not in {"PURCHASE", "REFUND"}
+            or transaction.transaction_type not in {"PURCHASE", "REFUND", "REVERSAL"}
             or not transaction.reward_bucket
         ):
             continue

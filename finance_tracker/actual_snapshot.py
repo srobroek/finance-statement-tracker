@@ -92,6 +92,7 @@ def transactions_from_actual_snapshot(
         transaction_type = (
             "TRANSFER" if transfer or card_payment else
             "REWARD_CREDIT" if amount_minor > 0 and income_category else
+            "REVERSAL" if amount_minor > 0 and "reversal" in {tag.casefold() for tag in tags} else
             "REFUND" if amount_minor > 0 else
             "PURCHASE"
         )
@@ -118,7 +119,7 @@ def transactions_from_actual_snapshot(
                     if not tag.casefold().startswith(("channel-", "cashback-", "owner-"))
                 },
                 review_required=row.get("category_name") is None or bool({"review", "needs-review"} & tags),
-                is_refund=transaction_type == "REFUND",
+                is_refund=transaction_type in {"REFUND", "REVERSAL"},
                 metadata={
                     "actual_id": row["id"],
                     "cleared": bool(row.get("cleared")),

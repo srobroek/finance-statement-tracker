@@ -4,12 +4,14 @@ from unittest import TestCase
 
 from finance_tracker.cashback import (
     PaymentIntent,
+    bucket_spend,
     pace_status,
     poc_programs,
     programs_from_config,
     recommend,
     reward_total,
     statement_period,
+    total_spend,
 )
 from finance_tracker.models import Transaction
 
@@ -61,6 +63,32 @@ class CashbackTests(TestCase):
         before = reward_total(program, Decimal("15000"), {"SC_ONLINE": Decimal("4000")})
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
+
+    def test_reversal_reduces_reward_like_a_refund(self) -> None:
+        rows = [
+            Transaction(
+                "purchase",
+                datetime(2026, 8, 1),
+                "SC_PLATINUM_X",
+                "Online",
+                "100",
+                category="GENERAL",
+                reward_bucket="SC_ONLINE",
+            ),
+            Transaction(
+                "reversal",
+                datetime(2026, 8, 2),
+                "SC_PLATINUM_X",
+                "Online purchase reversed",
+                "25",
+                transaction_type="REVERSAL",
+                category="GENERAL",
+                reward_bucket="SC_ONLINE",
+            ),
+        ]
+
+        self.assertEqual(total_spend(rows, "SC_PLATINUM_X"), Decimal("75"))
+        self.assertEqual(bucket_spend(rows, "SC_PLATINUM_X"), {"SC_ONLINE": Decimal("75")})
 
     def test_rak_cashback_is_zero_below_monthly_minimum(self) -> None:
         program = next(program for program in poc_programs() if program.card == "RAK_WORLD")

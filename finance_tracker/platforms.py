@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from typing import Iterable, Protocol
 
 from .actual_notes import format_actual_notes, normalize_actual_tag
 from .classification_audit import enforce_transaction_invariants
 from .models import Transaction
+from .transaction_semantics import actual_amount_minor
 
 
 class PlatformKind(str, Enum):
@@ -109,49 +109,9 @@ class LedgerBackend(Protocol):
 
 
 def _actual_amount(transaction: Transaction) -> int:
-    """Return Actual's signed integer minor-unit amount.
+    """Return Actual's signed integer minor-unit amount."""
 
-    Purchases and payments leaving an account are negative. Income and refunds
-    are positive. This conversion happens only at the backend boundary; the
-    canonical transaction model remains platform neutral.
-    """
-    units = (abs(transaction.amount_aed) * Decimal("100")).quantize(
-        Decimal("1"), rounding=ROUND_HALF_UP
-    )
-    statement_direction = str(
-        transaction.metadata.get("statement_direction") or ""
-    ).upper()
-    balance_convention = str(
-        transaction.metadata.get("account_balance_convention") or ""
-    ).upper()
-    is_card_payment = "card-payment" in {
-        str(tag).strip().casefold() for tag in transaction.tags
-    }
-    incoming_payment_description = any(
-        token in " ".join(transaction.merchant_raw.upper().split())
-        for token in ("PAYMENT RECEIVED", "CREDIT REPAYMENT", "CARD REPAYMENT")
-    )
-    if is_card_payment and incoming_payment_description and balance_convention == "LIABILITY":
-        # A payment received by a credit-card account reduces the liability.
-        # Some issuer exports label the row inconsistently; the semantic row
-        # type plus an explicit liability convention is the safer invariant.
-        positive = True
-    elif is_card_payment and balance_convention == "ASSET":
-        # The matching payment leaving a current account is an asset debit.
-        positive = False
-    elif statement_direction in {"CREDIT", "DEBIT"}:
-        # A statement already supplies the authoritative account-side sign.
-        # Payments, refunds, and rewards are credits to a credit-card account;
-        # purchases and fees are debits. Do not infer their sign from a later
-        # classification such as TRANSFER.
-        positive = statement_direction == "CREDIT"
-    else:
-        positive = transaction.is_refund or transaction.transaction_type.upper() in {
-            "INCOME",
-            "REFUND",
-            "CREDIT",
-        }
-    return int(units if positive else -units)
+    return actual_amount_minor(transaction)
 
 
 class ActualBudgetAdapter:

@@ -1,13 +1,116 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+
 from .models import Transaction
 
 
 SOURCE_DIRECTIONS = frozenset({"CREDIT", "DEBIT"})
 REFUND_TOPICS = frozenset({"REFUND", "REVERSAL"})
 EXPLICIT_CREDIT_TOPICS = frozenset(
-    {"INCOME", "PAYMENT", "REWARD_CREDIT", "TRANSFER", *REFUND_TOPICS}
+    {"INCOME", "INVESTMENT", "PAYMENT", "REWARD_CREDIT", "TRANSFER", *REFUND_TOPICS}
 )
+
+
+@dataclass(frozen=True, slots=True)
+class TopicSemantics:
+    """Economic contract for one finalized topic.
+
+    ``actual_sign`` is the default Actual account-side sign when no source
+    direction is available. Transfers and investments deliberately have no
+    default because guessing their direction would create a balancing error.
+    ``spend_factor`` is the contribution to consumption reporting: refunds and
+    reversals reduce spend, while transfers, rewards, income, and investments
+    do not represent spend.
+    """
+
+    allowed_directions: frozenset[str]
+    actual_sign: int | None
+    spend_factor: int
+    cashback_event: str | None = None
+
+
+TOPIC_SEMANTICS: dict[str, TopicSemantics] = {
+    "PURCHASE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, "PURCHASE"),
+    "REFUND": TopicSemantics(frozenset({"CREDIT"}), 1, -1, "REFUND"),
+    "REVERSAL": TopicSemantics(frozenset({"CREDIT"}), 1, -1, "REVERSAL"),
+    "REWARD_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
+    "INCOME": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
+    "TRANSFER": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
+    "FEE": TopicSemantics(frozenset({"DEBIT"}), -1, 1),
+    "INTEREST": TopicSemantics(frozenset({"DEBIT"}), -1, 1),
+    "INVESTMENT": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
+    # Browser acquisition uses this provisional topic until source evidence or
+    # a normalization rule resolves it. It must never count as spend.
+    "UNRESOLVED_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
+    # Provisional source labels are valid before normalization/finalization.
+    "CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0),
+    "PAYMENT": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0),
+}
+
+
+def topic_semantics(topic: str) -> TopicSemantics:
+    normalized = str(topic or "").strip().upper()
+    try:
+        return TOPIC_SEMANTICS[normalized]
+    except KeyError as error:
+        raise ValueError(f"Unsupported transaction topic: {normalized or '<empty>'}") from error
+
+
+def spend_amount(transaction: Transaction) -> Decimal:
+    """Return consumption impact while retaining refunds as negative spend."""
+
+    topic = (
+        "REFUND"
+        if transaction.is_refund
+        else str(transaction.transaction_type or "PURCHASE").upper()
+    )
+    semantics = topic_semantics(topic)
+    return abs(transaction.amount_aed) * semantics.spend_factor
+
+
+def actual_amount_minor(transaction: Transaction) -> int:
+    """Project one canonical row to Actual's signed integer minor units.
+
+    Source direction controls ordinary rows. Card-payment rows are the one
+    issuer-export exception: their human description and account convention
+    identify the account-side transfer even when the issuer labels direction
+    from liability accounting perspective. No other transfer or investment row
+    receives an inferred sign.
+    """
+
+    if transaction.amount_aed < 0:
+        raise ValueError("Canonical amount_aed must be a non-negative magnitude")
+    topic = (
+        "REFUND"
+        if transaction.is_refund and str(transaction.transaction_type).upper() == "PURCHASE"
+        else str(transaction.transaction_type or "PURCHASE").strip().upper()
+    )
+    semantics = topic_semantics(topic)
+    direction = _source_direction(transaction)
+    description = " ".join(transaction.merchant_raw.upper().split())
+    tags = {str(tag).strip().casefold() for tag in transaction.tags}
+    convention = str(transaction.metadata.get("account_balance_convention") or "").strip().upper()
+    card_payment = "card-payment" in tags
+    payment_description = any(
+        token in description
+        for token in ("PAYMENT RECEIVED", "CREDIT REPAYMENT", "CARD REPAYMENT")
+    )
+    if card_payment and payment_description and convention in {"ASSET", "LIABILITY"}:
+        positive = convention == "LIABILITY"
+    elif direction:
+        positive = direction == "CREDIT"
+    elif semantics.actual_sign is not None:
+        positive = semantics.actual_sign > 0
+    else:
+        raise ValueError(
+            f"{topic} transaction {transaction.transaction_id!r} requires source direction"
+        )
+    units = (abs(transaction.amount_aed) * Decimal("100")).quantize(
+        Decimal("1"), rounding=ROUND_HALF_UP
+    )
+    return int(units if positive else -units)
 
 
 def _source_direction(transaction: Transaction) -> str | None:
@@ -54,22 +157,54 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     ):
         topic = "REVERSAL"
         reason = "EXPLICIT_REVERSAL"
+    elif topic == "PAYMENT" or (
+        topic == "PURCHASE"
+        and any(
+            token in description
+            for token in ("PAYMENT RECEIVED", "CARD PAYMENT", "CARD PMT", "AUTOPAY PAYMENT")
+        )
+    ):
+        topic = "TRANSFER"
+        reason = "EXPLICIT_CARD_PAYMENT"
+        transaction.tags.update({"transfer", "card-payment"})
+    elif topic == "PURCHASE" and (
+        str(transaction.vendor or "").strip().casefold() == "stake"
+        or "GETSTAKE.COM" in description
+        or " INVESTMENT " in f" {description} "
+    ):
+        topic = "INVESTMENT"
+        reason = "EXPLICIT_INVESTMENT_EVIDENCE"
     elif direction == "CREDIT" and topic not in EXPLICIT_CREDIT_TOPICS:
         topic = "REFUND"
         reason = "CREDIT_DEFAULT_REFUND"
-    elif direction == "DEBIT" and topic == "CREDIT":
+    elif direction == "DEBIT" and topic in {
+        "CREDIT",
+        "INCOME",
+        "REFUND",
+        "REVERSAL",
+        "REWARD_CREDIT",
+    }:
         topic = "PURCHASE"
         reason = "DEBIT_DEFAULT_PURCHASE"
-    elif topic == "PURCHASE" and (
-        "FOREIGN EXCHANGE FEE" in description
-        or description.startswith("VAT ON ")
-        or description.endswith(" FEE")
-    ):
-        topic = "FEE"
-        reason = "EXPLICIT_FEE"
+    elif direction == "CREDIT" and topic in {"FEE", "INTEREST"}:
+        topic = "REFUND"
+        reason = "CREDIT_DEFAULT_REFUND"
     elif topic == "PURCHASE" and "INTEREST" in description:
         topic = "INTEREST"
         reason = "EXPLICIT_INTEREST"
+    elif topic == "PURCHASE" and (
+        "FOREIGN EXCHANGE FEE" in description
+        or description.startswith("VAT ON ")
+        or description.endswith((" FEE", " CHARGE", " CHARGES"))
+    ):
+        topic = "FEE"
+        reason = "EXPLICIT_FEE"
+
+    semantics = topic_semantics(topic)
+    if direction and direction not in semantics.allowed_directions:
+        raise ValueError(
+            f"Topic {topic} is incompatible with source direction {direction}"
+        )
 
     transaction.transaction_type = topic
     transaction.is_refund = topic in REFUND_TOPICS

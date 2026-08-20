@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/actual-economic-semantics-fixture-v1.json",
+  "title": "Executable Actual economic semantics fixtures",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "account_taxonomy", "rules", "cases"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "account_taxonomy": {"const": "config/actual-account-taxonomy.json"},
+    "rules": {"const": "config/static-rules.seed.json"},
+    "cases": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id", "account_key", "account_name", "direction", "description",
+          "amount_aed", "topic", "expected_actual_amount_minor", "expected_spend_aed"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "account_key": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "account_name": {"type": "string", "minLength": 1},
+          "direction": {"enum": ["CREDIT", "DEBIT"]},
+          "description": {"type": "string", "minLength": 1},
+          "vendor": {"type": "string", "minLength": 1},
+          "amount_aed": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]{1,2})?$"},
+          "topic": {
+            "enum": [
+              "PURCHASE", "REFUND", "REVERSAL", "REWARD_CREDIT", "INCOME",
+              "TRANSFER", "FEE", "INTEREST", "INVESTMENT"
+            ]
+          },
+          "tags": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9:-]+$"}},
+          "account_balance_convention": {"enum": ["ASSET", "LIABILITY"]},
+          "expected_actual_amount_minor": {"type": "integer"},
+          "expected_spend_aed": {"type": "string", "pattern": "^-?[0-9]+(\\.[0-9]{1,2})?$"}
+        }
+      }
+    }
+  }
+}
