@@ -8,7 +8,11 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "a160c9f5f0c713246a733e0752c79d160ecddaeb14fa5f77a6ef2347e42af031",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "871bc662d825c3747cd8c066884e06beb3014c442225346eb56c775b7bd0a9ee"
+    "config_version_seed_sha256": "871bc662d825c3747cd8c066884e06beb3014c442225346eb56c775b7bd0a9ee",
+    "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
+    "application_contract_bundle_sha256": "2af782275f5a51de5731cdcf70332550fa1fdfca52e382ef7a745d7faf9e93e1",
+    "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+    "application_contract_bundle_schema_sha256": "c7ebdcddfdf41ccabee077c0828884e2fe40be3590d5c2e543ecdb44b9b22582"
   },
   "native_data_table_create_contract": {
     "node_type": "n8n-nodes-base.dataTable",
@@ -1259,6 +1263,23 @@
       "content_sha256",
       "git_commit",
       "state"
+    ]
+  },
+  "application_contract": {
+    "path": "integrations/n8n/generated/application-contract-bundle.json",
+    "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
+    "schema_version": 1,
+    "bundle_content_sha256": "73bd45452e7aefb1a00c9d9729a9b024ce2e8f00e154d0aad57df94f00901467",
+    "resolver_order": [
+      "W02",
+      "W04",
+      "W05",
+      "W09"
+    ],
+    "source_paths": [
+      "config/statement-sources.json",
+      "config/transaction-email-sources.json",
+      "config/ai-policies.json"
     ]
   },
   "execution_evidence": {

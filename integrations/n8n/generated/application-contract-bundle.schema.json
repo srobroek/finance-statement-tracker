@@ -1,0 +1,478 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "finance-application-contract-bundle-v1",
+  "title": "Finance application contract resolver bundle",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract_status",
+    "schema_path",
+    "schema_sha256",
+    "content_digest",
+    "bundle_content_sha256",
+    "source_documents",
+    "resolver_order",
+    "resolver_maps",
+    "source_contracts",
+    "config_versions",
+    "ai_policy_contracts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "contract_status": {
+      "const": "SPEC_ONLY"
+    },
+    "schema_path": {
+      "const": "integrations/n8n/generated/application-contract-bundle.schema.json"
+    },
+    "schema_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "content_digest": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "canonicalization",
+        "excluded_fields"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "SHA-256"
+        },
+        "canonicalization": {
+          "const": "sorted-object-keys;array-order-preserved;compact-utf8-json"
+        },
+        "excluded_fields": {
+          "const": [
+            "bundle_content_sha256"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "bundle_content_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_documents": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "config/statement-sources.json"
+            },
+            "sha256": {
+              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "config/transaction-email-sources.json"
+            },
+            "sha256": {
+              "const": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "config/ai-policies.json"
+            },
+            "sha256": {
+              "const": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "resolver_order": {
+      "const": [
+        "W02",
+        "W04",
+        "W05",
+        "W09"
+      ]
+    },
+    "resolver_maps": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "workflow_code",
+            "workflow_path",
+            "selection_key",
+            "sources",
+            "entries"
+          ],
+          "properties": {
+            "workflow_code": {
+              "const": "W02"
+            },
+            "workflow_path": {
+              "const": "integrations/n8n/workflows/02-rakbank-live-cashback.json"
+            },
+            "selection_key": {
+              "const": "code"
+            },
+            "sources": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "const": "config/transaction-email-sources.json"
+                    },
+                    "sha256": {
+                      "const": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "items": false,
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "entries": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "properties": {
+                  "key": {
+                    "enum": [
+                      "RAKBANK_CARD_TRANSACTION",
+                      "STANDARD_CHARTERED_CARD_TRANSACTION"
+                    ]
+                  },
+                  "value": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "workflow_code",
+            "workflow_path",
+            "selection_key",
+            "sources",
+            "entries"
+          ],
+          "properties": {
+            "workflow_code": {
+              "const": "W04"
+            },
+            "workflow_path": {
+              "const": "integrations/n8n/workflows/04-ei-monthly-statement.json"
+            },
+            "selection_key": {
+              "const": "card_code"
+            },
+            "sources": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "const": "config/statement-sources.json"
+                    },
+                    "sha256": {
+                      "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "items": false,
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "entries": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "properties": {
+                  "key": {
+                    "enum": [
+                      "ADCB_CASHBACK",
+                      "EI_AMAZON",
+                      "WIO_CREDIT",
+                      "RAK_WORLD",
+                      "SC_PLATINUM_X"
+                    ]
+                  },
+                  "value": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "workflow_code",
+            "workflow_path",
+            "selection_key",
+            "sources",
+            "entries"
+          ],
+          "properties": {
+            "workflow_code": {
+              "const": "W05"
+            },
+            "workflow_path": {
+              "const": "integrations/n8n/workflows/05-wio-monthly-statement.json"
+            },
+            "selection_key": {
+              "const": "card_code"
+            },
+            "sources": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "const": "config/statement-sources.json"
+                    },
+                    "sha256": {
+                      "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "items": false,
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "entries": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "properties": {
+                  "key": {
+                    "enum": [
+                      "ADCB_CASHBACK",
+                      "EI_AMAZON",
+                      "WIO_CREDIT",
+                      "RAK_WORLD",
+                      "SC_PLATINUM_X"
+                    ]
+                  },
+                  "value": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "workflow_code",
+            "workflow_path",
+            "selection_key",
+            "sources",
+            "entries"
+          ],
+          "properties": {
+            "workflow_code": {
+              "const": "W09"
+            },
+            "workflow_path": {
+              "const": "integrations/n8n/workflows/09-ai-proposal.json"
+            },
+            "selection_key": {
+              "const": "policy_id"
+            },
+            "sources": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "const": "config/ai-policies.json"
+                    },
+                    "sha256": {
+                      "const": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "items": false,
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "entries": {
+              "type": "array",
+              "minItems": 7,
+              "maxItems": 7,
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "properties": {
+                  "key": {
+                    "enum": [
+                      "classify-unresolved",
+                      "recommend-category",
+                      "detect-subscription",
+                      "enrich-property",
+                      "find-purchase-evidence",
+                      "enrich-cashback-classification",
+                      "recommend-static-rule"
+                    ]
+                  },
+                  "value": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "source_contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    },
+    "config_versions": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "config_name",
+          "version",
+          "source_path",
+          "content_sha256",
+          "state"
+        ],
+        "properties": {
+          "config_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_path": {
+            "enum": [
+              "config/statement-sources.json",
+              "config/transaction-email-sources.json",
+              "config/ai-policies.json"
+            ]
+          },
+          "content_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "state": {
+            "const": "ACTIVE"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ai_policy_contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -567,11 +567,81 @@ class N8nWorkflowTests(unittest.TestCase):
             manifest["sources"]["config_version_seed_sha256"],
             git_canonical_sha256(N8N / "generated" / "config-versions.seed.json"),
         )
+        self.assertEqual(
+            manifest["sources"]["application_contract_bundle_sha256"],
+            git_canonical_sha256(N8N / "generated" / "application-contract-bundle.json"),
+        )
+        self.assertEqual(
+            manifest["sources"]["application_contract_bundle_schema_sha256"],
+            git_canonical_sha256(N8N / "generated" / "application-contract-bundle.schema.json"),
+        )
         result = subprocess.run(
             [sys.executable, str(N8N / "compile_config_versions.py")],
             cwd=ROOT, capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_application_contract_bundle_is_schema_valid_ordered_and_self_hashed(self) -> None:
+        bundle_path = N8N / "generated" / "application-contract-bundle.json"
+        schema_path = N8N / "generated" / "application-contract-bundle.schema.json"
+        bundle = load_json(bundle_path)
+        schema = load_json(schema_path)
+        self.assertEqual(bundle["schema_version"], 1)
+        self.assertEqual(bundle["contract_status"], "SPEC_ONLY")
+        self.assertEqual(bundle["schema_sha256"], git_canonical_sha256(schema_path))
+        self.assertEqual(bundle["resolver_order"], ["W02", "W04", "W05", "W09"])
+        self.assertEqual(
+            [resolver["workflow_code"] for resolver in bundle["resolver_maps"]],
+            bundle["resolver_order"],
+        )
+        payload = dict(bundle)
+        payload.pop("bundle_content_sha256")
+        canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        self.assertEqual(
+            hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            bundle["bundle_content_sha256"],
+        )
+        expected_sources = {
+            "config/statement-sources.json",
+            "config/transaction-email-sources.json",
+            "config/ai-policies.json",
+        }
+        self.assertEqual({source["path"] for source in bundle["source_documents"]}, expected_sources)
+        for source in bundle["source_documents"]:
+            self.assertEqual(source["sha256"], git_canonical_sha256(ROOT / source["path"]))
+        self.assertEqual(
+            [resolver["sources"][0]["path"] for resolver in bundle["resolver_maps"]],
+            [
+                "config/transaction-email-sources.json",
+                "config/statement-sources.json",
+                "config/statement-sources.json",
+                "config/ai-policies.json",
+            ],
+        )
+        workflow = self.workflow("19-platform-data-table-bootstrap.json")
+        nodes = self.nodes("19-platform-data-table-bootstrap.json")
+        self.assertEqual(
+            nodes["Load and Validate Application Contract Bundle"]["type"],
+            "n8n-nodes-base.code",
+        )
+        self.assertEqual(
+            nodes["SHA-256 Application Contract Bundle"]["parameters"]["type"],
+            "SHA256",
+        )
+        verify = nodes["Verify Application Contract Bundle Digest and Maps"]["parameters"]["jsCode"]
+        self.assertIn("APPLICATION_CONTRACT_BUNDLE_DIGEST_MISMATCH", verify)
+        self.assertIn("APPLICATION_CONTRACT_BUNDLE_RESOLVER_MAP_INVALID", verify)
+        self.assertEqual(
+            workflow["connections"]["Manual Platform Bootstrap Only"]["main"][0][0]["node"],
+            "Load and Validate Application Contract Bundle",
+        )
+        try:
+            import jsonschema
+        except ImportError:
+            jsonschema = None
+        if jsonschema:
+            jsonschema.validators.validator_for(schema).check_schema(schema)
+            jsonschema.validate(bundle, schema)
 
     def test_generated_source_hashes_use_git_canonical_lf_bytes(self) -> None:
         seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
@@ -612,6 +682,7 @@ class N8nWorkflowTests(unittest.TestCase):
                 "n8n-nodes-base.manualTrigger",
                 "n8n-nodes-base.dataTable",
                 "n8n-nodes-base.code",
+                "n8n-nodes-base.crypto",
                 "n8n-nodes-base.stickyNote",
             },
         )

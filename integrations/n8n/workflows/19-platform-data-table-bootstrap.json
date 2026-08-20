@@ -15,12 +15,54 @@
       "parameters": {}
     },
     {
+      "id": "19000",
+      "name": "Load and Validate Application Contract Bundle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Load and Validate Application Contract Bundle. Keep this deterministic and fail closed.\nconst bundle = {\n    \"ai_policy_contracts\": [\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"LUNA_MAX\",\n                \"allowed_tags\": [\n                    \"home\",\n                    \"grocery\",\n                    \"dining\",\n                    \"transport\",\n                    \"travel\",\n                    \"online\",\n                    \"health\",\n                    \"education\",\n                    \"gift\",\n                    \"business\",\n                    \"shared\",\n                    \"review\"\n                ],\n                \"allowed_value_sources\": {\n                    \"category\": \"actual.categories\"\n                },\n                \"conditions\": [\n                    {\n                        \"field\": \"transaction_type\",\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    }\n                ],\n                \"instruction\": (\"Using the merchant description and existing determ\" +\n                    \"inistic outputs, propose only a vendor, category, \" +\n                    \"subcategory, or approved reporting tags. Do not in\" +\n                    \"fer source facts. Leave a field unresolved when ev\" +\n                    \"idence is weak.\"),\n                \"minimum_confidence\": 0.82,\n                \"name\": \"Classify unresolved purchases\",\n                \"policy_id\": \"classify-unresolved\",\n                \"priority\": 10,\n                \"target_fields\": [\n                    \"vendor\",\n                    \"category\",\n                    \"subcategory\",\n                    \"tags\"\n                ],\n                \"trigger_fields\": [\n                    \"category\"\n                ],\n                \"version\": 2\n            },\n            \"policy_id\": \"classify-unresolved\",\n            \"policy_version\": 2,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"SOL_XHIGH\",\n                \"conditions\": [\n                    {\n                        \"field\": \"transaction_type\",\n                        \"group\": 1,\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    },\n                    {\n                        \"field\": \"category\",\n                        \"group\": 1,\n                        \"operator\": \"is_empty\"\n                    }\n                ],\n                \"instruction\": (\"Only when no configured category fits after static\" +\n                    \" rules and history matching, propose a category_re\" +\n                    \"commendation object with a concise name, the best \" +\n                    \"existing or proposed group, and an evidence-based \" +\n                    \"reason. Do not create or assign the category. The \" +\n                    \"proposal must remain review-required until an owne\" +\n                    \"r adds the category and reruns classification.\"),\n                \"minimum_confidence\": 0.92,\n                \"name\": \"Recommend a missing category\",\n                \"policy_id\": \"recommend-category\",\n                \"priority\": 15,\n                \"target_fields\": [\n                    \"category_recommendation\"\n                ],\n                \"trigger_fields\": [\n                    \"category_recommendation\"\n                ],\n                \"version\": 1\n            },\n            \"policy_id\": \"recommend-category\",\n            \"policy_version\": 1,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"LUNA_MAX\",\n                \"allowed_tags\": [\n                    \"subscription\",\n                    \"recurring\"\n                ],\n                \"allowed_values\": {\n                    \"is_subscription\": [\n                        true\n                    ]\n                },\n                \"conditions\": [\n                    {\n                        \"field\": \"transaction_type\",\n                        \"group\": 1,\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    },\n                    {\n                        \"field\": \"category\",\n                        \"group\": 1,\n                        \"operator\": \"in\",\n                        \"value\": [\n                            \"Software & App Subscriptions\",\n                            \"Media Subscriptions\",\n                            \"Mobile & Internet\",\n                            \"Cloud Services\"\n                        ]\n                    }\n                ],\n                \"instruction\": (\"Mark a transaction as a subscription only when the\" +\n                    \" merchant or related evidence indicates a recurrin\" +\n                    \"g service. Add only approved subscription tags.\"),\n                \"minimum_confidence\": 0.9,\n                \"name\": \"Detect recurring subscription\",\n                \"policy_id\": \"detect-subscription\",\n                \"priority\": 20,\n                \"target_fields\": [\n                    \"is_subscription\",\n                    \"tags\"\n                ],\n                \"trigger_fields\": [\n                    \"is_subscription\"\n                ],\n                \"version\": 1\n            },\n            \"policy_id\": \"detect-subscription\",\n            \"policy_version\": 1,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"SOL_XHIGH\",\n                \"allowed_value_sources\": {\n                    \"property_code\": \"properties.codes\",\n                    \"rental_unit\": \"properties.rental_units\"\n                },\n                \"conditions\": [\n                    {\n                        \"field\": \"category\",\n                        \"operator\": \"in\",\n                        \"value\": [\n                            \"Electricity & Water\",\n                            \"District Cooling\",\n                            \"Service Charges\",\n                            \"Maintenance & Repairs\",\n                            \"Rental Income\"\n                        ]\n                    }\n                ],\n                \"instruction\": (\"Use explicit transaction or linked email evidence \" +\n                    \"to identify only a configured property and rental \" +\n                    \"unit. Never guess a unit from amount alone. The de\" +\n                    \"terministic property registry adds reporting tags \" +\n                    \"after the identity is accepted.\"),\n                \"minimum_confidence\": 0.9,\n                \"name\": \"Enrich property and rental unit\",\n                \"policy_id\": \"enrich-property\",\n                \"priority\": 30,\n                \"target_fields\": [\n                    \"property_code\",\n                    \"rental_unit\"\n                ],\n                \"version\": 2\n            },\n            \"policy_id\": \"enrich-property\",\n            \"policy_version\": 2,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"LUNA_MAX\",\n                \"allowed_values\": {\n                    \"evidence_policy\": [\n                        \"SEARCH_RELATED_EMAIL\",\n                        \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                        \"MATCH_AMOUNT_AND_PERIOD\"\n                    ]\n                },\n                \"conditions\": [\n                    {\n                        \"field\": \"transaction_type\",\n                        \"group\": 1,\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    },\n                    {\n                        \"field\": \"category\",\n                        \"group\": 1,\n                        \"operator\": \"in\",\n                        \"value\": [\n                            \"Electricity & Water\",\n                            \"District Cooling\",\n                            \"Service Charges\",\n                            \"Maintenance & Repairs\",\n                            \"Electronics\",\n                            \"Furniture & Appliances\",\n                            \"Flights\",\n                            \"Accommodation\",\n                            \"Insurance\"\n                        ]\n                    },\n                    {\n                        \"field\": \"transaction_type\",\n                        \"group\": 2,\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    },\n                    {\n                        \"field\": \"amount_aed\",\n                        \"group\": 2,\n                        \"operator\": \"gte\",\n                        \"value\": \"500\"\n                    },\n                    {\n                        \"field\": \"category\",\n                        \"group\": 2,\n                        \"negate\": true,\n                        \"operator\": \"in\",\n                        \"value\": [\n                            \"Groceries\",\n                            \"Dining Out\",\n                            \"Food Delivery\",\n                            \"Coffee & Snacks\",\n                            \"Fuel\",\n                            \"Parking & Tolls\",\n                            \"Ride Hailing\",\n                            \"Public Transport\",\n                            \"Rent & Mortgage\",\n                            \"Mortgage Interest\",\n                            \"Mortgage Payments\",\n                            \"Investment Contributions\",\n                            \"Investments\",\n                            \"Savings Transfers\",\n                            \"Internal Transfers\",\n                            \"Cash Withdrawal\",\n                            \"Card Payments\",\n                            \"Bank Fees\"\n                        ]\n                    }\n                ],\n                \"instruction\": (\"Use config/evidence-search-policy.json and its sto\" +\n                    \"re/do-not-store examples. Propose an evidence sear\" +\n                    \"ch for document-worthy categories or for a qualify\" +\n                    \"ing high-value transaction whose statement descrip\" +\n                    \"tion lacks the product detail. The evidence worker\" +\n                    \" searches vendor aliases plus amount/currency with\" +\n                    \"in the date buffer and uses matched email/order co\" +\n                    \"ntent to identify the product, model, order refere\" +\n                    \"nce, serial number, warranty dates, or return dead\" +\n                    \"line. Never propose a vendor-only match or evidenc\" +\n                    \"e collection for a configured never-search categor\" +\n                    \"y unless a manual evidence request exists.\"),\n                \"minimum_confidence\": 0.8,\n                \"name\": \"Find receipt bill or warranty evidence\",\n                \"policy_id\": \"find-purchase-evidence\",\n                \"priority\": 40,\n                \"target_fields\": [\n                    \"evidence_policy\"\n                ],\n                \"trigger_fields\": [\n                    \"evidence_policy\"\n                ],\n                \"version\": 2\n            },\n            \"policy_id\": \"find-purchase-evidence\",\n            \"policy_version\": 2,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"LUNA_MAX\",\n                \"allowed_value_sources\": {\n                    \"reward_bucket\": \"cashback.buckets\"\n                },\n                \"allowed_values\": {\n                    \"channel\": [\n                        \"ONLINE\",\n                        \"PHYSICAL_POS\",\n                        \"APPLE_PAY_POS\",\n                        \"UNKNOWN\"\n                    ]\n                },\n                \"conditions\": [\n                    {\n                        \"field\": \"transaction_type\",\n                        \"group\": 1,\n                        \"operator\": \"equals\",\n                        \"value\": \"PURCHASE\"\n                    },\n                    {\n                        \"field\": \"card\",\n                        \"group\": 1,\n                        \"operator\": \"in\",\n                        \"value\": [\n                            \"RAK_WORLD\",\n                            \"SC_PLATINUM_X\"\n                        ]\n                    }\n                ],\n                \"instruction\": (\"Only when deterministic rules leave them unresolve\" +\n                    \"d, infer channel or propose a configured cashback \" +\n                    \"bucket from explicit merchant, notification, walle\" +\n                    \"t, currency, and card evidence. Do not calculate r\" +\n                    \"ewards or invent wallet usage.\"),\n                \"minimum_confidence\": 0.95,\n                \"name\": \"Enrich channel and cashback bucket\",\n                \"policy_id\": \"enrich-cashback-classification\",\n                \"priority\": 50,\n                \"target_fields\": [\n                    \"channel\",\n                    \"reward_bucket\"\n                ],\n                \"trigger_fields\": [\n                    \"channel\",\n                    \"reward_bucket\"\n                ],\n                \"version\": 1\n            },\n            \"policy_id\": \"enrich-cashback-classification\",\n            \"policy_version\": 1,\n            \"source_path\": \"config/ai-policies.json\"\n        },\n        {\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"contract\": {\n                \"agent_profile\": \"SOL_XHIGH\",\n                \"conditions\": [\n                    {\n                        \"field\": \"history_count\",\n                        \"operator\": \"gte\",\n                        \"value\": 3\n                    }\n                ],\n                \"instruction\": (\"Only when transaction metadata contains at least t\" +\n                    \"hree consistent reviewed examples for the same nor\" +\n                    \"malized merchant pattern, propose a disabled canon\" +\n                    \"ical static-rule draft. Include the evidence count\" +\n                    \" and never execute the recommendation.\"),\n                \"minimum_confidence\": 0.95,\n                \"name\": \"Recommend a repeated-pattern rule\",\n                \"policy_id\": \"recommend-static-rule\",\n                \"priority\": 90,\n                \"target_fields\": [\n                    \"rule_recommendation\"\n                ],\n                \"version\": 1\n            },\n            \"policy_id\": \"recommend-static-rule\",\n            \"policy_version\": 1,\n            \"source_path\": \"config/ai-policies.json\"\n        }\n    ],\n    \"bundle_content_sha256\": (\"73bd45452e7aefb1a00c9d9729a9b024ce2e8f00e154d0aad5\" +\n        \"7df94f00901467\"),\n    \"config_versions\": [\n        {\n            \"config_name\": \"statement-sources\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"source_path\": \"config/statement-sources.json\",\n            \"state\": \"ACTIVE\",\n            \"version\": \"1\"\n        },\n        {\n            \"config_name\": \"transaction-email-sources\",\n            \"content_sha256\": (\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19\" +\n                \"f287adca8b6a6d\"),\n            \"source_path\": \"config/transaction-email-sources.json\",\n            \"state\": \"ACTIVE\",\n            \"version\": \"1\"\n        },\n        {\n            \"config_name\": \"ai-policies\",\n            \"content_sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\"),\n            \"source_path\": \"config/ai-policies.json\",\n            \"state\": \"ACTIVE\",\n            \"version\": \"1\"\n        }\n    ],\n    \"content_digest\": {\n        \"algorithm\": \"SHA-256\",\n        \"canonicalization\": (\"sorted-object-keys;array-order-preserved;compact-u\" +\n            \"tf8-json\"),\n        \"excluded_fields\": [\n            \"bundle_content_sha256\"\n        ]\n    },\n    \"contract_status\": \"SPEC_ONLY\",\n    \"resolver_maps\": [\n        {\n            \"entries\": [\n                {\n                    \"key\": \"RAKBANK_CARD_TRANSACTION\",\n                    \"value\": {\n                        \"adapter\": \"rakbank_card_transaction_v1\",\n                        \"card_code\": \"RAK_WORLD\",\n                        \"code\": \"RAKBANK_CARD_TRANSACTION\",\n                        \"evidence_semantics\": \"LIVE_TRANSACTION_NOTIFICATION\",\n                        \"institution\": \"RAKBANK\",\n                        \"mail_folder\": \"Inbox/Rakbank\",\n                        \"notes\": (\"Verified 2026-08-17 format: You spent <currency> <\" +\n                            \"amount> at <merchant> on your Credit Card <masked-\" +\n                            \"card> on <DD/MM>. Date-only source; year is resolv\" +\n                            \"ed against receivedDateTime and statement reconcil\" +\n                            \"iation remains authoritative. A separately observe\" +\n                            \"d Apple Pay purchase used the identical template a\" +\n                            \"nd exposed no wallet marker. Explicit merchant cha\" +\n                            \"nnel rules run first; unresolved RAK_WORLD transac\" +\n                            \"tions use the configurable APPLE_PAY_POS user defa\" +\n                            \"ult.\"),\n                        \"senders\": [\n                            \"alerts@rakbank.ae\"\n                        ],\n                        \"status\": \"ACTIVE\",\n                        \"subject_match\": \"EXACT\",\n                        \"subjects\": [\n                            \"An update on your Card transaction\"\n                        ]\n                    }\n                },\n                {\n                    \"key\": \"STANDARD_CHARTERED_CARD_TRANSACTION\",\n                    \"value\": {\n                        \"adapter\": null,\n                        \"card_code\": \"SC_PLATINUM_X\",\n                        \"code\": \"STANDARD_CHARTERED_CARD_TRANSACTION\",\n                        \"evidence_semantics\": \"UNKNOWN\",\n                        \"institution\": \"Standard Chartered\",\n                        \"mail_folder\": null,\n                        \"notes\": (\"Replace with captured sender, subject, body fixtur\" +\n                            \"e, card suffix and parser only after a real notifi\" +\n                            \"cation format is verified.\"),\n                        \"senders\": [],\n                        \"status\": \"PLACEHOLDER\",\n                        \"subject_match\": \"EXACT\",\n                        \"subjects\": []\n                    }\n                }\n            ],\n            \"selection_key\": \"code\",\n            \"sources\": [\n                {\n                    \"path\": \"config/transaction-email-sources.json\",\n                    \"sha256\": (\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19\" +\n                        \"f287adca8b6a6d\")\n                }\n            ],\n            \"workflow_code\": \"W02\",\n            \"workflow_path\": (\"integrations/n8n/workflows/02-rakbank-live-cashbac\" +\n                \"k.json\")\n        },\n        {\n            \"entries\": [\n                {\n                    \"key\": \"ADCB_CASHBACK\",\n                    \"value\": {\n                        \"adapter\": \"adcb_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"ADCB_CASHBACK\",\n                        \"email_senders\": [\n                            \"estatement@adcb.com\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"ADCB Credit card e-Statement\"\n                        ],\n                        \"institution\": \"ADCB\",\n                        \"notes\": (\"PDF parser, browser export, and recurring producti\" +\n                            \"on mailbox contract are verified.\"),\n                        \"password_env\": \"ADCB_STATEMENT_PASSWORD\"\n                    }\n                },\n                {\n                    \"key\": \"EI_AMAZON\",\n                    \"value\": {\n                        \"adapter\": \"emirates_islamic_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"EI_AMAZON\",\n                        \"email_senders\": [\n                            \"estatement@emiratesislamic.ae\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"Statement of your Emirates Islamic Credit Card\"\n                        ],\n                        \"institution\": \"Emirates Islamic\",\n                        \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                            \"ct are verified.\"),\n                        \"password_env\": \"EI_STATEMENT_PASSWORD\"\n                    }\n                },\n                {\n                    \"key\": \"WIO_CREDIT\",\n                    \"value\": {\n                        \"adapter\": \"wio_credit_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"WIO_CREDIT\",\n                        \"email_senders\": [\n                            \"communications@email.wio.io\",\n                            \"communications@mail.wio.io\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"Your Wio Credit statement for this month\"\n                        ],\n                        \"institution\": \"Wio\",\n                        \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                            \"ct are verified. The sender migrated from communic\" +\n                            \"ations@email.wio.io to communications@mail.wio.io \" +\n                            \"in July 2026; both exact senders remain allowliste\" +\n                            \"d for historical backfills. Statements arrive on d\" +\n                            \"ay 1 or 2 and the scheduled job runs on day 3. Acc\" +\n                            \"ount mapping remains deployment-specific.\"),\n                        \"password_env\": null\n                    }\n                },\n                {\n                    \"key\": \"RAK_WORLD\",\n                    \"value\": {\n                        \"adapter\": null,\n                        \"adapter_status\": \"PLACEHOLDER\",\n                        \"card_code\": \"RAK_WORLD\",\n                        \"email_senders\": [],\n                        \"email_status\": \"PLACEHOLDER\",\n                        \"email_subjects\": [],\n                        \"institution\": \"RAKBANK\",\n                        \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                            \", import, reconcile, or finalize until a real PDF \" +\n                            \"fixture is captured and tested.\")\n                    }\n                },\n                {\n                    \"key\": \"SC_PLATINUM_X\",\n                    \"value\": {\n                        \"adapter\": null,\n                        \"adapter_status\": \"PLACEHOLDER\",\n                        \"card_code\": \"SC_PLATINUM_X\",\n                        \"email_senders\": [],\n                        \"email_status\": \"PLACEHOLDER\",\n                        \"email_subjects\": [],\n                        \"institution\": \"Standard Chartered\",\n                        \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                            \", import, reconcile, or finalize until a real PDF \" +\n                            \"fixture is captured and tested.\")\n                    }\n                }\n            ],\n            \"selection_key\": \"card_code\",\n            \"sources\": [\n                {\n                    \"path\": \"config/statement-sources.json\",\n                    \"sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                        \"317de8f0cefc62\")\n                }\n            ],\n            \"workflow_code\": \"W04\",\n            \"workflow_path\": (\"integrations/n8n/workflows/04-ei-monthly-statement\" +\n                \".json\")\n        },\n        {\n            \"entries\": [\n                {\n                    \"key\": \"ADCB_CASHBACK\",\n                    \"value\": {\n                        \"adapter\": \"adcb_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"ADCB_CASHBACK\",\n                        \"email_senders\": [\n                            \"estatement@adcb.com\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"ADCB Credit card e-Statement\"\n                        ],\n                        \"institution\": \"ADCB\",\n                        \"notes\": (\"PDF parser, browser export, and recurring producti\" +\n                            \"on mailbox contract are verified.\"),\n                        \"password_env\": \"ADCB_STATEMENT_PASSWORD\"\n                    }\n                },\n                {\n                    \"key\": \"EI_AMAZON\",\n                    \"value\": {\n                        \"adapter\": \"emirates_islamic_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"EI_AMAZON\",\n                        \"email_senders\": [\n                            \"estatement@emiratesislamic.ae\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"Statement of your Emirates Islamic Credit Card\"\n                        ],\n                        \"institution\": \"Emirates Islamic\",\n                        \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                            \"ct are verified.\"),\n                        \"password_env\": \"EI_STATEMENT_PASSWORD\"\n                    }\n                },\n                {\n                    \"key\": \"WIO_CREDIT\",\n                    \"value\": {\n                        \"adapter\": \"wio_credit_v1\",\n                        \"adapter_status\": \"ACTIVE\",\n                        \"card_code\": \"WIO_CREDIT\",\n                        \"email_senders\": [\n                            \"communications@email.wio.io\",\n                            \"communications@mail.wio.io\"\n                        ],\n                        \"email_status\": \"ACTIVE\",\n                        \"email_subjects\": [\n                            \"Your Wio Credit statement for this month\"\n                        ],\n                        \"institution\": \"Wio\",\n                        \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                            \"ct are verified. The sender migrated from communic\" +\n                            \"ations@email.wio.io to communications@mail.wio.io \" +\n                            \"in July 2026; both exact senders remain allowliste\" +\n                            \"d for historical backfills. Statements arrive on d\" +\n                            \"ay 1 or 2 and the scheduled job runs on day 3. Acc\" +\n                            \"ount mapping remains deployment-specific.\"),\n                        \"password_env\": null\n                    }\n                },\n                {\n                    \"key\": \"RAK_WORLD\",\n                    \"value\": {\n                        \"adapter\": null,\n                        \"adapter_status\": \"PLACEHOLDER\",\n                        \"card_code\": \"RAK_WORLD\",\n                        \"email_senders\": [],\n                        \"email_status\": \"PLACEHOLDER\",\n                        \"email_subjects\": [],\n                        \"institution\": \"RAKBANK\",\n                        \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                            \", import, reconcile, or finalize until a real PDF \" +\n                            \"fixture is captured and tested.\")\n                    }\n                },\n                {\n                    \"key\": \"SC_PLATINUM_X\",\n                    \"value\": {\n                        \"adapter\": null,\n                        \"adapter_status\": \"PLACEHOLDER\",\n                        \"card_code\": \"SC_PLATINUM_X\",\n                        \"email_senders\": [],\n                        \"email_status\": \"PLACEHOLDER\",\n                        \"email_subjects\": [],\n                        \"institution\": \"Standard Chartered\",\n                        \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                            \", import, reconcile, or finalize until a real PDF \" +\n                            \"fixture is captured and tested.\")\n                    }\n                }\n            ],\n            \"selection_key\": \"card_code\",\n            \"sources\": [\n                {\n                    \"path\": \"config/statement-sources.json\",\n                    \"sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                        \"317de8f0cefc62\")\n                }\n            ],\n            \"workflow_code\": \"W05\",\n            \"workflow_path\": (\"integrations/n8n/workflows/05-wio-monthly-statemen\" +\n                \"t.json\")\n        },\n        {\n            \"entries\": [\n                {\n                    \"key\": \"classify-unresolved\",\n                    \"value\": {\n                        \"agent_profile\": \"LUNA_MAX\",\n                        \"allowed_tags\": [\n                            \"home\",\n                            \"grocery\",\n                            \"dining\",\n                            \"transport\",\n                            \"travel\",\n                            \"online\",\n                            \"health\",\n                            \"education\",\n                            \"gift\",\n                            \"business\",\n                            \"shared\",\n                            \"review\"\n                        ],\n                        \"allowed_value_sources\": {\n                            \"category\": \"actual.categories\"\n                        },\n                        \"conditions\": [\n                            {\n                                \"field\": \"transaction_type\",\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            }\n                        ],\n                        \"instruction\": (\"Using the merchant description and existing determ\" +\n                            \"inistic outputs, propose only a vendor, category, \" +\n                            \"subcategory, or approved reporting tags. Do not in\" +\n                            \"fer source facts. Leave a field unresolved when ev\" +\n                            \"idence is weak.\"),\n                        \"minimum_confidence\": 0.82,\n                        \"name\": \"Classify unresolved purchases\",\n                        \"policy_id\": \"classify-unresolved\",\n                        \"priority\": 10,\n                        \"target_fields\": [\n                            \"vendor\",\n                            \"category\",\n                            \"subcategory\",\n                            \"tags\"\n                        ],\n                        \"trigger_fields\": [\n                            \"category\"\n                        ],\n                        \"version\": 2\n                    }\n                },\n                {\n                    \"key\": \"recommend-category\",\n                    \"value\": {\n                        \"agent_profile\": \"SOL_XHIGH\",\n                        \"conditions\": [\n                            {\n                                \"field\": \"transaction_type\",\n                                \"group\": 1,\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            },\n                            {\n                                \"field\": \"category\",\n                                \"group\": 1,\n                                \"operator\": \"is_empty\"\n                            }\n                        ],\n                        \"instruction\": (\"Only when no configured category fits after static\" +\n                            \" rules and history matching, propose a category_re\" +\n                            \"commendation object with a concise name, the best \" +\n                            \"existing or proposed group, and an evidence-based \" +\n                            \"reason. Do not create or assign the category. The \" +\n                            \"proposal must remain review-required until an owne\" +\n                            \"r adds the category and reruns classification.\"),\n                        \"minimum_confidence\": 0.92,\n                        \"name\": \"Recommend a missing category\",\n                        \"policy_id\": \"recommend-category\",\n                        \"priority\": 15,\n                        \"target_fields\": [\n                            \"category_recommendation\"\n                        ],\n                        \"trigger_fields\": [\n                            \"category_recommendation\"\n                        ],\n                        \"version\": 1\n                    }\n                },\n                {\n                    \"key\": \"detect-subscription\",\n                    \"value\": {\n                        \"agent_profile\": \"LUNA_MAX\",\n                        \"allowed_tags\": [\n                            \"subscription\",\n                            \"recurring\"\n                        ],\n                        \"allowed_values\": {\n                            \"is_subscription\": [\n                                true\n                            ]\n                        },\n                        \"conditions\": [\n                            {\n                                \"field\": \"transaction_type\",\n                                \"group\": 1,\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            },\n                            {\n                                \"field\": \"category\",\n                                \"group\": 1,\n                                \"operator\": \"in\",\n                                \"value\": [\n                                    \"Software & App Subscriptions\",\n                                    \"Media Subscriptions\",\n                                    \"Mobile & Internet\",\n                                    \"Cloud Services\"\n                                ]\n                            }\n                        ],\n                        \"instruction\": (\"Mark a transaction as a subscription only when the\" +\n                            \" merchant or related evidence indicates a recurrin\" +\n                            \"g service. Add only approved subscription tags.\"),\n                        \"minimum_confidence\": 0.9,\n                        \"name\": \"Detect recurring subscription\",\n                        \"policy_id\": \"detect-subscription\",\n                        \"priority\": 20,\n                        \"target_fields\": [\n                            \"is_subscription\",\n                            \"tags\"\n                        ],\n                        \"trigger_fields\": [\n                            \"is_subscription\"\n                        ],\n                        \"version\": 1\n                    }\n                },\n                {\n                    \"key\": \"enrich-property\",\n                    \"value\": {\n                        \"agent_profile\": \"SOL_XHIGH\",\n                        \"allowed_value_sources\": {\n                            \"property_code\": \"properties.codes\",\n                            \"rental_unit\": \"properties.rental_units\"\n                        },\n                        \"conditions\": [\n                            {\n                                \"field\": \"category\",\n                                \"operator\": \"in\",\n                                \"value\": [\n                                    \"Electricity & Water\",\n                                    \"District Cooling\",\n                                    \"Service Charges\",\n                                    \"Maintenance & Repairs\",\n                                    \"Rental Income\"\n                                ]\n                            }\n                        ],\n                        \"instruction\": (\"Use explicit transaction or linked email evidence \" +\n                            \"to identify only a configured property and rental \" +\n                            \"unit. Never guess a unit from amount alone. The de\" +\n                            \"terministic property registry adds reporting tags \" +\n                            \"after the identity is accepted.\"),\n                        \"minimum_confidence\": 0.9,\n                        \"name\": \"Enrich property and rental unit\",\n                        \"policy_id\": \"enrich-property\",\n                        \"priority\": 30,\n                        \"target_fields\": [\n                            \"property_code\",\n                            \"rental_unit\"\n                        ],\n                        \"version\": 2\n                    }\n                },\n                {\n                    \"key\": \"find-purchase-evidence\",\n                    \"value\": {\n                        \"agent_profile\": \"LUNA_MAX\",\n                        \"allowed_values\": {\n                            \"evidence_policy\": [\n                                \"SEARCH_RELATED_EMAIL\",\n                                \"SEARCH_RECEIPT_BILL_WARRANTY\",\n                                \"MATCH_AMOUNT_AND_PERIOD\"\n                            ]\n                        },\n                        \"conditions\": [\n                            {\n                                \"field\": \"transaction_type\",\n                                \"group\": 1,\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            },\n                            {\n                                \"field\": \"category\",\n                                \"group\": 1,\n                                \"operator\": \"in\",\n                                \"value\": [\n                                    \"Electricity & Water\",\n                                    \"District Cooling\",\n                                    \"Service Charges\",\n                                    \"Maintenance & Repairs\",\n                                    \"Electronics\",\n                                    \"Furniture & Appliances\",\n                                    \"Flights\",\n                                    \"Accommodation\",\n                                    \"Insurance\"\n                                ]\n                            },\n                            {\n                                \"field\": \"transaction_type\",\n                                \"group\": 2,\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            },\n                            {\n                                \"field\": \"amount_aed\",\n                                \"group\": 2,\n                                \"operator\": \"gte\",\n                                \"value\": \"500\"\n                            },\n                            {\n                                \"field\": \"category\",\n                                \"group\": 2,\n                                \"negate\": true,\n                                \"operator\": \"in\",\n                                \"value\": [\n                                    \"Groceries\",\n                                    \"Dining Out\",\n                                    \"Food Delivery\",\n                                    \"Coffee & Snacks\",\n                                    \"Fuel\",\n                                    \"Parking & Tolls\",\n                                    \"Ride Hailing\",\n                                    \"Public Transport\",\n                                    \"Rent & Mortgage\",\n                                    \"Mortgage Interest\",\n                                    \"Mortgage Payments\",\n                                    \"Investment Contributions\",\n                                    \"Investments\",\n                                    \"Savings Transfers\",\n                                    \"Internal Transfers\",\n                                    \"Cash Withdrawal\",\n                                    \"Card Payments\",\n                                    \"Bank Fees\"\n                                ]\n                            }\n                        ],\n                        \"instruction\": (\"Use config/evidence-search-policy.json and its sto\" +\n                            \"re/do-not-store examples. Propose an evidence sear\" +\n                            \"ch for document-worthy categories or for a qualify\" +\n                            \"ing high-value transaction whose statement descrip\" +\n                            \"tion lacks the product detail. The evidence worker\" +\n                            \" searches vendor aliases plus amount/currency with\" +\n                            \"in the date buffer and uses matched email/order co\" +\n                            \"ntent to identify the product, model, order refere\" +\n                            \"nce, serial number, warranty dates, or return dead\" +\n                            \"line. Never propose a vendor-only match or evidenc\" +\n                            \"e collection for a configured never-search categor\" +\n                            \"y unless a manual evidence request exists.\"),\n                        \"minimum_confidence\": 0.8,\n                        \"name\": \"Find receipt bill or warranty evidence\",\n                        \"policy_id\": \"find-purchase-evidence\",\n                        \"priority\": 40,\n                        \"target_fields\": [\n                            \"evidence_policy\"\n                        ],\n                        \"trigger_fields\": [\n                            \"evidence_policy\"\n                        ],\n                        \"version\": 2\n                    }\n                },\n                {\n                    \"key\": \"enrich-cashback-classification\",\n                    \"value\": {\n                        \"agent_profile\": \"LUNA_MAX\",\n                        \"allowed_value_sources\": {\n                            \"reward_bucket\": \"cashback.buckets\"\n                        },\n                        \"allowed_values\": {\n                            \"channel\": [\n                                \"ONLINE\",\n                                \"PHYSICAL_POS\",\n                                \"APPLE_PAY_POS\",\n                                \"UNKNOWN\"\n                            ]\n                        },\n                        \"conditions\": [\n                            {\n                                \"field\": \"transaction_type\",\n                                \"group\": 1,\n                                \"operator\": \"equals\",\n                                \"value\": \"PURCHASE\"\n                            },\n                            {\n                                \"field\": \"card\",\n                                \"group\": 1,\n                                \"operator\": \"in\",\n                                \"value\": [\n                                    \"RAK_WORLD\",\n                                    \"SC_PLATINUM_X\"\n                                ]\n                            }\n                        ],\n                        \"instruction\": (\"Only when deterministic rules leave them unresolve\" +\n                            \"d, infer channel or propose a configured cashback \" +\n                            \"bucket from explicit merchant, notification, walle\" +\n                            \"t, currency, and card evidence. Do not calculate r\" +\n                            \"ewards or invent wallet usage.\"),\n                        \"minimum_confidence\": 0.95,\n                        \"name\": \"Enrich channel and cashback bucket\",\n                        \"policy_id\": \"enrich-cashback-classification\",\n                        \"priority\": 50,\n                        \"target_fields\": [\n                            \"channel\",\n                            \"reward_bucket\"\n                        ],\n                        \"trigger_fields\": [\n                            \"channel\",\n                            \"reward_bucket\"\n                        ],\n                        \"version\": 1\n                    }\n                },\n                {\n                    \"key\": \"recommend-static-rule\",\n                    \"value\": {\n                        \"agent_profile\": \"SOL_XHIGH\",\n                        \"conditions\": [\n                            {\n                                \"field\": \"history_count\",\n                                \"operator\": \"gte\",\n                                \"value\": 3\n                            }\n                        ],\n                        \"instruction\": (\"Only when transaction metadata contains at least t\" +\n                            \"hree consistent reviewed examples for the same nor\" +\n                            \"malized merchant pattern, propose a disabled canon\" +\n                            \"ical static-rule draft. Include the evidence count\" +\n                            \" and never execute the recommendation.\"),\n                        \"minimum_confidence\": 0.95,\n                        \"name\": \"Recommend a repeated-pattern rule\",\n                        \"policy_id\": \"recommend-static-rule\",\n                        \"priority\": 90,\n                        \"target_fields\": [\n                            \"rule_recommendation\"\n                        ],\n                        \"version\": 1\n                    }\n                }\n            ],\n            \"selection_key\": \"policy_id\",\n            \"sources\": [\n                {\n                    \"path\": \"config/ai-policies.json\",\n                    \"sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                        \"5546f450c86c56\")\n                }\n            ],\n            \"workflow_code\": \"W09\",\n            \"workflow_path\": \"integrations/n8n/workflows/09-ai-proposal.json\"\n        }\n    ],\n    \"resolver_order\": [\n        \"W02\",\n        \"W04\",\n        \"W05\",\n        \"W09\"\n    ],\n    \"schema_path\": (\"integrations/n8n/generated/application-contract-bu\" +\n        \"ndle.schema.json\"),\n    \"schema_sha256\": (\"c7ebdcddfdf41ccabee077c0828884e2fe40be3590d5c2e543\" +\n        \"ecdb44b9b22582\"),\n    \"schema_version\": 1,\n    \"source_contracts\": [\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"contract\": {\n                \"adapter\": \"adcb_v1\",\n                \"adapter_status\": \"ACTIVE\",\n                \"card_code\": \"ADCB_CASHBACK\",\n                \"email_senders\": [\n                    \"estatement@adcb.com\"\n                ],\n                \"email_status\": \"ACTIVE\",\n                \"email_subjects\": [\n                    \"ADCB Credit card e-Statement\"\n                ],\n                \"institution\": \"ADCB\",\n                \"notes\": (\"PDF parser, browser export, and recurring producti\" +\n                    \"on mailbox contract are verified.\"),\n                \"password_env\": \"ADCB_STATEMENT_PASSWORD\"\n            },\n            \"source_code\": \"ADCB_CASHBACK\",\n            \"source_path\": \"config/statement-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"contract\": {\n                \"adapter\": \"emirates_islamic_v1\",\n                \"adapter_status\": \"ACTIVE\",\n                \"card_code\": \"EI_AMAZON\",\n                \"email_senders\": [\n                    \"estatement@emiratesislamic.ae\"\n                ],\n                \"email_status\": \"ACTIVE\",\n                \"email_subjects\": [\n                    \"Statement of your Emirates Islamic Credit Card\"\n                ],\n                \"institution\": \"Emirates Islamic\",\n                \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                    \"ct are verified.\"),\n                \"password_env\": \"EI_STATEMENT_PASSWORD\"\n            },\n            \"source_code\": \"EI_AMAZON\",\n            \"source_path\": \"config/statement-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"contract\": {\n                \"adapter\": \"wio_credit_v1\",\n                \"adapter_status\": \"ACTIVE\",\n                \"card_code\": \"WIO_CREDIT\",\n                \"email_senders\": [\n                    \"communications@email.wio.io\",\n                    \"communications@mail.wio.io\"\n                ],\n                \"email_status\": \"ACTIVE\",\n                \"email_subjects\": [\n                    \"Your Wio Credit statement for this month\"\n                ],\n                \"institution\": \"Wio\",\n                \"notes\": (\"PDF parser and recurring production mailbox contra\" +\n                    \"ct are verified. The sender migrated from communic\" +\n                    \"ations@email.wio.io to communications@mail.wio.io \" +\n                    \"in July 2026; both exact senders remain allowliste\" +\n                    \"d for historical backfills. Statements arrive on d\" +\n                    \"ay 1 or 2 and the scheduled job runs on day 3. Acc\" +\n                    \"ount mapping remains deployment-specific.\"),\n                \"password_env\": null\n            },\n            \"source_code\": \"WIO_CREDIT\",\n            \"source_path\": \"config/statement-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"contract\": {\n                \"adapter\": null,\n                \"adapter_status\": \"PLACEHOLDER\",\n                \"card_code\": \"RAK_WORLD\",\n                \"email_senders\": [],\n                \"email_status\": \"PLACEHOLDER\",\n                \"email_subjects\": [],\n                \"institution\": \"RAKBANK\",\n                \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                    \", import, reconcile, or finalize until a real PDF \" +\n                    \"fixture is captured and tested.\")\n            },\n            \"source_code\": \"RAK_WORLD\",\n            \"source_path\": \"config/statement-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\"),\n            \"contract\": {\n                \"adapter\": null,\n                \"adapter_status\": \"PLACEHOLDER\",\n                \"card_code\": \"SC_PLATINUM_X\",\n                \"email_senders\": [],\n                \"email_status\": \"PLACEHOLDER\",\n                \"email_subjects\": [],\n                \"institution\": \"Standard Chartered\",\n                \"notes\": (\"No verified statement fixture exists. Do not parse\" +\n                    \", import, reconcile, or finalize until a real PDF \" +\n                    \"fixture is captured and tested.\")\n            },\n            \"source_code\": \"SC_PLATINUM_X\",\n            \"source_path\": \"config/statement-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19\" +\n                \"f287adca8b6a6d\"),\n            \"contract\": {\n                \"adapter\": \"rakbank_card_transaction_v1\",\n                \"card_code\": \"RAK_WORLD\",\n                \"code\": \"RAKBANK_CARD_TRANSACTION\",\n                \"evidence_semantics\": \"LIVE_TRANSACTION_NOTIFICATION\",\n                \"institution\": \"RAKBANK\",\n                \"mail_folder\": \"Inbox/Rakbank\",\n                \"notes\": (\"Verified 2026-08-17 format: You spent <currency> <\" +\n                    \"amount> at <merchant> on your Credit Card <masked-\" +\n                    \"card> on <DD/MM>. Date-only source; year is resolv\" +\n                    \"ed against receivedDateTime and statement reconcil\" +\n                    \"iation remains authoritative. A separately observe\" +\n                    \"d Apple Pay purchase used the identical template a\" +\n                    \"nd exposed no wallet marker. Explicit merchant cha\" +\n                    \"nnel rules run first; unresolved RAK_WORLD transac\" +\n                    \"tions use the configurable APPLE_PAY_POS user defa\" +\n                    \"ult.\"),\n                \"senders\": [\n                    \"alerts@rakbank.ae\"\n                ],\n                \"status\": \"ACTIVE\",\n                \"subject_match\": \"EXACT\",\n                \"subjects\": [\n                    \"An update on your Card transaction\"\n                ]\n            },\n            \"source_code\": \"RAK_WORLD\",\n            \"source_path\": \"config/transaction-email-sources.json\"\n        },\n        {\n            \"config_version\": \"1\",\n            \"content_sha256\": (\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19\" +\n                \"f287adca8b6a6d\"),\n            \"contract\": {\n                \"adapter\": null,\n                \"card_code\": \"SC_PLATINUM_X\",\n                \"code\": \"STANDARD_CHARTERED_CARD_TRANSACTION\",\n                \"evidence_semantics\": \"UNKNOWN\",\n                \"institution\": \"Standard Chartered\",\n                \"mail_folder\": null,\n                \"notes\": (\"Replace with captured sender, subject, body fixtur\" +\n                    \"e, card suffix and parser only after a real notifi\" +\n                    \"cation format is verified.\"),\n                \"senders\": [],\n                \"status\": \"PLACEHOLDER\",\n                \"subject_match\": \"EXACT\",\n                \"subjects\": []\n            },\n            \"source_code\": \"SC_PLATINUM_X\",\n            \"source_path\": \"config/transaction-email-sources.json\"\n        }\n    ],\n    \"source_documents\": [\n        {\n            \"path\": \"config/statement-sources.json\",\n            \"sha256\": (\"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6\" +\n                \"317de8f0cefc62\")\n        },\n        {\n            \"path\": \"config/transaction-email-sources.json\",\n            \"sha256\": (\"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19\" +\n                \"f287adca8b6a6d\")\n        },\n        {\n            \"path\": \"config/ai-policies.json\",\n            \"sha256\": (\"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b76989\" +\n                \"5546f450c86c56\")\n        }\n    ]\n};\nif (bundle.schema_version !== 1 || bundle.contract_status !== 'SPEC_ONLY')\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_SCHEMA_MISMATCH');\nif (bundle.schema_path !== 'integrations/n8n/generated/application-contract-bundle.schema.json')\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_SCHEMA_PATH_MISMATCH');\nif (JSON.stringify(bundle.resolver_order) !== JSON.stringify(['W02', 'W04', 'W05', 'W09']))\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_RESOLVER_ORDER_MISMATCH');\nif (bundle.content_digest?.algorithm !== 'SHA-256' || JSON.stringify(bundle.content_digest?.excluded_fields) !== JSON.stringify(['bundle_content_sha256']))\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_DIGEST_CONTRACT_MISMATCH');\nconst canonical = value => Array.isArray(value) ? value.map(canonical) : (value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value);\nconst payload = { ...bundle };\ndelete payload.bundle_content_sha256;\nreturn [{ json: { application_contract_bundle: bundle, bundle_canonical: JSON.stringify(canonical(payload)) } }];\n"
+      }
+    },
+    {
+      "id": "19000-hash",
+      "name": "SHA-256 Application Contract Bundle",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.bundle_canonical }}",
+        "dataPropertyName": "bundle_content_sha256_observed"
+      }
+    },
+    {
+      "id": "19000-verify",
+      "name": "Verify Application Contract Bundle Digest and Maps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Application Contract Bundle Digest and Maps. Keep this deterministic and fail closed.\nconst bundle = $json.application_contract_bundle;\nif ($json.bundle_content_sha256_observed !== bundle.bundle_content_sha256)\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_DIGEST_MISMATCH');\nif (!Array.isArray(bundle.source_documents) || bundle.source_documents.length !== 3)\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_SOURCE_COUNT_MISMATCH');\nconst paths = bundle.source_documents.map(source => source.path);\nif (new Set(paths).size !== paths.length || bundle.source_documents.some(source => !/^config\\/(statement-sources|transaction-email-sources|ai-policies)\\.json$/.test(source.path) || !/^[a-f0-9]{64}$/.test(source.sha256)))\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_SOURCE_HASH_INVALID');\nif (!Array.isArray(bundle.resolver_maps) || bundle.resolver_maps.length !== 4 || bundle.resolver_maps.some((resolver, index) => resolver.workflow_code !== bundle.resolver_order[index] || !Array.isArray(resolver.entries) || !resolver.entries.length || !Array.isArray(resolver.sources) || resolver.sources.length !== 1 || new Set(resolver.entries.map(entry => entry.key)).size !== resolver.entries.length || resolver.sources[0].sha256 !== bundle.source_documents.find(source => source.path === resolver.sources[0].path)?.sha256))\n    throw new Error('APPLICATION_CONTRACT_BUNDLE_RESOLVER_MAP_INVALID');\nreturn [{ json: { application_contract_bundle: bundle, application_contract_bundle_verified: true, bundle_content_sha256: bundle.bundle_content_sha256 } }];\n"
+      }
+    },
+    {
       "id": "19002",
       "name": "Create or Reuse finance_execution_failures",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        80,
         0
       ],
       "parameters": {
@@ -90,7 +132,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        380,
         0
       ],
       "parameters": {
@@ -172,7 +214,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        680,
         0
       ],
       "parameters": {
@@ -266,7 +308,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        980,
         0
       ],
       "parameters": {
@@ -352,8 +394,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -466,8 +508,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        0
+        -820,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -532,8 +574,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        0
+        -520,
+        380
       ],
       "parameters": {
         "resource": "table",
@@ -598,7 +640,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -220,
         380
       ],
       "parameters": {
@@ -656,7 +698,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        80,
         380
       ],
       "parameters": {
@@ -758,7 +800,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        380,
         380
       ],
       "parameters": {
@@ -828,7 +870,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        680,
         380
       ],
       "parameters": {
@@ -894,7 +936,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        980,
         380
       ],
       "parameters": {
@@ -948,8 +990,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        380
+        -1120,
+        760
       ],
       "parameters": {
         "resource": "table",
@@ -1010,8 +1052,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        380
+        -820,
+        760
       ],
       "parameters": {
         "resource": "table",
@@ -1100,8 +1142,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        380
+        -520,
+        760
       ],
       "parameters": {
         "resource": "table",
@@ -1162,7 +1204,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         760
       ],
       "parameters": {
@@ -1175,7 +1217,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        80,
         760
       ],
       "parameters": {
@@ -1232,7 +1274,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        380,
         760
       ],
       "parameters": {
@@ -1245,7 +1287,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        680,
         760
       ],
       "parameters": {
@@ -1277,7 +1319,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        980,
         760
       ],
       "parameters": {
@@ -1290,8 +1332,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        760
+        -1120,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Emit Versioned Config Fingerprints. Keep this deterministic and fail closed.\nconst rows = [\n    {\n        \"config_name\": \"ai-policies\",\n        \"content_sha256\": \"e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/ai-policies.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"agent-providers\",\n        \"content_sha256\": \"d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/agent-providers.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"static-rules.seed\",\n        \"content_sha256\": \"92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/static-rules.seed.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"sha256-92680d5c55464a77\"\n    },\n    {\n        \"config_name\": \"transaction-email-sources\",\n        \"content_sha256\": \"38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/transaction-email-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"statement-sources\",\n        \"content_sha256\": \"90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/statement-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"browser-sources\",\n        \"content_sha256\": \"d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/browser-sources.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"cashback-programs\",\n        \"content_sha256\": \"fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/cashback-programs.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"document-processing\",\n        \"content_sha256\": \"32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/document-processing.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    },\n    {\n        \"config_name\": \"evidence-search-policy\",\n        \"content_sha256\": \"1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e\",\n        \"git_commit\": \"RUNTIME_BIND_GIT_COMMIT\",\n        \"readback_verified\": false,\n        \"source_path\": \"config/evidence-search-policy.json\",\n        \"state\": \"ACTIVE\",\n        \"version\": \"1\"\n    }\n];\nconst activated_at = new Date().toISOString();\nreturn rows.map(row => ({ json: { ...row, activated_at } }));\n"
@@ -1303,8 +1345,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        760
+        -820,
+        1140
       ],
       "parameters": {
         "resource": "row",
@@ -1357,8 +1399,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        760
+        -520,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Collapse Config Writes to One Readback. Keep this deterministic and fail closed.\nconst rows = $input.all();\nif (rows.length !== 9)\n    throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH');\nreturn [{ json: { config_write_count: rows.length } }];\n"
@@ -1370,7 +1412,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -220,
         1140
       ],
       "parameters": {
@@ -1402,7 +1444,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        80,
         1140
       ],
       "parameters": {
@@ -1411,7 +1453,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
-      "name": "Stage 1 · Manual Platform Bootstrap Only to Create or Reuse finance_archive_receipts",
+      "name": "Stage 1 · Manual Platform Bootstrap Only to Create or Reuse finance_actual_verifications",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1419,7 +1461,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Manual Platform Bootstrap Only → Create or Reuse finance_archive_receipts\n**Input:** Manual Platform Bootstrap Only  ·  **Output:** Create or Reuse finance_archive_receipts  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Manual Platform Bootstrap Only → Create or Reuse finance_actual_verifications\n**Input:** Manual Platform Bootstrap Only  ·  **Output:** Create or Reuse finance_actual_verifications  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1427,7 +1469,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000019-generated-note-2",
-      "name": "Stage 2 · Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "name": "Stage 2 · Create or Reuse finance_agent_jobs to Create or Reuse finance_provider_circuits",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1435,7 +1477,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Create or Reuse finance_config_versions → Create or Reuse finance_source_cursors\n**Input:** Create or Reuse finance_config_versions  ·  **Output:** Create or Reuse finance_source_cursors  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Create or Reuse finance_agent_jobs → Create or Reuse finance_provider_circuits\n**Input:** Create or Reuse finance_agent_jobs  ·  **Output:** Create or Reuse finance_provider_circuits  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1443,7 +1485,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000019-generated-note-3",
-      "name": "Stage 3 · Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "name": "Stage 3 · Create or Reuse finance_reconciliations to Exact Compare AI Policy Seed Readback",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1451,7 +1493,7 @@
         580
       ],
       "parameters": {
-        "content": "## Stage 3 · Emit Versioned AI Policy Seed → Collapse Config Writes to One Readback\n**Input:** Emit Versioned AI Policy Seed  ·  **Output:** Collapse Config Writes to One Readback  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 3 · Create or Reuse finance_reconciliations → Exact Compare AI Policy Seed Readback\n**Input:** Create or Reuse finance_reconciliations  ·  **Output:** Exact Compare AI Policy Seed Readback  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1459,7 +1501,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000019-generated-note-4",
-      "name": "Stage 4 · Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "name": "Stage 4 · Emit Versioned Config Fingerprints to Exact Compare Config Fingerprint Readback",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1467,7 +1509,7 @@
         960
       ],
       "parameters": {
-        "content": "## Stage 4 · Read Back ACTIVE Config Fingerprints → Exact Compare Config Fingerprint Readback\n**Input:** Read Back ACTIVE Config Fingerprints  ·  **Output:** Exact Compare Config Fingerprint Readback  ·  **Nodes:** 25–26\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 4 · Emit Versioned Config Fingerprints → Exact Compare Config Fingerprint Readback\n**Input:** Emit Versioned Config Fingerprints  ·  **Output:** Exact Compare Config Fingerprint Readback  ·  **Nodes:** 25–29\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1476,6 +1518,39 @@
   ],
   "connections": {
     "Manual Platform Bootstrap Only": {
+      "main": [
+        [
+          {
+            "node": "Load and Validate Application Contract Bundle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load and Validate Application Contract Bundle": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Application Contract Bundle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Application Contract Bundle": {
+      "main": [
+        [
+          {
+            "node": "Verify Application Contract Bundle Digest and Maps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Application Contract Bundle Digest and Maps": {
       "main": [
         [
           {
@@ -1769,6 +1844,9 @@
     "sourceContract": "integrations/n8n/data-tables.json",
     "seedContract": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "configSeedContract": "integrations/n8n/generated/config-versions.seed.json",
+    "applicationContractBundle": "integrations/n8n/generated/application-contract-bundle.json",
+    "applicationContractBundleSchema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+    "applicationContractBundleContentSha256": "73bd45452e7aefb1a00c9d9729a9b024ce2e8f00e154d0aad57df94f00901467",
     "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
     "activationBlockers": [
       "EXACT_IMAGE_IMPORT_REQUIRED",
@@ -1791,53 +1869,56 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Create or Reuse finance_execution_failures to Create or Reuse finance_archive_receipts",
+      "name": "Stage 1: Load and Validate Application Contract Bundle to Create or Reuse finance_actual_verifications",
       "nodeIds": [
+        "19000",
+        "19000-hash",
+        "19000-verify",
         "19002",
         "19003",
         "19004",
-        "19005",
-        "19006",
-        "19007",
-        "19008"
+        "19005"
       ],
-      "description": "Finance stage 1. Input starts at Create or Reuse finance_execution_failures; verified output leaves through Create or Reuse finance_archive_receipts."
+      "description": "Finance stage 1. Input starts at Load and Validate Application Contract Bundle; verified output leaves through Create or Reuse finance_actual_verifications."
     },
     {
-      "name": "Stage 2: Create or Reuse finance_config_versions to Create or Reuse finance_source_cursors",
+      "name": "Stage 2: Create or Reuse finance_agent_jobs to Create or Reuse finance_provider_circuits",
       "nodeIds": [
+        "19006",
+        "19007",
+        "19008",
         "19009",
         "19010",
         "19011",
         "19012",
-        "19013",
-        "19014",
-        "19015",
-        "19016"
+        "19013"
       ],
-      "description": "Finance stage 2. Input starts at Create or Reuse finance_config_versions; verified output leaves through Create or Reuse finance_source_cursors."
+      "description": "Finance stage 2. Input starts at Create or Reuse finance_agent_jobs; verified output leaves through Create or Reuse finance_provider_circuits."
     },
     {
-      "name": "Stage 3: Emit Versioned AI Policy Seed to Collapse Config Writes to One Readback",
+      "name": "Stage 3: Create or Reuse finance_reconciliations to Exact Compare AI Policy Seed Readback",
       "nodeIds": [
+        "19014",
+        "19015",
+        "19016",
         "19050",
         "19051",
         "19052",
         "19053",
-        "19054",
-        "19055",
-        "19056",
-        "19057"
+        "19054"
       ],
-      "description": "Finance stage 3. Input starts at Emit Versioned AI Policy Seed; verified output leaves through Collapse Config Writes to One Readback."
+      "description": "Finance stage 3. Input starts at Create or Reuse finance_reconciliations; verified output leaves through Exact Compare AI Policy Seed Readback."
     },
     {
-      "name": "Stage 4: Read Back ACTIVE Config Fingerprints to Exact Compare Config Fingerprint Readback",
+      "name": "Stage 4: Emit Versioned Config Fingerprints to Exact Compare Config Fingerprint Readback",
       "nodeIds": [
+        "19055",
+        "19056",
+        "19057",
         "19058",
         "19059"
       ],
-      "description": "Finance stage 4. Input starts at Read Back ACTIVE Config Fingerprints; verified output leaves through Exact Compare Config Fingerprint Readback."
+      "description": "Finance stage 4. Input starts at Emit Versioned Config Fingerprints; verified output leaves through Exact Compare Config Fingerprint Readback."
     }
   ],
   "tags": [
