@@ -92,7 +92,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        80,
+        680,
         0
       ],
       "alwaysOutputData": true,
@@ -109,12 +109,60 @@
       }
     },
     {
+      "id": "4016",
+      "name": "Initialize Source Cursor via W12",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000012",
+          "mode": "list",
+          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "operation": "INITIALIZE",
+            "run_id": "={{ $('Assemble Trusted Acquisition Contract').item.json.run_id }}",
+            "source_code": "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}",
+            "config_version": "={{ $('Assemble Trusted Acquisition Contract').item.json.config_version }}",
+            "initial_cursor_value": "={{ $('Assemble Trusted Acquisition Contract').item.json.window_start }}",
+            "initial_cursor_source": "statement-sources",
+            "overlap_seconds": "={{ $('Assemble Trusted Acquisition Contract').item.json.overlap_seconds }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "4017",
+      "name": "Restore Enumeration Request After Cursor Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Restore Enumeration Request After Cursor Init. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, initialization = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(initialization.status) || initialization.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { ...source, operation: 'ENUMERATE', cursor_initialization_status: initialization.status, cursor_initialization_version: Number(initialization.cursor_version) } }];\n"
+      }
+    },
+    {
       "id": "4006",
       "name": "Statement Found",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        380,
+        980,
         0
       ],
       "parameters": {
@@ -144,8 +192,8 @@
       "type": "n8n-nodes-base.microsoftOneDrive",
       "typeVersion": 1,
       "position": [
-        680,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "resource": "file",
@@ -166,8 +214,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        0
+        -820,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Assemble Immutable Pipeline Input. Keep this deterministic and fail closed.\nconst c = $('Assemble Trusted Acquisition Contract').first().json, r = $('Acquire Archive and Read Back').first().json;\nreturn [{ json: { ...c, ...r }, binary: $binary }];\n"
@@ -179,7 +227,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -1120,
+        -520,
         380
       ],
       "parameters": {
@@ -200,7 +248,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -220,
         380
       ],
       "alwaysOutputData": true,
@@ -233,7 +281,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        80,
         380
       ],
       "parameters": {
@@ -246,7 +294,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -220,
+        380,
         380
       ],
       "parameters": {
@@ -294,7 +342,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        680,
         380
       ],
       "parameters": {
@@ -307,7 +355,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        980,
         380
       ],
       "parameters": {
@@ -361,8 +409,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        380
+        -1120,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -394,7 +442,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000004-generated-note-1",
-      "name": "Stage 1 · Daily 20:40 Cycle Poll to Assemble Immutable Pipeline Input",
+      "name": "Stage 1 · Daily 20:40 Cycle Poll to Statement Found",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -402,7 +450,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Daily 20:40 Cycle Poll → Assemble Immutable Pipeline Input\n**Input:** Daily 20:40 Cycle Poll  ·  **Output:** Assemble Immutable Pipeline Input  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Daily 20:40 Cycle Poll → Statement Found\n**Input:** Daily 20:40 Cycle Poll  ·  **Output:** Statement Found  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -410,7 +458,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000004-generated-note-2",
-      "name": "Stage 2 · Run Shared Statement Pipeline to Read Back Waiting or Deadline Receipt",
+      "name": "Stage 2 · Download Archived Source to Upsert Waiting or Deadline Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -418,7 +466,23 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Run Shared Statement Pipeline → Read Back Waiting or Deadline Receipt\n**Input:** Run Shared Statement Pipeline  ·  **Output:** Read Back Waiting or Deadline Receipt  ·  **Nodes:** 9–15\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Download Archived Source → Upsert Waiting or Deadline Receipt\n**Input:** Download Archived Source  ·  **Output:** Upsert Waiting or Deadline Receipt  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000004-generated-note-3",
+      "name": "Stage 3 · Read Back Waiting or Deadline Receipt to Read Back Waiting or Deadline Receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        580
+      ],
+      "parameters": {
+        "content": "## Stage 3 · Read Back Waiting or Deadline Receipt → Read Back Waiting or Deadline Receipt\n**Input:** Read Back Waiting or Deadline Receipt  ·  **Output:** Read Back Waiting or Deadline Receipt  ·  **Nodes:** 17–17\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -460,6 +524,28 @@
       ]
     },
     "Assemble Trusted Acquisition Contract": {
+      "main": [
+        [
+          {
+            "node": "Initialize Source Cursor via W12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Source Cursor via W12": {
+      "main": [
+        [
+          {
+            "node": "Restore Enumeration Request After Cursor Init",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Enumeration Request After Cursor Init": {
       "main": [
         [
           {
@@ -614,36 +700,30 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Open Configured Cycle Window to Assemble Immutable Pipeline Input",
+      "name": "Stage 1: Open Configured Cycle Window to Statement Found",
       "nodeIds": [
         "4002",
         "4003",
         "4004",
+        "4016",
+        "4017",
         "4005",
-        "4006",
-        "4007",
-        "4008"
+        "4006"
       ],
-      "description": "Finance stage 1. Input starts at Open Configured Cycle Window; verified output leaves through Assemble Immutable Pipeline Input."
+      "description": "Finance stage 1. Input starts at Open Configured Cycle Window; verified output leaves through Statement Found."
     },
     {
-      "name": "Stage 2: Run Shared Statement Pipeline to Verify W12 COMMIT Terminal Readback",
+      "name": "Stage 2: Download Archived Source to Verify W12 COMMIT Terminal Readback",
       "nodeIds": [
+        "4007",
+        "4008",
         "4009",
         "4012",
         "4013",
         "4014",
         "4015"
       ],
-      "description": "Finance stage 2. Input starts at Run Shared Statement Pipeline; verified output leaves through Verify W12 COMMIT Terminal Readback."
-    },
-    {
-      "name": "Stage 2: Upsert Waiting or Deadline Receipt to Read Back Waiting or Deadline Receipt",
-      "nodeIds": [
-        "4010",
-        "4011"
-      ],
-      "description": "Finance stage 2. Input starts at Upsert Waiting or Deadline Receipt; verified output leaves through Read Back Waiting or Deadline Receipt."
+      "description": "Finance stage 2. Input starts at Download Archived Source; verified output leaves through Verify W12 COMMIT Terminal Readback."
     }
   ],
   "tags": [

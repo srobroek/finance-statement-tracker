@@ -1478,6 +1478,150 @@ try {
             }},
         )
 
+    def test_w12_initializes_empty_source_cursor_v0_once_with_collision_readback(self):
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        request = {
+            "operation": "INITIALIZE",
+            "run_id": "fixture:init",
+            "source_code": "EI_AMAZON",
+            "config_version": "1",
+            "initial_cursor_value": "2026-07-01T00:00:00.000Z",
+            "initial_cursor_source": "statement-sources",
+            "overlap_seconds": 7200,
+        }
+        validated = self.execute_code_node(
+            w12, "Validate Sweep or Commit", json_value=request
+        )
+        self.assertTrue(validated["ok"], validated)
+        built = self.execute_code_node(
+            w12,
+            "Build Cursor v0 Initialization",
+            input_items=[],
+            refs={"Validate Sweep or Commit": validated["output"][0]["json"]},
+        )
+        self.assertTrue(built["ok"], built)
+        pending = built["output"][0]["json"]
+        self.assertTrue(pending["initialized"])
+        self.assertEqual(pending["cursor_version"], 0)
+        self.assertEqual(pending["cursor_value"], request["initial_cursor_value"])
+        self.assertEqual(pending["config_version"], "1")
+
+        row = {
+            "source_code": "EI_AMAZON",
+            "cursor_value": pending["cursor_value"],
+            "committed_run_id": "",
+            "run_upper_bound": pending["run_upper_bound"],
+            "cursor_version": 0,
+            "readback_verified": True,
+        }
+        readback = self.execute_code_node(
+            w12,
+            "Verify Cursor v0 Initialization Readback",
+            input_items=[row],
+            refs={"Build Cursor v0 Initialization": pending},
+        )
+        self.assertTrue(readback["ok"], readback)
+        terminal = self.execute_code_node(
+            w12,
+            "Return Verified Cursor Initialization",
+            json_value=readback["output"][0]["json"],
+        )
+        self.assertTrue(terminal["ok"], terminal)
+        self.assertEqual(terminal["output"][0]["json"]["status"], "CURSOR_INITIALIZED")
+
+        existing = self.execute_code_node(
+            w12,
+            "Build Cursor v0 Initialization",
+            input_items=[row],
+            refs={"Validate Sweep or Commit": validated["output"][0]["json"]},
+        )
+        self.assertTrue(existing["ok"], existing)
+        self.assertFalse(existing["output"][0]["json"]["initialized"])
+        self.assertEqual(existing["output"][0]["json"]["status"], "CURSOR_ALREADY_INITIALIZED")
+        existing_terminal = self.execute_code_node(
+            w12,
+            "Return Existing Cursor Initialization Readback",
+            json_value=existing["output"][0]["json"],
+        )
+        self.assertTrue(existing_terminal["ok"], existing_terminal)
+
+        self.assert_code_error(
+            w12,
+            "Build Cursor v0 Initialization",
+            "SOURCE_CURSOR_INITIALIZATION_COLLISION",
+            input_items=[row, row],
+            refs={"Validate Sweep or Commit": validated["output"][0]["json"]},
+        )
+        self.assert_code_error(
+            w12,
+            "Verify Cursor v0 Initialization Readback",
+            "SOURCE_CURSOR_INITIALIZATION_COLLISION",
+            input_items=[
+                row,
+                {
+                    **row,
+                    "cursor_value": "2026-08-20T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "cursor_version": 1,
+                },
+            ],
+            refs={"Build Cursor v0 Initialization": pending},
+        )
+
+        for filename, source_code in (
+            ("04-ei-monthly-statement.json", "EI_AMAZON"),
+            ("05-wio-monthly-statement.json", "WIO_CREDIT"),
+        ):
+            workflow = self.workflow(filename)
+            nodes = {node["name"]: node for node in workflow["nodes"]}
+            initializer = nodes["Initialize Source Cursor via W12"]
+            self.assertEqual(
+                initializer["parameters"]["workflowInputs"]["value"]["operation"],
+                "INITIALIZE",
+            )
+            self.assertEqual(
+                initializer["parameters"]["workflowInputs"]["value"]["initial_cursor_source"],
+                "statement-sources",
+            )
+            self.assertEqual(
+                workflow["connections"]["Assemble Trusted Acquisition Contract"]["main"][0][0]["node"],
+                "Initialize Source Cursor via W12",
+            )
+            self.assertEqual(
+                workflow["connections"]["Initialize Source Cursor via W12"]["main"][0][0]["node"],
+                "Restore Enumeration Request After Cursor Init",
+            )
+            restored = self.execute_code_node(
+                workflow,
+                "Restore Enumeration Request After Cursor Init",
+                json_value={
+                    "status": "CURSOR_INITIALIZED",
+                    "cursor_version": 0,
+                    "readback_verified": True,
+                },
+                refs={
+                    "Assemble Trusted Acquisition Contract": {
+                        "run_id": "fixture:restore",
+                        "source_code": source_code,
+                        "folder_id": "Inbox/Statements",
+                        "senders": ["sender@example.test"],
+                        "subjects": ["Statement"],
+                        "window_start": "2026-07-01T00:00:00.000Z",
+                        "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    }
+                },
+            )
+            self.assertTrue(restored["ok"], restored)
+            restored_request = restored["output"][0]["json"]
+            self.assertEqual(restored_request["operation"], "ENUMERATE")
+            self.assertEqual(restored_request["folder_id"], "Inbox/Statements")
+            self.assertEqual(restored_request["senders"], ["sender@example.test"])
+            self.assertEqual(
+                initializer["parameters"]["workflowInputs"]["value"]["source_code"],
+                "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}",
+            )
+            self.assertIn(source_code, workflow["nodes"][1]["parameters"]["jsCode"])
+
     def test_executable_mixed_new_and_replay_branches_reach_barrier(self):
         w01 = self.workflow("01-outlook-finance-acquisition.json")
         request = {

@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['run_upper_bound', 'downstream_receipt_sha256', 'expected_cursor_version'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');\n}\nreturn [{ json: { ...r, operation } }];\n"
+        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT', 'INITIALIZE'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['run_upper_bound', 'downstream_receipt_sha256', 'expected_cursor_version'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');\n}\nif (operation === 'INITIALIZE') {\n    for (const k of ['config_version', 'initial_cursor_value'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (r.initial_cursor_source !== 'statement-sources')\n        throw new Error('VERSIONED_CURSOR_CONFIG_REQUIRED');\n}\nreturn [{ json: { ...r, operation } }];\n"
       }
     },
     {
@@ -78,6 +78,25 @@
                   }
                 ]
               }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "INITIALIZE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -87,13 +106,200 @@
       }
     },
     {
+      "id": "12040",
+      "name": "Read Source Cursor for Initialization",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12041",
+      "name": "Build Cursor v0 Initialization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Cursor v0 Initialization. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length > 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst initial = new Date(request.initial_cursor_value);\nif (!Number.isFinite(initial.valueOf()))\n    throw new Error('VERSIONED_CURSOR_INITIAL_VALUE_INVALID');\nif (rows.length === 1) {\n    const row = rows[0], version = Number(row.cursor_version);\n    if (row.source_code !== request.source_code || !Number.isInteger(version) || version < 0 || !row.cursor_value)\n        throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_INVALID');\n    return [{ json: { ...request, status: 'CURSOR_ALREADY_INITIALIZED', cursor_version: version, cursor_value: row.cursor_value, readback_verified: true, initialized: false } }];\n}\nreturn [{ json: { ...request, status: 'CURSOR_V0_PENDING', cursor_value: initial.toISOString(), run_upper_bound: initial.toISOString(), committed_run_id: '', overlap_seconds: Number(request.overlap_seconds || 0), scanned_count: 0, matched_count: 0, cursor_version: 0, readback_verified: true, initialized: true } }];\n"
+      }
+    },
+    {
+      "id": "12042",
+      "name": "Cursor Initialization Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.initialized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "12043",
+      "name": "Insert Source Cursor v0",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source_code": "={{ $json.source_code }}",
+            "cursor_value": "={{ $json.cursor_value }}",
+            "committed_run_id": "={{ $json.committed_run_id }}",
+            "run_upper_bound": "={{ $json.run_upper_bound }}",
+            "overlap_seconds": "={{ $json.overlap_seconds }}",
+            "scanned_count": "={{ $json.scanned_count }}",
+            "matched_count": "={{ $json.matched_count }}",
+            "cursor_version": "={{ $json.cursor_version }}",
+            "readback_verified": "={{ $json.readback_verified }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12044",
+      "name": "Read Back Initialized Source Cursor",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor v0 Initialization').item.json.source_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12045",
+      "name": "Verify Cursor v0 Initialization Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Cursor v0 Initialization Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor v0 Initialization').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length !== 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst row = rows[0];\nif (row.source_code !== expected.source_code || Number(row.cursor_version) !== 0 || row.cursor_value !== expected.cursor_value || row.run_upper_bound !== expected.run_upper_bound || String(row.committed_run_id || '') !== '' || row.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...row, status: 'CURSOR_INITIALIZED', initialized: true, readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "12046",
+      "name": "Return Existing Cursor Initialization Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Existing Cursor Initialization Readback. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.status !== 'CURSOR_ALREADY_INITIALIZED' || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_REQUIRED');\nreturn [{ json: { ...row, initialized: false } }];\n"
+      }
+    },
+    {
+      "id": "12047",
+      "name": "Return Verified Cursor Initialization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified Cursor Initialization. Keep this deterministic and fail closed.\nconst row = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(row.status) || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { run_id: row.run_id, source_code: row.source_code, config_version: row.config_version, status: row.status, cursor_value: row.cursor_value, cursor_version: Number(row.cursor_version), initialized: row.initialized === true, readback_verified: true } }];\n"
+      }
+    },
+    {
       "id": "12004",
       "name": "Freeze Trusted Cursor Window",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         -220,
-        0
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Freeze Trusted Cursor Window. Keep this deterministic and fail closed.\nconst request = $json;\nfor (const field of ['folder_id', 'senders', 'subjects', 'window_start']) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst start = new Date(request.window_start);\nconst upper = request.run_upper_bound ? new Date(request.run_upper_bound) : new Date();\nif (!Number.isFinite(start.valueOf()) || !Number.isFinite(upper.valueOf()) || !(start < upper) || upper > new Date()) {\n    throw new Error('Invalid frozen cursor window');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders.map(value => `from/emailAddress/address eq ${quoteOData(value)}`).join(' or ');\nconst subjectFilter = subjects.map(value => `contains(subject,${quoteOData(value)})`).join(' or ');\nreturn [{\n        json: {\n            ...request,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            run_upper_bound: upper.toISOString(),\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
@@ -106,7 +312,7 @@
       "typeVersion": 1.1,
       "position": [
         -520,
-        760
+        1140
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -139,7 +345,7 @@
       "typeVersion": 2,
       "position": [
         -220,
-        760
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Gate Outlook Circuit. Keep this deterministic and fail closed.\nconst now = new Date(), row = $json?.provider_code ? $json : { state: 'CLOSED', transient_failure_count: 0 }, retry = row.retry_after ? new Date(row.retry_after) : null;\nif (row.state === 'OPEN' && retry && retry > now)\n    throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH');\nreturn [{ json: { provider_code: 'MICROSOFT_GRAPH', state: row.state === 'OPEN' ? 'HALF_OPEN' : 'CLOSED', transient_failure_count: Number(row.transient_failure_count || 0), last_error_class: row.last_error_class || '', opened_at: row.opened_at || null, retry_after: row.retry_after || null, readback_verified: false, updated_at: now.toISOString() } }];\n"
@@ -152,7 +358,7 @@
       "typeVersion": 1.1,
       "position": [
         80,
-        760
+        1140
       ],
       "parameters": {
         "resource": "row",
@@ -201,7 +407,7 @@
       "typeVersion": 2,
       "position": [
         380,
-        760
+        1140
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -239,7 +445,7 @@
       "typeVersion": 2,
       "position": [
         680,
-        760
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Aggregate Exact Window Heartbeat. Keep this deterministic and fail closed.\nconst contract = $('Freeze Trusted Cursor Window').first().json;\nconst start = new Date(contract.window_start);\nconst upper = new Date(contract.run_upper_bound);\nconst scanned = $input.all().map(item => item.json).filter(message => message?.id);\nif (scanned.length > contract.max_messages) {\n    throw new Error(`SOURCE_RESULT_LIMIT_EXCEEDED:${scanned.length}`);\n}\nconst messages = scanned\n    .filter(message => {\n    const sender = String(message.from?.emailAddress?.address\n        || message.sender?.emailAddress?.address\n        || '').toLowerCase();\n    const subject = String(message.subject || '').toLowerCase();\n    const received = new Date(message.receivedDateTime);\n    return contract.senders.includes(sender)\n        && contract.subjects.some(fragment => subject.includes(fragment.toLowerCase()))\n        && received >= start\n        && received < upper;\n})\n    .sort((left, right) => (String(left.receivedDateTime).localeCompare(String(right.receivedDateTime))\n    || String(left.id).localeCompare(String(right.id))));\nreturn [{\n        json: {\n            run_id: contract.run_id,\n            source_code: contract.source_code,\n            folder_id: contract.folder_id,\n            senders: contract.senders,\n            subjects: contract.subjects,\n            window_start: contract.window_start,\n            run_upper_bound: contract.run_upper_bound,\n            onedrive_parent_id: contract.onedrive_parent_id,\n            pagination_exhausted: true,\n            pages_fetched: null,\n            scanned_count: scanned.length,\n            matched_count: messages.length,\n            heartbeat: messages.length === 0,\n            messages,\n        },\n    }];\n"
@@ -252,7 +458,7 @@
       "typeVersion": 1.1,
       "position": [
         380,
-        1140
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -301,7 +507,7 @@
       "typeVersion": 1.1,
       "position": [
         680,
-        1140
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -363,7 +569,7 @@
       "typeVersion": 1.1,
       "position": [
         980,
-        1140
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -405,7 +611,7 @@
       "typeVersion": 2,
       "position": [
         -1120,
-        1520
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Receipt and Return Sweep. Keep this deterministic and fail closed.\nconst e = $('Aggregate Immutable Archive Inventory').first().json, o = $json;\nfor (const k of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'scanned_count', 'matched_count', 'heartbeat'])\n    if (String(o[k]) !== String(e[k]))\n        throw new Error('ACQUISITION_RECEIPT_MISMATCH:' + k);\nif (o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_RECEIPT_STATE_MISMATCH');\nconst expectedInventory = JSON.stringify({ messages: e.messages, attachment_identity_keys: e.attachment_identity_keys || [], empty_inventory: e.empty_inventory === true, immutable_inventory: true, attachment_ids_verified: true });\nif (typeof o.immutable_inventory_json !== 'string' || o.immutable_inventory_json !== expectedInventory)\n    throw new Error('ACQUISITION_INVENTORY_READBACK_MISMATCH');\nlet persisted;\ntry {\n    persisted = JSON.parse(o.immutable_inventory_json);\n}\ncatch {\n    throw new Error('ACQUISITION_INVENTORY_READBACK_INVALID');\n}\nif (!Array.isArray(persisted.messages) || persisted.messages.length !== Number(e.matched_count))\n    throw new Error('ACQUISITION_INVENTORY_READBACK_COUNT_MISMATCH');\nreturn [{ json: { ...e, folder_id: e.folder_id, senders: e.senders, subjects: e.subjects, onedrive_parent_id: e.onedrive_parent_id, immutable_inventory_json: o.immutable_inventory_json, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
@@ -418,7 +624,7 @@
       "typeVersion": 1.1,
       "position": [
         80,
-        0
+        380
       ],
       "parameters": {
         "resource": "row",
@@ -460,7 +666,7 @@
       "typeVersion": 2,
       "position": [
         380,
-        0
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Merge Commit Evidence Readback. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nif (receipt.run_id !== request.run_id || receipt.source_code !== request.source_code || receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.cursor_commit_eligible !== false || typeof receipt.immutable_inventory_json !== 'string' || !receipt.immutable_inventory_json)\n    throw new Error('ENUMERATED_RECEIPT_COMMIT_READBACK_MISMATCH');\nif (Number(receipt.matched_count) !== Number(request.matched_count) || request.archive_ready !== true || request.attachment_verification_barrier !== 'VERIFIED' || request.email_evidence_receipt_barrier !== 'VERIFIED' || Number(request.email_evidence_receipts_verified) !== Number(request.matched_count) || request.receipt_readback_verified !== true || request.cursor_commit_eligible !== false)\n    throw new Error('COMMIT_ARCHIVE_BARRIER_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, ...request, immutable_inventory_json: receipt.immutable_inventory_json, terminal_state: receipt.terminal_state } }];\n"
@@ -473,7 +679,7 @@
       "typeVersion": 2,
       "position": [
         680,
-        0
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.attachment_verification_barrier !== 'VERIFIED' || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nreturn [{ json: { ...r, folder_id: r.folder_id, senders: r.senders, subjects: r.subjects, onedrive_parent_id: r.onedrive_parent_id, window_start: o.window_start, scanned_count: Number(o.scanned_count), matched_count: Number(o.matched_count), heartbeat: Boolean(o.heartbeat), attachment_identity_keys: o.attachment_identity_keys || [], email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified), email_evidence_receipt_barrier: o.email_evidence_receipt_barrier } }];\n"
@@ -486,7 +692,7 @@
       "typeVersion": 1.1,
       "position": [
         -1120,
-        380
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -518,7 +724,7 @@
       "typeVersion": 2,
       "position": [
         -820,
-        380
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, next_cursor_version: expected + 1 } }];\n"
@@ -531,7 +737,7 @@
       "typeVersion": 1.1,
       "position": [
         -520,
-        380
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -585,7 +791,7 @@
       "typeVersion": 1.1,
       "position": [
         -220,
-        380
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -627,7 +833,7 @@
       "typeVersion": 2,
       "position": [
         80,
-        380
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
@@ -640,7 +846,7 @@
       "typeVersion": 1.1,
       "position": [
         380,
-        380
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -696,7 +902,7 @@
       "typeVersion": 1.1,
       "position": [
         680,
-        380
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -743,7 +949,7 @@
       "typeVersion": 2,
       "position": [
         980,
-        380
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.downstream_receipt_sha256 !== e.downstream_receipt_sha256 || o.cursor_commit_eligible !== true)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: e.run_id, source_code: e.source_code, cursor: e.run_upper_bound, cursor_version: e.next_cursor_version, downstream_receipt_sha256: e.downstream_receipt_sha256 } }];\n"
@@ -756,7 +962,7 @@
       "typeVersion": 2,
       "position": [
         980,
-        760
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Shape Immutable Message Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Verify Receipt and Return Sweep').first().json;\nif (sweep.immutable_inventory === false)\n    throw new Error('IMMUTABLE_ENUMERATION_REQUIRED');\nconst rows = Array.isArray(sweep.messages) ? sweep.messages : [], seen = new Set();\nif (!rows.length)\n    return [{ json: { ...sweep, messages: [], empty_inventory: true, immutable_inventory: true } }];\nreturn rows.map(row => {\n    const message = row?.message && typeof row.message === 'object' ? row.message : row, messageId = String(row?.message_id || message?.id || '').trim();\n    if (!messageId || seen.has(messageId))\n        throw new Error('IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE');\n    seen.add(messageId);\n    return { json: { ...message, id: messageId, message_id: messageId, source_code: sweep.source_code, folder_id: sweep.folder_id, senders: sweep.senders, subjects: sweep.subjects, window_start: sweep.window_start, window_end: sweep.run_upper_bound, run_upper_bound: sweep.run_upper_bound, onedrive_parent_id: sweep.onedrive_parent_id, attachment_inventory: Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [] } };\n});\n"
@@ -769,7 +975,7 @@
       "typeVersion": 2,
       "position": [
         -820,
-        1140
+        1520
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -792,7 +998,7 @@
       "typeVersion": 2,
       "position": [
         -520,
-        1140
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Stamp Immutable Attachment IDs. Keep this deterministic and fail closed.\nconst parent = $('Shape Immutable Message Inventory').item.json;\nreturn $input.all().map(item => {\n    const attachment = item.json || {}, attachmentId = String(attachment.id || '').trim();\n    if (!attachmentId)\n        return { json: { message_id: parent.message_id, attachment: null } };\n    const identity = parent.message_id + ':' + attachmentId;\n    return { json: { message_id: parent.message_id, source_code: parent.source_code, attachment: { id: attachmentId, attachment_identity: identity, name: attachment.name || 'attachment.bin', contentType: attachment.contentType || null, size: attachment.size ?? null, isInline: Boolean(attachment.isInline) } } };\n});\n"
@@ -805,7 +1011,7 @@
       "typeVersion": 2,
       "position": [
         80,
-        1140
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Aggregate Immutable Archive Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Verify Receipt and Return Sweep').first().json, parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory), rows = $input.all().map(item => item.json), grouped = new Map();\nfor (const row of rows) {\n    const messageId = String(row.message_id || '').trim();\n    if (!messageId)\n        continue;\n    const bucket = grouped.get(messageId) || [];\n    if (row.attachment?.id)\n        bucket.push(row.attachment);\n    grouped.set(messageId, bucket);\n}\nconst messages = parents.map(item => {\n    const message = item.json, attachments = grouped.get(message.message_id) || [], seen = new Set();\n    for (const attachment of attachments) {\n        const identity = message.message_id + ':' + attachment.id;\n        if (seen.has(identity))\n            throw new Error('DUPLICATE_MESSAGE_ATTACHMENT_ID');\n        seen.add(identity);\n    }\n    attachments.sort((left, right) => String(left.id).localeCompare(String(right.id)));\n    return { message_id: message.message_id, message, attachment_inventory: attachments, attachment_ids: attachments.map(attachment => attachment.id), attachment_identity_keys: attachments.map(attachment => message.message_id + ':' + attachment.id) };\n});\nreturn [{ json: { ...sweep, messages, empty_inventory: messages.length === 0, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: messages.flatMap(message => message.attachment_identity_keys) } }];\n"
@@ -818,7 +1024,7 @@
       "typeVersion": 1.2,
       "position": [
         -220,
-        1520
+        1900
       ],
       "parameters": {
         "workflowId": {
@@ -839,7 +1045,7 @@
       "typeVersion": 2,
       "position": [
         80,
-        1520
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Attachment Archive Barrier. Keep this deterministic and fail closed.\nconst result = $json, contract = $('Attach Immutable Inventory to Sweep').first().json;\nif (result.attachment_verification_barrier !== 'VERIFIED' || result.attachment_ids_verified !== true || result.email_evidence_receipt_barrier !== 'VERIFIED')\n    throw new Error('ATTACHMENT_AND_EMAIL_EVIDENCE_BARRIER_REQUIRED');\nconst expected = Array.isArray(contract.attachment_identity_keys) ? contract.attachment_identity_keys : [], observed = Array.isArray(result.attachment_identity_keys) ? result.attachment_identity_keys : [];\nif (new Set(observed).size !== expected.length || expected.some(identity => !observed.includes(identity)))\n    throw new Error('COMPOSITE_ATTACHMENT_IDENTITY_BARRIER_MISMATCH');\nif (Number(result.email_evidence_receipts_verified) !== Number(contract.matched_count))\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH');\nreturn [{ json: { ...contract, ...result, archive_ready: true, cursor_commit_eligible: false } }];\n"
@@ -852,7 +1058,7 @@
       "typeVersion": 2,
       "position": [
         980,
-        0
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Require Verified Attachment Barrier. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.attachment_verification_barrier !== 'VERIFIED' || row.email_evidence_receipt_barrier !== 'VERIFIED' || row.archive_ready !== true || Number(row.email_evidence_receipts_verified) !== Number(row.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nreturn [{ json: row }];\n"
@@ -865,7 +1071,7 @@
       "typeVersion": 2.2,
       "position": [
         -1120,
-        1140
+        1520
       ],
       "parameters": {
         "conditions": {
@@ -895,7 +1101,7 @@
       "typeVersion": 2,
       "position": [
         -220,
-        1140
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Empty Immutable Archive Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Verify Receipt and Return Sweep').first().json;\nreturn [{ json: { ...sweep, messages: [], immutable_inventory: true, attachment_ids_verified: true, empty_inventory: true } }];\n"
@@ -908,7 +1114,7 @@
       "typeVersion": 2,
       "position": [
         -820,
-        1520
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Attach Immutable Inventory to Sweep. Keep this deterministic and fail closed.\nconst receipt = $json, inventory = $('Aggregate Immutable Archive Inventory').first().json;\nreturn [{ json: { ...receipt, folder_id: receipt.folder_id, senders: receipt.senders, subjects: receipt.subjects, onedrive_parent_id: receipt.onedrive_parent_id, messages: inventory.messages, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: inventory.attachment_identity_keys || [], empty_inventory: inventory.empty_inventory === true } }];\n"
@@ -921,7 +1127,7 @@
       "typeVersion": 1.1,
       "position": [
         -1120,
-        760
+        1140
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -964,7 +1170,7 @@
       "typeVersion": 2.2,
       "position": [
         -820,
-        760
+        1140
       ],
       "parameters": {
         "conditions": {
@@ -994,7 +1200,7 @@
       "typeVersion": 2,
       "position": [
         -520,
-        1520
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Existing ENUMERATED Receipt. Keep this deterministic and fail closed.\nconst trusted = $('Freeze Trusted Cursor Window').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])\n    if (String(receipt[field] ?? '') !== String(trusted[field] ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\nif (receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.cursor_commit_eligible !== false)\n    throw new Error('ENUMERATED_RECEIPT_REPLAY_NOT_SAFE');\nif (typeof receipt.immutable_inventory_json !== 'string' || !receipt.immutable_inventory_json)\n    throw new Error('ENUMERATED_INVENTORY_PERSISTENCE_REQUIRED');\nlet persisted;\ntry {\n    persisted = JSON.parse(receipt.immutable_inventory_json);\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_INVALID');\n}\nif (!persisted || persisted.immutable_inventory !== true || persisted.attachment_ids_verified !== true || !Array.isArray(persisted.messages) || Number(receipt.matched_count) !== persisted.messages.length)\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_NOT_SAFE');\nconst attachmentIdentityKeys = Array.isArray(persisted.attachment_identity_keys) ? persisted.attachment_identity_keys : [];\nreturn [{ json: { ...trusted, ...receipt, messages: persisted.messages, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: attachmentIdentityKeys, empty_inventory: persisted.empty_inventory === true, replay_noop: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
@@ -1002,7 +1208,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-1",
-      "name": "Stage 1 · Called by Workflow to Require Verified Attachment Barrier",
+      "name": "Stage 1 · Called by Workflow to Read Back Initialized Source Cursor",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1010,7 +1216,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Called by Workflow → Require Verified Attachment Barrier\n**Input:** Called by Workflow  ·  **Output:** Require Verified Attachment Barrier  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Called by Workflow → Read Back Initialized Source Cursor\n**Input:** Called by Workflow  ·  **Output:** Read Back Initialized Source Cursor  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1018,7 +1224,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-2",
-      "name": "Stage 2 · Read Authoritative Source Cursor to Return Verified Cursor Commit",
+      "name": "Stage 2 · Verify Cursor v0 Initialization Readback to Require Verified Attachment Barrier",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1026,7 +1232,7 @@
         200
       ],
       "parameters": {
-        "content": "## Stage 2 · Read Authoritative Source Cursor → Return Verified Cursor Commit\n**Input:** Read Authoritative Source Cursor  ·  **Output:** Return Verified Cursor Commit  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 2 · Verify Cursor v0 Initialization Readback → Require Verified Attachment Barrier\n**Input:** Verify Cursor v0 Initialization Readback  ·  **Output:** Require Verified Attachment Barrier  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1034,7 +1240,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-3",
-      "name": "Stage 3 · Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
+      "name": "Stage 3 · Read Authoritative Source Cursor to Return Verified Cursor Commit",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1042,7 +1248,7 @@
         580
       ],
       "parameters": {
-        "content": "## Stage 3 · Read Existing ENUMERATED Receipt → Shape Immutable Message Inventory\n**Input:** Read Existing ENUMERATED Receipt  ·  **Output:** Shape Immutable Message Inventory  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 3 · Read Authoritative Source Cursor → Return Verified Cursor Commit\n**Input:** Read Authoritative Source Cursor  ·  **Output:** Return Verified Cursor Commit  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1050,7 +1256,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-4",
-      "name": "Stage 4 · Message Inventory Present to Read Back ENUMERATED Receipt",
+      "name": "Stage 4 · Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1058,7 +1264,7 @@
         960
       ],
       "parameters": {
-        "content": "## Stage 4 · Message Inventory Present → Read Back ENUMERATED Receipt\n**Input:** Message Inventory Present  ·  **Output:** Read Back ENUMERATED Receipt  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 4 · Read Existing ENUMERATED Receipt → Shape Immutable Message Inventory\n**Input:** Read Existing ENUMERATED Receipt  ·  **Output:** Shape Immutable Message Inventory  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1066,7 +1272,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-5",
-      "name": "Stage 5 · Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 5 · Message Inventory Present to Read Back ENUMERATED Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1074,7 +1280,23 @@
         1340
       ],
       "parameters": {
-        "content": "## Stage 5 · Verify Receipt and Return Sweep → Verify Attachment Archive Barrier\n**Input:** Verify Receipt and Return Sweep  ·  **Output:** Verify Attachment Archive Barrier  ·  **Nodes:** 33–37\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 5 · Message Inventory Present → Read Back ENUMERATED Receipt\n**Input:** Message Inventory Present  ·  **Output:** Read Back ENUMERATED Receipt  ·  **Nodes:** 33–40\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-6",
+      "name": "Stage 6 · Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        1720
+      ],
+      "parameters": {
+        "content": "## Stage 6 · Verify Receipt and Return Sweep → Verify Attachment Archive Barrier\n**Input:** Verify Receipt and Return Sweep  ·  **Output:** Verify Attachment Archive Barrier  ·  **Nodes:** 41–45\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1116,6 +1338,97 @@
         [
           {
             "node": "Read ENUMERATED Receipt for Commit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Source Cursor for Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Source Cursor for Initialization": {
+      "main": [
+        [
+          {
+            "node": "Build Cursor v0 Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cursor v0 Initialization": {
+      "main": [
+        [
+          {
+            "node": "Cursor Initialization Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cursor Initialization Needed": {
+      "main": [
+        [
+          {
+            "node": "Insert Source Cursor v0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Existing Cursor Initialization Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Source Cursor v0": {
+      "main": [
+        [
+          {
+            "node": "Read Back Initialized Source Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Initialized Source Cursor": {
+      "main": [
+        [
+          {
+            "node": "Verify Cursor v0 Initialization Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Cursor v0 Initialization Readback": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Existing Cursor Initialization Readback": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Initialization",
             "type": "main",
             "index": 0
           }
@@ -1510,6 +1823,9 @@
     ],
     "archiveWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION",
     "attachmentVerificationBarrier": "REQUIRED_BEFORE_CURSOR_COMMIT",
+    "cursorInitializationExactlyOnce": true,
+    "cursorInitializationConfigSource": "statement-sources",
+    "cursorInitializationCollisionPolicy": "FAIL_CLOSED_EXACT_READBACK",
     "cursorCommitExactlyOnce": true,
     "cursorAdvanceRequiresDownstreamReceipt": true,
     "terminalReceiptTable": "finance_acquisition_receipts",
@@ -1544,20 +1860,39 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Validate Sweep or Commit to Require Verified Attachment Barrier",
+      "name": "Stage 1: Validate Sweep or Commit to Read Back Initialized Source Cursor",
       "nodeIds": [
         "12002",
         "12003",
-        "12004",
+        "12040",
+        "12041",
+        "12042",
+        "12043",
+        "12044"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Read Back Initialized Source Cursor."
+    },
+    {
+      "name": "Stage 2: Verify Cursor v0 Initialization Readback to Return Verified Cursor Initialization",
+      "nodeIds": [
+        "12045",
+        "12046",
+        "12047"
+      ],
+      "description": "Finance stage 2. Input starts at Verify Cursor v0 Initialization Readback; verified output leaves through Return Verified Cursor Initialization."
+    },
+    {
+      "name": "Stage 2: Read ENUMERATED Receipt for Commit to Require Verified Attachment Barrier",
+      "nodeIds": [
         "12020",
         "12031",
         "12021",
         "12030"
       ],
-      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Require Verified Attachment Barrier."
+      "description": "Finance stage 2. Input starts at Read ENUMERATED Receipt for Commit; verified output leaves through Require Verified Attachment Barrier."
     },
     {
-      "name": "Stage 2: Read Authoritative Source Cursor to Return Verified Cursor Commit",
+      "name": "Stage 3: Read Authoritative Source Cursor to Return Verified Cursor Commit",
       "nodeIds": [
         "12022",
         "12023",
@@ -1568,10 +1903,10 @@
         "12028",
         "12029"
       ],
-      "description": "Finance stage 2. Input starts at Read Authoritative Source Cursor; verified output leaves through Return Verified Cursor Commit."
+      "description": "Finance stage 3. Input starts at Read Authoritative Source Cursor; verified output leaves through Return Verified Cursor Commit."
     },
     {
-      "name": "Stage 3: Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
+      "name": "Stage 4: Read Existing ENUMERATED Receipt to Shape Immutable Message Inventory",
       "nodeIds": [
         "12036",
         "12037",
@@ -1582,10 +1917,10 @@
         "12009",
         "12014"
       ],
-      "description": "Finance stage 3. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Shape Immutable Message Inventory."
+      "description": "Finance stage 4. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Shape Immutable Message Inventory."
     },
     {
-      "name": "Stage 4: Message Inventory Present to Read Back ENUMERATED Receipt",
+      "name": "Stage 5: Message Inventory Present to Read Back ENUMERATED Receipt",
       "nodeIds": [
         "12033",
         "12015",
@@ -1596,10 +1931,10 @@
         "12011",
         "12012"
       ],
-      "description": "Finance stage 4. Input starts at Message Inventory Present; verified output leaves through Read Back ENUMERATED Receipt."
+      "description": "Finance stage 5. Input starts at Message Inventory Present; verified output leaves through Read Back ENUMERATED Receipt."
     },
     {
-      "name": "Stage 5: Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 6: Verify Receipt and Return Sweep to Verify Attachment Archive Barrier",
       "nodeIds": [
         "12013",
         "12035",
@@ -1607,7 +1942,7 @@
         "12018",
         "12019"
       ],
-      "description": "Finance stage 5. Input starts at Verify Receipt and Return Sweep; verified output leaves through Verify Attachment Archive Barrier."
+      "description": "Finance stage 6. Input starts at Verify Receipt and Return Sweep; verified output leaves through Verify Attachment Archive Barrier."
     }
   ],
   "tags": [
