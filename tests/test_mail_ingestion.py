@@ -1,8 +1,9 @@
+import hashlib
+import json
+import subprocess
 import unittest
 from datetime import datetime
-import json
 from pathlib import Path
-import subprocess
 
 from finance_tracker.mail_ingestion import (
     build_ingest_commit_payload,
@@ -256,11 +257,112 @@ try {
         self.assertIn("SOURCE_CURSOR_ALREADY_COMMITTED", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
         cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
+        commit_read_filters = w12_nodes["Read ARCHIVED Receipt for Commit"]["parameters"]["filters"]["conditions"]
+        self.assertEqual(
+            [row["keyName"] for row in commit_read_filters],
+            ["run_id", "source_code", "terminal_state", "readback_verified"],
+        )
+        self.assertEqual(
+            [row["keyValue"] for row in commit_read_filters],
+            ["={{ $('Validate Sweep or Commit').item.json.run_id }}", "={{ $('Validate Sweep or Commit').item.json.source_code }}", "ARCHIVED", True],
+        )
+        self.assertEqual(
+            w12["connections"]["Route Operation"]["main"][1][0]["node"],
+            "Read ARCHIVED Receipt for Commit",
+        )
+        self.assertEqual(
+            w12["connections"]["Verify Attachment Archive Barrier"]["main"][0][0]["node"],
+            "Build Durable Archive Barrier Receipt",
+        )
         self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
         self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
         self.assertIn("ARCHIVE_RECEIPT_REPLAY_NOT_SAFE", w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"]["jsCode"])
         self.assertIn("EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH", w01_nodes["Verify Durable Email Evidence Receipt"]["parameters"]["jsCode"])
         self.assertIn("Archive Enumerated Attachment in OneDrive", w01["connections"])
+
+    def test_executable_w12_archive_barrier_is_durable_before_commit(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        for count in (0, 1, 101):
+            with self.subTest(matched_count=count):
+                keys = [f"message-{index:03d}:attachment-{index:03d}" for index in range(1, count + 1)]
+                email_keys = [f"message-{index:03d}:INLINE_BODY" for index in range(1, count + 1)]
+                contract = {
+                    "run_id": f"fixture:barrier:{count}",
+                    "source_code": "FIXTURE",
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "matched_count": count,
+                    "pagination_exhausted": True,
+                    "scanned_count": count,
+                    "heartbeat": count == 0,
+                    "folder_id": "folder",
+                    "senders": ["sender@example.test"],
+                    "subjects": ["Fixture"],
+                    "onedrive_parent_id": "parent",
+                }
+                barrier = {
+                    **contract,
+                    "attachment_verification_barrier": "VERIFIED",
+                    "attachment_ids_verified": True,
+                    "attachment_identity_keys": keys,
+                    "attachments_verified": count,
+                    "email_evidence_receipt_barrier": "VERIFIED",
+                    "email_evidence_receipts_verified": count,
+                    "email_evidence_identity_keys": email_keys,
+                    "archive_ready": True,
+                    "cursor_commit_eligible": False,
+                }
+                built = self.execute_code_node(
+                    workflow,
+                    "Build Durable Archive Barrier Receipt",
+                    json_value=barrier,
+                    refs={"Attach Immutable Inventory to Sweep": contract},
+                )
+                self.assertTrue(built["ok"], built)
+                built_row = built["output"][0]["json"]
+                digest = hashlib.sha256(built_row["barrier_receipt_json"].encode()).hexdigest()
+                persisted = {
+                    **built_row,
+                    "terminal_state": "ARCHIVED",
+                    "downstream_receipt_sha256": digest,
+                    "readback_verified": False,
+                }
+                readback = self.execute_code_node(
+                    workflow,
+                    "Verify ARCHIVED Acquisition Receipt",
+                    json_value=persisted,
+                    refs={
+                        "Build Durable Archive Barrier Receipt": built_row,
+                        "SHA-256 Durable Archive Barrier Receipt": {"downstream_receipt_sha256": digest},
+                    },
+                )
+                self.assertTrue(readback["ok"], readback)
+                archived = readback["output"][0]["json"]
+                proof = self.execute_code_node(
+                    workflow,
+                    "Verify Downstream Persistence Proof",
+                    json_value=archived,
+                    refs={"Validate Sweep or Commit": {
+                        **contract,
+                        "operation": "COMMIT",
+                        "expected_cursor_version": 0,
+                    }},
+                )
+                self.assertTrue(proof["ok"], proof)
+                self.assertEqual(proof["output"][0]["json"]["downstream_receipt_sha256"], digest)
+
+                missing = dict(archived, email_evidence_receipt_barrier="")
+                self.assert_code_error(
+                    workflow,
+                    "Verify Downstream Persistence Proof",
+                    "DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING",
+                    json_value=missing,
+                    refs={"Validate Sweep or Commit": {
+                        **contract,
+                        "operation": "COMMIT",
+                        "expected_cursor_version": 0,
+                    }},
+                )
 
     def test_executable_attachment_cardinality_and_composite_identity(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
@@ -992,16 +1094,45 @@ try {
                           attached["output"][0]["json"]},
                 )
                 self.assertTrue(verified["ok"], verified)
+                durable = self.execute_code_node(
+                    w12,
+                    "Build Durable Archive Barrier Receipt",
+                    json_value=verified["output"][0]["json"],
+                    refs={"Attach Immutable Inventory to Sweep":
+                          attached["output"][0]["json"]},
+                )
+                self.assertTrue(durable["ok"], durable)
+                durable_row = durable["output"][0]["json"]
+                durable_hash = hashlib.sha256(
+                    durable_row["barrier_receipt_json"].encode("utf-8")
+                ).hexdigest()
+                archived = self.execute_code_node(
+                    w12,
+                    "Verify ARCHIVED Acquisition Receipt",
+                    json_value={
+                        **durable_row,
+                        "terminal_state": "ARCHIVED",
+                        "downstream_receipt_sha256": durable_hash,
+                        "readback_verified": False,
+                    },
+                    refs={
+                        "Build Durable Archive Barrier Receipt": durable_row,
+                        "SHA-256 Durable Archive Barrier Receipt": {
+                            "downstream_receipt_sha256": durable_hash,
+                        },
+                    },
+                )
+                self.assertTrue(archived["ok"], archived)
+                archived_receipt = archived["output"][0]["json"]
                 validation = {
                     **request(),
                     "operation": "COMMIT",
                     "expected_cursor_version": cursor["cursor_version"],
-                    "downstream_receipt_sha256": "a" * 64,
                 }
                 proof = self.execute_code_node(
                     w12,
                     "Verify Downstream Persistence Proof",
-                    json_value=verified["output"][0]["json"],
+                    json_value=archived_receipt,
                     refs={"Validate Sweep or Commit": validation},
                 )
                 self.assertTrue(proof["ok"], proof)
@@ -1038,7 +1169,7 @@ try {
                     w12,
                     "Return Verified Cursor Commit",
                     json_value={
-                        "downstream_receipt_sha256": "a" * 64,
+                        "downstream_receipt_sha256": durable_hash,
                         "cursor_commit_eligible": True,
                     },
                     refs={"Build Cursor CAS Update": cas_row},
@@ -1065,12 +1196,11 @@ try {
                 replay_proof = self.execute_code_node(
                     w12,
                     "Verify Downstream Persistence Proof",
-                    json_value=replay_verified["output"][0]["json"],
+                    json_value=archived_receipt,
                     refs={"Validate Sweep or Commit": {
                         **request(),
                         "operation": "COMMIT",
                         "expected_cursor_version": cursor["cursor_version"],
-                        "downstream_receipt_sha256": "a" * 64,
                     }},
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)

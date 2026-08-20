@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['run_upper_bound', 'downstream_receipt_sha256', 'expected_cursor_version'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('DOWNSTREAM_RECEIPT_HASH_INVALID');\n}\nreturn [{ json: { ...r, operation } }];\n"
+        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['run_upper_bound', 'expected_cursor_version'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n}\nreturn [{ json: { ...r, operation } }];\n"
       }
     },
     {
@@ -388,7 +388,7 @@
     },
     {
       "id": "12020",
-      "name": "Read ENUMERATED Receipt for Commit",
+      "name": "Read ARCHIVED Receipt for Commit",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
@@ -421,7 +421,12 @@
             {
               "keyName": "terminal_state",
               "condition": "eq",
-              "keyValue": "ENUMERATED"
+              "keyValue": "ARCHIVED"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
             }
           ]
         },
@@ -438,7 +443,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.attachment_verification_barrier !== 'VERIFIED' || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nreturn [{ json: { ...r, folder_id: r.folder_id, senders: r.senders, subjects: r.subjects, onedrive_parent_id: r.onedrive_parent_id, window_start: o.window_start, scanned_count: Number(o.scanned_count), matched_count: Number(o.matched_count), heartbeat: Boolean(o.heartbeat), attachment_identity_keys: o.attachment_identity_keys || [], email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified), email_evidence_receipt_barrier: o.email_evidence_receipt_barrier } }];\n"
+        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_id !== r.run_id || o.source_code !== r.source_code || o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true || o.cursor_commit_eligible !== false)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.terminal_state !== 'ARCHIVED' || o.readback_verified !== true || o.archive_ready !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nif (o.attachment_verification_barrier !== 'VERIFIED' || o.attachment_ids_verified !== true || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nif (!/^[a-f0-9]{64}$/.test(String(o.downstream_receipt_sha256 || '')))\n    throw new Error('DOWNSTREAM_RECEIPT_HASH_MISSING');\nlet attachmentKeys, emailKeys;\ntry {\n    attachmentKeys = JSON.parse(o.attachment_identity_keys_json);\n    emailKeys = JSON.parse(o.email_evidence_identity_keys_json);\n}\ncatch {\n    throw new Error('DOWNSTREAM_RECEIPT_KEYS_INVALID');\n}\nif (!Array.isArray(attachmentKeys) || !Array.isArray(emailKeys) || attachmentKeys.length !== Number(o.attachments_verified) || emailKeys.length !== Number(o.email_evidence_receipts_verified))\n    throw new Error('DOWNSTREAM_RECEIPT_COUNTS_MISMATCH');\nconst output = {\n    ...r,\n    folder_id: o.folder_id,\n    senders: o.senders,\n    subjects: o.subjects,\n    onedrive_parent_id: o.onedrive_parent_id,\n    window_start: o.window_start,\n    scanned_count: Number(o.scanned_count),\n    matched_count: Number(o.matched_count),\n    heartbeat: Boolean(o.heartbeat),\n    attachment_identity_keys: attachmentKeys,\n    attachments_verified: Number(o.attachments_verified),\n    email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified),\n    email_evidence_identity_keys: emailKeys,\n    email_evidence_receipt_barrier: o.email_evidence_receipt_barrier,\n    attachment_verification_barrier: o.attachment_verification_barrier,\n    attachment_ids_verified: o.attachment_ids_verified,\n    archive_ready: o.archive_ready,\n    downstream_receipt_sha256: o.downstream_receipt_sha256,\n    terminal_state: o.terminal_state,\n    readback_verified: o.readback_verified,\n};\nreturn [{ json: output }];\n"
       }
     },
     {
@@ -628,7 +633,7 @@
             {
               "keyName": "terminal_state",
               "condition": "eq",
-              "keyValue": "ENUMERATED"
+              "keyValue": "ARCHIVED"
             }
           ]
         },
@@ -953,6 +958,217 @@
       }
     },
     {
+      "id": "12039",
+      "name": "Build Durable Archive Barrier Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        1520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Durable Archive Barrier Receipt. Keep this deterministic and fail closed.\nconst result = $json, contract = $('Attach Immutable Inventory to Sweep').first().json;\nif (result.run_id !== contract.run_id || result.source_code !== contract.source_code || result.run_upper_bound !== contract.run_upper_bound)\n    throw new Error('ARCHIVE_BARRIER_CONTEXT_MISMATCH');\nif (result.attachment_verification_barrier !== 'VERIFIED' || result.attachment_ids_verified !== true || result.email_evidence_receipt_barrier !== 'VERIFIED' || result.archive_ready !== true)\n    throw new Error('ARCHIVE_BARRIER_NOT_VERIFIED');\nconst attachmentKeys = Array.isArray(result.attachment_identity_keys) ? [...new Set(result.attachment_identity_keys)].sort() : [];\nconst emailKeys = Array.isArray(result.email_evidence_identity_keys) ? [...new Set(result.email_evidence_identity_keys)].sort() : [];\nif (attachmentKeys.length !== Number(result.attachments_verified) || emailKeys.length !== Number(result.email_evidence_receipts_verified) || Number(result.email_evidence_receipts_verified) !== Number(contract.matched_count))\n    throw new Error('ARCHIVE_BARRIER_COUNTS_MISMATCH');\nconst barrier = { schema_version: 1, run_id: contract.run_id, source_code: contract.source_code, window_start: contract.window_start, run_upper_bound: contract.run_upper_bound, matched_count: Number(contract.matched_count), attachment_verification_barrier: 'VERIFIED', attachment_ids_verified: true, attachment_identity_keys: attachmentKeys, attachments_verified: Number(result.attachments_verified), email_evidence_receipt_barrier: 'VERIFIED', email_evidence_receipts_verified: Number(result.email_evidence_receipts_verified), email_evidence_identity_keys: emailKeys, archive_ready: true };\nreturn [{ json: { ...contract, ...result, attachment_identity_keys_json: JSON.stringify(attachmentKeys), email_evidence_identity_keys_json: JSON.stringify(emailKeys), barrier_receipt_json: JSON.stringify(barrier), cursor_commit_eligible: false } }];\n"
+      }
+    },
+    {
+      "id": "12040",
+      "name": "SHA-256 Durable Archive Barrier Receipt",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        380,
+        1520
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.barrier_receipt_json }}",
+        "dataPropertyName": "downstream_receipt_sha256"
+      }
+    },
+    {
+      "id": "12041",
+      "name": "Mark Acquisition ARCHIVED",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        1520
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ENUMERATED"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "terminal_state": "ARCHIVED",
+            "attachment_verification_barrier": "={{ $('Build Durable Archive Barrier Receipt').item.json.attachment_verification_barrier }}",
+            "attachment_ids_verified": "={{ $('Build Durable Archive Barrier Receipt').item.json.attachment_ids_verified }}",
+            "attachment_identity_keys_json": "={{ $('Build Durable Archive Barrier Receipt').item.json.attachment_identity_keys_json }}",
+            "attachments_verified": "={{ $('Build Durable Archive Barrier Receipt').item.json.attachments_verified }}",
+            "email_evidence_receipt_barrier": "={{ $('Build Durable Archive Barrier Receipt').item.json.email_evidence_receipt_barrier }}",
+            "email_evidence_receipts_verified": "={{ $('Build Durable Archive Barrier Receipt').item.json.email_evidence_receipts_verified }}",
+            "email_evidence_identity_keys_json": "={{ $('Build Durable Archive Barrier Receipt').item.json.email_evidence_identity_keys_json }}",
+            "archive_ready": "={{ $('Build Durable Archive Barrier Receipt').item.json.archive_ready }}",
+            "cursor_commit_eligible": false,
+            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}",
+            "readback_verified": false,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12042",
+      "name": "Read Back ARCHIVED Acquisition Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        1520
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ARCHIVED"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12043",
+      "name": "Verify ARCHIVED Acquisition Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify ARCHIVED Acquisition Receipt. Keep this deterministic and fail closed.\nconst expected = $('Build Durable Archive Barrier Receipt').first().json, hash = $('SHA-256 Durable Archive Barrier Receipt').first().json.downstream_receipt_sha256, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(field === 'downstream_receipt_sha256' ? hash : field === 'terminal_state' ? 'ARCHIVED' : expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_READBACK_MISMATCH:' + field);\nif (observed.cursor_commit_eligible !== false || observed.archive_ready !== true || observed.readback_verified !== false)\n    throw new Error('ARCHIVED_RECEIPT_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...observed, readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "12044",
+      "name": "Mark ARCHIVED Receipt Readback Verified",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        1900
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ARCHIVED"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "readback_verified": true,
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-1",
       "name": "Stage 1 · Called by Workflow to Read Authoritative Source Cursor",
       "type": "n8n-nodes-base.stickyNote",
@@ -1018,7 +1234,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-5",
-      "name": "Stage 5 · Attach Immutable Inventory to Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 5 · Attach Immutable Inventory to Sweep to Read Back ARCHIVED Acquisition Receipt",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1026,7 +1242,23 @@
         1340
       ],
       "parameters": {
-        "content": "## Stage 5 · Attach Immutable Inventory to Sweep → Verify Attachment Archive Barrier\n**Input:** Attach Immutable Inventory to Sweep  ·  **Output:** Verify Attachment Archive Barrier  ·  **Nodes:** 33–36\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 5 · Attach Immutable Inventory to Sweep → Read Back ARCHIVED Acquisition Receipt\n**Input:** Attach Immutable Inventory to Sweep  ·  **Output:** Read Back ARCHIVED Acquisition Receipt  ·  **Nodes:** 33–40\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-6",
+      "name": "Stage 6 · Verify ARCHIVED Acquisition Receipt to Mark ARCHIVED Receipt Readback Verified",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        1720
+      ],
+      "parameters": {
+        "content": "## Stage 6 · Verify ARCHIVED Acquisition Receipt → Mark ARCHIVED Receipt Readback Verified\n**Input:** Verify ARCHIVED Acquisition Receipt  ·  **Output:** Mark ARCHIVED Receipt Readback Verified  ·  **Nodes:** 41–42\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1067,7 +1299,7 @@
         ],
         [
           {
-            "node": "Read ENUMERATED Receipt for Commit",
+            "node": "Read ARCHIVED Receipt for Commit",
             "type": "main",
             "index": 0
           }
@@ -1279,17 +1511,6 @@
         ]
       ]
     },
-    "Read ENUMERATED Receipt for Commit": {
-      "main": [
-        [
-          {
-            "node": "Verify Downstream Persistence Proof",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Verify Downstream Persistence Proof": {
       "main": [
         [
@@ -1428,6 +1649,83 @@
           }
         ]
       ]
+    },
+    "Verify Attachment Archive Barrier": {
+      "main": [
+        [
+          {
+            "node": "Build Durable Archive Barrier Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Durable Archive Barrier Receipt": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Durable Archive Barrier Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Durable Archive Barrier Receipt": {
+      "main": [
+        [
+          {
+            "node": "Mark Acquisition ARCHIVED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Acquisition ARCHIVED": {
+      "main": [
+        [
+          {
+            "node": "Read Back ARCHIVED Acquisition Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back ARCHIVED Acquisition Receipt": {
+      "main": [
+        [
+          {
+            "node": "Verify ARCHIVED Acquisition Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify ARCHIVED Acquisition Receipt": {
+      "main": [
+        [
+          {
+            "node": "Mark ARCHIVED Receipt Readback Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ARCHIVED Receipt for Commit": {
+      "main": [
+        [
+          {
+            "node": "Verify Downstream Persistence Proof",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1499,14 +1797,26 @@
       "description": "Finance stage 4. Input starts at List Immutable Message Attachments; verified output leaves through Verify Receipt and Return Sweep."
     },
     {
-      "name": "Stage 5: Attach Immutable Inventory to Sweep to Verify Attachment Archive Barrier",
+      "name": "Stage 5: Attach Immutable Inventory to Sweep to Read Back ARCHIVED Acquisition Receipt",
       "nodeIds": [
         "12035",
         "12038",
         "12018",
-        "12019"
+        "12019",
+        "12039",
+        "12040",
+        "12041",
+        "12042"
       ],
-      "description": "Finance stage 5. Input starts at Attach Immutable Inventory to Sweep; verified output leaves through Verify Attachment Archive Barrier."
+      "description": "Finance stage 5. Input starts at Attach Immutable Inventory to Sweep; verified output leaves through Read Back ARCHIVED Acquisition Receipt."
+    },
+    {
+      "name": "Stage 6: Verify ARCHIVED Acquisition Receipt to Mark ARCHIVED Receipt Readback Verified",
+      "nodeIds": [
+        "12043",
+        "12044"
+      ],
+      "description": "Finance stage 6. Input starts at Verify ARCHIVED Acquisition Receipt; verified output leaves through Mark ARCHIVED Receipt Readback Verified."
     }
   ],
   "tags": [
