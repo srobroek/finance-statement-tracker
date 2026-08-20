@@ -28,12 +28,16 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
-NOT_FOUND = (
+CONTAINER_NOT_FOUND = (
     "no such container",
     "no container with name or id",
     "container not found",
+    "no such object:",
+)
+NETWORK_NOT_FOUND = (
     "no such network",
     "network not found",
+    "no such object:",
 )
 
 
@@ -98,7 +102,7 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     if result.returncode == 0:
         return "present"
     message = f"{result.stdout}\n{result.stderr}".casefold()
-    if any(marker in message for marker in NOT_FOUND):
+    if any(marker in message for marker in CONTAINER_NOT_FOUND):
         return "absent"
     raise DrillError("runtime_inspect_failed", "cleanup")
 
@@ -108,7 +112,7 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     if result.returncode == 0:
         return "present"
     message = f"{result.stdout}\n{result.stderr}".casefold()
-    if any(marker in message for marker in NOT_FOUND):
+    if any(marker in message for marker in NETWORK_NOT_FOUND):
         return "absent"
     raise DrillError("runtime_network_inspect_failed", "cleanup")
 

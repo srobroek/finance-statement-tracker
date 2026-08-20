@@ -101,7 +101,10 @@ def fake_runtime(
     network_collision: bool = False,
     inspect_failure: bool = False,
     cleanup_inspect_failure: bool = False,
+    network_inspect_failure: bool = False,
     network_failure: bool = False,
+    container_missing_message: str = "no such container",
+    network_missing_message: str = "no such network",
     start_failure: bool = False,
     restart_failure: bool = False,
 ) -> Path:
@@ -118,14 +121,14 @@ if command == 'network':
     name = sys.argv[-1]
     marker = root / (name + '.network')
     if action == 'inspect':
-        if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
+        if {inspect_failure!r} or {network_inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
             print('runtime transport failure', file=sys.stderr)
             raise SystemExit(1)
         if {network_collision!r} and 'restore-net-1-' in name:
             raise SystemExit(0)
         if marker.exists():
             raise SystemExit(0)
-        print('no such network', file=sys.stderr)
+        print({network_missing_message!r}, file=sys.stderr)
         raise SystemExit(1)
     if action == 'create':
         if {network_failure!r}:
@@ -155,7 +158,7 @@ if command == 'inspect':
         raise SystemExit(0)
     if marker.exists():
         raise SystemExit(0)
-    print('no such container', file=sys.stderr)
+    print({container_missing_message!r}, file=sys.stderr)
     raise SystemExit(1)
 if command == 'run':
     (root / 'run-args').write_text(' '.join(sys.argv), encoding='utf-8')
@@ -285,6 +288,47 @@ class ActualRestoreTests(unittest.TestCase):
             result, receipt = self.run_drill(root, fake_runtime(root, inspect_failure=True))
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "runtime_inspect_failed")
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_docker_no_such_object_messages_are_classified_as_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    container_missing_message="Error: No such object: finance-actual-restore-1-123",
+                    network_missing_message="Error: No such object: finance-actual-restore-net-1-123",
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+            self.assertEqual(len(receipt["runs"]), 2)
+
+    def test_podman_absent_container_and_network_messages_are_classified(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    container_missing_message="no container with name or id",
+                    network_missing_message="network not found",
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+
+    def test_unknown_network_inspect_fails_closed_without_cleanup_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, network_inspect_failure=True))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_network_inspect_failed")
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
 
