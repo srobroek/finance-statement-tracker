@@ -244,6 +244,97 @@ class FinanceMcpLauncherTests(unittest.TestCase):
             self.assertIn("OP_BIN", result.stderr)
             self.assertFalse(invoked.exists())
 
+    def test_nested_home_op_impostor_is_rejected_before_spawn(self):
+        with tempfile.TemporaryDirectory(dir="/dev/shm") as directory, tempfile.TemporaryDirectory(
+            dir=TRUSTED_INSTALLS, prefix="finance-mcp-nested-home-"
+        ) as home_root:
+            root = Path(directory)
+            nested_bin = Path(home_root) / ".local" / "bin"
+            nested_bin.mkdir(parents=True)
+            invoked = root / "invoked"
+            fake_op = executable(
+                nested_bin / "op",
+                f"""
+                import pathlib
+                pathlib.Path(r'{invoked}').touch()
+                """,
+            )
+            environment = {
+                "PATH": os.environ["PATH"],
+                "HOME": os.environ.get("HOME", "/tmp"),
+                "OP_BIN": str(fake_op),
+                "FINANCE_MCP_LAUNCH_TMPDIR": "/dev/shm",
+            }
+            result = subprocess.run([str(LAUNCHER), "codex"], env=environment, text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("OP_BIN", result.stderr)
+            self.assertFalse(invoked.exists())
+
+    def test_nested_home_codex_impostor_is_rejected_before_spawn(self):
+        with tempfile.TemporaryDirectory(dir="/dev/shm") as directory, trusted_binaries() as trusted, tempfile.TemporaryDirectory(
+            dir=TRUSTED_INSTALLS, prefix="finance-mcp-nested-codex-"
+        ) as home_root:
+            root = Path(directory)
+            nested_bin = Path(home_root) / ".local" / "bin"
+            nested_bin.mkdir(parents=True)
+            invoked = root / "invoked"
+            fake_op = executable(
+                trusted / "op",
+                f"""
+                import pathlib
+                pathlib.Path(r'{invoked}').touch()
+                """,
+            )
+            fake_codex = executable(nested_bin / "codex", "raise SystemExit(19)")
+            environment = {
+                "PATH": os.environ["PATH"],
+                "HOME": os.environ.get("HOME", "/tmp"),
+                "OP_BIN": str(fake_op),
+                "CODEX_BIN": str(fake_codex),
+                "FINANCE_MCP_LAUNCH_TMPDIR": "/dev/shm",
+            }
+            result = subprocess.run([str(LAUNCHER), "codex"], env=environment, text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("CODEX_BIN", result.stderr)
+            self.assertFalse(invoked.exists())
+
+    def test_nested_windows_user_op_impostor_is_rejected_before_spawn(self):
+        if not os.access("/mnt/c/Users/USER", os.W_OK):
+            self.skipTest("Windows user mount is read-only in this test environment")
+        with tempfile.TemporaryDirectory(dir="/dev/shm") as directory, tempfile.TemporaryDirectory(
+            dir="/mnt/c/Users/USER", prefix="finance-mcp-nested-windows-"
+        ) as windows_root:
+            root = Path(directory)
+            nested_op = (
+                Path(windows_root)
+                / "AppData"
+                / "Local"
+                / "Microsoft"
+                / "WinGet"
+                / "Packages"
+                / "AgileBits.1Password.CLI_Microsoft.Winget.Source_8wekyb3d8bbwe"
+                / "op.exe"
+            )
+            nested_op.parent.mkdir(parents=True)
+            invoked = root / "invoked"
+            fake_op = executable(
+                nested_op,
+                f"""
+                import pathlib
+                pathlib.Path(r'{invoked}').touch()
+                """,
+            )
+            environment = {
+                "PATH": os.environ["PATH"],
+                "HOME": os.environ.get("HOME", "/tmp"),
+                "OP_BIN": str(fake_op),
+                "FINANCE_MCP_LAUNCH_TMPDIR": "/dev/shm",
+            }
+            result = subprocess.run([str(LAUNCHER), "codex"], env=environment, text=True, capture_output=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("OP_BIN", result.stderr)
+            self.assertFalse(invoked.exists())
+
     def test_same_basename_codex_impostor_is_rejected_before_spawn(self):
         with tempfile.TemporaryDirectory(dir="/dev/shm") as directory, trusted_binaries() as trusted:
             root = Path(directory)

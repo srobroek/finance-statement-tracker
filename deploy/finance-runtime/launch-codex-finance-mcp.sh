@@ -52,11 +52,30 @@ resolve_trusted_binary() {
     echo "${label} executable cannot be canonicalized" >&2
     return 1
   }
-  # Environment overrides are accepted only after canonical paths land in a trusted install root.
-  case "${label}:${canonical}" in
-    OP_BIN:/usr/bin/op|OP_BIN:/usr/local/bin/op|OP_BIN:/home/*/.local/bin/op|OP_BIN:/home/*/.local/share/mise/installs/*/bin/op|OP_BIN:/home/*/.local/share/mise/installs/*/bin/op.exe|OP_BIN:/mnt/c/Users/*/AppData/Local/Microsoft/WinGet/Packages/AgileBits.1Password.CLI_Microsoft.Winget.Source_8wekyb3d8bbwe/op.exe) ;;
-    CODEX_BIN:/usr/bin/codex|CODEX_BIN:/usr/local/bin/codex|CODEX_BIN:/home/*/.local/bin/codex|CODEX_BIN:/home/*/.local/bin/codex-cli|CODEX_BIN:/home/*/.local/share/mise/installs/*/bin/codex|CODEX_BIN:/home/*/.local/share/mise/installs/*/bin/codex-cli|CODEX_BIN:/home/*/.local/share/mise/installs/npm-openai-codex/*/lib/node_modules/@openai/codex/bin/codex.js) ;;
-    *) echo "${label} must identify a trusted executable path" >&2; return 1 ;;
+  # [^/]+ keeps every variable segment to one path component; Bash case '*' spans '/'.
+  case "${label}" in
+    OP_BIN)
+      [[ "${canonical}" == /usr/bin/op || "${canonical}" == /usr/local/bin/op ]] ||
+        [[ "${canonical}" =~ ^/home/[^/]+/\.local/bin/op$ ]] ||
+        [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/[^/]+/bin/op(\.exe)?$ ]] ||
+        [[ "${canonical}" =~ ^/mnt/c/Users/[^/]+/AppData/Local/Microsoft/WinGet/Packages/AgileBits[.]1Password[.]CLI_Microsoft[.]Winget[.]Source_8wekyb3d8bbwe/op[.]exe$ ]] || {
+          echo "${label} must identify a trusted executable path" >&2
+          return 1
+        }
+      ;;
+    CODEX_BIN)
+      [[ "${canonical}" == /usr/bin/codex || "${canonical}" == /usr/local/bin/codex ]] ||
+        [[ "${canonical}" =~ ^/home/[^/]+/\.local/bin/(codex|codex-cli)$ ]] ||
+        [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/[^/]+/bin/(codex|codex-cli)$ ]] ||
+        [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/npm-openai-codex/[^/]+/lib/node_modules/@openai/codex/bin/codex[.]js$ ]] || {
+          echo "${label} must identify a trusted executable path" >&2
+          return 1
+        }
+      ;;
+    *)
+      echo "${label} must identify a trusted executable path" >&2
+      return 1
+      ;;
   esac
   printf '%s\n' "${canonical}"
 }
