@@ -3,13 +3,15 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from datetime import date, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from unittest import TestCase
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from finance_tracker.cashback import validate_program_configuration
+from finance_tracker.cashback import load_program_configuration, validate_program_configuration
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -285,7 +287,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_start"] = "2026-09-01"
+        reference["effective_start"] = date.today().isoformat()
         program["source_references"] = [reference]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -300,10 +302,10 @@ class CashbackProgrammeProvenanceTests(TestCase):
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_end"] = "2026-08-31"
+        reference["effective_end"] = date.today().isoformat()
         program["source_references"] = [reference]
         claims = authoritative_claims(program)
-        claims[0]["effective_start"] = "2026-09-01"
+        claims[0]["effective_start"] = date.today().isoformat()
         claims[0]["effective_end"] = None
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -312,6 +314,36 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
+            validate_program_configuration(source)
+
+    def test_open_current_program_rejects_future_claim(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        program["source_references"] = [authoritative_fixture_reference()]
+        claims = authoritative_claims(program)
+        claims[0]["effective_start"] = (date.today() + timedelta(days=1)).isoformat()
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises current programme boundary.",
+            "claims": claims,
+        }
+
+        with self.assertRaisesRegex(ValueError, "exceeds the programme interval"):
+            validate_program_configuration(source)
+
+    def test_open_current_program_rejects_future_evidence(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_start"] = (date.today() + timedelta(days=1)).isoformat()
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises future evidence boundary.",
+            "claims": authoritative_claims(program),
+        }
+
+        with self.assertRaisesRegex(ValueError, "evidence exceeds the programme interval"):
             validate_program_configuration(source)
 
     def test_authoritative_reference_without_fixture_content_is_rejected(self) -> None:
@@ -328,6 +360,26 @@ class CashbackProgrammeProvenanceTests(TestCase):
 
         with self.assertRaisesRegex(ValueError, "schema error"):
             validate_provenance(source)
+
+    def test_loader_validates_versioned_schema_and_preserves_v1_compatibility(self) -> None:
+        legacy = load_program_configuration(ROOT / "examples" / "cashback-profiles" / "flat-rate-usd.json")
+        self.assertEqual(legacy["schema_version"], 1)
+
+        for field in ("label", "url"):
+            source = copy.deepcopy(self.config)
+            reference = authoritative_fixture_reference()
+            del reference[field]
+            source["programs"][0]["source_references"] = [reference]
+            source["programs"][0]["provenance"] = {
+                "authority": "AUTHORITATIVE",
+                "reason": "Test-only fixture exercises loader evidence metadata validation.",
+                "claims": authoritative_claims(source["programs"][0]),
+            }
+            with self.subTest(missing=field), TemporaryDirectory() as directory:
+                invalid_path = Path(directory) / "invalid-profile.json"
+                invalid_path.write_text(json.dumps(source), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, r"schema error at programs\.0\.source_references\.0"):
+                    load_program_configuration(invalid_path)
 
 
 if __name__ == "__main__":

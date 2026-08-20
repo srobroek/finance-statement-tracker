@@ -9,6 +9,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 from .models import Transaction, money
 
 
@@ -596,6 +598,25 @@ def _provenance_interval_covers(
     )
 
 
+def _profile_schema_path(schema_version: int) -> Path:
+    return Path(__file__).resolve().parent.parent / "config" / f"cashback-profile-schema-v{schema_version}.json"
+
+
+def _validate_profile_schema(source: dict[str, object], schema_version: int) -> None:
+    schema_path = _profile_schema_path(schema_version)
+    if not schema_path.is_file():
+        raise ValueError(f"Cashback profile schema is missing for version {schema_version}")
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cashback profile schema cannot be loaded for version {schema_version}") from exc
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    errors = sorted(validator.iter_errors(source), key=lambda error: list(error.absolute_path))
+    if errors:
+        location = ".".join(str(part) for part in errors[0].absolute_path) or "$"
+        raise ValueError(f"Cashback profile schema error at {location}: {errors[0].message}")
+
+
 def validate_program_provenance(source: dict[str, object]) -> None:
     if int(source.get("schema_version", 1)) < 2:
         return
@@ -650,7 +671,22 @@ def validate_program_provenance(source: dict[str, object]) -> None:
                 detail = (f"; missing={missing}" if missing else "") + (f"; extra={extra}" if extra else "")
                 raise ValueError(f"Cashback program {card} has incomplete provenance claims{detail}")
         program_start = _iso_date(item.get("effective_start") or source.get("effective_from"))
-        program_end = _iso_date(item.get("effective_end") or source.get("effective_end"))
+        configured_program_end = _iso_date(item.get("effective_end") or source.get("effective_end"))
+        # An open-ended current programme is only applicable through this validation
+        # instant. Without this boundary, a current seed could attest to arbitrary
+        # future rates or issuer evidence that has not been observed yet.
+        program_end = configured_program_end or date.today()
+        if program_start and program_end and program_end < program_start:
+            raise ValueError(f"Cashback program {card} has an invalid effective interval")
+        for reference in references:
+            reference_start = _iso_date(reference.get("effective_start"))
+            reference_end = _iso_date(reference.get("effective_end"))
+            if reference_start and program_start and reference_start < program_start:
+                raise ValueError(f"Cashback program {card} evidence starts before the programme")
+            if reference_start and program_end and reference_start > program_end:
+                raise ValueError(f"Cashback program {card} evidence exceeds the programme interval")
+            if reference_end and program_end and reference_end > program_end:
+                raise ValueError(f"Cashback program {card} evidence exceeds the programme interval")
         for claim in claims:
             if not isinstance(claim, dict):
                 raise ValueError(f"Cashback program {card} contains invalid provenance claim")
@@ -667,7 +703,11 @@ def validate_program_provenance(source: dict[str, object]) -> None:
                 raise ValueError(f"Cashback program {card} claim {path} has an invalid date range")
             if program_start and claim_start < program_start:
                 raise ValueError(f"Cashback program {card} claim {path} starts before the programme")
-            if program_end and (claim_end is None or claim_end > program_end):
+            if program_end and claim_start > program_end:
+                raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            if configured_program_end and (claim_end is None or claim_end > configured_program_end):
+                raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+            if not configured_program_end and claim_end and claim_end > program_end:
                 raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
             reference_ids = claim.get("reference_ids")
             if not isinstance(reference_ids, list) or not reference_ids:
@@ -1108,8 +1148,13 @@ def payment_intents_from_config(source: dict[str, object]) -> tuple[PaymentInten
 def load_program_configuration(path: Path | None = None) -> dict[str, object]:
     resolved = path or Path(__file__).resolve().parent.parent / "config" / "cashback-programs.json"
     source = json.loads(resolved.read_text(encoding="utf-8"))
-    if int(source.get("schema_version", 0)) not in {1, 2}:
+    try:
+        schema_version = int(source.get("schema_version", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Unsupported cashback program schema version") from exc
+    if schema_version not in {1, 2}:
         raise ValueError("Unsupported cashback program schema version")
+    _validate_profile_schema(source, schema_version)
     validate_program_configuration(source)
     return source
 

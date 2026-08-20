@@ -8,7 +8,7 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "a160c9f5f0c713246a733e0752c79d160ecddaeb14fa5f77a6ef2347e42af031",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "871bc662d825c3747cd8c066884e06beb3014c442225346eb56c775b7bd0a9ee",
+    "config_version_seed_sha256": "2f069878e06e171fda600b03d92031edf63d43aa1eec367dc589d8ab5cc4a085",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
     "application_contract_bundle_sha256": "4e38d22363b78b2c4245a0912268f6479e319d908e3263dffafa8d190de7114e",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
@@ -1230,9 +1230,9 @@
       },
       {
         "config_name": "cashback-programs",
-        "version": "1",
+        "version": "2",
         "source_path": "config/cashback-programs.json",
-        "content_sha256": "fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253",
+        "content_sha256": "6cf341b7173a24a5373a5da8b658e8bd3a876c6121e734589126352938277b4c",
         "git_commit": "RUNTIME_BIND_GIT_COMMIT",
         "state": "ACTIVE",
         "readback_verified": false
