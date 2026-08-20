@@ -235,7 +235,7 @@ try {{
     def test_workflow_exports_are_inactive_sanitized_and_fail_closed(self) -> None:
         forbidden_types = {"n8n-nodes-base.executeCommand", "n8n-nodes-base.ssh"}
         forbidden_markers = (
-            "13393666", "sjor2908", "actual_password", "cashback_ingest_token",
+            "ADCB_STATEMENT_PASSWORD_PLACEHOLDER", "sjor2908", "actual_password", "cashback_ingest_token",
             "172.20.10.20", "notion", "$env", "gpt-5-mini", "lmchatopenai",
             "financetransform", "unlockifprotected",
         )
