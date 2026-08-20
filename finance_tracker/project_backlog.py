@@ -150,7 +150,7 @@ LATEST_OVERRIDES = {
     },
     "AGENT-002": {
         "next_action": (
-            "Prove server-owned normal and exception model routing, including the gated high-reasoning path, in disposable n8n."
+            "Prove server-owned normal and exception model routing, including the gated medium-reasoning exception path, in disposable n8n."
         ),
     },
     "AGENT-004": {

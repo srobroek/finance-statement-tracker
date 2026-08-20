@@ -4,10 +4,10 @@ export const MODEL_PROFILES = {
     model: "gpt-5.6-luna",
     reasoningEffort: "max",
   },
-  SOL_XHIGH: {
+  SOL_MEDIUM: {
     policyClass: "EXCEPTION",
     model: "gpt-5.6-sol",
-    reasoningEffort: "xhigh",
+    reasoningEffort: "medium",
   },
 } as const;
 
@@ -73,7 +73,7 @@ export interface ProposalResponse {
   output_schema_sha256: string;
   runner_receipt_id: string;
   runner_model: "gpt-5.6-luna" | "gpt-5.6-sol";
-  runner_reasoning_effort: "max" | "xhigh";
+  runner_reasoning_effort: "max" | "medium";
   auth_mode: "CHATGPT_SUBSCRIPTION";
   proposals: Proposal[];
 }

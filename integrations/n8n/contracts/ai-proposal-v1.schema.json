@@ -21,7 +21,7 @@
     "output_schema_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "runner_receipt_id": {"type": "string", "minLength": 1, "maxLength": 256},
     "runner_model": {"type": "string", "enum": ["gpt-5.6-luna", "gpt-5.6-sol", "claude-sonnet-4-6"]},
-    "runner_reasoning_effort": {"type": "string", "enum": ["max", "xhigh", "default"]},
+    "runner_reasoning_effort": {"type": "string", "enum": ["max", "medium", "default"]},
     "auth_mode": {"type": "string", "enum": ["CHATGPT_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"]},
     "proposals": {
       "type": "array",
@@ -123,7 +123,7 @@
             "agent_provider": {"const": "CODEX_SUBSCRIPTION"},
             "policy_class": {"const": "EXCEPTION"},
             "runner_model": {"const": "gpt-5.6-sol"},
-            "runner_reasoning_effort": {"const": "xhigh"},
+            "runner_reasoning_effort": {"const": "medium"},
             "auth_mode": {"const": "CHATGPT_SUBSCRIPTION"}
           }
         },

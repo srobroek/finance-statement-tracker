@@ -2,7 +2,7 @@
   "schema_version": 1,
   "profiles": {
     "LUNA_MAX": {"agent_provider": "CODEX_SUBSCRIPTION"},
-    "SOL_XHIGH": {"agent_provider": "CODEX_SUBSCRIPTION"}
+    "SOL_MEDIUM": {"agent_provider": "CODEX_SUBSCRIPTION"}
   },
   "providers": {
     "CODEX_SUBSCRIPTION": {
@@ -10,7 +10,7 @@
       "normal_model": "gpt-5.6-luna",
       "normal_reasoning_effort": "max",
       "exception_model": "gpt-5.6-sol",
-      "exception_reasoning_effort": "xhigh"
+      "exception_reasoning_effort": "medium"
     },
     "CLAUDE_SUBSCRIPTION": {
       "adapter_package": "@ggomez91npm/n8n-nodes-claude-code@0.8.0",

@@ -24,7 +24,7 @@ classification, cashback, or Actual logic.
   `SSL_CERT_FILE`; without it Codex subscription traffic fails closed with
   `UnknownIssuer` while the local login cache still appears valid.
 - Models are fixed by the versioned policy profile: `LUNA_MAX` maps to
-  `gpt-5.6-luna`/`max`; `SOL_XHIGH` maps to `gpt-5.6-sol`/`xhigh`.
+  `gpt-5.6-luna`/`max`; `SOL_MEDIUM` maps to `gpt-5.6-sol`/`medium`.
 - The runner embeds `generated/ai-policy-contracts.seed.json` and rejects any
   request whose policy hashes, field set, or exact value domains differ from
   that build-time contract. The n8n Data Table is not trusted by itself.

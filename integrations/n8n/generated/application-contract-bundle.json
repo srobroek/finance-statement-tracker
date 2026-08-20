@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
-  "schema_sha256": "8a9e96dd58eef929601ff619033e2ccc23471ca8a25b8a2d0e86a0af59cc1643",
+  "schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
   "content_digest": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
@@ -10,7 +10,7 @@
       "bundle_content_sha256"
     ]
   },
-  "bundle_content_sha256": "695eb54db954cab2e94c65e4f3bcda8d4970bcdeff2fb809be529dd7670bc96e",
+  "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
   "source_documents": [
     {
       "path": "config/statement-sources.json",
@@ -22,7 +22,7 @@
     },
     {
       "path": "config/ai-policies.json",
-      "sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56"
+      "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
     }
   ],
   "resolver_order": [
@@ -276,7 +276,7 @@
       "sources": [
         {
           "path": "config/ai-policies.json",
-          "sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56"
+          "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
         }
       ],
       "entries": [
@@ -330,7 +330,7 @@
           "value": {
             "policy_id": "recommend-category",
             "version": 1,
-            "agent_profile": "SOL_XHIGH",
+            "agent_profile": "SOL_MEDIUM",
             "name": "Recommend a missing category",
             "priority": 15,
             "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
@@ -408,7 +408,7 @@
           "value": {
             "policy_id": "enrich-property",
             "version": 2,
-            "agent_profile": "SOL_XHIGH",
+            "agent_profile": "SOL_MEDIUM",
             "name": "Enrich property and rental unit",
             "priority": 30,
             "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
@@ -576,7 +576,7 @@
           "value": {
             "policy_id": "recommend-static-rule",
             "version": 1,
-            "agent_profile": "SOL_XHIGH",
+            "agent_profile": "SOL_MEDIUM",
             "name": "Recommend a repeated-pattern rule",
             "priority": 90,
             "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",
@@ -755,7 +755,7 @@
       "config_name": "ai-policies",
       "version": "1",
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "state": "ACTIVE"
     }
   ],
@@ -764,7 +764,7 @@
       "policy_id": "classify-unresolved",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "classify-unresolved",
         "version": 2,
@@ -812,11 +812,11 @@
       "policy_id": "recommend-category",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "recommend-category",
         "version": 1,
-        "agent_profile": "SOL_XHIGH",
+        "agent_profile": "SOL_MEDIUM",
         "name": "Recommend a missing category",
         "priority": 15,
         "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
@@ -846,7 +846,7 @@
       "policy_id": "detect-subscription",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "detect-subscription",
         "version": 1,
@@ -896,11 +896,11 @@
       "policy_id": "enrich-property",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "enrich-property",
         "version": 2,
-        "agent_profile": "SOL_XHIGH",
+        "agent_profile": "SOL_MEDIUM",
         "name": "Enrich property and rental unit",
         "priority": 30,
         "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
@@ -932,7 +932,7 @@
       "policy_id": "find-purchase-evidence",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "find-purchase-evidence",
         "version": 2,
@@ -1022,7 +1022,7 @@
       "policy_id": "enrich-cashback-classification",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "enrich-cashback-classification",
         "version": 1,
@@ -1073,11 +1073,11 @@
       "policy_id": "recommend-static-rule",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "contract": {
         "policy_id": "recommend-static-rule",
         "version": 1,
-        "agent_profile": "SOL_XHIGH",
+        "agent_profile": "SOL_MEDIUM",
         "name": "Recommend a repeated-pattern rule",
         "priority": 90,
         "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",

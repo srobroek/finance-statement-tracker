@@ -28,6 +28,10 @@ preflight. The default public deployment can use the official OpenAI node;
 Codex CLI/subscription execution is optional and must be a narrow structured
 handoff rather than a general agent inside the finance workflow.
 
+The subscription runner fixes normal policies to `gpt-5.6-luna` with `max`
+reasoning and exception policies to `gpt-5.6-sol` with `medium` reasoning.
+Callers cannot select either model or reasoning setting.
+
 Policies also declare `trigger_fields`. A policy runs only when at least one
 trigger remains unresolved; optional companion fields such as reporting tags
 may be included in that request but cannot trigger a model call by themselves.

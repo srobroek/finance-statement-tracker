@@ -29,7 +29,7 @@ boundaries that cannot be called in a disposable test without external state:
   runner. The positive Luna wrapper exercises the production workflow's fixed
   private runner HTTP boundary with a schema-bound, redacted request and no
   finance write. The positive Sol wrapper is excluded from default execution
-  and requires the explicit harness gate `DISPOSABLE_ALLOW_SOL_XHIGH`.
+  and requires the explicit harness gate `DISPOSABLE_ALLOW_SOL_MEDIUM`.
 
 The manifest distinguishes these derived execution receipts from production
 provider proof. In particular, an inactive MCP Server Trigger cannot be tested

@@ -7,6 +7,6 @@
   "direct_commit_forbidden":true,
   "profile_policy":{
     "LUNA_MAX":{"policy_class":"NORMAL","runner_model":"gpt-5.6-luna","runner_reasoning_effort":"max"},
-    "SOL_XHIGH":{"policy_class":"EXCEPTION","runner_model":"gpt-5.6-sol","runner_reasoning_effort":"xhigh"}
+    "SOL_MEDIUM":{"policy_class":"EXCEPTION","runner_model":"gpt-5.6-sol","runner_reasoning_effort":"medium"}
   }
 }

@@ -40,7 +40,7 @@ async function fixture(policyId = "classify-unresolved") {
     operation_code: "FINANCE_AI_PROPOSAL",
     agent_provider: "CODEX_SUBSCRIPTION",
     policy_id: policy.policy_id,
-    policy_class: policy.agent_profile === "SOL_XHIGH" ? "EXCEPTION" : "NORMAL",
+    policy_class: policy.agent_profile === "SOL_MEDIUM" ? "EXCEPTION" : "NORMAL",
     policy_sha256: sha256(canonicalJson(policy)),
     config_sha256: sha256(configBytes),
     output_schema_sha256: sha256(schemaBytes),
@@ -91,7 +91,7 @@ test("request requires an explicit allowed value domain object", async () => {
 test("policy registry derives the model profile and rejects stale hashes", async () => {
   const { request, registry, resolved } = await fixture("recommend-category");
   assert.equal(resolved.profile.model, "gpt-5.6-sol");
-  assert.equal(resolved.profile.reasoningEffort, "xhigh");
+  assert.equal(resolved.profile.reasoningEffort, "medium");
   assert.throws(
     () => registry.resolve({ ...request, policy_class: "NORMAL" }),
     (error: unknown) => error instanceof ContractError && error.code === "MODEL_POLICY_MISMATCH",

@@ -5,7 +5,7 @@ import { assertChatGptLogin, buildCodexExecArgs, isChatGptLoginStatus, type Code
 import { ContractError } from "./contracts.js";
 import { MODEL_PROFILES, type ResolvedPolicy } from "./types.js";
 
-function resolved(profile: "LUNA_MAX" | "SOL_XHIGH"): ResolvedPolicy {
+function resolved(profile: "LUNA_MAX" | "SOL_MEDIUM"): ResolvedPolicy {
   return {
     policy: {
       policy_id: "test-policy",
@@ -27,9 +27,9 @@ test("Codex arguments are fixed, ephemeral, read-only, and schema constrained", 
     "-c", "model_reasoning_effort=\"max\"", "--output-schema", "/schema.json",
     "--output-last-message", "/tmp/final.json", "--json", "-",
   ]);
-  const sol = buildCodexExecArgs(resolved("SOL_XHIGH"), { outputSchemaPath: "/schema.json" }, "/tmp/final.json");
+  const sol = buildCodexExecArgs(resolved("SOL_MEDIUM"), { outputSchemaPath: "/schema.json" }, "/tmp/final.json");
   assert.equal(sol[sol.indexOf("--model") + 1], "gpt-5.6-sol");
-  assert.ok(sol.includes("model_reasoning_effort=\"xhigh\""));
+  assert.ok(sol.includes("model_reasoning_effort=\"medium\""));
   assert.ok(!sol.some((value) => /danger|approve-for-me|workspace-write|shell/i.test(value)));
 });
 
