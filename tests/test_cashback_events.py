@@ -20,13 +20,19 @@ def statement_digest(reference: str) -> str:
     return hashlib.sha256(reference.encode()).hexdigest()
 
 
-def actual_receipt(reference: str, period_start: str, period_end: str) -> dict[str, object]:
+def actual_receipt(
+    reference: str,
+    period_start: str,
+    period_end: str,
+    *,
+    account_id: str = "EI_AMAZON",
+) -> dict[str, object]:
     payload_digest = statement_digest(f"actual-payload:{reference}")
     return {
         "outbox_id": f"outbox:{reference}",
         "verification_version": 1,
         "actual_file_id": f"actual-file:{reference}",
-        "account_id": "EI_AMAZON",
+        "account_id": account_id,
         "period_start": period_start,
         "period_end": period_end,
         "expected_payload_sha256": payload_digest,
@@ -450,10 +456,14 @@ class CashbackEventStoreTests(unittest.TestCase):
                     "statement_sha256": statement_digest("RAK-2026-08-15"),
                     "statement_evidence_reference": "sha256:test",
                     "actual_import_receipt": actual_receipt(
-                        "RAK-2026-08-15", "2026-07-16", "2026-08-15"
+                        "RAK-2026-08-15", "2026-07-16", "2026-08-15",
+                        account_id="RAK_WORLD",
                     ),
                     "actual_import_receipt_sha256": actual_receipt_digest(
-                        actual_receipt("RAK-2026-08-15", "2026-07-16", "2026-08-15")
+                        actual_receipt(
+                            "RAK-2026-08-15", "2026-07-16", "2026-08-15",
+                            account_id="RAK_WORLD",
+                        )
                     ),
                     "statement_document_url": "https://evidence.example/rak.pdf",
                 },
@@ -523,10 +533,14 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "statement_sha256": statement_digest("RAK-2026-09-05"),
                 "statement_evidence_reference": "sha256:def",
                 "actual_import_receipt": actual_receipt(
-                    "RAK-2026-09-05", "2026-08-06", "2026-09-05"
+                    "RAK-2026-09-05", "2026-08-06", "2026-09-05",
+                    account_id="RAK_WORLD",
                 ),
                 "actual_import_receipt_sha256": actual_receipt_digest(
-                    actual_receipt("RAK-2026-09-05", "2026-08-06", "2026-09-05")
+                    actual_receipt(
+                        "RAK-2026-09-05", "2026-08-06", "2026-09-05",
+                        account_id="RAK_WORLD",
+                    )
                 ),
                 "statement_document_url": "Finance Evidence/2026/08/rak/statement.pdf",
             }
@@ -652,6 +666,47 @@ class CashbackEventStoreTests(unittest.TestCase):
                     "actual_import_receipt_sha256": actual_receipt_digest(failed_receipt),
                 })
             self.assertNotIn("FINALIZED", {row["status"] for row in store.period_rows()})
+
+    def test_actual_receipt_account_identity_must_match_reconciled_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            reference = "RAK-2026-09-05-account-identity"
+            statement_sha256 = statement_digest(reference)
+            store.reconcile_statement({
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "card_code": "RAK_WORLD",
+                "period_start": "2026-08-06",
+                "period_end": "2026-09-05",
+                "transactions": [],
+            })
+            close_fields = {
+                "statement_reference": reference,
+                "statement_sha256": statement_sha256,
+                "statement_evidence_reference": "sha256:account-identity",
+                "statement_document_url": "Finance Evidence/rak-account.pdf",
+            }
+            wrong_account_receipt = actual_receipt(reference, "2026-08-06", "2026-09-05")
+            with self.assertRaisesRegex(ValueError, "account identity"):
+                store.finalize_period({
+                    **close_fields,
+                    "actual_import_receipt": wrong_account_receipt,
+                    "actual_import_receipt_sha256": actual_receipt_digest(wrong_account_receipt),
+                })
+            exact_receipt = actual_receipt(
+                reference,
+                "2026-08-06",
+                "2026-09-05",
+                account_id="RAK_WORLD",
+            )
+            exact_payload = {
+                **close_fields,
+                "actual_import_receipt": exact_receipt,
+                "actual_import_receipt_sha256": actual_receipt_digest(exact_receipt),
+            }
+            finalized = store.finalize_period(exact_payload)
+            self.assertEqual(finalized["status"], "FINALIZED")
+            self.assertTrue(store.finalize_period(exact_payload)["idempotent_replay"])
 
     def test_legacy_reconciliation_digest_recovery_backfills_once_and_rejects_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

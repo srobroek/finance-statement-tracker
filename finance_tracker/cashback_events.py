@@ -1501,6 +1501,12 @@ class CashbackEventStore:
                     raise ValueError(
                         "actual_import_receipt period does not match the reconciliation receipt"
                     )
+                if str(actual_import_receipt["account_id"]).strip().upper() != str(
+                    run["card_code"]
+                ).strip().upper():
+                    raise ValueError(
+                        "actual_import_receipt account identity does not match the reconciled card"
+                    )
                 if supplied_content_sha256 is not None and supplied_content_sha256 != str(
                     run["statement_content_sha256"] or ""
                 ):
