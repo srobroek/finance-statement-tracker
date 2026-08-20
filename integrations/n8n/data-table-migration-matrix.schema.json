@@ -105,7 +105,7 @@
         "every_source_column_has_one_disposition": {"const": true},
         "node_operations": {
           "type": "array",
-          "const": ["create", "get", "upsert", "update"]
+          "const": ["create", "get", "insert", "upsert", "update"]
         },
         "read_columns_star_means_full_matching_row": {"const": true},
         "filter_keys_are_exact_node_parameters": {"const": true},
@@ -139,7 +139,7 @@
         "table": {"type": "string", "pattern": "^finance_[a-z0-9_]+$"},
         "file": {"type": "string", "pattern": "^integrations/n8n/.+\\.json$"},
         "node": {"type": "string", "minLength": 1},
-        "operation": {"enum": ["create", "get", "upsert", "update"]},
+        "operation": {"enum": ["create", "get", "insert", "upsert", "update"]},
         "read_columns": {
           "type": "array",
           "uniqueItems": true,

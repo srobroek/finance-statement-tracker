@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "8cf233d6ec5ba5ee6e62910f6a48618f9fb98547",
-    "data_tables_sha256": "8b28ec95330fb75542b80ec52991dce29a22658290ae2e8f12768697198c9051",
-    "node_scan_corpus_sha256": "320ad222e4057436d02246443e7f15bc25e36f4b3db1dd69e7c9427642c29912",
+    "finance_commit": "330daae2b453e93cd35964e6598add4c4e9ae829",
+    "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
+    "node_scan_corpus_sha256": "ad78b70569094c1d43f891e04ffe66e8ef7e6a2caff77fb9672cbbb495f45dbb",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -156,6 +156,54 @@
           "type": "string",
           "source_bindings": [
             "finance_acquisition_receipts.downstream_receipt_sha256"
+          ]
+        },
+        "attachment_verification_barrier": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.attachment_verification_barrier"
+          ]
+        },
+        "attachment_ids_verified": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_acquisition_receipts.attachment_ids_verified"
+          ]
+        },
+        "attachment_identity_keys_json": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.attachment_identity_keys_json"
+          ]
+        },
+        "attachments_verified": {
+          "type": "number",
+          "source_bindings": [
+            "finance_acquisition_receipts.attachments_verified"
+          ]
+        },
+        "email_evidence_receipt_barrier": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.email_evidence_receipt_barrier"
+          ]
+        },
+        "email_evidence_receipts_verified": {
+          "type": "number",
+          "source_bindings": [
+            "finance_acquisition_receipts.email_evidence_receipts_verified"
+          ]
+        },
+        "email_evidence_identity_keys_json": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.email_evidence_identity_keys_json"
+          ]
+        },
+        "archive_ready": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_acquisition_receipts.archive_ready"
           ]
         }
       }
@@ -569,7 +617,15 @@
         "account_id": {
           "type": "string",
           "source_bindings": [
+            "finance_actual_outbox.account_id",
             "finance_actual_verifications.account_id"
+          ]
+        },
+        "card_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_actual_outbox.card_code",
+            "finance_actual_verifications.card_code"
           ]
         },
         "period_start": {
@@ -806,17 +862,18 @@
   },
   "invariants": {
     "source_tables": 15,
-    "source_columns": 204,
-    "node_references": 117,
-    "consumer_node_edges": 873,
-    "filter_only_consumer_columns": 33,
-    "filter_only_consumer_edges": 75,
-    "write_reference_edges": 404,
-    "producer_node_edges": 608,
+    "source_columns": 215,
+    "node_references": 144,
+    "consumer_node_edges": 1229,
+    "filter_only_consumer_columns": 39,
+    "filter_only_consumer_edges": 121,
+    "write_reference_edges": 478,
+    "producer_node_edges": 693,
     "every_source_column_has_one_disposition": true,
     "node_operations": [
       "create",
       "get",
+      "insert",
       "upsert",
       "update"
     ],
@@ -826,7 +883,7 @@
     "producer_nodes_equal_write_mapping_plus_schema_creation": true,
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
-      "keep": 90,
+      "keep": 101,
       "transform": 58,
       "remove": 56
     }
@@ -1366,6 +1423,45 @@
         {
           "table": "finance_source_cursors",
           "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Insert Source Cursor v0",
+          "operation": "insert",
+          "read_columns": [],
+          "write_columns": [
+            "committed_run_id",
+            "cursor_value",
+            "cursor_version",
+            "matched_count",
+            "overlap_seconds",
+            "readback_verified",
+            "run_upper_bound",
+            "scanned_count",
+            "source_code",
+            "updated_at"
+          ],
+          "filter_keys": []
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Mark Source Cursor Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "cursor_version",
+            "committed_run_id",
+            "cursor_value",
+            "run_upper_bound",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
           "node": "Read Authoritative Source Cursor",
           "operation": "get",
           "read_columns": [
@@ -1393,6 +1489,76 @@
         },
         {
           "table": "finance_source_cursors",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Back Initialized Source Cursor",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Back Verified Source Cursor",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "cursor_version",
+            "committed_run_id",
+            "cursor_value",
+            "run_upper_bound",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Source Cursor for Initialization",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/04-ei-monthly-statement.json",
+          "node": "Read Source Cursor Before Commit",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/05-wio-monthly-statement.json",
+          "node": "Read Source Cursor Before Commit",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
           "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
           "node": "CAS Update Source Cursor",
           "operation": "update",
@@ -1410,6 +1576,45 @@
           "filter_keys": [
             "source_code",
             "cursor_version"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Insert Source Cursor v0",
+          "operation": "insert",
+          "read_columns": [],
+          "write_columns": [
+            "committed_run_id",
+            "cursor_value",
+            "cursor_version",
+            "matched_count",
+            "overlap_seconds",
+            "readback_verified",
+            "run_upper_bound",
+            "scanned_count",
+            "source_code",
+            "updated_at"
+          ],
+          "filter_keys": []
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Mark Source Cursor Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "cursor_version",
+            "committed_run_id",
+            "cursor_value",
+            "run_upper_bound",
+            "readback_verified"
           ]
         },
         {
@@ -1438,6 +1643,50 @@
             "source_code",
             "cursor_version",
             "committed_run_id"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Back Initialized Source Cursor",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Back Verified Source Cursor",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "cursor_version",
+            "committed_run_id",
+            "cursor_value",
+            "run_upper_bound",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Source Cursor for Initialization",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
           ]
         },
         {
@@ -1466,15 +1715,27 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1493,14 +1754,26 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1519,14 +1792,26 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1545,14 +1830,26 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1570,13 +1867,23 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1595,14 +1902,24 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1621,14 +1938,24 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1647,16 +1974,28 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1675,14 +2014,28 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
@@ -1701,14 +2054,26 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#CAS Update Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Insert Source Cursor v0",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Insert Source Cursor v0",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Source Cursor Readback Verified",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Authoritative Source Cursor",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back CAS Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Verified Source Cursor",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Source Cursor for Initialization",
+            "integrations/n8n/workflows/04-ei-monthly-statement.json#Read Source Cursor Before Commit",
+            "integrations/n8n/workflows/05-wio-monthly-statement.json#Read Source Cursor Before Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Authoritative Source Cursor",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor"
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back CAS Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Initialized Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Verified Source Cursor",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Source Cursor for Initialization"
           ],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         }
@@ -1716,7 +2081,7 @@
     },
     {
       "source_table": "finance_acquisition_receipts",
-      "source_columns_count": 16,
+      "source_columns_count": 24,
       "logical_key": [
         "run_id",
         "source_code"
@@ -1738,6 +2103,50 @@
         {
           "table": "finance_acquisition_receipts",
           "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Mark ARCHIVED Receipt Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Mark Acquisition ARCHIVED",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "archive_ready",
+            "attachment_identity_keys_json",
+            "attachment_ids_verified",
+            "attachment_verification_barrier",
+            "attachments_verified",
+            "cursor_commit_eligible",
+            "downstream_receipt_sha256",
+            "email_evidence_identity_keys_json",
+            "email_evidence_receipt_barrier",
+            "email_evidence_receipts_verified",
+            "readback_verified",
+            "terminal_state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
           "node": "Mark Acquisition DOWNSTREAM_VERIFIED",
           "operation": "update",
           "read_columns": [],
@@ -1751,7 +2160,95 @@
           "filter_keys": [
             "run_id",
             "source_code",
-            "terminal_state"
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "cursor_commit_eligible",
+            "downstream_receipt_sha256",
+            "readback_verified",
+            "terminal_state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Acquisition Receipt for Commit Resume",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Back ARCHIVED Acquisition Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "window_start",
+            "run_upper_bound",
+            "terminal_state",
+            "downstream_receipt_sha256",
+            "readback_verified"
           ]
         },
         {
@@ -1783,21 +2280,6 @@
             "source_code",
             "terminal_state",
             "readback_verified"
-          ]
-        },
-        {
-          "table": "finance_acquisition_receipts",
-          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
-          "node": "Read ENUMERATED Receipt for Commit",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "run_id",
-            "source_code",
-            "terminal_state"
           ]
         },
         {
@@ -1847,6 +2329,50 @@
         {
           "table": "finance_acquisition_receipts",
           "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Mark ARCHIVED Receipt Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Mark Acquisition ARCHIVED",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "archive_ready",
+            "attachment_identity_keys_json",
+            "attachment_ids_verified",
+            "attachment_verification_barrier",
+            "attachments_verified",
+            "cursor_commit_eligible",
+            "downstream_receipt_sha256",
+            "email_evidence_identity_keys_json",
+            "email_evidence_receipt_barrier",
+            "email_evidence_receipts_verified",
+            "readback_verified",
+            "terminal_state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
           "node": "Mark Acquisition DOWNSTREAM_VERIFIED",
           "operation": "update",
           "read_columns": [],
@@ -1860,7 +2386,95 @@
           "filter_keys": [
             "run_id",
             "source_code",
-            "terminal_state"
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "cursor_commit_eligible",
+            "downstream_receipt_sha256",
+            "readback_verified",
+            "terminal_state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Acquisition Receipt for Commit Resume",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Back ARCHIVED Acquisition Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "terminal_state",
+            "downstream_receipt_sha256"
+          ]
+        },
+        {
+          "table": "finance_acquisition_receipts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "source_code",
+            "window_start",
+            "run_upper_bound",
+            "terminal_state",
+            "downstream_receipt_sha256",
+            "readback_verified"
           ]
         },
         {
@@ -1892,21 +2506,6 @@
             "source_code",
             "terminal_state",
             "readback_verified"
-          ]
-        },
-        {
-          "table": "finance_acquisition_receipts",
-          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
-          "node": "Read ENUMERATED Receipt for Commit",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "run_id",
-            "source_code",
-            "terminal_state"
           ]
         },
         {
@@ -1984,16 +2583,28 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt"
           ],
@@ -2019,16 +2630,28 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt"
           ],
@@ -2053,13 +2676,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2083,13 +2710,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2113,13 +2744,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2143,13 +2778,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2173,13 +2812,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2203,13 +2846,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2233,13 +2880,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2263,13 +2914,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2288,22 +2943,38 @@
           "retention": "400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2322,20 +2993,28 @@
           "retention": "400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2354,20 +3033,36 @@
           "retention": "400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2386,20 +3081,34 @@
           "retention": "400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2423,13 +3132,17 @@
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -2448,20 +3161,304 @@
           "retention": "400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Upsert ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark ARCHIVED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition DOWNSTREAM_VERIFIED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Upsert ENUMERATED Receipt",
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
           ],
           "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read ENUMERATED Receipt for Commit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read ENUMERATED Receipt for Commit",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "attachment_verification_barrier",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "attachment_verification_barrier",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "attachment_ids_verified",
+          "source_type": "boolean",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "attachment_ids_verified",
+          "constraints": [
+            "type:boolean"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "attachment_identity_keys_json",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "attachment_identity_keys_json",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "attachments_verified",
+          "source_type": "number",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "attachments_verified",
+          "constraints": [
+            "type:number"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "email_evidence_receipt_barrier",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "email_evidence_receipt_barrier",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "email_evidence_receipts_verified",
+          "source_type": "number",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "email_evidence_receipts_verified",
+          "constraints": [
+            "type:number"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "email_evidence_identity_keys_json",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "email_evidence_identity_keys_json",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
+          ],
+          "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
+        },
+        {
+          "source_column": "archive_ready",
+          "source_type": "boolean",
+          "disposition": "keep",
+          "target_table": "finance_ingestion_state",
+          "target_artifact": null,
+          "target_field": "archive_ready",
+          "constraints": [
+            "type:boolean"
+          ],
+          "owner": "n8n acquisition workflow",
+          "retention": "400 days",
+          "privacy": "internal operational metadata",
+          "producer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Mark Acquisition ARCHIVED",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_acquisition_receipts"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Back Terminal Acquisition Receipt",
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Existing ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Acquisition Receipt for Commit Resume",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ARCHIVED Acquisition Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back ENUMERATED Receipt",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Back Terminal Acquisition Receipt",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Existing ENUMERATED Receipt"
           ],
           "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history."
@@ -4164,7 +5161,7 @@
     },
     {
       "source_table": "finance_actual_outbox",
-      "source_columns_count": 18,
+      "source_columns_count": 20,
       "logical_key": [
         "imported_id"
       ],
@@ -4276,6 +5273,19 @@
         {
           "table": "finance_actual_outbox",
           "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Read Back Existing Actual Outbox",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "imported_id"
+          ]
+        },
+        {
+          "table": "finance_actual_outbox",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
           "node": "Read Back PREPARED Actual Outbox",
           "operation": "get",
           "read_columns": [
@@ -4294,11 +5304,13 @@
           "operation": "upsert",
           "read_columns": [],
           "write_columns": [
+            "account_id",
             "actual_file_id",
             "artifact_etag",
             "artifact_item_id",
             "artifact_schema_version",
             "attempt_count",
+            "card_code",
             "config_version",
             "imported_id",
             "outbox_id",
@@ -4367,6 +5379,20 @@
         {
           "table": "finance_actual_outbox",
           "file": "integrations/n8n/workflows/20-actual-outbox-apply.json",
+          "node": "Read Back COMMITTED Recovery Replay",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "outbox_id",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_actual_outbox",
+          "file": "integrations/n8n/workflows/20-actual-outbox-apply.json",
           "node": "Read Back VERIFIED Recovery",
           "operation": "get",
           "read_columns": [
@@ -4387,6 +5413,9 @@
           "write_columns": [
             "actual_transaction_id",
             "attempt_count",
+            "lease_expires_at",
+            "lease_fence",
+            "lease_owner",
             "outbox_id",
             "state",
             "updated_at"
@@ -4456,10 +5485,12 @@
             "integrations/n8n/disposable/generated/103-recover-prepared.json#Seed PREPARED Outbox Crash Boundary",
             "integrations/n8n/disposable/generated/104-recover-actual-observed.json#Seed ACTUAL_OBSERVED Outbox Crash Boundary",
             "integrations/n8n/disposable/generated/105-recover-verified.json#Seed VERIFIED Outbox Crash Boundary",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert COMMITTED Recovery",
@@ -4489,10 +5520,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4520,11 +5553,13 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4551,10 +5586,70 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
+          ],
+          "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
+        },
+        {
+          "source_column": "account_id",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
+          "target_artifact": null,
+          "target_field": "account_id",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "finance Actual writer",
+          "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
+          "privacy": "restricted finance metadata",
+          "producer_nodes": [
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert PREPARED Actual Outbox",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
+            "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
+          ],
+          "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
+        },
+        {
+          "source_column": "card_code",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
+          "target_artifact": null,
+          "target_field": "card_code",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "finance Actual writer",
+          "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
+          "privacy": "restricted finance metadata",
+          "producer_nodes": [
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert PREPARED Actual Outbox",
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
+            "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4581,10 +5676,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4611,10 +5708,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4641,10 +5740,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4671,10 +5772,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4701,10 +5804,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4731,10 +5836,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4764,10 +5871,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4786,14 +5895,17 @@
           "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
           "privacy": "restricted finance metadata",
           "producer_nodes": [
-            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox"
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert ACTUAL OBSERVED Recovery"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4812,14 +5924,17 @@
           "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
           "privacy": "restricted finance metadata",
           "producer_nodes": [
-            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox"
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert ACTUAL OBSERVED Recovery"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4838,14 +5953,17 @@
           "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
           "privacy": "restricted finance metadata",
           "producer_nodes": [
-            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox"
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_outbox",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert ACTUAL OBSERVED Recovery"
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4869,10 +5987,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4901,10 +6021,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4927,10 +6049,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4960,10 +6084,12 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/disposable/generated/102-derived-recovery-core.json#Read Nonterminal Actual Outbox",
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Existing Actual Outbox",
             "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back PREPARED Actual Outbox",
             "integrations/n8n/workflows/17-actual-outbox-recovery.json#Read Nonterminal Actual Outbox",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back ACTUAL OBSERVED Recovery",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back COMMITTED Recovery Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back VERIFIED Recovery"
           ],
           "rationale": "Retain durable batch and recovery state; leases stay in finance-operations PostgreSQL."
@@ -4972,7 +6098,7 @@
     },
     {
       "source_table": "finance_actual_verifications",
-      "source_columns_count": 16,
+      "source_columns_count": 17,
       "logical_key": [
         "outbox_id",
         "verification_version"
@@ -5013,12 +6139,28 @@
         {
           "table": "finance_actual_verifications",
           "file": "integrations/n8n/workflows/20-actual-outbox-apply.json",
+          "node": "Read Back Exact Actual Verification Receipt Replay",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "outbox_id",
+            "verification_version",
+            "invariants_passed"
+          ]
+        },
+        {
+          "table": "finance_actual_verifications",
+          "file": "integrations/n8n/workflows/20-actual-outbox-apply.json",
           "node": "Upsert Exact Actual Verification Receipt",
           "operation": "upsert",
           "read_columns": [],
           "write_columns": [
             "account_id",
             "actual_file_id",
+            "card_code",
             "expected_account_balance",
             "expected_amount_sum_minor",
             "expected_count",
@@ -5061,6 +6203,7 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
@@ -5085,6 +6228,7 @@
           ],
           "consumer_nodes": [
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay",
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
@@ -5107,7 +6251,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5129,7 +6274,31 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
+          ],
+          "rationale": "Store immutable verification artifact identity on the batch."
+        },
+        {
+          "source_column": "card_code",
+          "source_type": "string",
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
+          "target_artifact": "actual-verification-v2",
+          "target_field": "card_code",
+          "constraints": [
+            "type:string"
+          ],
+          "owner": "finance Actual verifier",
+          "retention": "co-retain with Actual import evidence; default 7 years pending owner approval",
+          "privacy": "restricted financial aggregates",
+          "producer_nodes": [
+            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_actual_verifications",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
+          ],
+          "consumer_nodes": [
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5151,7 +6320,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5173,7 +6343,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5195,7 +6366,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5217,7 +6389,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5239,7 +6412,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5261,7 +6435,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5283,7 +6458,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5305,7 +6481,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5327,7 +6504,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5349,7 +6527,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5371,7 +6550,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         },
@@ -5393,7 +6573,8 @@
             "integrations/n8n/workflows/20-actual-outbox-apply.json#Upsert Exact Actual Verification Receipt"
           ],
           "consumer_nodes": [
-            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt"
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt",
+            "integrations/n8n/workflows/20-actual-outbox-apply.json#Read Back Exact Actual Verification Receipt Replay"
           ],
           "rationale": "Store immutable verification artifact identity on the batch."
         }
@@ -5435,7 +6616,10 @@
           "filter_keys": [
             "source_code",
             "period_key",
-            "state"
+            "state",
+            "reconciliation_version",
+            "statement_sha256",
+            "actual_verification_sha256"
           ]
         },
         {

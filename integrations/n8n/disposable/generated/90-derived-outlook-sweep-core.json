@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['window_start', 'run_upper_bound', 'expected_cursor_version', 'downstream_receipt_sha256'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('Invalid downstream receipt hash');\n}\nreturn [{ json: { ...r, operation } }];\n"
+        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT', 'INITIALIZE'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['window_start', 'run_upper_bound', 'expected_cursor_version', 'downstream_receipt_sha256'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('Invalid downstream receipt hash');\n}\nif (operation === 'INITIALIZE') {\n    for (const k of ['config_version', 'initial_cursor_value'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (r.initial_cursor_source !== 'statement-sources')\n        throw new Error('VERSIONED_CURSOR_CONFIG_REQUIRED');\n}\nreturn [{ json: { ...r, operation } }];\n"
       }
     },
     {
@@ -71,6 +71,25 @@
                   {
                     "leftValue": "={{ $json.operation }}",
                     "rightValue": "COMMIT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "INITIALIZE",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -501,7 +520,7 @@
       "typeVersion": 3.2,
       "position": [
         680,
-        1520
+        1900
       ],
       "parameters": {
         "rules": {
@@ -650,7 +669,7 @@
       "typeVersion": 1.1,
       "position": [
         980,
-        1520
+        1900
       ],
       "parameters": {
         "resource": "row",
@@ -711,7 +730,7 @@
       "typeVersion": 1.1,
       "position": [
         -1120,
-        1900
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -779,7 +798,7 @@
       "typeVersion": 1.1,
       "position": [
         -820,
-        1900
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -836,7 +855,7 @@
       "typeVersion": 2,
       "position": [
         -520,
-        1900
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Source Cursor Readback. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, detected = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (observed.source_code !== proof.source_code || observed.committed_run_id !== proof.run_id || observed.cursor_value !== proof.run_upper_bound || observed.run_upper_bound !== proof.run_upper_bound || Number(observed.cursor_version) !== Number(proof.expected_cursor_version) + 1 || observed.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_READBACK_MISMATCH');\nreturn [{ json: { ...proof, ...detected, ...observed, cursor_readback_stage: true, cursor_readback_verified: true } }];\n"
@@ -849,7 +868,7 @@
       "typeVersion": 2,
       "position": [
         -220,
-        1900
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, next_cursor_version: expected + 1 } }];\n"
@@ -862,7 +881,7 @@
       "typeVersion": 1.1,
       "position": [
         80,
-        1900
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -916,7 +935,7 @@
       "typeVersion": 1.1,
       "position": [
         380,
-        1900
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -958,7 +977,7 @@
       "typeVersion": 2,
       "position": [
         680,
-        1900
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
@@ -971,7 +990,7 @@
       "typeVersion": 1.1,
       "position": [
         980,
-        1900
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -1032,7 +1051,7 @@
       "typeVersion": 1.1,
       "position": [
         -1120,
-        2280
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -1079,7 +1098,7 @@
       "typeVersion": 2,
       "position": [
         -820,
-        2280
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, terminal = $('Verify Terminal Acquisition Receipt').first().json;\nif (terminal.readback_verified !== true || terminal.downstream_receipt_sha256 !== proof.downstream_receipt_sha256 || terminal.cursor_commit_eligible !== true)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nconst recovered = cursor.cursor_recovery === true, version = recovered ? Number(cursor.cursor_version) : Number(proof.expected_cursor_version) + 1, value = recovered ? cursor.cursor_value : proof.run_upper_bound;\nif (!Number.isInteger(version) || version < 1 || !value)\n    throw new Error('ACQUISITION_TERMINAL_CURSOR_MISSING');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: value, cursor_version: version, downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: recovered } }];\n"
@@ -1092,7 +1111,7 @@
       "typeVersion": 2,
       "position": [
         -520,
-        2280
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.cursor_commit_eligible !== true || observed.readback_verified !== false)\n    throw new Error('ACQUISITION_TERMINAL_STATE_MISMATCH');\nreturn [{ json: { ...observed, readback_verified: true } }];\n"
@@ -1105,7 +1124,7 @@
       "typeVersion": 1.1,
       "position": [
         -220,
-        2280
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -1168,7 +1187,7 @@
       "typeVersion": 1.1,
       "position": [
         80,
-        2280
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -1230,7 +1249,7 @@
       "typeVersion": 2,
       "position": [
         380,
-        2280
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.cursor_commit_eligible !== true || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
@@ -1243,7 +1262,7 @@
       "typeVersion": 2,
       "position": [
         680,
-        2280
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Replayed Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, replay = $('Verify Replayed Terminal Acquisition Receipt').first().json;\nif (replay.replay_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_NOT_VERIFIED');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: true, replayed: true } }];\n"
@@ -1702,6 +1721,193 @@
       }
     },
     {
+      "id": "12040",
+      "name": "Read Source Cursor for Initialization",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        1520
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12041",
+      "name": "Build Cursor v0 Initialization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        1520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Cursor v0 Initialization. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length > 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst initial = new Date(request.initial_cursor_value);\nif (!Number.isFinite(initial.valueOf()))\n    throw new Error('VERSIONED_CURSOR_INITIAL_VALUE_INVALID');\nif (rows.length === 1) {\n    const row = rows[0], version = Number(row.cursor_version);\n    if (row.source_code !== request.source_code || !Number.isInteger(version) || version < 0 || !row.cursor_value)\n        throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_INVALID');\n    return [{ json: { ...request, status: 'CURSOR_ALREADY_INITIALIZED', cursor_version: version, cursor_value: row.cursor_value, readback_verified: true, initialized: false } }];\n}\nreturn [{ json: { ...request, status: 'CURSOR_V0_PENDING', cursor_value: initial.toISOString(), run_upper_bound: initial.toISOString(), committed_run_id: '', overlap_seconds: Number(request.overlap_seconds || 0), scanned_count: 0, matched_count: 0, cursor_version: 0, readback_verified: true, initialized: true } }];\n"
+      }
+    },
+    {
+      "id": "12042",
+      "name": "Cursor Initialization Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        1900
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.initialized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "12043",
+      "name": "Insert Source Cursor v0",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        1900
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source_code": "={{ $json.source_code }}",
+            "cursor_value": "={{ $json.cursor_value }}",
+            "committed_run_id": "={{ $json.committed_run_id }}",
+            "run_upper_bound": "={{ $json.run_upper_bound }}",
+            "overlap_seconds": "={{ $json.overlap_seconds }}",
+            "scanned_count": "={{ $json.scanned_count }}",
+            "matched_count": "={{ $json.matched_count }}",
+            "cursor_version": "={{ $json.cursor_version }}",
+            "readback_verified": "={{ $json.readback_verified }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "12044",
+      "name": "Read Back Initialized Source Cursor",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        1900
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_source_cursors",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor v0 Initialization').item.json.source_code }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12045",
+      "name": "Verify Cursor v0 Initialization Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Cursor v0 Initialization Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor v0 Initialization').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length !== 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst row = rows[0];\nif (row.source_code !== expected.source_code || Number(row.cursor_version) !== 0 || row.cursor_value !== expected.cursor_value || row.run_upper_bound !== expected.run_upper_bound || String(row.committed_run_id || '') !== '' || row.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...row, status: 'CURSOR_INITIALIZED', initialized: true, readback_verified: true } }];\n"
+      }
+    },
+    {
+      "id": "12046",
+      "name": "Return Existing Cursor Initialization Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Existing Cursor Initialization Readback. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.status !== 'CURSOR_ALREADY_INITIALIZED' || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_REQUIRED');\nreturn [{ json: { ...row, initialized: false } }];\n"
+      }
+    },
+    {
+      "id": "12047",
+      "name": "Return Verified Cursor Initialization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified Cursor Initialization. Keep this deterministic and fail closed.\nconst row = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(row.status) || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { run_id: row.run_id, source_code: row.source_code, config_version: row.config_version, status: row.status, cursor_value: row.cursor_value, cursor_version: Number(row.cursor_version), initialized: row.initialized === true, readback_verified: true } }];\n"
+      }
+    },
+    {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-1",
       "name": "Stage 1 · Called by Workflow to Require Verified Attachment Barrier",
       "type": "n8n-nodes-base.stickyNote",
@@ -1767,7 +1973,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-5",
-      "name": "Stage 5 · Build Durable Archive Barrier Receipt to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+      "name": "Stage 5 · Build Durable Archive Barrier Receipt to Build Cursor v0 Initialization",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1775,7 +1981,7 @@
         1340
       ],
       "parameters": {
-        "content": "## Stage 5 · Build Durable Archive Barrier Receipt → Mark Recovered Acquisition DOWNSTREAM_VERIFIED\n**Input:** Build Durable Archive Barrier Receipt  ·  **Output:** Mark Recovered Acquisition DOWNSTREAM_VERIFIED  ·  **Nodes:** 33–40\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 5 · Build Durable Archive Barrier Receipt → Build Cursor v0 Initialization\n**Input:** Build Durable Archive Barrier Receipt  ·  **Output:** Build Cursor v0 Initialization  ·  **Nodes:** 33–40\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1783,7 +1989,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-6",
-      "name": "Stage 6 · Mark Source Cursor Readback Verified to Mark Acquisition DOWNSTREAM_VERIFIED",
+      "name": "Stage 6 · Cursor Initialization Needed to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1791,7 +1997,7 @@
         1720
       ],
       "parameters": {
-        "content": "## Stage 6 · Mark Source Cursor Readback Verified → Mark Acquisition DOWNSTREAM_VERIFIED\n**Input:** Mark Source Cursor Readback Verified  ·  **Output:** Mark Acquisition DOWNSTREAM_VERIFIED  ·  **Nodes:** 41–48\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 6 · Cursor Initialization Needed → Mark Recovered Acquisition DOWNSTREAM_VERIFIED\n**Input:** Cursor Initialization Needed  ·  **Output:** Mark Recovered Acquisition DOWNSTREAM_VERIFIED  ·  **Nodes:** 41–48\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1799,7 +2005,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000012-generated-note-7",
-      "name": "Stage 7 · Read Back Terminal Acquisition Receipt to Return Replayed Cursor Commit",
+      "name": "Stage 7 · Mark Source Cursor Readback Verified to Mark Acquisition DOWNSTREAM_VERIFIED",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1807,7 +2013,23 @@
         2100
       ],
       "parameters": {
-        "content": "## Stage 7 · Read Back Terminal Acquisition Receipt → Return Replayed Cursor Commit\n**Input:** Read Back Terminal Acquisition Receipt  ·  **Output:** Return Replayed Cursor Commit  ·  **Nodes:** 49–55\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 7 · Mark Source Cursor Readback Verified → Mark Acquisition DOWNSTREAM_VERIFIED\n**Input:** Mark Source Cursor Readback Verified  ·  **Output:** Mark Acquisition DOWNSTREAM_VERIFIED  ·  **Nodes:** 49–56\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012-generated-note-8",
+      "name": "Stage 8 · Read Back Terminal Acquisition Receipt to Return Replayed Cursor Commit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        2480
+      ],
+      "parameters": {
+        "content": "## Stage 8 · Read Back Terminal Acquisition Receipt → Return Replayed Cursor Commit\n**Input:** Read Back Terminal Acquisition Receipt  ·  **Output:** Return Replayed Cursor Commit  ·  **Nodes:** 57–63\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -1849,6 +2071,13 @@
         [
           {
             "node": "Read Acquisition Receipt for Commit Resume",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Source Cursor for Initialization",
             "type": "main",
             "index": 0
           }
@@ -2442,6 +2671,90 @@
           }
         ]
       ]
+    },
+    "Read Source Cursor for Initialization": {
+      "main": [
+        [
+          {
+            "node": "Build Cursor v0 Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cursor v0 Initialization": {
+      "main": [
+        [
+          {
+            "node": "Cursor Initialization Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cursor Initialization Needed": {
+      "main": [
+        [
+          {
+            "node": "Insert Source Cursor v0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Existing Cursor Initialization Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Source Cursor v0": {
+      "main": [
+        [
+          {
+            "node": "Read Back Initialized Source Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Initialized Source Cursor": {
+      "main": [
+        [
+          {
+            "node": "Verify Cursor v0 Initialization Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Cursor v0 Initialization Readback": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Existing Cursor Initialization Readback": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Initialization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -2532,15 +2845,35 @@
       "description": "Finance stage 5. Input starts at Build Durable Archive Barrier Receipt; verified output leaves through Mark ARCHIVED Receipt Readback Verified."
     },
     {
-      "name": "Stage 5: Route Commit Resume State to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+      "name": "Stage 5: Read Source Cursor for Initialization to Build Cursor v0 Initialization",
+      "nodeIds": [
+        "12040",
+        "12041"
+      ],
+      "description": "Finance stage 5. Input starts at Read Source Cursor for Initialization; verified output leaves through Build Cursor v0 Initialization."
+    },
+    {
+      "name": "Stage 6: Cursor Initialization Needed to Return Verified Cursor Initialization",
+      "nodeIds": [
+        "12042",
+        "12043",
+        "12044",
+        "12045",
+        "12046",
+        "12047"
+      ],
+      "description": "Finance stage 6. Input starts at Cursor Initialization Needed; verified output leaves through Return Verified Cursor Initialization."
+    },
+    {
+      "name": "Stage 6: Route Commit Resume State to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
       "nodeIds": [
         "12046",
         "12047"
       ],
-      "description": "Finance stage 5. Input starts at Route Commit Resume State; verified output leaves through Mark Recovered Acquisition DOWNSTREAM_VERIFIED."
+      "description": "Finance stage 6. Input starts at Route Commit Resume State; verified output leaves through Mark Recovered Acquisition DOWNSTREAM_VERIFIED."
     },
     {
-      "name": "Stage 6: Mark Source Cursor Readback Verified to Compare CAS Cursor Readback",
+      "name": "Stage 7: Mark Source Cursor Readback Verified to Compare CAS Cursor Readback",
       "nodeIds": [
         "12052",
         "12053",
@@ -2550,26 +2883,26 @@
         "12025",
         "12026"
       ],
-      "description": "Finance stage 6. Input starts at Mark Source Cursor Readback Verified; verified output leaves through Compare CAS Cursor Readback."
+      "description": "Finance stage 7. Input starts at Mark Source Cursor Readback Verified; verified output leaves through Compare CAS Cursor Readback."
     },
     {
-      "name": "Stage 7: Read Back Terminal Acquisition Receipt to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+      "name": "Stage 8: Read Back Terminal Acquisition Receipt to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
       "nodeIds": [
         "12028",
         "12029",
         "12048",
         "12049"
       ],
-      "description": "Finance stage 7. Input starts at Read Back Terminal Acquisition Receipt; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
+      "description": "Finance stage 8. Input starts at Read Back Terminal Acquisition Receipt; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
     },
     {
-      "name": "Stage 7: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Return Replayed Cursor Commit",
+      "name": "Stage 8: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Return Replayed Cursor Commit",
       "nodeIds": [
         "12055",
         "12056",
         "12057"
       ],
-      "description": "Finance stage 7. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Return Replayed Cursor Commit."
+      "description": "Finance stage 8. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Return Replayed Cursor Commit."
     }
   ],
   "tags": [

@@ -36,7 +36,7 @@ SOURCE_REF_PATHS = (
     "integrations/n8n/disposable/generated",
     "integrations/n8n/setup-workflows",
 )
-OPERATIONS = ("create", "get", "upsert", "update")
+OPERATIONS = ("create", "get", "insert", "upsert", "update")
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -124,6 +124,30 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "last_receipt_created_at": _target_column("date", "finance_acquisition_receipts.created_at"),
             "downstream_receipt_sha256": _target_column(
                 "string", "finance_acquisition_receipts.downstream_receipt_sha256"
+            ),
+            "attachment_verification_barrier": _target_column(
+                "string", "finance_acquisition_receipts.attachment_verification_barrier"
+            ),
+            "attachment_ids_verified": _target_column(
+                "boolean", "finance_acquisition_receipts.attachment_ids_verified"
+            ),
+            "attachment_identity_keys_json": _target_column(
+                "string", "finance_acquisition_receipts.attachment_identity_keys_json"
+            ),
+            "attachments_verified": _target_column(
+                "number", "finance_acquisition_receipts.attachments_verified"
+            ),
+            "email_evidence_receipt_barrier": _target_column(
+                "string", "finance_acquisition_receipts.email_evidence_receipt_barrier"
+            ),
+            "email_evidence_receipts_verified": _target_column(
+                "number", "finance_acquisition_receipts.email_evidence_receipts_verified"
+            ),
+            "email_evidence_identity_keys_json": _target_column(
+                "string", "finance_acquisition_receipts.email_evidence_identity_keys_json"
+            ),
+            "archive_ready": _target_column(
+                "boolean", "finance_acquisition_receipts.archive_ready"
             ),
         },
     },
@@ -332,7 +356,16 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "verification_version": _target_column(
                 "number", "finance_actual_verifications.verification_version"
             ),
-            "account_id": _target_column("string", "finance_actual_verifications.account_id"),
+            "account_id": _target_column(
+                "string",
+                "finance_actual_outbox.account_id",
+                "finance_actual_verifications.account_id",
+            ),
+            "card_code": _target_column(
+                "string",
+                "finance_actual_outbox.card_code",
+                "finance_actual_verifications.card_code",
+            ),
             "period_start": _target_column("date", "finance_actual_verifications.period_start"),
             "period_end": _target_column("date", "finance_actual_verifications.period_end"),
             "expected_payload_sha256": _target_column(
@@ -708,9 +741,9 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 else:
                     read_columns = []
                 columns_value = parameters.get("columns", {}).get("value", {})
-                if operation in {"upsert", "update"} and not isinstance(columns_value, dict):
+                if operation in {"insert", "upsert", "update"} and not isinstance(columns_value, dict):
                     raise MatrixError(f"{relative}#{name} write columns must be an object")
-                write_columns = sorted(columns_value) if operation in {"upsert", "update"} else []
+                write_columns = sorted(columns_value) if operation in {"insert", "upsert", "update"} else []
                 if any(column not in columns_by_table.get(table_name, {}) for column in write_columns):
                     raise MatrixError(f"{relative}#{name} writes an undeclared Data Table column")
                 conditions = parameters.get("filters", {}).get("conditions", [])

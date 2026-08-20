@@ -76,16 +76,16 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             },
             {
                 "source_tables": 15,
-                "source_columns": 204,
-                "node_references": 117,
-                "consumer_node_edges": 873,
-                "filter_only_consumer_columns": 33,
-                "filter_only_consumer_edges": 75,
-                "write_reference_edges": 404,
-                "producer_node_edges": 608,
+                "source_columns": 215,
+                "node_references": 144,
+                "consumer_node_edges": 1229,
+                "filter_only_consumer_columns": 39,
+                "filter_only_consumer_edges": 121,
+                "write_reference_edges": 478,
+                "producer_node_edges": 693,
             },
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 90, "transform": 58, "remove": 56})
+        self.assertEqual(invariants["dispositions"], {"keep": 101, "transform": 58, "remove": 56})
         tables = load_json(N8N / "data-tables.json")["tables"]
         self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
         self.assertEqual(
@@ -117,6 +117,15 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(update["operation"], "update")
         self.assertEqual(update["write_columns"], sorted(update["write_columns"]))
         self.assertEqual(update["filter_keys"], ["source_code", "cursor_version"])
+        insert = references[
+            (
+                "integrations/n8n/workflows/12-outlook-message-sweep.json",
+                "Insert Source Cursor v0",
+            )
+        ]
+        self.assertEqual(insert["operation"], "insert")
+        self.assertEqual(insert["write_columns"], sorted(insert["write_columns"]))
+        self.assertEqual(insert["filter_keys"], [])
 
     def test_consumer_and_producer_unions_are_explicit(self) -> None:
         columns = {
@@ -199,6 +208,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             for column in table["columns"]
         }
         self.assertEqual(actual_verifications["actual_file_id"]["target_field"], "actual_file_id")
+        self.assertEqual(actual_verifications["card_code"]["target_field"], "card_code")
         self.assertEqual(
             actual_verifications["expected_payload_sha256"]["target_field"],
             "expected_payload_sha256",
@@ -212,6 +222,15 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(
             reconciliations["actual_verification_sha256"]["target_field"],
             "verification_artifact_sha256",
+        )
+        ingestion_columns = self.matrix["target_schemas"]["finance_ingestion_state"]["columns"]
+        self.assertEqual(
+            ingestion_columns["attachment_verification_barrier"]["source_bindings"],
+            ["finance_acquisition_receipts.attachment_verification_barrier"],
+        )
+        self.assertEqual(
+            ingestion_columns["email_evidence_receipt_barrier"]["source_bindings"],
+            ["finance_acquisition_receipts.email_evidence_receipt_barrier"],
         )
 
         document_identities = self.matrix["target_schemas"]["finance_documents"]["identity_derivations"]
