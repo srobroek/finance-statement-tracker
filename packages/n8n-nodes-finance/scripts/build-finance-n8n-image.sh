@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 package_dir="${repo_root}/packages/n8n-nodes-finance"
 dockerfile="${package_dir}/Dockerfile.n8n"
 base_file="${package_dir}/base-image.txt"
+base_provenance_file="${package_dir}/base-image-provenance.json"
 receipt="${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json"
 tag="finance-n8n:spec-0.1.0"
 dry_run=0
@@ -53,6 +54,26 @@ if [[ ! "${base_image}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]]; then
   echo "FINANCE_BASE_IMAGE_MUST_BE_IMMUTABLE" >&2
   exit 1
 fi
+[[ -f "${base_provenance_file}" ]] || {
+  echo "FINANCE_BASE_IMAGE_PROVENANCE_MISSING" >&2
+  exit 1
+}
+provenance_reference="$(node -p "require(process.argv[1]).reference" "${base_provenance_file}")"
+provenance_digest="$(node -p "require(process.argv[1]).digest" "${base_provenance_file}")"
+base_source_repository="$(node -p "require(process.argv[1]).source_repository" "${base_provenance_file}")"
+base_source_commit="$(node -p "require(process.argv[1]).source_commit" "${base_provenance_file}")"
+[[ "${provenance_reference}" = "${base_image}" && "${provenance_digest}" = "${base_image##*@}" ]] || {
+  echo "FINANCE_BASE_IMAGE_PROVENANCE_MISMATCH" >&2
+  exit 1
+}
+[[ "${base_source_repository}" = "https://github.com/srobroek/n8n" ]] || {
+  echo "FINANCE_BASE_IMAGE_SOURCE_REPOSITORY_INVALID" >&2
+  exit 1
+}
+[[ "${base_source_commit}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "FINANCE_BASE_IMAGE_SOURCE_COMMIT_INVALID" >&2
+  exit 1
+}
 
 if [[ -n "$(git -C "${repo_root}" status --porcelain --untracked-files=all)" ]]; then
   echo "FINANCE_SOURCE_TREE_MUST_BE_CLEAN" >&2
@@ -85,6 +106,9 @@ FINANCE_IMAGE_ID="${image_id}" \
 FINANCE_PACKAGE_VERSION="${package_version}" \
 FINANCE_SOURCE_COMMIT="${source_commit}" \
 FINANCE_BASE_IMAGE="${base_image}" \
+FINANCE_BASE_SOURCE_REPOSITORY="${base_source_repository}" \
+FINANCE_BASE_SOURCE_COMMIT="${base_source_commit}" \
+FINANCE_BASE_PROVENANCE_PATH="packages/n8n-nodes-finance/base-image-provenance.json" \
 node <<'NODE'
 'use strict';
 const fs = require('node:fs');
@@ -108,6 +132,9 @@ const receipt = {
   base_image: {
     reference: process.env.FINANCE_BASE_IMAGE,
     digest,
+    source_repository: process.env.FINANCE_BASE_SOURCE_REPOSITORY,
+    source_commit: process.env.FINANCE_BASE_SOURCE_COMMIT,
+    provenance_path: process.env.FINANCE_BASE_PROVENANCE_PATH,
   },
   source_commit: sourceCommit,
   sbom_sha256: null,

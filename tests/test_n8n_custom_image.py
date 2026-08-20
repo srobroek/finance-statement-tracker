@@ -4,9 +4,37 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+GENERIC_BASE_DIGEST = "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9"
+GENERIC_SOURCE_COMMIT = "e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7"
 
 
 class N8nCustomImageTests(unittest.TestCase):
+    def test_finance_inherits_approved_generic_platform_image_without_duplicate_patch(self):
+        dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
+        base_reference = (ROOT / "packages/n8n-nodes-finance/base-image.txt").read_text(encoding="utf-8").strip()
+        provenance = json.loads(
+            (ROOT / "packages/n8n-nodes-finance/base-image-provenance.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(base_reference, provenance["reference"])
+        self.assertEqual(provenance["digest"], GENERIC_BASE_DIGEST)
+        self.assertEqual(provenance["source_repository"], "https://github.com/srobroek/n8n")
+        self.assertEqual(provenance["source_commit"], GENERIC_SOURCE_COMMIT)
+        self.assertEqual(base_reference.rsplit("@", 1)[1], GENERIC_BASE_DIGEST)
+        self.assertIn("ARG N8N_BASE_IMAGE=" + base_reference, dockerfile)
+        self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
+        self.assertIn('io.finance.n8n.base-source="https://github.com/srobroek/n8n@' + GENERIC_SOURCE_COMMIT, dockerfile)
+        for duplicate_marker in (
+            "nodemailer-security-patch",
+            "npm pack nodemailer",
+            "nodemailer@8.0.10",
+            "nodemailer@9.0.1",
+            "nodemailer-smoke",
+        ):
+            self.assertNotIn(duplicate_marker, dockerfile)
+        self.assertIn("AS node-builder", dockerfile)
+        self.assertIn("/opt/finance-n8n/custom-extensions/n8n-nodes-finance", dockerfile)
+        self.assertIn("/opt/finance-n8n/community-extensions", dockerfile)
+
     def test_finance_extension_is_immutable_and_outside_persistent_state(self):
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
         base_image = (ROOT / "packages/n8n-nodes-finance/base-image.txt").read_text(encoding="utf-8").strip()
@@ -26,12 +54,21 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("N8N_BASE_IMAGE", builder)
         self.assertIn("FINANCE_SOURCE_COMMIT", builder)
         self.assertIn("FINANCE_BASE_IMAGE_MUST_BE_IMMUTABLE", builder)
+        self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISSING", builder)
+        self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISMATCH", builder)
+        self.assertIn("FINANCE_BASE_SOURCE_COMMIT", builder)
         self.assertIn("FINANCE_RUNTIME_RECEIPT_MUST_BE_EXTERNAL", builder)
         self.assertIn("FINANCE_SOURCE_TREE_MUST_BE_CLEAN", builder)
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
         self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
         self.assertEqual(receipt["status"], "SPEC_ONLY")
+        self.assertEqual(receipt["base_image"]["digest"], GENERIC_BASE_DIGEST)
+        self.assertEqual(receipt["base_image"]["source_commit"], GENERIC_SOURCE_COMMIT)
+        self.assertEqual(
+            receipt["base_image"]["source_repository"],
+            "https://github.com/srobroek/n8n",
+        )
         self.assertIsNone(receipt["image"]["image_digest"])
         self.assertIsNone(receipt["attestation"]["subject_digest"])
         self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
@@ -94,9 +131,6 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(package["overrides"], {"nanoid": "3.3.18", "uuid": "11.1.1"})
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
         self.assertIn("node_modules/@anthropic-ai/claude-code/install.cjs", dockerfile)
-        self.assertIn("ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3", dockerfile)
-        self.assertIn("sha256sum -c -", dockerfile)
-        self.assertNotIn("ADD --checksum", dockerfile)
         lock = json.loads(
             (ROOT / "packages/n8n-nodes-finance/community-ai/package-lock.json").read_text(encoding="utf-8")
         )

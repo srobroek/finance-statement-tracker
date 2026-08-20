@@ -8,8 +8,11 @@
     "local_image_id": null
   },
   "base_image": {
-    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
-    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+    "reference": "localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
+    "digest": "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
+    "source_repository": "https://github.com/srobroek/n8n",
+    "source_commit": "e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7",
+    "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json"
   },
   "source_commit": null,
   "sbom_sha256": null,
