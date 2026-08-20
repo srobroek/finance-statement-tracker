@@ -6,7 +6,7 @@
       "config_name": "ai-policies",
       "version": "1",
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -15,7 +15,7 @@
       "config_name": "agent-providers",
       "version": "1",
       "source_path": "config/agent-providers.json",
-      "content_sha256": "d64512e43cf8fe64439ab37541f5f28ac8992c13b91d6bbe54b603b8cafa9c6c",
+      "content_sha256": "7eee0c7b517b03b922607bef9d747ae233da8a2af20323a165a8d48b89518bcb",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

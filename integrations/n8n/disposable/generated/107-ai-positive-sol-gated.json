@@ -82,9 +82,9 @@
   "meta": {
     "disposableOnly": true,
     "productionImportForbidden": true,
-    "agentProfileExpected": "SOL_XHIGH",
+    "agentProfileExpected": "SOL_MEDIUM",
     "financeWritesImpossible": true,
-    "executionGate": "DISPOSABLE_ALLOW_SOL_XHIGH",
+    "executionGate": "DISPOSABLE_ALLOW_SOL_MEDIUM",
     "defaultExecutionForbidden": true
   }
 }
