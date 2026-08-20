@@ -36,11 +36,13 @@ EXCLUDED_PUSH_DATA = {
     "cashback-data/cashback-events.sqlite3:push_deliveries",
     "cashback-data/cashback-events.sqlite3:push_state",
 }
-EXCLUDED_CASHBACK_PATHS = {
+EXCLUDED_CASHBACK_PATHS = {"cashback-data/pre-deploy-*.sqlite3*"}
+PRIOR_V4_EXCLUDED_CASHBACK_PATHS = {
     "cashback-data/pre-deploy-*.sqlite3",
     "cashback-data/pre-deploy-*.sqlite3-wal",
     "cashback-data/pre-deploy-*.sqlite3-shm",
 }
+HISTORICAL_CASHBACK_MEMBER = re.compile(r"pre-deploy-[^/]+\.sqlite3(?:-[^/]*)?")
 CURRENT_MANIFEST_SCHEMA = 4
 LEGACY_MANIFEST_SCHEMA = 3
 
@@ -107,7 +109,9 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
         raise VerificationError("backup manifest does not classify excluded push state")
     excluded_paths = manifest.get("excluded_paths")
     if schema_version == CURRENT_MANIFEST_SCHEMA and (
-        not isinstance(excluded_paths, list) or set(excluded_paths) != EXCLUDED_CASHBACK_PATHS
+        not isinstance(excluded_paths, list)
+        or set(excluded_paths)
+        not in (EXCLUDED_CASHBACK_PATHS, PRIOR_V4_EXCLUDED_CASHBACK_PATHS)
     ):
         raise VerificationError("backup manifest does not classify excluded historical snapshots")
     return manifest
@@ -156,7 +160,7 @@ def _extract_regular_files(archive: Path, destination: Path) -> int:
                 relative = _safe_member_path(member.name)
                 if (
                     relative.parts[:1] == ("cashback-data",)
-                    and re.fullmatch(r"pre-deploy-[^/]+\.sqlite3(?:-(?:wal|shm))?", relative.name)
+                    and HISTORICAL_CASHBACK_MEMBER.fullmatch(relative.name)
                 ):
                     raise VerificationError(
                         f"archive contains excluded historical cashback snapshot: {member.name}"

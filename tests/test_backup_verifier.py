@@ -91,7 +91,7 @@ class BackupVerifierTests(unittest.TestCase):
                 b"secret-p256dh-value",
                 b"secret-auth-value",
             )
-            for suffix in ("-wal", "-shm"):
+            for suffix in ("-wal", "-shm", "-journal"):
                 (historical_base.with_name(historical_base.name + suffix)).write_bytes(
                     b"|".join(sentinels)
                 )
@@ -218,7 +218,7 @@ class BackupVerifierTests(unittest.TestCase):
                 b"secret-auth-value",
             )
             with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
-                for suffix in ("-wal", "-shm"):
+                for suffix in ("-wal", "-shm", "-journal"):
                     member = archive.extractfile(
                         "cashback-data/pre-deploy-20260818T010203Z.sqlite3" + suffix
                     )
@@ -250,6 +250,23 @@ class BackupVerifierTests(unittest.TestCase):
 
             with self.assertRaisesRegex(verifier.VerificationError, "legacy v3"):
                 verifier.verify_backup(root, backup, None)
+
+    def test_accepts_prior_v4_snapshot_path_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root)
+            manifest_path = backup / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["excluded_paths"] = sorted(verifier.PRIOR_V4_EXCLUDED_CASHBACK_PATHS)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = verifier.verify_backup(root, backup, None)
+
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(
+                result["excluded_paths"],
+                sorted(verifier.PRIOR_V4_EXCLUDED_CASHBACK_PATHS),
+            )
 
     def test_rejects_checksum_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
