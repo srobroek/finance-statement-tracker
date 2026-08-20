@@ -31,6 +31,11 @@ REQUIRED_ARCHIVE_PATHS = (
     "configuration/actual-compose.yaml",
     "configuration/cashback-compose.yaml",
 )
+EXCLUDED_PUSH_DATA = {
+    "cashback-data/cashback-events.sqlite3:push_subscriptions",
+    "cashback-data/cashback-events.sqlite3:push_deliveries",
+    "cashback-data/cashback-events.sqlite3:push_state",
+}
 
 
 class VerificationError(RuntimeError):
@@ -87,6 +92,9 @@ def _verify_manifest(backup: Path) -> dict[str, Any]:
         "configuration",
     }:
         raise VerificationError("backup manifest has incomplete scope")
+    excluded_data = manifest.get("excluded_data")
+    if not isinstance(excluded_data, list) or set(excluded_data) != EXCLUDED_PUSH_DATA:
+        raise VerificationError("backup manifest does not classify excluded push state")
     return manifest
 
 
@@ -163,6 +171,28 @@ def _sqlite_integrity(path: Path) -> None:
         raise VerificationError(f"SQLite integrity check failed: {path}")
 
 
+def _verify_excluded_push_data(path: Path) -> None:
+    """Ensure ephemeral push credentials and delivery metadata were scrubbed."""
+    try:
+        connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            tables = {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            for table in ("push_subscriptions", "push_deliveries", "push_state"):
+                if table in tables and connection.execute(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).fetchone()[0]:
+                    raise VerificationError(f"backup contains excluded push state: {table}")
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise VerificationError(f"SQLite backup cannot inspect push state: {path}") from exc
+
+
 def _verify_extracted(root: Path) -> tuple[list[str], int]:
     for relative in REQUIRED_ARCHIVE_PATHS:
         if not (root / relative).is_file():
@@ -178,6 +208,7 @@ def _verify_extracted(root: Path) -> tuple[list[str], int]:
     ]
     for database in databases:
         _sqlite_integrity(database)
+    _verify_excluded_push_data(root / "cashback-data/cashback-events.sqlite3")
 
     json_paths = sorted((root / "configuration").glob("*.json"))
     dashboard = root / "cashback-data/cashback-dashboard.json"
@@ -211,6 +242,7 @@ def verify_backup(backup_root: Path, backup_path: Path | None, work_root: Path |
         "extracted_files": extracted_files,
         "sqlite_databases": databases,
         "json_documents": json_documents,
+        "excluded_data": manifest["excluded_data"],
     }
 
 

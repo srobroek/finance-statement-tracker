@@ -34,6 +34,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("sha256sum finance-data.tar.gz > SHA256SUMS", script)
         self.assertIn("sha256sum -c SHA256SUMS", script)
         self.assertIn('python3 "${VERIFY_SCRIPT}"', script)
+        self.assertIn('python3 "${SANITIZE_SCRIPT}"', script)
+        self.assertIn("excluded_data", script)
         self.assertIn("--write-receipt", script)
 
         service = Path("deploy/actual-poc/finance-backup.service").read_text(

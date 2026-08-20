@@ -3,6 +3,8 @@ import importlib.util
 import io
 import json
 import sqlite3
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -25,11 +27,60 @@ class BackupVerifierTests(unittest.TestCase):
         connection.commit()
         connection.close()
 
-    def _backup(self, root: Path, *, unsafe_member: str | None = None) -> Path:
+    def _push_state(self, path: Path) -> None:
+        with sqlite3.connect(path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE push_subscriptions (
+                    endpoint TEXT PRIMARY KEY,
+                    p256dh TEXT NOT NULL,
+                    auth TEXT NOT NULL
+                );
+                CREATE TABLE push_deliveries (
+                    notification_key TEXT NOT NULL,
+                    endpoint TEXT NOT NULL,
+                    payload_hash TEXT NOT NULL
+                );
+                CREATE TABLE push_state (
+                    state_key TEXT PRIMARY KEY,
+                    state_value TEXT NOT NULL
+                );
+                INSERT INTO push_subscriptions VALUES (
+                    'https://push.example/private-endpoint',
+                    'secret-p256dh-value',
+                    'secret-auth-value'
+                );
+                INSERT INTO push_deliveries VALUES (
+                    'alert-1', 'https://push.example/private-endpoint', 'hash'
+                );
+                INSERT INTO push_state VALUES ('routing-map', '{}');
+                """
+            )
+
+    def _backup(
+        self,
+        root: Path,
+        *,
+        unsafe_member: str | None = None,
+        push_data: bool = False,
+        sanitize_push: bool = False,
+    ) -> Path:
         source = root / "source"
+        cashback_database = source / "cashback-data/cashback-events.sqlite3"
         self._sqlite(source / "actual-data/server-files/account.sqlite")
         self._sqlite(source / "actual-data/user-files/budget.sqlite")
-        self._sqlite(source / "cashback-data/cashback-events.sqlite3")
+        self._sqlite(cashback_database)
+        if push_data:
+            self._push_state(cashback_database)
+        if sanitize_push:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(Path("deploy/actual-poc/sanitize-cashback-backup.py")),
+                    str(cashback_database),
+                ],
+                check=True,
+            )
         (source / "configuration").mkdir(parents=True)
         for name in ("actual-compose.yaml", "cashback-compose.yaml"):
             (source / "configuration" / name).write_text("services: {}\n", encoding="utf-8")
@@ -55,6 +106,7 @@ class BackupVerifierTests(unittest.TestCase):
                     "created_at": backup.name,
                     "includes": ["actual-data", "cashback-data", "configuration"],
                     "secrets_included": False,
+                    "excluded_data": sorted(verifier.EXCLUDED_PUSH_DATA),
                 }
             ),
             encoding="utf-8",
@@ -72,6 +124,30 @@ class BackupVerifierTests(unittest.TestCase):
             self.assertEqual(result["backup"], backup.name)
             self.assertEqual(result["json_documents"], 1)
             self.assertEqual(len(result["sqlite_databases"]), 3)
+            self.assertEqual(result["excluded_data"], sorted(verifier.EXCLUDED_PUSH_DATA))
+
+    def test_sanitized_backup_excludes_push_credentials_and_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, push_data=True, sanitize_push=True)
+
+            result = verifier.verify_backup(root, backup, None)
+
+            self.assertEqual(result["status"], "ok")
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile("cashback-data/cashback-events.sqlite3")
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            self.assertNotIn(b"secret-p256dh-value", contents)
+            self.assertNotIn(b"secret-auth-value", contents)
+
+    def test_rejects_backup_that_claims_push_exclusion_without_scrubbing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, push_data=True)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "excluded push state"):
+                verifier.verify_backup(root, backup, None)
 
     def test_rejects_checksum_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
