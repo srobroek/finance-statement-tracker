@@ -493,7 +493,11 @@ ATTACHMENT_ALIAS_POSITIVE_FIXTURES = (
     },
 )
 ATTACHMENT_ALIAS_NEGATIVE_FIXTURES = (
-    ({}, "Missing trusted immutable field attachment_id"),
+    ({}, "Missing trusted immutable field source_attachment_id"),
+    (
+        {"attachment_id": "attachment-only-003"},
+        "Missing trusted immutable field source_attachment_id",
+    ),
     (
         {
             "source_attachment_id": "source-attachment-003",
@@ -683,6 +687,31 @@ class N8nInterfaceContractTests(unittest.TestCase):
                 )
                 self.assertFalse(result["ok"], result)
                 self.assertIn(expected_error, result["error"])
+
+    def test_outlook_source_attachment_mapping_is_immutable(self) -> None:
+        producer = self.workflow_for_code("OUTLOOK_FINANCE_ACQUISITION")
+        expand_code = next(
+            node["parameters"]["jsCode"]
+            for node in producer["nodes"]
+            if node["name"] == "Expand Enumerated Attachment Items"
+        )
+        result = execute_js_code(
+            expand_code,
+            {
+                "json": {
+                    "message_id": "source-message-001",
+                    "source_code": "OUTLOOK_FIXTURE",
+                    "onedrive_parent_id": "fixture-parent",
+                    "attachment_inventory": [
+                        {"id": "source-attachment-001", "name": "statement.pdf"}
+                    ],
+                }
+            },
+        )
+        self.assertTrue(result["ok"], result)
+        output = result["output"][0]["json"]
+        self.assertEqual(output["source_attachment_id"], "source-attachment-001")
+        self.assertEqual(output["attachment_id"], "source-attachment-001")
 
     def test_error_and_lease_boundaries_have_redacted_fixed_shapes(self) -> None:
         error = self.workflow_for_code("OPERATIONS_ERROR_HANDLER")

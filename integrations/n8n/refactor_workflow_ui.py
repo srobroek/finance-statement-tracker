@@ -645,15 +645,18 @@ return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', ac
     verify_context = node_by_name(statement, "Verify Archive and Execution Context")
     verify_context["parameters"]["jsCode"] = r"""
 const r = $json;
-const sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();
-const attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();
-if (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {
+const sourceAttachmentId = String(r.source_attachment_id || '').trim();
+const suppliedAttachmentId = r.attachment_id == null ? '' : String(r.attachment_id).trim();
+if (!sourceAttachmentId) {
+  throw new Error('Missing trusted immutable field source_attachment_id');
+}
+if (r.attachment_id != null && sourceAttachmentId !== suppliedAttachmentId) {
   throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');
 }
+const attachmentId = sourceAttachmentId;
 for (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'manifest_onedrive_parent_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key']) {
   if (!r[k]) throw new Error(`Missing trusted immutable field ${k}`);
 }
-if (!attachmentId) throw new Error('Missing trusted immutable field attachment_id');
 if (typeof r.cashback_close_required !== 'boolean') {
   throw new Error('Missing trusted immutable field cashback_close_required');
 }
