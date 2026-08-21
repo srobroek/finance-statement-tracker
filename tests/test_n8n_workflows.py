@@ -479,7 +479,9 @@ try {{
                 if value:
                     referenced.add(value)
         declared = {row["name"] for row in self.tables["tables"]}
-        self.assertEqual(referenced, declared)
+        # W19 no longer creates or seeds the retired config table; preserved
+        # source tables may therefore have no connected runtime node.
+        self.assertEqual(referenced, declared - {"finance_config_versions"})
 
     def test_outbox_holds_only_pointer_hash_and_state_metadata(self) -> None:
         table = next(row for row in self.tables["tables"] if row["name"] == "finance_actual_outbox")
