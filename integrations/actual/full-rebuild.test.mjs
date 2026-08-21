@@ -162,10 +162,40 @@ test("full rebuild exact replay passes with changed provider row identifiers", (
   });
   assert.equal(compareRebuildStates(first, replay).status, "PASS");
   assert.equal(compareRebuildStates(first, replay, { enforceCoverage: true }).status, "PASS");
+  assert.equal(JSON.stringify(first), JSON.stringify(replay));
   const receipt = JSON.stringify(first);
   assert.ok(!receipt.includes("provider-account-first"));
   assert.ok(!receipt.includes("provider-row-first"));
   assert.ok(!receipt.includes("provider:transaction:1"));
+});
+
+test("full rebuild economic projection hashes change for every canonical economic field", () => {
+  const fixture = replayFixture();
+  const baseline = summarizeRebuildState(fixture.snapshot, fixture);
+  const mutations = [
+    ["account_name", "Another Card"],
+    ["date", "2026-08-02"],
+    ["amount", -12499],
+    ["imported_payee", "Another Merchant"],
+    ["payee_name", "Another Merchant"],
+    ["category_name", "Travel"],
+    ["cleared", false],
+  ];
+  for (const [field, value] of mutations) {
+    const changedSnapshot = structuredClone(fixture.snapshot);
+    changedSnapshot.transactions[0][field] = value;
+    const changed = summarizeRebuildState(changedSnapshot, fixture);
+    assert.notEqual(
+      changed.hashes.economic_fields_sha256,
+      baseline.hashes.economic_fields_sha256,
+      `${field} must change the economic projection hash`,
+    );
+    assert.notEqual(
+      changed.hashes.transaction_sha256,
+      baseline.hashes.transaction_sha256,
+      `${field} must change the serialized transaction hash`,
+    );
+  }
 });
 
 test("full rebuild uses semantic link endpoints and child fields, not provider IDs", () => {
