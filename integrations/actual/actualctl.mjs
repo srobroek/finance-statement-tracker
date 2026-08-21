@@ -54,6 +54,19 @@ function canonicalTransferId(value) {
   return String(value);
 }
 
+function resolvePayee(row, payees) {
+  if (!(payees instanceof Map)) return null;
+  const payeeId = row?.payee_id ?? row?.payee;
+  if (payeeId !== undefined && payeeId !== null && payeeId !== "") {
+    const payee = payees.get(String(payeeId));
+    if (payee) return payee;
+  }
+  const name = row?.payee_name;
+  if (name === undefined || name === null || name === "") return null;
+  const wanted = normalized(name);
+  return [...payees.values()].find(payee => normalized(payee?.name) === wanted) ?? null;
+}
+
 /**
  * Project the fields that give an imported Actual transaction its meaning.
  *
@@ -64,26 +77,37 @@ function canonicalTransferId(value) {
  */
 export function canonicalActualImportProjection(row, {
   account = row?.account,
-  payeeName = row?.payee_name,
+  payees = new Map(),
+  payeeName,
+  transferAccount,
+  expectGeneratedTransfer = false,
   defaultCleared = false,
 } = {}) {
+  const payee = resolvePayee({ ...row, payee_name: payeeName ?? row?.payee_name }, payees);
+  const resolvedPayeeName = payeeName ?? row?.payee_name ?? payee?.name;
+  const resolvedTransferAccount = transferAccount ?? row?.transfer_account ?? payee?.transfer_acct;
+  const transferId = canonicalTransferId(row?.transfer_id);
   return {
     imported_id: canonicalText(row?.imported_id),
     account: canonicalText(account),
     date: canonicalText(row?.date),
     amount: Number(row?.amount ?? 0),
     imported_payee: canonicalText(row?.imported_payee),
-    payee: canonicalText(payeeName),
+    payee: canonicalText(resolvedPayeeName),
     category: canonicalText(row?.category ?? row?.category_name),
     notes: canonicalText(row?.notes),
     cleared: row?.cleared === undefined ? Boolean(defaultCleared) : Boolean(row.cleared),
     reconciled: Boolean(row?.reconciled),
-    transfer_id: canonicalTransferId(row?.transfer_id),
+    transfer: {
+      linked: transferId !== null || (expectGeneratedTransfer && Boolean(resolvedTransferAccount)),
+      account: canonicalText(resolvedTransferAccount),
+    },
   };
 }
 
 function projectionDifferences(expected, observed) {
-  return Object.keys(expected).filter(key => expected[key] !== observed?.[key]);
+  return Object.keys(expected).filter(key =>
+    JSON.stringify(expected[key]) !== JSON.stringify(observed?.[key]));
 }
 
 /**
@@ -137,6 +161,57 @@ export function compareActualImportProjections(expectedRows, observedRows) {
     duplicate_expected: duplicateExpected,
     mismatches,
   };
+}
+
+export function findUnexpectedActualImportRows(rows, {
+  allowedImportedIds = new Set(),
+  baselineRowIds = new Set(),
+} = {}) {
+  const allowed = allowedImportedIds instanceof Set
+    ? allowedImportedIds
+    : new Set(allowedImportedIds);
+  const baseline = baselineRowIds instanceof Set
+    ? baselineRowIds
+    : new Set(baselineRowIds);
+  return rows
+    .filter(row => !allowed.has(String(row.imported_id ?? "")) &&
+      (!row.id || !baseline.has(String(row.id))))
+    .map(row => String(row.imported_id ?? row.id ?? "<missing-id>"))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export function validateActualTransferCounterparts(sourceRows, allRows, payees = new Map()) {
+  const rowsById = new Map();
+  for (const row of allRows) {
+    const id = String(row.id ?? "");
+    if (!id) continue;
+    const matches = rowsById.get(id) ?? [];
+    matches.push(row);
+    rowsById.set(id, matches);
+  }
+  const failures = [];
+  for (const source of sourceRows) {
+    const transferId = canonicalTransferId(source.transfer_id);
+    if (!transferId) continue;
+    const sourceId = String(source.id ?? source.imported_id ?? "<missing-id>");
+    const peers = rowsById.get(transferId) ?? [];
+    if (peers.length !== 1) {
+      failures.push({ imported_id: source.imported_id ?? sourceId, fields: ["transfer.counterpart"] });
+      continue;
+    }
+    const peer = peers[0];
+    const fields = [];
+    if (String(peer.transfer_id ?? "") !== String(source.id ?? "")) fields.push("transfer.reciprocal");
+    if (String(peer.account ?? "") === String(source.account ?? "")) fields.push("transfer.account");
+    if (Number(peer.amount ?? 0) !== -Number(source.amount ?? 0)) fields.push("transfer.inverse_amount");
+    if (String(peer.date ?? "") !== String(source.date ?? "")) fields.push("transfer.date");
+    const payee = resolvePayee(source, payees);
+    if (payee?.transfer_acct && String(peer.account ?? "") !== String(payee.transfer_acct)) {
+      fields.push("transfer.payee_account");
+    }
+    if (fields.length) failures.push({ imported_id: source.imported_id ?? sourceId, fields });
+  }
+  return failures.sort((left, right) => String(left.imported_id).localeCompare(String(right.imported_id)));
 }
 
 export function partitionCrossSourceStatementDuplicates(records, existingRows) {
@@ -569,8 +644,29 @@ export async function importEnvelopes(
     });
   }
 
+  const batchExpectedIdsByAccount = new Map();
+  for (const item of prepared) {
+    const expectedIds = batchExpectedIdsByAccount.get(item.account.id) ?? new Set();
+    for (const record of item.records) {
+      const importedId = String(record.imported_id ?? "").trim();
+      if (expectedIds.has(importedId)) {
+        throw new Error(`Duplicate imported_id in Actual import batch: ${importedId}`);
+      }
+      expectedIds.add(importedId);
+    }
+    batchExpectedIdsByAccount.set(item.account.id, expectedIds);
+  }
   const preflight = [];
   for (const item of prepared) {
+    const missingImportedIds = item.records
+      .map((record, index) => String(record.imported_id ?? "").trim() ? null : index)
+      .filter(index => index !== null);
+    if (missingImportedIds.length) {
+      throw new Error(
+        `Actual import requires imported_id for ${item.account.name}: ` +
+        `${JSON.stringify(missingImportedIds)}`,
+      );
+    }
     const result = item.records.length
       ? await withoutActualReconciliationNoise(() =>
         actual.importTransactions(item.account.id, item.records, {
@@ -608,8 +704,9 @@ export async function importEnvelopes(
   }
   const verification = [];
   const payees = prepared.some(item => item.records.length)
-    ? new Map((await actual.getPayees()).map(row => [String(row.id), row.name]))
+    ? new Map((await actual.getPayees()).map(row => [String(row.id), row]))
     : new Map();
+  const readbackContexts = [];
   for (const item of prepared) {
     if (!item.records.length) {
       verification.push({
@@ -629,18 +726,19 @@ export async function importEnvelopes(
     );
     const expected = item.records.map(record => canonicalActualImportProjection(record, {
       account: item.account.id,
+      payees,
+      expectGeneratedTransfer: true,
       defaultCleared: Boolean(item.envelope.default_cleared),
     }));
     const expectedIds = new Set(expected.map(row => row.imported_id));
     const existingRowIds = new Set(item.existingRows.map(row => String(row.id ?? "")).filter(Boolean));
-    const unexpected = rows
-      .filter(row => !expectedIds.has(String(row.imported_id ?? "")) &&
-        (!row.id || !existingRowIds.has(String(row.id))))
-      .map(row => String(row.imported_id ?? row.id ?? "<missing-id>"))
-      .sort((left, right) => left.localeCompare(right));
+    const unexpected = findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: batchExpectedIdsByAccount.get(item.account.id),
+      baselineRowIds: existingRowIds,
+    });
     const observed = rows.map(row => canonicalActualImportProjection(row, {
       account: row.account,
-      payeeName: row.payee_name ?? payees.get(String(row.payee ?? "")),
+      payees,
     }));
     const readback = compareActualImportProjections(expected, observed);
     if (
@@ -668,6 +766,34 @@ export async function importEnvelopes(
       unexpected: 0,
       suppressed_cross_source: item.suppressed.length,
     });
+    readbackContexts.push({ item, rows, expectedIds });
+  }
+  const linkedSources = readbackContexts.flatMap(({ rows, expectedIds }) =>
+    rows.filter(row => expectedIds.has(String(row.imported_id ?? "")) && row.transfer_id));
+  if (linkedSources.length) {
+    const dates = prepared.flatMap(item => item.records.map(record => record.date)).sort();
+    const allRowsByAccount = new Map();
+    for (const { item, rows } of readbackContexts) {
+      const existing = allRowsByAccount.get(item.account.id) ?? [];
+      const byId = new Map(existing.map(row => [String(row.id ?? `${row.imported_id ?? ""}:${row.date ?? ""}`), row]));
+      for (const row of rows) {
+        const key = String(row.id ?? `${row.imported_id ?? ""}:${row.date ?? ""}`);
+        byId.set(key, row);
+      }
+      allRowsByAccount.set(item.account.id, [...byId.values()]);
+    }
+    for (const account of accounts.values()) {
+      if (allRowsByAccount.has(account.id)) continue;
+      allRowsByAccount.set(account.id, await actual.getTransactions(account.id, dates[0], dates.at(-1)));
+    }
+    const transferFailures = validateActualTransferCounterparts(
+      linkedSources,
+      [...allRowsByAccount.values()].flat(),
+      payees,
+    );
+    if (transferFailures.length) {
+      throw new Error(`Actual import transfer verification failed: ${JSON.stringify(transferFailures)}`);
+    }
   }
   const reminderSpec = statementPaymentReminderSpec(payload);
   let paymentReminder = reminderSpec;
