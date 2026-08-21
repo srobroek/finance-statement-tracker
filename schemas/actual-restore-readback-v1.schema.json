@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/actual-restore-readback-v1.json",
+  "title": "Actual restore readback contract",
+  "oneOf": [
+    { "$ref": "#/$defs/expected" },
+    { "$ref": "#/$defs/probe" }
+  ],
+  "$defs": {
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "balance_minor", "closed", "offbudget"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "balance_minor": { "type": "integer" },
+        "closed": { "type": "boolean" },
+        "offbudget": { "type": "boolean" }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account_name", "amount_minor", "date", "imported_id", "payee"],
+      "properties": {
+        "account_name": { "type": "string", "minLength": 1 },
+        "amount_minor": { "type": "integer" },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "imported_id": { "type": "string", "minLength": 1 },
+        "payee": { "type": "string", "minLength": 1 }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accounts", "representative_transactions"],
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/account" }
+        },
+        "representative_transactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transaction" }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "accounts", "representative_transactions"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "accounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/account" }
+        },
+        "representative_transactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transaction" }
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "ui"],
+      "properties": {
+        "api": { "$ref": "#/$defs/payload" },
+        "ui": { "$ref": "#/$defs/payload" }
+      }
+    }
+  }
+}
