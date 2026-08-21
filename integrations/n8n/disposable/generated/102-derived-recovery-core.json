@@ -71,7 +71,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000020",
           "mode": "list",
-          "cachedResultName": "Finance · Apply Prepared Actual Outbox · Setup Required"
+          "cachedResultName": "Finance · Apply Prepared Actual Outbox"
         },
         "options": {
           "waitForSubWorkflow": true

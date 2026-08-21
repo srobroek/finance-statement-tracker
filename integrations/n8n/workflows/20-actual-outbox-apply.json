@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000020",
-  "name": "Finance · Apply Prepared Actual Outbox · Setup Required",
+  "name": "Finance · Apply Prepared Actual Outbox",
   "active": false,
   "nodes": [
     {
@@ -205,7 +205,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -347,7 +347,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -694,7 +694,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true

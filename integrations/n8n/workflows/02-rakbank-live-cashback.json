@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000002",
-  "name": "Finance · RAKBANK Live Cashback · Setup Required",
+  "name": "Finance · RAKBANK Live Cashback",
   "active": false,
   "nodes": [
     {
@@ -128,7 +128,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages"
         },
         "options": {
           "waitForSubWorkflow": true

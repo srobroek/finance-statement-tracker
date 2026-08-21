@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000011",
-  "name": "Finance · Interactive Artifact Handoff · Setup Required",
+  "name": "Finance · Interactive Artifact Handoff",
   "active": false,
   "nodes": [
     {
@@ -461,7 +461,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000003",
           "mode": "list",
-          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline · Setup Required"
+          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline"
         },
         "options": {
           "waitForSubWorkflow": true

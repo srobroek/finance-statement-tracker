@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000015",
-  "name": "Finance · Bounded MCP Facade · Setup Required",
+  "name": "Finance · Bounded MCP Facade",
   "active": false,
   "nodes": [
     {
@@ -40,7 +40,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -69,7 +69,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -99,7 +99,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",

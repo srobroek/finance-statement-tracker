@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000003",
-  "name": "Finance · Shared Deterministic Statement Pipeline · Setup Required",
+  "name": "Finance · Shared Deterministic Statement Pipeline",
   "active": false,
   "nodes": [
     {
@@ -124,7 +124,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000009",
           "mode": "list",
-          "cachedResultName": "Finance · Subscription Agent Proposal · Setup Required"
+          "cachedResultName": "Finance · Subscription Agent Proposal"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -732,7 +732,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000014",
           "mode": "list",
-          "cachedResultName": "Finance · Local PDF Extraction Ladder · Setup Required"
+          "cachedResultName": "Finance · Local PDF Extraction Ladder"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -753,7 +753,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000020",
           "mode": "list",
-          "cachedResultName": "Finance · Apply Prepared Actual Outbox · Setup Required"
+          "cachedResultName": "Finance · Apply Prepared Actual Outbox"
         },
         "options": {
           "waitForSubWorkflow": true

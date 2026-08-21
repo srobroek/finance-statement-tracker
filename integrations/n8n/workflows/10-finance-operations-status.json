@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000010",
-  "name": "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
+  "name": "Finance · Operations Status and Audited MCP Dispatch",
   "active": false,
   "nodes": [
     {
@@ -335,7 +335,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000011",
           "mode": "list",
-          "cachedResultName": "Finance · Interactive Artifact Handoff · Setup Required"
+          "cachedResultName": "Finance · Interactive Artifact Handoff"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -366,7 +366,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000013",
           "mode": "list",
-          "cachedResultName": "Finance · Request Document Extraction · Setup Required"
+          "cachedResultName": "Finance · Request Document Extraction"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",

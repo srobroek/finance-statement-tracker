@@ -877,7 +877,7 @@ def build_workflow(
 
     return {
         "id": WORKFLOW_ID,
-        "name": "Finance · Platform Data Table Bootstrap · Setup Required",
+        "name": "Finance · Platform Data Table Bootstrap",
         "active": False,
         "nodes": nodes,
         "connections": connections,

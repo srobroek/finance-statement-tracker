@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000005",
-  "name": "Finance · Wio Statement Cycle Poll · Setup Required",
+  "name": "Finance · Wio Statement Cycle Poll",
   "active": false,
   "nodes": [
     {
@@ -50,7 +50,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000022",
           "mode": "list",
-          "cachedResultName": "Finance · Shared Monthly Statement Cycle · Setup Required"
+          "cachedResultName": "Finance · Shared Monthly Statement Cycle"
         },
         "options": {
           "waitForSubWorkflow": true
