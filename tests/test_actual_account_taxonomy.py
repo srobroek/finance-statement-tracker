@@ -9,7 +9,12 @@ import sys
 import unittest
 from pathlib import Path
 
-from finance_tracker.account_completeness import load_account_completeness_manifest
+from finance_tracker.account_completeness import (
+    _parse_account_row,
+    _parse_provider_inventory,
+    _validate_account_lifecycle_and_balance,
+    load_account_completeness_manifest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -193,6 +198,37 @@ class ActualAccountTaxonomyTests(unittest.TestCase):
         self.assertEqual(len(provisional), 6)
         self.assertTrue(all(row.provider_identity_status == "UNAVAILABLE" for row in provisional))
         self.assertTrue(all(row.provider_identity_source is None for row in provisional))
+
+    def test_private_manifest_parsers_match_taxonomy_projection(self) -> None:
+        payload = json.loads(COMPLETENESS.read_text(encoding="utf-8"))
+        identities: set[str] = set()
+        accounts = []
+        for raw in payload["accounts"]:
+            account = _parse_account_row(raw, identities)
+            _validate_account_lifecycle_and_balance(account)
+            accounts.append(account)
+
+        provider_ids: set[str] = set()
+        providers = [
+            _parse_provider_inventory(raw, provider_ids)
+            for raw in payload["providers"]
+        ]
+        manifest = load_account_completeness_manifest(payload)
+
+        self.assertEqual(tuple(accounts), manifest.accounts)
+        self.assertEqual(tuple(providers), manifest.providers)
+        self.assertEqual(len(accounts), 18)
+        self.assertEqual(len(identities), 12)
+        self.assertEqual(len(accounts) - len(identities), 6)
+        self.assertEqual(
+            {row.provider_id for row in accounts},
+            {row.provider_id for row in providers},
+        )
+        self.assertTrue(all(
+            row.account_type not in {"credit", "mortgage"}
+            or row.balance_sign == "LIABILITY_NEGATIVE"
+            for row in accounts
+        ))
 
     def test_evidenced_identity_sources_are_tracked_and_row_bound(self) -> None:
         canonical = json.loads(CANONICAL.read_text(encoding="utf-8"))
