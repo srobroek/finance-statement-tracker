@@ -10,25 +10,9 @@ import {
   isVerifiedEmptyManifest,
   loadFullRebuildManifests,
 } from "./full-rebuild.mjs";
+import { parseCliArgs, PRODUCTION_REBUILD_OPTIONS } from "./cli-args.mjs";
 
 const normalized = value => String(value ?? "").trim().toLocaleLowerCase();
-
-function parseArgs(values) {
-  const result = {};
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) continue;
-    const key = token.slice(2);
-    const next = values[index + 1];
-    if (next && !next.startsWith("--")) {
-      result[key] = next;
-      index += 1;
-    } else {
-      result[key] = true;
-    }
-  }
-  return result;
-}
 
 export function assertReplacementGate(apply, environment = process.env) {
   if (!apply) return;
@@ -368,7 +352,7 @@ export async function runProductionRebuild({
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseCliArgs(process.argv.slice(2), PRODUCTION_REBUILD_OPTIONS);
   for (const required of [
     "root", "validation", "bootstrap", "start", "end", "backup", "snapshot", "result",
   ]) {
@@ -383,7 +367,7 @@ async function main() {
     backupPath: path.resolve(args.backup),
     snapshotPath: path.resolve(args.snapshot),
     resultPath: path.resolve(args.result),
-    apply: Boolean(args.apply),
+    apply: args.apply,
     preservationApprovalSha256: args["approve-preservation-sha256"],
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

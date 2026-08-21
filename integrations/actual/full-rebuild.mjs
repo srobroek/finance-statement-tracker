@@ -7,21 +7,9 @@ import { pathToFileURL } from "node:url";
 import * as actual from "@actual-app/api";
 
 import { bootstrap, importEnvelopes, snapshot } from "./actualctl.mjs";
+import { FULL_REBUILD_OPTIONS, parseCliArgs } from "./cli-args.mjs";
 
 const normalized = value => String(value ?? "").trim().toLocaleLowerCase();
-
-function parseArgs(values) {
-  const result = {};
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) continue;
-    const next = values[index + 1];
-    if (!next || next.startsWith("--")) throw new Error(`${token} requires a value`);
-    result[token.slice(2)] = next;
-    index += 1;
-  }
-  return result;
-}
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -715,7 +703,7 @@ export async function runDisposableFullRebuild({
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseCliArgs(process.argv.slice(2), FULL_REBUILD_OPTIONS);
   for (const required of ["root", "validation", "bootstrap", "start", "end", "snapshot", "result"]) {
     if (!args[required]) throw new Error(`Missing --${required}`);
   }
