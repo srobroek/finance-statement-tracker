@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -468,6 +469,64 @@ ATTACHMENT_ALIAS_NEGATIVE_FIXTURE = {
     "consumer_fields": ("attachment_id",),
 }
 
+ATTACHMENT_ALIAS_CONTEXT = {
+    "run_id": "fixture-run",
+    "source_code": "FIXTURE_SOURCE",
+    "message_id": "fixture-message",
+    "document_sha256": "a" * 64,
+    "onedrive_item_id": "fixture-item",
+    "manifest_onedrive_parent_id": "fixture-parent",
+    "config_version": "fixture-config",
+    "actual_file_id": "fixture-actual-file",
+    "account_id": "fixture-account",
+    "card_code": "FIXTURE_CARD",
+    "cashback_close_required": False,
+    "period_key": "2026-08",
+    "trigger_kind": "SUBWORKFLOW",
+}
+
+ATTACHMENT_ALIAS_POSITIVE_FIXTURES = (
+    {"source_attachment_id": "source-attachment-001"},
+    {
+        "source_attachment_id": "source-attachment-002",
+        "attachment_id": "source-attachment-002",
+    },
+)
+ATTACHMENT_ALIAS_NEGATIVE_FIXTURES = (
+    ({}, "Missing trusted immutable field attachment_id"),
+    (
+        {
+            "source_attachment_id": "source-attachment-003",
+            "attachment_id": "different-attachment-003",
+        },
+        "ATTACHMENT_ID_ALIAS_MISMATCH",
+    ),
+)
+
+
+def execute_js_code(js_code: str, payload: dict) -> dict:
+    """Execute one n8n Code-node body with the context used by this contract."""
+    runner = r'''
+const payload = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+try {
+  const output = new Function('$json', '$binary', payload.js_code)(payload.json, payload.binary || {});
+  process.stdout.write(JSON.stringify({ok: true, output}));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ok: false, error: String(error.message || error)}));
+}
+'''
+    completed = subprocess.run(
+        ["node", "-e", runner],
+        input=json.dumps({"js_code": js_code, **payload}),
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode:
+        raise AssertionError(completed.stderr)
+    return json.loads(completed.stdout)
+
 
 class N8nInterfaceContractTests(unittest.TestCase):
     @classmethod
@@ -593,6 +652,37 @@ class N8nInterfaceContractTests(unittest.TestCase):
             ATTACHMENT_ALIAS_NEGATIVE_FIXTURE["consumer_fields"],
             {"attachment_id": "source_attachment_id"},
         )
+
+    def test_attachment_alias_adapter_executes_positive_and_negative_fixtures(
+        self,
+    ) -> None:
+        consumer = self.workflow_for_code("SHARED_STATEMENT_PIPELINE")
+        verify_code = next(
+            node["parameters"]["jsCode"]
+            for node in consumer["nodes"]
+            if node["name"] == "Verify Archive and Execution Context"
+        )
+
+        for aliases in ATTACHMENT_ALIAS_POSITIVE_FIXTURES:
+            with self.subTest(case=aliases):
+                result = execute_js_code(
+                    verify_code,
+                    {"json": {**ATTACHMENT_ALIAS_CONTEXT, **aliases}},
+                )
+                self.assertTrue(result["ok"], result)
+                output = result["output"][0]["json"]
+                expected_source_id = aliases["source_attachment_id"]
+                self.assertEqual(output["source_attachment_id"], expected_source_id)
+                self.assertEqual(output["attachment_id"], expected_source_id)
+
+        for aliases, expected_error in ATTACHMENT_ALIAS_NEGATIVE_FIXTURES:
+            with self.subTest(case=aliases):
+                result = execute_js_code(
+                    verify_code,
+                    {"json": {**ATTACHMENT_ALIAS_CONTEXT, **aliases}},
+                )
+                self.assertFalse(result["ok"], result)
+                self.assertIn(expected_error, result["error"])
 
     def test_error_and_lease_boundaries_have_redacted_fixed_shapes(self) -> None:
         error = self.workflow_for_code("OPERATIONS_ERROR_HANDLER")
