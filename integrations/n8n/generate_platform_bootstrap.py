@@ -575,6 +575,7 @@ def build_manifest(
             "legacy_table_creation_forbidden": True,
             "row_seed_writes_forbidden": True,
         }
+        manifest["activation_blockers"].append("SOURCE_MIGRATION_GATE_REQUIRED")
         manifest["execution_evidence"] = {
             "exact_image_import_tested": False,
             "disposable_create_reuse_tested": False,
