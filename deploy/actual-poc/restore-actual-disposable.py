@@ -31,6 +31,13 @@ DEFAULT_IMAGE = (
 RESTORE_OWNER_LABEL = "finance.restore.owner"
 RESTORE_RUN_LABEL = "finance.restore.run"
 RESTORE_OWNER_VALUE = "actual-restore"
+MAX_READBACK_DIAGNOSTIC = 2048
+SENSITIVE_DIAGNOSTIC_KEY = re.compile(
+    r"(?:\b[A-Za-z_][A-Za-z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API[_-]?KEY|"
+    r"ACCESS[_-]?TOKEN|AUTHORIZATION|COOKIE|CREDENTIAL)\b|\b(?:password|passwd|"
+    r"secret|token|api[_-]?key|access[_-]?token|authorization|cookie|credential)\b)",
+    re.IGNORECASE,
+)
 
 
 def is_absent_inspect_response(message: str, object_name: str, kind: str) -> bool:
@@ -87,6 +94,62 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     os.chmod(temporary, 0o600)
     temporary.replace(path)
     os.chmod(path, 0o600)
+
+
+def redact_diagnostic(value: str) -> str:
+    """Keep bounded child diagnostics while removing common secret assignments."""
+    diagnostic = value.replace("\x00", "\\x00").strip()
+    if not diagnostic:
+        return ""
+    diagnostic = re.sub(r"(?i)\b(?:Basic|Bearer)\s+\S+", lambda match: f"{match.group(0).split()[0]} <redacted>", diagnostic)
+    diagnostic = re.sub(
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
+        rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+        lambda match: (
+            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
+            f"{match.group('quote')}<redacted>{match.group('quote')}"
+        ),
+        diagnostic,
+        flags=re.IGNORECASE,
+    )
+    diagnostic = re.sub(
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
+        rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
+        lambda match: (
+            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
+            f"{match.group('value') if match.group('value').casefold() in {'basic', 'bearer'} else '<redacted>'}"
+        ),
+        diagnostic,
+        flags=re.IGNORECASE,
+    )
+    diagnostic = re.sub(
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<separator>\s+)"
+        rf"(?P<value>[^\s,;]+)",
+        lambda match: f"{match.group('key')}{match.group('separator')}<redacted>",
+        diagnostic,
+        flags=re.IGNORECASE,
+    )
+    diagnostic = re.sub(r"(?i)(https?://[^\s/@:]+):[^\s/@]+@", r"\1:<redacted>@", diagnostic)
+    if len(diagnostic) > MAX_READBACK_DIAGNOSTIC:
+        diagnostic = diagnostic[:MAX_READBACK_DIAGNOSTIC] + "..."
+    return diagnostic
+
+
+def probe_failure_detail(result: subprocess.CompletedProcess[str], *, stdout_bytes: int | None = None) -> str:
+    """Expose status and safe stderr without persisting child output or secrets."""
+    fields = [f"exit_code={result.returncode}"]
+    if stdout_bytes is not None:
+        fields.append(f"stdout_bytes={stdout_bytes}")
+    diagnostic = redact_diagnostic(result.stderr)
+    if diagnostic:
+        fields.append(f"stderr={diagnostic}")
+    return "; ".join(fields)
+
+
+def attach_probe_diagnostic(error: DrillError, result: subprocess.CompletedProcess[str], *, stdout_bytes: int) -> DrillError:
+    detail = probe_failure_detail(result, stdout_bytes=stdout_bytes)
+    error.detail = f"{error.detail}; {detail}" if error.detail else detail
+    return error
 
 
 _ACTIVE_PROCESSES: dict[int, subprocess.Popen[str]] = {}
@@ -483,21 +546,44 @@ def probe_readback(
     namespace_tool: list[str],
     namespace: NetworkNamespace,
     timeout: float,
+    readback_path: Path,
 ) -> dict[str, Any]:
     environment = os.environ.copy()
     environment.update({
         "ACTUAL_RESTORE_URL": url,
         "ACTUAL_RESTORE_DATA_DIR": str(data_dir),
         "ACTUAL_RESTORE_RUN_INDEX": str(run_index),
+        # The wrapper may run another container. Give it both the host-owned
+        # artifact path and the path visible through the sidecar's data mount.
+        "ACTUAL_RESTORE_READBACK_PATH": str(readback_path),
+        "ACTUAL_RESTORE_READBACK_CONTAINER_PATH": f"/data/readback-{run_index}.json",
     })
     result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=timeout)
     if result.returncode != 0:
-        raise DrillError("readback_probe_failed", "readback")
+        raise DrillError(
+            "readback_probe_failed",
+            "readback",
+            probe_failure_detail(result),
+        )
+    stdout_bytes = len(result.stdout.encode("utf-8"))
+    if not result.stdout.strip():
+        raise DrillError(
+            "readback_probe_output_empty",
+            "readback",
+            probe_failure_detail(result, stdout_bytes=stdout_bytes),
+        )
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        raise DrillError("readback_probe_output_invalid", "readback") from exc
-    return validate_readback(payload, expected)
+        raise DrillError(
+            "readback_probe_output_invalid",
+            "readback",
+            probe_failure_detail(result, stdout_bytes=stdout_bytes),
+        ) from exc
+    try:
+        return validate_readback(payload, expected)
+    except DrillError as error:
+        raise attach_probe_diagnostic(error, result, stdout_bytes=stdout_bytes) from error
 
 
 def probe_http(
@@ -561,6 +647,7 @@ def main() -> int:
         print("--repeat must be at least 2", file=sys.stderr)
         return 64
     receipt = Path(args.receipt or f"/tmp/finance-actual-restore-{datetime.now(UTC):%Y%m%dT%H%M%SZ}.json")
+    readback_root = receipt.parent.resolve()
     started = now()
     result: dict[str, Any] = {
         "schema_version": 1,
@@ -753,6 +840,9 @@ def main() -> int:
             sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
             data_dir = temp_root / f"data-{run_index}"
             network = f"finance-actual-restore-net-{run_index}-{os.getpid()}"
+            readback_path = readback_root / f"readback-{run_index}.json"
+            if path_exists(readback_path):
+                raise DrillError("disposable_resource_collision", "preflight", str(readback_path))
             if inspect_state(current_runtime, sidecar) != "absent" or data_dir.exists():
                 raise DrillError("disposable_resource_collision", "preflight", sidecar)
             if inspect_network_state(current_runtime, network) != "absent":
@@ -815,6 +905,7 @@ def main() -> int:
                 namespace_tool=namespace_tool,
                 namespace=namespace,
                 timeout=args.readback_timeout,
+                readback_path=readback_path,
             )
             restarted = runtime_call(current_runtime, "restart", current_sidecar_id)
             if restarted.returncode != 0:
@@ -838,6 +929,7 @@ def main() -> int:
                 namespace_tool=namespace_tool,
                 namespace=namespace,
                 timeout=args.readback_timeout,
+                readback_path=readback_path,
             )
             repeat_match = first_readback == second_readback
             if not repeat_match:
