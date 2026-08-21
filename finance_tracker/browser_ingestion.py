@@ -15,13 +15,13 @@ from .actual_pipeline import (
     load_compiled_rules,
 )
 from .ai_rules import AIEnrichmentEngine, AITrace, load_ai_policies, load_ai_provider
+from .classification_audit import enforce_transaction_invariants
 from .history import HistoryDecision, HistoryTrace, apply_history_match, load_history_index
 from .models import Transaction, money
 from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleEngine, StaticRule
 from .transaction_semantics import finalize_transaction_topic
-from .classification_audit import enforce_transaction_invariants
 
 
 CAPTURE_KINDS = {
@@ -212,6 +212,38 @@ class BrowserIngestionRun:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class _ValidatedBrowserCapture:
+    capture: Mapping[str, Any]
+    capture_id: str
+    source: Mapping[str, Any]
+    artifact: Mapping[str, Any]
+    account: Mapping[str, Any]
+    provider: str
+    method: str
+    kind: str
+    approval: dict[str, str] | None
+    sanitized_source: dict[str, object]
+
+
+@dataclass(slots=True)
+class _NormalizedBrowserCapture:
+    validated: _ValidatedBrowserCapture
+    account_blockers: tuple[str, ...]
+    account_name: str | None
+    account_type: str
+    card_code: str
+    account_last4: str | None
+    account_snapshot: dict[str, object]
+    artifact_summary: dict[str, object]
+    transactions: list[Transaction]
+    statement_check: dict[str, object]
+    authoritative_statement: bool
+    terminal_status: str | None
+    terminal_review_count: int
+    terminal_blockers: tuple[str, ...]
+
+
 def _resolve_account(
     capture_account: Mapping[str, Any],
     config: Mapping[str, Any],
@@ -362,16 +394,7 @@ def _match_exact_refunds(transactions: Iterable[Transaction]) -> int:
     return resolved
 
 
-def build_browser_ingestion_run(
-    capture: Mapping[str, Any],
-    config: Mapping[str, Any],
-    rules: Iterable[StaticRule] = (),
-    *,
-    history_index: dict[str, HistoryDecision] | None = None,
-    ai_engine: AIEnrichmentEngine | None = None,
-    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
-    property_registry: PropertyRegistry | None = None,
-) -> BrowserIngestionRun:
+def _validate_browser_capture(capture: Mapping[str, Any]) -> _ValidatedBrowserCapture:
     _reject_sensitive_values(capture)
     if capture.get("schema_version") != 1:
         raise ValueError("Browser capture schema_version must be 1")
@@ -405,6 +428,29 @@ def build_browser_ingestion_run(
         "limitations": [str(value) for value in source.get("limitations", [])],
         "approval": approval,
     }
+    return _ValidatedBrowserCapture(
+        capture=capture,
+        capture_id=capture_id,
+        source=source,
+        artifact=artifact,
+        account=account,
+        provider=provider,
+        method=method,
+        kind=kind,
+        approval=approval,
+        sanitized_source=sanitized_source,
+    )
+
+
+def _normalize_browser_capture(
+    validated: _ValidatedBrowserCapture,
+    config: Mapping[str, Any],
+    *,
+    ai_engine: AIEnrichmentEngine | None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None,
+) -> _NormalizedBrowserCapture:
+    capture = validated.capture
+    account = validated.account
     resolved_account, account_blockers = _resolve_account(account, config)
     account_name = str(resolved_account["name"]) if resolved_account else None
     account_type = str(
@@ -433,37 +479,45 @@ def build_browser_ingestion_run(
         "balance_posting_allowed": False,
     }
     artifact_summary = {
-        "kind": kind,
-        "local_path": str(artifact.get("local_path") or "").strip() or None,
-        "file_name": str(artifact.get("file_name") or "").strip() or None,
-        "mime_type": str(artifact.get("mime_type") or "").strip() or None,
-        "download_reference": str(artifact.get("download_reference") or "").strip() or None,
+        "kind": validated.kind,
+        "local_path": str(validated.artifact.get("local_path") or "").strip() or None,
+        "file_name": str(validated.artifact.get("file_name") or "").strip() or None,
+        "mime_type": str(validated.artifact.get("mime_type") or "").strip() or None,
+        "download_reference": str(validated.artifact.get("download_reference") or "").strip() or None,
     }
-    if kind in {"ACCOUNT_SNAPSHOT", "STATEMENT_PDF"}:
-        status = "ACCOUNT_REVIEW_REQUIRED" if kind == "ACCOUNT_SNAPSHOT" else "ROUTE_TO_STATEMENT_PIPELINE"
-        blockers = account_blockers if kind == "ACCOUNT_SNAPSHOT" else ()
-        if kind == "STATEMENT_PDF" and not artifact_summary["local_path"]:
+    if validated.kind in {"ACCOUNT_SNAPSHOT", "STATEMENT_PDF"}:
+        status = (
+            "ACCOUNT_REVIEW_REQUIRED"
+            if validated.kind == "ACCOUNT_SNAPSHOT"
+            else "ROUTE_TO_STATEMENT_PIPELINE"
+        )
+        blockers = account_blockers if validated.kind == "ACCOUNT_SNAPSHOT" else ()
+        if validated.kind == "STATEMENT_PDF" and not artifact_summary["local_path"]:
             raise ValueError("artifact.local_path is required for STATEMENT_PDF")
-        return BrowserIngestionRun(
-            schema_version=1,
-            capture_id=capture_id,
-            source=sanitized_source,
-            artifact=artifact_summary,
+        return _NormalizedBrowserCapture(
+            validated=validated,
+            account_blockers=account_blockers,
+            account_name=account_name,
+            account_type=account_type,
+            card_code=card_code,
+            account_last4=account_last4,
             account_snapshot=snapshot,
+            artifact_summary=artifact_summary,
+            transactions=[],
             statement_check={"available": False, "balance_tied": False},
-            staging_status=status,
-            review_count=1,
-            import_blockers=tuple(blockers),
-            transactions=(),
-            rule_trace=(),
-            history_trace=(),
-            ai_trace=(),
-            envelopes=(),
+            authoritative_statement=False,
+            terminal_status=status,
+            terminal_review_count=1,
+            terminal_blockers=tuple(blockers),
         )
 
     raw_rows = capture.get("rows")
-    if not isinstance(raw_rows, list) or not raw_rows or any(not isinstance(row, Mapping) for row in raw_rows):
-        raise ValueError(f"{kind} requires a non-empty rows list")
+    if (
+        not isinstance(raw_rows, list)
+        or not raw_rows
+        or any(not isinstance(row, Mapping) for row in raw_rows)
+    ):
+        raise ValueError(f"{validated.kind} requires a non-empty rows list")
     if (ai_engine is None) != (ai_resolver is None):
         raise ValueError("ai_engine and ai_resolver must be supplied together")
     seen_source_ids: set[str] = set()
@@ -505,13 +559,13 @@ def build_browser_ingestion_run(
         transaction_type = explicit_type or "PURCHASE"
         if currency != "AED" and amount_original is None:
             review_reasons.append("MISSING_AED_EQUIVALENT")
-        if method == "VISIBLE_ROWS" and approval is None:
+        if validated.method == "VISIBLE_ROWS" and validated.approval is None:
             review_reasons.append("VISIBLE_ROWS_REQUIRE_REVIEW")
         if resolved_account is None:
             review_reasons.append("UNMAPPED_ACCOUNT")
         transaction = Transaction(
             transaction_id=_stable_transaction_id(
-                provider,
+                validated.provider,
                 f"{account_identity}:{row_last4 or ''}",
                 row,
                 when,
@@ -523,7 +577,7 @@ def build_browser_ingestion_run(
             card=card_code,
             account=account_name,
             owner=None,
-            institution=provider,
+            institution=validated.provider,
             account_last4=row_last4,
             merchant_raw=description,
             amount_aed=amount_aed,
@@ -540,11 +594,11 @@ def build_browser_ingestion_run(
             tags=set(),
             metadata={
                 "import_status": "STAGED",
-                "capture_id": capture_id,
-                "browser_provider": provider,
-                "browser_capture_method": method,
-                "browser_page_context": sanitized_source["page_context"],
-                "browser_source_url": sanitized_source["url"],
+                "capture_id": validated.capture_id,
+                "browser_provider": validated.provider,
+                "browser_capture_method": validated.method,
+                "browser_page_context": validated.sanitized_source["page_context"],
+                "browser_source_url": validated.sanitized_source["url"],
                 "browser_source_id": source_id or None,
                 "browser_reference": str(row.get("reference") or "").strip() or None,
                 "browser_post_date": str(row.get("post_date") or "").strip() or None,
@@ -560,9 +614,9 @@ def build_browser_ingestion_run(
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
                 "browser_review_reasons": review_reasons,
                 "browser_review_resolutions": (
-                    ["OWNER_APPROVED_VISIBLE_CAPTURE"] if approval is not None else []
+                    ["OWNER_APPROVED_VISIBLE_CAPTURE"] if validated.approval is not None else []
                 ),
-                "browser_capture_limitations": sanitized_source["limitations"],
+                "browser_capture_limitations": validated.sanitized_source["limitations"],
                 "ledger_reconciled": False,
                 "locked_fields": [
                     "transaction_id",
@@ -581,20 +635,48 @@ def build_browser_ingestion_run(
         str((resolved_account or {}).get("type") or "checking"),
     )
     authoritative_statement = (
-        kind == "STATEMENT_ROWS"
-        and method == "OFFICIAL_EXPORT"
+        validated.kind == "STATEMENT_ROWS"
+        and validated.method == "OFFICIAL_EXPORT"
         and statement_check.get("balance_tied") is True
         and bool(statement_check.get("statement_reference"))
     )
-    if kind == "STATEMENT_ROWS" and not authoritative_statement:
+    if validated.kind == "STATEMENT_ROWS" and not authoritative_statement:
         for transaction in transactions:
             transaction.review_required = True
     if authoritative_statement:
         for transaction in transactions:
             transaction.source_type = "browser_statement"
 
+    return _NormalizedBrowserCapture(
+        validated=validated,
+        account_blockers=account_blockers,
+        account_name=account_name,
+        account_type=account_type,
+        card_code=card_code,
+        account_last4=account_last4,
+        account_snapshot=snapshot,
+        artifact_summary=artifact_summary,
+        transactions=transactions,
+        statement_check=statement_check,
+        authoritative_statement=authoritative_statement,
+        terminal_status=None,
+        terminal_review_count=0,
+        terminal_blockers=(),
+    )
+
+
+def _enrich_browser_transactions(
+    transactions: Iterable[Transaction],
+    config: Mapping[str, Any],
+    rules: Iterable[StaticRule],
+    *,
+    history_index: dict[str, HistoryDecision] | None,
+    ai_engine: AIEnrichmentEngine | None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None,
+    property_registry: PropertyRegistry | None,
+) -> tuple[list[Any], list[HistoryTrace], list[AITrace]]:
     engine = RuleEngine(rules)
-    rule_traces = []
+    rule_traces: list[Any] = []
     history_traces: list[HistoryTrace] = []
     ai_traces: list[AITrace] = []
     owner_by_card = account_owner_map(dict(config))
@@ -639,35 +721,111 @@ def build_browser_ingestion_run(
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
+    return rule_traces, history_traces, ai_traces
 
-    _match_exact_refunds(transactions)
-    for transaction in transactions:
-        enforce_transaction_invariants(transaction)
 
-    blockers = list(account_blockers)
-    if kind == "STATEMENT_ROWS" and not authoritative_statement:
+def _match_browser_transactions(transactions: Iterable[Transaction]) -> int:
+    return _match_exact_refunds(transactions)
+
+
+def _serialize_browser_ingestion_run(
+    normalized: _NormalizedBrowserCapture,
+    rule_traces: Iterable[Any],
+    history_traces: Iterable[HistoryTrace],
+    ai_traces: Iterable[AITrace],
+) -> BrowserIngestionRun:
+    validated = normalized.validated
+    if normalized.terminal_status is not None:
+        return BrowserIngestionRun(
+            schema_version=1,
+            capture_id=validated.capture_id,
+            source=validated.sanitized_source,
+            artifact=normalized.artifact_summary,
+            account_snapshot=normalized.account_snapshot,
+            statement_check=normalized.statement_check,
+            staging_status=normalized.terminal_status,
+            review_count=normalized.terminal_review_count,
+            import_blockers=normalized.terminal_blockers,
+            transactions=(),
+            rule_trace=(),
+            history_trace=(),
+            ai_trace=(),
+            envelopes=(),
+        )
+
+    blockers = list(normalized.account_blockers)
+    if validated.kind == "STATEMENT_ROWS" and not normalized.authoritative_statement:
         blockers.append("Statement rows are not authoritative until an official export ties to balances and has a statement reference")
     if blockers:
         envelopes: tuple[dict[str, object], ...] = ()
-        status = "UNMAPPED_ACCOUNT" if account_blockers else "REVIEW_REQUIRED"
+        status = "UNMAPPED_ACCOUNT" if normalized.account_blockers else "REVIEW_REQUIRED"
     else:
-        envelopes = tuple(asdict(item) for item in ActualBudgetAdapter().serialize_import(transactions))
-        status = "REVIEW_REQUIRED" if any(row.review_required for row in transactions) else "READY_FOR_APPROVAL"
+        envelopes = tuple(
+            asdict(item)
+            for item in ActualBudgetAdapter().serialize_import(normalized.transactions)
+        )
+        status = (
+            "REVIEW_REQUIRED"
+            if any(row.review_required for row in normalized.transactions)
+            else "READY_FOR_APPROVAL"
+        )
     return BrowserIngestionRun(
         schema_version=1,
-        capture_id=capture_id,
-        source=sanitized_source,
-        artifact=artifact_summary,
-        account_snapshot=snapshot,
-        statement_check=statement_check,
+        capture_id=validated.capture_id,
+        source=validated.sanitized_source,
+        artifact=normalized.artifact_summary,
+        account_snapshot=normalized.account_snapshot,
+        statement_check=normalized.statement_check,
         staging_status=status,
-        review_count=sum(row.review_required for row in transactions),
+        review_count=sum(row.review_required for row in normalized.transactions),
         import_blockers=tuple(blockers),
-        transactions=tuple(row.to_dict() for row in transactions),
+        transactions=tuple(row.to_dict() for row in normalized.transactions),
         rule_trace=tuple(asdict(trace) for trace in rule_traces),
         history_trace=tuple(asdict(trace) for trace in history_traces),
-        ai_trace=tuple({**asdict(trace), "decision_status": trace.decision_status} for trace in ai_traces),
+        ai_trace=tuple(
+            {**asdict(trace), "decision_status": trace.decision_status}
+            for trace in ai_traces
+        ),
         envelopes=envelopes,
+    )
+
+
+def build_browser_ingestion_run(
+    capture: Mapping[str, Any],
+    config: Mapping[str, Any],
+    rules: Iterable[StaticRule] = (),
+    *,
+    history_index: dict[str, HistoryDecision] | None = None,
+    ai_engine: AIEnrichmentEngine | None = None,
+    ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    property_registry: PropertyRegistry | None = None,
+) -> BrowserIngestionRun:
+    validated = _validate_browser_capture(capture)
+    normalized = _normalize_browser_capture(
+        validated,
+        config,
+        ai_engine=ai_engine,
+        ai_resolver=ai_resolver,
+    )
+    if normalized.terminal_status is not None:
+        return _serialize_browser_ingestion_run(normalized, (), (), ())
+    rule_traces, history_traces, ai_traces = _enrich_browser_transactions(
+        normalized.transactions,
+        config,
+        rules,
+        history_index=history_index,
+        ai_engine=ai_engine,
+        ai_resolver=ai_resolver,
+        property_registry=property_registry,
+    )
+    _match_browser_transactions(normalized.transactions)
+    for transaction in normalized.transactions:
+        enforce_transaction_invariants(transaction)
+    return _serialize_browser_ingestion_run(
+        normalized,
+        rule_traces,
+        history_traces,
+        ai_traces,
     )
 
 
