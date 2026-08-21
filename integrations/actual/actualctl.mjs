@@ -7,11 +7,7 @@ import { buildTagReport, csvTags } from "./tag-report.mjs";
 import { statementPaymentReminderSpec } from "./payment-reminder.mjs";
 import { validateCanonicalActualNotes } from "./note-contract.mjs";
 import { reconcileAccounts } from "./account-reconciliation.mjs";
-import {
-  compileCanonicalRules,
-  scheduleSignature,
-  validateBootstrapConfig,
-} from "./bootstrap-config.mjs";
+import { reconcileBootstrapResources, schedulesDiffer } from "./bootstrap-resources.mjs";
 import {
   canonicalCleanup,
   cleanupGroupNames,
@@ -118,42 +114,7 @@ async function withoutActualReconciliationNoise(callback) {
   }
 }
 
-function signature(rule) {
-  const compact = item => {
-    const result = { op: item.op, value: stable(item.value) };
-    if (item.field !== undefined && !["append-notes", "prepend-notes"].includes(item.op)) {
-      result.field = item.field;
-    }
-    if (item.options !== undefined) result.options = stable(item.options);
-    return result;
-  };
-  return JSON.stringify(stable({
-    stage: rule.stage,
-    conditionsOp: rule.conditionsOp ?? "and",
-    conditions: (rule.conditions ?? []).map(compact),
-    actions: (rule.actions ?? []).map(compact),
-  }));
-}
-
-export function selectRetiredRuleIds(existingRules, retiredRules) {
-  const retiredSignatures = new Set(retiredRules.map(signature));
-  return existingRules
-    .filter(existing => retiredSignatures.has(signature(existing)))
-    .map(existing => existing.id);
-}
-
-export function selectStageMigrationRuleIds(existingRules, desiredRules, migrations) {
-  const stageValue = stage => stage === "default" ? null : stage;
-  const candidates = [];
-  for (const rule of desiredRules) {
-    for (const migration of migrations ?? []) {
-      if (stageValue(migration.to) === rule.stage) {
-        candidates.push({ ...rule, stage: stageValue(migration.from) });
-      }
-    }
-  }
-  return selectRetiredRuleIds(existingRules, candidates);
-}
+export { selectRetiredRuleIds, selectStageMigrationRuleIds } from "./bootstrap-resources.mjs";
 
 export async function openBudget() {
   const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
@@ -464,293 +425,16 @@ async function budgetAutomation(configPath, apply) {
   };
 }
 
-async function canonicalRules(config, configPath) {
-  const collected = [];
-  const skipped = [];
-  const deferred = [];
-  for (const source of config.canonical_rule_sources ?? []) {
-    const filename = path.resolve(path.dirname(path.resolve(configPath)), source.path);
-    const payload = await readJson(filename);
-    const allRows = Array.isArray(payload) ? payload : [payload];
-    const include = new Set(source.include_rule_ids ?? []);
-    const rows = include.size ? allRows.filter(row => include.has(row.rule_id)) : allRows;
-    const compiled = compileCanonicalRules(rows, { onlyMarked: source.only_marked !== false });
-    collected.push(...compiled.rules);
-    skipped.push(...compiled.skipped.map(item => ({ ...item, source: filename })));
-    deferred.push(...compiled.deferred.map(item => ({ ...item, source: filename })));
-  }
-  return { rules: collected, skipped, deferred };
-}
-
 export async function bootstrap(config, apply, configPath, { syncRemote = true } = {}) {
-  validateBootstrapConfig(config);
-  const changes = [];
-  let accounts = await actual.getAccounts();
-  let groups = await actual.getCategoryGroups();
-  let categories = await actual.getCategories();
-  let tags = await actual.getTags();
-  let payees = await actual.getPayees();
-
-  for (const desired of (config.accounts ?? []).filter(item => item.enabled !== false)) {
-    const names = [desired.name, ...(desired.aliases ?? [])].map(normalized);
-    const found = accounts.find(account => names.includes(normalized(account.name)));
-    if (!found) {
-      changes.push({ action: "create", type: "account", name: desired.name });
-      if (apply) {
-        await actual.createAccount({
-          name: desired.name,
-          type: desired.type ?? "other",
-          offbudget: Boolean(desired.offbudget),
-          closed: false,
-        }, Number(desired.initial_balance ?? 0));
-      }
-      continue;
-    }
-    const fields = {};
-    if (found.name !== desired.name) fields.name = desired.name;
-    if (Boolean(found.offbudget) !== Boolean(desired.offbudget)) {
-      fields.offbudget = Boolean(desired.offbudget);
-    }
-    if (Object.keys(fields).length) {
-      changes.push({ action: "update", type: "account", name: found.name, fields });
-      if (apply) await actual.updateAccount(found.id, fields);
-    }
-  }
-
-  const desiredAccountNames = new Set(
-    (config.accounts ?? [])
-      .filter(item => item.enabled !== false)
-      .flatMap(desired => [desired.name, ...(desired.aliases ?? [])])
-      .map(normalized),
-  );
-  for (const retiredName of config.retired_accounts ?? []) {
-    const retiredKey = normalized(retiredName);
-    if (desiredAccountNames.has(retiredKey)) {
-      throw new Error(`Account cannot be both active and retired: ${retiredName}`);
-    }
-    const found = accounts.find(account => normalized(account.name) === retiredKey);
-    if (!found || Boolean(found.closed)) continue;
-    const balance = await actual.getAccountBalance(found.id);
-    if (balance !== 0) {
-      throw new Error(`Refusing to close non-zero retired account ${found.name}: ${balance}`);
-    }
-    changes.push({ action: "close", type: "account", name: found.name });
-    if (apply) await actual.closeAccount(found.id);
-  }
-
-  if (apply) accounts = await actual.getAccounts();
-  const groupIndex = byName(groups);
-  for (const desired of config.category_groups ?? []) {
-    let group = groupIndex.get(normalized(desired.name));
-    if (!group) {
-      changes.push({ action: "create", type: "category_group", name: desired.name });
-      if (apply) {
-        const id = await actual.createCategoryGroup({
-          name: desired.name,
-          is_income: Boolean(desired.is_income),
-          hidden: Boolean(desired.hidden),
-        });
-        group = { id, name: desired.name };
-        groupIndex.set(normalized(desired.name), group);
-      }
-    }
-    for (const categoryName of desired.categories ?? []) {
-      const existing = categories.find(category => normalized(category.name) === normalized(categoryName));
-      if (!existing) {
-        changes.push({ action: "create", type: "category", name: categoryName, group: desired.name });
-        if (apply) {
-          if (!group?.id) throw new Error(`Category group was not created: ${desired.name}`);
-          await actual.createCategory({
-            name: categoryName,
-            group_id: group.id,
-            is_income: Boolean(desired.is_income),
-            hidden: false,
-          });
-        }
-      } else if (apply && group?.id && existing.group_id !== group.id) {
-        changes.push({ action: "update", type: "category", name: categoryName, group: desired.name });
-        await actual.updateCategory(existing.id, { group_id: group.id });
-      }
-    }
-  }
-
-  const tagIndex = byName(tags, "tag");
-  for (const desired of config.tags ?? []) {
-    if (!tagIndex.has(normalized(desired.tag))) {
-      changes.push({ action: "create", type: "tag", name: desired.tag });
-      if (apply) {
-        const tag = { tag: desired.tag, description: desired.description ?? "" };
-        if (desired.color) tag.color = desired.color;
-        await actual.createTag(tag);
-      }
-    }
-  }
-
-  const payeeIndex = byName(payees);
-  for (const desired of config.payees ?? []) {
-    if (!payeeIndex.has(normalized(desired.name))) {
-      changes.push({ action: "create", type: "payee", name: desired.name });
-      if (apply) await actual.createPayee({ name: desired.name });
-    }
-  }
-
-  if (apply) {
-    groups = await actual.getCategoryGroups();
-    categories = await actual.getCategories();
-    tags = await actual.getTags();
-    payees = await actual.getPayees();
-  }
-  if (config.actual_settings?.category_learning === false) {
-    const learningPayees = (await actual.aqlQuery(
-      actual.q("payees").select(["id", "name", "transfer_acct", "learn_categories"]),
-    )).data;
-    for (const payee of learningPayees.filter(item => !item.transfer_acct)) {
-      if (payee.learn_categories !== false) {
-        changes.push({ action: "disable", type: "payee_category_learning", name: payee.name });
-        if (apply) await actual.updatePayee(payee.id, { learn_categories: false });
-      }
-    }
-  }
-  const refs = {
-    account: byName(accounts),
-    category: byName(categories),
-    category_group: byName(groups),
-    payee: byName(payees),
-    tag: byName(tags, "tag"),
-  };
-  function resolve(value) {
-    if (Array.isArray(value)) return value.map(resolve);
-    if (value && typeof value === "object" && value.ref && value.name) {
-      const match = refs[value.ref]?.get(normalized(value.name));
-      if (!match) {
-        if (!apply) return `@${value.ref}:${value.name}`;
-        throw new Error(`Unknown ${value.ref} reference: ${value.name}`);
-      }
-      return match.id;
-    }
-    if (value && typeof value === "object") {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolve(item)]));
-    }
-    return value;
-  }
-
-  const compiled = await canonicalRules(config, configPath);
-  const desiredRules = [
-    ...(config.rules ?? []).filter(item => item.enabled !== false),
-    ...compiled.rules,
-  ].map(desired => ({
-    desired,
-    rule: resolve({
-      stage: desired.stage === undefined ? "pre" : desired.stage,
-      conditionsOp: desired.conditionsOp ?? "and",
-      conditions: desired.conditions ?? [],
-      actions: desired.actions ?? [],
-    }),
-  }));
-  let existingRules = await actual.getRules();
-  const retiredRules = (config.retired_rules ?? []).map(desired => resolve({
-      stage: desired.stage ?? "pre",
-      conditionsOp: desired.conditionsOp ?? "and",
-      conditions: desired.conditions ?? [],
-      actions: desired.actions ?? [],
-    }));
-  const retiredRuleIds = new Set([
-    ...selectRetiredRuleIds(existingRules, retiredRules),
-    ...selectStageMigrationRuleIds(
-      existingRules,
-      desiredRules.map(item => item.rule),
-      config.rule_stage_migrations,
-    ),
-  ]);
-  for (const existing of existingRules) {
-    if (!retiredRuleIds.has(existing.id)) continue;
-    changes.push({ action: "delete", type: "rule", id: existing.id });
-    if (apply && await actual.deleteRule(existing.id) === false) {
-      throw new Error(`Actual refused to delete retired rule ${existing.id}`);
-    }
-  }
-  if (apply && retiredRuleIds.size) existingRules = await actual.getRules();
-  const existingRuleSignatures = new Set(existingRules.map(signature));
-  for (const { desired, rule } of desiredRules) {
-    if (!existingRuleSignatures.has(signature(rule))) {
-      changes.push({ action: "create", type: "rule", name: desired.name });
-      if (apply) {
-        await actual.createRule(rule);
-        existingRuleSignatures.add(signature(rule));
-      }
-    }
-  }
-
-  const existingSchedules = await actual.getSchedules();
-  const schedulesByName = byName(existingSchedules);
-  for (const desired of (config.schedules ?? []).filter(item => item.enabled !== false)) {
-    const amountOp = desired.amount_op ?? "is";
-    const amount = amountOp === "isbetween"
-      ? { num1: desired.amount_min_minor, num2: desired.amount_max_minor }
-      : desired.amount_minor;
-    const schedule = resolve({
-      name: desired.name,
-      account: { ref: "account", name: desired.account },
-      payee: { ref: "payee", name: desired.payee },
-      amount,
-      amountOp,
-      date: desired.date,
-      posts_transaction: Boolean(desired.posts_transaction),
-    });
-    const existing = schedulesByName.get(normalized(desired.name));
-    if (!existing) {
-      changes.push({ action: "create", type: "schedule", name: desired.name });
-      if (apply) await actual.createSchedule(schedule);
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
-      changes.push({ action: "update", type: "schedule", name: desired.name });
-      if (apply) await actual.updateSchedule(existing.id, schedule, true);
-    }
-  }
-
-  for (const desiredMonth of config.budget_months ?? []) {
-    const month = await actual.getBudgetMonth(desiredMonth.month);
-    const current = new Map(
-      month.categoryGroups.flatMap(group => (group.categories ?? []).map(category => [category.id, category])),
-    );
-    for (const desired of desiredMonth.categories) {
-      const category = refs.category.get(normalized(desired.name));
-      if (!category) throw new Error(`Unknown category reference: ${desired.name}`);
-      const existing = current.get(category.id) ?? {};
-      if (Number(existing.budgeted ?? 0) !== desired.amount_minor) {
-        changes.push({
-          action: "set",
-          type: "budget",
-          month: desiredMonth.month,
-          category: desired.name,
-          amount_minor: desired.amount_minor,
-        });
-        if (apply) await actual.setBudgetAmount(desiredMonth.month, category.id, desired.amount_minor);
-      }
-      if (desired.carryover !== undefined && Boolean(existing.carryover) !== Boolean(desired.carryover)) {
-        changes.push({
-          action: "set",
-          type: "budget_carryover",
-          month: desiredMonth.month,
-          category: desired.name,
-          carryover: Boolean(desired.carryover),
-        });
-        if (apply) await actual.setBudgetCarryover(desiredMonth.month, category.id, Boolean(desired.carryover));
-      }
-    }
-  }
-
-  if (apply && syncRemote) await actual.sync();
-  return {
-    status: apply ? "applied" : "planned",
-    changes,
-    native_rule_compilation: {
-      compiled: compiled.rules.length,
-      skipped: compiled.skipped,
-      deferred: compiled.deferred,
-    },
-  };
+  return reconcileBootstrapResources({
+    api: actual,
+    config,
+    apply,
+    configPath,
+    readJson,
+    syncRemote,
+  });
 }
-
 export async function importEnvelopes(
   payload,
   commit,
@@ -878,7 +562,7 @@ export async function importEnvelopes(
         date: schedule.date,
         amount_minor: schedule.amount,
       };
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
+    } else if (schedulesDiffer(existing, schedule)) {
       await actual.updateSchedule(existing.id, schedule, true);
       paymentReminder = {
         status: "updated",
