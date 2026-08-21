@@ -180,6 +180,37 @@ export function findUnexpectedActualImportRows(rows, {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function actualRowKey(row) {
+  if (row?.id !== undefined && row?.id !== null && row.id !== "") {
+    return `id:${String(row.id)}`;
+  }
+  return `fallback:${String(row?.imported_id ?? "")}:${String(row?.date ?? "")}:${String(row?.amount ?? "")}`;
+}
+
+/**
+ * Refresh every account over the complete transfer verification range.
+ *
+ * Readback contexts are intentionally seeded with each envelope's narrower
+ * range, but a sibling envelope can leave a cached account covering a
+ * disjoint range. Always merging a union-range fetch prevents that cache
+ * from hiding a transfer counterpart.
+ */
+export async function fetchActualTransferRows(api, accounts, start, end, seeded = new Map()) {
+  const allRowsByAccount = new Map();
+  for (const account of accounts) {
+    const accountId = String(account.id);
+    const byKey = new Map();
+    for (const row of seeded.get(account.id) ?? seeded.get(accountId) ?? []) {
+      byKey.set(actualRowKey(row), row);
+    }
+    for (const row of await api.getTransactions(account.id, start, end)) {
+      byKey.set(actualRowKey(row), row);
+    }
+    allRowsByAccount.set(account.id, [...byKey.values()]);
+  }
+  return allRowsByAccount;
+}
+
 export function validateActualTransferCounterparts(sourceRows, allRows, payees = new Map()) {
   const rowsById = new Map();
   for (const row of allRows) {
@@ -772,20 +803,15 @@ export async function importEnvelopes(
     rows.filter(row => expectedIds.has(String(row.imported_id ?? "")) && row.transfer_id));
   if (linkedSources.length) {
     const dates = prepared.flatMap(item => item.records.map(record => record.date)).sort();
-    const allRowsByAccount = new Map();
-    for (const { item, rows } of readbackContexts) {
-      const existing = allRowsByAccount.get(item.account.id) ?? [];
-      const byId = new Map(existing.map(row => [String(row.id ?? `${row.imported_id ?? ""}:${row.date ?? ""}`), row]));
-      for (const row of rows) {
-        const key = String(row.id ?? `${row.imported_id ?? ""}:${row.date ?? ""}`);
-        byId.set(key, row);
-      }
-      allRowsByAccount.set(item.account.id, [...byId.values()]);
-    }
-    for (const account of accounts.values()) {
-      if (allRowsByAccount.has(account.id)) continue;
-      allRowsByAccount.set(account.id, await actual.getTransactions(account.id, dates[0], dates.at(-1)));
-    }
+    const seededRowsByAccount = new Map();
+    for (const { item, rows } of readbackContexts) seededRowsByAccount.set(item.account.id, rows);
+    const allRowsByAccount = await fetchActualTransferRows(
+      actual,
+      accounts.values(),
+      dates[0],
+      dates.at(-1),
+      seededRowsByAccount,
+    );
     const transferFailures = validateActualTransferCounterparts(
       linkedSources,
       [...allRowsByAccount.values()].flat(),

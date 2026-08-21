@@ -8,6 +8,7 @@ import {
   doctor,
   enrichTransactions,
   exportDashboardDocument,
+  fetchActualTransferRows,
   findUnexpectedActualImportRows,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
@@ -234,6 +235,64 @@ test("transfer readback requires reciprocal cross-account inverse rows", () => {
   assert.deepEqual(
     validateActualTransferCounterparts([source], [source, { ...counterpart, account: "account-1" }], payees),
     [{ imported_id: source.imported_id, fields: ["transfer.account", "transfer.payee_account"] }],
+  );
+});
+
+test("transfer readback refreshes a cached sibling account over the union range", async () => {
+  const source = {
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-source",
+    date: "2026-08-16",
+    amount: -500,
+    transfer_id: "transaction-counterpart",
+  };
+  const counterpart = {
+    id: "transaction-counterpart",
+    account: "account-target",
+    date: "2026-08-16",
+    amount: 500,
+    transfer_id: "transaction-source",
+  };
+  const sibling = {
+    id: "transaction-sibling",
+    account: "account-target",
+    date: "2026-09-01",
+    amount: -25,
+    imported_id: "statement:target:sibling",
+  };
+  const calls = [];
+  const api = {
+    getTransactions: async (account, start, end) => {
+      calls.push([account, start, end]);
+      return account === "account-target" ? [counterpart, sibling] : [source];
+    },
+  };
+  const rowsByAccount = await fetchActualTransferRows(
+    api,
+    [{ id: "account-source" }, { id: "account-target" }],
+    "2026-08-16",
+    "2026-09-01",
+    new Map([
+      ["account-source", [source]],
+      ["account-target", [sibling]],
+    ]),
+  );
+
+  assert.deepEqual(calls, [
+    ["account-source", "2026-08-16", "2026-09-01"],
+    ["account-target", "2026-08-16", "2026-09-01"],
+  ]);
+  assert.deepEqual(
+    validateActualTransferCounterparts(
+      [source],
+      [...rowsByAccount.values()].flat(),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    rowsByAccount.get("account-target").map(row => row.id),
+    ["transaction-sibling", "transaction-counterpart"],
   );
 });
 
