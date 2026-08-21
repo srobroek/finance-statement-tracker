@@ -7,8 +7,7 @@ import { buildTagReport, csvTags } from "./tag-report.mjs";
 import { statementPaymentReminderSpec } from "./payment-reminder.mjs";
 import { validateCanonicalActualNotes } from "./note-contract.mjs";
 import { reconcileAccounts } from "./account-reconciliation.mjs";
-import { scheduleSignature } from "./bootstrap-config.mjs";
-import { reconcileBootstrapResources } from "./bootstrap-resources.mjs";
+import { reconcileBootstrapResources, schedulesDiffer } from "./bootstrap-resources.mjs";
 import {
   canonicalCleanup,
   cleanupGroupNames,
@@ -563,7 +562,7 @@ export async function importEnvelopes(
         date: schedule.date,
         amount_minor: schedule.amount,
       };
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
+    } else if (schedulesDiffer(existing, schedule)) {
       await actual.updateSchedule(existing.id, schedule, true);
       paymentReminder = {
         status: "updated",

@@ -11,6 +11,10 @@ const normalized = value => String(value ?? "").trim().toLocaleLowerCase();
 const byName = (rows, property = "name") =>
   new Map(rows.map(row => [normalized(row[property]), row]));
 
+export function schedulesDiffer(left, right) {
+  return scheduleSignature(left) !== scheduleSignature(right);
+}
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === "object") {
@@ -118,7 +122,6 @@ export async function reconcileAccounts({ api, config, apply, accounts, changes 
   return apply ? api.getAccounts() : accounts;
 }
 
-/** Reconcile category groups and their categories without performing a sync. */
 export async function reconcileCategories({ api, config, apply, groups, categories, changes }) {
   const groupIndex = byName(groups);
   for (const desired of config.category_groups ?? []) {
@@ -156,7 +159,6 @@ export async function reconcileCategories({ api, config, apply, groups, categori
   }
 }
 
-/** Reconcile tags and payees as independent idempotent resource phases. */
 export async function reconcileTagsAndPayees({ api, config, apply, tags, payees, changes }) {
   const tagIndex = byName(tags, "tag");
   for (const desired of config.tags ?? []) {
@@ -299,7 +301,7 @@ export async function reconcileSchedules({ api, config, apply, refs, changes }) 
     if (!existing) {
       changes.push({ action: "create", type: "schedule", name: desired.name });
       if (apply) await api.createSchedule(schedule);
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
+    } else if (schedulesDiffer(existing, schedule)) {
       changes.push({ action: "update", type: "schedule", name: desired.name });
       if (apply) await api.updateSchedule(existing.id, schedule, true);
     }
