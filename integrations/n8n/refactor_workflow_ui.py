@@ -25,6 +25,10 @@ TYPESCRIPT = (
 )
 ACTUAL_APPLY_PATH = WORKFLOWS / "20-actual-outbox-apply.json"
 AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
+MONTHLY_SHARED_PATH = WORKFLOWS / "22-shared-monthly-statement-cycle.json"
+MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000022"
+MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
+MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle · Setup Required"
 FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
@@ -119,50 +123,280 @@ def rename_node(workflow: dict, old: str, new: str) -> None:
 
 
 def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
-    """Keep each statement cycle's W03-to-W12 commit handoff explicit."""
+    """Keep the shared monthly cycle's W03-to-W12 handoff explicit."""
     by_code = {
         workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
     }
+    shared = by_code[MONTHLY_SHARED_WORKFLOW_CODE]
+    shared_nodes = {node["name"]: node for node in shared["nodes"]}
+    required_shared = {
+        "Run Shared Statement Pipeline",
+        "Read Source Cursor Before Commit",
+        "Build W12 COMMIT Request",
+        "Commit Source Cursor via W12",
+        "Verify W12 COMMIT Terminal Readback",
+    }
+    missing = sorted(required_shared - shared_nodes.keys())
+    if missing:
+        raise ValueError(
+            "shared monthly cycle missing explicit commit nodes: "
+            + ", ".join(missing)
+        )
+    shared_commit = shared_nodes["Commit Source Cursor via W12"]
+    if shared_commit["parameters"]["workflowId"].get("value") != "10000000-0000-4000-8000-000000000012":
+        raise ValueError("shared monthly cycle commit target is not W12")
+    shared_mapped = shared_commit["parameters"].get("workflowInputs", {}).get("value", {})
+    for field in (
+        "operation",
+        "downstream_receipt_sha256",
+        "expected_cursor_version",
+        "attachment_verification_barrier",
+        "email_evidence_receipt_barrier",
+        "receipt_readback_verified",
+    ):
+        if field not in shared_mapped:
+            raise ValueError(f"shared monthly cycle W12 COMMIT input omits {field}")
+    expected_edges = {
+        "Run Shared Statement Pipeline": "Read Source Cursor Before Commit",
+        "Read Source Cursor Before Commit": "Build W12 COMMIT Request",
+        "Build W12 COMMIT Request": "Commit Source Cursor via W12",
+        "Commit Source Cursor via W12": "Verify W12 COMMIT Terminal Readback",
+    }
+    for source, target in expected_edges.items():
+        edges = shared["connections"].get(source, {}).get("main", [[]])[0]
+        if not any(edge.get("node") == target for edge in edges):
+            raise ValueError(f"shared monthly cycle missing connection {source} -> {target}")
+
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
         workflow = by_code[code]
         nodes = {node["name"]: node for node in workflow["nodes"]}
-        required = {
-            "Run Shared Statement Pipeline",
-            "Read Source Cursor Before Commit",
-            "Build W12 COMMIT Request",
-            "Commit Source Cursor via W12",
-            "Verify W12 COMMIT Terminal Readback",
+        expected_names = {
+            "Daily 20:40 Cycle Poll",
+            "Open Configured Cycle Window",
+            "Run Shared Monthly Statement Cycle",
         }
-        missing = sorted(required - nodes.keys())
+        if set(nodes) != expected_names:
+            raise ValueError(f"{code} must retain exactly its three caller nodes")
+        execute = nodes["Run Shared Monthly Statement Cycle"]
+        workflow_id = execute["parameters"]["workflowId"]
+        if workflow_id.get("value") != MONTHLY_SHARED_WORKFLOW_ID:
+            raise ValueError(f"{code} shared cycle target is not W22")
+        mapped = execute["parameters"].get("workflowInputs", {}).get("value", {})
+        if set(mapped) != {"cycle_context", "deadline_policy", "execution_id"}:
+            raise ValueError(f"{code} caller interface is not allowlisted")
+        source_code = "EI_AMAZON" if code == "EI_MONTHLY_STATEMENT" else "WIO_CREDIT"
+        if source_code not in json.dumps(mapped["cycle_context"]):
+            raise ValueError(f"{code} source identity is not caller-bound")
+
+
+def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
+    """Extract EI/Wio's immutable cycle core behind one source-aware boundary."""
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    shared = by_code.get(MONTHLY_SHARED_WORKFLOW_CODE)
+    core_names = (
+        "Load Trusted Source Contract",
+        "Assemble Trusted Acquisition Contract",
+        "Acquire Archive and Read Back",
+        "Initialize Source Cursor via W12",
+        "Restore Enumeration Request After Cursor Init",
+        "Statement Found",
+        "Download Archived Source",
+        "Assemble Immutable Pipeline Input",
+        "Run Shared Statement Pipeline",
+        "Read Source Cursor Before Commit",
+        "Build W12 COMMIT Request",
+        "Commit Source Cursor via W12",
+        "Verify W12 COMMIT Terminal Readback",
+        "Upsert Waiting or Deadline Receipt",
+        "Read Back Waiting or Deadline Receipt",
+    )
+    if shared is None:
+        source = by_code["EI_MONTHLY_STATEMENT"]
+        source_for_graph = source
+        source_nodes = {node["name"]: node for node in source["nodes"]}
+        missing = sorted(set(core_names) - source_nodes.keys())
         if missing:
-            raise ValueError(
-                f"{code} missing explicit commit nodes: {', '.join(missing)}"
-            )
-        commit = nodes["Commit Source Cursor via W12"]
-        workflow_id = commit["parameters"]["workflowId"]
-        if workflow_id.get("value") != "10000000-0000-4000-8000-000000000012":
-            raise ValueError(f"{code} commit target is not W12")
-        mapped = commit["parameters"].get("workflowInputs", {}).get("value", {})
-        for field in (
-            "operation",
-            "downstream_receipt_sha256",
-            "expected_cursor_version",
-            "attachment_verification_barrier",
-            "email_evidence_receipt_barrier",
-            "receipt_readback_verified",
-        ):
-            if field not in mapped:
-                raise ValueError(f"{code} W12 COMMIT input omits {field}")
-        expected_edges = {
-            "Run Shared Statement Pipeline": "Read Source Cursor Before Commit",
-            "Read Source Cursor Before Commit": "Build W12 COMMIT Request",
-            "Build W12 COMMIT Request": "Commit Source Cursor via W12",
-            "Commit Source Cursor via W12": "Verify W12 COMMIT Terminal Readback",
+            raise ValueError("cannot extract monthly cycle; source nodes missing: " + ", ".join(missing))
+        node_ids = {
+            name: f"220{index:02d}"
+            for index, name in enumerate(core_names, start=2)
         }
-        for source, target in expected_edges.items():
-            edges = workflow["connections"].get(source, {}).get("main", [[]])[0]
-            if not any(edge.get("node") == target for edge in edges):
-                raise ValueError(f"{code} missing connection {source} -> {target}")
+        trigger = {
+            "id": "22001",
+            "name": "Monthly Cycle Context",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1.1,
+            "position": [-1120, 0],
+            "parameters": {"inputSource": "passthrough"},
+        }
+        nodes = [trigger]
+        for name in core_names:
+            node = json.loads(json.dumps(source_nodes[name]))
+            node["id"] = node_ids[name]
+            nodes.append(node)
+        connections = {
+            "Monthly Cycle Context": {
+                "main": [[{"node": core_names[0], "type": "main", "index": 0}]]
+            }
+        }
+        for name, channels in source_for_graph.get("connections", {}).items():
+            if name not in core_names:
+                continue
+            copied = json.loads(json.dumps(channels))
+            connections[name] = copied
+        shared = {
+            "id": MONTHLY_SHARED_WORKFLOW_ID,
+            "name": MONTHLY_SHARED_WORKFLOW_NAME,
+            "active": False,
+            "nodes": nodes,
+            "connections": connections,
+            "settings": json.loads(json.dumps(source_for_graph["settings"])),
+            "pinData": {},
+            "meta": {
+                "financeWorkflowCode": MONTHLY_SHARED_WORKFLOW_CODE,
+                "migrationStatus": "SPEC_ONLY",
+                "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
+                "sourceIdentityOwnedBy": "trusted source contract",
+                "callerInputAllowlist": ["cycle_context", "deadline_policy", "execution_id"],
+                "sourceCodes": ["EI_AMAZON", "WIO_CREDIT"],
+                "credentialBindings": json.loads(json.dumps(source_for_graph["meta"].get("credentialBindings", []))),
+                "setupRequired": True,
+                "importTested": False,
+                "workflowFolder": json.loads(json.dumps(source_for_graph["meta"].get("workflowFolder", {}))),
+                "workflowTags": json.loads(json.dumps(source_for_graph["meta"].get("workflowTags", FOLDER_CONTRACT["tags"]))),
+            },
+            "tags": json.loads(json.dumps(source_for_graph.get("tags", []))),
+        }
+        workflows.append(shared)
+    else:
+        # Existing exports are treated as the source of truth after the first render.
+        shared["id"] = MONTHLY_SHARED_WORKFLOW_ID
+        shared["name"] = MONTHLY_SHARED_WORKFLOW_NAME
+        shared["active"] = False
+        shared["meta"]["financeWorkflowCode"] = MONTHLY_SHARED_WORKFLOW_CODE
+        shared["meta"]["reusableBoundary"] = "SHARED_MONTHLY_SOURCE_CYCLE_V1"
+        shared["meta"]["sourceIdentityOwnedBy"] = "trusted source contract"
+        shared["meta"]["callerInputAllowlist"] = ["cycle_context", "deadline_policy", "execution_id"]
+        shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
+        shared["meta"]["workflowTags"] = json.loads(json.dumps(FOLDER_CONTRACT["tags"]))
+
+    if not any(node["type"] == "n8n-nodes-base.stickyNote" for node in shared["nodes"]):
+        shared["nodes"].append({
+            "id": f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1",
+            "name": "Stage 1 · Monthly Cycle Context to Read Back Waiting or Deadline Receipt",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [-1160, -180],
+            "parameters": {
+                "content": (
+                    "## Stage 1 · Shared monthly source cycle\n"
+                    "**Input:** Monthly Cycle Context  ·  **Output:** terminal pipeline or wait/deadline receipt\n"
+                    "Any rejected invariant stops this stage and routes only a redacted failure receipt."
+                ),
+                "height": 110,
+                "width": 2240,
+                "color": 7,
+            },
+        })
+
+    by_code[MONTHLY_SHARED_WORKFLOW_CODE] = shared
+    shared_nodes = {node["name"]: node for node in shared["nodes"]}
+    source_context = shared_nodes["Monthly Cycle Context"]
+    source_context["parameters"] = {"inputSource": "passthrough"}
+    source_contract = shared_nodes["Load Trusted Source Contract"]
+    source_contract["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+        "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
+    )
+    assemble = shared_nodes["Assemble Trusted Acquisition Contract"]
+    assemble["parameters"]["jsCode"] = r"""
+const input = $('Monthly Cycle Context').first().json;
+const context = input.cycle_context;
+const deadline = input.deadline_policy;
+const sourceContract = $json;
+if (!context || !deadline || !input.execution_id) throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');
+for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {
+  if (context[field] === undefined || context[field] === null || context[field] === '') throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);
+}
+for (const field of ['deadline_at', 'deadline_days']) {
+  if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '') throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);
+}
+if (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code))) throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');
+if (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true) throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');
+return [{ json: {
+  ...context,
+  ...deadline,
+  execution_id: String(input.execution_id),
+  ...sourceContract,
+  source_code: sourceContract.source_code,
+  operation: 'ENUMERATE',
+  onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,
+  senders: JSON.parse(sourceContract.senders_json),
+  subjects: JSON.parse(sourceContract.subjects_json),
+} }];
+""".strip()
+    upsert = shared_nodes["Upsert Waiting or Deadline Receipt"]
+    upsert["parameters"]["columns"]["value"].update({
+        "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
+        "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
+        "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
+        "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
+        "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
+        "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
+    })
+    upsert["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    upsert["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    readback = shared_nodes["Read Back Waiting or Deadline Receipt"]
+    readback["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    readback["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    shared["meta"]["credentialBindings"] = json.loads(json.dumps(
+        shared["meta"].get("credentialBindings", [{"placeholder": "BIND_ONEDRIVE", "configured": False, "action_required": True}])
+    ))
+
+    for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        caller = by_code[code]
+        source_code = "EI_AMAZON" if code == "EI_MONTHLY_STATEMENT" else "WIO_CREDIT"
+        workflow_code = code
+        schedule = node_by_name(caller, "Daily 20:40 Cycle Poll")
+        open_window = node_by_name(caller, "Open Configured Cycle Window")
+        execute = {
+            "id": "4003" if code == "EI_MONTHLY_STATEMENT" else "5003",
+            "name": "Run Shared Monthly Statement Cycle",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.2,
+            "position": [80, 0],
+            "parameters": {
+                "workflowId": {
+                    "__rl": True,
+                    "value": MONTHLY_SHARED_WORKFLOW_ID,
+                    "mode": "list",
+                    "cachedResultName": MONTHLY_SHARED_WORKFLOW_NAME,
+                },
+                "options": {"waitForSubWorkflow": True},
+                "workflowInputs": {
+                    "mappingMode": "defineBelow",
+                    "matchingColumns": [],
+                    "schema": [],
+                    "value": {
+                        "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: '" + source_code + "', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
+                        "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: " + str(caller["meta"].get("deadlineDays", 5)) + " } }}",
+                        "execution_id": "={{ $execution.id }}",
+                    },
+                },
+            },
+        }
+        caller["nodes"] = [schedule, open_window, execute]
+        caller["connections"] = {
+            schedule["name"]: {"main": [[{"node": open_window["name"], "type": "main", "index": 0}]]},
+            open_window["name"]: {"main": [[{"node": execute["name"], "type": "main", "index": 0}]]},
+        }
+        caller["nodeGroups"] = []
+        caller_meta = caller["meta"]
+        caller_meta["sharedCycleWorkflow"] = MONTHLY_SHARED_WORKFLOW_CODE
+        caller_meta["sharedCycleWorkflowId"] = MONTHLY_SHARED_WORKFLOW_ID
+        caller_meta["sourceIdentity"] = source_code
+        caller_meta["credentialBindings"] = []
+        caller_meta["workflowCode"] = workflow_code
+        caller["tags"] = json.loads(json.dumps(shared.get("tags", caller.get("tags", []))))
 
 
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
@@ -179,8 +413,11 @@ if (sameRun && !sameWindow) throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMA
 if (sameRun && observedVersion < 1) throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');
 const expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;
 return [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: true, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];
-""".strip()
+    """.strip()
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        caller_nodes = {node["name"] for node in by_code[code]["nodes"]}
+        if "Assemble Trusted Acquisition Contract" not in caller_nodes:
+            continue
         assemble = node_by_name(by_code[code], "Assemble Trusted Acquisition Contract")
         assemble["parameters"]["jsCode"] = r"""
 const w = $('Open Configured Cycle Window').first().json, c = $json;
@@ -3389,11 +3626,12 @@ def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.json"))
     workflows = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     workflows = [repair_mojibake(workflow) for workflow in workflows]
+    ensure_shared_monthly_cycle(workflows)
     harden_exact_node_contracts(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
     assert_monthly_cycle_commit_graph(workflows)
-    paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH})
+    paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
     path_to_code = {
@@ -3402,17 +3640,23 @@ def main() -> int:
             if path == ACTUAL_APPLY_PATH
             else "SUBSCRIPTION_AGENT_ADAPTER"
             if path == AGENT_ADAPTER_PATH
+            else MONTHLY_SHARED_WORKFLOW_CODE
+            if path == MONTHLY_SHARED_PATH
             else json.loads(path.read_text(encoding="utf-8"))["meta"]["financeWorkflowCode"]
         )
         for path in paths
-        if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH}
+        if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
     }
     workflows = [by_code[path_to_code[path]] for path in paths]
     format_code_nodes(workflows)
     for workflow in workflows:
         # W03 is a reviewed migration canvas. Preserve its existing positions
         # and groups while adding runtime nodes; this task does not redesign UI.
-        if workflow["meta"]["financeWorkflowCode"] not in {"SHARED_STATEMENT_PIPELINE", "ACTUAL_OUTBOX_APPLY"}:
+        if workflow["meta"]["financeWorkflowCode"] not in {
+            "SHARED_STATEMENT_PIPELINE",
+            "SHARED_MONTHLY_STATEMENT_CYCLE",
+            "ACTUAL_OUTBOX_APPLY",
+        }:
             layout(workflow)
     rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
     if args.check:
