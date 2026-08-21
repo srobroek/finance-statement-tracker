@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
-from pathlib import Path
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from jsonschema import Draft202012Validator
-
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "integrations" / "n8n" / "generate_data_table_migration.py"
@@ -87,6 +86,9 @@ class DataTableMigrationTests(unittest.TestCase):
 
     def test_alias_hit_miss_collision_and_replay(self) -> None:
         identity = self.migration.document_identity("MAIL_LINKED", ["a" * 64, "message-1", "NO_ATTACHMENT"])
+        other_identity = self.migration.document_identity(
+            "MAIL_LINKED", ["b" * 64, "message-2", "NO_ATTACHMENT"]
+        )
         entry = {
             "alias_kind": "legacy_document_id",
             "alias_value": "old-1",
@@ -111,9 +113,14 @@ class DataTableMigrationTests(unittest.TestCase):
         self.assertIn("ALIAS_MISS", str(miss.exception))
         with self.assertRaises(self.migration.AliasResolutionError) as collision:
             self.migration.build_alias_bundle(
-                [entry, {**entry, "canonical_document_id": "different"}], source_commit="abc"
+                [entry, {**entry, "canonical_document_id": other_identity["document_id"], "canonical_identity_sha256": other_identity["identity_sha256"]}], source_commit="abc"
             )
         self.assertIn("ALIAS_COLLISION", str(collision.exception))
+        with self.assertRaises(self.migration.AliasResolutionError) as mismatch:
+            self.migration.build_alias_bundle(
+                [{**entry, "canonical_document_id": other_identity["document_id"]}], source_commit="abc"
+            )
+        self.assertIn("ID_HASH_MISMATCH", str(mismatch.exception))
         with self.assertRaises(self.migration.AliasResolutionError):
             resolver.lookup("legacy_document_id", "old-1", replay_document_id="different")
 
@@ -137,9 +144,10 @@ class DataTableMigrationTests(unittest.TestCase):
         replay = resolver.commit(inventory, fence=fence, cursor_version=3)
         self.assertTrue(first["readback_verified"])
         self.assertFalse(replay["changed"])
-        restarted = resolver.restart_readback("run-1", "MAIL")
+        restarted_resolver = migration.InventoryResolver(store=resolver.store, fences=resolver.fences)
+        restarted = restarted_resolver.restart_readback("run-1", "MAIL")
         self.assertTrue(restarted["restart_rehydrated"])
-        self.assertFalse(resolver.restart_readback("run-1", "MAIL")["restart_rehydrated"])
+        self.assertFalse(restarted_resolver.restart_readback("run-1", "MAIL")["restart_rehydrated"])
         self.assertTrue(resolver.fences.release(fence))
 
     def test_verification_hash_readback_rejects_pointer_drift(self) -> None:
@@ -170,28 +178,52 @@ class DataTableMigrationTests(unittest.TestCase):
             "payload_sha256": "b" * 64, "state": "COMMITTED", "actual_file_id": "actual",
             "source_code": "MAIL", "period_key": "2026-08",
         }]
+        verification_payload = {
+            "schema_version": "actual-verification-v2",
+            "verification_version": 1,
+            "actual_file_id": "actual",
+            "account_id": "account",
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": "a" * 64,
+            "observed_payload_sha256": "a" * 64,
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": 10,
+            "observed_amount_sum_minor": 10,
+            "invariants_passed": True,
+        }
+        verification_resolver = self.migration.VerificationResolver()
+        verification_pointer = verification_resolver.write(verification_payload)
         verification = [{
-            "outbox_id": "out-1", "verification_version": 1, "actual_file_id": "actual",
-            "account_id": "account", "period_start": "2026-08-01", "period_end": "2026-08-31",
-            "expected_payload_sha256": "a" * 64, "observed_payload_sha256": "a" * 64,
-            "expected_count": 1, "observed_count": 1, "expected_amount_sum_minor": 10,
-            "observed_amount_sum_minor": 10, "invariants_passed": True,
+            "outbox_id": "out-1", **verification_payload, **verification_pointer,
         }]
         reconciliation = [{
             "source_code": "MAIL", "period_key": "2026-08", "reconciliation_version": 1,
-            "statement_sha256": "c" * 64, "actual_verification_sha256": "a" * 64,
+            "statement_sha256": "c" * 64, "actual_verification_sha256": verification_pointer["verification_artifact_sha256"],
             "state": "COMMITTED", "difference_minor": 0, "verified_at": "2026-09-01",
         }]
-        rows = self.migration.reconcile_actual_batches(outbox, verification, reconciliation)
+        rows = self.migration.reconcile_actual_batches(
+            outbox, verification, reconciliation, verification_resolver=verification_resolver
+        )
         self.assertEqual(rows[0]["idempotency_key"], "import-1")
-        self.assertEqual(rows[0]["verification_artifact_sha256"], "a" * 64)
+        self.assertEqual(rows[0]["verification_artifact_sha256"], verification_pointer["verification_artifact_sha256"])
         self.assertNotIn("outbox_id", rows[0])
         with self.assertRaises(self.migration.MigrationError):
             self.migration.reconcile_actual_batches(
                 outbox,
                 verification,
                 [{**reconciliation[0], "actual_verification_sha256": "d" * 64}],
+                verification_resolver=verification_resolver,
             )
+        with self.assertRaises(self.migration.MigrationError) as missing_pointer:
+            self.migration.reconcile_actual_batches(
+                outbox,
+                [{key: value for key, value in verification[0].items() if key not in verification_pointer}],
+                reconciliation,
+                verification_resolver=verification_resolver,
+            )
+        self.assertIn("POINTER_REQUIRED", str(missing_pointer.exception))
 
     def test_second_run_noop_reverse_rehearsal_and_backup_digest(self) -> None:
         source = {
@@ -226,8 +258,51 @@ class DataTableMigrationTests(unittest.TestCase):
         self.assertFalse(second["changed"])
         self.assertEqual(runner.reverse_rehearsal()["source_digest"], backup)
         self.assertTrue(runner.reverse_rehearsal()["target_tables_untouched"])
+        rehearsal = runner.reverse_rehearsal()
+        self.assertTrue(rehearsal["restore_roundtrip"])
+        self.assertEqual(rehearsal["restored_source_digest"], backup)
+        self.assertEqual(rehearsal["restored_source_schemas"], rehearsal["source_schemas"])
+        tampered_backup = runner.backup_snapshot()
+        tampered_backup["tables"]["finance_source_cursors"]["schema"]["columns"] = {}
+        with self.assertRaises(self.migration.MigrationError):
+            runner.restore_backup(tampered_backup)
         with self.assertRaises(self.migration.MigrationError):
             runner.delete_old_tables()
+
+    def test_duplicate_precedence_and_logical_keys_fail_closed(self) -> None:
+        resolver = self.migration.VerificationResolver()
+        payload = {
+            "schema_version": "actual-verification-v2", "verification_version": 1,
+            "actual_file_id": "actual", "account_id": "account", "period_start": "2026-08-01",
+            "period_end": "2026-08-31", "expected_payload_sha256": "a" * 64,
+            "observed_payload_sha256": "a" * 64, "expected_count": 1, "observed_count": 1,
+            "expected_amount_sum_minor": 1, "observed_amount_sum_minor": 1,
+            "invariants_passed": True,
+        }
+        pointer = resolver.write(payload)
+        winner = {"outbox_id": "out-1", **payload, **pointer}
+        outbox = [{"outbox_id": "out-1", "imported_id": "same", "payload_sha256": "b" * 64}]
+        with self.assertRaises(self.migration.MigrationError):
+            self.migration.reconcile_actual_batches(
+                outbox, [winner, winner], [], verification_resolver=resolver
+            )
+        runner = self.migration.MigrationRunner({
+            "finance_actual_outbox": [
+                {"outbox_id": "out-1", "imported_id": "same"},
+                {"outbox_id": "out-2", "imported_id": "same"},
+            ]
+        })
+        with self.assertRaises(self.migration.MigrationError) as duplicate:
+            runner.build_targets()
+        self.assertIn("duplicate-logical-key", str(duplicate.exception))
+        duplicate_cursor_runner = self.migration.MigrationRunner({
+            "finance_source_cursors": [
+                {"source_code": "MAIL"},
+                {"source_code": "MAIL"},
+            ]
+        })
+        with self.assertRaises(self.migration.MigrationError):
+            duplicate_cursor_runner.build_targets()
 
     def test_dual_read_prefers_target_and_falls_back_without_cutover(self) -> None:
         dual = self.migration.DualReadWrite()

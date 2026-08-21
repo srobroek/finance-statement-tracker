@@ -10,19 +10,20 @@ from __future__ import annotations
 
 import argparse
 import base64
-from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 import re
 import struct
+from collections.abc import Iterable, Mapping, Sequence
+from copy import deepcopy
+from pathlib import Path
 from threading import Lock
-from typing import Any, Iterable, Mapping, NamedTuple, Sequence
-
+from typing import Any, NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
 MATRIX_PATH = N8N / "data-table-migration-matrix.json"
+DATA_TABLES_PATH = N8N / "data-tables.json"
 ALIAS_PATH = N8N / "generated" / "document-identity-aliases-v1.json"
 TARGETS = (
     "finance_ingestion_state",
@@ -34,6 +35,29 @@ INVENTORY_SCHEMA = "inventory-v1"
 VERIFICATION_SCHEMA = "actual-verification-v2"
 DOCUMENT_IDENTITY_VERSION = "document-identity-v1"
 IDENTITY_KINDS = {"MAIL_LINKED", "BROWSER_CAPTURE", "PROCESSING_ONLY"}
+VERIFICATION_POINTER_FIELDS = {
+    "verification_artifact_sha256",
+    "verification_artifact_item_id",
+    "verification_artifact_path",
+    "verification_artifact_etag",
+    "verification_artifact_schema_version",
+    "verification_artifact_length_bytes",
+}
+VERIFICATION_PAYLOAD_FIELDS = {
+    "schema_version",
+    "verification_version",
+    "actual_file_id",
+    "account_id",
+    "period_start",
+    "period_end",
+    "expected_payload_sha256",
+    "observed_payload_sha256",
+    "expected_count",
+    "observed_count",
+    "expected_amount_sum_minor",
+    "observed_amount_sum_minor",
+    "invariants_passed",
+}
 
 
 class MigrationError(ValueError):
@@ -102,6 +126,14 @@ def encode_document_identity(
     return bytes(encoded)
 
 
+def _document_id_from_identity_hash(version: str, identity_sha256: str) -> str:
+    """Bind the public document ID to the exact canonical identity digest."""
+    if not re.fullmatch(r"[0-9a-f]{64}", identity_sha256):
+        raise MigrationError("document identity hash is malformed")
+    digest = base64.urlsafe_b64encode(bytes.fromhex(identity_sha256)).decode("ascii").rstrip("=")
+    return f"{version}_{digest}"
+
+
 def document_identity(
     identity_kind: str,
     components: Sequence[Any],
@@ -111,9 +143,8 @@ def document_identity(
     """Return the canonical document ID and its raw tuple hash."""
     encoded = encode_document_identity(identity_kind, components, version=version)
     digest = hashlib.sha256(encoded).digest()
-    encoded_digest = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     return {
-        "document_id": f"{version}_{encoded_digest}",
+        "document_id": _document_id_from_identity_hash(version, digest.hex()),
         "identity_kind": identity_kind,
         "identity_sha256": digest.hex(),
         "version": version,
@@ -142,6 +173,9 @@ def build_alias_bundle(
             "canonical_identity_sha256": _text(
                 raw.get("canonical_identity_sha256"), "canonical_identity_sha256"
             ),
+            "identity_version": _text(
+                raw.get("identity_version", DOCUMENT_IDENTITY_VERSION), "identity_version"
+            ),
             "bundle_version": _text(raw.get("bundle_version", bundle_version), "bundle_version"),
             "source_commit": _text(raw.get("source_commit", source_commit), "source_commit"),
         }
@@ -149,6 +183,10 @@ def build_alias_bundle(
             raise AliasResolutionError("alias identity_kind is unsupported")
         if not re.fullmatch(r"[0-9a-f]{64}", entry["canonical_identity_sha256"]):
             raise AliasResolutionError("alias canonical identity hash is malformed")
+        if entry["canonical_document_id"] != _document_id_from_identity_hash(
+            entry["identity_version"], entry["canonical_identity_sha256"]
+        ):
+            raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_ID_HASH_MISMATCH")
         capture_id = raw.get("capture_id")
         if capture_id is not None:
             entry["capture_id"] = _text(capture_id, "capture_id")
@@ -194,8 +232,13 @@ class AliasResolver:
                 entry.get("identity_kind") not in IDENTITY_KINDS
                 or not isinstance(entry.get("canonical_document_id"), str)
                 or not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("canonical_identity_sha256", "")))
+                or not isinstance(entry.get("identity_version"), str)
             ):
                 raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_UNAVAILABLE:entry-integrity")
+            if entry["canonical_document_id"] != _document_id_from_identity_hash(
+                entry["identity_version"], entry["canonical_identity_sha256"]
+            ):
+                raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_ID_HASH_MISMATCH")
             if key in self._entries and self._entries[key] != entry:
                 raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_COLLISION")
             self._entries[key] = entry
@@ -245,6 +288,10 @@ class ArtifactStore:
             return self._items[item_id]
         except KeyError as exc:
             raise MigrationError(f"artifact not found: {item_id}") from exc
+
+    def contains(self, item_id: str) -> bool:
+        """Expose durable existence without conflating absence and corruption."""
+        return item_id in self._items
 
 
 class Fence(NamedTuple):
@@ -338,13 +385,60 @@ def _validate_inventory(inventory: Mapping[str, Any]) -> None:
 
 
 class InventoryResolver:
-    """Persist and read back inventory-v1 under cursor-version fencing."""
+    """Persist and read back inventory-v1 under cursor-version fencing.
+
+    The artifact store is the durable receipt/index boundary.  ``_states`` is
+    only a warm cache; a new resolver instance can rehydrate the same receipt
+    from the deterministic receipt item ID.
+    """
 
     def __init__(self, *, store: ArtifactStore | None = None, fences: FenceStore | None = None) -> None:
         self.store = store or ArtifactStore()
         self.fences = fences or FenceStore()
         self._states: dict[tuple[str, str], dict[str, Any]] = {}
         self._rehydrated: set[tuple[str, str]] = set()
+
+    @staticmethod
+    def _receipt_item_id(inventory_run_id: str, source_code: str) -> str:
+        key_digest = sha256_json(
+            {"inventory_run_id": inventory_run_id, "source_code": source_code}
+        )
+        return f"inventory-receipt-v1://{key_digest}"
+
+    def _load_receipt(self, key: tuple[str, str]) -> dict[str, Any] | None:
+        item_id = self._receipt_item_id(*key)
+        if not self.store.contains(item_id):
+            return None
+        content, _etag = self.store.read(item_id)
+        try:
+            receipt = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise MigrationError("INVENTORY_RECEIPT_CORRUPT") from exc
+        if not isinstance(receipt, dict) or receipt.get("receipt_item_id") != item_id:
+            raise MigrationError("INVENTORY_RECEIPT_IDENTITY_MISMATCH")
+        integrity = deepcopy(receipt)
+        expected_digest = integrity.pop("receipt_sha256", None)
+        expected_etag = integrity.pop("receipt_etag", None)
+        if sha256_json(integrity) != expected_digest or expected_etag != expected_digest:
+            raise MigrationError("INVENTORY_RECEIPT_READBACK_MISMATCH")
+        if (receipt.get("inventory_run_id"), receipt.get("source_code")) != key:
+            raise MigrationError("INVENTORY_RECEIPT_KEY_MISMATCH")
+        return receipt
+
+    def _persist_receipt(self, result: Mapping[str, Any]) -> dict[str, Any]:
+        receipt = deepcopy(dict(result))
+        receipt_item_id = self._receipt_item_id(
+            receipt["inventory_run_id"], receipt["source_code"]
+        )
+        receipt["receipt_item_id"] = receipt_item_id
+        receipt["receipt_schema_version"] = "inventory-receipt-v1"
+        receipt.pop("receipt_sha256", None)
+        receipt.pop("receipt_etag", None)
+        receipt_digest = sha256_json(receipt)
+        receipt["receipt_sha256"] = receipt_digest
+        receipt["receipt_etag"] = receipt_digest
+        self.store.put(receipt_item_id, canonical_bytes(receipt))
+        return receipt
 
     def stage(self, inventory: Mapping[str, Any]) -> dict[str, Any]:
         _validate_inventory(inventory)
@@ -375,7 +469,7 @@ class InventoryResolver:
         self.fences.assert_current(fence)
         pointer = self.stage(inventory)
         key = (pointer["inventory_run_id"], pointer["source_code"])
-        current = self._states.get(key)
+        current = self._load_receipt(key)
         if current is not None:
             if current["inventory_sha256"] != pointer["inventory_sha256"]:
                 raise MigrationError("inventory run identity maps to different bytes")
@@ -383,6 +477,7 @@ class InventoryResolver:
                 raise FenceConflict("STALE_CURSOR_VERSION")
             result = deepcopy(current)
             result.update({"changed": False, "receipt_code": "INVENTORY_REPLAY_NOOP"})
+            self._states[key] = deepcopy(result)
             return result
         result = {
             **pointer,
@@ -391,12 +486,15 @@ class InventoryResolver:
             "readback_verified": True,
             "receipt_code": "INVENTORY_COMMITTED",
         }
-        self._states[key] = deepcopy(result)
-        return deepcopy(result)
+        persisted = self._persist_receipt(result)
+        self._states[key] = deepcopy(persisted)
+        return deepcopy(persisted)
 
     def restart_readback(self, inventory_run_id: str, source_code: str) -> dict[str, Any]:
         key = (inventory_run_id, source_code)
-        state = self._states.get(key)
+        state = self._load_receipt(key)
+        if state is None:
+            state = self._states.get(key)
         if state is None:
             raise MigrationError("INVENTORY_RESTART_RECEIPT_MISSING")
         content, etag = self.store.read(state["inventory_item_id"])
@@ -506,6 +604,60 @@ def _rows_digest(rows: Iterable[Mapping[str, Any]]) -> str:
     return sha256_json(ordered)
 
 
+def _ensure_unique_logical_keys(
+    rows: Sequence[Mapping[str, Any]], table: str, fields: Sequence[str]
+) -> list[dict[str, Any]]:
+    seen: set[tuple[Any, ...]] = set()
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        key = tuple(row.get(field) for field in fields)
+        if any(value is None for value in key):
+            raise MigrationError(f"MIGRATION_CONFLICT:{table}-missing-logical-key")
+        if key in seen:
+            raise MigrationError(f"MIGRATION_CONFLICT:{table}-duplicate-logical-key")
+        seen.add(key)
+        result.append(dict(row))
+    return result
+
+
+def _select_authoritative_verifications(
+    verification_rows: Sequence[Mapping[str, Any]],
+    verification_resolver: VerificationResolver | None,
+) -> dict[str, Mapping[str, Any]]:
+    if verification_rows and verification_resolver is None:
+        raise MigrationError("ACTUAL_VERIFICATION_RESOLVER_REQUIRED")
+    versions: dict[str, list[Mapping[str, Any]]] = {}
+    for row in verification_rows:
+        try:
+            outbox_id = _text(row.get("outbox_id"), "verification.outbox_id")
+            version = int(row["verification_version"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MigrationError("MIGRATION_CONFLICT:verification-key") from exc
+        if version < 0:
+            raise MigrationError("MIGRATION_CONFLICT:verification-version")
+        versions.setdefault(outbox_id, []).append(row)
+    selected: dict[str, Mapping[str, Any]] = {}
+    for outbox_id, rows in versions.items():
+        max_version = max(int(row["verification_version"]) for row in rows)
+        winners = [row for row in rows if int(row["verification_version"]) == max_version]
+        if len(winners) != 1:
+            raise MigrationError("MIGRATION_CONFLICT:verification-version")
+        winner = winners[0]
+        if not VERIFICATION_POINTER_FIELDS <= set(winner):
+            raise MigrationError("ACTUAL_VERIFICATION_POINTER_REQUIRED")
+        assert verification_resolver is not None
+        payload = verification_resolver.readback(
+            winner, expected_sha256=winner["verification_artifact_sha256"]
+        )
+        for field in VERIFICATION_PAYLOAD_FIELDS:
+            if field in winner and winner[field] != payload.get(field):
+                raise MigrationError(f"ACTUAL_VERIFICATION_AUTHORITATIVE_MISMATCH:{field}")
+        authoritative = dict(winner)
+        authoritative.update({field: payload[field] for field in VERIFICATION_PAYLOAD_FIELDS})
+        selected[outbox_id] = authoritative
+    return selected
+
+
 def reconcile_actual_batches(
     outbox_rows: Sequence[Mapping[str, Any]],
     verification_rows: Sequence[Mapping[str, Any]],
@@ -517,23 +669,10 @@ def reconcile_actual_batches(
     outbox_by_id: dict[str, Mapping[str, Any]] = {}
     for row in outbox_rows:
         key = _text(row.get("outbox_id"), "outbox_id")
-        if key in outbox_by_id and outbox_by_id[key] != row:
+        if key in outbox_by_id:
             raise MigrationError("MIGRATION_CONFLICT:duplicate outbox")
         outbox_by_id[key] = row
-    versions: dict[str, list[Mapping[str, Any]]] = {}
-    for row in verification_rows:
-        versions.setdefault(_text(row.get("outbox_id"), "verification.outbox_id"), []).append(row)
-    selected: dict[str, Mapping[str, Any]] = {}
-    for outbox_id, rows in versions.items():
-        max_version = max(int(row["verification_version"]) for row in rows)
-        winners = [row for row in rows if int(row["verification_version"]) == max_version]
-        if len(winners) != 1:
-            raise MigrationError("MIGRATION_CONFLICT:verification-version")
-        selected[outbox_id] = winners[0]
-        if verification_resolver is not None and winners[0].get("verification_artifact_sha256"):
-            verification_resolver.readback(
-                winners[0], expected_sha256=winners[0]["verification_artifact_sha256"]
-            )
+    selected = _select_authoritative_verifications(verification_rows, verification_resolver)
     result: list[dict[str, Any]] = []
     for reconciliation in reconciliation_rows:
         matches: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
@@ -545,7 +684,7 @@ def reconcile_actual_batches(
                 outbox.get("source_code") == reconciliation.get("source_code")
                 and outbox.get("period_key") == reconciliation.get("period_key")
                 and reconciliation.get("actual_verification_sha256")
-                == verification.get("observed_payload_sha256")
+                == verification.get("verification_artifact_sha256")
             ):
                 matches.append((outbox, verification))
         if len(matches) != 1:
@@ -566,7 +705,11 @@ def reconcile_actual_batches(
             },
         )
         result.append(row)
-    return sorted(result, key=lambda row: (str(row.get("idempotency_key")), str(row.get("batch_id"))))
+    return _ensure_unique_logical_keys(
+        sorted(result, key=lambda row: (str(row.get("idempotency_key")), str(row.get("batch_id")))),
+        "finance_actual_batches",
+        ("idempotency_key",),
+    )
 
 
 def _outbox_projection(outbox: Mapping[str, Any]) -> dict[str, Any]:
@@ -616,22 +759,18 @@ def _verification_projection(verification: Mapping[str, Any]) -> dict[str, Any]:
 def _actual_rows_without_reconciliation(
     outbox_rows: Sequence[Mapping[str, Any]],
     verification_rows: Sequence[Mapping[str, Any]],
+    verification_resolver: VerificationResolver | None,
 ) -> list[dict[str, Any]]:
-    versions: dict[str, list[Mapping[str, Any]]] = {}
-    for verification in verification_rows:
-        versions.setdefault(_text(verification.get("outbox_id"), "verification.outbox_id"), []).append(verification)
+    selected_verifications = _select_authoritative_verifications(verification_rows, verification_resolver)
     result: list[dict[str, Any]] = []
     for outbox in outbox_rows:
-        candidates = versions.get(_text(outbox.get("outbox_id"), "outbox_id"), [])
-        selected = None
-        if candidates:
-            max_version = max(int(row["verification_version"]) for row in candidates)
-            winners = [row for row in candidates if int(row["verification_version"]) == max_version]
-            if len(winners) != 1:
-                raise MigrationError("MIGRATION_CONFLICT:verification-version")
-            selected = winners[0]
+        selected = selected_verifications.get(_text(outbox.get("outbox_id"), "outbox_id"))
         result.append(merge_non_null(_outbox_projection(outbox), _verification_projection(selected or {})))
-    return sorted(result, key=lambda row: str(row.get("idempotency_key")))
+    return _ensure_unique_logical_keys(
+        sorted(result, key=lambda row: str(row.get("idempotency_key"))),
+        "finance_actual_batches",
+        ("idempotency_key",),
+    )
 
 
 def _target_projection(row: Mapping[str, Any], fields: Iterable[str]) -> dict[str, Any]:
@@ -691,10 +830,68 @@ class DualReadWrite:
         raise MigrationError("OLD_TABLE_DELETE_REQUIRES_NAMED_OPERATOR_GATE")
 
 
+def _source_schema(table_name: str) -> dict[str, Any]:
+    data = json.loads(DATA_TABLES_PATH.read_text(encoding="utf-8"))
+    for table in data.get("tables", []):
+        if table.get("name") == table_name:
+            schema = {
+                "idempotency_key": list(table.get("idempotency_key", [])),
+                "columns": dict(table.get("columns", {})),
+            }
+            if "allowed_states" in table:
+                schema["allowed_states"] = list(table["allowed_states"])
+            return schema
+    raise MigrationError(f"BACKUP_SCHEMA_MISSING:{table_name}")
+
+
+def _backup_snapshot(
+    source_tables: Mapping[str, Sequence[Mapping[str, Any]]],
+    source_schemas: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": "finance-data-table-backup-v1",
+        "tables": {
+            name: {
+                "schema": deepcopy(dict(source_schemas[name])),
+                "rows": sorted(
+                    (dict(row) for row in rows), key=lambda row: canonical_text(row)
+                ),
+            }
+            for name, rows in sorted(source_tables.items())
+        },
+    }
+
+
+def _restore_snapshot(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    if snapshot.get("schema_version") != "finance-data-table-backup-v1":
+        raise MigrationError("BACKUP_SCHEMA_VERSION_MISMATCH")
+    tables = snapshot.get("tables")
+    if not isinstance(tables, Mapping):
+        raise MigrationError("BACKUP_TABLES_MISSING")
+    restored: dict[str, list[dict[str, Any]]] = {}
+    for name, table in tables.items():
+        if not isinstance(name, str) or not isinstance(table, Mapping):
+            raise MigrationError("BACKUP_TABLE_INVALID")
+        if not isinstance(table.get("schema"), Mapping) or not isinstance(table.get("rows"), list):
+            raise MigrationError(f"BACKUP_TABLE_INVALID:{name}")
+        restored[name] = [dict(row) for row in table["rows"]]
+    return restored
+
+
 def _map_ingestion(source: Mapping[str, Sequence[Mapping[str, Any]]]) -> list[dict[str, Any]]:
-    cursors = {row.get("source_code"): dict(row) for row in source.get("finance_source_cursors", [])}
+    cursors: dict[str, dict[str, Any]] = {}
+    for row in source.get("finance_source_cursors", []):
+        source_code = _text(row.get("source_code"), "source_cursor.source_code")
+        if source_code in cursors:
+            raise MigrationError("MIGRATION_CONFLICT:finance_source_cursors-duplicate-logical-key")
+        cursors[source_code] = dict(row)
     receipts: dict[str, Mapping[str, Any]] = {}
+    receipt_keys: set[tuple[str, str]] = set()
     for row in source.get("finance_acquisition_receipts", []):
+        receipt_key = (_text(row.get("run_id"), "acquisition.run_id"), _text(row.get("source_code"), "acquisition.source_code"))
+        if receipt_key in receipt_keys:
+            raise MigrationError("MIGRATION_CONFLICT:finance_acquisition_receipts-duplicate-logical-key")
+        receipt_keys.add(receipt_key)
         if row.get("readback_verified") is not True or row.get("terminal_state") not in {"DOWNSTREAM_VERIFIED", "COMMITTED", "SUCCEEDED"}:
             continue
         key = row.get("source_code")
@@ -749,7 +946,12 @@ def _map_documents(
     source: Mapping[str, Sequence[Mapping[str, Any]]], alias_resolver: AliasResolver | None = None
 ) -> list[dict[str, Any]]:
     rows: dict[str, dict[str, Any]] = {}
+    archive_keys: set[tuple[Any, ...]] = set()
     for archive in source.get("finance_archive_receipts", []):
+        archive_key = tuple(archive.get(field) for field in ("source_code", "source_message_id", "source_attachment_id", "source_sha256"))
+        if any(value is None for value in archive_key) or archive_key in archive_keys:
+            raise MigrationError("MIGRATION_CONFLICT:finance_archive_receipts-duplicate-logical-key")
+        archive_keys.add(archive_key)
         identity = document_identity(
             "MAIL_LINKED",
             [archive.get("source_sha256"), archive.get("source_message_id"), archive.get("source_attachment_id")],
@@ -769,7 +971,12 @@ def _map_documents(
             "updated_at": archive.get("updated_at"),
         }
         rows[identity["document_id"]] = merge_non_null(rows.get(identity["document_id"], {}), row)
+    operation_keys: set[tuple[Any, ...]] = set()
     for operation in source.get("finance_document_operations", []):
+        operation_key = tuple(operation.get(field) for field in ("source_sha256", "document_profile", "requested_schema_version"))
+        if any(value is None for value in operation_key) or operation_key in operation_keys:
+            raise MigrationError("MIGRATION_CONFLICT:finance_document_operations-duplicate-logical-key")
+        operation_keys.add(operation_key)
         identity: dict[str, str]
         if operation.get("source_message_id") is not None and operation.get("source_attachment_id") is not None:
             identity = document_identity(
@@ -781,10 +988,15 @@ def _map_documents(
                 "PROCESSING_ONLY",
                 [operation.get("source_sha256"), operation.get("document_profile"), operation.get("requested_schema_version")],
             )
-        if operation.get("document_id") and alias_resolver is not None:
-            resolved = alias_resolver.resolve("document_id", operation["document_id"])
-            if resolved != identity["document_id"] and operation.get("source_message_id") is not None:
-                raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_REPLAY_MISMATCH")
+        if operation.get("document_id"):
+            if alias_resolver is None:
+                raise AliasResolutionError("DOCUMENT_IDENTITY_ALIAS_UNAVAILABLE:resolver")
+            alias_resolver.lookup(
+                "document_id",
+                operation["document_id"],
+                expected_identity_sha256=identity["identity_sha256"],
+                replay_document_id=identity["document_id"],
+            )
         row = {
             "document_id": identity["document_id"],
             **{field: operation.get(field) for field in (
@@ -801,31 +1013,73 @@ def _map_documents(
 class MigrationRunner:
     """Build four projections and immutable receipts without mutating old rows."""
 
-    def __init__(self, source_tables: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+    def __init__(
+        self,
+        source_tables: Mapping[str, Sequence[Mapping[str, Any]]],
+        *,
+        verification_resolver: VerificationResolver | None = None,
+    ) -> None:
         self.source_tables = {name: [dict(row) for row in rows] for name, rows in source_tables.items()}
+        self.source_schemas = {
+            name: _source_schema(name) for name in sorted(self.source_tables)
+        }
+        self.verification_resolver = verification_resolver
         self.target_tables: dict[str, list[dict[str, Any]]] = {target: [] for target in TARGETS}
         self.receipt: dict[str, Any] | None = None
 
-    def backup_digest(self) -> str:
-        return sha256_json(
-            {name: sorted((dict(row) for row in rows), key=lambda row: canonical_text(row)) for name, rows in sorted(self.source_tables.items())}
-        )
+    def backup_snapshot(self) -> dict[str, Any]:
+        return _backup_snapshot(self.source_tables, self.source_schemas)
 
-    def build_targets(self, *, alias_resolver: AliasResolver | None = None) -> dict[str, list[dict[str, Any]]]:
+    def backup_digest(self) -> str:
+        return sha256_json(self.backup_snapshot())
+
+    def restore_backup(self, snapshot: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        snapshot = self.backup_snapshot() if snapshot is None else deepcopy(dict(snapshot))
+        tables = snapshot.get("tables")
+        if not isinstance(tables, Mapping) or set(tables) != set(self.source_schemas):
+            raise MigrationError("BACKUP_SCHEMA_TABLE_SET_MISMATCH")
+        for name, expected_schema in self.source_schemas.items():
+            table = tables.get(name)
+            if not isinstance(table, Mapping) or table.get("schema") != expected_schema:
+                raise MigrationError(f"BACKUP_SCHEMA_MISMATCH:{name}")
+        restored_tables = _restore_snapshot(snapshot)
+        restored_schemas = {
+            name: deepcopy(snapshot["tables"][name]["schema"])
+            for name in sorted(restored_tables)
+        }
+        restored_snapshot = _backup_snapshot(restored_tables, restored_schemas)
+        restored_digest = sha256_json(restored_snapshot)
+        return {
+            "source_tables": restored_tables,
+            "source_schemas": restored_schemas,
+            "source_digest": restored_digest,
+            "backup_digest": self.backup_digest(),
+            "restore_roundtrip": restored_snapshot == snapshot,
+        }
+
+    def build_targets(
+        self,
+        *,
+        alias_resolver: AliasResolver | None = None,
+        verification_resolver: VerificationResolver | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        resolver = verification_resolver or self.verification_resolver
         actual = reconcile_actual_batches(
             self.source_tables.get("finance_actual_outbox", []),
             self.source_tables.get("finance_actual_verifications", []),
             self.source_tables.get("finance_reconciliations", []),
+            verification_resolver=resolver,
         )
         # Outbox rows without a reconciliation remain durable migration rows.
         existing_ids = {row.get("batch_id") for row in actual}
         for row in _actual_rows_without_reconciliation(
             self.source_tables.get("finance_actual_outbox", []),
             self.source_tables.get("finance_actual_verifications", []),
+            resolver,
         ):
             if row.get("batch_id") not in existing_ids:
                 actual.append(row)
-        return {
+        targets = {
             "finance_ingestion_state": _map_ingestion(self.source_tables),
             "finance_documents": _map_documents(self.source_tables, alias_resolver),
             "finance_actual_batches": [
@@ -839,9 +1093,27 @@ class MigrationRunner:
                 )
             ],
         }
+        logical_keys = {
+            "finance_ingestion_state": ("source_code",),
+            "finance_documents": ("document_id",),
+            "finance_actual_batches": ("idempotency_key",),
+            "finance_ai_reviews": ("idempotency_key",),
+        }
+        return {
+            name: _ensure_unique_logical_keys(rows, name, logical_keys[name])
+            for name, rows in targets.items()
+        }
 
-    def run(self, *, alias_resolver: AliasResolver | None = None) -> dict[str, Any]:
-        targets = self.build_targets(alias_resolver=alias_resolver)
+    def run(
+        self,
+        *,
+        alias_resolver: AliasResolver | None = None,
+        verification_resolver: VerificationResolver | None = None,
+    ) -> dict[str, Any]:
+        targets = self.build_targets(
+            alias_resolver=alias_resolver,
+            verification_resolver=verification_resolver,
+        )
         source_digest = self.backup_digest()
         target_digest = sha256_json(targets)
         no_op = self.receipt is not None and self.receipt["target_digest"] == target_digest
@@ -854,6 +1126,7 @@ class MigrationRunner:
             "target_digest": target_digest,
             "target_schema_sha256": generated_target_schema_digest(),
             "backup_digest": source_digest,
+            "source_schemas": deepcopy(self.source_schemas),
             "source_row_counts": {name: len(rows) for name, rows in sorted(self.source_tables.items())},
             "target_row_counts": {name: len(rows) for name, rows in sorted(targets.items())},
             "old_table_names": sorted(self.source_tables),
@@ -867,9 +1140,14 @@ class MigrationRunner:
         return receipt
 
     def reverse_rehearsal(self) -> dict[str, Any]:
+        restored = self.restore_backup()
         return {
             "schema_version": "data-table-reverse-rehearsal-v1",
             "source_digest": self.backup_digest(),
+            "source_schemas": deepcopy(self.source_schemas),
+            "restored_source_digest": restored["source_digest"],
+            "restored_source_schemas": restored["source_schemas"],
+            "restore_roundtrip": restored["restore_roundtrip"],
             "row_boundary": {name: len(rows) for name, rows in sorted(self.source_tables.items())},
             "target_tables_untouched": True,
             "would_restore_old_tables": True,

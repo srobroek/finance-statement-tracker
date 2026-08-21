@@ -11,6 +11,7 @@
     "target_digest",
     "target_schema_sha256",
     "backup_digest",
+    "source_schemas",
     "source_row_counts",
     "target_row_counts",
     "old_table_names",
@@ -27,6 +28,19 @@
     "target_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "target_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "backup_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_schemas": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["idempotency_key", "columns"],
+        "properties": {
+          "idempotency_key": {"type": "array", "items": {"type": "string"}},
+          "columns": {"type": "object", "additionalProperties": {"type": "string"}},
+          "allowed_states": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
     "source_row_counts": {"$ref": "#/$defs/counts"},
     "target_row_counts": {"$ref": "#/$defs/counts"},
     "old_table_names": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
