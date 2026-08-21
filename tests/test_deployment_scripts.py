@@ -6,6 +6,123 @@ from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
+    def _run_render_env_fixture(
+        self,
+        bootstrap: str,
+        *,
+        mode: int = 0o600,
+        symlink: bool = False,
+        owner: int | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], str, str]:
+        script = Path("deploy/finance-runtime/render-env.sh")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / "runtime"
+            runtime.mkdir()
+            bootstrap_target = root / "bootstrap-target"
+            bootstrap_target.write_text(bootstrap, encoding="utf-8")
+            bootstrap_target.chmod(mode)
+            bootstrap_file = root / "bootstrap"
+            if symlink:
+                bootstrap_file.symlink_to(bootstrap_target)
+            else:
+                bootstrap_file = bootstrap_target
+            if owner is not None:
+                os.chown(bootstrap_target, owner, owner)
+            (runtime / ".env.tpl").write_text("APP_ENV=fixture\n", encoding="utf-8")
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            token_capture = root / "token"
+            (bin_dir / "op").write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "printf '%s' \"${OP_SERVICE_ACCOUNT_TOKEN-}\" > \"${TOKEN_CAPTURE}\"\n"
+                "out=\"\"\n"
+                "while (($#)); do\n"
+                "  if [[ \"$1\" == --out-file ]]; then out=\"$2\"; shift 2; else shift; fi\n"
+                "done\n"
+                "printf '%s\\n' 'APP_ENV=fixture' > \"${out}\"\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "op").chmod(0o755)
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PATH": f"{bin_dir}:{environment['PATH']}",
+                    "FINANCE_RUNTIME_DIR": str(runtime),
+                    "FINANCE_OP_BOOTSTRAP_FILE": str(bootstrap_file),
+                    "TOKEN_CAPTURE": str(token_capture),
+                }
+            )
+            result = subprocess.run(
+                ["bash", str(script)],
+                cwd=Path.cwd(),
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            rendered = (
+                (runtime / ".env").read_text(encoding="utf-8")
+                if (runtime / ".env").exists()
+                else ""
+            )
+            captured = (
+                token_capture.read_text(encoding="utf-8")
+                if token_capture.exists()
+                else ""
+            )
+            return result, rendered, captured
+
+    def test_render_env_parses_literal_token_and_preserves_render_contract(self) -> None:
+        for assignment in (
+            "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n",
+            "OP_SERVICE_ACCOUNT_TOKEN='ops_fixture-token'\n",
+            'OP_SERVICE_ACCOUNT_TOKEN="ops_fixture-token"\n',
+        ):
+            with self.subTest(assignment=assignment):
+                result, rendered, captured = self._run_render_env_fixture(assignment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(rendered, "APP_ENV=fixture\n")
+                self.assertEqual(captured, "ops_fixture-token")
+                self.assertNotIn("ops_fixture-token", result.stdout + result.stderr)
+
+    def test_render_env_rejects_shell_content_and_extra_assignments(self) -> None:
+        for bootstrap in (
+            "OP_SERVICE_ACCOUNT_TOKEN=$(printf injected)\n",
+            "OP_SERVICE_ACCOUNT_TOKEN=${TOKEN}\n",
+            "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\nOTHER=value\n",
+            "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\nOP_SERVICE_ACCOUNT_TOKEN=other\n",
+            "OP_SERVICE_ACCOUNT_TOKEN='ops_fixture-token\n",
+            "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\r\n",
+        ):
+            with self.subTest(bootstrap=bootstrap):
+                result, rendered, captured = self._run_render_env_fixture(bootstrap)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(rendered, "")
+                self.assertEqual(captured, "")
+                self.assertNotIn("ops_fixture-token", result.stdout + result.stderr)
+
+    def test_render_env_rejects_symlink_unsafe_mode_and_owner(self) -> None:
+        for kwargs in (
+            {"symlink": True},
+            {"mode": 0o640},
+        ):
+            with self.subTest(kwargs=kwargs):
+                result, rendered, captured = self._run_render_env_fixture(
+                    "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n", **kwargs
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(rendered, "")
+                self.assertEqual(captured, "")
+        if os.geteuid() == 0:
+            result, rendered, captured = self._run_render_env_fixture(
+                "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n", owner=65534
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(rendered, "")
+            self.assertEqual(captured, "")
+
     def _run_backup_fixture(
         self, probe_mode: str, docker_mode: str = "normal"
     ) -> subprocess.CompletedProcess[str]:
