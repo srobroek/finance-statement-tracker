@@ -170,6 +170,12 @@
         "operation": "download",
         "fileId": "={{ $json.onedrive_item_id }}",
         "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
       }
     },
     {

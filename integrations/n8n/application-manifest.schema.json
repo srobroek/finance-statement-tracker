@@ -57,9 +57,15 @@
     "credentials": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["placeholders", "values_included", "forbidden_fields"],
+      "required": ["placeholders", "binding_contract", "values_included", "forbidden_fields"],
       "properties": {
         "placeholders": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/credential"}},
+        "binding_contract": {
+          "allOf": [
+            {"$ref": "#/$defs/artifact"},
+            {"properties": {"path": {"const": "integrations/n8n/credential-bindings.json"}}}
+          ]
+        },
         "values_included": {"const": false},
         "forbidden_fields": {
           "type": "array",

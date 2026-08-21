@@ -1103,6 +1103,12 @@ return [{
             "fileId": "={{ $json.onedrive_item_id }}",
             "binaryPropertyName": "data",
         },
+        "credentials": {
+            "microsoftOneDriveOAuth2Api": {
+                "id": "BIND_ONEDRIVE",
+                "name": "Finance OneDrive",
+            }
+        },
     })
     archive_hash = node_by_name(handoff, "Run Statement Pipeline")
     archive_hash.update({
