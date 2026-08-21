@@ -306,6 +306,22 @@ try {
             ["source_message_id", "source_attachment_id"],
         )
         self.assertTrue(workflow["meta"]["enumerationReceiptPreRead"])
+        for node_name in (
+            "Shape Immutable Message Inventory",
+            "Aggregate Immutable Archive Inventory",
+            "Empty Immutable Archive Inventory",
+        ):
+            code = nodes[node_name]["parameters"]["jsCode"]
+            self.assertIn(
+                "Aggregate Exact Window Heartbeat",
+                code,
+                f"{node_name} must consume the finite enumeration boundary",
+            )
+            self.assertNotIn(
+                "Verify Receipt and Return Sweep",
+                code,
+                f"{node_name} must not depend on its downstream receipt verifier",
+            )
         self.assertIn(
             "folder_id: sweep.folder_id",
             nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"],
@@ -541,7 +557,7 @@ try {
                         shaped = self.execute_code_node(
                             w12,
                             "Shape Immutable Message Inventory",
-                            refs={"Verify Receipt and Return Sweep": sweep},
+                            refs={"Aggregate Exact Window Heartbeat": sweep},
                         )
                         self.assertTrue(shaped["ok"], shaped)
                         parents = [item["json"] for item in shaped["output"]]
@@ -558,7 +574,7 @@ try {
                             "Aggregate Immutable Archive Inventory",
                             input_items=attachment_rows,
                             refs={
-                                "Verify Receipt and Return Sweep": sweep,
+                                "Aggregate Exact Window Heartbeat": sweep,
                                 "Shape Immutable Message Inventory": parents,
                             },
                         )
@@ -619,7 +635,7 @@ try {
                 replay_parents = self.execute_code_node(
                     w12,
                     "Shape Immutable Message Inventory",
-                    refs={"Verify Receipt and Return Sweep": replay_sweep},
+                    refs={"Aggregate Exact Window Heartbeat": replay_sweep},
                 )
                 replay_parent_rows = [item["json"] for item in replay_parents["output"]]
                 replay_inventory = {
@@ -777,7 +793,7 @@ try {
             shaped = self.execute_code_node(
                 w12,
                 "Shape Immutable Message Inventory",
-                refs={"Verify Receipt and Return Sweep": sweep},
+                refs={"Aggregate Exact Window Heartbeat": sweep},
             )
             self.assertTrue(shaped["ok"], shaped)
             parents = [item["json"] for item in shaped["output"]]
@@ -791,7 +807,7 @@ try {
                 "Aggregate Immutable Archive Inventory",
                 input_items=attachment_rows,
                 refs={
-                    "Verify Receipt and Return Sweep": sweep,
+                    "Aggregate Exact Window Heartbeat": sweep,
                     "Shape Immutable Message Inventory": parents,
                 },
             )
@@ -1486,6 +1502,7 @@ try {
             "scanned_count": 1,
             "matched_count": 1,
             "heartbeat": False,
+            "immutable_inventory": True,
             "pagination_exhausted": True,
             "cursor_commit_eligible": False,
             "messages": [{
@@ -1497,7 +1514,7 @@ try {
         shaped = self.execute_code_node(
             workflow,
             "Shape Immutable Message Inventory",
-            refs={"Verify Receipt and Return Sweep": sweep},
+            refs={"Aggregate Exact Window Heartbeat": sweep},
         )
         self.assertTrue(shaped["ok"], shaped)
         for count in (0, 1, 101):
@@ -1510,7 +1527,7 @@ try {
                 "Aggregate Immutable Archive Inventory",
                 input_items=attachments,
                 refs={
-                    "Verify Receipt and Return Sweep": sweep,
+                    "Aggregate Exact Window Heartbeat": sweep,
                     "Shape Immutable Message Inventory": [
                         item["json"] for item in shaped["output"]
                     ],
@@ -1629,7 +1646,7 @@ try {
         shaped = self.execute_code_node(
             fixture,
             "Shape Immutable Message Inventory",
-            refs={"Verify Receipt and Return Sweep": sweep},
+            refs={"Aggregate Exact Window Heartbeat": sweep},
         )
         self.assertTrue(shaped["ok"], shaped)
         self.assertEqual(len(shaped["output"]), 101)
@@ -1656,7 +1673,7 @@ try {
             "Aggregate Immutable Archive Inventory",
             input_items=[item["json"] for item in stamped],
             refs={
-                "Verify Receipt and Return Sweep": sweep,
+                "Aggregate Exact Window Heartbeat": sweep,
                 "Shape Immutable Message Inventory": [
                     item["json"] for item in shaped["output"]
                 ],
