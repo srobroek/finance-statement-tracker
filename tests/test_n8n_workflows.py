@@ -470,10 +470,25 @@ try {{
             self.assertTrue(row["schedule"].startswith("FREQ=DAILY;"))
             self.assertGreater(row["cycle_poll"]["cycle_day"], 0)
             self.assertGreater(row["cycle_poll"]["deadline_days"], 0)
+        shared_names = set(self.nodes("22-shared-monthly-statement-cycle.json"))
+        for name in ("Upsert Waiting or Deadline Receipt", "Read Back Waiting or Deadline Receipt"):
+            self.assertIn(name, shared_names)
         for filename in ("04-ei-monthly-statement.json", "05-wio-monthly-statement.json"):
             names = set(self.nodes(filename))
-            self.assertIn("Upsert Waiting or Deadline Receipt", names)
-            self.assertIn("Read Back Waiting or Deadline Receipt", names)
+            self.assertEqual(
+                {name for name in names if not name.startswith("Stage ")},
+                {"Daily 20:40 Cycle Poll", "Open Configured Cycle Window", "Run Shared Monthly Statement Cycle"},
+            )
+            self.assertIn("Run Shared Monthly Statement Cycle", names)
+        for name in (
+            "Monthly Cycle Context",
+            "Load Trusted Source Contract",
+            "Acquire Archive and Read Back",
+            "Initialize Source Cursor via W12",
+            "Run Shared Statement Pipeline",
+            "Commit Source Cursor via W12",
+        ):
+            self.assertIn(name, shared_names)
 
     def test_shared_pipeline_archives_delta_before_prepared_and_reads_every_state(self) -> None:
         names = [node["name"] for node in self.workflow("03-shared-statement-pipeline.json")["nodes"]]

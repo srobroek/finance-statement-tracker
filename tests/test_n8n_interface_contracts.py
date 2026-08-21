@@ -35,12 +35,12 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Apply Prepared Outbox Safely", "ACTUAL_OUTBOX_APPLY"),
     ),
     "EI_MONTHLY_STATEMENT": (
-        ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
-        ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
-        ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
-        ("Commit Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
+        ("Run Shared Monthly Statement Cycle", "SHARED_MONTHLY_STATEMENT_CYCLE"),
     ),
     "WIO_MONTHLY_STATEMENT": (
+        ("Run Shared Monthly Statement Cycle", "SHARED_MONTHLY_STATEMENT_CYCLE"),
+    ),
+    "SHARED_MONTHLY_STATEMENT_CYCLE": (
         ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
         ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
         ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
@@ -186,36 +186,40 @@ CURSOR_COMMIT_CONTEXT = (
 # either caller from the observed topology check.
 BOUNDARY_FIXTURES: tuple[dict, ...] = (
     boundary_case(
+        "source-specific monthly caller",
+        ("EI_MONTHLY_STATEMENT", "Run Shared Monthly Statement Cycle"),
+        "SHARED_MONTHLY_STATEMENT_CYCLE",
+        ("cycle_context", "deadline_policy", "execution_id"),
+        ("cycle_context", "deadline_policy", "execution_id"),
+        (("WIO_MONTHLY_STATEMENT", "Run Shared Monthly Statement Cycle"),),
+    ),
+    boundary_case(
         "monthly acquisition request",
-        ("EI_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Acquire Archive and Read Back"),
         "OUTLOOK_MESSAGE_SWEEP",
         MONTHLY_SWEEP_REQUEST,
         MONTHLY_SWEEP_REQUEST,
-        (("WIO_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),),
     ),
     boundary_case(
         "versioned source cursor initialization",
-        ("EI_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Initialize Source Cursor via W12"),
         "OUTLOOK_MESSAGE_SWEEP",
         CURSOR_INITIALIZATION_CONTEXT,
         CURSOR_INITIALIZATION_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline input",
-        ("EI_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Run Shared Statement Pipeline"),
         "SHARED_STATEMENT_PIPELINE",
         STATEMENT_CONTEXT,
         STATEMENT_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),),
     ),
     boundary_case(
         "durable source cursor commit",
-        ("EI_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Commit Source Cursor via W12"),
         "OUTLOOK_MESSAGE_SWEEP",
         CURSOR_COMMIT_CONTEXT,
         CURSOR_COMMIT_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline to AI proposal",
@@ -491,7 +495,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
         registry_codes = set(self.registry_by_code)
         actual_codes = set(self.by_code)
         self.assertEqual(actual_codes, registry_codes)
-        self.assertEqual(len(actual_codes), 21)
+        self.assertEqual(len(actual_codes), 22)
 
         ids = {workflow["id"]: workflow for workflow in self.workflows.values()}
         for filename, workflow in self.workflows.items():

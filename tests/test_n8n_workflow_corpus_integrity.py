@@ -38,22 +38,30 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 48,
                                        'connections_sha256': 'd1ae93d27fe550ae7d1ce8db0f03b1a202457c294b4348e3e4fecee6206f5a2d',
                                        'parameters_sha256': '47227ba51f3bcf80274010d6c1f9ec48ce55286e1fb7f5250a3497f00b14809f',
                                        'groups_sha256': '82b1b5b302e05a98f640377b1492843ac6f6408a40de0a58f93b0abe7763879a'},
- '04-ei-monthly-statement.json': {'nodes': 20,
-                                  'edges': 16,
-                                  'sticky': 3,
-                                  'groups': 2,
-                                  'node_ids_sha256': '8ad4f0842bd6fadccd2b8bec12947f699b07d99c0076dde302fe1d9bbf24814e',
-                                  'connections_sha256': '2489e9328eead8b5a55236a68495b206206db2cb059495abf1caea99165d59dc',
-                                  'parameters_sha256': '554d80d9d8d9e252f7e637ee4f6dc0d66fba4b90d139e93d284186ee4c093632',
-                                  'groups_sha256': '93323af8eb683e2d1533a45ea884c056ad644a29bdf0e29341f7e4504a27a032'},
- '05-wio-monthly-statement.json': {'nodes': 20,
-                                   'edges': 16,
-                                   'sticky': 3,
-                                   'groups': 2,
-                                   'node_ids_sha256': '3480967ae9fdd7403e07e8e1f8dd5f46dc8dc2428041e54369e7e7a61f1879af',
-                                   'connections_sha256': '2489e9328eead8b5a55236a68495b206206db2cb059495abf1caea99165d59dc',
-                                   'parameters_sha256': '79c278ef1316f8a3b1603c201e8a30c60b4aedf2d6a88da3c080b415c34409e9',
-                                   'groups_sha256': '76492fb8d13857f3a7ab42c62a5ffa6aa7a8855b970bd9f1ea4168306f28ab91'},
+ '04-ei-monthly-statement.json': {'nodes': 4,
+                                  'edges': 2,
+                                  'sticky': 1,
+                                  'groups': 1,
+                                  'node_ids_sha256': '9eaf7f0a7591de3b99a43615cc2e309e0e52675fe2dfada0b8909b8a5d912d02',
+                                  'connections_sha256': 'ecb0981ee4ee51c0412063b6578bbe9d34a12486d320660e85927cdfbcd94fff',
+                                  'parameters_sha256': 'd49da43f4cc3e5bf47809c76555fd9e10841ae75a817f6d1ac616db04d8261dc',
+                                  'groups_sha256': '350935f05b4ebfa132cbc8c34ac64198fa5cb0d8892f409e044f8fc48953e1b3'},
+ '05-wio-monthly-statement.json': {'nodes': 4,
+                                   'edges': 2,
+                                   'sticky': 1,
+                                   'groups': 1,
+                                   'node_ids_sha256': '7f1e8bbc395740f90a6909ab52517fb2c7e8f87cc481320f1219a488c14ff574',
+                                   'connections_sha256': 'ecb0981ee4ee51c0412063b6578bbe9d34a12486d320660e85927cdfbcd94fff',
+                                   'parameters_sha256': '7af3177013efdbb824ba125329e816554177a53dc86f1f60132ef568688863ae',
+                                   'groups_sha256': '55a439d01325d7f0005ae93ebc9583397ae3e7cb9cd783d5980de1b3417b9bf6'},
+ '22-shared-monthly-statement-cycle.json': {'nodes': 17,
+                                            'edges': 15,
+                                            'sticky': 1,
+                                            'groups': 0,
+                                            'node_ids_sha256': '1a77e53c7314de832f131a245e2945712087be86e90561a6a6defb3eb67ba20d',
+                                            'connections_sha256': 'c64db46a4ea0c005bfc3ae8f094b4bb992ee507b8e73152d39558aaeb047b6e2',
+                                            'parameters_sha256': '8a61c8e7a7e29a23a6459517067af3dfe41ae19db38e7d3b7a89a6b482a8516a',
+                                            'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
  '06-rak-monthly-statement.json': {'nodes': 3,
                                    'edges': 1,
                                    'sticky': 1,
@@ -264,7 +272,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
         )
 
     def test_regular_exports_are_exactly_inactive_and_unpublished(self) -> None:
-        self.assert_metric("corpus", "regular export count", 21, len(self.workflows))
+        self.assert_metric("corpus", "regular export count", 22, len(self.workflows))
         missing = sorted(set(CORPUS_SNAPSHOT) - set(self.workflows))
         extra = sorted(set(self.workflows) - set(CORPUS_SNAPSHOT))
         self.assertEqual(
@@ -298,7 +306,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
 
     def test_registry_and_folder_manifest_are_bijective(self) -> None:
         rows = self.registry["workflows"]
-        self.assert_metric("registry", "workflow row count", 21, len(rows))
+        self.assert_metric("registry", "workflow row count", 22, len(rows))
         registry_files = [row["file"] for row in rows]
         registry_codes = [row["code"] for row in rows]
         self.assertEqual(len(registry_files), len(set(registry_files)), "duplicate registry files")
