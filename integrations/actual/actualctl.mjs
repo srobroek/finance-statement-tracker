@@ -1247,6 +1247,23 @@ function splitMatches(row, desiredChildren) {
   });
 }
 
+export function resolveSplitChildren(children, categories) {
+  if (children === undefined) return undefined;
+  return children.map(child => {
+    const category = child.category_name
+      ? categories.get(normalized(child.category_name))
+      : null;
+    if (child.category_name && !category) {
+      throw new Error(`Unknown Actual category in split: ${child.category_name}`);
+    }
+    return {
+      amount: child.amount,
+      notes: child.notes,
+      ...(category ? { category: category.id } : {}),
+    };
+  });
+}
+
 export async function enrichTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
   const changes = validateTransactionEnrichmentPlan(plan);
   const serverResponse = await api.getServerVersion();
@@ -1292,19 +1309,7 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
         change.add_note_tokens,
         change.remove_note_tokens,
       );
-      const desiredChildren = change.split?.map(child => {
-        const category = child.category_name
-          ? categories.get(normalized(child.category_name))
-          : null;
-        if (child.category_name && !category) {
-          throw new Error(`Unknown Actual category in split: ${child.category_name}`);
-        }
-        return {
-          amount: child.amount,
-          notes: child.notes,
-          ...(category ? { category: category.id } : {}),
-        };
-      });
+      const desiredChildren = resolveSplitChildren(change.split, categories);
       const item = {
         transaction_id: row.id,
         imported_id: row.imported_id,
@@ -1349,12 +1354,7 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
         change.add_note_tokens,
         change.remove_note_tokens,
       );
-      const desiredChildren = change.split?.map(child => {
-        const category = child.category_name
-          ? categories.get(normalized(child.category_name))
-          : null;
-        return { amount: child.amount, notes: child.notes, ...(category ? { category: category.id } : {}) };
-      });
+      const desiredChildren = resolveSplitChildren(change.split, categories);
       if (!row || String(row.notes ?? "") !== desiredNotes ||
           (desiredChildren && !splitMatches(row, desiredChildren))) {
         throw new Error(`Enrichment verification failed for ${change.imported_id}`);
