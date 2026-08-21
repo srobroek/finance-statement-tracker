@@ -93,7 +93,121 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "activationBlockers": [
+      "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+      "ACTIVE_ADAPTER_REQUIRED"
+    ],
+    "blockerContract": {
+      "schemaVersion": 1,
+      "registryPath": "integrations/n8n/pipeline-registry.json",
+      "workflowCode": "SC_MONTHLY_STATEMENT",
+      "evaluation": "ALL_REQUIRED",
+      "activationBlocked": true,
+      "blockerCodes": [
+        "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+        "ACTIVE_ADAPTER_REQUIRED"
+      ],
+      "required": [
+        {
+          "kind": "statement_fixture",
+          "severity": "activation",
+          "objective": "A complete issuer statement fixture is archived, redacted, hashed, and reconciled.",
+          "evidence": {
+            "artifact": "statement_adapter_receipt",
+            "required_fields": [
+              "source_code",
+              "attachment_sha256",
+              "redacted_mail_envelope",
+              "statement_manifest",
+              "parser_version",
+              "expected_transaction_rows",
+              "balance_difference_minor"
+            ],
+            "assertions": [
+              {
+                "path": "statement_manifest.status",
+                "operator": "equals",
+                "value": "VERIFIED"
+              },
+              {
+                "path": "statement_manifest.balance_difference_minor",
+                "operator": "equals",
+                "value": 0
+              },
+              {
+                "path": "adapter_tests.status",
+                "operator": "equals",
+                "value": "PASS"
+              },
+              {
+                "path": "runtime_receipt.status",
+                "operator": "equals",
+                "value": "VERIFIED"
+              }
+            ]
+          },
+          "operator_warning": "Do not parse, import, reconcile, or finalize until the issuer fixture and parser gates pass.",
+          "code": "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        },
+        {
+          "kind": "statement_adapter",
+          "severity": "activation",
+          "objective": "The issuer adapter and exact mailbox contract are active in both canonical implementations.",
+          "evidence": {
+            "artifact": "source_contract_and_adapter_manifest",
+            "required_fields": [
+              "adapter",
+              "mailbox_folder",
+              "email_senders",
+              "email_subjects"
+            ],
+            "assertions": [
+              {
+                "path": "statement_source.adapter_status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "path": "statement_source.email_status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "path": "statement_source.adapter",
+                "operator": "not_empty"
+              },
+              {
+                "path": "adapter_registry.status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "path": "adapter_tests.status",
+                "operator": "equals",
+                "value": "PASS"
+              }
+            ]
+          },
+          "operator_warning": "Keep this workflow inactive until the exact issuer adapter and mailbox contract are verified.",
+          "code": "ACTIVE_ADAPTER_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        }
+      ],
+      "operatorWarning": {
+        "required": true,
+        "retainUntil": "ALL_REQUIRED_PROVEN",
+        "stickyNoteNames": [
+          "Stage 1 · Daily 20:20 Cycle Poll to Block Until Adapter Verified"
+        ],
+        "guardNodeNames": [
+          "Block Until Adapter Verified"
+        ]
+      }
+    }
   },
   "nodeGroups": [],
   "tags": [

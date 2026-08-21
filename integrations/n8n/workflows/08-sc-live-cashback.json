@@ -90,7 +90,120 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "activationBlockers": [
+      "ACTIVE_EMAIL_SOURCE_REQUIRED",
+      "VERIFIED_MESSAGE_FIXTURE_REQUIRED"
+    ],
+    "blockerContract": {
+      "schemaVersion": 1,
+      "registryPath": "integrations/n8n/pipeline-registry.json",
+      "workflowCode": "SC_LIVE_CASHBACK",
+      "evaluation": "ALL_REQUIRED",
+      "activationBlocked": true,
+      "blockerCodes": [
+        "ACTIVE_EMAIL_SOURCE_REQUIRED",
+        "VERIFIED_MESSAGE_FIXTURE_REQUIRED"
+      ],
+      "required": [
+        {
+          "kind": "transaction_email_source",
+          "severity": "activation",
+          "objective": "The transaction-notification source has a verified sender, subject, parser, and active status.",
+          "evidence": {
+            "artifact": "transaction_email_source_contract",
+            "required_fields": [
+              "source_code",
+              "card_code",
+              "senders",
+              "subjects",
+              "adapter"
+            ],
+            "assertions": [
+              {
+                "path": "source.status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "path": "source.senders",
+                "operator": "non_empty_array"
+              },
+              {
+                "path": "source.subjects",
+                "operator": "non_empty_array"
+              },
+              {
+                "path": "source.adapter",
+                "operator": "not_empty"
+              },
+              {
+                "path": "source_contract_tests.status",
+                "operator": "equals",
+                "value": "PASS"
+              }
+            ]
+          },
+          "operator_warning": "Do not enable the scheduled cashback sweep until the exact email source contract is active.",
+          "code": "ACTIVE_EMAIL_SOURCE_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        },
+        {
+          "kind": "transaction_email_fixture",
+          "severity": "activation",
+          "objective": "A representative transaction message is immutably identified and the parser/cursor replay gates pass.",
+          "evidence": {
+            "artifact": "transaction_notification_fixture",
+            "required_fields": [
+              "message_id",
+              "received_at",
+              "sender",
+              "subject",
+              "body_fixture_sha256",
+              "card_code",
+              "parser_version"
+            ],
+            "assertions": [
+              {
+                "path": "source.status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "path": "fixture.status",
+                "operator": "equals",
+                "value": "VERIFIED"
+              },
+              {
+                "path": "parser_tests.status",
+                "operator": "equals",
+                "value": "PASS"
+              },
+              {
+                "path": "cursor_replay_tests.status",
+                "operator": "equals",
+                "value": "PASS"
+              }
+            ]
+          },
+          "operator_warning": "Do not publish cashback events until a real message fixture and parser replay gates pass.",
+          "code": "VERIFIED_MESSAGE_FIXTURE_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        }
+      ],
+      "operatorWarning": {
+        "required": true,
+        "retainUntil": "ALL_REQUIRED_PROVEN",
+        "stickyNoteNames": [
+          "Stage 1 · 08:25 Dubai Daily to Block Until Notification Contract Verified"
+        ],
+        "guardNodeNames": [
+          "Block Until Notification Contract Verified"
+        ]
+      }
+    }
   },
   "nodeGroups": [],
   "tags": [

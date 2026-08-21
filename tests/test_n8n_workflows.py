@@ -284,6 +284,100 @@ try {{
             all(row["status"] == "SPEC_ONLY" for row in self.registry["workflows"])
         )
 
+    def test_blocked_workflows_project_objective_registry_contracts(self) -> None:
+        """Blocker gates are source-owned metadata, not sticky-note prose."""
+        catalog = self.registry.get("blocker_registry")
+        self.assertIsInstance(catalog, dict)
+        self.assertEqual(catalog["schema_version"], 1)
+        self.assertEqual(catalog["evaluation"], "ALL_REQUIRED")
+        definitions = catalog["definitions"]
+        expected = {
+            "06-rak-monthly-statement.json": [
+                "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+                "ACTIVE_ADAPTER_REQUIRED",
+            ],
+            "07-sc-monthly-statement.json": [
+                "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+                "ACTIVE_ADAPTER_REQUIRED",
+            ],
+            "08-sc-live-cashback.json": [
+                "ACTIVE_EMAIL_SOURCE_REQUIRED",
+                "VERIFIED_MESSAGE_FIXTURE_REQUIRED",
+            ],
+            "15-finance-mcp-facade.json": [
+                "MCP_FACADE_CREDENTIAL_REQUIRED",
+                "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
+            ],
+        }
+        rows = {row["file"]: row for row in self.registry["workflows"]}
+        for filename, codes in expected.items():
+            with self.subTest(workflow=filename):
+                row = rows[filename]
+                workflow = self.workflow(filename)
+                contract = workflow["meta"]["blockerContract"]
+                self.assertEqual(row["blockers"], codes)
+                self.assertEqual(row["blocker_policy"], {
+                    "evaluation": "ALL_REQUIRED",
+                    "state": "BLOCKED",
+                    "operator_warning_required": True,
+                })
+                self.assertTrue(workflow["meta"]["activationBlocked"])
+                self.assertEqual(workflow["meta"]["activationBlockers"], codes)
+                self.assertEqual(contract["schemaVersion"], catalog["schema_version"])
+                self.assertEqual(contract["registryPath"], "integrations/n8n/pipeline-registry.json")
+                self.assertEqual(contract["workflowCode"], row["code"])
+                self.assertEqual(contract["evaluation"], "ALL_REQUIRED")
+                self.assertTrue(contract["activationBlocked"])
+                self.assertEqual(contract["blockerCodes"], codes)
+                projected = contract["required"]
+                self.assertEqual([item["code"] for item in projected], codes)
+                for item in projected:
+                    with self.subTest(blocker=item["code"]):
+                        self.assertTrue(item["required"])
+                        self.assertEqual(item["state"], "BLOCKED")
+                        self.assertEqual(item, {
+                            **definitions[item["code"]],
+                            "code": item["code"],
+                            "required": True,
+                            "state": "BLOCKED",
+                        })
+                        evidence = item["evidence"]
+                        self.assertTrue(evidence["artifact"])
+                        self.assertTrue(evidence["required_fields"])
+                        self.assertTrue(evidence["assertions"])
+                        self.assertTrue(item["operator_warning"])
+
+                warning = contract["operatorWarning"]
+                self.assertTrue(warning["required"])
+                self.assertEqual(warning["retainUntil"], "ALL_REQUIRED_PROVEN")
+                sticky_names = {
+                    node["name"]
+                    for node in workflow["nodes"]
+                    if node["type"] == "n8n-nodes-base.stickyNote"
+                }
+                guard_names = {
+                    node["name"]
+                    for node in workflow["nodes"]
+                    if node["type"] in {
+                        "n8n-nodes-base.stopAndError",
+                        "@n8n/n8n-nodes-langchain.mcpTrigger",
+                    }
+                }
+                self.assertEqual(set(warning["stickyNoteNames"]), sticky_names)
+                self.assertEqual(set(warning["guardNodeNames"]), guard_names)
+
+        self.assertEqual(
+            set(definitions),
+            {
+                "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
+                "ACTIVE_ADAPTER_REQUIRED",
+                "ACTIVE_EMAIL_SOURCE_REQUIRED",
+                "VERIFIED_MESSAGE_FIXTURE_REQUIRED",
+                "MCP_FACADE_CREDENTIAL_REQUIRED",
+                "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
+            },
+        )
+
     def test_registry_and_workflow_exports_are_bijective(self) -> None:
         expected = {row["file"] for row in self.registry["workflows"]}
         self.assertEqual(expected, set(self.workflows))
