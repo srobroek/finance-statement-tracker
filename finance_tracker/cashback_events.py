@@ -339,6 +339,86 @@ def _statement_content_digest(
         "transactions": content,
     })
 
+def _canonical_statement_events(
+    payload: dict[str, Any],
+    *,
+    statement_reference: str,
+    card_code: str,
+    period_start: date,
+    period_end: date,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    rows = payload.get("transactions")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("transactions must be a list of statement transaction objects")
+
+    statement_events = []
+    statement_transaction_ids = []
+    transaction_ids: set[str] = set()
+    for row in rows:
+        transaction_id = str(row.get("statement_transaction_id") or "").strip()
+        if not transaction_id:
+            raise ValueError("statement_transaction_id is required for every statement transaction")
+        if transaction_id in transaction_ids:
+            raise ValueError(f"Duplicate statement_transaction_id: {transaction_id}")
+        transaction_ids.add(transaction_id)
+        event = _normalize_event({
+            **row,
+            "source_event_id": f"statement:{statement_reference}:{transaction_id}",
+            "card_code": card_code,
+            "source": "statement",
+            "status": "ACTIVE",
+            "confidence": 1,
+            "reconciliation_status": "RECONCILED",
+            "statement_reference": statement_reference,
+        })
+        occurred = date.fromisoformat(event["occurred_at"][:10])
+        if occurred < period_start or occurred > period_end:
+            raise ValueError(f"statement transaction {transaction_id} falls outside the statement period")
+        statement_events.append(event)
+        statement_transaction_ids.append(transaction_id)
+
+    return statement_events, statement_transaction_ids
+
+
+def _rank_statement_candidates(
+    event: dict[str, Any],
+    candidates: Iterable[dict[str, Any]],
+) -> list[tuple[int, int, str]]:
+    event_date = date.fromisoformat(event["occurred_at"][:10])
+    ranked = []
+    for candidate in candidates:
+        if candidate["amount_aed_minor"] != event["amount_aed_minor"]:
+            continue
+        if (
+            str(candidate["currency"] or "").strip().upper()
+            != event["currency"]
+        ):
+            continue
+        if _event_polarity(candidate["event_type"]) != _event_polarity(
+            event["event_type"]
+        ):
+            continue
+        candidate_date = date.fromisoformat(
+            str(candidate["occurred_at"])[:10]
+        )
+        day_gap = abs((event_date - candidate_date).days)
+        if day_gap > 3:
+            continue
+        merchant_score = _merchant_match_score(
+            candidate["merchant"], event["merchant"]
+        )
+        if merchant_score == 0:
+            continue
+        ranked.append(
+            (
+                merchant_score,
+                -day_gap,
+                str(candidate["source_event_id"]),
+            )
+        )
+    ranked.sort(reverse=True)
+    return ranked
+
 
 def _cursor_order(left: str, right: str) -> int:
     """Compare timestamp cursors when possible, otherwise their source ordering."""
@@ -1098,35 +1178,13 @@ class CashbackEventStore:
             raise ValueError("period_start and period_end must be ISO dates") from error
         if period_end < period_start:
             raise ValueError("period_end cannot be before period_start")
-        rows = payload.get("transactions")
-        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-            raise ValueError("transactions must be a list of statement transaction objects")
-
-        statement_events = []
-        statement_transaction_ids = []
-        transaction_ids: set[str] = set()
-        for row in rows:
-            transaction_id = str(row.get("statement_transaction_id") or "").strip()
-            if not transaction_id:
-                raise ValueError("statement_transaction_id is required for every statement transaction")
-            if transaction_id in transaction_ids:
-                raise ValueError(f"Duplicate statement_transaction_id: {transaction_id}")
-            transaction_ids.add(transaction_id)
-            event = _normalize_event({
-                **row,
-                "source_event_id": f"statement:{statement_reference}:{transaction_id}",
-                "card_code": card_code,
-                "source": "statement",
-                "status": "ACTIVE",
-                "confidence": 1,
-                "reconciliation_status": "RECONCILED",
-                "statement_reference": statement_reference,
-            })
-            occurred = date.fromisoformat(event["occurred_at"][:10])
-            if occurred < period_start or occurred > period_end:
-                raise ValueError(f"statement transaction {transaction_id} falls outside the statement period")
-            statement_events.append(event)
-            statement_transaction_ids.append(transaction_id)
+        statement_events, statement_transaction_ids = _canonical_statement_events(
+            payload,
+            statement_reference=statement_reference,
+            card_code=card_code,
+            period_start=period_start,
+            period_end=period_end,
+        )
 
         statement_content_sha256 = _statement_content_digest(
             statement_events,
@@ -1249,39 +1307,7 @@ class CashbackEventStore:
                 matched = 0
                 statement_only = 0
                 for event in statement_events:
-                    event_date = date.fromisoformat(event["occurred_at"][:10])
-                    ranked = []
-                    for candidate in remaining.values():
-                        if candidate["amount_aed_minor"] != event["amount_aed_minor"]:
-                            continue
-                        if (
-                            str(candidate["currency"] or "").strip().upper()
-                            != event["currency"]
-                        ):
-                            continue
-                        if _event_polarity(candidate["event_type"]) != _event_polarity(
-                            event["event_type"]
-                        ):
-                            continue
-                        candidate_date = date.fromisoformat(
-                            str(candidate["occurred_at"])[:10]
-                        )
-                        day_gap = abs((event_date - candidate_date).days)
-                        if day_gap > 3:
-                            continue
-                        merchant_score = _merchant_match_score(
-                            candidate["merchant"], event["merchant"]
-                        )
-                        if merchant_score == 0:
-                            continue
-                        ranked.append(
-                            (
-                                merchant_score,
-                                -day_gap,
-                                str(candidate["source_event_id"]),
-                            )
-                        )
-                    ranked.sort(reverse=True)
+                    ranked = _rank_statement_candidates(event, remaining.values())
                     unique_match = bool(
                         len(ranked) == 1
                         and ranked[0][0] > 0
