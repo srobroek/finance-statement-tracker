@@ -770,7 +770,7 @@
         "19004",
         "19005"
       ],
-      "description": "Manual-only four-table schema bootstrap. Exact target schema mismatch stops before downstream writes."
+      "description": "Finance stage 1. Manual-only four-table schema bootstrap; exact target schema mismatch stops before downstream writes."
     }
   ],
   "tags": [
