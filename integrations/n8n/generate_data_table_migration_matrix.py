@@ -55,6 +55,11 @@ def _target_column(source_type: str, *sources: str) -> dict[str, Any]:
     return {"type": source_type, "source_bindings": list(sources)}
 
 
+def _resolver_column(source_type: str, artifact: str, field: str) -> dict[str, Any]:
+    """Describe a field resolved from a durable artifact rather than an old row."""
+    return _target_column(source_type, f"{artifact}.{field}")
+
+
 # These are the four executable target contracts.  Source columns may merge
 # only when their target field and type are explicitly listed here; this keeps
 # a migration review from silently collapsing unrelated values into one field.
@@ -148,6 +153,18 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             ),
             "archive_ready": _target_column(
                 "boolean", "finance_acquisition_receipts.archive_ready"
+            ),
+            "inventory_run_id": _resolver_column("string", "inventory-v1", "inventory_run_id"),
+            "inventory_fence": _resolver_column("number", "inventory-v1", "inventory_fence"),
+            "inventory_sha256": _resolver_column("string", "inventory-v1", "inventory_sha256"),
+            "inventory_item_id": _resolver_column("string", "inventory-v1", "inventory_item_id"),
+            "inventory_path": _resolver_column("string", "inventory-v1", "inventory_path"),
+            "inventory_etag": _resolver_column("string", "inventory-v1", "inventory_etag"),
+            "inventory_schema_version": _resolver_column(
+                "string", "inventory-v1", "inventory_schema_version"
+            ),
+            "inventory_length_bytes": _resolver_column(
+                "number", "inventory-v1", "inventory_length_bytes"
             ),
         },
     },
@@ -401,6 +418,21 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             ),
             "reconciliation_verified_at": _target_column(
                 "date", "finance_reconciliations.verified_at"
+            ),
+            "verification_artifact_item_id": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_item_id"
+            ),
+            "verification_artifact_path": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_path"
+            ),
+            "verification_artifact_etag": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_etag"
+            ),
+            "verification_artifact_schema_version": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_schema_version"
+            ),
+            "verification_artifact_length_bytes": _resolver_column(
+                "number", "actual-verification-v2", "verification_artifact_length_bytes"
             ),
         },
     },
@@ -1140,6 +1172,21 @@ def validate_target_mappings(
     validate_identity_derivations(tables, target_schemas)
 
     observed: dict[tuple[str, str], list[str]] = {}
+    source_binding_names = {
+        f"{table['source_table']}.{column['source_column']}"
+        for table in tables
+        for column in table["columns"]
+    }
+    resolver_binding_prefixes = ("inventory-v1.", "actual-verification-v2.")
+    for target, schema in target_schemas.items():
+        for field, spec in schema["columns"].items():
+            for binding in spec["source_bindings"]:
+                if binding not in source_binding_names:
+                    if not binding.startswith(resolver_binding_prefixes):
+                        raise MatrixError(
+                            f"{target}.{field} has an unknown source or resolver binding {binding!r}"
+                        )
+                    observed.setdefault((target, field), []).append(binding)
     for table in tables:
         source_table = table["source_table"]
         for column in table["columns"]:
