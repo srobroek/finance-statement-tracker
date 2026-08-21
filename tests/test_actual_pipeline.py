@@ -10,6 +10,7 @@ from finance_tracker.actual_pipeline import (
     account_maps,
     build_actual_statement_run,
     load_compiled_rules,
+    load_actual_config,
     runtime_secret,
 )
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
@@ -19,6 +20,61 @@ from finance_tracker.statements import parse_statement_text
 
 
 class ActualStatementPipelineTests(TestCase):
+    def test_actual_config_validates_only_python_consumed_fields(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        valid = {
+            "schema_version": 1,
+            "currency": "AED",
+            "accounts": [
+                {
+                    "name": "Card",
+                    "card_code": "CARD",
+                    "card_last4": ["1234"],
+                    "aliases": ["Old Card"],
+                    "owner": "Owner",
+                    "type": "checking",
+                }
+            ],
+            "retired_accounts": ["Retired Card"],
+            "unconsumed": {"may": "change"},
+            "offbudget": {"opaque": "configuration"},
+        }
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "actual.json"
+            path.write_text(json.dumps(valid), encoding="utf-8")
+            self.assertEqual(load_actual_config(path)["accounts"][0]["name"], "Card")
+
+            invalid_values = (
+                ("currency", 3),
+                ("accounts", [{"name": "Card", "card_last4": [1234]}]),
+                ("accounts", [{"name": "Card", "aliases": "Old Card"}]),
+                ("accounts", [{"name": "Card", "owner": False}]),
+                ("accounts", [{"name": "Card", "type": {"opaque": "configuration"}}]),
+                ("accounts", [{"name": "Card", "type": "crypto"}]),
+                ("accounts", [{"name": "Card", "enabled": "false"}]),
+                ("retired_accounts", "Retired Card"),
+            )
+            for field, value in invalid_values:
+                with self.subTest(field=field):
+                    candidate = dict(valid)
+                    candidate[field] = value
+                    path.write_text(json.dumps(candidate), encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        load_actual_config(path)
+
+    def test_actual_config_rejects_boolean_schema_version(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "actual.json"
+            path.write_text(
+                json.dumps({"schema_version": True, "accounts": [{"name": "Card"}]}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "schema_version"):
+                load_actual_config(path)
+
     def test_runtime_secret_file_takes_precedence_over_environment(self) -> None:
         from tempfile import TemporaryDirectory
 
@@ -220,6 +276,107 @@ Closing balance (Total to pay) -25.00
         self.assertIsNone(preferred["bucket_cap_aed"])
         self.assertEqual(preferred["target_rate_percent"], "6.00")
         self.assertEqual(dashboard["cards"][0]["routing_mode"], "CURRENT_TIER")
+
+    def test_snapshot_rejects_conflicting_cashback_bucket_tags_deterministically(self) -> None:
+        snapshot = {
+            "transactions": [
+                {
+                    "id": "actual-conflict",
+                    "account_name": "Emirates Islamic Amazon Credit Card · 0082",
+                    "date": "2026-07-10",
+                    "amount": -10000,
+                    "imported_payee": "AMAZON.AE",
+                    "category_name": "Online Shopping",
+                    "notes": "#cashback-sc-wallet #cashback-ei_amazon",
+                }
+            ]
+        }
+        with self.assertRaisesRegex(
+            ValueError, "Conflicting cashback bucket tags: EI_AMAZON, SC_WALLET"
+        ):
+            transactions_from_actual_snapshot(snapshot, self.config(), self.cashback_config())
+
+    def test_snapshot_skips_retired_accounts_but_rejects_unknown_active_accounts(self) -> None:
+        retired = {
+            "transactions": [
+                {
+                    "id": "retired",
+                    "account_name": "Wio Current Account · 4113",
+                    "date": "2026-07-10",
+                    "amount": -100,
+                }
+            ]
+        }
+        config = self.config()
+        config["retired_accounts"] = ["Wio Current Account · 4113"]
+        self.assertEqual(
+            transactions_from_actual_snapshot(retired, config, self.cashback_config()), []
+        )
+
+        unknown = {
+            "transactions": [
+                {
+                    "id": "unknown",
+                    "account_name": "Unexpected Active Account",
+                    "date": "2026-07-10",
+                    "amount": -100,
+                }
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "Unknown active Actual snapshot accounts"):
+            transactions_from_actual_snapshot(unknown, config, self.cashback_config())
+
+        non_reward = {
+            "transactions": [
+                {
+                    "id": "non-reward",
+                    "account_name": "FAB Current",
+                    "date": "2026-07-10",
+                    "amount": -100,
+                }
+            ]
+        }
+        non_reward_config = {
+            "accounts": [{"name": "FAB Current", "card_code": "FAB_CURRENT_2001"}]
+        }
+        rows = transactions_from_actual_snapshot(
+            non_reward, non_reward_config, self.cashback_config()
+        )
+        self.assertEqual(rows[0].card, "FAB_CURRENT_2001")
+        self.assertIsNone(rows[0].reward_bucket)
+
+    def test_snapshot_skips_disabled_accounts(self) -> None:
+        snapshot = {
+            "transactions": [
+                {
+                    "id": "disabled",
+                    "account_name": "Disabled Account",
+                    "date": "2026-07-10",
+                    "amount": -100,
+                }
+            ]
+        }
+        config = {
+            "accounts": [
+                {"name": "Disabled Account", "card_code": "DISABLED", "enabled": False},
+                {"name": "Active Account", "card_code": "ACTIVE"},
+            ]
+        }
+        self.assertEqual(
+            transactions_from_actual_snapshot(snapshot, config, self.cashback_config()), []
+        )
+
+    def test_snapshot_rejects_alias_collision_between_accounts(self) -> None:
+        config = {
+            "accounts": [
+                {"name": "One", "card_code": "ONE", "aliases": ["Shared"]},
+                {"name": "Two", "card_code": "TWO", "aliases": ["Shared"]},
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "alias .* maps to multiple cards"):
+            transactions_from_actual_snapshot(
+                {"transactions": []}, config, self.cashback_config()
+            )
 
     def test_filler_route_is_inactive_after_all_card_thresholds_are_met(self) -> None:
         rows = [

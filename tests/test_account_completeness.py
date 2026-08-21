@@ -28,6 +28,29 @@ RECONCILIATION_RECEIPT = ROOT / "config" / "evidence" / "production-account-reco
 
 
 class AccountCompletenessTests(unittest.TestCase):
+    def test_manifest_rejects_truthy_boolean_values(self) -> None:
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        account_fields = (
+            "include_in_actual",
+            "actual_offbudget",
+            "include_in_net_worth",
+            "active",
+            "retain_history",
+            "include_in_active_routing",
+            "balance_reconciliation_required",
+        )
+        for field in account_fields:
+            with self.subTest(field=field):
+                candidate = json.loads(json.dumps(payload))
+                candidate["accounts"][0][field] = "false"
+                with self.assertRaisesRegex(ValueError, field):
+                    load_account_completeness_manifest(candidate)
+
+        candidate = json.loads(json.dumps(payload))
+        candidate["providers"][0]["discovery_required"] = 0
+        with self.assertRaisesRegex(ValueError, "discovery_required"):
+            load_account_completeness_manifest(candidate)
+
     def test_production_reconciliation_receipt_is_redacted_and_hash_bound(self) -> None:
         receipt = json.loads(RECONCILIATION_RECEIPT.read_text(encoding="utf-8"))
         rendered = json.dumps(receipt)
