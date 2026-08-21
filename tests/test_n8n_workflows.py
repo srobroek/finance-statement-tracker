@@ -1338,8 +1338,14 @@ try {{
 
     def test_platform_bootstrap_creates_every_declared_table_with_exact_columns(self) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")
-        manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
-        expected = {row["name"]: row["columns"] for row in self.tables["tables"]}
+        matrix = load_json(N8N / "data-table-migration-matrix.json")
+        expected = {
+            target: [
+                {"name": field, "type": definition["type"]}
+                for field, definition in schema["columns"].items()
+            ]
+            for target, schema in matrix["target_schemas"].items()
+        }
         creates = [
             node for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.dataTable"
@@ -1352,79 +1358,35 @@ try {{
             parameters = node["parameters"]
             name = parameters["tableName"]
             self.assertEqual(parameters["options"], {"createIfNotExists": True})
-            self.assertEqual(
-                parameters["columns"]["column"],
-                [
-                    {"name": column, "type": column_type}
-                    for column, column_type in expected[name].items()
-                ],
+            self.assertEqual(parameters["columns"]["column"], expected[name])
+        self.assertEqual(
+            [node["parameters"]["tableName"] for node in creates],
+            matrix["targets"],
+        )
+        self.assertFalse(
+            any(
+                node["type"] == "n8n-nodes-base.dataTable"
+                and node["parameters"].get("resource") == "row"
+                for node in workflow["nodes"]
             )
-        self.assertEqual(
-            [entry["parameters"] for entry in manifest["table_create_operations"]],
-            [node["parameters"] for node in creates],
         )
-        self.assertEqual(
-            creates[0]["parameters"]["tableName"], "finance_execution_failures"
-        )
+        self.assertEqual(workflow["meta"]["targetTables"], matrix["targets"])
+        self.assertTrue(workflow["meta"]["legacyTableCreationForbidden"])
+        self.assertTrue(workflow["meta"]["seedWritesForbidden"])
 
-    def test_platform_bootstrap_seeds_and_exactly_reads_policy_and_config_contracts(self) -> None:
+    def test_platform_bootstrap_has_no_legacy_row_seeds(self) -> None:
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         data_nodes = [
             node for node in nodes.values()
             if node["type"] == "n8n-nodes-base.dataTable"
-            and node["parameters"].get("resource") == "row"
         ]
+        self.assertTrue(data_nodes)
+        self.assertTrue(all(node["parameters"].get("resource") == "table" for node in data_nodes))
+        self.assertFalse(any("finance_ai_policy_contracts" in json.dumps(node) for node in data_nodes))
+        self.assertFalse(any("finance_config_versions" in json.dumps(node) for node in data_nodes))
         self.assertEqual(
-            [(node["parameters"]["operation"], node["parameters"]["dataTableId"]["value"])
-             for node in data_nodes],
-            [
-                ("upsert", "finance_ai_policy_contracts"),
-                ("get", "finance_ai_policy_contracts"),
-                ("upsert", "finance_config_versions"),
-                ("get", "finance_config_versions"),
-            ],
-        )
-        upsert = nodes["Upsert AI Policy Contracts"]["parameters"]
-        self.assertEqual(
-            [(row["keyName"], row["condition"]) for row in upsert["filters"]["conditions"]],
-            [("policy_id", "eq"), ("policy_version", "eq")],
-        )
-        readback = nodes["Read Back All ACTIVE AI Policy Contracts"]
-        self.assertTrue(readback["parameters"]["returnAll"])
-        self.assertTrue(readback["alwaysOutputData"])
-        self.assertEqual(
-            readback["parameters"]["filters"]["conditions"],
-            [{"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}],
-        )
-        compare = nodes["Exact Compare AI Policy Seed Readback"]["parameters"]["jsCode"]
-        compact_compare = re.sub(r"\s+", "", compare)
-        for marker in (
-            "AI_POLICY_ACTIVE_COUNT_MISMATCH",
-            "AI_POLICY_DUPLICATE_ACTIVE_VERSION",
-            "AI_POLICY_READBACK_MISSING",
-            "AI_POLICY_READBACK_MISMATCH",
-            "AI_POLICY_UPDATED_AT_INVALID",
-            "finance_ledger_writes:false",
-            "actual_writes:false",
-        ):
-            self.assertIn(marker, compact_compare if ":false" in marker else compare)
-        seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
-        policy_code = nodes["Emit Versioned AI Policy Seed"]["parameters"]["jsCode"]
-        for row in seed["rows"]:
-            for field in ("policy_id", "policy_sha256", "agent_profile", "agent_provider"):
-                self.assertIn(json.dumps(row[field]), policy_code)
-        config_seed = load_json(N8N / "generated" / "config-versions.seed.json")
-        config_code = nodes["Emit Versioned Config Fingerprints"]["parameters"]["jsCode"]
-        for row in config_seed["rows"]:
-            for field in ("config_name", "version", "content_sha256"):
-                self.assertIn(json.dumps(row[field]), config_code)
-        for node_name in ("Upsert AI Policy Contracts", "Upsert Config Version Fingerprints"):
-            mappings = nodes[node_name]["parameters"]["columns"]["value"]
-            for value in mappings.values():
-                self.assertRegex(value, r"^=\{\{ \$json\.[a-z0-9_]+ \}\}$")
-        self.assertEqual(
-            nodes["Upsert AI Policy Contracts"]["parameters"]["columns"]["value"]["policy_version"],
-            "={{ $json.policy_version }}",
+            nodes["Verify Application Contract Bundle Digest and Maps"]["type"],
+            "n8n-nodes-base.code",
         )
 
     def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:

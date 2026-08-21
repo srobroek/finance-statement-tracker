@@ -29,6 +29,7 @@ MONTHLY_SHARED_PATH = WORKFLOWS / "22-shared-monthly-statement-cycle.json"
 MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000022"
 MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
 MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle"
+DATA_TABLE_MIGRATION_MATRIX_PATH = N8N / "data-table-migration-matrix.json"
 LEGACY_NAME_SUFFIXES = frozenset({"SPEC ONLY", "PAUSED", " ".join(("SETUP", "REQUIRED"))})
 MONTHLY_SHARED_INPUT_CONTRACT = {
     "schema_version": 1,
@@ -172,6 +173,56 @@ def repair_mojibake(value: object) -> object:
 
 def node_by_name(workflow: dict, name: str) -> dict:
     return next(node for node in workflow["nodes"] if node["name"] == name)
+
+
+def assert_four_table_bootstrap(workflows: list[dict]) -> None:
+    """Keep W19 limited to the reviewed target-schema bootstrap contract.
+
+    The migration matrix inventories the preserved legacy tables separately;
+    W19 must never recreate that source layout or seed rows into it.  Target
+    create nodes are checked here as part of the deterministic UI render so a
+    stale hand-edited export cannot silently reintroduce the fifteen-table
+    bootstrap.
+    """
+    matrix = json.loads(DATA_TABLE_MIGRATION_MATRIX_PATH.read_text(encoding="utf-8"))
+    targets = list(matrix["targets"])
+    schemas = matrix["target_schemas"]
+    bootstrap = next(
+        workflow
+        for workflow in workflows
+        if workflow.get("meta", {}).get("financeWorkflowCode") == "PLATFORM_DATA_TABLE_BOOTSTRAP"
+    )
+    creates = [
+        node
+        for node in bootstrap["nodes"]
+        if node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "table"
+        and node.get("parameters", {}).get("operation") == "create"
+    ]
+    observed = [node["parameters"].get("tableName") for node in creates]
+    if observed != targets:
+        raise ValueError(f"W19 target table order differs from migration matrix: {observed!r}")
+    for node, target in zip(creates, targets, strict=True):
+        parameters = node["parameters"]
+        if parameters.get("options") != {"createIfNotExists": True}:
+            raise ValueError(f"W19 {target} must use idempotent createIfNotExists")
+        expected = [
+            {"name": field, "type": definition["type"]}
+            for field, definition in schemas[target]["columns"].items()
+        ]
+        if parameters.get("columns", {}).get("column") != expected:
+            raise ValueError(f"W19 {target} schema differs from migration matrix")
+    if any(
+        node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "row"
+        for node in bootstrap["nodes"]
+    ):
+        raise ValueError("W19 must not seed rows while creating the four migration targets")
+    metadata = bootstrap.get("meta", {})
+    if metadata.get("targetTables") != targets:
+        raise ValueError("W19 metadata targetTables differs from migration matrix")
+    if metadata.get("legacyTableCreationForbidden") is not True:
+        raise ValueError("W19 must forbid legacy source-table creation")
 
 
 def rename_node(workflow: dict, old: str, new: str) -> None:
@@ -3687,6 +3738,7 @@ def main() -> int:
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
     assert_monthly_cycle_commit_graph(workflows)
+    assert_four_table_bootstrap(workflows)
     paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
