@@ -48,7 +48,7 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000022",
+          "value": "10000000-0000-4000-8000-000000000024",
           "mode": "list",
           "cachedResultName": "Finance · Shared Monthly Statement Cycle"
         },
@@ -156,7 +156,7 @@
       "inactive"
     ],
     "sharedCycleWorkflow": "SHARED_MONTHLY_STATEMENT_CYCLE",
-    "sharedCycleWorkflowId": "10000000-0000-4000-8000-000000000022",
+    "sharedCycleWorkflowId": "10000000-0000-4000-8000-000000000024",
     "sourceIdentity": "EI_AMAZON",
     "workflowCode": "EI_MONTHLY_STATEMENT"
   },

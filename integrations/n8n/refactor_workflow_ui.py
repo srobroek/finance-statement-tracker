@@ -27,7 +27,7 @@ ACTUAL_APPLY_PATH = WORKFLOWS / "20-actual-outbox-apply.json"
 AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
 PIPELINE_REGISTRY_PATH = N8N / "pipeline-registry.json"
 MONTHLY_SHARED_PATH = WORKFLOWS / "22-shared-monthly-statement-cycle.json"
-MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000022"
+MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000024"
 MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
 MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle"
 DATA_TABLE_MIGRATION_MATRIX_PATH = N8N / "data-table-migration-matrix.json"
@@ -441,6 +441,9 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
         shared["meta"]["workflowInputContract"] = json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT))
         shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
         shared["meta"]["workflowTags"] = json.loads(json.dumps(FOLDER_CONTRACT["tags"]))
+        for node in shared["nodes"]:
+            if node.get("type") == "n8n-nodes-base.stickyNote" and str(node.get("id", "")).endswith("-generated-note-1"):
+                node["id"] = f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1"
 
     if not any(node["type"] == "n8n-nodes-base.stickyNote" for node in shared["nodes"]):
         shared["nodes"].append({

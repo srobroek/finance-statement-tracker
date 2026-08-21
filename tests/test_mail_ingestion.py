@@ -368,7 +368,8 @@ try {
         )
         for filename, source in cases:
             with self.subTest(workflow=filename):
-                workflow = self.workflow(filename)
+                caller = self.workflow(filename)
+                workflow = self.workflow("22-shared-monthly-statement-cycle.json")
                 nodes = {node["name"]: node for node in workflow["nodes"]}
                 acquire = nodes["Acquire Archive and Read Back"]
                 target = acquire["parameters"]["workflowId"]
@@ -379,6 +380,12 @@ try {
                 self.assertEqual(
                     target["cachedResultName"], w12["name"]
                 )
+                caller_execute = [
+                    node for node in caller["nodes"]
+                    if node["type"] == "n8n-nodes-base.executeWorkflow"
+                ]
+                self.assertEqual(len(caller_execute), 1)
+                self.assertEqual(caller_execute[0]["parameters"]["workflowId"]["value"], workflow["id"])
                 self.assertTrue(acquire["parameters"]["options"]["waitForSubWorkflow"])
                 for node_name in (
                     "Read Source Cursor Before Commit",
@@ -471,7 +478,22 @@ try {
                     workflow,
                     "Assemble Trusted Acquisition Contract",
                     json_value=contract_row,
-                    refs={"Open Configured Cycle Window": run},
+                    refs={
+                        "Monthly Cycle Context": {
+                            "cycle_context": {
+                                key: run[key]
+                                for key in (
+                                    "run_id", "source_code", "window_start", "run_upper_bound",
+                                    "cycle_day", "period_key", "trigger_kind",
+                                )
+                            },
+                            "deadline_policy": {
+                                "deadline_at": run["deadline_at"],
+                                "deadline_days": run["deadline_days"],
+                            },
+                            "execution_id": run["run_id"],
+                        }
+                    },
                 )
                 self.assertTrue(assembled["ok"], assembled)
                 request = assembled["output"][0]["json"]
@@ -744,7 +766,22 @@ try {
                 workflow,
                 "Assemble Trusted Acquisition Contract",
                 json_value=source,
-                refs={"Open Configured Cycle Window": run},
+                refs={
+                    "Monthly Cycle Context": {
+                        "cycle_context": {
+                            key: run[key]
+                            for key in (
+                                "run_id", "source_code", "window_start", "run_upper_bound",
+                                "cycle_day", "period_key", "trigger_kind",
+                            )
+                        },
+                        "deadline_policy": {
+                            "deadline_at": run["deadline_at"],
+                            "deadline_days": run["deadline_days"],
+                        },
+                        "execution_id": run["run_id"],
+                    }
+                },
             )
             self.assertTrue(assembled["ok"], assembled)
             return assembled["output"][0]["json"]
@@ -839,7 +876,7 @@ try {
 
         for filename, source_code, senders, subjects, cycle_day in cases:
             with self.subTest(workflow=filename):
-                workflow = self.workflow(filename)
+                workflow = self.workflow("22-shared-monthly-statement-cycle.json")
                 request = cycle_request(workflow, source_code, senders, subjects, cycle_day)
                 cardinalities = {
                     "zero": [],
@@ -1910,7 +1947,7 @@ try {
             ("04-ei-monthly-statement.json", "EI_AMAZON"),
             ("05-wio-monthly-statement.json", "WIO_CREDIT"),
         ):
-            workflow = self.workflow(filename)
+            workflow = self.workflow("22-shared-monthly-statement-cycle.json")
             nodes = {node["name"]: node for node in workflow["nodes"]}
             initializer = nodes["Initialize Source Cursor via W12"]
             self.assertEqual(
@@ -1958,7 +1995,10 @@ try {
                 initializer["parameters"]["workflowInputs"]["value"]["source_code"],
                 "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}",
             )
-            self.assertIn(source_code, workflow["nodes"][1]["parameters"]["jsCode"])
+            self.assertIn(
+                "['EI_AMAZON', 'WIO_CREDIT']",
+                nodes["Assemble Trusted Acquisition Contract"]["parameters"]["jsCode"],
+            )
 
     def test_executable_mixed_new_and_replay_branches_reach_barrier(self):
         w01 = self.workflow("01-outlook-finance-acquisition.json")
@@ -2255,7 +2295,7 @@ try {
             ("05-wio-monthly-statement.json", "WIO_CREDIT"),
         ):
             with self.subTest(workflow=filename):
-                cycle = self.workflow(filename)
+                cycle = self.workflow("22-shared-monthly-statement-cycle.json")
                 run_id = f"{source_code}:whole-restart"
                 run_upper_bound = "2026-08-20T00:00:00.000Z"
                 source = {
