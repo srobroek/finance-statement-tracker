@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import hashlib
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -282,7 +283,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         program["source_references"] = [reference]
         claims = authoritative_claims(program)
         claims[0]["effective_start"] = (
-            datetime.now(timezone.utc).date() + timedelta(days=1)
+            datetime.datetime.now(datetime.UTC).date() + timedelta(days=1)
         ).isoformat()
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
