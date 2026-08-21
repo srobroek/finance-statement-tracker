@@ -300,18 +300,19 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlsplit(self.path).path
-        if path not in {
-            "/api/events",
-            "/api/events/validate",
-            "/api/ingest-runs",
-            "/api/ingest-state",
-            "/api/reconcile",
-            "/api/corrections",
-            "/api/periods/finalize",
-            "/api/alerts/ack",
-            "/api/outlook/messages",
-            "/api/push/subscriptions",
-        }:
+        handlers = {
+            "/api/events": self._post_events,
+            "/api/events/validate": self._post_events_validate,
+            "/api/ingest-runs": self._post_ingest_runs,
+            "/api/ingest-state": self._post_ingest_state,
+            "/api/reconcile": self._post_reconcile,
+            "/api/corrections": self._post_corrections,
+            "/api/periods/finalize": self._post_period_finalize,
+            "/api/alerts/ack": self._post_alert_ack,
+            "/api/outlook/messages": self._post_outlook_messages,
+            "/api/push/subscriptions": self._post_push_subscription,
+        }
+        if path not in handlers:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
         same_origin_paths = {
@@ -325,121 +326,141 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         elif not INGEST_TOKEN:
             self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Cashback ingest token is not configured"})
             return
-        elif self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
+        elif not hmac.compare_digest(
+            self.headers.get("Authorization") or "",
+            f"Bearer {INGEST_TOKEN}",
+        ):
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
             return
         try:
-            length = int(self.headers.get("Content-Length") or "0")
-            if length <= 0 or length > 1_000_000:
-                raise ValueError("Request body must be between 1 byte and 1 MB")
-            source = json.loads(self.rfile.read(length))
-            if path == "/api/push/subscriptions":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a push subscription request")
-                action = str(source.get("action") or "subscribe").strip().casefold()
-                subscription = source.get("subscription")
-                if not isinstance(subscription, dict):
-                    raise ValueError("subscription must be an object")
-                if action == "unsubscribe":
-                    result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
-                    self._json(
-                        HTTPStatus.OK,
-                        {
-                            "subscription": {"removed": bool(result["removed"])},
-                            "push": PUSH_DISPATCHER.config(),
-                        },
-                    )
-                    return
-                if action != "subscribe":
-                    raise ValueError("action must be subscribe or unsubscribe")
-                result = PUSH_STORE.upsert_subscription(
-                    subscription,
-                    str(self.headers.get("User-Agent") or "")[:500],
-                )
-                delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
-                self._json(
-                    HTTPStatus.OK,
-                    {
-                        "subscription": {"enabled": bool(result["enabled"])},
-                        "test_delivery": delivery,
-                        "push": PUSH_DISPATCHER.config(),
-                    },
-                )
-                return
-            if path == "/api/alerts/ack":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an alert acknowledgement object")
-                result = STORE.set_alert_acknowledgement(
-                    source.get("alert_key"),
-                    source.get("acknowledged"),
-                )
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"alert": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/ingest-runs":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an ingest run object")
-                result = STORE.record_ingest_success(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"ingest": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/ingest-state":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an ingest state request object")
-                state = STORE.ingest_state(str(source.get("source") or "outlook"))
-                self._json(HTTPStatus.OK, {"ingest_state": state})
-                return
-            if path == "/api/outlook/messages":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an Outlook message batch object")
-                result = parse_outlook_batch(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {**result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/reconcile":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a statement reconciliation object")
-                result = STORE.reconcile_statement(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"reconciliation": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/corrections":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an event correction object")
-                result = STORE.correct_event(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"correction": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/periods/finalize":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a card-period finalization object")
-                result = STORE.finalize_period(source, program_config_path=PROGRAM_CONFIG_PATH)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"period": result, "event_store": dashboard["data_status"]})
-                return
-            events = source if isinstance(source, list) else [source]
-            if any(not isinstance(event, dict) for event in events):
-                raise ValueError("Payload must be an event object or a list of event objects")
-            profile_currency = str(
-                load_program_configuration(PROGRAM_CONFIG_PATH).get("currency") or ""
-            ).strip().upper()
-            if not profile_currency:
-                raise ValueError("Cashback profile currency is required")
-            events = [
-                {**event, "currency": event.get("currency") or profile_currency}
-                for event in events
-            ]
-            if path == "/api/events/validate":
-                STORE.validate(events)
-                self._json(HTTPStatus.OK, {"valid": True, "event_count": len(events)})
-                return
-            result = STORE.upsert(events)
-            dashboard = rebuild_dashboard()
+            result = handlers[path](self._read_json_body())
         except (ValueError, json.JSONDecodeError) as error:
             status = HTTPStatus.CONFLICT if isinstance(error, IngestCursorConflict) else HTTPStatus.BAD_REQUEST
             self._json(status, {"error": str(error)})
             return
-        self._json(HTTPStatus.OK, {**result, "event_store": dashboard["data_status"]})
+        except Exception as error:  # service boundary: keep operational details out of responses
+            self._log_post_failure(path, error)
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Internal server error"})
+            return
+        self._json(HTTPStatus.OK, result)
+
+    def _read_json_body(self) -> object:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0 or length > 1_000_000:
+            raise ValueError("Request body must be between 1 byte and 1 MB")
+        return json.loads(self.rfile.read(length))
+
+    def _post_push_subscription(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a push subscription request")
+        action = str(source.get("action") or "subscribe").strip().casefold()
+        subscription = source.get("subscription")
+        if not isinstance(subscription, dict):
+            raise ValueError("subscription must be an object")
+        if action == "unsubscribe":
+            result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
+            return {
+                "subscription": {"removed": bool(result["removed"])},
+                "push": PUSH_DISPATCHER.config(),
+            }
+        if action != "subscribe":
+            raise ValueError("action must be subscribe or unsubscribe")
+        result = PUSH_STORE.upsert_subscription(
+            subscription,
+            str(self.headers.get("User-Agent") or "")[:500],
+        )
+        delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
+        return {
+            "subscription": {"enabled": bool(result["enabled"])},
+            "test_delivery": delivery,
+            "push": PUSH_DISPATCHER.config(),
+        }
+
+    def _post_alert_ack(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an alert acknowledgement object")
+        result = STORE.set_alert_acknowledgement(
+            source.get("alert_key"),
+            source.get("acknowledged"),
+        )
+        dashboard = rebuild_dashboard()
+        return {"alert": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_runs(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an ingest run object")
+        result = STORE.record_ingest_success(source)
+        dashboard = rebuild_dashboard()
+        return {"ingest": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_state(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an ingest state request object")
+        state = STORE.ingest_state(str(source.get("source") or "outlook"))
+        return {"ingest_state": state}
+
+    def _post_outlook_messages(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an Outlook message batch object")
+        result = parse_outlook_batch(source)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _post_reconcile(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a statement reconciliation object")
+        result = STORE.reconcile_statement(source)
+        dashboard = rebuild_dashboard()
+        return {"reconciliation": result, "event_store": dashboard["data_status"]}
+
+    def _post_corrections(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an event correction object")
+        result = STORE.correct_event(source)
+        dashboard = rebuild_dashboard()
+        return {"correction": result, "event_store": dashboard["data_status"]}
+
+    def _post_period_finalize(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a card-period finalization object")
+        result = STORE.finalize_period(source, program_config_path=PROGRAM_CONFIG_PATH)
+        dashboard = rebuild_dashboard()
+        return {"period": result, "event_store": dashboard["data_status"]}
+
+    def _post_events_payload(self, source: object) -> list[dict[str, object]]:
+        events = source if isinstance(source, list) else [source]
+        if any(not isinstance(event, dict) for event in events):
+            raise ValueError("Payload must be an event object or a list of event objects")
+        event_objects = [event for event in events if isinstance(event, dict)]
+        profile_currency = str(
+            load_program_configuration(PROGRAM_CONFIG_PATH).get("currency") or ""
+        ).strip().upper()
+        if not profile_currency:
+            raise ValueError("Cashback profile currency is required")
+        return [
+            {**event, "currency": event.get("currency") or profile_currency}
+            for event in event_objects
+        ]
+
+    def _post_events_validate(self, source: object) -> dict[str, object]:
+        events = self._post_events_payload(source)
+        STORE.validate(events)
+        return {"valid": True, "event_count": len(events)}
+
+    def _post_events(self, source: object) -> dict[str, object]:
+        events = self._post_events_payload(source)
+        result = STORE.upsert(events)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _log_post_failure(self, path: str, error: Exception) -> None:
+        print(json.dumps({
+            "timestamp": datetime_now(),
+            "level": "error",
+            "event": "http_request_failed",
+            "path": path,
+            "exception_type": type(error).__name__,
+        }), flush=True)
 
     def _json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
         body = json.dumps(payload).encode("utf-8")

@@ -372,7 +372,7 @@ class CashbackServerTests(unittest.TestCase):
                     process.kill()
                     process.wait(timeout=5)
 
-    def test_finalize_fault_restart_is_persistent_and_fail_closed(self) -> None:
+    def test_finalize_fault_returns_bounded_500_and_replays_after_restart(self) -> None:
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
@@ -472,8 +472,18 @@ class CashbackServerTests(unittest.TestCase):
                         END
                         """
                     )
-                with self.assertRaises((OSError, urllib.error.URLError)):
+                with self.assertRaises(urllib.error.HTTPError) as failed:
                     post("periods/finalize", close_payload)
+                self.assertEqual(failed.exception.code, 500)
+                self.assertEqual(
+                    json.loads(failed.exception.read()),
+                    {"error": "Internal server error"},
+                )
+                failed.exception.close()
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/health", timeout=3
+                ) as response:
+                    self.assertEqual(response.status, 200)
                 with self.assertRaises(urllib.error.HTTPError) as untrusted:
                     post("periods/finalize", {
                         key: value
