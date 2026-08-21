@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   assertCommitEnabled,
+  canonicalActualImportProjection,
+  compareActualImportProjections,
   doctor,
   enrichTransactions,
   exportDashboardDocument,
@@ -113,6 +115,113 @@ test("Actual commit requires the explicit production write gate", () => {
     () => assertCommitEnabled(true, {}),
     /Actual commits are disabled/,
   );
+});
+
+test("import readback compares the complete canonical economic projection", () => {
+  const source = {
+    imported_id: "statement:fixture:1",
+    date: "2026-08-16",
+    amount: -12345,
+    imported_payee: "MERCHANT RAW",
+    payee_name: "Merchant",
+    category: "category-shopping",
+    notes: "#shopping",
+    reconciled: true,
+    transfer_id: "transfer-peer",
+  };
+  const expected = canonicalActualImportProjection(source, {
+    account: "account-1",
+    defaultCleared: true,
+  });
+  const observed = canonicalActualImportProjection({
+    ...source,
+    account: "account-1",
+    payee_name: undefined,
+    payee: "payee-1",
+    cleared: true,
+  }, { account: "account-1", payeeName: "Merchant" });
+
+  const result = compareActualImportProjections([expected], [observed]);
+  assert.deepEqual(result.missing, []);
+  assert.deepEqual(result.duplicated, []);
+  assert.deepEqual(result.duplicate_expected, []);
+  assert.deepEqual(result.mismatches, []);
+});
+
+test("import readback detects drift in every economic field", () => {
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:fixture:1",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -12345,
+    imported_payee: "MERCHANT RAW",
+    payee_name: "Merchant",
+    category: "category-shopping",
+    notes: "#shopping",
+    cleared: true,
+    reconciled: false,
+    transfer_id: null,
+  });
+  const observed = { ...expected };
+  const mutations = {
+    account: "account-2",
+    date: "2026-08-17",
+    amount: -12346,
+    imported_payee: "OTHER RAW",
+    payee: "Other Merchant",
+    category: "category-travel",
+    notes: "#travel",
+    cleared: false,
+    reconciled: true,
+    transfer_id: "transfer-peer",
+  };
+  for (const [field, value] of Object.entries(mutations)) {
+    const result = compareActualImportProjections(
+      [expected],
+      [{ ...observed, [field]: value }],
+    );
+    assert.equal(result.mismatches.length, 1, `expected ${field} drift to fail`);
+    assert.deepEqual(result.mismatches[0].fields, [field]);
+  }
+});
+
+test("import readback detects missing and duplicate imported rows deterministically", () => {
+  const expected = [
+    canonicalActualImportProjection({ imported_id: "b", account: "account-1", date: "2026-08-16", amount: -2 }),
+    canonicalActualImportProjection({ imported_id: "a", account: "account-1", date: "2026-08-15", amount: -1 }),
+  ];
+  const observed = [{ ...expected[1] }, { ...expected[1] }];
+  const result = compareActualImportProjections(expected, observed);
+  assert.deepEqual(result.missing, ["b"]);
+  assert.deepEqual(result.duplicated, ["a"]);
+  assert.deepEqual(result.expected.map(row => row.imported_id), ["a", "b"]);
+});
+
+test("import readback normalizes null optional fields and default clearing", () => {
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:fixture:nulls",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: 1,
+    imported_payee: null,
+    category: null,
+    notes: null,
+    reconciled: null,
+    transfer_id: null,
+  }, { account: "account-1", defaultCleared: true });
+  const observed = canonicalActualImportProjection({
+    imported_id: "statement:fixture:nulls",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: 1,
+    imported_payee: undefined,
+    category: undefined,
+    notes: undefined,
+    reconciled: undefined,
+    transfer_id: "",
+    cleared: true,
+  });
+  assert.deepEqual(compareActualImportProjections([expected], [observed]).mismatches, []);
 });
 
 test("native classification rules migrate from pre to Actual default without touching unrelated rules", () => {
