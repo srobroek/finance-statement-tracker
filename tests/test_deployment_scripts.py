@@ -585,11 +585,47 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
         self.assertIn('sudo podman pull --authfile "$auth_file" "$IMAGE_REF"', deploy)
         self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
-        self.assertIn("{{index .RepoDigests 0}}", deploy)
+        self.assertIn("{{range .RepoDigests}}{{println .}}{{end}}", deploy)
+        self.assertIn('awk -v expected="$IMAGE_REF"', deploy)
+        self.assertIn("$0 == expected", deploy)
+        self.assertIn("found != 1", deploy)
+        self.assertNotIn("{{index .RepoDigests 0}}", deploy)
         self.assertIn('test "$resolved" = "$IMAGE_REF"', deploy)
         self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
-        self.assertIn('"$stack/.env.pre-${stamp}"', deploy)
+        self.assertIn('"$stack/.env.rollback-${stamp}"', deploy)
+        self.assertIn('running_image_id="$(sudo docker inspect finance-cashback-control --format \'{{.Image}}\')"', deploy)
+        self.assertIn('rollback_image_ref="$(\n', deploy)
+        self.assertIn('awk -v prefix="${IMAGE_NAME}@"', deploy)
+        self.assertIn('index($0, prefix) == 1', deploy)
+        self.assertIn('CASHBACK_IMAGE=%s\\n', deploy)
         self.assertNotIn("$IMAGE_NAME:main", deploy)
+
+        expected = (
+            "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+            + "b" * 64
+        )
+        candidates = "\n".join(
+            (
+                "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+                + "a" * 64,
+                "ghcr.io/other/cashback@sha256:" + "c" * 64,
+                expected,
+            )
+        )
+        selected = subprocess.run(
+            [
+                "awk",
+                "-v",
+                f"expected={expected}",
+                '$0 == expected { found += 1 } END { if (found != 1) exit 1; print expected }',
+            ],
+            input=candidates,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(selected.returncode, 0, selected.stderr)
+        self.assertEqual(selected.stdout.strip(), expected)
 
         self.assertIn(
             "image: ${CASHBACK_IMAGE:?CASHBACK_IMAGE must be the published immutable image reference}",
