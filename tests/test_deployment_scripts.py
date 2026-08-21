@@ -594,9 +594,11 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
         self.assertIn('"$stack/.env.rollback-${stamp}"', deploy)
         self.assertIn('running_image_id="$(sudo docker inspect finance-cashback-control --format \'{{.Image}}\')"', deploy)
+        self.assertIn('running_image_digest="$(sudo docker image inspect "$running_image_id" --format \'{{.Digest}}\')"', deploy)
+        self.assertIn('rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"', deploy)
         self.assertIn('rollback_image_ref="$(\n', deploy)
-        self.assertIn('awk -v prefix="${IMAGE_NAME}@"', deploy)
-        self.assertIn('index($0, prefix) == 1', deploy)
+        self.assertIn('awk -v expected="$rollback_image_ref"', deploy)
+        self.assertIn("$0 == expected", deploy)
         self.assertIn('CASHBACK_IMAGE=%s\\n', deploy)
         self.assertNotIn("$IMAGE_NAME:main", deploy)
 
@@ -608,8 +610,10 @@ class DeploymentScriptTests(unittest.TestCase):
             (
                 "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
                 + "a" * 64,
-                "ghcr.io/other/cashback@sha256:" + "c" * 64,
                 expected,
+                "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+                + "c" * 64,
+                "ghcr.io/other/cashback@sha256:" + "d" * 64,
             )
         )
         selected = subprocess.run(

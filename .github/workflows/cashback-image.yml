@@ -197,20 +197,21 @@ jobs:
           fi
           if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
             running_image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
+            running_image_digest="$(sudo docker image inspect "$running_image_id" --format '{{.Digest}}')"
+            if [[ ! "$running_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Running Cashback image digest is missing or malformed" >&2
+              exit 1
+            fi
+            rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"
             running_repo_digests="$(sudo docker image inspect "$running_image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
             if ! rollback_image_ref="$(
               printf '%s\n' "$running_repo_digests" |
-                awk -v prefix="${IMAGE_NAME}@" '
-                  index($0, prefix) == 1 { found += 1; value = $0 }
-                  END { if (found != 1) exit 1; print value }
+                awk -v expected="$rollback_image_ref" '
+                  $0 == expected { found += 1 }
+                  END { if (found != 1) exit 1; print expected }
                 '
             )"; then
-              echo "Running Cashback image has no unique RepoDigest for ${IMAGE_NAME}" >&2
-              exit 1
-            fi
-            rollback_digest="${rollback_image_ref#"${IMAGE_NAME}"@}"
-            if [[ ! "$rollback_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "Running Cashback image RepoDigest is malformed" >&2
+              echo "Running Cashback image digest is not a unique RepoDigest for ${IMAGE_NAME}" >&2
               exit 1
             fi
             printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
