@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 
@@ -20,6 +21,11 @@ def load_json(path: Path) -> dict:
 def declared_tools(workflow: dict) -> dict[str, dict]:
     """Extract declared MCP tool nodes from the workflow graph itself."""
     trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
+    path = trigger.get("parameters", {}).get("path")
+    if path != "finance-operations-v1":
+        raise AssertionError("MCP trigger path must use the stable short route")
+    if trigger.get("webhookId") != path:
+        raise AssertionError("MCP trigger webhookId must equal the stable short route")
     tools = {
         node["parameters"]["name"]: node
         for node in workflow["nodes"]
@@ -80,6 +86,7 @@ class FinanceMcpContractTests(unittest.TestCase):
 
         trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
         self.assertEqual(trigger["parameters"]["path"], "finance-operations-v1")
+        self.assertEqual(trigger["webhookId"], "finance-operations-v1")
         self.assertEqual(manifest["mcp"]["path"], contract["path"])
         self.assertEqual(manifest["mcp"]["operations"], expected_names)
         self.assertEqual(
@@ -151,6 +158,39 @@ class FinanceMcpContractTests(unittest.TestCase):
             build_tool_call_envelope(workflow, "finance.unknown.v1", {})
         with self.assertRaisesRegex(ValueError, "MCP_TOOL_ARGUMENTS_INVALID"):
             build_tool_call_envelope(workflow, "finance.status.v1", {"unexpected": "value"})
+
+    def test_source_graph_rejects_missing_or_prefixed_webhook_identity(self) -> None:
+        for webhook_id in (None, "", "workflow/10000000-0000-4000-8000-000000000015/finance-operations-v1"):
+            with self.subTest(webhook_id=webhook_id):
+                workflow = deepcopy(load_json(WORKFLOW))
+                trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
+                trigger["webhookId"] = webhook_id
+                with self.assertRaisesRegex(AssertionError, "webhookId"):
+                    declared_tools(workflow)
+
+        workflow = deepcopy(load_json(WORKFLOW))
+        trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
+        trigger["parameters"]["path"] = "workflow/10000000-0000-4000-8000-000000000015/finance-operations-v1"
+        with self.assertRaisesRegex(AssertionError, "path"):
+            declared_tools(workflow)
+
+    def test_source_graph_rejects_reversed_or_empty_tool_wiring(self) -> None:
+        workflow = deepcopy(load_json(WORKFLOW))
+        trigger = next(node for node in workflow["nodes"] if node["type"].endswith("mcpTrigger"))
+        tool = next(node for node in workflow["nodes"] if node["type"].endswith("toolWorkflow"))
+
+        workflow["connections"] = {
+            trigger["name"]: {
+                "ai_tool": [[{"node": tool["name"], "type": "ai_tool", "index": 0}]]
+            }
+        }
+        with self.assertRaisesRegex(AssertionError, "must not be the ai_tool source"):
+            declared_tools(workflow)
+
+        workflow = deepcopy(load_json(WORKFLOW))
+        workflow["connections"] = {}
+        with self.assertRaisesRegex(AssertionError, "not connected to the trigger"):
+            declared_tools(workflow)
 
 
 if __name__ == "__main__":

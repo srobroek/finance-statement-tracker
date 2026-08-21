@@ -8,6 +8,7 @@
       "name": "Finance MCP Server Trigger",
       "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
       "typeVersion": 2,
+      "webhookId": "finance-operations-v1",
       "position": [
         -220,
         0

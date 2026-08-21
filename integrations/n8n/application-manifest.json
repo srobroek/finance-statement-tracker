@@ -35,7 +35,7 @@
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 21,
-    "sha256": "42181de089ff46a4e81610fced1dcebe4f5e966e28bb6dc061b9dfd78e09c372",
+    "sha256": "97f02a8d0668a1b5974f7299c9cc3c136c9cc6ff28f305c5e3026418ae98d8b5",
     "required_state": {
       "active": false,
       "published": false,
@@ -57,7 +57,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "db6eefb068e211ed052093eccb8a5a950bab2201418210892069ed3209b59ed8"
+      "sha256": "03f8ebb36923f399df6abef487bfd413afec11c985fb2c3e015f0af05d4c5b9a"
     },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
