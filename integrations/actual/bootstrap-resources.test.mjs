@@ -138,6 +138,35 @@ test("bootstrap category group drift is visible in dry-run and apply projections
   assert.equal(appliedCategories[0].group_id, "group-food");
 });
 
+test("bootstrap created category group retains applied fields for parity", async () => {
+  const config = {
+    category_groups: [{ name: "Income", is_income: true, hidden: true, categories: [] }],
+  };
+  const plannedChanges = [];
+  await reconcileCategories({
+    api: {}, config, apply: false, groups: [], categories: [], changes: plannedChanges,
+  });
+
+  const calls = [];
+  const appliedChanges = [];
+  await reconcileCategories({
+    api: {
+      createCategoryGroup: async fields => {
+        calls.push(fields);
+        return "group-income";
+      },
+    },
+    config,
+    apply: true,
+    groups: [],
+    categories: [],
+    changes: appliedChanges,
+  });
+
+  assert.deepEqual(appliedChanges, plannedChanges);
+  assert.deepEqual(calls, [{ name: "Income", is_income: true, hidden: true }]);
+});
+
 test("managed schedule marker is durable and manual name collisions fail closed", async () => {
   const desired = scheduleConfig();
   const markerName = managedScheduleName(desired);
@@ -211,4 +240,21 @@ test("removed and disabled managed schedules retire while unrelated manual sched
     changes: second,
   });
   assert.deepEqual(second, []);
+});
+
+test("managed schedule retirement fails closed when Actual rejects deletion", async () => {
+  const existing = scheduleConfig({ name: "Retired bill", managed_id: "retired-bill" });
+  await assert.rejects(
+    () => reconcileSchedules({
+      api: {
+        getSchedules: async () => [{ id: "retired", name: managedScheduleName(existing) }],
+        deleteSchedule: async () => false,
+      },
+      config: { schedules: [] },
+      apply: true,
+      refs,
+      changes: [],
+    }),
+    /refused to retire schedule retired/,
+  );
 });

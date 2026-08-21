@@ -235,21 +235,35 @@ export async function reconcileCategories({ api, config, apply, groups, categori
     if (groupMatches.length > 1) throw new Error(`Ambiguous Actual category group identity: ${desired.name}`);
     let group = groupMatches[0];
     if (!group) {
-      changes.push({ action: "create", type: "category_group", name: desired.name });
+      changes.push({
+        action: "create",
+        type: "category_group",
+        name: desired.name,
+        fields: {
+          name: desired.name,
+          is_income: Boolean(desired.is_income),
+          hidden: Boolean(desired.hidden),
+        },
+      });
       if (apply) {
         const id = await api.createCategoryGroup({
           name: desired.name,
           is_income: Boolean(desired.is_income),
           hidden: Boolean(desired.hidden),
         });
-        group = { id, name: desired.name };
+        group = {
+          id,
+          name: desired.name,
+          is_income: Boolean(desired.is_income),
+          hidden: Boolean(desired.hidden),
+        };
       }
     }
 
     const groupFields = {};
     if (group && group.name !== desired.name) groupFields.name = desired.name;
     for (const field of ["is_income", "hidden"]) {
-      if (desired[field] !== undefined && Boolean(group?.[field]) !== Boolean(desired[field])) {
+      if (group && desired[field] !== undefined && Boolean(group[field]) !== Boolean(desired[field])) {
         groupFields[field] = Boolean(desired[field]);
       }
     }
@@ -516,7 +530,10 @@ export async function reconcileSchedules({ api, config, apply, refs, changes }) 
           if (typeof api.deleteSchedule !== "function") {
             throw new Error(`Actual API cannot retire schedule: ${marker.name}`);
           }
-          await api.deleteSchedule(existing.id);
+          const deleted = await api.deleteSchedule(existing.id);
+          if (deleted === false) {
+            throw new Error(`Actual refused to retire schedule ${existing.id}`);
+          }
         }
       }
       continue;
