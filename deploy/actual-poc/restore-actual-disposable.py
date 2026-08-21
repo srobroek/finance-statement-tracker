@@ -86,6 +86,17 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     os.chmod(path, 0o600)
 
 
+_ACTIVE_PROCESSES: dict[int, subprocess.Popen[str]] = {}
+
+
+def terminate_active_process_groups() -> None:
+    for process in tuple(_ACTIVE_PROCESSES.values()):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def run_checked(
     argv: list[str],
     *,
@@ -103,17 +114,32 @@ def run_checked(
         env=env,
         start_new_session=True,
     )
+    _ACTIVE_PROCESSES[process.pid] = process
     try:
         stdout, stderr = process.communicate(timeout=timeout)
+    except SystemExit:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate()
+        raise
     except subprocess.TimeoutExpired as exc:
-        os.killpg(process.pid, signal.SIGKILL)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         stdout, stderr = process.communicate()
         if not isinstance(stdout, str):
             stdout = exc.stdout if isinstance(exc.stdout, str) else ""
         if not isinstance(stderr, str):
             stderr = exc.stderr if isinstance(exc.stderr, str) else ""
-        return subprocess.CompletedProcess(argv, 124, stdout, f"{stderr}\ncommand timed out".strip())
-    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+        completed = subprocess.CompletedProcess(argv, 124, stdout, f"{stderr}\ncommand timed out".strip())
+    else:
+        completed = subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+    finally:
+        _ACTIVE_PROCESSES.pop(process.pid, None)
+    return completed
 
 
 def runtime_command(value: str | None) -> list[str]:
@@ -134,7 +160,6 @@ def detect_runtime_backend(runtime: list[str]) -> str:
     result = runtime_call(runtime, "version")
     if result.returncode != 0:
         raise DrillError("container_runtime_unavailable", "runtime")
-    executable = Path(runtime[0]).name.lower()
     version_text = f"{result.stdout}\n{result.stderr}".lower()
     podman = bool(re.search(r"\bpodman\b", version_text))
     docker = bool(re.search(r"\bdocker\b", version_text))
@@ -146,11 +171,14 @@ def detect_runtime_backend(runtime: list[str]) -> str:
         return "podman"
     if docker:
         return "docker"
-    if executable in {"podman", "podman.exe"}:
-        return "podman"
-    if executable in {"docker", "docker.exe"}:
-        return "docker"
     raise DrillError("unsupported_container_runtime", "runtime", "runtime is not Docker or Podman")
+
+
+def parse_runtime_id(output: str, code: str, stage: str) -> str:
+    value = output.strip()
+    if not re.fullmatch(r"[0-9a-f]{12,64}", value, flags=re.IGNORECASE):
+        raise DrillError(code, stage, "runtime did not return one opaque object ID")
+    return value
 
 
 @dataclass(frozen=True)
@@ -168,15 +196,15 @@ def namespace_stat(pid: int) -> tuple[int, int]:
     return status.st_dev, status.st_ino
 
 
-def inspect_sidecar_namespace(runtime: list[str], sidecar: str) -> NetworkNamespace:
-    result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}|{{.State.Pid}}", sidecar)
+def inspect_sidecar_namespace(runtime: list[str], sidecar: str, sidecar_id: str) -> NetworkNamespace:
+    result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}|{{.State.Pid}}", sidecar_id)
     if result.returncode != 0:
         raise DrillError("runtime_namespace_identity_failed", "namespace")
     fields = result.stdout.strip().split("|")
     if len(fields) != 3:
         raise DrillError("runtime_namespace_identity_failed", "namespace", "unexpected inspect identity")
     container_id, name, pid_text = fields
-    if not re.fullmatch(r"[0-9a-f]{12,64}", container_id, flags=re.IGNORECASE):
+    if container_id.lower() != sidecar_id.lower():
         raise DrillError("runtime_namespace_identity_failed", "namespace", "invalid container identity")
     if name not in {sidecar, f"/{sidecar}"} or not re.fullmatch(r"[1-9][0-9]*", pid_text):
         raise DrillError("runtime_namespace_identity_failed", "namespace", "foreign sidecar identity")
@@ -212,6 +240,26 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     raise DrillError("runtime_inspect_failed", "cleanup")
 
 
+def inspect_owned_state(runtime: list[str], object_id: str, object_name: str, kind: str) -> str:
+    if kind == "container":
+        result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}", object_id)
+        absent_code = "runtime_inspect_failed"
+    else:
+        result = runtime_call(runtime, "network", "inspect", "--format", "{{.Id}}|{{.Name}}", object_id)
+        absent_code = "runtime_network_inspect_failed"
+    if result.returncode == 0:
+        fields = result.stdout.strip().split("|")
+        expected_names = {object_name} if kind == "network" else {object_name, f"/{object_name}"}
+        actual_name = fields[1] if len(fields) == 2 else ""
+        if len(fields) != 2 or fields[0].lower() != object_id.lower() or actual_name not in expected_names:
+            raise DrillError(absent_code, "cleanup", "owned resource identity changed")
+        return "present"
+    message = f"{result.stdout}\n{result.stderr}"
+    if is_absent_inspect_response(message, object_id, kind):
+        return "absent"
+    raise DrillError(absent_code, "cleanup")
+
+
 def inspect_network_state(runtime: list[str], network: str) -> str:
     result = runtime_call(runtime, "network", "inspect", network)
     if result.returncode == 0:
@@ -222,11 +270,14 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     raise DrillError("runtime_network_inspect_failed", "cleanup")
 
 
-def inspect_network_internal(runtime: list[str], network: str) -> bool:
-    result = runtime_call(runtime, "network", "inspect", "--format", "{{.Internal}}", network)
+def inspect_network_internal(runtime: list[str], network_id: str, network_name: str) -> bool:
+    result = runtime_call(runtime, "network", "inspect", "--format", "{{.Id}}|{{.Name}}|{{.Internal}}", network_id)
     if result.returncode != 0:
         raise DrillError("runtime_network_inspect_failed", "network")
-    if result.stdout.strip().lower() != "true":
+    fields = result.stdout.strip().split("|")
+    if len(fields) != 3 or fields[0].lower() != network_id.lower() or fields[1] != network_name:
+        raise DrillError("runtime_network_identity_changed", "network", "owned network identity changed")
+    if fields[2].lower() != "true":
         raise DrillError("network_not_internal", "network", "network is not egress-isolated")
     return True
 
@@ -351,6 +402,7 @@ def probe_readback(
     data_dir: Path,
     namespace_tool: list[str],
     namespace: NetworkNamespace,
+    timeout: float,
 ) -> dict[str, Any]:
     environment = os.environ.copy()
     environment.update({
@@ -358,7 +410,7 @@ def probe_readback(
         "ACTUAL_RESTORE_DATA_DIR": str(data_dir),
         "ACTUAL_RESTORE_RUN_INDEX": str(run_index),
     })
-    result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=30)
+    result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=timeout)
     if result.returncode != 0:
         raise DrillError("readback_probe_failed", "readback")
     try:
@@ -400,6 +452,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runtime", default=os.environ.get("FINANCE_CONTAINER_RUNTIME"))
     parser.add_argument("--repeat", type=int, default=int(os.environ.get("FINANCE_ACTUAL_RESTORE_RUNS", "2")))
     parser.add_argument("--health-attempts", type=int, default=int(os.environ.get("FINANCE_ACTUAL_RESTORE_HEALTH_ATTEMPTS", "60")))
+    parser.add_argument("--readback-timeout", type=float, default=float(os.environ.get("FINANCE_ACTUAL_RESTORE_READBACK_TIMEOUT", "30")))
     parser.add_argument("--temp-root", default=os.environ.get("FINANCE_ACTUAL_RESTORE_TEMP_ROOT", "/tmp"))
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--namespace-tool", default=os.environ.get("FINANCE_ACTUAL_RESTORE_NAMESPACE_TOOL", "nsenter"))
@@ -454,27 +507,39 @@ def main() -> int:
     }
     current_runtime: list[str] | None = None
     current_sidecar: str | None = None
+    current_sidecar_id: str | None = None
     current_network: str | None = None
+    current_network_id: str | None = None
     current_data: Path | None = None
     temp_root_for_cleanup: Path | None = None
 
     def cleanup() -> bool:
-        nonlocal current_sidecar, current_network, current_data
+        nonlocal current_sidecar, current_sidecar_id, current_network, current_network_id, current_data
         ok = True
         sidecar_state = "absent"
         if current_runtime and current_sidecar:
-            try:
-                sidecar_state = inspect_state(current_runtime, current_sidecar)
-            except DrillError:
-                sidecar_state = "unknown"
-                ok = False
+            if current_sidecar_id:
+                try:
+                    sidecar_state = inspect_owned_state(current_runtime, current_sidecar_id, current_sidecar, "container")
+                except DrillError:
+                    sidecar_state = "unknown"
+                    ok = False
+            else:
+                try:
+                    sidecar_state = inspect_state(current_runtime, current_sidecar)
+                except DrillError:
+                    sidecar_state = "unknown"
+                    ok = False
+                if sidecar_state == "present":
+                    sidecar_state = "unknown"
+                    ok = False
             if sidecar_state == "present":
-                removed = runtime_call(current_runtime, "rm", "-f", current_sidecar)
+                removed = runtime_call(current_runtime, "rm", "-f", current_sidecar_id)
                 if removed.returncode != 0:
                     ok = False
                 else:
                     try:
-                        sidecar_state = inspect_state(current_runtime, current_sidecar)
+                        sidecar_state = inspect_owned_state(current_runtime, current_sidecar_id, current_sidecar, "container")
                     except DrillError:
                         sidecar_state = "unknown"
                         ok = False
@@ -486,24 +551,36 @@ def main() -> int:
         if current_runtime and current_network:
             if sidecar_state != "absent":
                 ok = False
-            try:
-                network_state = inspect_network_state(current_runtime, current_network)
-            except DrillError:
                 network_state = "unknown"
-                ok = False
-            if network_state == "present" and sidecar_state == "absent":
-                removed = runtime_call(current_runtime, "network", "rm", current_network)
+            elif current_network_id:
+                try:
+                    network_state = inspect_owned_state(current_runtime, current_network_id, current_network, "network")
+                except DrillError:
+                    network_state = "unknown"
+                    ok = False
+            else:
+                try:
+                    network_state = inspect_network_state(current_runtime, current_network)
+                except DrillError:
+                    network_state = "unknown"
+                    ok = False
+                if network_state == "present":
+                    network_state = "unknown"
+                    ok = False
+            if network_state == "present" and sidecar_state == "absent" and current_network_id:
+                removed = runtime_call(current_runtime, "network", "rm", current_network_id)
                 if removed.returncode != 0:
                     ok = False
                 else:
                     try:
-                        network_state = inspect_network_state(current_runtime, current_network)
+                        network_state = inspect_owned_state(current_runtime, current_network_id, current_network, "network")
                     except DrillError:
                         network_state = "unknown"
                         ok = False
                     if network_state != "absent":
                         ok = False
             elif network_state != "absent":
+                network_state = "unknown"
                 ok = False
         if current_data and path_exists(current_data):
             if sidecar_state != "absent" or network_state != "absent":
@@ -515,7 +592,7 @@ def main() -> int:
                     ok = False
                 ok = ok and not path_exists(current_data)
         if ok:
-            current_sidecar, current_network, current_data = None, None, None
+            current_sidecar, current_sidecar_id, current_network, current_network_id, current_data = None, None, None, None, None
         return ok
 
     def cleanup_outer_root() -> bool:
@@ -544,6 +621,7 @@ def main() -> int:
         return True
 
     def handle_signal(signum: int, _frame: Any) -> None:
+        terminate_active_process_groups()
         if not cleanup():
             result["cleanup_verified"] = False
         raise SystemExit(128 + signum)
@@ -591,6 +669,8 @@ def main() -> int:
                 raise DrillError("disposable_resource_collision", "preflight", network)
             current_sidecar, current_data = sidecar, data_dir
             current_network = network
+            current_sidecar_id = None
+            current_network_id = None
             safe_extract_actual(archive, data_dir)
             created_network = runtime_call(
                 current_runtime,
@@ -605,7 +685,8 @@ def main() -> int:
             )
             if created_network.returncode != 0:
                 raise DrillError("disposable_network_create_failed", "network")
-            network_internal = inspect_network_internal(current_runtime, network)
+            current_network_id = parse_runtime_id(created_network.stdout, "disposable_network_identity_invalid", "network")
+            network_internal = inspect_network_internal(current_runtime, current_network_id, network)
             data_sha = digest({str(path.relative_to(data_dir)): sha256(path) for path in sorted(data_dir.rglob("*")) if path.is_file()})
             port = args.port or 5006
             url = f"http://127.0.0.1:{port}"
@@ -616,7 +697,8 @@ def main() -> int:
             )
             if started_container.returncode != 0:
                 raise DrillError("sidecar_start_failed", "start")
-            namespace = inspect_sidecar_namespace(current_runtime, sidecar)
+            current_sidecar_id = parse_runtime_id(started_container.stdout, "sidecar_identity_invalid", "start")
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id)
             health_error: DrillError | None = None
             for _attempt in range(args.health_attempts):
                 try:
@@ -635,11 +717,12 @@ def main() -> int:
                 data_dir=data_dir,
                 namespace_tool=namespace_tool,
                 namespace=namespace,
+                timeout=args.readback_timeout,
             )
-            restarted = runtime_call(current_runtime, "restart", sidecar)
+            restarted = runtime_call(current_runtime, "restart", current_sidecar_id)
             if restarted.returncode != 0:
                 raise DrillError("sidecar_restart_failed", "restart")
-            namespace = inspect_sidecar_namespace(current_runtime, sidecar)
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id)
             for _attempt in range(args.health_attempts):
                 try:
                     probe_http(url, http_command, namespace_tool=namespace_tool, namespace=namespace)
@@ -657,6 +740,7 @@ def main() -> int:
                 data_dir=data_dir,
                 namespace_tool=namespace_tool,
                 namespace=namespace,
+                timeout=args.readback_timeout,
             )
             repeat_match = first_readback == second_readback
             if not repeat_match:

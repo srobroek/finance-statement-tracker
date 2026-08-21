@@ -112,6 +112,7 @@ def fake_runtime(
     restart_failure: bool = False,
     network_internal: bool = True,
     namespace_identity: str = "owned",
+    replacement_race: str | None = None,
 ) -> Path:
     return executable(
         root,
@@ -128,6 +129,19 @@ if command == 'version':
 if command == 'network':
     action = sys.argv[2] if len(sys.argv) > 2 else ''
     name = sys.argv[-1]
+    if {replacement_race!r} == 'network' and action == 'inspect' and '--format' in sys.argv and sys.argv[sys.argv.index('--format') + 1] == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.Internal}}}}' and not (root / 'network-replacement-done').exists():
+        target_id = name
+        for identity_path in root.glob('*.network-id'):
+            if identity_path.read_text(encoding='ascii') == target_id:
+                name = identity_path.name.removesuffix('.network-id')
+                identity_path.write_text('d' * 64, encoding='ascii')
+                (root / 'network-replacement-done').write_text('1', encoding='ascii')
+                print('d' * 64 + '|' + name + '|true')
+                raise SystemExit(0)
+    for identity_path in root.glob('*.network-id'):
+        if identity_path.read_text(encoding='ascii') == name:
+            name = identity_path.name.removesuffix('.network-id')
+            break
     marker = root / (name + '.network')
     if action == 'inspect':
         if {inspect_failure!r} or {network_inspect_failure!r} or ({cleanup_inspect_failure!r} and list(root.glob('*.container'))):
@@ -136,8 +150,12 @@ if command == 'network':
         if {network_collision!r} and 'restore-net-1-' in name:
             raise SystemExit(0)
         if marker.exists():
-            if '--format' in sys.argv and sys.argv[sys.argv.index('--format') + 1] == '{{{{.Internal}}}}':
-                print('true' if {network_internal!r} else 'false')
+            if '--format' in sys.argv:
+                format_string = sys.argv[sys.argv.index('--format') + 1]
+                if format_string == '{{{{.Id}}}}|{{{{.Name}}}}':
+                    print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name)
+                if format_string == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.Internal}}}}':
+                    print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name + '|' + ('true' if {network_internal!r} else 'false'))
             raise SystemExit(0)
         missing_message = {network_missing_message!r}
         if missing_message is None:
@@ -154,23 +172,39 @@ if command == 'network':
             print('network create failed', file=sys.stderr)
             raise SystemExit(1)
         marker.write_text('internal', encoding='utf-8')
-        print(name)
+        network_id = 'c' * 64
+        (root / (name + '.network-id')).write_text(network_id, encoding='ascii')
+        print(network_id)
         raise SystemExit(0)
     if action == 'rm':
         marker.unlink(missing_ok=True)
+        (root / (name + '.network-id')).unlink(missing_ok=True)
         raise SystemExit(0)
     raise SystemExit(1)
 name = sys.argv[sys.argv.index('--name') + 1] if '--name' in sys.argv else (sys.argv[2] if len(sys.argv) > 2 else '')
 if command == 'inspect' and '--format' in sys.argv:
     name = sys.argv[-1]
+    for identity_path in root.glob('*.container-id'):
+        if identity_path.read_text(encoding='ascii') == name:
+            name = identity_path.name.removesuffix('.container-id')
+            break
 if command == 'rm' and len(sys.argv) > 3 and sys.argv[2] == '-f':
     name = sys.argv[3]
+    for identity_path in root.glob('*.container-id'):
+        if identity_path.read_text(encoding='ascii') == name:
+            name = identity_path.name.removesuffix('.container-id')
+            break
+if command == 'restart':
+    for identity_path in root.glob('*.container-id'):
+        if identity_path.read_text(encoding='ascii') == name:
+            name = identity_path.name.removesuffix('.container-id')
+            break
 marker = root / (name + '.container')
 if command == 'image' and len(sys.argv) > 3 and sys.argv[2] == 'inspect':
     print('a' * 64)
     raise SystemExit(0)
 if command == 'inspect':
-    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists() and '--format' not in sys.argv):
+    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists() and (('--format' not in sys.argv) or sys.argv[sys.argv.index('--format') + 1] != '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.State.Pid}}}}')):
         print('runtime transport failure', file=sys.stderr)
         raise SystemExit(1)
     if {collision!r} and 'restore-1-' in name:
@@ -178,9 +212,11 @@ if command == 'inspect':
     if marker.exists():
         if '--format' in sys.argv:
             format_string = sys.argv[sys.argv.index('--format') + 1]
+            if format_string == '{{{{.Id}}}}|{{{{.Name}}}}':
+                print((root / (name + '.container-id')).read_text(encoding='ascii') + '|' + name)
             if format_string == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.State.Pid}}}}':
                 identity_name = name if {namespace_identity!r} == 'owned' else 'foreign-sidecar'
-                identity_id = 'a' * 64 if {namespace_identity!r} != 'invalid-id' else 'not-an-id'
+                identity_id = (root / (name + '.container-id')).read_text(encoding='ascii') if {namespace_identity!r} != 'invalid-id' else 'not-an-id'
                 identity_pid = str(os.getppid()) if {namespace_identity!r} != 'invalid-pid' else 'not-a-pid'
                 print(identity_id + '|' + identity_name + '|' + identity_pid)
         raise SystemExit(0)
@@ -199,15 +235,24 @@ if command == 'run':
         print('start failed', file=sys.stderr)
         raise SystemExit(1)
     marker.write_text('present', encoding='utf-8')
-    print(name)
+    container_id = 'a' * 64
+    (root / (name + '.container-id')).write_text(container_id, encoding='ascii')
+    print(container_id)
     raise SystemExit(0)
 if command == 'restart':
+    if {replacement_race!r} == 'container' and not (root / 'container-replacement-done').exists():
+        for identity_path in root.glob('*.container-id'):
+            if identity_path.name.removesuffix('.container-id') == name:
+                identity_path.write_text('d' * 64, encoding='ascii')
+                (root / 'container-replacement-done').write_text('1', encoding='ascii')
+                break
     if {restart_failure!r}:
         print('restart failed', file=sys.stderr)
         raise SystemExit(1)
     raise SystemExit(0)
 if command == 'rm':
     marker.unlink(missing_ok=True)
+    (root / (name + '.container-id')).unlink(missing_ok=True)
     raise SystemExit(0)
 raise SystemExit(1)
 """,
@@ -230,9 +275,23 @@ if not pathlib.Path('/proc', target, 'ns', 'net').exists():
     raise SystemExit(1)
 (root / 'namespace-args').write_text(' '.join(sys.argv), encoding='utf-8')
 command = sys.argv[sys.argv.index('--') + 1:]
-raise SystemExit(subprocess.run(command, check=False).returncode)
+child = subprocess.Popen(command)
+(root / 'namespace-child.pid').write_text(str(child.pid), encoding='ascii')
+raise SystemExit(child.wait())
 """,
     )
+
+
+def process_is_live(pid_path: Path) -> bool:
+    try:
+        pid = int(pid_path.read_text(encoding="ascii"))
+    except (OSError, ValueError):
+        return False
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="ascii").split()[2]
+    except (OSError, IndexError):
+        return False
+    return state != "Z"
 
 
 def probe(root: Path) -> Path:
@@ -260,6 +319,7 @@ class ActualRestoreTests(unittest.TestCase):
         probe_path: Path | None = None,
         health_path: Path | None = None,
         health_attempts: int | None = None,
+        readback_timeout: float | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict]:
         receipt = root / "receipt.json"
         namespace = namespace_tool(root)
@@ -276,6 +336,8 @@ class ActualRestoreTests(unittest.TestCase):
         ]
         if health_attempts is not None:
             command.extend(["--health-attempts", str(health_attempts)])
+        if readback_timeout is not None:
+            command.extend(["--readback-timeout", str(readback_timeout)])
         result = subprocess.run(
             command,
             cwd=ROOT,
@@ -386,6 +448,17 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
             self.assertFalse(receipt["runtime"]["verified"])
 
+    def test_unidentified_docker_basename_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            runtime = fake_runtime(root, backend="unknown")
+            docker_alias = root / "docker"
+            runtime.rename(docker_alias)
+            result, receipt = self.run_drill(root, docker_alias)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
+
     def test_non_internal_network_fails_closed_without_starting_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -417,6 +490,28 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["error"]["code"], "runtime_namespace_identity_failed")
             self.assertTrue(receipt["cleanup_verified"])
 
+    def test_container_replacement_race_is_not_removed_as_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, replacement_race="container"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_namespace_identity_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(list(root.glob("*.container")))
+            self.assertEqual((next(root.glob("*.container-id"))).read_text(encoding="ascii"), "d" * 64)
+
+    def test_network_replacement_race_is_not_removed_as_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, replacement_race="network"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_network_identity_changed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(list(root.glob("*.network")))
+            self.assertEqual((next(root.glob("*.network-id"))).read_text(encoding="ascii"), "d" * 64)
+
     def test_namespace_probe_timeout_fails_closed_and_cleans_owned_resources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -430,6 +525,22 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(process_is_live(root / "namespace-child.pid"))
+
+    def test_readback_probe_timeout_fails_closed_and_reaps_descendants(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            slow_probe = executable(root, "slow-probe", "import time; time.sleep(10)")
+            started = time.monotonic()
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=slow_probe, readback_timeout=5)
+            self.assertLess(time.monotonic() - started, 8)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(process_is_live(root / "namespace-child.pid"))
 
     def test_rootful_docker_network_stdout_prefix_is_bound_to_requested_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -732,6 +843,7 @@ print(json.dumps({'api': payload, 'ui': payload}))
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
             self.assertFalse(list(root.glob("finance-actual-restore.*")))
+            self.assertFalse(process_is_live(root / "namespace-child.pid"))
 
     def test_happy_path_proves_two_runs_restart_and_ui_api_parity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
