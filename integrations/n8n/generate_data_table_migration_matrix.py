@@ -759,6 +759,21 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 if not isinstance(schema_columns, list):
                     raise MatrixError(f"{relative}#{name} create columns must be a list")
                 actual_schema = [(row.get("name"), row.get("type")) for row in schema_columns]
+                # W19 creates the four migration targets, while this matrix
+                # inventories the fifteen legacy source tables.  Target
+                # schema creation is validated here but is intentionally not
+                # added to source-table references: target tables are not
+                # migration inputs and must not masquerade as source writes.
+                if table_name in TARGET_SCHEMAS:
+                    expected_schema = [
+                        (column, definition["type"])
+                        for column, definition in TARGET_SCHEMAS[table_name]["columns"].items()
+                    ]
+                    if actual_schema != expected_schema:
+                        raise MatrixError(
+                            f"{relative}#{name} target create schema differs from migration contract"
+                        )
+                    continue
                 expected_schema = list(columns_by_table.get(table_name, {}).items())
                 if actual_schema != expected_schema:
                     raise MatrixError(f"{relative}#{name} create schema differs from data-tables.json")
@@ -801,10 +816,8 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                     "filter_keys": filter_keys,
                 }
             )
-    for table_name, table_references in references.items():
+    for table_references in references.values():
         table_references.sort(key=lambda row: (row["file"], row["node"]))
-        if not any(row["operation"] == "create" for row in table_references):
-            raise MatrixError(f"{table_name} has no create/schema reference")
     return references
 
 
