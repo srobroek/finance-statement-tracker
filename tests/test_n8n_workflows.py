@@ -194,6 +194,75 @@ try {{
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
 
+    def run_exported_workflow_node_with_items(
+        self,
+        workflow_filename: str,
+        node_name: str,
+        items: list[dict],
+        references: dict[str, dict],
+    ) -> dict:
+        code = self.nodes(workflow_filename)[node_name]["parameters"]["jsCode"]
+        script = f"""
+const code = {json.dumps(code)};
+const items = {json.dumps(items)};
+const references = {json.dumps(references)};
+const lookup = name => ({{ first: () => references[name] }});
+const input = {{ all: () => items.map(json => ({{ json }})) }};
+try {{
+  const output = new Function('$json', '$input', '$', 'require', code)(items[0] || {{}}, input, lookup, require);
+  process.stdout.write(JSON.stringify({{ ok: true, output }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
+        result = subprocess.run(
+            [node, "-e", script],
+            cwd=ROOT,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
+
+    def evaluate_exported_expression(
+        self,
+        expression: str,
+        now: str,
+        references: dict[str, dict],
+    ) -> object:
+        body = expression.removeprefix("={{").removesuffix("}}").strip()
+        script = f"""
+const expression = {json.dumps(body)};
+const references = {json.dumps(references)};
+const lookup = name => ({{ first: () => references[name] }});
+const now = {{ toISO: () => {json.dumps(now)} }};
+try {{
+  const value = new Function('$now', '$', `return (${{expression}});`)(now, lookup);
+  process.stdout.write(JSON.stringify({{ ok: true, value }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported expression execution")
+        result = subprocess.run(
+            [node, "-e", script],
+            cwd=ROOT,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"], payload)
+        return payload["value"]
+
     def test_registry_maps_every_existing_codex_automation(self) -> None:
         automations = load_json(ROOT / "config" / "codex-automations.json")
         mapped = {
@@ -489,6 +558,244 @@ try {{
             "Commit Source Cursor via W12",
         ):
             self.assertIn(name, shared_names)
+
+    def test_monthly_cycle_acceptance_fixtures_execute_for_ei_and_wio(self) -> None:
+        """Exercise shared-cycle mappings and terminal guards with both callers."""
+        shared = self.workflow("22-shared-monthly-statement-cycle.json")
+        shared_nodes = self.nodes("22-shared-monthly-statement-cycle.json")
+        contract = shared["meta"]["workflowInputContract"]
+        self.assertEqual(contract["schema_version"], 1)
+        self.assertEqual(
+            contract["required"], ["cycle_context", "deadline_policy", "execution_id"]
+        )
+        self.assertEqual(
+            set(contract["properties"]),
+            {"cycle_context", "deadline_policy", "execution_id"},
+        )
+        self.assertEqual(shared_nodes["Monthly Cycle Context"]["parameters"], {"inputSource": "passthrough"})
+
+        scenarios = {
+            "zero": (0, 0),
+            "one": (1, 1),
+            "one_hundred_one": (101, 101),
+            "mixed": (5, 2),
+        }
+        window_start = "2026-08-01T00:00:00.000Z"
+        run_upper_bound = "2026-08-20T00:00:00.000Z"
+        for caller_code, source_code in (
+            ("EI_MONTHLY_STATEMENT", "EI_AMAZON"),
+            ("WIO_MONTHLY_STATEMENT", "WIO_CREDIT"),
+        ):
+            caller = self.nodes(
+                "04-ei-monthly-statement.json"
+                if caller_code == "EI_MONTHLY_STATEMENT"
+                else "05-wio-monthly-statement.json"
+            )["Run Shared Monthly Statement Cycle"]
+            mapping = caller["parameters"]["workflowInputs"]
+            self.assertEqual(mapping["mappingMode"], "defineBelow")
+            self.assertEqual(set(mapping["value"]), set(contract["required"]))
+            self.assertEqual(caller["parameters"]["options"], {"waitForSubWorkflow": True})
+            self.assertIn(source_code, mapping["value"]["cycle_context"])
+            self.assertNotIn("credentials", caller)
+
+            run_id = f"monthly-fixture:{source_code}"
+            senders = [f"{source_code.lower()}@fixture.test"]
+            subjects = [source_code.lower()]
+            source_contract = {
+                "source_code": source_code,
+                "enabled": True,
+                "manifest_onedrive_parent_id": f"onedrive:{source_code}",
+                "senders_json": json.dumps(senders),
+                "subjects_json": json.dumps(subjects),
+                "config_version": "fixture-v1",
+                "overlap_seconds": 3600,
+            }
+            cycle_context = {
+                "run_id": run_id,
+                "source_code": source_code,
+                "window_start": window_start,
+                "run_upper_bound": run_upper_bound,
+                "cycle_day": 1 if source_code == "EI_AMAZON" else 3,
+                "period_key": "2026-08",
+                "trigger_kind": "SCHEDULED",
+            }
+            deadline_policy = {
+                "deadline_at": "2026-08-22T00:00:00.000Z",
+                "deadline_days": 5,
+            }
+            assembled = self.run_exported_workflow_node(
+                "22-shared-monthly-statement-cycle.json",
+                "Assemble Trusted Acquisition Contract",
+                source_contract,
+                {"Monthly Cycle Context": {"json": {
+                    "cycle_context": cycle_context,
+                    "deadline_policy": deadline_policy,
+                    "execution_id": f"exec:{source_code}",
+                }}},
+            )
+            self.assertTrue(assembled["ok"], assembled)
+            assembled_row = assembled["output"][0]["json"]
+            self.assertEqual(assembled_row["source_code"], source_code)
+            self.assertEqual(assembled_row["onedrive_parent_id"], f"onedrive:{source_code}")
+
+            def message(
+                index: int,
+                *,
+                matches: bool = True,
+                received: str | None = None,
+                source: str = source_code,
+                sender: str = senders[0],
+                subject: str = subjects[0],
+            ) -> dict:
+                return {
+                    "id": f"message:{source}:{index}",
+                    "from": {"emailAddress": {"address": sender if matches else "other@fixture.test"}},
+                    "subject": f"{subject} statement" if matches else "unrelated",
+                    "receivedDateTime": received or f"2026-08-{index + 1:02d}T00:00:00.000Z",
+                }
+
+            for scenario, (scanned_count, matched_count) in scenarios.items():
+                if scenario == "zero":
+                    messages = []
+                elif scenario == "one":
+                    messages = [message(1)]
+                elif scenario == "one_hundred_one":
+                    messages = [message(index % 18 + 1) for index in range(101)]
+                else:
+                    messages = [
+                        message(1),
+                        message(2),
+                        message(3, matches=False),
+                        message(4, received="2026-07-31T23:59:59.000Z"),
+                        message(5, matches=False),
+                    ]
+                frozen = self.run_exported_workflow_node(
+                    "12-outlook-message-sweep.json",
+                    "Freeze Trusted Cursor Window",
+                    {
+                        "run_id": run_id,
+                        "source_code": source_code,
+                        "folder_id": f"folder:{source_code}",
+                        "senders": senders,
+                        "subjects": subjects,
+                        "window_start": window_start,
+                        "run_upper_bound": run_upper_bound,
+                        "max_messages": 500,
+                        "onedrive_parent_id": f"onedrive:{source_code}",
+                    },
+                    {},
+                )
+                self.assertTrue(frozen["ok"], frozen)
+                aggregated = self.run_exported_workflow_node_with_items(
+                    "12-outlook-message-sweep.json",
+                    "Aggregate Exact Window Heartbeat",
+                    messages,
+                    {"Freeze Trusted Cursor Window": frozen["output"][0]},
+                )
+                self.assertTrue(aggregated["ok"], (source_code, scenario, aggregated))
+                output = aggregated["output"][0]["json"]
+                self.assertEqual(output["source_code"], source_code)
+                self.assertEqual(output["scanned_count"], scanned_count)
+                self.assertEqual(output["matched_count"], matched_count)
+                self.assertEqual(output["heartbeat"], matched_count == 0)
+
+            # Deadline state is the exported n8n expression used by the wait path.
+            state_expression = shared_nodes["Upsert Waiting or Deadline Receipt"]["parameters"]["columns"]["value"]["state"]
+            wait_state = self.evaluate_exported_expression(
+                state_expression,
+                "2026-08-21T00:00:00.000Z",
+                {"Assemble Trusted Acquisition Contract": {"json": {"deadline_at": deadline_policy["deadline_at"]}}},
+            )
+            deadline_state = self.evaluate_exported_expression(
+                state_expression,
+                "2026-08-23T00:00:00.000Z",
+                {"Assemble Trusted Acquisition Contract": {"json": {"deadline_at": deadline_policy["deadline_at"]}}},
+            )
+            self.assertEqual((wait_state, deadline_state), ("WAITING", "FAILED"))
+
+            receipt_hash = "a" * 64
+            archive = {
+                "archive_ready": True,
+                "attachment_verification_barrier": "VERIFIED",
+                "email_evidence_receipt_barrier": "VERIFIED",
+                "receipt_readback_verified": True,
+                "cursor_commit_eligible": False,
+                "pagination_exhausted": True,
+                "email_evidence_receipts_verified": 1,
+                "matched_count": 1,
+                "scanned_count": 1,
+                "heartbeat": False,
+            }
+            pipeline = {
+                "state": "SUCCEEDED",
+                "terminal_readback_verified": True,
+                "receipt_sha256": receipt_hash,
+            }
+            cursor = {
+                "source_code": source_code,
+                "cursor_version": 8,
+                "cursor_value": run_upper_bound,
+                "run_upper_bound": run_upper_bound,
+                "committed_run_id": run_id,
+            }
+            request = self.run_exported_workflow_node(
+                "22-shared-monthly-statement-cycle.json",
+                "Build W12 COMMIT Request",
+                cursor,
+                {
+                    "Assemble Trusted Acquisition Contract": {"json": assembled_row},
+                    "Acquire Archive and Read Back": {"json": {**assembled_row, **archive}},
+                    "Run Shared Statement Pipeline": {"json": pipeline},
+                },
+            )
+            self.assertTrue(request["ok"], request)
+            request_row = request["output"][0]["json"]
+            self.assertEqual(request_row["expected_cursor_version"], 7)
+            self.assertEqual(request_row["source_code"], source_code)
+
+            cas = self.run_exported_workflow_node(
+                "12-outlook-message-sweep.json",
+                "Build Cursor CAS Update",
+                {"source_code": source_code, "cursor_version": 7, "cursor_value": window_start},
+                {"Verify Downstream Persistence Proof": {"json": {
+                    "source_code": source_code,
+                    "expected_cursor_version": 7,
+                    "run_id": run_id,
+                    "run_upper_bound": run_upper_bound,
+                }}},
+            )
+            self.assertTrue(cas["ok"], cas)
+            self.assertEqual(cas["output"][0]["json"]["next_cursor_version"], 8)
+            replay_cas = self.run_exported_workflow_node(
+                "12-outlook-message-sweep.json",
+                "Build Cursor CAS Update",
+                {"source_code": source_code, "cursor_version": 8, "cursor_value": run_upper_bound, "committed_run_id": run_id},
+                {"Verify Downstream Persistence Proof": {"json": {
+                    "source_code": source_code,
+                    "expected_cursor_version": 8,
+                    "run_id": run_id,
+                    "run_upper_bound": run_upper_bound,
+                }}},
+            )
+            self.assertFalse(replay_cas["ok"])
+
+            cross_source = {**source_contract, "source_code": "WIO_CREDIT" if source_code == "EI_AMAZON" else "EI_AMAZON"}
+            rejected = self.run_exported_workflow_node(
+                "22-shared-monthly-statement-cycle.json",
+                "Assemble Trusted Acquisition Contract",
+                cross_source,
+                {"Monthly Cycle Context": {"json": {
+                    "cycle_context": cycle_context,
+                    "deadline_policy": deadline_policy,
+                    "execution_id": f"exec:{source_code}",
+                }}},
+            )
+            self.assertFalse(rejected["ok"])
+
+        self.assertEqual(
+            shared_nodes["Download Archived Source"]["credentials"]["microsoftOneDriveOAuth2Api"]["id"],
+            "BIND_ONEDRIVE",
+        )
 
     def test_shared_pipeline_archives_delta_before_prepared_and_reads_every_state(self) -> None:
         names = [node["name"] for node in self.workflow("03-shared-statement-pipeline.json")["nodes"]]
@@ -1492,7 +1799,9 @@ try {{
         self.assertEqual(before, after)
         for filename, workflow in self.workflows.items():
             self.assertNotIn("SPEC ONLY", workflow["name"].upper())
-            self.assertTrue(workflow["name"].endswith("Setup Required"))
+            self.assertNotIn("SETUP REQUIRED", workflow["name"].upper())
+            self.assertNotIn("PAUSED", workflow["name"].upper())
+            self.assertTrue(workflow["name"].strip(), filename)
             notes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.stickyNote"]
             self.assertTrue(notes, filename)
             for note in notes:

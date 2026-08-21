@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000022",
-  "name": "Finance · Shared Monthly Statement Cycle · Setup Required",
+  "name": "Finance · Shared Monthly Statement Cycle",
   "active": false,
   "nodes": [
     {
@@ -81,7 +81,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -102,7 +102,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -215,7 +215,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000003",
           "mode": "list",
-          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline · Setup Required"
+          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -282,7 +282,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -640,7 +640,86 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "workflowInputContract": {
+      "schema_version": 1,
+      "mapping_mode": "defineBelow",
+      "additionalProperties": false,
+      "required": [
+        "cycle_context",
+        "deadline_policy",
+        "execution_id"
+      ],
+      "properties": {
+        "cycle_context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run_id",
+            "source_code",
+            "window_start",
+            "run_upper_bound",
+            "cycle_day",
+            "period_key",
+            "trigger_kind"
+          ],
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_code": {
+              "enum": [
+                "EI_AMAZON",
+                "WIO_CREDIT"
+              ]
+            },
+            "window_start": {
+              "type": "string",
+              "minLength": 1
+            },
+            "run_upper_bound": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cycle_day": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "period_key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "trigger_kind": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "deadline_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "deadline_at",
+            "deadline_days"
+          ],
+          "properties": {
+            "deadline_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "deadline_days": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
   },
   "tags": [
     {

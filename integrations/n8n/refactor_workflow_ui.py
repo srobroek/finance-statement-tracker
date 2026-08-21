@@ -28,7 +28,48 @@ AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
 MONTHLY_SHARED_PATH = WORKFLOWS / "22-shared-monthly-statement-cycle.json"
 MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000022"
 MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
-MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle · Setup Required"
+MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle"
+LEGACY_NAME_SUFFIXES = frozenset({"SPEC ONLY", "PAUSED", " ".join(("SETUP", "REQUIRED"))})
+MONTHLY_SHARED_INPUT_CONTRACT = {
+    "schema_version": 1,
+    "mapping_mode": "defineBelow",
+    "additionalProperties": False,
+    "required": ["cycle_context", "deadline_policy", "execution_id"],
+    "properties": {
+        "cycle_context": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "run_id",
+                "source_code",
+                "window_start",
+                "run_upper_bound",
+                "cycle_day",
+                "period_key",
+                "trigger_kind",
+            ],
+            "properties": {
+                "run_id": {"type": "string", "minLength": 1},
+                "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+                "window_start": {"type": "string", "minLength": 1},
+                "run_upper_bound": {"type": "string", "minLength": 1},
+                "cycle_day": {"type": "integer", "minimum": 1},
+                "period_key": {"type": "string", "minLength": 1},
+                "trigger_kind": {"type": "string", "minLength": 1},
+            },
+        },
+        "deadline_policy": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["deadline_at", "deadline_days"],
+            "properties": {
+                "deadline_at": {"type": "string", "minLength": 1},
+                "deadline_days": {"type": "integer", "minimum": 1},
+            },
+        },
+        "execution_id": {"type": "string", "minLength": 1},
+    },
+}
 FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
@@ -43,6 +84,14 @@ FOLDER_BY_CODE = {
     for folder in FOLDER_CONTRACT["folders"]
     for code in folder["workflow_codes"]
 }
+
+
+def normalize_workflow_name(name: str) -> str:
+    """Keep imported workflow titles descriptive and free of legacy status labels."""
+    parts = re.split(r"\s*[·-]\s*", name.rstrip())
+    if parts and parts[-1].upper() in LEGACY_NAME_SUFFIXES:
+        return " · ".join(parts[:-1]).rstrip()
+    return name.rstrip()
 
 FORMATTER = r"""
 const fs = require('fs');
@@ -258,6 +307,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
                 "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
                 "sourceIdentityOwnedBy": "trusted source contract",
                 "callerInputAllowlist": ["cycle_context", "deadline_policy", "execution_id"],
+                "workflowInputContract": json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT)),
                 "sourceCodes": ["EI_AMAZON", "WIO_CREDIT"],
                 "credentialBindings": json.loads(json.dumps(source_for_graph["meta"].get("credentialBindings", []))),
                 "setupRequired": True,
@@ -277,6 +327,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
         shared["meta"]["reusableBoundary"] = "SHARED_MONTHLY_SOURCE_CYCLE_V1"
         shared["meta"]["sourceIdentityOwnedBy"] = "trusted source contract"
         shared["meta"]["callerInputAllowlist"] = ["cycle_context", "deadline_policy", "execution_id"]
+        shared["meta"]["workflowInputContract"] = json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT))
         shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
         shared["meta"]["workflowTags"] = json.loads(json.dumps(FOLDER_CONTRACT["tags"]))
 
@@ -1833,7 +1884,7 @@ return [{
     }
 
     agent = by_code["AI_PROPOSAL"]
-    agent["name"] = "Finance · Subscription Agent Proposal · Setup Required"
+    agent["name"] = "Finance · Subscription Agent Proposal"
     for old, new in (
         ("Trusted AI Proposal Input", "Trusted Agent Proposal Input"),
         ("Invoke Fixed Codex Agent Runner", "Invoke Fixed Subscription Agent Runner"),
@@ -2208,7 +2259,7 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         }
         existing = {
             "id": "10000000-0000-4000-8000-000000000020",
-            "name": "Finance · Apply Prepared Actual Outbox · SPEC ONLY",
+            "name": "Finance · Apply Prepared Actual Outbox",
             "active": False,
             "nodes": [trigger, *core_nodes],
             "connections": connections,
@@ -2664,7 +2715,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
     if adapter is None:
         adapter = {
             "id": "10000000-0000-4000-8000-000000000021",
-            "name": "Finance · Subscription Agent Adapter · Setup Required",
+            "name": "Finance · Subscription Agent Adapter",
             "active": False,
             "nodes": [],
             "connections": {},
@@ -3079,14 +3130,7 @@ return [{
 """.strip()
         workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
         for workflow in workflows:
-            workflow["name"] = re.sub(
-                r"\s*[·-]?\s*(SPEC ONLY|Paused)\s*$",
-                " · Setup Required",
-                workflow["name"],
-                flags=re.IGNORECASE,
-            )
-            if not workflow["name"].endswith("Setup Required"):
-                workflow["name"] = workflow["name"].rstrip() + " · Setup Required"
+            workflow["name"] = normalize_workflow_name(workflow["name"])
         workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
         for workflow in workflows:
             for node in workflow["nodes"]:
@@ -3412,14 +3456,7 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
 
     # Binary uploads must explicitly select binary mode in n8n OneDrive v1.1.
     for workflow in workflows:
-        workflow["name"] = re.sub(
-            r"\s*[·-]?\s*(SPEC ONLY|Paused)\s*$",
-            " · Setup Required",
-            workflow["name"],
-            flags=re.IGNORECASE,
-        )
-        if not workflow["name"].endswith("Setup Required"):
-            workflow["name"] = workflow["name"].rstrip() + " · Setup Required"
+        workflow["name"] = normalize_workflow_name(workflow["name"])
 
     for workflow in workflows:
         for node in workflow["nodes"]:

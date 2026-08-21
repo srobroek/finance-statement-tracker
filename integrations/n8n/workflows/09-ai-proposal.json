@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000009",
-  "name": "Finance · Subscription Agent Proposal · Setup Required",
+  "name": "Finance · Subscription Agent Proposal",
   "active": false,
   "nodes": [
     {
@@ -226,7 +226,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000021",
           "mode": "list",
-          "cachedResultName": "Finance · Subscription Agent Adapter · Setup Required"
+          "cachedResultName": "Finance · Subscription Agent Adapter"
         },
         "options": {
           "waitForSubWorkflow": true

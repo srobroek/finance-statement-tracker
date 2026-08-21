@@ -4,17 +4,17 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "1b869023f6c1a1e817e65d4b450da00b3ff168ed8894e5862f2d64e362d7a4b4",
-    "12-outlook-message-sweep.json": "b315e0c0abb92aa833a7d5731eb03b23b771e5bfbdf07ff4ed6766e14a048d6e",
-    "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
-    "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",
-    "18-finance-writer-lease.json": "e03e6d3defba9a30564db0b227cd0fa714a5676ba131ff0b679deeeb960abfc4"
+    "09-ai-proposal.json": "cbb7da7428cff2ac6d76277aa840bae5eecd4c236816637bb81b0499583d28d1",
+    "12-outlook-message-sweep.json": "5902f7636b4bee4f5b633fd46098f789d05fa3e037344a3e1abc2f0ebd8c80aa",
+    "16-operations-error-handler.json": "40b9b068052d875c177f19b84bfa231c43baf3beb076bc22692e939fea43443a",
+    "17-actual-outbox-recovery.json": "148c3c308cfed6e0cc8cae11fef0c3150972471936d3601104522c888401cf74",
+    "18-finance-writer-lease.json": "86b7fdb190708456ba76bbb46f381b1393ff37cec5e2500f11bedd310f01c856"
   },
   "workflows": [
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "4913dac6815ae56f9b6975008f7aaed7fff8cd2011dec4a90e770f3e09979c60"
+      "sha256": "3d4761e2334c921ac09cd6176e21a0c9bf3ea39c818683d101d7bfce3ae4ce64"
     },
     {
       "file": "91-sweep-zero.json",
@@ -84,7 +84,7 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "0c837bd7fca573848ad1e6b5ac87c87c24bf6b44f63068bae1bd12a3387c5553"
+      "sha256": "ea4fdc7fb5c33b215fdddec147d926a6c15df2df616626f54163558e82990227"
     },
     {
       "file": "103-recover-prepared.json",

@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000013",
-  "name": "Finance · Request Document Extraction · Setup Required",
+  "name": "Finance · Request Document Extraction",
   "active": false,
   "nodes": [
     {
@@ -110,7 +110,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000014",
           "mode": "list",
-          "cachedResultName": "Finance · Local PDF Extraction Ladder · Setup Required"
+          "cachedResultName": "Finance · Local PDF Extraction Ladder"
         },
         "options": {
           "waitForSubWorkflow": true
