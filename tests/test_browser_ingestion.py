@@ -242,6 +242,51 @@ class BrowserIngestionTests(TestCase):
         self.assertTrue(run.envelopes[0]["default_cleared"])
         self.assertTrue(all(row["source_type"] == "browser_statement" for row in run.transactions))
 
+    def test_mortgage_uses_liability_balance_convention_and_preserves_signed_balance(self):
+        capture = self.capture()
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["artifact"]["kind"] = "STATEMENT_ROWS"
+        capture["account"] = {
+            "label": "FAB Mortgage ending 0203",
+            "account_last4": "0203",
+            "currency": "AED",
+            "balance": "-2550.00",
+        }
+        capture["statement"] = {
+            "statement_reference": "FAB-MORTGAGE-2026-08",
+            "opening_balance_aed": "2500.00",
+            "closing_balance_aed": "2525.50",
+        }
+        capture["rows"] = [
+            {
+                "source_id": "mortgage-payment-1",
+                "transaction_date": "2026-08-15",
+                "description": "MORTGAGE PAYMENT",
+                "amount_aed": "25.50",
+                "direction": "DEBIT",
+                "transaction_type": "PAYMENT",
+            }
+        ]
+        config = deepcopy(self.config())
+        config["accounts"].append(
+            {
+                "name": "FAB Mortgage · 0203",
+                "type": "mortgage",
+                "card_code": "FAB_MORTGAGE_0203",
+                "card_last4": ["0203"],
+            }
+        )
+
+        run = build_browser_ingestion_run(capture, config)
+
+        self.assertEqual(run.account_snapshot["balance"], "-2550.00")
+        self.assertEqual(run.statement_check["balance_convention"], "LIABILITY")
+        self.assertEqual(run.statement_check["calculated_closing_balance_aed"], "2525.50")
+        self.assertTrue(run.statement_check["balance_tied"])
+        self.assertEqual(
+            run.transactions[0]["metadata"]["account_balance_convention"], "LIABILITY"
+        )
+
     def test_unbalanced_statement_rows_are_blocked_from_partial_import(self):
         capture = self.capture()
         capture["source"]["capture_method"] = "OFFICIAL_EXPORT"

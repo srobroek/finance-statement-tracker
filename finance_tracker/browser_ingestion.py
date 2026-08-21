@@ -257,7 +257,7 @@ def _statement_check(
     opening = _optional_money(raw.get("opening_balance_aed"))
     closing = _optional_money(raw.get("closing_balance_aed"))
     convention = str(raw.get("balance_convention") or (
-        "LIABILITY" if account_type.casefold() == "credit" else "ASSET"
+        "LIABILITY" if account_type.casefold() in {"credit", "mortgage"} else "ASSET"
     )).upper()
     if convention not in {"ASSET", "LIABILITY"}:
         raise ValueError("statement.balance_convention must be ASSET or LIABILITY")
@@ -555,7 +555,7 @@ def build_browser_ingestion_run(
                 # later transfer/reward classification cannot invert a credit.
                 "statement_direction": direction,
                 "account_balance_convention": (
-                    "LIABILITY" if account_type.casefold() == "credit" else "ASSET"
+                    "LIABILITY" if account_type.casefold() in {"credit", "mortgage"} else "ASSET"
                 ),
                 "browser_status": str(row.get("status") or "").strip().upper() or None,
                 "browser_review_reasons": review_reasons,
