@@ -1425,7 +1425,6 @@ try {{
                 "n8n-nodes-base.dataTable",
                 "n8n-nodes-base.code",
                 "n8n-nodes-base.crypto",
-                "n8n-nodes-base.stickyNote",
             },
         )
         self.assertFalse(any(
@@ -1760,13 +1759,30 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         after = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
         self.assertEqual(before, after)
+        operator_warning_codes = {
+            "RAK_MONTHLY_STATEMENT",
+            "SC_MONTHLY_STATEMENT",
+            "SC_LIVE_CASHBACK",
+            "FINANCE_MCP_FACADE",
+        }
+        operator_warning_ids = {
+            "10000000-0000-4000-8000-000000000006-generated-note-1",
+            "10000000-0000-4000-8000-000000000007-generated-note-1",
+            "10000000-0000-4000-8000-000000000008-generated-note-1",
+            "10000000-0000-4000-8000-000000000015-generated-note-1",
+        }
         for filename, workflow in self.workflows.items():
             self.assertNotIn("SPEC ONLY", workflow["name"].upper())
             self.assertNotIn("SETUP REQUIRED", workflow["name"].upper())
             self.assertNotIn("PAUSED", workflow["name"].upper())
             self.assertTrue(workflow["name"].strip(), filename)
             notes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.stickyNote"]
-            self.assertTrue(notes, filename)
+            code = workflow["meta"]["financeWorkflowCode"]
+            if code in operator_warning_codes:
+                self.assertEqual(len(notes), 1, filename)
+                self.assertIn(notes[0]["id"], operator_warning_ids)
+            else:
+                self.assertEqual(notes, [], filename)
             for note in notes:
                 content = note["parameters"]["content"]
                 self.assertIn("**Input:**", content)

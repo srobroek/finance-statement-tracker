@@ -662,38 +662,6 @@
       "parameters": {
         "jsCode": "// Purpose: Emit Redacted Bootstrap Receipt. Keep this deterministic and fail closed.\nconst targetTables = [\"finance_ingestion_state\", \"finance_documents\", \"finance_actual_batches\", \"finance_ai_reviews\"];\nreturn [{ json: { schema_version: 'data-table-migration-receipt-v1', status: 'SCHEMA_CONTRACT_READY', target_tables: targetTables, target_schema_digest: '38fdcda241289e19117d3a23286d47d50165f604c1a88866242eb77cd1760e4e', runtime_cutover: false, deletion_authorized: false, second_run_noop: true, old_tables_preserved: true, redacted: true, mode: '0600' } }];\n"
       }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
-      "name": "Stage 1 · Manual Platform Bootstrap Only to Create or Reuse finance_actual_batches",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Manual Platform Bootstrap Only → Create or Reuse finance_actual_batches\n**Input:** Manual Platform Bootstrap Only  ·  **Output:** Create or Reuse finance_actual_batches  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000019-generated-note-2",
-      "name": "Stage 2 · Create or Reuse finance_ai_reviews to Emit Redacted Bootstrap Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Create or Reuse finance_ai_reviews → Emit Redacted Bootstrap Receipt\n**Input:** Create or Reuse finance_ai_reviews  ·  **Output:** Emit Redacted Bootstrap Receipt  ·  **Nodes:** 9–12\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
     }
   ],
   "connections": {

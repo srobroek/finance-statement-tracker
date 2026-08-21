@@ -206,22 +206,6 @@
         },
         "options": {}
       }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000013-generated-note-1",
-      "name": "Stage 1 · Called by Trusted Workflow to Read Back Redacted Extraction Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Called by Trusted Workflow → Read Back Redacted Extraction Receipt\n**Input:** Called by Trusted Workflow  ·  **Output:** Read Back Redacted Extraction Receipt  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
     }
   ],
   "connections": {

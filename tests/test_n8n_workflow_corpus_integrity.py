@@ -12,6 +12,43 @@ N8N = ROOT / "integrations" / "n8n"
 WORKFLOWS = N8N / "workflows"
 
 
+# The approved visual rebaseline removes these historical generated stage
+# labels.  The current-head extraction removed a few of these nodes before
+# this cleanup, but the full allowlist remains a regression guard against any
+# reintroduction.  Four blocker warning notes are intentionally retained and
+# are asserted separately below.
+_REMOVED_STAGE_NOTE_RANGES = {
+    "001": range(1, 7),
+    "002": range(1, 3),
+    "003": range(1, 6),
+    "004": range(1, 4),
+    "005": range(1, 4),
+    "009": range(1, 5),
+    "010": range(1, 4),
+    "011": range(1, 4),
+    "012": range(1, 9),
+    "013": range(1, 2),
+    "014": range(1, 3),
+    "016": range(1, 3),
+    "017": range(1, 2),
+    "018": range(1, 2),
+    "019": range(1, 5),
+    "020": range(1, 5),
+    "021": range(1, 2),
+}
+REMOVED_STAGE_NOTE_IDS = {
+    f"10000000-0000-4000-8000-000000000{workflow}-generated-note-{number}"
+    for workflow, numbers in _REMOVED_STAGE_NOTE_RANGES.items()
+    for number in numbers
+}
+RETAINED_OPERATOR_WARNING_NOTE_IDS = {
+    "10000000-0000-4000-8000-000000000006-generated-note-1",
+    "10000000-0000-4000-8000-000000000007-generated-note-1",
+    "10000000-0000-4000-8000-000000000008-generated-note-1",
+    "10000000-0000-4000-8000-000000000015-generated-note-1",
+}
+
+
 # These are the reviewed regular-export fingerprints.  A deliberate workflow
 # edit must update this snapshot in the same review as the export change.
 CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 48,
@@ -190,6 +227,104 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 48,
                                         'connections_sha256': 'dc9ef1e63829f6c2ef02d613ca6c9f4d15b7826ec808384e86612985655f646f',
                                         'parameters_sha256': '482366a87719fa4317ffb930e8ef1d42180d1be85d0a75d8c4ae1343be7244ed',
                                         'groups_sha256': 'e1990b4608b5f524f88b0190f3c1be4a625c9297f9610ad76ec8a181ad5fbf90'}}
+
+
+# The accepted-head source integration changed the runtime corpus before this
+# presentation-only cleanup (W04/W05 extraction, W19 table reduction, and W22
+# introduction).  Keep the historical snapshot above and overlay only the
+# deterministic metrics affected by the approved note removals/current head.
+VISUAL_CLEANUP_SNAPSHOT = {
+    "01-outlook-finance-acquisition.json": {
+        "nodes": 42, "sticky": 0,
+        "node_ids_sha256": "6a0ef6d52743499bac9c51b27a761b32dee24c0af24d7d69bd147a1458e94915",
+        "parameters_sha256": "09dfb7370b365752581517466e7a9bc247ba2f180890a5345b271d5d1c04c508",
+    },
+    "02-rakbank-live-cashback.json": {
+        "nodes": 12, "sticky": 0,
+        "node_ids_sha256": "2e195a65a480836bc390a0af0932abd2f34b77c2aa0b7dc2f3a6891130138fa6",
+        "parameters_sha256": "c04080260f56cc943238e069e27f5bcc0f393cf85504dc1e0bb009b1e67bd3a4",
+    },
+    "03-shared-statement-pipeline.json": {
+        "nodes": 49, "sticky": 0,
+        "node_ids_sha256": "d3194e26de68314113b7692c4fd1e2883c373baf3bcb68489f089c2622ad7419",
+        "parameters_sha256": "dbb4f18db8a68eea560fb1817204fdb5d212511945d0d1e9967c46f45edcfb8e",
+    },
+    "04-ei-monthly-statement.json": {
+        "nodes": 3, "sticky": 0,
+        "node_ids_sha256": "a940322f4533b277859116892c286226677e74c743e18c34dc8535f7c9842a8a",
+        "parameters_sha256": "59ed25468fac57062bdff5e25c7fc7b88bfd554f4e6fc7d6c917f2896f90a2c7",
+    },
+    "05-wio-monthly-statement.json": {
+        "nodes": 3, "sticky": 0,
+        "node_ids_sha256": "009da3b20276e97aab46f240718284723748de52371e897056b5f2efcb8e1324",
+        "parameters_sha256": "acffbb0c6e3000cb97dcc979cf702587faf8f43724c1559bcfe23eb845f8a6ad",
+    },
+    "09-ai-proposal.json": {
+        "nodes": 31, "sticky": 0,
+        "node_ids_sha256": "05c31cba68050588f13ffee323eceae6cec7efe65ea83833a397232d8b633053",
+        "parameters_sha256": "eae1503a733acfe4f1b50c8ba473734945f21a103a3e4da528ff9b742a827455",
+    },
+    "10-finance-operations-status.json": {
+        "nodes": 22, "sticky": 0,
+        "node_ids_sha256": "f1445a8c54733005522f5fcf996dc9b2c33d6698b3dda327e22820876f957dfc",
+        "parameters_sha256": "270f68296287010b036c5fc2089d8eb911b3ab493dd34600d72a6fe9c0e1b4f3",
+    },
+    "11-interactive-artifact-handoff.json": {
+        "nodes": 22, "sticky": 0,
+        "node_ids_sha256": "d1fadaeaf61dd29d98518ad6aaf6756a800b5279556cee09a8b7f2cf4735cc37",
+        "parameters_sha256": "c9bb56497d735ceeb7cd432e443d898795bae47697020713905cd8182ef6e6a4",
+    },
+    "12-outlook-message-sweep.json": {
+        "nodes": 63, "sticky": 0,
+        "node_ids_sha256": "4c4c330ada2808c7ca9e387e01dfa0505f6b7351299968b23e8a6378e507c66e",
+        "parameters_sha256": "b2f420494d47315ffa35301a584ba9c60a9d2fc906727bc7fcec75cf651ac807",
+    },
+    "13-document-extraction-request.json": {
+        "nodes": 8, "sticky": 0,
+        "node_ids_sha256": "a414f6411a3b668c9b234320bc32481b19bd90297421dd8da00dc075a86746df",
+        "parameters_sha256": "a92eee8ba921d443cc132c815447dc26d28fb7d0339da34aef30573a8c597a7b",
+    },
+    "14-local-pdf-extraction.json": {
+        "nodes": 9, "sticky": 0,
+        "node_ids_sha256": "577ae11a3b07086294072ce5b6acf452993eaddd6b591140d011285da2ce58ad",
+        "parameters_sha256": "133c2aa1fae8518f6fee1aadc26d0a3701ce55f3c95ff8c0011a81b93e9fbf79",
+    },
+    "16-operations-error-handler.json": {
+        "nodes": 13, "sticky": 0,
+        "node_ids_sha256": "6d4bb1d21f537808601ee5ba2e7d266d1f2d940712b21bfbc92bd796175f1738",
+        "parameters_sha256": "8888e46e5579d9be4d627a36331d2c18fbcd9691df3ff3a2a65e22b27556d509",
+    },
+    "17-actual-outbox-recovery.json": {
+        "nodes": 3, "sticky": 0,
+        "node_ids_sha256": "b6b448b0beaa1bf7843621deff6926a433c832583db17c69ab03fc94f57703da",
+        "parameters_sha256": "7514d836675c5011847b9f38cdef1fbb0eb5484178f4e2e86544de7d446d8679",
+    },
+    "18-finance-writer-lease.json": {
+        "nodes": 7, "sticky": 0,
+        "node_ids_sha256": "540ec1502e83accc5d6e45648b638799e80cc02cbede1f547087967ea9d158ab",
+        "parameters_sha256": "17b485660ae0b96cdcb2f198286640171c6f24bbec8dc95ec7a87a2e970b85da",
+    },
+    "19-platform-data-table-bootstrap.json": {
+        "nodes": 12, "sticky": 0,
+        "node_ids_sha256": "5be5f493de12fe7d6ad7f44f7bc7c3d13cdc653cabf149df14c128b0b0038a38",
+        "parameters_sha256": "ff144f3b27905cf0d3fd80d54c3289bbf8a6fd7424403b9aca68a61e43869bc6",
+    },
+    "20-actual-outbox-apply.json": {
+        "nodes": 35, "sticky": 0,
+        "node_ids_sha256": "5bb1af2a71279cdbed6cd8fc03f38ed402f686df3fca2df654a81dd598464c2a",
+        "parameters_sha256": "8e77a08e6fc783ab868205c4e9bc242d5829bf66cbcc94163ee8a6cd031e2755",
+    },
+    "21-subscription-agent-adapter.json": {
+        "nodes": 8, "sticky": 0,
+        "node_ids_sha256": "b0e22a3275e99b1bf397cfc1b96a9ef6b9866af7ae71411edd3b4a7dc9c1f56a",
+        "parameters_sha256": "df92d9b3c2e4d3d6bf333f4d6f8bee20d0e7a85c84c64adcacc89dbbbc82e353",
+    },
+    "22-shared-monthly-statement-cycle.json": {
+        "nodes": 16, "sticky": 0,
+        "node_ids_sha256": "069c61f8f0803b90027c9f0ddd6fcb4a548d06297017816ead42da0305de2119",
+        "parameters_sha256": "10bbef5383921ce7d5c2e9ec3b5c775ad04dd31cfbff94c155838da33d4a6a3b",
+    },
+}
 
 
 def load_json(path: Path) -> dict:
@@ -444,9 +579,30 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
             f"node IDs are not unique across regular exports: {duplicate_global_ids}",
         )
 
+    def test_generated_stage_labels_are_removed_and_blocker_warnings_remain(self) -> None:
+        sticky_ids = {
+            node["id"]
+            for workflow in self.workflows.values()
+            for node in workflow["nodes"]
+            if node["type"] == "n8n-nodes-base.stickyNote"
+        }
+        self.assertEqual(
+            len(REMOVED_STAGE_NOTE_IDS),
+            53,
+            "approved stage-label allowlist must remain exact",
+        )
+        self.assertTrue(
+            REMOVED_STAGE_NOTE_IDS.isdisjoint(sticky_ids),
+            f"approved generated stage labels remain: {sorted(REMOVED_STAGE_NOTE_IDS & sticky_ids)}",
+        )
+        self.assertEqual(sticky_ids, RETAINED_OPERATOR_WARNING_NOTE_IDS)
+
     def test_workflow_counts_and_fingerprints_are_deterministic(self) -> None:
         for filename, workflow in self.workflows.items():
-            expected = CORPUS_SNAPSHOT[filename]
+            expected = {
+                **CORPUS_SNAPSHOT[filename],
+                **VISUAL_CLEANUP_SNAPSHOT.get(filename, {}),
+            }
             groups = group_snapshot(workflow)
             actual = {
                 "nodes": len(workflow["nodes"]),

@@ -398,38 +398,6 @@
       "parameters": {
         "jsCode": "// Purpose: Verify OPEN Circuit Readback. Keep this deterministic and fail closed.\nconst e = $('Build OPEN Provider Circuit').first().json, o = $json;\nif (o.provider_code !== e.provider_code || o.state !== 'OPEN' || Number(o.transient_failure_count) !== e.transient_failure_count || o.retry_after !== e.retry_after)\n    throw new Error('PROVIDER_CIRCUIT_READBACK_MISMATCH');\nreturn [{ json: o }];\n"
       }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000016-generated-note-1",
-      "name": "Stage 1 · Finance Workflow Failed to Route Retryable Provider Failure",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Finance Workflow Failed → Route Retryable Provider Failure\n**Input:** Finance Workflow Failed  ·  **Output:** Route Retryable Provider Failure  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000016-generated-note-2",
-      "name": "Stage 2 · Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Read Provider Circuit after Failure → Verify OPEN Circuit Readback\n**Input:** Read Provider Circuit after Failure  ·  **Output:** Verify OPEN Circuit Readback  ·  **Nodes:** 9–13\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
     }
   ],
   "connections": {

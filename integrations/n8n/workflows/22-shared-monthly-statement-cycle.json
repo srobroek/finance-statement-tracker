@@ -434,22 +434,6 @@
         },
         "options": {}
       }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000024-generated-note-1",
-      "name": "Stage 1 · Monthly Cycle Context to Read Back Waiting or Deadline Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Shared monthly source cycle\n**Input:** Monthly Cycle Context  ·  **Output:** terminal pipeline or wait/deadline receipt\nAny rejected invariant stops this stage and routes only a redacted failure receipt.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
     }
   ],
   "connections": {

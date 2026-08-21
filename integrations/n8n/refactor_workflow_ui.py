@@ -120,6 +120,14 @@ BLOCKER_WORKFLOW_CODES = {
     "FINANCE_MCP_FACADE",
 }
 
+# These four notes are operational stop-gate warnings, not generated stage
+# labels.  Their blocker contracts reference the notes by name, so retain the
+# exact export node (including its position/content) during layout rendering.
+OPERATOR_WARNING_NOTE_IDS = {
+    f"10000000-0000-4000-8000-00000000000{suffix}-generated-note-1"
+    for suffix in (6, 7, 8)
+} | {"10000000-0000-4000-8000-000000000015-generated-note-1"}
+
 FORMATTER = r"""
 const fs = require('fs');
 const ts = require(process.argv[1]);
@@ -3739,6 +3747,21 @@ def connected_order(workflow: dict) -> list[dict]:
     return [by_name[name] for name in ordered]
 
 
+def remove_generated_stage_notes(workflow: dict) -> None:
+    """Drop presentation-only stage labels while retaining blocker warnings."""
+    retained_warning_notes = [
+        node
+        for node in workflow["nodes"]
+        if node.get("type") == "n8n-nodes-base.stickyNote"
+        and node.get("id") in OPERATOR_WARNING_NOTE_IDS
+    ]
+    workflow["nodes"] = [
+        node for node in workflow["nodes"]
+        if node.get("type") != "n8n-nodes-base.stickyNote"
+    ]
+    workflow["nodes"].extend(retained_warning_notes)
+
+
 def layout(workflow: dict) -> None:
     ordered = connected_order(workflow)
     columns = 8
@@ -3750,44 +3773,8 @@ def layout(workflow: dict) -> None:
         row, column = divmod(index, columns)
         node["position"] = [left + column * x_step, top + row * y_step]
 
-    workflow["nodes"] = [
-        node
-        for node in workflow["nodes"]
-        if not (
-            node["type"] == "n8n-nodes-base.stickyNote"
-            and (
-                str(node.get("id", "")).startswith(f"{workflow['id']}-generated-note-")
-                or str(node.get("id", "")).startswith(f"{workflow['id']}-note-")
-            )
-        )
-    ]
+    remove_generated_stage_notes(workflow)
     row_count = max(1, (len(ordered) + columns - 1) // columns)
-    for row in range(row_count):
-        start = row * columns + 1
-        end = min(len(ordered), (row + 1) * columns)
-        section = ordered[row * columns : min(len(ordered), (row + 1) * columns)]
-        first = section[0]["name"]
-        last = section[-1]["name"]
-        workflow["nodes"].append(
-            {
-                "id": f"{workflow['id']}-generated-note-{row + 1}",
-                "name": f"Stage {row + 1} · {first} to {last}",
-                "type": "n8n-nodes-base.stickyNote",
-                "typeVersion": 1,
-                "position": [left - 40, top + row * y_step - 180],
-                "parameters": {
-                    "content": (
-                        f"## Stage {row + 1} · {first} → {last}\n"
-                        f"**Input:** {first}  ·  **Output:** {last}  ·  **Nodes:** {start}–{end}\n"
-                        "Any rejected invariant stops this stage and routes only a redacted "
-                        "failure receipt to the shared error workflow."
-                    ),
-                    "height": 110,
-                    "width": 2240,
-                    "color": 7,
-                },
-            }
-        )
 
     # Canvas Groups are native n8n 2.36.2 metadata. Keep groups limited to
     # connected, non-trigger components inside each documented stage so the
@@ -3898,6 +3885,11 @@ def main() -> int:
             "ACTUAL_OUTBOX_APPLY",
         }:
             layout(workflow)
+        else:
+            # These reviewed migration canvases intentionally keep their
+            # existing positions/groups, but stage labels are still
+            # presentation-only and must obey the same cleanup policy.
+            remove_generated_stage_notes(workflow)
     rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
     if args.check:
         stale = [
