@@ -1530,6 +1530,11 @@
         "placeholder": "BIND_ONEDRIVE",
         "configured": false,
         "action_required": true
+      },
+      {
+        "placeholder": "BIND_FINANCE_OPS_DB",
+        "configured": false,
+        "action_required": true
       }
     ],
     "setupRequired": true,

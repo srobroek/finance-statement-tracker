@@ -35,7 +35,7 @@
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 21,
-    "sha256": "52fcc188efa978a2268ded80e9c157fd1006335f32b0588d0864f4ad5cd8bedd",
+    "sha256": "42181de089ff46a4e81610fced1dcebe4f5e966e28bb6dc061b9dfd78e09c372",
     "required_state": {
       "active": false,
       "published": false,
@@ -55,6 +55,10 @@
       {"name": "Finance Actual", "binding": "BIND_ACTUAL", "type": "actualBudgetApi"},
       {"name": "Finance Codex Agent Runner Bearer", "binding": "BIND_FINANCE_CODEX_RUNNER", "type": "httpBearerAuth"}
     ],
+    "binding_contract": {
+      "path": "integrations/n8n/credential-bindings.json",
+      "sha256": "db6eefb068e211ed052093eccb8a5a950bab2201418210892069ed3209b59ed8"
+    },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
   },
@@ -81,6 +85,7 @@
     {"kind": "RUNTIME_ASSERTION", "path": "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs", "command": "node /opt/finance-n8n/verify-immutable-extension.cjs"},
     {"kind": "TEST", "path": "tests/test_n8n_custom_image.py", "command": "python -m unittest tests.test_n8n_custom_image -v"},
     {"kind": "TEST", "path": "tests/test_n8n_application_manifest.py", "command": "python -m unittest tests.test_n8n_application_manifest -v"},
+    {"kind": "TEST", "path": "integrations/n8n/generate_credential_bindings.py", "command": "python integrations/n8n/generate_credential_bindings.py --check"},
     {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
   ],
   "blockers": [

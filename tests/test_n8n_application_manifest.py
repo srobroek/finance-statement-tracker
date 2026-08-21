@@ -3,16 +3,23 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import tempfile
 import unittest
 from copy import deepcopy
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from integrations.n8n.generate_credential_bindings import (
+    build_contract,
+    validate_current,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 N8N = ROOT / "integrations" / "n8n"
 MANIFEST_PATH = N8N / "application-manifest.json"
 MANIFEST_SCHEMA_PATH = N8N / "application-manifest.schema.json"
+BINDINGS_PATH = N8N / "credential-bindings.json"
+BINDINGS_SCHEMA_PATH = N8N / "credential-bindings.schema.json"
 IMAGE_LOCK_PATH = N8N / "application-images.lock.json"
 IMAGE_LOCK_SCHEMA_PATH = N8N / "application-images.lock.schema.json"
 
@@ -87,6 +94,8 @@ class N8nApplicationManifestTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.manifest = load_json(MANIFEST_PATH)
         cls.manifest_schema = load_json(MANIFEST_SCHEMA_PATH)
+        cls.bindings = load_json(BINDINGS_PATH)
+        cls.bindings_schema = load_json(BINDINGS_SCHEMA_PATH)
         cls.image_lock = load_json(IMAGE_LOCK_PATH)
         cls.image_lock_schema = load_json(IMAGE_LOCK_SCHEMA_PATH)
 
@@ -143,6 +152,9 @@ class N8nApplicationManifestTests(unittest.TestCase):
         self.assertEqual(
             self.manifest["mcp"]["path"], "/mcp/finance-operations-v1"
         )
+        binding_contract = self.manifest["credentials"]["binding_contract"]
+        self.assertEqual(binding_contract["path"], "integrations/n8n/credential-bindings.json")
+        self.assertEqual(binding_contract["sha256"], sha256(ROOT / binding_contract["path"]))
         self.assertEqual(
             self.manifest["mcp"]["operations"],
             [
@@ -202,6 +214,38 @@ class N8nApplicationManifestTests(unittest.TestCase):
             self.assertNotIn("id", placeholder)
             self.assertNotIn("value", placeholder)
             self.assertNotIn("secret", placeholder)
+
+    def test_credential_binding_contract_is_current_and_schema_valid(self) -> None:
+        errors = schema_errors(self.bindings, self.bindings_schema)
+        self.assertEqual(errors, [], "schema errors: " + "; ".join(error.message for error in errors))
+        self.assertEqual(self.bindings, build_contract())
+        validate_current(self.bindings)
+
+        w11 = next(row for row in self.bindings["bindings"] if row["placeholder"] == "BIND_ONEDRIVE")
+        self.assertIn(
+            {
+                "workflow": {
+                    "code": "INTERACTIVE_ARTIFACT_HANDOFF",
+                    "file": "11-interactive-artifact-handoff.json",
+                    "id": "10000000-0000-4000-8000-000000000011",
+                },
+                "node": {"id": "11007", "name": "Download Archived Browser Capture"},
+            },
+            w11["nodes"],
+        )
+
+    def test_credential_binding_contract_rejects_omitted_node_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workflow_root = pathlib.Path(temporary) / "workflows"
+            workflow_root.mkdir()
+            for source in (N8N / "workflows").glob("*.json"):
+                (workflow_root / source.name).write_bytes(source.read_bytes())
+            w11_path = workflow_root / "11-interactive-artifact-handoff.json"
+            w11 = load_json(w11_path)
+            next(node for node in w11["nodes"] if node["id"] == "11007").pop("credentials")
+            w11_path.write_text(json.dumps(w11, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "CREDENTIAL_BINDING_CONTRACT_DRIFT"):
+                validate_current(self.bindings, workflow_root)
 
     def test_workflow_registry_and_fixture_manifest_remain_inactive(self) -> None:
         registry = load_json(N8N / "pipeline-registry.json")
