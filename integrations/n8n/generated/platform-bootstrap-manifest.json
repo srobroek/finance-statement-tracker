@@ -14,7 +14,7 @@
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
     "application_contract_bundle_schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
     "data_table_migration_matrix": "integrations/n8n/data-table-migration-matrix.json",
-    "data_table_migration_matrix_sha256": "0c53736d592ab98e128ba645d2d8daffce4a8c19c4b7ff93b46608b93ebbd5b8"
+    "data_table_migration_matrix_sha256": "a4da2184d25b92a3e695c5e4be5109f18e5c65def57b7249c9852565ed463c4c"
   },
   "native_data_table_create_contract": {
     "node_type": "n8n-nodes-base.dataTable",
