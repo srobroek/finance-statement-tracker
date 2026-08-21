@@ -868,9 +868,103 @@ return [{
     scanned_count: scanned.length,
     matched_count: messages.length,
     heartbeat: messages.length === 0,
+    immutable_inventory: true,
     messages,
   },
 }];
+""".strip()
+
+    # The finite Graph result is the immutable enumeration boundary. Shape and
+    # archive aggregation run immediately after that result, before the
+    # persisted ENUMERATED receipt can be read back. Referencing the later
+    # receipt verifier here creates a runtime cycle and leaves the W12->W01
+    # handoff without an immutable inventory.
+    shape = node_by_name(sweep, "Shape Immutable Message Inventory")
+    shape["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+if (sweep.immutable_inventory !== true) {
+  throw new Error('IMMUTABLE_ENUMERATION_REQUIRED');
+}
+const rows = Array.isArray(sweep.messages) ? sweep.messages : [];
+const seen = new Set();
+if (!rows.length) {
+  return [{ json: { ...sweep, messages: [], empty_inventory: true, immutable_inventory: true } }];
+}
+return rows.map(row => {
+  const message = row?.message && typeof row.message === 'object' ? row.message : row;
+  const messageId = String(row?.message_id || message?.id || '').trim();
+  if (!messageId || seen.has(messageId)) {
+    throw new Error('IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE');
+  }
+  seen.add(messageId);
+  return { json: {
+    ...message,
+    id: messageId,
+    message_id: messageId,
+    source_code: sweep.source_code,
+    folder_id: sweep.folder_id,
+    senders: sweep.senders,
+    subjects: sweep.subjects,
+    window_start: sweep.window_start,
+    window_end: sweep.run_upper_bound,
+    run_upper_bound: sweep.run_upper_bound,
+    onedrive_parent_id: sweep.onedrive_parent_id,
+    attachment_inventory: Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [],
+  } };
+});
+""".strip()
+
+    archive_inventory = node_by_name(sweep, "Aggregate Immutable Archive Inventory")
+    archive_inventory["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+const parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory);
+const rows = $input.all().map(item => item.json);
+const grouped = new Map();
+for (const row of rows) {
+  const messageId = String(row.message_id || '').trim();
+  if (!messageId) continue;
+  const bucket = grouped.get(messageId) || [];
+  if (row.attachment?.id) bucket.push(row.attachment);
+  grouped.set(messageId, bucket);
+}
+const messages = parents.map(item => {
+  const message = item.json;
+  const attachments = grouped.get(message.message_id) || [];
+  const seen = new Set();
+  for (const attachment of attachments) {
+    const identity = message.message_id + ':' + attachment.id;
+    if (seen.has(identity)) throw new Error('DUPLICATE_MESSAGE_ATTACHMENT_ID');
+    seen.add(identity);
+  }
+  attachments.sort((left, right) => String(left.id).localeCompare(String(right.id)));
+  return {
+    message_id: message.message_id,
+    message,
+    attachment_inventory: attachments,
+    attachment_ids: attachments.map(attachment => attachment.id),
+    attachment_identity_keys: attachments.map(attachment => message.message_id + ':' + attachment.id),
+  };
+});
+return [{ json: {
+  ...sweep,
+  messages,
+  empty_inventory: messages.length === 0,
+  immutable_inventory: true,
+  attachment_ids_verified: true,
+  attachment_identity_keys: messages.flatMap(message => message.attachment_identity_keys),
+} }];
+""".strip()
+
+    empty_inventory = node_by_name(sweep, "Empty Immutable Archive Inventory")
+    empty_inventory["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+return [{ json: {
+  ...sweep,
+  messages: [],
+  immutable_inventory: true,
+  attachment_ids_verified: true,
+  empty_inventory: true,
+} }];
 """.strip()
 
     # Shared statement processing delegates the isolated PDF boundary to the
