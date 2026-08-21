@@ -396,6 +396,9 @@ class ActualRestoreTests(unittest.TestCase):
             "ui_api_parity",
             "ACTUAL_RESTORE_READBACK_PATH",
             "ACTUAL_RESTORE_READBACK_CONTAINER_PATH",
+            "ACTUAL_RESTORE_CHECKPOINT_PATH",
+            "ACTUAL_RESTORE_CHECKPOINT_CONTAINER_PATH",
+            "failure_checkpoint_payload",
             "readback_probe_output_empty",
             "probe_failure_detail",
             "MAX_READBACK_DIAGNOSTIC",
@@ -686,6 +689,47 @@ print(json.dumps({{"api": payload, "ui": payload}}))
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
             self.assertFalse(list(root.glob("finance-actual-restore.*")))
+
+    def test_readback_failure_retains_sanitized_mode0600_phase_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            failing_probe = executable(
+                root,
+                "phase-failing-probe",
+                """
+import json
+import os
+import sys
+from pathlib import Path
+
+checkpoint = Path(os.environ["ACTUAL_RESTORE_CHECKPOINT_PATH"])
+checkpoint.parent.mkdir(parents=True, exist_ok=True)
+checkpoint.write_text(json.dumps({"label": "probe_failure", "secret": "checkpoint-secret-sentinel"}), encoding="utf-8")
+print("playwright failure token=stderr-secret-sentinel", file=sys.stderr)
+raise SystemExit(23)
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=failing_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            retained = [Path(path) for path in receipt["cleanup"]["retained_paths"]]
+            checkpoint = root / "phase-checkpoint-1.json"
+            self.assertIn(checkpoint, retained)
+            self.assertTrue(checkpoint.is_file())
+            self.assertEqual(checkpoint.stat().st_mode & 0o777, 0o600)
+            phase = json.loads(checkpoint.read_text(encoding="utf-8"))
+            self.assertEqual(phase["schema_version"], 1)
+            self.assertEqual(phase["status"], "failed")
+            self.assertEqual(phase["run_index"], 1)
+            self.assertEqual(phase["phase"], "readback")
+            self.assertEqual(phase["code"], "readback_probe_failed")
+            self.assertEqual(phase["exit_code"], 23)
+            self.assertIn("playwright", phase["diagnostic"])
+            self.assertNotIn("checkpoint-secret-sentinel", checkpoint.read_text(encoding="utf-8"))
+            self.assertNotIn("stderr-secret-sentinel", checkpoint.read_text(encoding="utf-8"))
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
 
     def test_readback_schema_accepts_expected_and_probe_payloads(self) -> None:
         schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))

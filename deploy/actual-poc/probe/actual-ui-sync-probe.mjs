@@ -107,7 +107,8 @@ const indexedDbState = async () => page.evaluate(async () => {
   }
 }).catch(error => ({ available: false, error: String(error?.name ?? 'indexeddb_error') }));
 
-const registerState = async accountName => page.evaluate(({ accountName }) => {
+const registerStateInPage = ({ accountName }) => {
+  const normalize = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const body = document.body?.innerText ?? '';
   const visible = element => {
     if (!element) return false;
@@ -120,7 +121,7 @@ const registerState = async accountName => page.evaluate(({ accountName }) => {
   const wrappers = inner ? [...inner.querySelectorAll('[data-focus-key]')].filter(visible) : [];
   const rows = wrappers.map(wrapper => wrapper.querySelector('[data-testid="row"]')).filter(visible);
   const headings = [...document.querySelectorAll('h1,h2,h3,[role="heading"]')]
-    .filter(visible).map(element => clean(element.textContent));
+    .filter(visible).map(element => normalize(element.textContent));
   const searchCandidates = [
     ['[data-testid="transactions-search"]', document.querySelector('[data-testid="transactions-search"]')],
     ['input[placeholder*="Search" i]', document.querySelector('input[placeholder*="Search" i]')],
@@ -142,7 +143,9 @@ const registerState = async accountName => page.evaluate(({ accountName }) => {
     body_downloading: body.includes('Downloading'),
     body_has_files: body.includes('Files'),
   };
-}, { accountName }).catch(error => ({ route: page.url(), account_heading_visible: false, table_present: false, table_visible: false, table_inner_present: false, table_inner_visible: false, row_wrapper_count: 0, row_count: 0, search_present: false, search_selector: null, body_downloading: false, body_has_files: false, error: String(error?.name ?? 'register_state_error') }));
+};
+
+const registerState = async accountName => page.evaluate(registerStateInPage, { accountName }).catch(error => ({ route: page.url(), account_heading_visible: false, table_present: false, table_visible: false, table_inner_present: false, table_inner_visible: false, row_wrapper_count: 0, row_count: 0, search_present: false, search_selector: null, body_downloading: false, body_has_files: false, error: String(error?.name ?? 'register_state_error') }));
 
 const checkpoint = async (label, extra = {}) => {
   const body = await page.locator('body').innerText().catch(() => '');
