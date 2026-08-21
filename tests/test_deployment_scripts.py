@@ -569,6 +569,35 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("os.environ.get(\"CASHBACK_INGEST_TOKEN\", \"\")", probe)
         self.assertNotIn("print(token", probe)
 
+    def test_cashback_deployment_pins_published_digest_and_retains_rollback(self) -> None:
+        workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        publish = workflow.split("\n  publish:\n", 1)[1].split("\n  deploy:\n", 1)[0]
+        deploy = workflow.split("\n  deploy:\n", 1)[1]
+        compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("image_digest: ${{ steps.publish.outputs.digest }}", publish)
+        self.assertIn("id: publish", publish)
+        self.assertIn(
+            "PUBLISHED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}",
+            deploy,
+        )
+        self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', deploy)
+        self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
+        self.assertIn('sudo podman pull --authfile "$auth_file" "$IMAGE_REF"', deploy)
+        self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
+        self.assertIn("{{index .RepoDigests 0}}", deploy)
+        self.assertIn('test "$resolved" = "$IMAGE_REF"', deploy)
+        self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
+        self.assertIn('"$stack/.env.pre-${stamp}"', deploy)
+        self.assertNotIn("$IMAGE_NAME:main", deploy)
+
+        self.assertIn(
+            "image: ${CASHBACK_IMAGE:?CASHBACK_IMAGE must be the published immutable image reference}",
+            compose,
+        )
+        self.assertIn("pull_policy: never", compose)
+        self.assertNotIn(":main", compose)
+
 
 if __name__ == "__main__":
     unittest.main()
