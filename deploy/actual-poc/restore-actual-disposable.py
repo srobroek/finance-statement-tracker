@@ -33,7 +33,9 @@ RESTORE_RUN_LABEL = "finance.restore.run"
 RESTORE_OWNER_VALUE = "actual-restore"
 MAX_READBACK_DIAGNOSTIC = 2048
 SENSITIVE_DIAGNOSTIC_KEY = re.compile(
-    r"\b(?:password|passwd|secret|token|api[_-]?key|authorization|cookie|credential)\b",
+    r"(?:\b[A-Za-z_][A-Za-z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API[_-]?KEY|"
+    r"ACCESS[_-]?TOKEN|AUTHORIZATION|COOKIE|CREDENTIAL)\b|\b(?:password|passwd|"
+    r"secret|token|api[_-]?key|access[_-]?token|authorization|cookie|credential)\b)",
     re.IGNORECASE,
 )
 
@@ -99,13 +101,34 @@ def redact_diagnostic(value: str) -> str:
     diagnostic = value.replace("\x00", "\\x00").strip()
     if not diagnostic:
         return ""
+    diagnostic = re.sub(r"(?i)\b(?:Basic|Bearer)\s+\S+", lambda match: f"{match.group(0).split()[0]} <redacted>", diagnostic)
     diagnostic = re.sub(
-        rf"({SENSITIVE_DIAGNOSTIC_KEY.pattern})(?:\s*[:=]\s*|\s+)([^\s,;]+)",
-        r"\1=<redacted>",
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
+        rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+        lambda match: (
+            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
+            f"{match.group('quote')}<redacted>{match.group('quote')}"
+        ),
         diagnostic,
         flags=re.IGNORECASE,
     )
-    diagnostic = re.sub(r"(?i)\bBearer\s+\S+", "Bearer <redacted>", diagnostic)
+    diagnostic = re.sub(
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
+        rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
+        lambda match: (
+            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
+            f"{match.group('value') if match.group('value').casefold() in {'basic', 'bearer'} else '<redacted>'}"
+        ),
+        diagnostic,
+        flags=re.IGNORECASE,
+    )
+    diagnostic = re.sub(
+        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<separator>\s+)"
+        rf"(?P<value>[^\s,;]+)",
+        lambda match: f"{match.group('key')}{match.group('separator')}<redacted>",
+        diagnostic,
+        flags=re.IGNORECASE,
+    )
     diagnostic = re.sub(r"(?i)(https?://[^\s/@:]+):[^\s/@]+@", r"\1:<redacted>@", diagnostic)
     if len(diagnostic) > MAX_READBACK_DIAGNOSTIC:
         diagnostic = diagnostic[:MAX_READBACK_DIAGNOSTIC] + "..."

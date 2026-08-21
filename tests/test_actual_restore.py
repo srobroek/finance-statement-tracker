@@ -688,15 +688,38 @@ print(json.dumps({{"api": payload, "ui": payload}}))
             failing_probe = executable(
                 root,
                 "failing-probe",
-                "print('playwright failure password=top-secret-sentinel', file=__import__('sys').stderr); raise SystemExit(9)",
+                """
+import sys
+print(
+    'playwright failure ACTUAL_PASSWORD=actual-password-sentinel '
+    '{\"password\":\"quoted-json-sentinel\",\"access_token\":\"access-token-sentinel\"} '
+    'Authorization: Basic basic-auth-sentinel',
+    file=sys.stderr,
+)
+raise SystemExit(9)
+""",
             )
             result, receipt = self.run_drill(root, fake_runtime(root), probe_path=failing_probe)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
             detail = receipt["error"]["detail"]
             self.assertIn("exit_code=9", detail)
-            self.assertIn("playwright failure password=<redacted>", detail)
-            self.assertNotIn("top-secret-sentinel", detail)
+            for redacted in (
+                "ACTUAL_PASSWORD=<redacted>",
+                '"password":"<redacted>"',
+                '"access_token":"<redacted>"',
+                "Authorization: Basic <redacted>",
+            ):
+                self.assertIn(redacted, detail)
+            for sentinel in (
+                "actual-password-sentinel",
+                "quoted-json-sentinel",
+                "access-token-sentinel",
+                "basic-auth-sentinel",
+            ):
+                self.assertNotIn(sentinel, receipt["error"]["detail"])
+                self.assertNotIn(sentinel, (root / "receipt.json").read_text(encoding="utf-8"))
+            self.assertFalse(receipt["secret_values_recorded"])
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
