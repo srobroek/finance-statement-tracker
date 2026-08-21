@@ -341,6 +341,27 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "passed")
             self.assertEqual(len(receipt["runs"]), 2)
 
+    def test_rootful_docker_detailed_network_stdout_prefix_is_bound_to_requested_id(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    network_missing_stdout="[]",
+                    network_missing_message=(
+                        "Error: network {name}: unable to find network with name or ID "
+                        "{name}: network not found"
+                    ),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+            self.assertEqual(len(receipt["runs"]), 2)
+
     def test_podman_absent_container_and_network_messages_are_classified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

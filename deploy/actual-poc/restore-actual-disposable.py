@@ -43,7 +43,7 @@ def is_absent_inspect_response(message: str, object_name: str, kind: str) -> boo
         patterns = (
             rf"\[\]\s*(?i:Error:\s+No such object:)\s+\"{escaped_name}\"",
             rf"(?i:Error:\s+No such object:)\s+\"{escaped_name}\"",
-            rf"(?i:Error:\s+network)\s+{escaped_name}(?i::\s+unable to find network with name or ID)\s+{escaped_name}(?i::\s+network not found)",
+            rf"(?:\[\]\s*)?(?i:Error:\s+network)\s+{escaped_name}(?i::\s+unable to find network with name or ID)\s+{escaped_name}(?i::\s+network not found)",
             rf"(?i:Error:\s+network)\s+{escaped_name}(?i:\s+not found)",
         )
     else:
