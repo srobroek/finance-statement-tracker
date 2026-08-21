@@ -7,6 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from finance_tracker.account_completeness import (
+    _parse_account_row,
+    _parse_provider_inventory,
+    _validate_account_lifecycle_and_balance,
     load_account_completeness_manifest,
     validate_account_completeness,
 )
@@ -28,6 +31,45 @@ RECONCILIATION_RECEIPT = ROOT / "config" / "evidence" / "production-account-reco
 
 
 class AccountCompletenessTests(unittest.TestCase):
+    def test_private_parsers_preserve_manifest_projection_and_errors(self) -> None:
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        identities: set[str] = set()
+        parsed_accounts = []
+        for raw in payload["accounts"]:
+            account = _parse_account_row(raw, identities)
+            _validate_account_lifecycle_and_balance(account)
+            parsed_accounts.append(account)
+
+        provider_ids: set[str] = set()
+        parsed_providers = [
+            _parse_provider_inventory(raw, provider_ids)
+            for raw in payload["providers"]
+        ]
+        manifest = load_account_completeness_manifest(payload)
+
+        self.assertEqual(tuple(parsed_accounts), manifest.accounts)
+        self.assertEqual(tuple(parsed_providers), manifest.providers)
+        self.assertEqual(len(parsed_accounts), 18)
+        self.assertEqual(len(identities), 12)
+        self.assertEqual(len(parsed_accounts) - len(identities), 6)
+
+        invalid_account = json.loads(json.dumps(payload))
+        invalid_account["accounts"][0]["active"] = True
+        with self.assertRaises(ValueError) as public_error:
+            load_account_completeness_manifest(invalid_account)
+        with self.assertRaises(ValueError) as parser_error:
+            account = _parse_account_row(invalid_account["accounts"][0], set())
+            _validate_account_lifecycle_and_balance(account)
+        self.assertEqual(str(parser_error.exception), str(public_error.exception))
+
+        invalid_provider = json.loads(json.dumps(payload))
+        invalid_provider["providers"][0]["inventory_status"] = "UNKNOWN"
+        with self.assertRaises(ValueError) as public_error:
+            load_account_completeness_manifest(invalid_provider)
+        with self.assertRaises(ValueError) as parser_error:
+            _parse_provider_inventory(invalid_provider["providers"][0], set())
+        self.assertEqual(str(parser_error.exception), str(public_error.exception))
+
     def test_manifest_rejects_truthy_boolean_values(self) -> None:
         payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
         account_fields = (
