@@ -12,7 +12,16 @@ if [[ ! -f "$bootstrap_file" || -L "$bootstrap_file" || ! -r "$bootstrap_file" ]
 fi
 bootstrap_owner="$(stat -c '%u' -- "$bootstrap_file")"
 bootstrap_mode="$(stat -c '%a' -- "$bootstrap_file")"
-if [[ "$bootstrap_owner" != "$(id -u)" || "$bootstrap_mode" != 600 ]]; then
+effective_uid="$(id -u)"
+trusted_owner=false
+if [[ "$bootstrap_owner" == 0 || "$bootstrap_owner" == "$effective_uid" ]]; then
+  trusted_owner=true
+elif [[ "$effective_uid" == 0 && "${SUDO_UID:-}" =~ ^[1-9][0-9]*$ && "$bootstrap_owner" == "$SUDO_UID" ]]; then
+  # The deployment invokes this script with sudo; SUDO_UID is the CI runner
+  # that owns the bootstrap before sudo changes the effective UID to root.
+  trusted_owner=true
+fi
+if [[ "$trusted_owner" != true || "$bootstrap_mode" != 600 ]]; then
   echo "1Password bootstrap file has unsafe ownership or mode: $bootstrap_file" >&2
   exit 1
 fi
@@ -21,6 +30,14 @@ if [[ ! -r "$template_file" ]]; then
   exit 1
 fi
 
+if ! bootstrap_hex="$(od -An -tx1 -v -- "$bootstrap_file")"; then
+  echo "1Password bootstrap file could not be inspected: $bootstrap_file" >&2
+  exit 1
+fi
+if [[ "$bootstrap_hex" =~ (^|[[:space:]])00([[:space:]]|$) ]]; then
+  echo "1Password bootstrap file contains an unsupported NUL byte: $bootstrap_file" >&2
+  exit 1
+fi
 mapfile -t bootstrap_lines < "$bootstrap_file"
 if [[ "${#bootstrap_lines[@]}" != 1 || "${bootstrap_lines[0]}" == *$'\r'* ]]; then
   echo "1Password bootstrap file must contain exactly one assignment: $bootstrap_file" >&2

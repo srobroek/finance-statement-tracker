@@ -8,11 +8,12 @@ from pathlib import Path
 class DeploymentScriptTests(unittest.TestCase):
     def _run_render_env_fixture(
         self,
-        bootstrap: str,
+        bootstrap: str | bytes,
         *,
         mode: int = 0o600,
         symlink: bool = False,
         owner: int | None = None,
+        sudo_uid: int | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], str, str]:
         script = Path("deploy/finance-runtime/render-env.sh")
         with tempfile.TemporaryDirectory() as temporary:
@@ -20,7 +21,10 @@ class DeploymentScriptTests(unittest.TestCase):
             runtime = root / "runtime"
             runtime.mkdir()
             bootstrap_target = root / "bootstrap-target"
-            bootstrap_target.write_text(bootstrap, encoding="utf-8")
+            if isinstance(bootstrap, bytes):
+                bootstrap_target.write_bytes(bootstrap)
+            else:
+                bootstrap_target.write_text(bootstrap, encoding="utf-8")
             bootstrap_target.chmod(mode)
             bootstrap_file = root / "bootstrap"
             if symlink:
@@ -54,6 +58,8 @@ class DeploymentScriptTests(unittest.TestCase):
                     "TOKEN_CAPTURE": str(token_capture),
                 }
             )
+            if sudo_uid is not None:
+                environment["SUDO_UID"] = str(sudo_uid)
             result = subprocess.run(
                 ["bash", str(script)],
                 cwd=Path.cwd(),
@@ -95,6 +101,7 @@ class DeploymentScriptTests(unittest.TestCase):
             "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\nOP_SERVICE_ACCOUNT_TOKEN=other\n",
             "OP_SERVICE_ACCOUNT_TOKEN='ops_fixture-token\n",
             "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\r\n",
+            b"OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\x00\n",
         ):
             with self.subTest(bootstrap=bootstrap):
                 result, rendered, captured = self._run_render_env_fixture(bootstrap)
@@ -117,11 +124,27 @@ class DeploymentScriptTests(unittest.TestCase):
                 self.assertEqual(captured, "")
         if os.geteuid() == 0:
             result, rendered, captured = self._run_render_env_fixture(
-                "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n", owner=65534
+                "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n", sudo_uid=65534
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(rendered, "APP_ENV=fixture\n")
+            self.assertEqual(captured, "ops_fixture-token")
+            result, rendered, captured = self._run_render_env_fixture(
+                "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n",
+                owner=65533,
+                sudo_uid=65534,
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(rendered, "")
             self.assertEqual(captured, "")
+            result, rendered, captured = self._run_render_env_fixture(
+                "OP_SERVICE_ACCOUNT_TOKEN=ops_fixture-token\n",
+                owner=65534,
+                sudo_uid=65534,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(rendered, "APP_ENV=fixture\n")
+            self.assertEqual(captured, "ops_fixture-token")
 
     def _run_backup_fixture(
         self, probe_mode: str, docker_mode: str = "normal"
