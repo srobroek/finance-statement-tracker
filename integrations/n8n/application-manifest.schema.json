@@ -199,7 +199,7 @@
       "required": ["path", "file_count", "sha256", "required_state", "setup_corpus_excluded"],
       "properties": {
         "path": {"const": "integrations/n8n/workflows"},
-        "file_count": {"const": 21},
+        "file_count": {"const": 22},
         "sha256": {"$ref": "#/$defs/sha256"},
         "required_state": {
           "type": "object",
