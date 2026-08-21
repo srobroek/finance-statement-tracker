@@ -585,7 +585,18 @@ def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]
             raise DrillError("readback_contract_invalid", "readback", f"duplicate or missing {section} identity")
         seen.add(identity)
         canonical.append(dict(sorted(row.items())))
-    return sorted(canonical, key=lambda row: json.dumps(row, sort_keys=True))
+    if section == "accounts":
+        return sorted(canonical, key=lambda row: row["name"])
+    return sorted(
+        canonical,
+        key=lambda row: (
+            row["account_name"],
+            row["date"],
+            row["imported_id"],
+            row["amount_minor"],
+            "" if row["payee"] is None else row["payee"],
+        ),
+    )
 
 
 def validate_readback(actual_payload: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:

@@ -11,6 +11,29 @@ assert.ok(callbackStart > 'const registerStateInPage = '.length, 'register-state
 assert.ok(callbackEnd > callbackStart, 'register-state callback has a bounded source region');
 const callbackSource = probeSource.slice(callbackStart, callbackEnd).trim().replace(/;$/, '');
 const registerStateInPage = vm.runInNewContext(`(${callbackSource})`);
+const orderingStart = probeSource.indexOf('const compareText = ');
+const orderingEnd = probeSource.indexOf('\nconst expectedBytes', orderingStart);
+assert.ok(orderingStart > 0, 'readback ordering helpers are present');
+assert.ok(orderingEnd > orderingStart, 'readback ordering helpers have a bounded source region');
+const orderingHelpers = vm.runInNewContext(`(() => { ${probeSource.slice(orderingStart, orderingEnd)}; return { canonicalizeAccounts, canonicalizeTransactions }; })()`);
+
+test('readback ordering is stable across permutations and account-grouped collection', () => {
+  const rows = [
+    { account_name: 'B', amount_minor: 10, date: '2026-08-02', imported_id: 'b-2', payee: null },
+    { account_name: 'A', amount_minor: 20, date: '2026-08-01', imported_id: 'a-1', payee: 'Alpha' },
+    { account_name: 'B', amount_minor: -5, date: '2026-08-01', imported_id: 'b-1', payee: 'Beta' },
+  ];
+  const groupedByAccount = [rows[1], rows[0], rows[2]];
+  const permutations = [rows, [...rows].reverse(), groupedByAccount];
+  const canonical = permutations.map(value => JSON.parse(JSON.stringify(orderingHelpers.canonicalizeTransactions(value))));
+  assert.deepEqual(canonical[0], canonical[1]);
+  assert.deepEqual(canonical[0], canonical[2]);
+  assert.deepEqual(canonical[0].map(row => row.imported_id), ['a-1', 'b-1', 'b-2']);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(orderingHelpers.canonicalizeAccounts([{ name: 'Wio' }, { name: 'ADCB' }]))),
+    [{ name: 'ADCB' }, { name: 'Wio' }],
+  );
+});
 
 test('register-state browser callback evaluates without an outer closure', async () => {
   const browser = await chromium.launch({ headless: true });
