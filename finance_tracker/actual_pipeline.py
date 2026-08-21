@@ -46,11 +46,53 @@ class ActualStatementRun:
 
 def load_actual_config(path: str | Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    if payload.get("schema_version") != 1:
+    if not isinstance(payload, dict):
+        raise ValueError("Actual bootstrap config must be an object")
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
         raise ValueError("Actual bootstrap config schema_version must be 1")
+    currency = payload.get("currency")
+    if currency is not None and (
+        not isinstance(currency, str)
+        or len(currency) != 3
+        or not currency.isascii()
+        or not currency.isalpha()
+    ):
+        raise ValueError("Actual bootstrap config currency must be a three-letter code")
     accounts = payload.get("accounts")
     if not isinstance(accounts, list) or not accounts:
         raise ValueError("Actual bootstrap config requires a non-empty accounts list")
+    for index, account in enumerate(accounts):
+        if not isinstance(account, dict):
+            raise ValueError(f"Actual bootstrap config account {index} must be an object")
+        name = account.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"Actual bootstrap config account {index} requires a name")
+        for field in ("card_last4", "aliases"):
+            values = account.get(field, [])
+            if not isinstance(values, list):
+                raise ValueError(f"Actual bootstrap config account {index} {field} must be a list")
+            for value in values:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(
+                        f"Actual bootstrap config account {index} {field} values must be strings"
+                    )
+                if field == "card_last4" and (
+                    len(value) != 4 or not value.isascii() or not value.isdigit()
+                ):
+                    raise ValueError(
+                        f"Actual bootstrap config account {index} card_last4 values must be four digits"
+                    )
+        for field in ("card_code", "owner"):
+            value = account.get(field)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"Actual bootstrap config account {index} {field} must be a string"
+                )
+    retired_accounts = payload.get("retired_accounts", [])
+    if not isinstance(retired_accounts, list) or any(
+        not isinstance(value, str) or not value.strip() for value in retired_accounts
+    ):
+        raise ValueError("Actual bootstrap config retired_accounts must be a list of strings")
     return payload
 
 

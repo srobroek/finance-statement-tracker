@@ -63,9 +63,17 @@ def _reward_bucket(
     currency: str,
     tags: set[str],
 ) -> str | None:
-    for tag in tags:
-        if tag.casefold().startswith("cashback-"):
-            return tag[9:].replace("-", "_").upper()
+    tagged_buckets = sorted({
+        tag[9:].replace("-", "_").upper()
+        for tag in tags
+        if tag.casefold().startswith("cashback-")
+    })
+    if len(tagged_buckets) > 1:
+        raise ValueError(
+            "Conflicting cashback bucket tags: " + ", ".join(tagged_buckets)
+        )
+    if tagged_buckets:
+        return tagged_buckets[0]
     return configured_reward_bucket(programs, card, category, channel, currency)
 
 
@@ -80,16 +88,34 @@ def transactions_from_actual_snapshot(
     _, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
     card_by_account = {name.casefold(): card for card, name in account_by_card.items()}
+    retired_config = config.get("retired_accounts", [])
+    if not isinstance(retired_config, list) or any(
+        not isinstance(name, str) or not name.strip() for name in retired_config
+    ):
+        raise ValueError("Actual snapshot retired_accounts must be a list of strings")
+    retired_accounts = {name.casefold() for name in retired_config}
     for account in config["accounts"]:
         card = str(account.get("card_code") or account["name"]).upper()
         for alias in account.get("aliases", []):
             card_by_account[str(alias).casefold()] = card
+
+    unknown_accounts = sorted({
+        str(row["account_name"])
+        for row in snapshot.get("transactions", [])
+        if str(row["account_name"]).casefold() not in card_by_account
+        and str(row["account_name"]).casefold() not in retired_accounts
+    })
+    if unknown_accounts:
+        raise ValueError(
+            "Unknown active Actual snapshot accounts: " + ", ".join(unknown_accounts)
+        )
 
     result: list[Transaction] = []
     for row in snapshot.get("transactions", []):
         account_name = str(row["account_name"])
         card = card_by_account.get(account_name.casefold())
         if card is None:
+            # Retired/non-reward accounts are intentionally outside the replay set.
             continue
         notes = str(row.get("notes") or "")
         tags = _tags(notes)

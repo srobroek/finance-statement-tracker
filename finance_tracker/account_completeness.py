@@ -85,11 +85,18 @@ def _load_payload(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _strict_bool(raw: Mapping[str, Any], field: str, default: bool) -> bool:
+    value = raw.get(field, default)
+    if type(value) is not bool:
+        raise ValueError(f"Account completeness field {field} must be a boolean")
+    return value
+
+
 def load_account_completeness_manifest(
     source: str | Path | Mapping[str, Any],
 ) -> AccountCompletenessManifest:
     payload = _load_payload(source)
-    if payload.get("schema_version") != 1:
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
         raise ValueError("Account completeness schema_version must be 1")
     raw_accounts = payload.get("accounts")
     raw_providers = payload.get("providers")
@@ -150,22 +157,22 @@ def load_account_completeness_manifest(
             last4=last4,
             owner=str(raw.get("owner") or "").strip() or None,
             lifecycle_status=str(raw.get("lifecycle_status") or "ACTIVE").upper(),
-            include_in_actual=bool(raw.get("include_in_actual", True)),
-            actual_offbudget=bool(raw.get("actual_offbudget", False)),
-            include_in_net_worth=bool(raw.get("include_in_net_worth", True)),
+            include_in_actual=_strict_bool(raw, "include_in_actual", True),
+            actual_offbudget=_strict_bool(raw, "actual_offbudget", False),
+            include_in_net_worth=_strict_bool(raw, "include_in_net_worth", True),
             balance_sign=str(raw.get("balance_sign") or "ASSET_POSITIVE").upper(),
             balance_evidence_status=str(raw.get("balance_evidence_status") or "UNAVAILABLE").upper(),
             balance_source=str(raw.get("balance_source") or "").strip() or None,
             balance_as_of=str(raw.get("balance_as_of") or "").strip() or None,
-            active=bool(raw.get("active", True)),
-            retain_history=bool(raw.get("retain_history", True)),
-            include_in_active_routing=bool(raw.get("include_in_active_routing", True)),
+            active=_strict_bool(raw, "active", True),
+            retain_history=_strict_bool(raw, "retain_history", True),
+            include_in_active_routing=_strict_bool(raw, "include_in_active_routing", True),
             expected_balance_minor=(
                 int(raw["expected_balance_minor"])
                 if raw.get("expected_balance_minor") is not None else None
             ),
-            balance_reconciliation_required=bool(
-                raw.get("balance_reconciliation_required", False)
+            balance_reconciliation_required=_strict_bool(
+                raw, "balance_reconciliation_required", False
             ),
         ))
         if accounts[-1].lifecycle_status == "CLOSED" and accounts[-1].active:
@@ -205,7 +212,7 @@ def load_account_completeness_manifest(
         providers.append(ProviderInventory(
             provider_id=provider_id,
             inventory_status=status,
-            discovery_required=bool(raw.get("discovery_required", False)),
+            discovery_required=_strict_bool(raw, "discovery_required", False),
             blocker=str(raw.get("blocker") or "").strip() or None,
             evidence=str(raw.get("evidence") or "").strip() or None,
         ))
