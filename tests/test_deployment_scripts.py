@@ -214,39 +214,65 @@ class DeploymentScriptTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_backup_resume_retains_unknown_ownership_on_inspect_error(self) -> None:
+    def test_backup_resume_retains_unknown_ownership_for_uncertain_states(self) -> None:
         script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
         helpers = script[
             script.index("declare -A paused_services=()"):script.index("actual_state=")
         ]
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            docker = bin_dir / "docker"
-            docker.write_text(
-                "#!/usr/bin/env bash\n"
-                "set -euo pipefail\n"
-                "exit 1\n",
-                encoding="utf-8",
-            )
-            docker.chmod(0o755)
-            harness = (
-                "set -euo pipefail\n"
-                f"export PATH={bin_dir}:$PATH\n"
-                f"{helpers}\n"
-                "paused_services[finance-actual-poc]=paused\n"
-                "if resume_services; then exit 1; fi\n"
-                "[[ \"${paused_services[finance-actual-poc]}\" == unknown ]]\n"
-            )
-            result = subprocess.run(
-                ["bash", "-c", harness],
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn('"reason":"inspect_error"', result.stderr)
+        for mode, expected_reason in (
+            ("inspect_error", "inspect_error"),
+            ("exited", "container_not_running"),
+            ("partial_unpause", "unpause_failed"),
+        ):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                log = root / "docker.log"
+                docker = bin_dir / "docker"
+                docker.write_text(
+                    "#!/usr/bin/env bash\n"
+                    "set -euo pipefail\n"
+                    "name=\"${@: -1}\"\n"
+                    "case \"${1}\" in\n"
+                    "  inspect)\n"
+                    "    case \"${STUB_MODE}\" in\n"
+                    "      inspect_error) exit 1 ;;\n"
+                    "      exited) echo exited ;;\n"
+                    "      partial_unpause) echo paused ;;\n"
+                    "    esac\n"
+                    "    ;;\n"
+                    "  unpause)\n"
+                    "    echo \"unpause:${2}\" >> \"${STUB_LOG}\"\n"
+                    "    [[ \"${STUB_MODE}\" != partial_unpause ]]\n"
+                    "    ;;\n"
+                    "esac\n",
+                    encoding="utf-8",
+                )
+                docker.chmod(0o755)
+                harness = (
+                    "set -euo pipefail\n"
+                    f"export PATH={bin_dir}:$PATH STUB_MODE={mode} STUB_LOG={log}\n"
+                    f"{helpers}\n"
+                    "paused_services[finance-actual-poc]=paused\n"
+                    "if resume_services; then exit 1; fi\n"
+                    "[[ \"${paused_services[finance-actual-poc]}\" == unknown ]]\n"
+                )
+                result = subprocess.run(
+                    ["bash", "-c", harness],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f'"reason":"{expected_reason}"', result.stderr)
+                if mode == "partial_unpause":
+                    self.assertEqual(
+                        log.read_text(encoding="utf-8").splitlines(),
+                        ["unpause:finance-actual-poc"],
+                    )
+                else:
+                    self.assertFalse(log.exists())
 
     def test_legacy_ingestion_bridge_is_absent(self) -> None:
         for path in (

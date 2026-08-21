@@ -103,13 +103,17 @@ resume_services() {
           failed=1
         fi
         ;;
-      running|not_running)
+      running)
         if [[ "${ownership}" == "paused" ]]; then
           unset "paused_services[${name}]"
         else
           retain_unknown_ownership "${name}" "pause_state_unconfirmed"
           failed=1
         fi
+        ;;
+      not_running)
+        retain_unknown_ownership "${name}" "container_not_running"
+        failed=1
         ;;
       inspect_error|unexpected_state)
         retain_unknown_ownership "${name}" "${state}"
