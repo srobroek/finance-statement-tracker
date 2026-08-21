@@ -1390,6 +1390,12 @@ try {{
             nodes["Verify Application Contract Bundle Digest and Maps"]["type"],
             "n8n-nodes-base.code",
         )
+        target_guard = nodes["Verify Four-Table Target Contract"]["parameters"]["jsCode"]
+        self.assertIn("TARGET_TABLE_SET_MISMATCH", target_guard)
+        self.assertIn("TARGET_SCHEMA_TYPE_UNSUPPORTED", target_guard)
+        receipt = nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"]
+        for marker in ("runtime_cutover:false", "deletion_authorized:false", "second_run_noop:true", "mode:'0600'"):
+            self.assertIn(marker, receipt)
 
     def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:
         facade = self.nodes("15-finance-mcp-facade.json")
