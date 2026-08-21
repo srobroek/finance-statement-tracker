@@ -198,6 +198,63 @@ class ActualEconomicSemanticsTests(TestCase):
             }:
                 self.assertNotEqual(transaction.transaction_type, "PURCHASE")
 
+    def test_snapshot_replay_preserves_signed_transfer_direction_and_amount(self) -> None:
+        by_case = {case["case_id"]: case for case in self.fixture["cases"]}
+        config = self._snapshot_config()
+        source_transactions = [
+            self._transaction(by_case[case_id])
+            for case_id in (
+                "liability-card-payment",
+                "asset-card-payment",
+                "asset-transfer-credit",
+            )
+        ]
+        envelopes = ActualBudgetAdapter().serialize_import(source_transactions)
+        snapshot_rows = [
+            {
+                "id": record["imported_id"],
+                "imported_id": record["imported_id"],
+                "account_name": envelope.account,
+                "date": record["date"],
+                "amount": record["amount"],
+                "imported_payee": record["imported_payee"],
+                "payee_name": record["payee_name"],
+                "category_name": record.get("category_name"),
+                "notes": record["notes"],
+            }
+            for envelope in envelopes
+            for record in envelope.records
+        ]
+
+        replayed = transactions_from_actual_snapshot(
+            {"transactions": snapshot_rows}, config
+        )
+
+        self.assertEqual(
+            {
+                transaction.transaction_id: transaction.source_direction
+                for transaction in replayed
+            },
+            {
+                "fixture:liability-card-payment": "CREDIT",
+                "fixture:asset-card-payment": "DEBIT",
+                "fixture:asset-transfer-credit": "CREDIT",
+            },
+        )
+        replayed_records = {
+            record["imported_id"]: record["amount"]
+            for envelope in ActualBudgetAdapter().serialize_import(replayed)
+            for record in envelope.records
+        }
+        self.assertEqual(
+            replayed_records,
+            {
+                "fixture:liability-card-payment": 355,
+                "fixture:asset-card-payment": -355,
+                "fixture:asset-transfer-credit": 10000,
+            },
+        )
+
     def test_negative_topic_boundaries_fail_closed(self) -> None:
         for case in self.fixture["negative_cases"]:
             transaction = Transaction(

@@ -183,6 +183,7 @@ def transactions_from_actual_snapshot(
                 merchant_raw=merchant,
                 vendor=row.get("payee_name"),
                 amount_aed=Decimal(abs(amount_minor)) / Decimal("100"),
+                source_direction="CREDIT" if amount_minor > 0 else "DEBIT",
                 currency=currency,
                 channel=channel,
                 source_type="actual_snapshot",
