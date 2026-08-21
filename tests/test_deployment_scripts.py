@@ -6,7 +6,9 @@ from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
-    def _run_backup_fixture(self, probe_mode: str) -> subprocess.CompletedProcess[str]:
+    def _run_backup_fixture(
+        self, probe_mode: str, docker_mode: str = "normal"
+    ) -> subprocess.CompletedProcess[str]:
         script = Path("deploy/actual-poc/backup.sh")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -49,6 +51,8 @@ class DeploymentScriptTests(unittest.TestCase):
                 "name=\"${@: -1}\"\n"
                 "case \"${1}\" in\n"
                 "  inspect)\n"
+                "    if [[ \"${DOCKER_MODE}\" == inspect_error && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual-poc ]]; then exit 1; fi\n"
+                "    if [[ \"${DOCKER_MODE}\" == unexpected_state && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual-poc ]]; then printf 'mystery\\n'; exit 0; fi\n"
                 "    if [[ \"${3}\" == *'.State.Paused'* ]]; then\n"
                 "      [[ -e \"${state}/${name}.paused\" ]] && printf 'true\\n' || printf 'false\\n'\n"
                 "    elif [[ -e \"${state}/${name}.paused\" ]]; then\n"
@@ -57,7 +61,7 @@ class DeploymentScriptTests(unittest.TestCase):
                 "      printf 'running\\n'\n"
                 "    fi\n"
                 "    ;;\n"
-                "  pause) touch \"${state}/${2}.paused\" ;;\n"
+                "  pause) printf 'pause:%s\\n' \"${2}\" >> \"${log}\"; touch \"${state}/${2}.paused\"; if [[ \"${DOCKER_MODE}\" == partial_pause_failure && \"${2}\" == finance-actual-poc ]]; then exit 1; fi ;;\n"
                 "  unpause) printf 'unpause:%s\\n' \"${2}\" >> \"${log}\"; rm -f \"${state}/${2}.paused\" ;;\n"
                 "  exec)\n"
                 "    case \"${PROBE_MODE}\" in\n"
@@ -91,6 +95,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "STUB_STATE": str(state),
                     "STUB_LOG": str(log),
                     "PROBE_MODE": probe_mode,
+                    "DOCKER_MODE": docker_mode,
                 }
             )
             command = ["bash", str(script)] if os.geteuid() == 0 else ["unshare", "-Ur", "bash", str(script)]
@@ -106,19 +111,44 @@ class DeploymentScriptTests(unittest.TestCase):
                 probe_mode,
                 ("success", "missing_probe", "runtime_exec_failed", "probe_unhealthy"),
             )
-            if probe_mode == "success":
+            if docker_mode == "normal" and probe_mode == "success":
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(len(list(backup_root.glob("20??????T??????Z"))), 1)
                 self.assertFalse(list(backup_root.glob(".*.incomplete")))
-            else:
+            elif docker_mode == "normal":
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(len(list(backup_root.glob(".*.incomplete"))), 1)
                 self.assertIn(f'"reason":"{probe_mode}"', result.stderr)
-            self.assertEqual(
-                result.stderr.count('"event":"backup_resume_unhealthy"'),
-                0 if probe_mode == "success" else 1,
-            )
-            self.assertEqual(log.read_text(encoding="utf-8").count("unpause:"), 3)
+                self.assertEqual(
+                    result.stderr.count('"event":"backup_resume_unhealthy"'), 1
+                )
+            elif docker_mode in ("inspect_error", "unexpected_state"):
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f'"reason":"{docker_mode}"', result.stderr)
+                docker_log = log.read_text(encoding="utf-8") if log.exists() else ""
+                self.assertNotIn("pause:", docker_log)
+                self.assertNotIn("unpause:", docker_log)
+                self.assertFalse(list(backup_root.glob(".*.incomplete")))
+            elif docker_mode == "partial_pause_failure":
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('"reason":"pause_failed"', result.stderr)
+                self.assertEqual(
+                    log.read_text(encoding="utf-8").splitlines(),
+                    [
+                        "pause:finance-actual-proxy",
+                        "pause:finance-actual-poc",
+                        "unpause:finance-actual-poc",
+                        "unpause:finance-actual-proxy",
+                    ],
+                )
+                self.assertFalse((state / "finance-actual-poc.paused").exists())
+                self.assertFalse((state / "finance-actual-proxy.paused").exists())
+            if docker_mode == "normal":
+                self.assertEqual(
+                    result.stderr.count('"event":"backup_resume_unhealthy"'),
+                    0 if probe_mode == "success" else 1,
+                )
+                self.assertEqual(log.read_text(encoding="utf-8").count("unpause:"), 3)
             return result
 
     def test_backup_stubbed_runtime_promotes_or_retains_redacted_failure(self) -> None:
@@ -126,9 +156,19 @@ class DeploymentScriptTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 self._run_backup_fixture(mode)
 
+    def test_backup_container_inspection_is_strict_and_fail_closed(self) -> None:
+        for mode in ("inspect_error", "unexpected_state"):
+            with self.subTest(mode=mode):
+                self._run_backup_fixture("success", docker_mode=mode)
+
+    def test_backup_partial_pause_failure_is_recovered(self) -> None:
+        self._run_backup_fixture("success", docker_mode="partial_pause_failure")
+
     def test_backup_resume_helpers_are_exactly_once_and_state_aware(self) -> None:
         script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
-        helpers = script[script.index("declare -A paused_services=()"):script.index("emergency_resume()")]
+        helpers = script[
+            script.index("declare -A paused_services=()"):script.index("actual_state=")
+        ]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
@@ -143,6 +183,7 @@ class DeploymentScriptTests(unittest.TestCase):
                 "name=\"${@: -1}\"\n"
                 "case \"${1}\" in\n"
                 "  inspect)\n"
+                "    if [[ \"${STUB_MODE}\" == inspect_error ]]; then exit 1; fi\n"
                 "    if [[ \"${3}\" == *'.State.Paused'* ]]; then\n"
                 "      [[ -e \"${STUB_STATE}/${name}.paused\" ]] && echo true || echo false\n"
                 "    elif [[ -e \"${STUB_STATE}/${name}.paused\" ]]; then echo paused; else echo running; fi\n"
@@ -154,14 +195,14 @@ class DeploymentScriptTests(unittest.TestCase):
             docker.chmod(0o755)
             harness = (
                 "set -euo pipefail\n"
-                f"export PATH={bin_dir}:$PATH STUB_STATE={state} STUB_LOG={log}\n"
+                f"export PATH={bin_dir}:$PATH STUB_STATE={state} STUB_LOG={log} STUB_MODE=normal\n"
                 f"{helpers}\n"
                 "touch \"${STUB_STATE}/finance-actual-poc.paused\"\n"
-                "paused_services[finance-actual-poc]=1\n"
+                "paused_services[finance-actual-poc]=paused\n"
                 "resume_services\n"
                 "resume_services\n"
                 "[[ $(wc -l < \"${STUB_LOG}\") -eq 1 ]]\n"
-                "paused_services[finance-cashback-control]=1\n"
+                "paused_services[finance-cashback-control]=paused\n"
                 "resume_services\n"
                 "[[ $(wc -l < \"${STUB_LOG}\") -eq 1 ]]\n"
             )
@@ -172,6 +213,40 @@ class DeploymentScriptTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_backup_resume_retains_unknown_ownership_on_inspect_error(self) -> None:
+        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        helpers = script[
+            script.index("declare -A paused_services=()"):script.index("actual_state=")
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            docker = bin_dir / "docker"
+            docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            docker.chmod(0o755)
+            harness = (
+                "set -euo pipefail\n"
+                f"export PATH={bin_dir}:$PATH\n"
+                f"{helpers}\n"
+                "paused_services[finance-actual-poc]=paused\n"
+                "if resume_services; then exit 1; fi\n"
+                "[[ \"${paused_services[finance-actual-poc]}\" == unknown ]]\n"
+            )
+            result = subprocess.run(
+                ["bash", "-c", harness],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"reason":"inspect_error"', result.stderr)
 
     def test_legacy_ingestion_bridge_is_absent(self) -> None:
         for path in (
@@ -197,8 +272,8 @@ class DeploymentScriptTests(unittest.TestCase):
     def test_backup_quiesces_only_authoritative_data_services(self) -> None:
         script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
         self.assertNotIn("docker compose", script)
-        self.assertIn("docker pause finance-actual-poc", script)
-        self.assertIn("docker pause finance-cashback-control", script)
+        self.assertIn("pause_service finance-actual-poc", script)
+        self.assertIn("pause_service finance-cashback-control", script)
         self.assertNotIn("finance-actual-ingestion", script)
         self.assertNotIn("ingestion-data", script)
         self.assertIn("sha256sum finance-data.tar.gz > SHA256SUMS", script)

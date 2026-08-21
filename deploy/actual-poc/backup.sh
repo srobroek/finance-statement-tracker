@@ -42,51 +42,122 @@ flock -n 9 || {
   exit 0
 }
 
+declare -A paused_services=()
+probe_failure_reason="probe_unhealthy"
+
+container_state() {
+  local name="$1"
+  local status
+  local paused
+
+  if ! status="$(docker inspect -f '{{.State.Status}}' "${name}" 2>/dev/null)"; then
+    printf 'inspect_error\n'
+    return 0
+  fi
+  case "${status}" in
+    paused)
+      printf 'paused\n'
+      ;;
+    running)
+      if ! paused="$(docker inspect -f '{{.State.Paused}}' "${name}" 2>/dev/null)"; then
+        printf 'inspect_error\n'
+      elif [[ "${paused}" == "true" ]]; then
+        printf 'paused\n'
+      elif [[ "${paused}" == "false" ]]; then
+        printf 'running\n'
+      else
+        printf 'unexpected_state\n'
+      fi
+      ;;
+    created|restarting|removing|exited|dead)
+      printf 'not_running\n'
+      ;;
+    *)
+      printf 'unexpected_state\n'
+      ;;
+  esac
+}
+
+retain_unknown_ownership() {
+  local name="$1"
+  local reason="$2"
+  paused_services["${name}"]=unknown
+  printf '{"level":"error","event":"backup_resume_state_unknown","service":"%s","reason":"%s"}\n' "${name}" "${reason}" >&2
+}
+
+resume_services() {
+  local failed=0
+  local name
+  local ownership
+  local state
+  for name in finance-actual-poc finance-cashback-control finance-actual-proxy; do
+    [[ -n "${paused_services[${name}]+set}" ]] || continue
+    ownership="${paused_services[${name}]}"
+    state="$(container_state "${name}")"
+    case "${state}" in
+      paused)
+        if docker unpause "${name}" >/dev/null; then
+          unset "paused_services[${name}]"
+        else
+          retain_unknown_ownership "${name}" "unpause_failed"
+          failed=1
+        fi
+        ;;
+      running|not_running)
+        if [[ "${ownership}" == "paused" ]]; then
+          unset "paused_services[${name}]"
+        else
+          retain_unknown_ownership "${name}" "pause_state_unconfirmed"
+          failed=1
+        fi
+        ;;
+      inspect_error|unexpected_state)
+        retain_unknown_ownership "${name}" "${state}"
+        failed=1
+        ;;
+      *)
+        retain_unknown_ownership "${name}" "unexpected_state"
+        failed=1
+        ;;
+    esac
+  done
+  return "${failed}"
+}
+
+pause_service() {
+  local name="$1"
+  # Record ownership before pause so a partial pause failure remains recoverable.
+  paused_services["${name}"]=pending
+  if docker pause "${name}" >/dev/null; then
+    paused_services["${name}"]=paused
+  else
+    retain_unknown_ownership "${name}" "pause_failed"
+    return 1
+  fi
+}
+
+actual_state="$(container_state finance-actual-poc)"
+proxy_state="$(container_state finance-actual-proxy)"
+cashback_state="$(container_state finance-cashback-control)"
+declare -A initial_states=(
+  [finance-actual-poc]="${actual_state}"
+  [finance-actual-proxy]="${proxy_state}"
+  [finance-cashback-control]="${cashback_state}"
+)
+for name in finance-actual-poc finance-actual-proxy finance-cashback-control; do
+  state="${initial_states[${name}]}"
+  if [[ "${state}" == "inspect_error" || "${state}" == "unexpected_state" ]]; then
+    printf '{"level":"error","event":"backup_container_state_unknown","service":"%s","reason":"%s"}\n' "${name}" "${state}" >&2
+    fail "container_state_unknown"
+  fi
+done
+
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 working="${BACKUP_ROOT}/.${stamp}.incomplete"
 destination="${BACKUP_ROOT}/${stamp}"
 payload="${working}/payload"
 [[ ! -e "${working}" && ! -e "${destination}" ]] || fail "backup_destination_exists"
 mkdir -p "${payload}/actual-data" "${payload}/cashback-data" "${payload}/configuration"
-
-actual_running="$(docker inspect -f '{{.State.Status}}' finance-actual-poc 2>/dev/null || true)"
-proxy_running="$(docker inspect -f '{{.State.Status}}' finance-actual-proxy 2>/dev/null || true)"
-cashback_running="$(docker inspect -f '{{.State.Status}}' finance-cashback-control 2>/dev/null || true)"
-declare -A paused_services=()
-probe_failure_reason="probe_unhealthy"
-
-container_is_paused() {
-  local name="$1"
-  local status
-  local paused
-
-  status="$(docker inspect -f '{{.State.Status}}' "${name}" 2>/dev/null || true)"
-  [[ "${status}" == "paused" ]] && return 0
-  [[ "${status}" == "running" ]] || return 1
-  if paused="$(docker inspect -f '{{.State.Paused}}' "${name}" 2>/dev/null)"; then
-    [[ "${paused}" == "true" ]]
-    return
-  fi
-  return 1
-}
-
-resume_services() {
-  local failed=0
-  local name
-  for name in finance-actual-poc finance-cashback-control finance-actual-proxy; do
-    [[ -n "${paused_services[${name}]+set}" ]] || continue
-    if ! container_is_paused "${name}"; then
-      unset "paused_services[${name}]"
-      continue
-    fi
-    if docker unpause "${name}" >/dev/null; then
-      unset "paused_services[${name}]"
-    else
-      failed=1
-    fi
-  done
-  return "${failed}"
-}
 
 probe_cashback_health() {
   local output
@@ -135,17 +206,14 @@ emergency_resume() {
 }
 trap emergency_resume EXIT
 
-if [[ "${proxy_running}" == "running" ]]; then
-  docker pause finance-actual-proxy >/dev/null
-  paused_services[finance-actual-proxy]=1
+if [[ "${proxy_state}" == "running" ]]; then
+  pause_service finance-actual-proxy
 fi
-if [[ "${actual_running}" == "running" ]]; then
-  docker pause finance-actual-poc >/dev/null
-  paused_services[finance-actual-poc]=1
+if [[ "${actual_state}" == "running" ]]; then
+  pause_service finance-actual-poc
 fi
-if [[ "${cashback_running}" == "running" ]]; then
-  docker pause finance-cashback-control >/dev/null
-  paused_services[finance-cashback-control]=1
+if [[ "${cashback_state}" == "running" ]]; then
+  pause_service finance-cashback-control
 fi
 sync
 
@@ -183,10 +251,10 @@ cat > "${working}/manifest.json" <<EOF
 EOF
 
 resume_services
-if [[ "${actual_running}" == "running" && "${proxy_running}" == "running" ]]; then
+if [[ "${actual_state}" == "running" && "${proxy_state}" == "running" ]]; then
   wait_for_url "actual" "http://127.0.0.1:5006/"
 fi
-if [[ "${cashback_running}" == "running" ]]; then
+if [[ "${cashback_state}" == "running" ]]; then
   wait_for_url "cashback" "http://127.0.0.1:5010/api/health"
 fi
 trap - EXIT
