@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+import importlib.util
 import json
 import os
 import sqlite3
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -396,6 +399,8 @@ class ActualRestoreTests(unittest.TestCase):
             "readback_probe_output_empty",
             "probe_failure_detail",
             "MAX_READBACK_DIAGNOSTIC",
+            "SAFE_DIAGNOSTIC_LABEL",
+            "stderr_sha256",
             '"production_mutated": False',
             '"secret_values_recorded": False',
             '"network_cleanup_verified": False',
@@ -702,6 +707,61 @@ print(json.dumps({{"api": payload, "ui": payload}}))
         probe_payload["accounts"][0]["balance_minor"] = "100"
         self.assertTrue(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})))
 
+    def test_readback_schema_and_runtime_reject_equivalent_malformed_payloads(self) -> None:
+        module_spec = importlib.util.spec_from_file_location("restore_actual_disposable", SCRIPT)
+        self.assertIsNotNone(module_spec)
+        self.assertIsNotNone(module_spec.loader)
+        restore_module = importlib.util.module_from_spec(module_spec)
+        sys.modules[module_spec.name] = restore_module
+        module_spec.loader.exec_module(restore_module)
+        expected_base = {
+            "schema_version": 1,
+            "accounts": [{"name": "Current", "balance_minor": 100, "closed": False, "offbudget": False}],
+            "representative_transactions": [{
+                "account_name": "Current",
+                "amount_minor": -10,
+                "date": "2026-08-01",
+                "imported_id": "statement:fixture:1",
+                "payee": "Merchant",
+            }],
+        }
+        probe_base = {
+            "api": copy.deepcopy({key: value for key, value in expected_base.items() if key != "schema_version"}),
+            "ui": copy.deepcopy({key: value for key, value in expected_base.items() if key != "schema_version"}),
+        }
+        schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        self.assertEqual(list(validator.iter_errors(expected_base)), [])
+        self.assertEqual(list(validator.iter_errors(probe_base)), [])
+        self.assertIsInstance(restore_module.validate_readback(probe_base, expected_base), dict)
+        cases = (
+            ("expected missing", "expected", lambda payload: payload.pop("accounts")),
+            ("expected malformed", "expected", lambda payload: payload["accounts"][0].update(balance_minor="100")),
+            ("expected additional", "expected", lambda payload: payload.update(unexpected=True)),
+            ("api missing", "api", lambda payload: payload.pop("accounts")),
+            ("api malformed", "api", lambda payload: payload["accounts"][0].update(closed="false")),
+            ("api additional", "api", lambda payload: payload.update(unexpected=True)),
+            ("ui missing", "ui", lambda payload: payload.pop("accounts")),
+            ("ui malformed", "ui", lambda payload: payload["accounts"][0].update(offbudget="false")),
+            ("ui additional", "ui", lambda payload: payload.update(unexpected=True)),
+        )
+        for label, target, mutate in cases:
+            with self.subTest(label=label):
+                expected = copy.deepcopy(expected_base)
+                probe = copy.deepcopy(probe_base)
+                if target == "expected":
+                    mutate(expected)
+                    schema_payload = expected
+                else:
+                    mutate(probe[target])
+                    schema_payload = probe
+                self.assertTrue(list(validator.iter_errors(schema_payload)))
+                with self.assertRaises(restore_module.DrillError):
+                    if target == "expected":
+                        restore_module.validate_readback_contract(expected, label="expected", include_schema_version=True)
+                    else:
+                        restore_module.validate_readback(probe, expected)
+
     def test_expected_readback_wrong_types_fail_before_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -787,6 +847,33 @@ raise SystemExit(9)
             ):
                 self.assertNotIn(sentinel, receipt["error"]["detail"])
                 self.assertNotIn(sentinel, (root / "receipt.json").read_text(encoding="utf-8"))
+            self.assertFalse(receipt["secret_values_recorded"])
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_unlabeled_diagnostic_is_hashed_without_secret_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            secret_values = (
+                "Current checking account 987654 AED OTP 731942 "
+                "statement-id stmt-20260821-opaque"
+            )
+            unlabeled_probe = executable(
+                root,
+                "unlabeled-secret-probe",
+                f"print({secret_values!r}, file=__import__('sys').stderr); raise SystemExit(17)",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=unlabeled_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            detail = receipt["error"]["detail"]
+            self.assertIn("exit_code=17", detail)
+            self.assertRegex(detail, r"stderr=(?:<redacted> )?stderr_sha256=[0-9a-f]{64}")
+            for secret in secret_values.split():
+                self.assertNotIn(secret, detail)
+                self.assertNotIn(secret, (root / "receipt.json").read_text(encoding="utf-8"))
             self.assertFalse(receipt["secret_values_recorded"])
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("*.container")))

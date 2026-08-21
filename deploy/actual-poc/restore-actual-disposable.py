@@ -40,6 +40,8 @@ SENSITIVE_DIAGNOSTIC_KEY = re.compile(
     r"secret|token|api[_-]?key|access[_-]?token|authorization|cookie|credential)\b)",
     re.IGNORECASE,
 )
+SAFE_DIAGNOSTIC_LABEL = re.compile(r"(?i)\b(?:browser|failure|playwright|wrong-path)\b")
+SAFE_DIAGNOSTIC_PHRASE = re.compile(r"(?i)\bcommand timed out\b")
 
 
 def is_absent_inspect_response(message: str, object_name: str, kind: str) -> bool:
@@ -99,42 +101,68 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def redact_diagnostic(value: str) -> str:
-    """Keep bounded child diagnostics while removing common secret assignments."""
+    """Keep only allowlisted labels, redacted assignments, and a diagnostic hash."""
     diagnostic = value.replace("\x00", "\\x00").strip()
     if not diagnostic:
         return ""
-    diagnostic = re.sub(r"(?i)\b(?:Basic|Bearer)\s+\S+", lambda match: f"{match.group(0).split()[0]} <redacted>", diagnostic)
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
-        rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
-        lambda match: (
-            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
-            f"{match.group('quote')}<redacted>{match.group('quote')}"
+    fragments: list[tuple[int, str]] = []
+
+    def collect(pattern: re.Pattern[str], render: Any) -> None:
+        for match in pattern.finditer(diagnostic):
+            fragments.append((match.start(), render(match)))
+
+    collect(
+        re.compile(r"(?i)\bAuthorization:\s+(?:Basic|Bearer)\s+\S+"),
+        lambda match: f"Authorization: {match.group(0).split()[1]} <redacted>",
+    )
+    collect(
+        re.compile(r"(?i)\b(?:Basic|Bearer)\s+\S+"),
+        lambda match: f"{match.group(0).split()[0]} <redacted>",
+    )
+    collect(SAFE_DIAGNOSTIC_PHRASE, lambda match: match.group(0))
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+            flags=re.IGNORECASE,
         ),
-        diagnostic,
-        flags=re.IGNORECASE,
-    )
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
-        rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
         lambda match: (
-            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
-            f"{match.group('value') if match.group('value').casefold() in {'basic', 'bearer'} else '<redacted>'}"
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}{match.group('quote')}<redacted>{match.group('quote')}"
         ),
-        diagnostic,
-        flags=re.IGNORECASE,
     )
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<separator>\s+)"
-        rf"(?P<value>[^\s,;]+)",
-        lambda match: f"{match.group('key')}{match.group('separator')}<redacted>",
-        diagnostic,
-        flags=re.IGNORECASE,
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
+            flags=re.IGNORECASE,
+        ),
+        lambda match: (
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}<redacted>"
+        ),
     )
-    diagnostic = re.sub(r"(?i)(https?://[^\s/@:]+):[^\s/@]+@", r"\1:<redacted>@", diagnostic)
-    if len(diagnostic) > MAX_READBACK_DIAGNOSTIC:
-        diagnostic = diagnostic[:MAX_READBACK_DIAGNOSTIC] + "..."
-    return diagnostic
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s+)(?P<value>[^\s,;]+)",
+            flags=re.IGNORECASE,
+        ),
+        lambda match: (
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}<redacted>"
+        ),
+    )
+    collect(SAFE_DIAGNOSTIC_LABEL, lambda match: match.group(0))
+    ordered: list[str] = []
+    for _position, fragment in sorted(fragments):
+        if fragment not in ordered:
+            ordered.append(fragment)
+    ordered.append(f"stderr_sha256={hashlib.sha256(diagnostic.encode('utf-8')).hexdigest()}")
+    redacted = " ".join(ordered)
+    if len(redacted) > MAX_READBACK_DIAGNOSTIC:
+        redacted = redacted[:MAX_READBACK_DIAGNOSTIC] + "..."
+    return redacted
 
 
 def probe_failure_detail(result: subprocess.CompletedProcess[str], *, stdout_bytes: int | None = None) -> str:
