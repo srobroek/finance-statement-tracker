@@ -544,7 +544,7 @@
                 "actual_verification_sha256"
               ],
               "right_fields": [
-                "observed_payload_sha256"
+                "verification_artifact_sha256"
               ]
             },
             {

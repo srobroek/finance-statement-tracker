@@ -36,7 +36,8 @@
         "properties": {
           "idempotency_key": {"type": "array", "items": {"type": "string"}},
           "columns": {"type": "object", "additionalProperties": {"type": "string"}},
-          "allowed_states": {"type": "array", "items": {"type": "string"}}
+          "allowed_states": {"type": "array", "items": {"type": "string"}},
+          "allowed_review_states": {"type": "array", "items": {"type": "string"}}
         },
         "additionalProperties": false
       }

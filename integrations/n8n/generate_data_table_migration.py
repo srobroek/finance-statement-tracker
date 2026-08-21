@@ -58,6 +58,12 @@ VERIFICATION_PAYLOAD_FIELDS = {
     "observed_amount_sum_minor",
     "invariants_passed",
 }
+OUTBOX_STATE_PRECEDENCE = {
+    "PREPARED": 0,
+    "ACTUAL_OBSERVED": 1,
+    "VERIFIED": 2,
+    "COMMITTED": 3,
+}
 
 
 class MigrationError(ValueError):
@@ -620,9 +626,43 @@ def _ensure_unique_logical_keys(
     return result
 
 
+def _select_committed_outboxes(
+    outbox_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    """Select one deterministic batch row per imported ID.
+
+    A committed row outranks earlier lifecycle states.  Within one state,
+    the newest explicit update wins; an equal-precedence tie is ambiguous and
+    remains a fail-closed conflict.
+    """
+    candidates: dict[str, list[Mapping[str, Any]]] = {}
+    for row in outbox_rows:
+        imported_id = _text(row.get("imported_id"), "outbox.imported_id")
+        _text(row.get("outbox_id"), "outbox.outbox_id")
+        candidates.setdefault(imported_id, []).append(row)
+    selected: dict[str, Mapping[str, Any]] = {}
+    for imported_id, rows in candidates.items():
+        ranked = [
+            (
+                OUTBOX_STATE_PRECEDENCE.get(str(row.get("state")), -1),
+                str(row.get("updated_at") or ""),
+                row,
+            )
+            for row in rows
+        ]
+        best_rank = max((state_rank, updated_at) for state_rank, updated_at, _row in ranked)
+        winners = [row for state_rank, updated_at, row in ranked if (state_rank, updated_at) == best_rank]
+        if len(winners) != 1:
+            raise MigrationError("MIGRATION_CONFLICT:outbox-precedence")
+        selected[imported_id] = winners[0]
+    return selected
+
+
 def _select_authoritative_verifications(
     verification_rows: Sequence[Mapping[str, Any]],
     verification_resolver: VerificationResolver | None,
+    *,
+    allowed_outbox_ids: set[str] | None = None,
 ) -> dict[str, Mapping[str, Any]]:
     if verification_rows and verification_resolver is None:
         raise MigrationError("ACTUAL_VERIFICATION_RESOLVER_REQUIRED")
@@ -635,6 +675,8 @@ def _select_authoritative_verifications(
             raise MigrationError("MIGRATION_CONFLICT:verification-key") from exc
         if version < 0:
             raise MigrationError("MIGRATION_CONFLICT:verification-version")
+        if allowed_outbox_ids is not None and outbox_id not in allowed_outbox_ids:
+            continue
         versions.setdefault(outbox_id, []).append(row)
     selected: dict[str, Mapping[str, Any]] = {}
     for outbox_id, rows in versions.items():
@@ -658,6 +700,63 @@ def _select_authoritative_verifications(
     return selected
 
 
+def _select_reconciliation_winners(
+    reconciliation_rows: Sequence[Mapping[str, Any]],
+    outboxes: Mapping[str, Mapping[str, Any]],
+    verifications: Mapping[str, Mapping[str, Any]],
+) -> list[tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]]:
+    """Choose the highest matching reconciliation version per source period."""
+    outboxes_by_id: dict[str, Mapping[str, Any]] = {}
+    for outbox in outboxes.values():
+        outbox_id = _text(outbox.get("outbox_id"), "outbox.outbox_id")
+        if outbox_id in outboxes_by_id:
+            raise MigrationError("MIGRATION_CONFLICT:duplicate outbox")
+        outboxes_by_id[outbox_id] = outbox
+    candidates: dict[tuple[str, str], list[tuple[int, Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]]] = {}
+    for reconciliation in reconciliation_rows:
+        source_code = _text(reconciliation.get("source_code"), "reconciliation.source_code")
+        period_key = _text(reconciliation.get("period_key"), "reconciliation.period_key")
+        try:
+            version = int(reconciliation["reconciliation_version"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MigrationError("MIGRATION_CONFLICT:reconciliation-version") from exc
+        if version < 0:
+            raise MigrationError("MIGRATION_CONFLICT:reconciliation-version")
+        matches: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+        for outbox_id, verification in verifications.items():
+            outbox = outboxes_by_id.get(outbox_id)
+            if outbox is None:
+                continue
+            if (
+                outbox.get("source_code") == source_code
+                and outbox.get("period_key") == period_key
+                and reconciliation.get("actual_verification_sha256")
+                == verification.get("verification_artifact_sha256")
+            ):
+                matches.append((outbox, verification))
+        if len(matches) != 1:
+            raise MigrationError("MIGRATION_CONFLICT:reconciliation-cardinality")
+        outbox, verification = matches[0]
+        key = (source_code, period_key)
+        candidates.setdefault(key, []).append((version, reconciliation, outbox, verification))
+    winners: list[tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]] = []
+    for rows in candidates.values():
+        max_version = max(version for version, _row, _outbox, _verification in rows)
+        best = [item for item in rows if item[0] == max_version]
+        if len(best) != 1:
+            raise MigrationError("MIGRATION_CONFLICT:reconciliation-version")
+        _version, reconciliation, outbox, verification = best[0]
+        winners.append((reconciliation, outbox, verification))
+    return sorted(
+        winners,
+        key=lambda item: (
+            str(item[0].get("source_code")),
+            str(item[0].get("period_key")),
+            str(item[1].get("imported_id")),
+        ),
+    )
+
+
 def reconcile_actual_batches(
     outbox_rows: Sequence[Mapping[str, Any]],
     verification_rows: Sequence[Mapping[str, Any]],
@@ -666,30 +765,17 @@ def reconcile_actual_batches(
     verification_resolver: VerificationResolver | None = None,
 ) -> list[dict[str, Any]]:
     """Join outbox, highest trusted verification, and matching reconciliation rows."""
-    outbox_by_id: dict[str, Mapping[str, Any]] = {}
-    for row in outbox_rows:
-        key = _text(row.get("outbox_id"), "outbox_id")
-        if key in outbox_by_id:
-            raise MigrationError("MIGRATION_CONFLICT:duplicate outbox")
-        outbox_by_id[key] = row
-    selected = _select_authoritative_verifications(verification_rows, verification_resolver)
+    selected_outboxes = _select_committed_outboxes(outbox_rows)
+    selected = _select_authoritative_verifications(
+        verification_rows,
+        verification_resolver,
+        allowed_outbox_ids={str(row["outbox_id"]) for row in selected_outboxes.values()},
+    )
+    reconciliation_winners = _select_reconciliation_winners(
+        reconciliation_rows, selected_outboxes, selected
+    )
     result: list[dict[str, Any]] = []
-    for reconciliation in reconciliation_rows:
-        matches: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
-        for outbox_id, verification in selected.items():
-            outbox = outbox_by_id.get(outbox_id)
-            if outbox is None:
-                continue
-            if (
-                outbox.get("source_code") == reconciliation.get("source_code")
-                and outbox.get("period_key") == reconciliation.get("period_key")
-                and reconciliation.get("actual_verification_sha256")
-                == verification.get("verification_artifact_sha256")
-            ):
-                matches.append((outbox, verification))
-        if len(matches) != 1:
-            raise MigrationError("MIGRATION_CONFLICT:reconciliation-cardinality")
-        outbox, verification = matches[0]
+    for reconciliation, outbox, verification in reconciliation_winners:
         row = merge_non_null(
             _outbox_projection(outbox),
             _verification_projection(verification),
@@ -761,9 +847,14 @@ def _actual_rows_without_reconciliation(
     verification_rows: Sequence[Mapping[str, Any]],
     verification_resolver: VerificationResolver | None,
 ) -> list[dict[str, Any]]:
-    selected_verifications = _select_authoritative_verifications(verification_rows, verification_resolver)
+    selected_outboxes = _select_committed_outboxes(outbox_rows)
+    selected_verifications = _select_authoritative_verifications(
+        verification_rows,
+        verification_resolver,
+        allowed_outbox_ids={str(row["outbox_id"]) for row in selected_outboxes.values()},
+    )
     result: list[dict[str, Any]] = []
-    for outbox in outbox_rows:
+    for outbox in selected_outboxes.values():
         selected = selected_verifications.get(_text(outbox.get("outbox_id"), "outbox_id"))
         result.append(merge_non_null(_outbox_projection(outbox), _verification_projection(selected or {})))
     return _ensure_unique_logical_keys(
@@ -840,6 +931,8 @@ def _source_schema(table_name: str) -> dict[str, Any]:
             }
             if "allowed_states" in table:
                 schema["allowed_states"] = list(table["allowed_states"])
+            if "allowed_review_states" in table:
+                schema["allowed_review_states"] = list(table["allowed_review_states"])
             return schema
     raise MigrationError(f"BACKUP_SCHEMA_MISSING:{table_name}")
 

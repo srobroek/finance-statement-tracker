@@ -201,19 +201,25 @@ class DataTableMigrationTests(unittest.TestCase):
         reconciliation = [{
             "source_code": "MAIL", "period_key": "2026-08", "reconciliation_version": 1,
             "statement_sha256": "c" * 64, "actual_verification_sha256": verification_pointer["verification_artifact_sha256"],
-            "state": "COMMITTED", "difference_minor": 0, "verified_at": "2026-09-01",
+            "state": "COMMITTED", "difference_minor": 1, "verified_at": "2026-09-01",
+        }, {
+            "source_code": "MAIL", "period_key": "2026-08", "reconciliation_version": 2,
+            "statement_sha256": "d" * 64, "actual_verification_sha256": verification_pointer["verification_artifact_sha256"],
+            "state": "COMMITTED", "difference_minor": 0, "verified_at": "2026-09-02",
         }]
         rows = self.migration.reconcile_actual_batches(
             outbox, verification, reconciliation, verification_resolver=verification_resolver
         )
         self.assertEqual(rows[0]["idempotency_key"], "import-1")
         self.assertEqual(rows[0]["verification_artifact_sha256"], verification_pointer["verification_artifact_sha256"])
+        self.assertEqual(rows[0]["reconciliation_version"], 2)
+        self.assertEqual(rows[0]["reconciliation_difference_minor"], 0)
         self.assertNotIn("outbox_id", rows[0])
         with self.assertRaises(self.migration.MigrationError):
             self.migration.reconcile_actual_batches(
                 outbox,
                 verification,
-                [{**reconciliation[0], "actual_verification_sha256": "d" * 64}],
+                [{**reconciliation[1], "actual_verification_sha256": "e" * 64}],
                 verification_resolver=verification_resolver,
             )
         with self.assertRaises(self.migration.MigrationError) as missing_pointer:
@@ -262,10 +268,18 @@ class DataTableMigrationTests(unittest.TestCase):
         self.assertTrue(rehearsal["restore_roundtrip"])
         self.assertEqual(rehearsal["restored_source_digest"], backup)
         self.assertEqual(rehearsal["restored_source_schemas"], rehearsal["source_schemas"])
+        self.assertEqual(
+            rehearsal["source_schemas"]["finance_agent_jobs"]["allowed_review_states"],
+            ["NOT_REVIEWED", "PENDING", "APPROVED", "REJECTED"],
+        )
         tampered_backup = runner.backup_snapshot()
         tampered_backup["tables"]["finance_source_cursors"]["schema"]["columns"] = {}
         with self.assertRaises(self.migration.MigrationError):
             runner.restore_backup(tampered_backup)
+        tampered_review_states = runner.backup_snapshot()
+        tampered_review_states["tables"]["finance_agent_jobs"]["schema"]["allowed_review_states"] = ["APPROVED"]
+        with self.assertRaises(self.migration.MigrationError):
+            runner.restore_backup(tampered_review_states)
         with self.assertRaises(self.migration.MigrationError):
             runner.delete_old_tables()
 
@@ -288,13 +302,22 @@ class DataTableMigrationTests(unittest.TestCase):
             )
         runner = self.migration.MigrationRunner({
             "finance_actual_outbox": [
-                {"outbox_id": "out-1", "imported_id": "same"},
-                {"outbox_id": "out-2", "imported_id": "same"},
+                {"outbox_id": "out-prepared", "imported_id": "same", "state": "PREPARED", "updated_at": "2026-09-03"},
+                {"outbox_id": "out-committed", "imported_id": "same", "state": "COMMITTED", "updated_at": "2026-09-01"},
+            ]
+        })
+        selected = runner.build_targets()["finance_actual_batches"]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["batch_id"], "out-committed")
+        tied_runner = self.migration.MigrationRunner({
+            "finance_actual_outbox": [
+                {"outbox_id": "out-a", "imported_id": "same", "state": "COMMITTED"},
+                {"outbox_id": "out-b", "imported_id": "same", "state": "COMMITTED"},
             ]
         })
         with self.assertRaises(self.migration.MigrationError) as duplicate:
-            runner.build_targets()
-        self.assertIn("duplicate-logical-key", str(duplicate.exception))
+            tied_runner.build_targets()
+        self.assertIn("outbox-precedence", str(duplicate.exception))
         duplicate_cursor_runner = self.migration.MigrationRunner({
             "finance_source_cursors": [
                 {"source_code": "MAIL"},
