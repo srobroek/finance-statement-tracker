@@ -122,6 +122,18 @@ class CashbackServerTests(unittest.TestCase):
                 self.assertEqual(wrong_token.exception.code, 401)
                 wrong_token.exception.close()
 
+                request.add_header("Authorization", "Bearer café")
+                with self.assertRaises(urllib.error.HTTPError) as non_ascii_token:
+                    urllib.request.urlopen(request, timeout=1)
+                self.assertEqual(non_ascii_token.exception.code, 401)
+                self.assertEqual(
+                    json.loads(non_ascii_token.exception.read()),
+                    {"error": "Invalid ingest token"},
+                )
+                non_ascii_token.exception.close()
+                with urllib.request.urlopen(health_url, timeout=1) as response:
+                    self.assertEqual(response.status, 200)
+
                 request.add_header("Authorization", "Bearer test-token")
                 with urllib.request.urlopen(request, timeout=1) as response:
                     result = json.loads(response.read())

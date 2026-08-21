@@ -326,10 +326,7 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         elif not INGEST_TOKEN:
             self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Cashback ingest token is not configured"})
             return
-        elif not hmac.compare_digest(
-            self.headers.get("Authorization") or "",
-            f"Bearer {INGEST_TOKEN}",
-        ):
+        elif not self._authorize_ingest():
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
             return
         try:
@@ -461,6 +458,18 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "path": path,
             "exception_type": type(error).__name__,
         }), flush=True)
+
+    def _authorize_ingest(self) -> bool:
+        authorization = self.headers.get("Authorization")
+        if not isinstance(authorization, str):
+            return False
+        try:
+            return hmac.compare_digest(
+                authorization.encode("ascii"),
+                f"Bearer {INGEST_TOKEN}".encode("ascii"),
+            )
+        except UnicodeEncodeError:
+            return False
 
     def _json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
         body = json.dumps(payload).encode("utf-8")
