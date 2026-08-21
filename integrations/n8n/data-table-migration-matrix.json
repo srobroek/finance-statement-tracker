@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "c748f92c628c2094f707ec696077afe818bbcc18",
+    "finance_commit": "c998214a903039a6e18e9fff19e817c44be127ac",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "160112e5344da2e0b5c3100b513872654852dc8fc815919a7ae98c69e33512dd",
+    "node_scan_corpus_sha256": "0f3b151906f127b1d4869db9828b9d1bc7f553c6687ce8f0c6486ce27269b9a1",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
