@@ -16,6 +16,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "deploy/actual-poc/restore-actual-disposable.py"
 SCHEMA = ROOT / "config/actual-restore-receipt.schema.json"
+READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
 
 
 def _sqlite(path: Path) -> None:
@@ -680,6 +681,73 @@ print(json.dumps({{"api": payload, "ui": payload}}))
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
             self.assertFalse(list(root.glob("finance-actual-restore.*")))
+
+    def test_readback_schema_accepts_expected_and_probe_payloads(self) -> None:
+        schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        expected = {
+            "schema_version": 1,
+            "accounts": [{"name": "Current", "balance_minor": 100, "closed": False, "offbudget": False}],
+            "representative_transactions": [{
+                "account_name": "Current",
+                "amount_minor": -10,
+                "date": "2026-08-01",
+                "imported_id": "statement:fixture:1",
+                "payee": "Merchant",
+            }],
+        }
+        self.assertEqual(list(validator.iter_errors(expected)), [])
+        probe_payload = {key: value for key, value in expected.items() if key != "schema_version"}
+        self.assertEqual(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})), [])
+        probe_payload["accounts"][0]["balance_minor"] = "100"
+        self.assertTrue(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})))
+
+    def test_expected_readback_wrong_types_fail_before_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            expected = expected_fixture(root)
+            payload = json.loads(expected.read_text(encoding="utf-8"))
+            payload["accounts"][0]["balance_minor"] = "100"
+            expected.write_text(json.dumps(payload), encoding="utf-8")
+            result, receipt = self.run_drill(root, fake_runtime(root), expected=expected)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_contract_invalid")
+            self.assertEqual(receipt["error"]["stage"], "readback")
+            self.assertIn("expected.accounts.balance_minor has invalid type", receipt["error"]["detail"])
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_api_and_ui_readback_wrong_types_fail_before_normalization(self) -> None:
+        for interface in ("api", "ui"):
+            with self.subTest(interface=interface), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                backup_fixture(root)
+                malformed_probe = executable(
+                    root,
+                    f"malformed-{interface}-probe",
+                    f"""
+import copy
+import json
+payload = {{
+  'accounts': [{{'name': 'Current', 'balance_minor': 100, 'closed': False, 'offbudget': False}}],
+  'representative_transactions': [{{'account_name': 'Current', 'amount_minor': -10, 'date': '2026-08-01', 'imported_id': 'statement:fixture:1', 'payee': 'Merchant'}}]
+}}
+payloads = {{'api': copy.deepcopy(payload), 'ui': copy.deepcopy(payload)}}
+payloads['{interface}']['accounts'][0]['balance_minor'] = '100'
+print(json.dumps(payloads))
+""",
+                )
+                result, receipt = self.run_drill(root, fake_runtime(root), probe_path=malformed_probe)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(receipt["error"]["code"], "readback_contract_invalid")
+                self.assertEqual(receipt["error"]["stage"], "readback")
+                self.assertIn(f"{interface}.accounts.balance_minor has invalid type", receipt["error"]["detail"])
+                self.assertIn("exit_code=0", receipt["error"]["detail"])
+                self.assertTrue(receipt["cleanup_verified"])
+                self.assertFalse(list(root.glob("*.container")))
+                self.assertFalse(list(root.glob("*.network")))
 
     def test_readback_exit_and_stderr_are_persisted_without_secret_values(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -28,6 +28,8 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
+READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
+READBACK_SCHEMA_VERSION = 1
 RESTORE_OWNER_LABEL = "finance.restore.owner"
 RESTORE_RUN_LABEL = "finance.restore.run"
 RESTORE_OWNER_VALUE = "actual-restore"
@@ -140,7 +142,7 @@ def probe_failure_detail(result: subprocess.CompletedProcess[str], *, stdout_byt
     fields = [f"exit_code={result.returncode}"]
     if stdout_bytes is not None:
         fields.append(f"stdout_bytes={stdout_bytes}")
-    diagnostic = redact_diagnostic(result.stderr)
+    diagnostic = redact_diagnostic(result.stderr if isinstance(result.stderr, str) else "")
     if diagnostic:
         fields.append(f"stderr={diagnostic}")
     return "; ".join(fields)
@@ -485,24 +487,70 @@ def load_expected(path: Path) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise DrillError("readback_contract_invalid", "readback", "invalid expected readback JSON") from exc
-    if payload.get("schema_version") != 1:
-        raise DrillError("readback_contract_invalid", "readback", "unsupported readback schema")
-    for section in ("accounts", "representative_transactions"):
-        if not isinstance(payload.get(section), list):
-            raise DrillError("readback_contract_invalid", "readback", f"missing {section}")
+    validate_readback_contract(payload, label="expected", include_schema_version=True)
     return payload
 
 
-def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
+def _validate_readback_rows(payload: dict[str, Any], section: str, *, label: str) -> None:
     rows = payload.get(section)
-    if not isinstance(rows, list):
-        raise DrillError("readback_contract_invalid", "readback", f"{section} is not a list")
+    if type(rows) is not list:
+        raise DrillError("readback_contract_invalid", "readback", f"{label}.{section} must be an array")
+    fields: dict[str, type] = (
+        {
+            "name": str,
+            "balance_minor": int,
+            "closed": bool,
+            "offbudget": bool,
+        }
+        if section == "accounts"
+        else {
+            "account_name": str,
+            "amount_minor": int,
+            "date": str,
+            "imported_id": str,
+            "payee": str,
+        }
+    )
+    required_fields = set(fields)
+    for row in rows:
+        if type(row) is not dict or set(row) != required_fields:
+            raise DrillError("readback_contract_invalid", "readback", f"{label}.{section} has invalid fields")
+        for field, expected_type in fields.items():
+            value = row[field]
+            if type(value) is not expected_type:
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} has invalid type")
+            if expected_type is str and not value:
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} must not be empty")
+            if field == "date" and not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} has invalid format")
+
+
+def validate_readback_contract(
+    payload: Any,
+    *,
+    label: str,
+    include_schema_version: bool,
+) -> None:
+    required_fields = {"accounts", "representative_transactions"}
+    if include_schema_version:
+        required_fields.add("schema_version")
+    if type(payload) is not dict or set(payload) != required_fields:
+        raise DrillError("readback_contract_invalid", "readback", f"{label} has invalid fields")
+    if include_schema_version and (
+        type(payload["schema_version"]) is not int or payload["schema_version"] != READBACK_SCHEMA_VERSION
+    ):
+        raise DrillError("readback_contract_invalid", "readback", f"{label} has unsupported schema")
+    _validate_readback_rows(payload, "accounts", label=label)
+    _validate_readback_rows(payload, "representative_transactions", label=label)
+
+
+def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
+    _validate_readback_rows(payload, section, label="readback")
+    rows = payload[section]
     canonical: list[dict[str, Any]] = []
     seen: set[str] = set()
     for row in rows:
-        if not isinstance(row, dict):
-            raise DrillError("readback_contract_invalid", "readback", f"{section} contains a non-object")
-        identity = str(row.get("name" if section == "accounts" else "imported_id", ""))
+        identity = row["name" if section == "accounts" else "imported_id"]
         if not identity or identity in seen:
             raise DrillError("readback_contract_invalid", "readback", f"duplicate or missing {section} identity")
         seen.add(identity)
@@ -511,12 +559,15 @@ def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]
 
 
 def validate_readback(actual_payload: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(actual_payload, dict) or not isinstance(actual_payload.get("api"), dict) or not isinstance(actual_payload.get("ui"), dict):
+    validate_readback_contract(expected, label="expected", include_schema_version=True)
+    if type(actual_payload) is not dict or set(actual_payload) != {"api", "ui"}:
         raise DrillError("readback_contract_invalid", "readback", "probe must return api and ui objects")
-    expected_accounts = normalize_rows(expected, "accounts")
-    expected_transactions = normalize_rows(expected, "representative_transactions")
     api = actual_payload["api"]
     ui = actual_payload["ui"]
+    validate_readback_contract(api, label="api", include_schema_version=False)
+    validate_readback_contract(ui, label="ui", include_schema_version=False)
+    expected_accounts = normalize_rows(expected, "accounts")
+    expected_transactions = normalize_rows(expected, "representative_transactions")
     api_accounts = normalize_rows(api, "accounts")
     ui_accounts = normalize_rows(ui, "accounts")
     api_transactions = normalize_rows(api, "representative_transactions")
