@@ -16,6 +16,17 @@ node actualctl.mjs bootstrap --config ..\..\config\actual-bootstrap.json
 node actualctl.mjs import --input .\statement-run.json
 ```
 
+## License and dependency boundary
+
+This package is private and is not published as a standalone npm artifact.
+The test suite imports HyperFormula directly, so it is pinned as a development
+dependency instead of relying on `@actual-app/core` to resolve the test import.
+The lockfile records HyperFormula 3.4.0 as GPL-3.0-only. `@actual-app/core`
+also declares HyperFormula as a runtime dependency, so the direct development
+declaration does not remove HyperFormula from a runtime install. Treat any
+distribution that includes HyperFormula as requiring a separate GPL-3.0-only
+license review.
+
 `bootstrap` plans by default and mutates only with `--apply`. `import` performs a dry-run by default. A low-level commit requires both `--commit` and `ALLOW_ACTUAL_WRITES=true`, and always repeats the complete preflight before writing. Production statement and browser imports reach these operations only through the reviewed n8n custom node after AI, evidence, review, source-identity, and reconciliation gates pass.
 
 `repair-transactions` is the guarded exception for correcting an already imported row when Actual's import deduplication intentionally refuses to update it. Its versioned plan must identify every row by account, date, and `imported_id`, state the exact current amount, and provide only an exact sign reversal. It plans by default; `--apply` additionally requires `ALLOW_ACTUAL_WRITES=true`. The command refuses missing, duplicate, transferred, or drifted rows, re-reads every target after syncing, and is idempotent after a successful repair.
