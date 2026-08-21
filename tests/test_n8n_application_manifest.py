@@ -218,6 +218,8 @@ class N8nApplicationManifestTests(unittest.TestCase):
     def test_credential_binding_contract_is_current_and_schema_valid(self) -> None:
         errors = schema_errors(self.bindings, self.bindings_schema)
         self.assertEqual(errors, [], "schema errors: " + "; ".join(error.message for error in errors))
+        self.assertEqual(self.bindings["workflow_code_metadata_key"], "financeWorkflowCode")
+        self.assertNotIn("workflow_code_metadata_key", self.manifest["credentials"])
         self.assertEqual(self.bindings, build_contract())
         validate_current(self.bindings)
 
@@ -233,6 +235,28 @@ class N8nApplicationManifestTests(unittest.TestCase):
             },
             w11["nodes"],
         )
+
+    def test_generic_verifier_uses_declared_finance_workflow_metadata_key(self) -> None:
+        key = self.bindings["workflow_code_metadata_key"]
+        workflows = [load_json(path) for path in (N8N / "workflows").glob("*.json")]
+        self.assertEqual(
+            {workflow["meta"].get(key) for workflow in workflows},
+            {workflow["meta"]["financeWorkflowCode"] for workflow in workflows},
+        )
+        self.assertTrue(all(isinstance(workflow["meta"].get(key), str) for workflow in workflows))
+
+    def test_workflow_metadata_contract_rejects_missing_alternate_or_duplicate_declaration(self) -> None:
+        missing = deepcopy(self.bindings)
+        del missing["workflow_code_metadata_key"]
+        self.assertTrue(schema_errors(missing, self.bindings_schema))
+
+        alternate = deepcopy(self.bindings)
+        alternate["workflow_code_metadata_key"] = "archiveWorkflowCode"
+        self.assertTrue(schema_errors(alternate, self.bindings_schema))
+
+        duplicate = deepcopy(self.manifest)
+        duplicate["credentials"]["workflow_code_metadata_key"] = "financeWorkflowCode"
+        self.assertTrue(schema_errors(duplicate, self.manifest_schema))
 
     def test_credential_binding_contract_rejects_omitted_node_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

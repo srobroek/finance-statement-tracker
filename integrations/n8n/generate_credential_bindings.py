@@ -118,6 +118,7 @@ def build_contract(workflow_root: Path = WORKFLOW_ROOT) -> dict[str, Any]:
         )
     return {
         "schema_version": 1,
+        "workflow_code_metadata_key": "financeWorkflowCode",
         "source": {
             "path": "integrations/n8n/workflows",
             "file_count": len(workflows),
