@@ -106,6 +106,7 @@ def fake_runtime(
     container_missing_message: str | None = None,
     network_missing_message: str | None = None,
     container_missing_stdout: str = "",
+    network_missing_stdout: str = "",
     start_failure: bool = False,
     restart_failure: bool = False,
 ) -> Path:
@@ -134,6 +135,9 @@ if command == 'network':
             missing_message = f'Error: network {{name}} not found'
         else:
             missing_message = missing_message.format(name=name, name_upper=name.upper())
+        missing_stdout = {network_missing_stdout!r}.format(name=name, name_upper=name.upper())
+        if missing_stdout:
+            print(missing_stdout, end='')
         print(missing_message, file=sys.stderr)
         raise SystemExit(1)
     if action == 'create':
@@ -321,6 +325,22 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "passed")
             self.assertEqual(len(receipt["runs"]), 2)
 
+    def test_rootful_docker_network_stdout_prefix_is_bound_to_requested_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(
+                    root,
+                    network_missing_stdout="[]",
+                    network_missing_message='Error: No such object: "{name}"',
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+            self.assertEqual(len(receipt["runs"]), 2)
+
     def test_podman_absent_container_and_network_messages_are_classified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -365,7 +385,11 @@ class ActualRestoreTests(unittest.TestCase):
             backup_fixture(root)
             result, receipt = self.run_drill(
                 root,
-                fake_runtime(root, network_missing_message="Error: No such object: {name}\npermission denied"),
+                fake_runtime(
+                    root,
+                    network_missing_stdout="[]",
+                    network_missing_message="Error: No such object: {name}\npermission denied",
+                ),
             )
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "runtime_network_inspect_failed")
@@ -393,6 +417,7 @@ class ActualRestoreTests(unittest.TestCase):
                 root,
                 fake_runtime(
                     root,
+                    network_missing_stdout="[]",
                     network_missing_message="Error: network {name}: unable to find network with name or ID other-network: network not found",
                 ),
             )
@@ -426,6 +451,7 @@ class ActualRestoreTests(unittest.TestCase):
                 root,
                 fake_runtime(
                     root,
+                    network_missing_stdout="[]",
                     network_missing_message="Error: NETWORK {name_upper}: unable to find network with name or ID {name_upper}: NETWORK NOT FOUND",
                 ),
             )
@@ -442,6 +468,7 @@ class ActualRestoreTests(unittest.TestCase):
                 root,
                 fake_runtime(
                     root,
+                    network_missing_stdout="[]",
                     network_missing_message="Error: network {name}: unable to find network with name or ID {name_upper}: network not found",
                 ),
             )
