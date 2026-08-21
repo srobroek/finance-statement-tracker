@@ -4,17 +4,57 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+from finance_tracker.actual_pipeline import load_compiled_rules
 from finance_tracker.browser_ingestion import (
+    _enrich_browser_transactions,
+    _match_browser_transactions,
+    _normalize_browser_capture,
+    _serialize_browser_ingestion_run,
+    _validate_browser_capture,
     build_browser_ingestion_run,
     export_browser_capture_for_actual,
 )
-from finance_tracker.actual_pipeline import load_compiled_rules
+from finance_tracker.classification_audit import enforce_transaction_invariants
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserIngestionTests(TestCase):
+    def test_private_phases_reconstruct_the_exported_run_exactly(self):
+        capture = self.capture()
+        validated = _validate_browser_capture(capture)
+        normalized = _normalize_browser_capture(
+            validated,
+            self.config(),
+            ai_engine=None,
+            ai_resolver=None,
+        )
+        rule_traces, history_traces, ai_traces = _enrich_browser_transactions(
+            normalized.transactions,
+            self.config(),
+            (),
+            history_index=None,
+            ai_engine=None,
+            ai_resolver=None,
+            property_registry=None,
+        )
+        _match_browser_transactions(normalized.transactions)
+        for transaction in normalized.transactions:
+            enforce_transaction_invariants(transaction)
+
+        phased = _serialize_browser_ingestion_run(
+            normalized,
+            rule_traces,
+            history_traces,
+            ai_traces,
+        )
+
+        self.assertEqual(
+            phased.to_dict(),
+            build_browser_ingestion_run(capture, self.config()).to_dict(),
+        )
+
     def test_inactive_n8n_handoff_validates_browser_capture_before_writes(self):
         workflow = json.loads(
             (ROOT / "integrations" / "n8n" / "workflows" / "11-interactive-artifact-handoff.json")
