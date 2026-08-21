@@ -10,6 +10,127 @@
     "disposable_validated": false,
     "production_validated": false
   },
+  "blocker_registry": {
+    "schema_version": 1,
+    "evaluation": "ALL_REQUIRED",
+    "definitions": {
+      "VERIFIED_STATEMENT_FIXTURE_REQUIRED": {
+        "kind": "statement_fixture",
+        "severity": "activation",
+        "objective": "A complete issuer statement fixture is archived, redacted, hashed, and reconciled.",
+        "evidence": {
+          "artifact": "statement_adapter_receipt",
+          "required_fields": [
+            "source_code",
+            "attachment_sha256",
+            "redacted_mail_envelope",
+            "statement_manifest",
+            "parser_version",
+            "expected_transaction_rows",
+            "balance_difference_minor"
+          ],
+          "assertions": [
+            {"path": "statement_manifest.status", "operator": "equals", "value": "VERIFIED"},
+            {"path": "statement_manifest.balance_difference_minor", "operator": "equals", "value": 0},
+            {"path": "adapter_tests.status", "operator": "equals", "value": "PASS"},
+            {"path": "runtime_receipt.status", "operator": "equals", "value": "VERIFIED"}
+          ]
+        },
+        "operator_warning": "Do not parse, import, reconcile, or finalize until the issuer fixture and parser gates pass."
+      },
+      "ACTIVE_ADAPTER_REQUIRED": {
+        "kind": "statement_adapter",
+        "severity": "activation",
+        "objective": "The issuer adapter and exact mailbox contract are active in both canonical implementations.",
+        "evidence": {
+          "artifact": "source_contract_and_adapter_manifest",
+          "required_fields": ["adapter", "mailbox_folder", "email_senders", "email_subjects"],
+          "assertions": [
+            {"path": "statement_source.adapter_status", "operator": "equals", "value": "ACTIVE"},
+            {"path": "statement_source.email_status", "operator": "equals", "value": "ACTIVE"},
+            {"path": "statement_source.adapter", "operator": "not_empty"},
+            {"path": "adapter_registry.status", "operator": "equals", "value": "ACTIVE"},
+            {"path": "adapter_tests.status", "operator": "equals", "value": "PASS"}
+          ]
+        },
+        "operator_warning": "Keep this workflow inactive until the exact issuer adapter and mailbox contract are verified."
+      },
+      "ACTIVE_EMAIL_SOURCE_REQUIRED": {
+        "kind": "transaction_email_source",
+        "severity": "activation",
+        "objective": "The transaction-notification source has a verified sender, subject, parser, and active status.",
+        "evidence": {
+          "artifact": "transaction_email_source_contract",
+          "required_fields": ["source_code", "card_code", "senders", "subjects", "adapter"],
+          "assertions": [
+            {"path": "source.status", "operator": "equals", "value": "ACTIVE"},
+            {"path": "source.senders", "operator": "non_empty_array"},
+            {"path": "source.subjects", "operator": "non_empty_array"},
+            {"path": "source.adapter", "operator": "not_empty"},
+            {"path": "source_contract_tests.status", "operator": "equals", "value": "PASS"}
+          ]
+        },
+        "operator_warning": "Do not enable the scheduled cashback sweep until the exact email source contract is active."
+      },
+      "VERIFIED_MESSAGE_FIXTURE_REQUIRED": {
+        "kind": "transaction_email_fixture",
+        "severity": "activation",
+        "objective": "A representative transaction message is immutably identified and the parser/cursor replay gates pass.",
+        "evidence": {
+          "artifact": "transaction_notification_fixture",
+          "required_fields": [
+            "message_id",
+            "received_at",
+            "sender",
+            "subject",
+            "body_fixture_sha256",
+            "card_code",
+            "parser_version"
+          ],
+          "assertions": [
+            {"path": "source.status", "operator": "equals", "value": "ACTIVE"},
+            {"path": "fixture.status", "operator": "equals", "value": "VERIFIED"},
+            {"path": "parser_tests.status", "operator": "equals", "value": "PASS"},
+            {"path": "cursor_replay_tests.status", "operator": "equals", "value": "PASS"}
+          ]
+        },
+        "operator_warning": "Do not publish cashback events until a real message fixture and parser replay gates pass."
+      },
+      "MCP_FACADE_CREDENTIAL_REQUIRED": {
+        "kind": "credential_binding",
+        "severity": "activation",
+        "objective": "The W15 bearer credential is created and owner-bound by the approved runtime binder.",
+        "evidence": {
+          "artifact": "n8n_credential_binding_receipt",
+          "required_fields": ["credential_name", "credential_owner", "placeholder", "workflow_id", "secret_value_recorded"],
+          "assertions": [
+            {"path": "binding.placeholder", "operator": "equals", "value": "BIND_FINANCE_MCP_FACADE"},
+            {"path": "binding.configured", "operator": "equals", "value": true},
+            {"path": "binding.owner_relation", "operator": "equals", "value": true},
+            {"path": "binding.secret_value_recorded", "operator": "equals", "value": false}
+          ]
+        },
+        "operator_warning": "Keep the MCP facade inactive until its concealed bearer credential is bound and owner-read back."
+      },
+      "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED": {
+        "kind": "disposable_runtime_proof",
+        "severity": "activation",
+        "objective": "Disposable W15 activation, authenticated tool discovery, bounded operation execution, and teardown are read back clean.",
+        "evidence": {
+          "artifact": "w15_disposable_proof_receipt",
+          "required_fields": ["scope", "status", "tool_names", "cleanup", "production_writes"],
+          "assertions": [
+            {"path": "receipt.scope", "operator": "equals", "value": "W15_DISPOSABLE_ONLY"},
+            {"path": "receipt.status", "operator": "equals", "value": "VERIFIED"},
+            {"path": "receipt.tool_names", "operator": "equals", "value": ["finance.document.request.v1", "finance.reviewed-artifact.handoff.v1", "finance.status.v1"]},
+            {"path": "receipt.cleanup.status", "operator": "equals", "value": "CLEAN"},
+            {"path": "receipt.production_writes", "operator": "equals", "value": false}
+          ]
+        },
+        "operator_warning": "Do not expose the MCP facade until disposable initialize, tool-list, operation, and cleanup readbacks pass."
+      }
+    }
+  },
   "custom_nodes": {
     "package": "n8n-nodes-finance",
     "version": "0.1.0",
@@ -50,16 +171,16 @@
     {"code":"SHARED_STATEMENT_PIPELINE","file":"03-shared-statement-pipeline.json","status":"SPEC_ONLY","schedule":null,"source":"archived immutable source","mcp_exposed":false,"intended_writes":["Postgres Actual outbox","Actual after verification","reconciliation"]},
     {"code":"EI_MONTHLY_STATEMENT","file":"04-ei-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=40","cycle_poll":{"cycle_day":1,"deadline_days":5},"source":"EI_AMAZON","replaces_codex_automation":"emirates-islamic-amazon-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","EI_AMAZON cashback close"]},
     {"code":"WIO_MONTHLY_STATEMENT","file":"05-wio-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=40","cycle_poll":{"cycle_day":3,"deadline_days":5},"source":"WIO_CREDIT","replaces_codex_automation":"wio-monthly-statement-ingestion","mcp_exposed":false,"intended_writes":["Actual"]},
-    {"code":"RAK_MONTHLY_STATEMENT","file":"06-rak-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=0","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"RAK_WORLD","replaces_codex_automation":"rakbank-world-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","RAK_WORLD cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"]},
-    {"code":"SC_MONTHLY_STATEMENT","file":"07-sc-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=20","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"SC_PLATINUM_X","replaces_codex_automation":"standard-chartered-platinum-x-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","SC_PLATINUM_X cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"]},
-    {"code":"SC_LIVE_CASHBACK","file":"08-sc-live-cashback.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=8;BYMINUTE=25","source":"STANDARD_CHARTERED_CARD_TRANSACTION","replaces_codex_automation":"standard-chartered-morning-cashback-scan","mcp_exposed":false,"intended_writes":["cashback event store","cashback-owned outlook cursor"],"blockers":["ACTIVE_EMAIL_SOURCE_REQUIRED","VERIFIED_MESSAGE_FIXTURE_REQUIRED"]},
+    {"code":"RAK_MONTHLY_STATEMENT","file":"06-rak-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=0","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"RAK_WORLD","replaces_codex_automation":"rakbank-world-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","RAK_WORLD cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"],"blocker_policy":{"evaluation":"ALL_REQUIRED","state":"BLOCKED","operator_warning_required":true}},
+    {"code":"SC_MONTHLY_STATEMENT","file":"07-sc-monthly-statement.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=20;BYMINUTE=20","cycle_poll":{"cycle_day":6,"deadline_days":5},"source":"SC_PLATINUM_X","replaces_codex_automation":"standard-chartered-platinum-x-monthly-statement-reconciliation","mcp_exposed":false,"intended_writes":["Actual","SC_PLATINUM_X cashback close"],"blockers":["VERIFIED_STATEMENT_FIXTURE_REQUIRED","ACTIVE_ADAPTER_REQUIRED"],"blocker_policy":{"evaluation":"ALL_REQUIRED","state":"BLOCKED","operator_warning_required":true}},
+    {"code":"SC_LIVE_CASHBACK","file":"08-sc-live-cashback.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=8;BYMINUTE=25","source":"STANDARD_CHARTERED_CARD_TRANSACTION","replaces_codex_automation":"standard-chartered-morning-cashback-scan","mcp_exposed":false,"intended_writes":["cashback event store","cashback-owned outlook cursor"],"blockers":["ACTIVE_EMAIL_SOURCE_REQUIRED","VERIFIED_MESSAGE_FIXTURE_REQUIRED"],"blocker_policy":{"evaluation":"ALL_REQUIRED","state":"BLOCKED","operator_warning_required":true}},
     {"code":"AI_PROPOSAL","file":"09-ai-proposal.json","status":"SPEC_ONLY","schedule":null,"source":"bounded subscription-agent proposal contract","mcp_exposed":false,"intended_writes":["redacted agent job receipt","immutable OneDrive proposal artifact","review proposal only"],"blockers":["SUBSCRIPTION_PROVIDER_RUNTIME_REQUIRED","SUBSCRIPTION_LOGIN_REQUIRED","AI_POLICY_CONTRACT_SEED_REQUIRED","AI_PROPOSAL_ARCHIVE_CONTRACT_REQUIRED","RUNNER_EXACT_IMAGE_REQUIRED","THREE_CONSECUTIVE_VALID_RECEIPTS_REQUIRED"]},
     {"code":"FINANCE_OPERATIONS_STATUS","file":"10-finance-operations-status.json","status":"SPEC_ONLY","schedule":"FREQ=DAILY;BYHOUR=8;BYMINUTE=45","source":"Postgres operational state and bounded MCP facade","mcp_exposed":false,"intended_writes":["operations alert only","redacted MCP request and result receipt"]},
     {"code":"INTERACTIVE_ARTIFACT_HANDOFF","file":"11-interactive-artifact-handoff.json","status":"SPEC_ONLY","schedule":null,"source":"reviewed FAB, Sarwa, or Amazon artifact","mcp_exposed":false,"intended_writes":["OneDrive evidence archive","pipeline receipt"]},
     {"code":"OUTLOOK_MESSAGE_SWEEP","file":"12-outlook-message-sweep.json","status":"SPEC_ONLY","schedule":null,"source":"trusted source configuration","mcp_exposed":false,"intended_writes":["aggregate sweep receipt","N8N-owned source cursor after downstream receipt","provider circuit state"]},
     {"code":"DOCUMENT_EXTRACTION_REQUEST","file":"13-document-extraction-request.json","status":"SPEC_ONLY","schedule":null,"source":"finance_document_operations","mcp_exposed":false,"intended_writes":["redacted document state"]},
     {"code":"LOCAL_PDF_EXTRACTION","file":"14-local-pdf-extraction.json","status":"SPEC_ONLY","schedule":null,"source":"staged immutable PDF","mcp_exposed":false,"intended_writes":["redacted document state only"]},
-    {"code":"FINANCE_MCP_FACADE","file":"15-finance-mcp-facade.json","status":"SPEC_ONLY","schedule":null,"source":"MCP Server Trigger fixed operation code","mcp_exposed":true,"intended_writes":["MCP request audit"]},
+    {"code":"FINANCE_MCP_FACADE","file":"15-finance-mcp-facade.json","status":"SPEC_ONLY","schedule":null,"source":"MCP Server Trigger fixed operation code","mcp_exposed":true,"intended_writes":["MCP request audit"],"blockers":["MCP_FACADE_CREDENTIAL_REQUIRED","MCP_FACADE_DISPOSABLE_PROOF_REQUIRED"],"blocker_policy":{"evaluation":"ALL_REQUIRED","state":"BLOCKED","operator_warning_required":true}},
     {"code":"OPERATIONS_ERROR_HANDLER","file":"16-operations-error-handler.json","status":"SPEC_ONLY","schedule":null,"source":"n8n workflow error events","mcp_exposed":false,"intended_writes":["redacted failure receipt"]},
     {"code":"ACTUAL_OUTBOX_RECOVERY","file":"17-actual-outbox-recovery.json","status":"SPEC_ONLY","schedule":"FREQ=MINUTELY;INTERVAL=10","source":"Postgres nonterminal Actual outbox","mcp_exposed":false,"intended_writes":["Actual recovery after immutable artifact readback","outbox state"]},
     {"code":"FINANCE_WRITER_LEASE","file":"18-finance-writer-lease.json","status":"SPEC_ONLY","schedule":null,"source":"fixed finance_ops Postgres functions","mcp_exposed":false,"intended_writes":["fenced writer lease only"]},

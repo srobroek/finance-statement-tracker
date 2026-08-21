@@ -25,6 +25,7 @@ TYPESCRIPT = (
 )
 ACTUAL_APPLY_PATH = WORKFLOWS / "20-actual-outbox-apply.json"
 AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
+PIPELINE_REGISTRY_PATH = N8N / "pipeline-registry.json"
 FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
@@ -38,6 +39,13 @@ FOLDER_BY_CODE = {
     code: folder
     for folder in FOLDER_CONTRACT["folders"]
     for code in folder["workflow_codes"]
+}
+
+BLOCKER_WORKFLOW_CODES = {
+    "RAK_MONTHLY_STATEMENT",
+    "SC_MONTHLY_STATEMENT",
+    "SC_LIVE_CASHBACK",
+    "FINANCE_MCP_FACADE",
 }
 
 FORMATTER = r"""
@@ -3229,6 +3237,93 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
         workflow["meta"]["setupRequired"] = True
 
 
+def apply_blocker_metadata(workflows: list[dict]) -> None:
+    """Project objective blocker evidence from the registry into four exports.
+
+    The stop/error nodes and operator notes in the placeholder workflows are
+    intentional fail-closed behavior.  This projection makes their release
+    conditions machine-readable without adding a node, changing a connection,
+    or relying on the rendered sticky-note text as the source of truth.
+    """
+    registry = json.loads(PIPELINE_REGISTRY_PATH.read_text(encoding="utf-8"))
+    catalog = registry.get("blocker_registry")
+    if not isinstance(catalog, dict) or catalog.get("schema_version") != 1:
+        raise ValueError("BLOCKER_REGISTRY_SCHEMA_MISMATCH")
+    definitions = catalog.get("definitions")
+    if not isinstance(definitions, dict) or not definitions:
+        raise ValueError("BLOCKER_REGISTRY_DEFINITIONS_MISSING")
+    rows = {
+        row["code"]: row
+        for row in registry.get("workflows", [])
+        if row.get("code") in BLOCKER_WORKFLOW_CODES
+    }
+    if set(rows) != BLOCKER_WORKFLOW_CODES:
+        missing = sorted(BLOCKER_WORKFLOW_CODES - set(rows))
+        raise ValueError(f"BLOCKER_WORKFLOW_REGISTRY_MISSING: {','.join(missing)}")
+
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    for code in sorted(BLOCKER_WORKFLOW_CODES):
+        workflow = by_code.get(code)
+        row = rows[code]
+        if workflow is None:
+            raise ValueError(f"BLOCKER_WORKFLOW_EXPORT_MISSING: {code}")
+        policy = row.get("blocker_policy")
+        blocker_codes = row.get("blockers")
+        if not isinstance(policy, dict) or not isinstance(blocker_codes, list) or not blocker_codes:
+            raise ValueError(f"BLOCKER_WORKFLOW_POLICY_MISSING: {code}")
+        if policy.get("evaluation") != catalog.get("evaluation"):
+            raise ValueError(f"BLOCKER_EVALUATION_MISMATCH: {code}")
+        if policy.get("state") != "BLOCKED":
+            raise ValueError(f"BLOCKER_STATE_MISMATCH: {code}")
+
+        required = []
+        for blocker_code in blocker_codes:
+            definition = definitions.get(blocker_code)
+            if not isinstance(definition, dict):
+                raise TypeError(f"BLOCKER_DEFINITION_MISSING: {code}:{blocker_code}")
+            evidence = definition.get("evidence")
+            if not isinstance(evidence, dict) or not evidence.get("required_fields") or not evidence.get("assertions"):
+                raise ValueError(f"BLOCKER_EVIDENCE_CONTRACT_MISSING: {blocker_code}")
+            projected = json.loads(json.dumps(definition))
+            projected.update({"code": blocker_code, "required": True, "state": policy["state"]})
+            required.append(projected)
+
+        sticky_notes = [
+            node["name"]
+            for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.stickyNote"
+        ]
+        if not sticky_notes:
+            raise ValueError(f"BLOCKER_OPERATOR_WARNING_MISSING: {code}")
+        guard_nodes = [
+            node["name"]
+            for node in workflow["nodes"]
+            if node.get("type") in {
+                "n8n-nodes-base.stopAndError",
+                "@n8n/n8n-nodes-langchain.mcpTrigger",
+            }
+        ]
+        if not guard_nodes:
+            raise ValueError(f"BLOCKER_EXECUTABLE_GUARD_MISSING: {code}")
+        workflow["meta"]["activationBlocked"] = True
+        workflow["meta"]["activationBlockers"] = list(blocker_codes)
+        workflow["meta"]["blockerContract"] = {
+            "schemaVersion": catalog["schema_version"],
+            "registryPath": "integrations/n8n/pipeline-registry.json",
+            "workflowCode": code,
+            "evaluation": policy["evaluation"],
+            "activationBlocked": True,
+            "blockerCodes": list(blocker_codes),
+            "required": required,
+            "operatorWarning": {
+                "required": bool(policy.get("operator_warning_required")),
+                "retainUntil": "ALL_REQUIRED_PROVEN",
+                "stickyNoteNames": sticky_notes,
+                "guardNodeNames": guard_nodes,
+            },
+        }
+
+
 def connected_order(workflow: dict) -> list[dict]:
     """Return a stable dependency-first order, tolerating branch merges."""
     nodes = [n for n in workflow["nodes"] if n["type"] != "n8n-nodes-base.stickyNote"]
@@ -3390,6 +3485,7 @@ def main() -> int:
     workflows = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     workflows = [repair_mojibake(workflow) for workflow in workflows]
     harden_exact_node_contracts(workflows)
+    apply_blocker_metadata(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
     assert_monthly_cycle_commit_graph(workflows)
