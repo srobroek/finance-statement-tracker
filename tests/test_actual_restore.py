@@ -113,6 +113,8 @@ def fake_runtime(
     network_internal: bool = True,
     namespace_identity: str = "owned",
     replacement_race: str | None = None,
+    network_label_mode: str = "valid",
+    container_label_mode: str = "valid",
 ) -> Path:
     return executable(
         root,
@@ -129,14 +131,14 @@ if command == 'version':
 if command == 'network':
     action = sys.argv[2] if len(sys.argv) > 2 else ''
     name = sys.argv[-1]
-    if {replacement_race!r} == 'network' and action == 'inspect' and '--format' in sys.argv and sys.argv[sys.argv.index('--format') + 1] == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.Internal}}}}' and not (root / 'network-replacement-done').exists():
+    if {replacement_race!r} == 'network' and action == 'inspect' and '--format' in sys.argv and not (root / 'network-replacement-done').exists() and ('Internal' in sys.argv[sys.argv.index('--format') + 1] or 'Labels' in sys.argv[sys.argv.index('--format') + 1]):
         target_id = name
         for identity_path in root.glob('*.network-id'):
             if identity_path.read_text(encoding='ascii') == target_id:
                 name = identity_path.name.removesuffix('.network-id')
                 identity_path.write_text('d' * 64, encoding='ascii')
                 (root / 'network-replacement-done').write_text('1', encoding='ascii')
-                print('d' * 64 + '|' + name + '|true')
+                print('d' * 64 + '|' + name + '|foreign-owner|foreign-run|true')
                 raise SystemExit(0)
     for identity_path in root.glob('*.network-id'):
         if identity_path.read_text(encoding='ascii') == name:
@@ -156,6 +158,13 @@ if command == 'network':
                     print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name)
                 if format_string == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.Internal}}}}':
                     print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name + '|' + ('true' if {network_internal!r} else 'false'))
+                if 'index .Labels' in format_string:
+                    owner_label = 'actual-restore' if {network_label_mode!r} == 'valid' else ('' if {network_label_mode!r} == 'missing' else 'foreign-owner')
+                    run_label = name if {network_label_mode!r} == 'valid' else ('' if {network_label_mode!r} == 'missing' else 'foreign-run')
+                    if 'Internal' in format_string:
+                        print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name + '|' + owner_label + '|' + run_label + '|' + ('true' if {network_internal!r} else 'false'))
+                    else:
+                        print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name + '|' + owner_label + '|' + run_label)
             raise SystemExit(0)
         missing_message = {network_missing_message!r}
         if missing_message is None:
@@ -174,7 +183,9 @@ if command == 'network':
         marker.write_text('internal', encoding='utf-8')
         network_id = 'c' * 64
         (root / (name + '.network-id')).write_text(network_id, encoding='ascii')
-        print(network_id)
+        create_output = name if {backend!r} == 'podman' else network_id
+        (root / 'network-create-stdout').write_text(create_output, encoding='ascii')
+        print(create_output)
         raise SystemExit(0)
     if action == 'rm':
         marker.unlink(missing_ok=True)
@@ -204,7 +215,7 @@ if command == 'image' and len(sys.argv) > 3 and sys.argv[2] == 'inspect':
     print('a' * 64)
     raise SystemExit(0)
 if command == 'inspect':
-    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists() and (('--format' not in sys.argv) or sys.argv[sys.argv.index('--format') + 1] != '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.State.Pid}}}}')):
+    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists() and (('--format' not in sys.argv) or 'State.Pid' not in sys.argv[sys.argv.index('--format') + 1])):
         print('runtime transport failure', file=sys.stderr)
         raise SystemExit(1)
     if {collision!r} and 'restore-1-' in name:
@@ -219,6 +230,16 @@ if command == 'inspect':
                 identity_id = (root / (name + '.container-id')).read_text(encoding='ascii') if {namespace_identity!r} != 'invalid-id' else 'not-an-id'
                 identity_pid = str(os.getppid()) if {namespace_identity!r} != 'invalid-pid' else 'not-a-pid'
                 print(identity_id + '|' + identity_name + '|' + identity_pid)
+            if 'index .Config.Labels' in format_string:
+                identity_name = name if ('State.Pid' not in format_string or {namespace_identity!r} == 'owned') else 'foreign-sidecar'
+                identity_id = (root / (name + '.container-id')).read_text(encoding='ascii') if ('State.Pid' not in format_string or {namespace_identity!r} != 'invalid-id') else 'not-an-id'
+                identity_pid = str(os.getppid()) if {namespace_identity!r} != 'invalid-pid' else 'not-a-pid'
+                owner_label = 'actual-restore' if {container_label_mode!r} == 'valid' else ('' if {container_label_mode!r} == 'missing' else 'foreign-owner')
+                run_label = next((path.name.removesuffix('.network-id') for path in root.glob('*.network-id')), '') if {container_label_mode!r} == 'valid' else ('' if {container_label_mode!r} == 'missing' else 'foreign-run')
+                if 'State.Pid' in format_string:
+                    print(identity_id + '|' + identity_name + '|' + identity_pid + '|' + owner_label + '|' + run_label)
+                else:
+                    print(identity_id + '|' + identity_name + '|' + owner_label + '|' + run_label)
         raise SystemExit(0)
     if {container_missing_stdout!r}:
         print({container_missing_stdout!r})
@@ -237,6 +258,7 @@ if command == 'run':
     marker.write_text('present', encoding='utf-8')
     container_id = 'a' * 64
     (root / (name + '.container-id')).write_text(container_id, encoding='ascii')
+    (root / (name + '.container-label-mode')).write_text({container_label_mode!r}, encoding='ascii')
     print(container_id)
     raise SystemExit(0)
 if command == 'restart':
@@ -438,6 +460,45 @@ class ActualRestoreTests(unittest.TestCase):
                 result, receipt = self.run_drill(root, fake_runtime(root, backend=backend))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(receipt["runtime"]["engine"], expected_backend)
+
+    def test_podman_name_shaped_network_create_output_resolves_immutable_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, backend="podman"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+            self.assertTrue((root / "network-create-stdout").read_text(encoding="ascii").startswith("finance-actual-restore-net-"))
+
+    def test_ambiguous_runtime_text_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, backend="runc ... Docker compatibility"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
+
+    def test_network_labels_are_required_and_bound_to_requested_name(self) -> None:
+        for label_mode in ("missing", "wrong"):
+            with self.subTest(label_mode=label_mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                backup_fixture(root)
+                result, receipt = self.run_drill(root, fake_runtime(root, network_label_mode=label_mode))
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(receipt["error"]["code"], "runtime_network_identity_changed")
+                self.assertFalse(receipt["cleanup_verified"])
+                self.assertTrue(list(root.glob("*.network")))
+
+    def test_container_labels_are_required_and_bound_to_network(self) -> None:
+        for label_mode in ("missing", "wrong"):
+            with self.subTest(label_mode=label_mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                backup_fixture(root)
+                result, receipt = self.run_drill(root, fake_runtime(root, container_label_mode=label_mode))
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(receipt["error"]["code"], "runtime_namespace_identity_failed")
+                self.assertFalse(receipt["cleanup_verified"])
+                self.assertTrue(list(root.glob("*.container")))
 
     def test_unsupported_runtime_identity_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

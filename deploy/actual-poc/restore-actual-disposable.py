@@ -28,6 +28,9 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
+RESTORE_OWNER_LABEL = "finance.restore.owner"
+RESTORE_RUN_LABEL = "finance.restore.run"
+RESTORE_OWNER_VALUE = "actual-restore"
 
 
 def is_absent_inspect_response(message: str, object_name: str, kind: str) -> bool:
@@ -156,18 +159,21 @@ def runtime_command(value: str | None) -> list[str]:
 
 
 def detect_runtime_backend(runtime: list[str]) -> str:
-    """Identify the actual engine, including aliases that wrap Docker or Podman."""
+    """Identify the engine from an unambiguous, structured version signature."""
     result = runtime_call(runtime, "version")
     if result.returncode != 0:
         raise DrillError("container_runtime_unavailable", "runtime")
-    version_text = f"{result.stdout}\n{result.stderr}".lower()
-    podman = bool(re.search(r"\bpodman\b", version_text))
-    docker = bool(re.search(r"\bdocker\b", version_text))
-    if podman and docker:
-        if re.search(r"(?:emulat|compatib).*\bdocker\b.*\bpodman\b", version_text):
-            return "podman"
+    version_text = f"{result.stdout}\n{result.stderr}"
+    docker = bool(
+        re.search(r"(?im)^\s*(?:docker\s+version\s+v?\d+(?:\.\d+){1,3}|(?:client|server):\s+docker\s+engine\b)", version_text)
+    )
+    podman = bool(
+        re.search(r"(?im)^\s*(?:podman\s+version\s+v?\d+(?:\.\d+){1,3}|(?:client|server):\s+podman\s+engine\b)", version_text)
+    )
+    podman_alias = bool(re.search(r"(?im)^\s*emulate\s+docker\s+cli\s+using\s+podman(?:[.! ]|$)", version_text))
+    if docker and (podman or podman_alias):
         raise DrillError("unsupported_container_runtime", "runtime", "runtime identity is ambiguous")
-    if podman:
+    if podman or podman_alias:
         return "podman"
     if docker:
         return "docker"
@@ -196,17 +202,30 @@ def namespace_stat(pid: int) -> tuple[int, int]:
     return status.st_dev, status.st_ino
 
 
-def inspect_sidecar_namespace(runtime: list[str], sidecar: str, sidecar_id: str) -> NetworkNamespace:
-    result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}|{{.State.Pid}}", sidecar_id)
+def inspect_sidecar_namespace(
+    runtime: list[str], sidecar: str, sidecar_id: str, network_name: str
+) -> NetworkNamespace:
+    result = runtime_call(
+        runtime,
+        "inspect",
+        "--format",
+        f'{{{{.Id}}}}|{{{{.Name}}}}|{{{{.State.Pid}}}}|{{{{index .Config.Labels "{RESTORE_OWNER_LABEL}"}}}}|{{{{index .Config.Labels "{RESTORE_RUN_LABEL}"}}}}',
+        sidecar_id,
+    )
     if result.returncode != 0:
         raise DrillError("runtime_namespace_identity_failed", "namespace")
     fields = result.stdout.strip().split("|")
-    if len(fields) != 3:
+    if len(fields) != 5:
         raise DrillError("runtime_namespace_identity_failed", "namespace", "unexpected inspect identity")
-    container_id, name, pid_text = fields
+    container_id, name, pid_text, owner_label, run_label = fields
     if container_id.lower() != sidecar_id.lower():
         raise DrillError("runtime_namespace_identity_failed", "namespace", "invalid container identity")
-    if name not in {sidecar, f"/{sidecar}"} or not re.fullmatch(r"[1-9][0-9]*", pid_text):
+    if (
+        name not in {sidecar, f"/{sidecar}"}
+        or owner_label != RESTORE_OWNER_VALUE
+        or run_label != network_name
+        or not re.fullmatch(r"[1-9][0-9]*", pid_text)
+    ):
         raise DrillError("runtime_namespace_identity_failed", "namespace", "foreign sidecar identity")
     pid = int(pid_text)
     device, inode = namespace_stat(pid)
@@ -240,18 +259,34 @@ def inspect_state(runtime: list[str], sidecar: str) -> str:
     raise DrillError("runtime_inspect_failed", "cleanup")
 
 
-def inspect_owned_state(runtime: list[str], object_id: str, object_name: str, kind: str) -> str:
+def inspect_owned_state(
+    runtime: list[str], object_id: str, object_name: str, kind: str, network_name: str
+) -> str:
     if kind == "container":
-        result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}", object_id)
+        format_string = (
+            f'{{{{.Id}}}}|{{{{.Name}}}}|{{{{index .Config.Labels "{RESTORE_OWNER_LABEL}"}}}}|'
+            f'{{{{index .Config.Labels "{RESTORE_RUN_LABEL}"}}}}'
+        )
+        result = runtime_call(runtime, "inspect", "--format", format_string, object_id)
         absent_code = "runtime_inspect_failed"
     else:
-        result = runtime_call(runtime, "network", "inspect", "--format", "{{.Id}}|{{.Name}}", object_id)
+        format_string = (
+            f'{{{{.Id}}}}|{{{{.Name}}}}|{{{{index .Labels "{RESTORE_OWNER_LABEL}"}}}}|'
+            f'{{{{index .Labels "{RESTORE_RUN_LABEL}"}}}}'
+        )
+        result = runtime_call(runtime, "network", "inspect", "--format", format_string, object_id)
         absent_code = "runtime_network_inspect_failed"
     if result.returncode == 0:
         fields = result.stdout.strip().split("|")
         expected_names = {object_name} if kind == "network" else {object_name, f"/{object_name}"}
-        actual_name = fields[1] if len(fields) == 2 else ""
-        if len(fields) != 2 or fields[0].lower() != object_id.lower() or actual_name not in expected_names:
+        actual_name = fields[1] if len(fields) >= 2 else ""
+        if (
+            len(fields) != 4
+            or fields[0].lower() != object_id.lower()
+            or actual_name not in expected_names
+            or fields[2] != RESTORE_OWNER_VALUE
+            or fields[3] != network_name
+        ):
             raise DrillError(absent_code, "cleanup", "owned resource identity changed")
         return "present"
     message = f"{result.stdout}\n{result.stderr}"
@@ -270,14 +305,51 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     raise DrillError("runtime_network_inspect_failed", "cleanup")
 
 
+def inspect_network_identity(runtime: list[str], network_name: str) -> str:
+    """Resolve a created network name to an immutable, label-bound runtime ID."""
+    result = runtime_call(
+        runtime,
+        "network",
+        "inspect",
+        "--format",
+        f'{{{{.Id}}}}|{{{{.Name}}}}|{{{{index .Labels "{RESTORE_OWNER_LABEL}"}}}}|{{{{index .Labels "{RESTORE_RUN_LABEL}"}}}}',
+        network_name,
+    )
+    if result.returncode != 0:
+        raise DrillError("disposable_network_identity_invalid", "network", "created network cannot be inspected")
+    fields = result.stdout.strip().split("|")
+    if (
+        len(fields) != 4
+        or not re.fullmatch(r"[0-9a-f]{12,64}", fields[0], flags=re.IGNORECASE)
+        or fields[1] != network_name
+        or fields[2] != RESTORE_OWNER_VALUE
+        or fields[3] != network_name
+    ):
+        raise DrillError("runtime_network_identity_changed", "network", "owned network identity changed")
+    return fields[0]
+
+
 def inspect_network_internal(runtime: list[str], network_id: str, network_name: str) -> bool:
-    result = runtime_call(runtime, "network", "inspect", "--format", "{{.Id}}|{{.Name}}|{{.Internal}}", network_id)
+    result = runtime_call(
+        runtime,
+        "network",
+        "inspect",
+        "--format",
+        f'{{{{.Id}}}}|{{{{.Name}}}}|{{{{index .Labels "{RESTORE_OWNER_LABEL}"}}}}|{{{{index .Labels "{RESTORE_RUN_LABEL}"}}}}|{{{{.Internal}}}}',
+        network_id,
+    )
     if result.returncode != 0:
         raise DrillError("runtime_network_inspect_failed", "network")
     fields = result.stdout.strip().split("|")
-    if len(fields) != 3 or fields[0].lower() != network_id.lower() or fields[1] != network_name:
+    if (
+        len(fields) != 5
+        or fields[0].lower() != network_id.lower()
+        or fields[1] != network_name
+        or fields[2] != RESTORE_OWNER_VALUE
+        or fields[3] != network_name
+    ):
         raise DrillError("runtime_network_identity_changed", "network", "owned network identity changed")
-    if fields[2].lower() != "true":
+    if fields[4].lower() != "true":
         raise DrillError("network_not_internal", "network", "network is not egress-isolated")
     return True
 
@@ -520,7 +592,9 @@ def main() -> int:
         if current_runtime and current_sidecar:
             if current_sidecar_id:
                 try:
-                    sidecar_state = inspect_owned_state(current_runtime, current_sidecar_id, current_sidecar, "container")
+                    sidecar_state = inspect_owned_state(
+                        current_runtime, current_sidecar_id, current_sidecar, "container", current_network or ""
+                    )
                 except DrillError:
                     sidecar_state = "unknown"
                     ok = False
@@ -539,7 +613,9 @@ def main() -> int:
                     ok = False
                 else:
                     try:
-                        sidecar_state = inspect_owned_state(current_runtime, current_sidecar_id, current_sidecar, "container")
+                        sidecar_state = inspect_owned_state(
+                            current_runtime, current_sidecar_id, current_sidecar, "container", current_network or ""
+                        )
                     except DrillError:
                         sidecar_state = "unknown"
                         ok = False
@@ -554,7 +630,9 @@ def main() -> int:
                 network_state = "unknown"
             elif current_network_id:
                 try:
-                    network_state = inspect_owned_state(current_runtime, current_network_id, current_network, "network")
+                    network_state = inspect_owned_state(
+                        current_runtime, current_network_id, current_network, "network", current_network
+                    )
                 except DrillError:
                     network_state = "unknown"
                     ok = False
@@ -573,7 +651,9 @@ def main() -> int:
                     ok = False
                 else:
                     try:
-                        network_state = inspect_owned_state(current_runtime, current_network_id, current_network, "network")
+                        network_state = inspect_owned_state(
+                            current_runtime, current_network_id, current_network, "network", current_network
+                        )
                     except DrillError:
                         network_state = "unknown"
                         ok = False
@@ -678,27 +758,34 @@ def main() -> int:
                 "create",
                 "--internal",
                 "--label",
-                "finance.restore.owner=actual-restore",
+                f"{RESTORE_OWNER_LABEL}={RESTORE_OWNER_VALUE}",
                 "--label",
-                f"finance.restore.run={network}",
+                f"{RESTORE_RUN_LABEL}={network}",
                 network,
             )
             if created_network.returncode != 0:
                 raise DrillError("disposable_network_create_failed", "network")
-            current_network_id = parse_runtime_id(created_network.stdout, "disposable_network_identity_invalid", "network")
+            created_output = created_network.stdout.strip()
+            if created_output != network and not re.fullmatch(r"[0-9a-f]{12,64}", created_output, flags=re.IGNORECASE):
+                raise DrillError("disposable_network_identity_invalid", "network", "runtime returned an unknown network identity")
+            current_network_id = inspect_network_identity(current_runtime, network)
+            if re.fullmatch(r"[0-9a-f]{12,64}", created_output, flags=re.IGNORECASE) and created_output.lower() != current_network_id.lower():
+                raise DrillError("runtime_network_identity_changed", "network", "network create identity changed")
             network_internal = inspect_network_internal(current_runtime, current_network_id, network)
             data_sha = digest({str(path.relative_to(data_dir)): sha256(path) for path in sorted(data_dir.rglob("*")) if path.is_file()})
             port = args.port or 5006
             url = f"http://127.0.0.1:{port}"
             started_container = runtime_call(
                 current_runtime, "run", "-d", "--pull=never", "--network", network, "--name", sidecar,
+                "--label", f"{RESTORE_OWNER_LABEL}={RESTORE_OWNER_VALUE}",
+                "--label", f"{RESTORE_RUN_LABEL}={network}",
                 "--user", f"{os.getuid()}:{os.getgid()}",
                 "-v", f"{data_dir}:/data", args.image,
             )
             if started_container.returncode != 0:
                 raise DrillError("sidecar_start_failed", "start")
             current_sidecar_id = parse_runtime_id(started_container.stdout, "sidecar_identity_invalid", "start")
-            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id)
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id, network)
             health_error: DrillError | None = None
             for _attempt in range(args.health_attempts):
                 try:
@@ -722,7 +809,7 @@ def main() -> int:
             restarted = runtime_call(current_runtime, "restart", current_sidecar_id)
             if restarted.returncode != 0:
                 raise DrillError("sidecar_restart_failed", "restart")
-            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id)
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar, current_sidecar_id, network)
             for _attempt in range(args.health_attempts):
                 try:
                     probe_http(url, http_command, namespace_tool=namespace_tool, namespace=namespace)
