@@ -105,7 +105,7 @@
         "every_source_column_has_one_disposition": {"const": true},
         "node_operations": {
           "type": "array",
-          "const": ["create", "get", "insert", "upsert", "update"]
+          "const": ["create", "get", "insert", "upsert", "update", "list"]
         },
         "read_columns_star_means_full_matching_row": {"const": true},
         "filter_keys_are_exact_node_parameters": {"const": true},

@@ -35,7 +35,7 @@ SOURCE_REF_PATHS = (
     "integrations/n8n/disposable/generated",
     "integrations/n8n/setup-workflows",
 )
-OPERATIONS = ("create", "get", "insert", "upsert", "update")
+OPERATIONS = ("create", "get", "insert", "upsert", "update", "list")
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -750,6 +750,13 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
             operation = _string(parameters.get("operation"), f"{relative}#{name} operation")
             if operation not in OPERATIONS:
                 raise MatrixError(f"{relative}#{name} uses unsupported operation {operation!r}")
+            if operation == "list":
+                if parameters.get("resource") != "table":
+                    raise MatrixError(f"{relative}#{name} list operation must use the table resource")
+                # W19's native table-list readback validates target schemas and
+                # IDs after creation. It is a target-side verifier, not a
+                # reference to one of the preserved legacy source tables.
+                continue
             if operation == "create":
                 table_name = _string(parameters.get("tableName"), f"{relative}#{name} tableName")
                 read_columns: list[str] = []
