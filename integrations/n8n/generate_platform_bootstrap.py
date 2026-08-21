@@ -556,7 +556,6 @@ def build_manifest(
     if matrix is not None:
         targets, _, schema_digest = target_schema_contract(matrix)
         manifest["sources"]["data_table_migration_matrix"] = "integrations/n8n/data-table-migration-matrix.json"
-        manifest["sources"]["data_table_migration_matrix_sha256"] = sha256(MATRIX_PATH)
         manifest["table_create_operations"] = [
             {
                 "table_name": table["name"],
