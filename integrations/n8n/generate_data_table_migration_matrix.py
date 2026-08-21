@@ -16,7 +16,6 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-
 ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
 DATA_TABLES = N8N / "data-tables.json"
@@ -53,6 +52,11 @@ DOCUMENT_IDENTITY_FIELDS = {
 def _target_column(source_type: str, *sources: str) -> dict[str, Any]:
     """Describe one target field and the source columns allowed to populate it."""
     return {"type": source_type, "source_bindings": list(sources)}
+
+
+def _resolver_column(source_type: str, artifact: str, field: str) -> dict[str, Any]:
+    """Describe a field resolved from a durable artifact rather than an old row."""
+    return _target_column(source_type, f"{artifact}.{field}")
 
 
 # These are the four executable target contracts.  Source columns may merge
@@ -148,6 +152,18 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             ),
             "archive_ready": _target_column(
                 "boolean", "finance_acquisition_receipts.archive_ready"
+            ),
+            "inventory_run_id": _resolver_column("string", "inventory-v1", "inventory_run_id"),
+            "inventory_fence": _resolver_column("number", "inventory-v1", "inventory_fence"),
+            "inventory_sha256": _resolver_column("string", "inventory-v1", "inventory_sha256"),
+            "inventory_item_id": _resolver_column("string", "inventory-v1", "inventory_item_id"),
+            "inventory_path": _resolver_column("string", "inventory-v1", "inventory_path"),
+            "inventory_etag": _resolver_column("string", "inventory-v1", "inventory_etag"),
+            "inventory_schema_version": _resolver_column(
+                "string", "inventory-v1", "inventory_schema_version"
+            ),
+            "inventory_length_bytes": _resolver_column(
+                "number", "inventory-v1", "inventory_length_bytes"
             ),
         },
     },
@@ -310,7 +326,7 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                     {
                         "table": "finance_actual_verifications",
                         "left_fields": ["actual_verification_sha256"],
-                        "right_fields": ["observed_payload_sha256"],
+                        "right_fields": ["verification_artifact_sha256"],
                     },
                     {
                         "table": "finance_actual_outbox",
@@ -401,6 +417,21 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             ),
             "reconciliation_verified_at": _target_column(
                 "date", "finance_reconciliations.verified_at"
+            ),
+            "verification_artifact_item_id": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_item_id"
+            ),
+            "verification_artifact_path": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_path"
+            ),
+            "verification_artifact_etag": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_etag"
+            ),
+            "verification_artifact_schema_version": _resolver_column(
+                "string", "actual-verification-v2", "verification_artifact_schema_version"
+            ),
+            "verification_artifact_length_bytes": _resolver_column(
+                "number", "actual-verification-v2", "verification_artifact_length_bytes"
             ),
         },
     },
@@ -664,7 +695,7 @@ def source_snapshot() -> dict[str, str]:
     lines = []
     for path in json_paths():
         relative = path.relative_to(ROOT).as_posix()
-        lines.append(f"{sha256_bytes(normalized_bytes(path))}  {relative}\n".encode("utf-8"))
+        lines.append(f"{sha256_bytes(normalized_bytes(path))}  {relative}\n".encode())
     corpus = sha256_bytes(b"".join(sorted(lines)))
     return {
         "finance_commit": source_ref(),
@@ -770,9 +801,9 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                     "filter_keys": filter_keys,
                 }
             )
-    for table_name in references:
-        references[table_name].sort(key=lambda row: (row["file"], row["node"]))
-        if not any(row["operation"] == "create" for row in references[table_name]):
+    for table_name, table_references in references.items():
+        table_references.sort(key=lambda row: (row["file"], row["node"]))
+        if not any(row["operation"] == "create" for row in table_references):
             raise MatrixError(f"{table_name} has no create/schema reference")
     return references
 
@@ -849,7 +880,7 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         if column not in AGENT_REVIEW_COLUMNS:
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         return {"disposition": "keep", "target_table": "finance_ai_reviews", "target_artifact": None, "target_field": column}
-    raise MatrixError(f"no migration policy for {table_name}.{column} ({source_type})")
+    raise MatrixError(f"no migration policy for {table_name}.{column}")
 
 
 def column_matrix(table: dict[str, Any], references: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1071,7 +1102,7 @@ def validate_identity_derivations(
                         raise MatrixError(f"{target}.{source_table} join key is malformed")
                     source_fields = join_key.get("source_fields")
                     target_fields = join_key.get("target_fields")
-                    target_columns = target_schemas[target]["columns"]
+                    target_columns = schema["columns"]
                     if (
                         not isinstance(source_fields, list)
                         or not source_fields
@@ -1098,18 +1129,36 @@ def validate_identity_derivations(
                     left_fields = step.get("left_fields")
                     right_fields = step.get("right_fields")
                     joined_table = step["table"]
+                    resolver_right_fields = {
+                        "verification_artifact_sha256"
+                    }
                     if (
                         not isinstance(left_fields, list)
                         or not isinstance(right_fields, list)
                         or len(left_fields) != len(right_fields)
                         or not left_fields
                         or any(field not in source_columns[current_table] for field in left_fields)
-                        or any(field not in source_columns[joined_table] for field in right_fields)
+                        or any(
+                            field not in source_columns[joined_table]
+                            and not (
+                                joined_table == "finance_actual_verifications"
+                                and field in resolver_right_fields
+                            )
+                            for field in right_fields
+                        )
                     ):
                         raise MatrixError(f"{target}.{source_table} join identity has invalid join fields")
                     for left_field, right_field in zip(left_fields, right_fields, strict=True):
                         left_type = source_columns[current_table][left_field]
-                        right_type = source_columns[joined_table][right_field]
+                        # Verification artifacts are resolver-owned target
+                        # fields, not columns in the legacy verification row.
+                        if (
+                            joined_table == "finance_actual_verifications"
+                            and right_field == "verification_artifact_sha256"
+                        ):
+                            right_type = "string"
+                        else:
+                            right_type = source_columns[joined_table][right_field]
                         if left_type != right_type:
                             raise MatrixError(
                                 f"{target}.{source_table} join field type {left_type!r} cannot match "
@@ -1140,6 +1189,21 @@ def validate_target_mappings(
     validate_identity_derivations(tables, target_schemas)
 
     observed: dict[tuple[str, str], list[str]] = {}
+    source_binding_names = {
+        f"{table['source_table']}.{column['source_column']}"
+        for table in tables
+        for column in table["columns"]
+    }
+    resolver_binding_prefixes = ("inventory-v1.", "actual-verification-v2.")
+    for target, schema in target_schemas.items():
+        for field, spec in schema["columns"].items():
+            for binding in spec["source_bindings"]:
+                if binding not in source_binding_names:
+                    if not binding.startswith(resolver_binding_prefixes):
+                        raise MatrixError(
+                            f"{target}.{field} has an unknown source or resolver binding {binding!r}"
+                        )
+                    observed.setdefault((target, field), []).append(binding)
     for table in tables:
         source_table = table["source_table"]
         for column in table["columns"]:

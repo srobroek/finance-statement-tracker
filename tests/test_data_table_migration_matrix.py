@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
 import sys
 import unittest
+from copy import deepcopy
+from pathlib import Path
 
 from jsonschema import Draft202012Validator
-
 
 ROOT = Path(__file__).resolve().parents[1]
 N8N = ROOT / "integrations" / "n8n"
@@ -294,7 +293,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         )
         self.assertEqual(
             reconciliation_identity["join_steps"][0]["right_fields"],
-            ["observed_payload_sha256"],
+            ["verification_artifact_sha256"],
         )
         processing_document_id = next(
             column

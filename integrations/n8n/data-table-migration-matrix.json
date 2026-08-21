@@ -205,6 +205,54 @@
           "source_bindings": [
             "finance_acquisition_receipts.archive_ready"
           ]
+        },
+        "inventory_run_id": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_run_id"
+          ]
+        },
+        "inventory_fence": {
+          "type": "number",
+          "source_bindings": [
+            "inventory-v1.inventory_fence"
+          ]
+        },
+        "inventory_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_sha256"
+          ]
+        },
+        "inventory_item_id": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_item_id"
+          ]
+        },
+        "inventory_path": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_path"
+          ]
+        },
+        "inventory_etag": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_etag"
+          ]
+        },
+        "inventory_schema_version": {
+          "type": "string",
+          "source_bindings": [
+            "inventory-v1.inventory_schema_version"
+          ]
+        },
+        "inventory_length_bytes": {
+          "type": "number",
+          "source_bindings": [
+            "inventory-v1.inventory_length_bytes"
+          ]
         }
       }
     },
@@ -496,7 +544,7 @@
                 "actual_verification_sha256"
               ],
               "right_fields": [
-                "observed_payload_sha256"
+                "verification_artifact_sha256"
               ]
             },
             {
@@ -734,6 +782,36 @@
           "type": "date",
           "source_bindings": [
             "finance_reconciliations.verified_at"
+          ]
+        },
+        "verification_artifact_item_id": {
+          "type": "string",
+          "source_bindings": [
+            "actual-verification-v2.verification_artifact_item_id"
+          ]
+        },
+        "verification_artifact_path": {
+          "type": "string",
+          "source_bindings": [
+            "actual-verification-v2.verification_artifact_path"
+          ]
+        },
+        "verification_artifact_etag": {
+          "type": "string",
+          "source_bindings": [
+            "actual-verification-v2.verification_artifact_etag"
+          ]
+        },
+        "verification_artifact_schema_version": {
+          "type": "string",
+          "source_bindings": [
+            "actual-verification-v2.verification_artifact_schema_version"
+          ]
+        },
+        "verification_artifact_length_bytes": {
+          "type": "number",
+          "source_bindings": [
+            "actual-verification-v2.verification_artifact_length_bytes"
           ]
         }
       }
