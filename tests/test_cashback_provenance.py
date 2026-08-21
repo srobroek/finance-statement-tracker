@@ -242,6 +242,55 @@ class CashbackProgrammeProvenanceTests(TestCase):
         with self.assertRaisesRegex(ValueError, "schema error"):
             validate_provenance(source)
 
+    def test_reference_validation_precedes_claim_validation(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["authority"] = "INVALID"
+        program["source_references"] = [reference]
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises reference-phase ordering.",
+            "claims": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "invalid evidence authority"):
+            validate_program_configuration(source)
+
+    def test_claim_validation_precedes_fixture_digest_validation(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["sha256"] = "0" * 64
+        program["source_references"] = [reference]
+        claims = authoritative_claims(program)
+        claims[0]["path"] = "unknown"
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises claim-phase ordering.",
+            "claims": claims,
+        }
+
+        with self.assertRaisesRegex(ValueError, "incomplete provenance claims"):
+            validate_program_configuration(source)
+
+    def test_interval_validation_precedes_fixture_digest_validation(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["sha256"] = "0" * 64
+        program["source_references"] = [reference]
+        claims = authoritative_claims(program)
+        claims[0]["effective_start"] = (date.today() + timedelta(days=1)).isoformat()
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises interval-phase ordering.",
+            "claims": claims,
+        }
+
+        with self.assertRaisesRegex(ValueError, "exceeds the programme interval"):
+            validate_program_configuration(source)
+
     def test_drifted_issuer_fixture_digest_is_rejected(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
