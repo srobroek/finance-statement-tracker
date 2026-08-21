@@ -5,7 +5,7 @@ import json
 import re
 import sqlite3
 from contextlib import closing
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterable
@@ -39,7 +39,6 @@ EVENT_CANONICAL_FIELDS = (
     "merchant",
     "event_type",
     "reversal_of",
-    "identity_key",
 )
 CORRECTABLE_EVENT_FIELDS = frozenset(
     {
@@ -456,7 +455,7 @@ def _iso_datetime(value: object) -> str:
         raise ValueError("occurred_at is required")
     parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed.isoformat()
 
 
@@ -1560,7 +1559,7 @@ class CashbackEventStore:
         ):
             raise ValueError("actual_import_verified cannot replace an Actual import receipt digest")
         acknowledge_variances = _boolean(payload.get("acknowledge_variances"), default=False)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
                 run = connection.execute(
@@ -1899,12 +1898,12 @@ def build_live_dashboard(
     if last_ingest:
         parsed = datetime.fromisoformat(str(last_ingest).replace("Z", "+00:00"))
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        age_seconds = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            parsed = parsed.replace(tzinfo=UTC)
+        age_seconds = (datetime.now(UTC) - parsed.astimezone(UTC)).total_seconds()
         stale = age_seconds > stale_after_minutes * 60
     result["data_status"] = {
         "mode": "LIVE_TRANSACTION_EVENTS",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "stale_after_minutes": stale_after_minutes,
         "is_stale": stale,
         **stats,
