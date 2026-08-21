@@ -277,7 +277,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "12-outlook-message-sweep.json": {
         "nodes": 63, "sticky": 0,
         "node_ids_sha256": "4c4c330ada2808c7ca9e387e01dfa0505f6b7351299968b23e8a6378e507c66e",
-        "parameters_sha256": "b2f420494d47315ffa35301a584ba9c60a9d2fc906727bc7fcec75cf651ac807",
+        "parameters_sha256": "c07dfbf217e48b683f60ba6f8cab0c2974110fde7ba47329d8532526ee13d129",
     },
     "13-document-extraction-request.json": {
         "nodes": 8, "sticky": 0,
