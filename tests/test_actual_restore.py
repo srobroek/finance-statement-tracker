@@ -390,6 +390,11 @@ class ActualRestoreTests(unittest.TestCase):
             "SIGTERM",
             "disposable_resource_collision",
             "ui_api_parity",
+            "ACTUAL_RESTORE_READBACK_PATH",
+            "ACTUAL_RESTORE_READBACK_CONTAINER_PATH",
+            "readback_probe_output_empty",
+            "probe_failure_detail",
+            "MAX_READBACK_DIAGNOSTIC",
             '"production_mutated": False',
             '"secret_values_recorded": False',
             '"network_cleanup_verified": False',
@@ -613,10 +618,121 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 8)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            self.assertIn("exit_code=124", receipt["error"]["detail"])
+            self.assertIn("command timed out", receipt["error"]["detail"])
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("*.container")))
             self.assertFalse(list(root.glob("*.network")))
             self.assertFalse(process_is_live(root / "namespace-child.pid"))
+
+    def test_readback_path_is_bound_to_the_receipt_run_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            path_probe = executable(
+                root,
+                "path-probe",
+                f"""
+import json
+import os
+from pathlib import Path
+
+run_index = os.environ["ACTUAL_RESTORE_RUN_INDEX"]
+expected_host = Path({str(root)!r}) / f"readback-{{run_index}}.json"
+actual_host = Path(os.environ["ACTUAL_RESTORE_READBACK_PATH"])
+if actual_host != expected_host:
+    print(f"wrong-path token=path-sentinel expected={{expected_host}} actual={{actual_host}}", file=__import__("sys").stderr)
+    raise SystemExit(41)
+if os.environ["ACTUAL_RESTORE_READBACK_CONTAINER_PATH"] != f"/data/readback-{{run_index}}.json":
+    raise SystemExit(42)
+actual_host.write_text("bound", encoding="ascii")
+payload = {{
+  "accounts": [{{"name": "Current", "balance_minor": 100, "closed": False, "offbudget": False}}],
+  "representative_transactions": [{{"account_name": "Current", "amount_minor": -10, "date": "2026-08-01", "imported_id": "statement:fixture:1", "payee": "Merchant"}}]
+}}
+print(json.dumps({{"api": payload, "ui": payload}}))
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=path_probe)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(receipt["status"], "passed")
+            self.assertEqual((root / "readback-1.json").read_text(encoding="ascii"), "bound")
+            self.assertEqual((root / "readback-2.json").read_text(encoding="ascii"), "bound")
+
+    def test_readback_empty_stdout_is_failed_with_redacted_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            empty_probe = executable(
+                root,
+                "empty-probe",
+                "print('browser token=top-secret-sentinel', file=__import__('sys').stderr)",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=empty_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_output_empty")
+            detail = receipt["error"]["detail"]
+            self.assertIn("exit_code=0", detail)
+            self.assertIn("stdout_bytes=0", detail)
+            self.assertIn("browser token=<redacted>", detail)
+            self.assertNotIn("top-secret-sentinel", detail)
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
+
+    def test_readback_exit_and_stderr_are_persisted_without_secret_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            failing_probe = executable(
+                root,
+                "failing-probe",
+                "print('playwright failure password=top-secret-sentinel', file=__import__('sys').stderr); raise SystemExit(9)",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=failing_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            detail = receipt["error"]["detail"]
+            self.assertIn("exit_code=9", detail)
+            self.assertIn("playwright failure password=<redacted>", detail)
+            self.assertNotIn("top-secret-sentinel", detail)
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_readback_wrong_path_failure_is_truthful_and_cleans_exact_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            wrong_path_probe = executable(
+                root,
+                "wrong-path-probe",
+                """
+import os
+import sys
+from pathlib import Path
+
+expected = Path(os.environ["ACTUAL_RESTORE_DATA_DIR"]).parent / "readback-1.json"
+actual = Path(os.environ["ACTUAL_RESTORE_READBACK_PATH"])
+if actual != expected:
+    print(f"wrong-path token=path-sentinel expected={expected} actual={actual}", file=sys.stderr)
+    raise SystemExit(41)
+raise SystemExit(42)
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=wrong_path_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            detail = receipt["error"]["detail"]
+            self.assertIn("exit_code=41", detail)
+            self.assertIn("wrong-path token=<redacted>", detail)
+            self.assertNotIn("path-sentinel", detail)
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+            self.assertFalse(list(root.glob("finance-actual-restore.*")))
 
     def test_rootful_docker_network_stdout_prefix_is_bound_to_requested_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
