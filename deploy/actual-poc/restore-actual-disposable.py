@@ -545,6 +545,8 @@ def _validate_readback_rows(payload: dict[str, Any], section: str, *, label: str
             raise DrillError("readback_contract_invalid", "readback", f"{label}.{section} has invalid fields")
         for field, expected_type in fields.items():
             value = row[field]
+            if field == "payee" and value is None:
+                continue
             if type(value) is not expected_type:
                 raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} has invalid type")
             if expected_type is str and not value:
