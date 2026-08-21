@@ -8,12 +8,14 @@ import {
   doctor,
   enrichTransactions,
   exportDashboardDocument,
+  findUnexpectedActualImportRows,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
   resolveSplitChildren,
   resolvePortableReferences,
   selectRetiredRuleIds,
   selectStageMigrationRuleIds,
+  validateActualTransferCounterparts,
   validateTransactionRepairPlan,
   validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
@@ -148,6 +150,93 @@ test("import readback compares the complete canonical economic projection", () =
   assert.deepEqual(result.mismatches, []);
 });
 
+test("import readback resolves API payee_id and payee-driven transfer semantics", () => {
+  const payees = new Map([
+    ["payee-transfer", { id: "payee-transfer", name: "Savings transfer", transfer_acct: "account-2" }],
+  ]);
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    imported_payee: "SAVINGS TRANSFER",
+    payee: "payee-transfer",
+    category: null,
+    notes: "",
+    cleared: true,
+  }, { account: "account-1", payees, expectGeneratedTransfer: true });
+  const observed = canonicalActualImportProjection({
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    imported_payee: "SAVINGS TRANSFER",
+    payee_id: "payee-transfer",
+    category: null,
+    notes: null,
+    cleared: true,
+    transfer_id: "transaction-counterpart",
+  }, { payees });
+  assert.deepEqual(compareActualImportProjections([expected], [observed]).mismatches, []);
+  assert.deepEqual(
+    compareActualImportProjections([expected], [{ ...observed, transfer: { linked: false, account: "account-2" } }]).mismatches,
+    [{ imported_id: "statement:transfer:source", fields: ["transfer"] }],
+  );
+});
+
+test("batch readback allows rows expected by overlapping envelopes", () => {
+  const rows = [
+    { id: "row-a", imported_id: "a" },
+    { id: "row-b", imported_id: "b" },
+  ];
+  assert.deepEqual(
+    findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: new Set(["a", "b"]),
+      baselineRowIds: new Set(),
+    }),
+    [],
+  );
+  assert.deepEqual(
+    findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: new Set(["a"]),
+      baselineRowIds: new Set(),
+    }),
+    ["b"],
+  );
+});
+
+test("transfer readback requires reciprocal cross-account inverse rows", () => {
+  const payees = new Map([
+    ["payee-transfer", { name: "Savings transfer", transfer_acct: "account-2" }],
+  ]);
+  const source = {
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    payee_id: "payee-transfer",
+    transfer_id: "transaction-counterpart",
+  };
+  const counterpart = {
+    id: "transaction-counterpart",
+    account: "account-2",
+    date: "2026-08-16",
+    amount: 500,
+    transfer_id: "transaction-source",
+  };
+  assert.deepEqual(validateActualTransferCounterparts([source], [source, counterpart], payees), []);
+  assert.deepEqual(
+    validateActualTransferCounterparts([source], [source, { ...counterpart, amount: 499 }], payees),
+    [{ imported_id: source.imported_id, fields: ["transfer.inverse_amount"] }],
+  );
+  assert.deepEqual(
+    validateActualTransferCounterparts([source], [source, { ...counterpart, account: "account-1" }], payees),
+    [{ imported_id: source.imported_id, fields: ["transfer.account", "transfer.payee_account"] }],
+  );
+});
+
 test("import readback detects drift in every economic field", () => {
   const expected = canonicalActualImportProjection({
     imported_id: "statement:fixture:1",
@@ -173,7 +262,7 @@ test("import readback detects drift in every economic field", () => {
     notes: "#travel",
     cleared: false,
     reconciled: true,
-    transfer_id: "transfer-peer",
+    transfer: { linked: true, account: "account-2" },
   };
   for (const [field, value] of Object.entries(mutations)) {
     const result = compareActualImportProjections(
