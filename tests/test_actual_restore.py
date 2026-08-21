@@ -698,7 +698,7 @@ print(json.dumps({{"api": payload, "ui": payload}}))
                 "amount_minor": -10,
                 "date": "2026-08-01",
                 "imported_id": "statement:fixture:1",
-                "payee": "Merchant",
+                "payee": None,
             }],
         }
         self.assertEqual(list(validator.iter_errors(expected)), [])
@@ -722,7 +722,7 @@ print(json.dumps({{"api": payload, "ui": payload}}))
                 "amount_minor": -10,
                 "date": "2026-08-01",
                 "imported_id": "statement:fixture:1",
-                "payee": "Merchant",
+                "payee": None,
             }],
         }
         probe_base = {
@@ -740,6 +740,7 @@ print(json.dumps({{"api": payload, "ui": payload}}))
             ("expected additional", "expected", lambda payload: payload.update(unexpected=True)),
             ("api missing", "api", lambda payload: payload.pop("accounts")),
             ("api malformed", "api", lambda payload: payload["accounts"][0].update(closed="false")),
+            ("api nullable non-payee", "api", lambda payload: payload["accounts"][0].update(name=None)),
             ("api additional", "api", lambda payload: payload.update(unexpected=True)),
             ("ui missing", "ui", lambda payload: payload.pop("accounts")),
             ("ui malformed", "ui", lambda payload: payload["accounts"][0].update(offbudget="false")),
