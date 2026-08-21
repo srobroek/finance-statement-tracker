@@ -628,6 +628,7 @@ def probe_readback(
     namespace: NetworkNamespace,
     timeout: float,
     readback_path: Path,
+    checkpoint_path: Path,
 ) -> dict[str, Any]:
     environment = os.environ.copy()
     environment.update({
@@ -638,6 +639,8 @@ def probe_readback(
         # artifact path and the path visible through the sidecar's data mount.
         "ACTUAL_RESTORE_READBACK_PATH": str(readback_path),
         "ACTUAL_RESTORE_READBACK_CONTAINER_PATH": f"/data/readback-{run_index}.json",
+        "ACTUAL_RESTORE_CHECKPOINT_PATH": str(checkpoint_path),
+        "ACTUAL_RESTORE_CHECKPOINT_CONTAINER_PATH": f"/data/{checkpoint_path.name}",
     })
     result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=timeout)
     if result.returncode != 0:
@@ -722,6 +725,21 @@ def error_payload(error: DrillError) -> dict[str, str]:
     return payload
 
 
+def failure_checkpoint_payload(error: DrillError, *, run_index: int | None) -> dict[str, Any]:
+    """Build a bounded, redacted phase receipt without child command output."""
+    detail = redact_diagnostic(error.detail)
+    exit_match = re.search(r"\bexit_code=(-?[0-9]+)\b", error.detail)
+    return {
+        "schema_version": 1,
+        "status": "failed",
+        "run_index": run_index,
+        "phase": error.stage,
+        "code": error.code,
+        "exit_code": int(exit_match.group(1)) if exit_match else None,
+        "diagnostic": detail,
+    }
+
+
 def main() -> int:
     args = parse_args()
     if args.repeat < 2:
@@ -761,6 +779,20 @@ def main() -> int:
     current_network_id: str | None = None
     current_data: Path | None = None
     temp_root_for_cleanup: Path | None = None
+    current_run_index: int | None = None
+    retained_failure_paths: list[str] = []
+
+    def retain_failure_checkpoint(error: DrillError) -> None:
+        if current_run_index is None:
+            return
+        checkpoint_path = readback_root / f"phase-checkpoint-{current_run_index}.json"
+        try:
+            write_json(checkpoint_path, failure_checkpoint_payload(error, run_index=current_run_index))
+        except OSError:
+            return
+        path = str(checkpoint_path)
+        if path not in retained_failure_paths:
+            retained_failure_paths.append(path)
 
     def cleanup() -> bool:
         nonlocal current_sidecar, current_sidecar_id, current_network, current_network_id, current_data
@@ -859,7 +891,7 @@ def main() -> int:
         cleanup_receipt["outer_temp_root"] = str(temp_root_for_cleanup)
         if not path_exists(temp_root_for_cleanup):
             cleanup_receipt["outer_temp_root_removed"] = True
-            cleanup_receipt["retained_paths"] = []
+            cleanup_receipt["retained_paths"] = list(retained_failure_paths)
             return True
         try:
             if temp_root_for_cleanup.is_symlink():
@@ -867,14 +899,14 @@ def main() -> int:
             shutil.rmtree(temp_root_for_cleanup)
         except OSError:
             cleanup_receipt["outer_temp_root_removed"] = False
-            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup), *retained_failure_paths]
             return False
         if path_exists(temp_root_for_cleanup):
             cleanup_receipt["outer_temp_root_removed"] = False
-            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup), *retained_failure_paths]
             return False
         cleanup_receipt["outer_temp_root_removed"] = True
-        cleanup_receipt["retained_paths"] = []
+        cleanup_receipt["retained_paths"] = list(retained_failure_paths)
         return True
 
     def handle_signal(signum: int, _frame: Any) -> None:
@@ -918,12 +950,17 @@ def main() -> int:
         if not namespace_tool or not (Path(namespace_tool[0]).is_file() or shutil.which(namespace_tool[0])):
             raise DrillError("runtime_namespace_tool_unavailable", "namespace")
         for run_index in range(1, args.repeat + 1):
+            current_run_index = None
             sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
             data_dir = temp_root / f"data-{run_index}"
             network = f"finance-actual-restore-net-{run_index}-{os.getpid()}"
             readback_path = readback_root / f"readback-{run_index}.json"
+            checkpoint_path = readback_root / f"phase-checkpoint-{run_index}.json"
             if path_exists(readback_path):
                 raise DrillError("disposable_resource_collision", "preflight", str(readback_path))
+            if path_exists(checkpoint_path):
+                raise DrillError("disposable_resource_collision", "preflight", str(checkpoint_path))
+            current_run_index = run_index
             if inspect_state(current_runtime, sidecar) != "absent" or data_dir.exists():
                 raise DrillError("disposable_resource_collision", "preflight", sidecar)
             if inspect_network_state(current_runtime, network) != "absent":
@@ -987,6 +1024,7 @@ def main() -> int:
                 namespace=namespace,
                 timeout=args.readback_timeout,
                 readback_path=readback_path,
+                checkpoint_path=checkpoint_path,
             )
             restarted = runtime_call(current_runtime, "restart", current_sidecar_id)
             if restarted.returncode != 0:
@@ -1011,6 +1049,7 @@ def main() -> int:
                 namespace=namespace,
                 timeout=args.readback_timeout,
                 readback_path=readback_path,
+                checkpoint_path=checkpoint_path,
             )
             repeat_match = first_readback == second_readback
             if not repeat_match:
@@ -1034,12 +1073,17 @@ def main() -> int:
             run["cleanup_verified"] = True
             run["network_cleanup_verified"] = True
             run["status"] = "passed"
+            try:
+                checkpoint_path.unlink(missing_ok=True)
+            except OSError as error:
+                raise DrillError("checkpoint_cleanup_failed", "cleanup", str(error)) from error
             result["runs"].append(run)
         result["status"] = "passed"
         return_code = 0
     except DrillError as error:
         result["status"] = "blocked" if error.code in {"container_runtime_unavailable", "image_digest_unavailable"} else "failed"
         result["error"] = error_payload(error)
+        retain_failure_checkpoint(error)
         result["cleanup_verified"] = cleanup() and result["cleanup_verified"]
         return_code = 2 if result["status"] == "blocked" else 1
     except SystemExit as exit_error:
