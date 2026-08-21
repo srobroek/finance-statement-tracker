@@ -439,6 +439,58 @@ test("transaction enrichment uses the same split category id for preflight and r
   assert.deepEqual(rows[0].subtransactions, planned.pending[0].desired_children);
 });
 
+const postWriteSplitFixture = mutateAfterWrite => {
+  const plan = enrichmentPlan();
+  plan.changes[0].expected_current_amount = -100;
+  plan.changes[0].split = [
+    { amount: -60, notes: "#utility", category_name: "Electricity & Water" },
+    { amount: -40, notes: "#home", category_name: "Electricity & Water" },
+  ];
+  let rows = [{
+    id: "actual-row-1",
+    imported_id: "statement:adcb:test-row",
+    date: "2026-07-18",
+    amount: -100,
+    notes: "source:statement | #home | #utility",
+    is_parent: false,
+  }];
+  const category = { id: "category-1", name: "Electricity & Water" };
+  return {
+    plan,
+    api: {
+      getServerVersion: async () => "26.8.1",
+      getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
+      getCategories: async () => [category],
+      getTransactions: async () => rows,
+      updateTransaction: async (_id, fields) => {
+        rows = [{ ...rows[0], ...fields, is_parent: true }];
+        mutateAfterWrite({ category, plan });
+      },
+      sync: async () => {},
+    },
+  };
+};
+
+test("transaction enrichment rejects an unknown split category during post-write readback", async () => {
+  const fixture = postWriteSplitFixture(({ plan }) => {
+    plan.changes[0].split[0].category_name = "Missing after write";
+  });
+  await assert.rejects(
+    () => enrichTransactions(fixture.plan, true, fixture.api),
+    /Unknown Actual category in split: Missing after write/,
+  );
+});
+
+test("transaction enrichment rejects a split category identity drift during post-write readback", async () => {
+  const fixture = postWriteSplitFixture(({ category }) => {
+    category.id = "category-drifted";
+  });
+  await assert.rejects(
+    () => enrichTransactions(fixture.plan, true, fixture.api),
+    /Enrichment verification failed for statement:adcb:test-row/,
+  );
+});
+
 test("transaction enrichment refuses note drift and server version drift", async () => {
   const base = {
     getServerVersion: async () => "26.8.1",

@@ -310,20 +310,35 @@ test("production rebuild executes backup, replacement, import, bootstrap, sync, 
   assert.equal(JSON.parse(await fs.readFile(fixture.resultPath, "utf8")).status, "APPLIED");
 });
 
-test("production rebuild is a read-only no-op when apply is false", async () => {
+test("production rebuild exact replay is a read-only no-op when apply is false", async () => {
   const fixture = await rebuildFixture();
   const calls = [];
-  const result = await runProductionRebuild({
+  const options = {
     ...fixture,
     start: "2026-08-01",
     end: "2026-08-31",
     apply: false,
+  };
+  const result = await runProductionRebuild({
+    ...options,
+    dependencies: fakeDependencies(fixture, calls),
+  });
+  const replay = await runProductionRebuild({
+    ...options,
     dependencies: fakeDependencies(fixture, calls),
   });
 
   assert.equal(result.status, "PLANNED");
   assert.equal(result.replacement_count, 1);
-  assert.deepEqual(calls, ["open", "snapshot", "shutdown"]);
+  assert.deepEqual(replay, result);
+  assert.deepEqual(calls, [
+    "open",
+    "snapshot",
+    "shutdown",
+    "open",
+    "snapshot",
+    "shutdown",
+  ]);
   await assert.rejects(() => fs.stat(fixture.backupPath), { code: "ENOENT" });
   await assert.rejects(() => fs.stat(fixture.resultPath), { code: "ENOENT" });
 });
