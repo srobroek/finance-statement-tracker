@@ -20,6 +20,7 @@ MANIFEST_PATH = N8N / "generated" / "platform-bootstrap-manifest.json"
 WORKFLOW_PATH = N8N / "workflows" / "19-platform-data-table-bootstrap.json"
 BUNDLE_PATH = N8N / "generated" / "application-contract-bundle.json"
 BUNDLE_SCHEMA_PATH = N8N / "generated" / "application-contract-bundle.schema.json"
+MATRIX_PATH = N8N / "data-table-migration-matrix.json"
 
 APPLICATION_CONFIG_PATHS = (
     "config/statement-sources.json",
@@ -412,6 +413,41 @@ def ordered_tables(contract: dict) -> list[dict]:
     )
 
 
+def target_table_rows(matrix: dict) -> list[dict]:
+    """Convert the generated migration matrix to native Data Table creates."""
+    return [
+        {
+            "name": target,
+            "columns": {
+                field: definition["type"]
+                for field, definition in matrix["target_schemas"][target]["columns"].items()
+            },
+        }
+        for target in matrix["targets"]
+    ]
+
+
+def target_schema_contract(matrix: dict) -> tuple[list[str], dict[str, dict[str, Any]], str]:
+    """Return the ordered target set, canonical n8n column arrays, and digest."""
+    targets = list(matrix["targets"])
+    schemas = {
+        target: {
+            "columns": [
+                {"name": field, "type": definition["type"]}
+                for field, definition in matrix["target_schemas"][target]["columns"].items()
+            ],
+            "logical_key": list(matrix["target_schemas"][target]["logical_key"]),
+        }
+        for target in targets
+    }
+    digest_payload = {
+        "targets": targets,
+        "target_schemas": matrix["target_schemas"],
+    }
+    digest = hashlib.sha256(canonical_json(digest_payload).encode("utf-8")).hexdigest()
+    return targets, schemas, digest
+
+
 def create_parameters(table: dict) -> dict:
     return {
         "resource": "table",
@@ -434,8 +470,9 @@ def build_manifest(
     bundle: dict,
     bundle_file_sha256: str,
     bundle_schema_sha256: str,
+    matrix: dict | None = None,
 ) -> dict:
-    return {
+    manifest = {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
         "n8n_version": "2.36.2",
@@ -516,6 +553,35 @@ def build_manifest(
             "imports or executes in the pinned n8n image."
         ),
     }
+    if matrix is not None:
+        targets, _, schema_digest = target_schema_contract(matrix)
+        manifest["sources"]["data_table_migration_matrix"] = "integrations/n8n/data-table-migration-matrix.json"
+        manifest["sources"]["data_table_migration_matrix_sha256"] = sha256(MATRIX_PATH)
+        manifest["table_create_operations"] = [
+            {
+                "table_name": table["name"],
+                "parameters": create_parameters(table),
+            }
+            for table in target_table_rows(matrix)
+        ]
+        manifest.pop("seed")
+        manifest.pop("config_seed")
+        manifest["target_schema_contract"] = {
+            "path": "integrations/n8n/data-table-migration-matrix.json",
+            "digest": schema_digest,
+            "target_tables": targets,
+            "readback_operation": "list",
+            "readback_required": True,
+            "legacy_table_creation_forbidden": True,
+            "row_seed_writes_forbidden": True,
+        }
+        manifest["execution_evidence"] = {
+            "exact_image_import_tested": False,
+            "disposable_create_reuse_tested": False,
+            "table_list_readback_tested": False,
+            "production_validated": False,
+        }
+    return manifest
 
 
 def data_table_node(node_id: str, name: str, position: list[int], parameters: dict) -> dict:
@@ -529,14 +595,85 @@ def data_table_node(node_id: str, name: str, position: list[int], parameters: di
     }
 
 
+def target_bootstrap_document(
+    nodes: list[dict],
+    connections: dict[str, dict],
+    bundle: dict,
+    manifest: dict,
+    targets: list[str],
+    schema_digest: str,
+) -> dict:
+    """Build the manual-only W19 document after its four-table readback."""
+    nodes.append({
+        "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
+        "name": "Stage 1 · Manual Platform Bootstrap Only to Emit Redacted Bootstrap Receipt",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-1160, -180],
+        "parameters": {
+            "content": (
+                "## Stage 1 · Four-table schema bootstrap\\n"
+                "**Input:** Manual Platform Bootstrap Only  ·  **Output:** canonical native table-list "
+                "readback and redacted receipt\\nPartial, extra, mismatched, or ID-drifting schemas fail closed."
+            ),
+            "height": 110,
+            "width": 2240,
+            "color": 7,
+        },
+    })
+    return {
+        "id": WORKFLOW_ID,
+        "name": "Finance · Platform Data Table Bootstrap",
+        "active": False,
+        "nodes": nodes,
+        "connections": connections,
+        "settings": {
+            "executionOrder": "v1",
+            "timezone": "Asia/Dubai",
+            "saveDataErrorExecution": "none",
+            "saveDataSuccessExecution": "none",
+            "errorWorkflow": ERROR_WORKFLOW_ID,
+        },
+        "pinData": {},
+        "meta": {
+            "financeWorkflowCode": "PLATFORM_DATA_TABLE_BOOTSTRAP",
+            "migrationStatus": "SPEC_ONLY",
+            "manualOnly": True,
+            "platformBootstrapOnly": True,
+            "financeLedgerMutationForbidden": True,
+            "actualMutationForbidden": True,
+            "sourceContract": "integrations/n8n/data-table-migration-matrix.json",
+            "applicationContractBundle": "integrations/n8n/generated/application-contract-bundle.json",
+            "applicationContractBundleSchema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+            "applicationContractBundleContentSha256": bundle["bundle_content_sha256"],
+            "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
+            "activationBlockers": manifest["activation_blockers"],
+            "importTested": False,
+            "fixtureExecuted": False,
+            "credentialBindings": [],
+            "setupRequired": True,
+            "targetSchemaContract": "integrations/n8n/data-table-migration-matrix.json",
+            "targetSchemaDigest": schema_digest,
+            "targetTables": targets,
+            "sourceTablesPreserved": True,
+            "legacyTableCreationForbidden": True,
+            "partialSchemaPolicy": "PARTIAL_RECONCILED_FAIL_CLOSED",
+            "secondRunPolicy": "NOOP_ON_EXACT_SCHEMA",
+            "rowMigrationForbidden": True,
+            "seedWritesForbidden": True,
+        },
+    }
+
+
 def build_workflow(
     tables: dict,
     seed: dict,
     config_seed: dict,
     manifest: dict,
     bundle: dict,
+    matrix: dict | None = None,
 ) -> dict:
-    table_rows = ordered_tables(tables)
+    table_rows = target_table_rows(matrix) if matrix is not None else ordered_tables(tables)
     seed_rows = seed["rows"]
     nodes: list[dict] = [
         {
@@ -645,6 +782,36 @@ def build_workflow(
     }
     previous = verify_bundle_name
 
+    if matrix is not None:
+        targets, target_schemas, target_schema_digest = target_schema_contract(matrix)
+        target_guard_name = "Verify Four-Table Target Contract"
+        nodes.append({
+            "id": "19000-target-guard",
+            "name": target_guard_name,
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [-680, 0],
+            "parameters": {
+                "jsCode": (
+                    f"const contract={readable_js_literal(target_schemas)}; "
+                    f"const expected={json.dumps(targets)}; "
+                    "const names=Object.keys(contract); "
+                    "if(names.length!==expected.length||expected.some(name=>!names.includes(name))) "
+                    "throw new Error('TARGET_TABLE_SET_MISMATCH'); "
+                    "for(const name of expected){const table=contract[name]; "
+                    "if(!table.logical_key.length||!table.columns.length) "
+                    "throw new Error(`TARGET_SCHEMA_EMPTY:${name}`); "
+                    "if(table.columns.some(column=>!['string','number','boolean','date'].includes(column.type))) "
+                    "throw new Error(`TARGET_SCHEMA_TYPE_UNSUPPORTED:${name}`);} "
+                    f"return [{{json:{{status:'TARGET_SCHEMA_CONTRACT_VERIFIED',target_tables:expected,target_schemas:contract,target_schema_digest:'{target_schema_digest}',runtime_cutover:false,deletion_authorized:false}}}}];"
+                )
+            },
+        })
+        connections[previous] = {
+            "main": [[{"node": target_guard_name, "type": "main", "index": 0}]]
+        }
+        previous = target_guard_name
+
     for index, table in enumerate(table_rows, start=1):
         name = f"Create or Reuse {table['name']}"
         node = data_table_node(
@@ -658,6 +825,114 @@ def build_workflow(
             "main": [[{"node": name, "type": "main", "index": 0}]]
         }
         previous = name
+
+    if matrix is not None:
+        list_name = "List Four Target Tables"
+        nodes.append(data_table_node(
+            "19006",
+            list_name,
+            [1380, 0],
+            {"resource": "table", "operation": "list", "returnAll": True, "options": {}},
+        ))
+        connections[previous] = {
+            "main": [[{"node": list_name, "type": "main", "index": 0}]]
+        }
+        previous = list_name
+
+        readback_name = "Verify Four Target Table Readback"
+        nodes.append({
+            "id": "19007",
+            "name": readback_name,
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1680, 0],
+            "parameters": {
+                "jsCode": r"""
+const contract = $('Verify Four-Table Target Contract').first().json;
+const expected = contract.target_tables;
+const rows = $input.all().map(item => item.json || {});
+if (!Array.isArray(expected) || expected.length !== 4) throw new Error('TARGET_TABLE_SET_MISMATCH');
+const names = rows.map(row => String(row.name || ''));
+const duplicateNames = names.filter((name, index) => name && names.indexOf(name) !== index);
+if (duplicateNames.length) throw new Error('TARGET_TABLE_DUPLICATE:' + duplicateNames[0]);
+const unexpectedTarget = rows.find(row => {
+  const name = String(row.name || '');
+  return /^finance_(ingestion_state|documents|actual_batches|ai_reviews)(?:[_-]|$)/.test(name) && !expected.includes(name);
+});
+if (unexpectedTarget) throw new Error('TARGET_TABLE_EXTRA:' + String(unexpectedTarget.name));
+const observed = new Map(rows.filter(row => expected.includes(String(row.name || ''))).map(row => [String(row.name), row]));
+if (observed.size !== expected.length) {
+  const missing = expected.find(name => !observed.has(name));
+  throw new Error('TARGET_TABLE_MISSING:' + missing);
+}
+for (const target of expected) {
+  const row = observed.get(target);
+  const schemaColumns = contract.target_schemas?.[target]?.columns;
+  const expectedColumns = Array.isArray(schemaColumns) ? schemaColumns.map(column => ({ name: String(column.name || ''), type: String(column.type || '') })) : Object.entries(schemaColumns || {}).map(([name, spec]) => ({ name, type: spec.type }));
+  const columns = Array.isArray(row.columns) ? row.columns.map(column => ({ name: String(column.name || ''), type: String(column.type || '') })) : [];
+  if (columns.length !== expectedColumns.length) throw new Error('TARGET_SCHEMA_MISMATCH:' + target);
+  for (let index = 0; index < columns.length; index += 1) {
+    const wanted = expectedColumns[index];
+    const actual = columns[index];
+    if (actual.name !== wanted.name || actual.type !== wanted.type) throw new Error('TARGET_SCHEMA_MISMATCH:' + target + ':' + (actual.name || index));
+  }
+  const createRow = $('Create or Reuse ' + target).first().json || {};
+  const createdId = String(createRow.id || createRow.dataTableId || createRow.tableId || '');
+  const observedId = String(row.id || row.dataTableId || row.tableId || '');
+  if (!createdId || !observedId) throw new Error('TARGET_TABLE_ID_MISSING:' + target);
+  if (createdId !== observedId) throw new Error('TARGET_TABLE_ID_MISMATCH:' + target);
+}
+return [{ json: {
+  status: 'TARGET_SCHEMA_READBACK_VERIFIED',
+  target_tables: expected,
+  target_schema_digest: contract.target_schema_digest,
+  observed_table_count: observed.size,
+  observed_schema_verified: true,
+  observed_ids_verified: true,
+  runtime_cutover: false,
+  deletion_authorized: false,
+  second_run_noop: true,
+  old_tables_preserved: true,
+  redacted: true,
+  mode: '0600',
+} }];
+""".strip(),
+            },
+        })
+        connections[previous] = {
+            "main": [[{"node": readback_name, "type": "main", "index": 0}]]
+        }
+        previous = readback_name
+
+        receipt_name = "Emit Redacted Bootstrap Receipt"
+        nodes.append({
+            "id": "19060",
+            "name": receipt_name,
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1680, 0],
+            "parameters": {
+                "jsCode": (
+                    f"const targetTables={json.dumps(targets)}; "
+                    "return [{json:{schema_version:'data-table-migration-receipt-v1',"
+                    "status:'SCHEMA_CONTRACT_READY',target_tables:targetTables,"
+                    f"target_schema_digest:'{target_schema_digest}',runtime_cutover:false,"
+                    "deletion_authorized:false,second_run_noop:true,old_tables_preserved:true,"
+                    "redacted:true,mode:'0600'}}];"
+                )
+            },
+        })
+        connections[previous] = {
+            "main": [[{"node": receipt_name, "type": "main", "index": 0}]]
+        }
+        return target_bootstrap_document(
+            nodes,
+            connections,
+            bundle,
+            manifest,
+            targets,
+            target_schema_digest,
+        )
 
     embedded_seed = readable_js_literal(seed_rows)
     emit_name = "Emit Versioned AI Policy Seed"
@@ -914,6 +1189,7 @@ def build_workflow(
 
 def render() -> tuple[str, str, str, str]:
     tables = load_json(TABLES_PATH)
+    matrix = load_json(MATRIX_PATH)
     seed = load_json(SEED_PATH)
     config_seed = load_json(CONFIG_SEED_PATH)
     documents, sources = load_application_configs()
@@ -928,8 +1204,9 @@ def render() -> tuple[str, str, str, str]:
         bundle,
         hashlib.sha256(bundle_text.encode("utf-8")).hexdigest(),
         hashlib.sha256(bundle_schema_text.encode("utf-8")).hexdigest(),
+        matrix,
     )
-    workflow = build_workflow(tables, seed, config_seed, manifest, bundle)
+    workflow = build_workflow(tables, seed, config_seed, manifest, bundle, matrix)
     format_code_nodes([workflow])
     layout(workflow)
     return (

@@ -1394,8 +1394,9 @@ try {{
         self.assertIn("TARGET_TABLE_SET_MISMATCH", target_guard)
         self.assertIn("TARGET_SCHEMA_TYPE_UNSUPPORTED", target_guard)
         receipt = nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"]
+        compact_receipt = re.sub(r"\s+", "", receipt)
         for marker in ("runtime_cutover:false", "deletion_authorized:false", "second_run_noop:true", "mode:'0600'"):
-            self.assertIn(marker, receipt)
+            self.assertIn(marker, compact_receipt)
 
     def test_platform_bootstrap_readback_rejects_partial_extra_type_and_id_drift(self) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")

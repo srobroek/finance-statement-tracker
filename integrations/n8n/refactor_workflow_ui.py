@@ -218,6 +218,40 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         for node in bootstrap["nodes"]
     ):
         raise ValueError("W19 must not seed rows while creating the four migration targets")
+    lists = [
+        node
+        for node in bootstrap["nodes"]
+        if node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "table"
+        and node.get("parameters", {}).get("operation") == "list"
+    ]
+    if len(lists) != 1 or lists[0]["name"] != "List Four Target Tables":
+        raise ValueError("W19 must use one canonical native table-list readback")
+    list_parameters = lists[0]["parameters"]
+    if list_parameters.get("returnAll") is not True or list_parameters.get("options") != {}:
+        raise ValueError("W19 table-list readback must return all table schemas")
+    guard = node_by_name(bootstrap, "Verify Four-Table Target Contract")
+    readback = node_by_name(bootstrap, "Verify Four Target Table Readback")
+    receipt = node_by_name(bootstrap, "Emit Redacted Bootstrap Receipt")
+    guard_code = guard.get("parameters", {}).get("jsCode", "")
+    readback_code = readback.get("parameters", {}).get("jsCode", "")
+    receipt_code = receipt.get("parameters", {}).get("jsCode", "")
+    compact_receipt_code = re.sub(r"\s+", "", receipt_code)
+    for marker in ("TARGET_TABLE_SET_MISMATCH", "TARGET_SCHEMA_TYPE_UNSUPPORTED"):
+        if marker not in guard_code:
+            raise ValueError(f"W19 target guard omits {marker}")
+    for marker in (
+        "TARGET_TABLE_MISSING",
+        "TARGET_TABLE_EXTRA",
+        "TARGET_SCHEMA_MISMATCH",
+        "TARGET_TABLE_ID_MISMATCH",
+        "TARGET_SCHEMA_READBACK_VERIFIED",
+    ):
+        if marker not in readback_code:
+            raise ValueError(f"W19 readback verifier omits {marker}")
+    for marker in ("second_run_noop:true", "old_tables_preserved:true", "mode:'0600'"):
+        if marker not in compact_receipt_code:
+            raise ValueError(f"W19 receipt omits {marker}")
     metadata = bootstrap.get("meta", {})
     if metadata.get("targetTables") != targets:
         raise ValueError("W19 metadata targetTables differs from migration matrix")
