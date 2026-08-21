@@ -126,7 +126,10 @@ import sys
 root = pathlib.Path({str(root)!r})
 command = sys.argv[1] if len(sys.argv) > 1 else ''
 if command == 'version':
-    print({backend!r} + ' version 1.0')
+    if {backend!r} == 'Emulate Docker CLI using Podman':
+        print('Emulate Docker CLI using podman. Create /etc/containers/nodocker to quiet msg.')
+    else:
+        print({backend!r} + ' version 1.0')
     raise SystemExit(0)
 if command == 'network':
     action = sys.argv[2] if len(sys.argv) > 2 else ''
@@ -146,6 +149,8 @@ if command == 'network':
             break
     marker = root / (name + '.network')
     if action == 'inspect':
+        if '--format' in sys.argv:
+            (root / 'network-inspect-format').write_text(sys.argv[sys.argv.index('--format') + 1], encoding='ascii')
         if {inspect_failure!r} or {network_inspect_failure!r} or ({cleanup_inspect_failure!r} and list(root.glob('*.container'))):
             print('runtime transport failure', file=sys.stderr)
             raise SystemExit(1)
@@ -154,7 +159,7 @@ if command == 'network':
         if marker.exists():
             if '--format' in sys.argv:
                 format_string = sys.argv[sys.argv.index('--format') + 1]
-                if format_string == '{{{{.Id}}}}|{{{{.Name}}}}':
+                if format_string in ('{{{{.Id}}}}|{{{{.Name}}}}', '{{{{.ID}}}}|{{{{.Name}}}}'):
                     print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name)
                 if format_string == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.Internal}}}}':
                     print((root / (name + '.network-id')).read_text(encoding='ascii') + '|' + name + '|' + ('true' if {network_internal!r} else 'false'))
@@ -460,6 +465,8 @@ class ActualRestoreTests(unittest.TestCase):
                 result, receipt = self.run_drill(root, fake_runtime(root, backend=backend))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(receipt["runtime"]["engine"], expected_backend)
+                inspect_format = (root / "network-inspect-format").read_text(encoding="ascii")
+                self.assertIn("{{.ID}}" if expected_backend == "podman" else "{{.Id}}", inspect_format)
 
     def test_podman_name_shaped_network_create_output_resolves_immutable_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -475,6 +482,14 @@ class ActualRestoreTests(unittest.TestCase):
             root = Path(temporary)
             backup_fixture(root)
             result, receipt = self.run_drill(root, fake_runtime(root, backend="runc ... Docker compatibility"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
+
+    def test_bare_podman_alias_prose_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, backend="maintenance note: emulate docker cli using podman"))
             self.assertEqual(result.returncode, 1)
             self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
 
