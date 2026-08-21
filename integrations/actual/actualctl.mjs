@@ -45,6 +45,100 @@ const economicKey = row => JSON.stringify([
   importedPayeeKey(row.imported_payee),
 ]);
 
+function canonicalText(value) {
+  return String(value ?? "");
+}
+
+function canonicalTransferId(value) {
+  if (value === undefined || value === null || value === "") return null;
+  return String(value);
+}
+
+/**
+ * Project the fields that give an imported Actual transaction its meaning.
+ *
+ * Provider IDs for payees and categories are deliberately not resolved here:
+ * categories are already resolved during import and payees are resolved by
+ * the caller.  This keeps the projection stable across a replay while still
+ * detecting a changed payee/category name or transfer link.
+ */
+export function canonicalActualImportProjection(row, {
+  account = row?.account,
+  payeeName = row?.payee_name,
+  defaultCleared = false,
+} = {}) {
+  return {
+    imported_id: canonicalText(row?.imported_id),
+    account: canonicalText(account),
+    date: canonicalText(row?.date),
+    amount: Number(row?.amount ?? 0),
+    imported_payee: canonicalText(row?.imported_payee),
+    payee: canonicalText(payeeName),
+    category: canonicalText(row?.category ?? row?.category_name),
+    notes: canonicalText(row?.notes),
+    cleared: row?.cleared === undefined ? Boolean(defaultCleared) : Boolean(row.cleared),
+    reconciled: Boolean(row?.reconciled),
+    transfer_id: canonicalTransferId(row?.transfer_id),
+  };
+}
+
+function projectionDifferences(expected, observed) {
+  return Object.keys(expected).filter(key => expected[key] !== observed?.[key]);
+}
+
+/**
+ * Compare imported transaction projections in imported-id order.
+ *
+ * The API returns all transactions in a date range, so callers may pass
+ * unrelated rows; only rows with an expected imported_id participate in the
+ * equality check. Duplicate IDs, missing rows, and field drift are failures.
+ */
+export function compareActualImportProjections(expectedRows, observedRows) {
+  const expected = [...expectedRows].sort((left, right) =>
+    left.imported_id.localeCompare(right.imported_id));
+  const observed = [...observedRows].sort((left, right) =>
+    left.imported_id.localeCompare(right.imported_id));
+  const expectedIds = new Set(expected.map(row => row.imported_id));
+  const observedById = new Map();
+  for (const row of observed) {
+    if (!expectedIds.has(row.imported_id)) continue;
+    const matches = observedById.get(row.imported_id) ?? [];
+    matches.push(row);
+    observedById.set(row.imported_id, matches);
+  }
+  const expectedCounts = new Map();
+  for (const row of expected) {
+    expectedCounts.set(row.imported_id, (expectedCounts.get(row.imported_id) ?? 0) + 1);
+  }
+  const missing = [...expectedIds]
+    .filter(importedId => !observedById.has(importedId))
+    .sort((left, right) => left.localeCompare(right));
+  const duplicated = [...observedById.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([importedId]) => importedId)
+    .sort((left, right) => left.localeCompare(right));
+  const duplicateExpected = [...expectedCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([importedId]) => importedId)
+    .sort((left, right) => left.localeCompare(right));
+  const mismatches = [];
+  for (const row of expected) {
+    const matches = observedById.get(row.imported_id) ?? [];
+    if (matches.length !== 1) continue;
+    const observedRow = matches[0];
+    const fields = projectionDifferences(row, observedRow);
+    if (fields.length) mismatches.push({ imported_id: row.imported_id, fields });
+  }
+  return {
+    expected,
+    observed: observed.filter(row => expectedIds.has(row.imported_id)),
+    missing,
+    duplicated,
+    duplicate_expected: duplicateExpected,
+    mismatches,
+  };
+}
+
 export function partitionCrossSourceStatementDuplicates(records, existingRows) {
   const existingIds = new Set(
     existingRows.map(row => String(row.imported_id ?? "")).filter(Boolean),
@@ -466,7 +560,13 @@ export async function importEnvelopes(
       ? await actual.getTransactions(account.id, dates[0], dates[dates.length - 1])
       : [];
     const partition = partitionCrossSourceStatementDuplicates(records, existingRows);
-    prepared.push({ account, envelope, records: partition.records, suppressed: partition.suppressed });
+    prepared.push({
+      account,
+      envelope,
+      records: partition.records,
+      suppressed: partition.suppressed,
+      existingRows,
+    });
   }
 
   const preflight = [];
@@ -507,6 +607,9 @@ export async function importEnvelopes(
     });
   }
   const verification = [];
+  const payees = prepared.some(item => item.records.length)
+    ? new Map((await actual.getPayees()).map(row => [String(row.id), row.name]))
+    : new Map();
   for (const item of prepared) {
     if (!item.records.length) {
       verification.push({
@@ -524,24 +627,45 @@ export async function importEnvelopes(
       dates[0],
       dates[dates.length - 1],
     );
-    const counts = new Map();
-    for (const row of rows) {
-      if (row.imported_id) counts.set(row.imported_id, (counts.get(row.imported_id) ?? 0) + 1);
-    }
-    const expected = item.records.map(record => record.imported_id).filter(Boolean);
-    const missing = expected.filter(importedId => !counts.has(importedId));
-    const duplicated = expected.filter(importedId => (counts.get(importedId) ?? 0) > 1);
-    if (missing.length || duplicated.length) {
+    const expected = item.records.map(record => canonicalActualImportProjection(record, {
+      account: item.account.id,
+      defaultCleared: Boolean(item.envelope.default_cleared),
+    }));
+    const expectedIds = new Set(expected.map(row => row.imported_id));
+    const existingRowIds = new Set(item.existingRows.map(row => String(row.id ?? "")).filter(Boolean));
+    const unexpected = rows
+      .filter(row => !expectedIds.has(String(row.imported_id ?? "")) &&
+        (!row.id || !existingRowIds.has(String(row.id))))
+      .map(row => String(row.imported_id ?? row.id ?? "<missing-id>"))
+      .sort((left, right) => left.localeCompare(right));
+    const observed = rows.map(row => canonicalActualImportProjection(row, {
+      account: row.account,
+      payeeName: row.payee_name ?? payees.get(String(row.payee ?? "")),
+    }));
+    const readback = compareActualImportProjections(expected, observed);
+    if (
+      readback.missing.length ||
+      readback.duplicated.length ||
+      readback.duplicate_expected.length ||
+      readback.mismatches.length ||
+      unexpected.length
+    ) {
       throw new Error(
         `Actual import verification failed for ${item.account.name}: ` +
-        `missing=${JSON.stringify(missing)} duplicated=${JSON.stringify(duplicated)}`,
+        `missing=${JSON.stringify(readback.missing)} ` +
+        `duplicated=${JSON.stringify(readback.duplicated)} ` +
+        `duplicate_expected=${JSON.stringify(readback.duplicate_expected)} ` +
+        `mismatched=${JSON.stringify(readback.mismatches)} ` +
+        `unexpected=${JSON.stringify(unexpected)}`,
       );
     }
     verification.push({
       account: item.account.name,
-      expected: expected.length,
-      verified: expected.length,
+      expected: readback.expected.length,
+      verified: readback.expected.length,
       duplicated: 0,
+      mismatched: 0,
+      unexpected: 0,
       suppressed_cross_source: item.suppressed.length,
     });
   }
