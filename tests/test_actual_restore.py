@@ -794,6 +794,35 @@ raise SystemExit(23)
         probe_payload["accounts"][0]["balance_minor"] = "100"
         self.assertTrue(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})))
 
+    def test_readback_digests_use_one_order_for_permuted_and_grouped_transactions(self) -> None:
+        module_spec = importlib.util.spec_from_file_location("restore_actual_disposable_ordering", SCRIPT)
+        self.assertIsNotNone(module_spec)
+        self.assertIsNotNone(module_spec.loader)
+        restore_module = importlib.util.module_from_spec(module_spec)
+        sys.modules[module_spec.name] = restore_module
+        module_spec.loader.exec_module(restore_module)
+        accounts = [
+            {"name": "B", "balance_minor": 20, "closed": False, "offbudget": False},
+            {"name": "A", "balance_minor": 10, "closed": False, "offbudget": False},
+        ]
+        transactions = [
+            {"account_name": "B", "amount_minor": 10, "date": "2026-08-02", "imported_id": "b-2", "payee": None},
+            {"account_name": "A", "amount_minor": 20, "date": "2026-08-01", "imported_id": "a-1", "payee": "Alpha"},
+            {"account_name": "B", "amount_minor": -5, "date": "2026-08-01", "imported_id": "b-1", "payee": "Beta"},
+        ]
+        expected = {"schema_version": 1, "accounts": accounts, "representative_transactions": transactions}
+        probe = {
+            "api": {"accounts": [accounts[1], accounts[0]], "representative_transactions": [transactions[1], transactions[0], transactions[2]]},
+            "ui": {"accounts": [accounts[0], accounts[1]], "representative_transactions": [transactions[2], transactions[1], transactions[0]]},
+        }
+        first = restore_module.validate_readback(probe, expected)
+        probe["api"]["representative_transactions"] = [transactions[2], transactions[0], transactions[1]]
+        probe["ui"]["representative_transactions"] = [transactions[0], transactions[1], transactions[2]]
+        second = restore_module.validate_readback(probe, expected)
+        self.assertEqual(first["api_readback_sha256"], second["api_readback_sha256"])
+        self.assertEqual(first["ui_readback_sha256"], second["ui_readback_sha256"])
+        self.assertEqual(first["api_readback_sha256"], first["ui_readback_sha256"])
+
     def test_readback_schema_and_runtime_reject_equivalent_malformed_payloads(self) -> None:
         module_spec = importlib.util.spec_from_file_location("restore_actual_disposable", SCRIPT)
         self.assertIsNotNone(module_spec)
