@@ -569,6 +569,75 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("os.environ.get(\"CASHBACK_INGEST_TOKEN\", \"\")", probe)
         self.assertNotIn("print(token", probe)
 
+    def test_cashback_deployment_pins_published_digest_and_retains_rollback(self) -> None:
+        workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        publish = workflow.split("\n  publish:\n", 1)[1].split("\n  deploy:\n", 1)[0]
+        deploy = workflow.split("\n  deploy:\n", 1)[1]
+        compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("image_digest: ${{ steps.publish.outputs.digest }}", publish)
+        self.assertIn("id: publish", publish)
+        self.assertIn(
+            "PUBLISHED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}",
+            deploy,
+        )
+        self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', deploy)
+        self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
+        self.assertIn('sudo podman pull --authfile "$auth_file" "$IMAGE_REF"', deploy)
+        self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
+        self.assertIn("{{range .RepoDigests}}{{println .}}{{end}}", deploy)
+        self.assertIn('awk -v expected="$IMAGE_REF"', deploy)
+        self.assertIn("$0 == expected", deploy)
+        self.assertIn("found != 1", deploy)
+        self.assertNotIn("{{index .RepoDigests 0}}", deploy)
+        self.assertIn('test "$resolved" = "$IMAGE_REF"', deploy)
+        self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
+        self.assertIn('"$stack/.env.rollback-${stamp}"', deploy)
+        self.assertIn('running_image_id="$(sudo docker inspect finance-cashback-control --format \'{{.Image}}\')"', deploy)
+        self.assertIn('running_image_digest="$(sudo docker image inspect "$running_image_id" --format \'{{.Digest}}\')"', deploy)
+        self.assertIn('rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"', deploy)
+        self.assertIn('rollback_image_ref="$(\n', deploy)
+        self.assertIn('awk -v expected="$rollback_image_ref"', deploy)
+        self.assertIn("$0 == expected", deploy)
+        self.assertIn('CASHBACK_IMAGE=%s\\n', deploy)
+        self.assertNotIn("$IMAGE_NAME:main", deploy)
+
+        expected = (
+            "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+            + "b" * 64
+        )
+        candidates = "\n".join(
+            (
+                "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+                + "a" * 64,
+                expected,
+                "ghcr.io/srobroek/finance-statement-tracker-cashback-control@sha256:"
+                + "c" * 64,
+                "ghcr.io/other/cashback@sha256:" + "d" * 64,
+            )
+        )
+        selected = subprocess.run(
+            [
+                "awk",
+                "-v",
+                f"expected={expected}",
+                '$0 == expected { found += 1 } END { if (found != 1) exit 1; print expected }',
+            ],
+            input=candidates,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(selected.returncode, 0, selected.stderr)
+        self.assertEqual(selected.stdout.strip(), expected)
+
+        self.assertIn(
+            "image: ${CASHBACK_IMAGE:?CASHBACK_IMAGE must be the published immutable image reference}",
+            compose,
+        )
+        self.assertIn("pull_policy: never", compose)
+        self.assertNotIn(":main", compose)
+
 
 if __name__ == "__main__":
     unittest.main()

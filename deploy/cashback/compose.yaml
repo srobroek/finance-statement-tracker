@@ -1,7 +1,7 @@
 services:
   cashback-control:
-    image: ghcr.io/srobroek/finance-statement-tracker-cashback-control:main
-    pull_policy: always
+    image: ${CASHBACK_IMAGE:?CASHBACK_IMAGE must be the published immutable image reference}
+    pull_policy: never
     container_name: finance-cashback-control
     restart: unless-stopped
     env_file:
