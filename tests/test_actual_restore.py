@@ -731,6 +731,49 @@ raise SystemExit(23)
             self.assertTrue(receipt["cleanup_verified"])
             self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
 
+    def test_readback_failure_retains_phase_checkpoint_when_cleanup_is_uncertain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            failing_probe = executable(
+                root,
+                "phase-failing-probe",
+                """
+import json
+import os
+import sys
+from pathlib import Path
+
+checkpoint = Path(os.environ["ACTUAL_RESTORE_CHECKPOINT_PATH"])
+checkpoint.parent.mkdir(parents=True, exist_ok=True)
+checkpoint.write_text(json.dumps({"secret": "cleanup-secret-sentinel"}), encoding="utf-8")
+print("playwright failure token=cleanup-stderr-secret-sentinel", file=sys.stderr)
+raise SystemExit(23)
+""",
+            )
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(root, cleanup_inspect_failure=True),
+                probe_path=failing_probe,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            checkpoint = root / "phase-checkpoint-1.json"
+            retained = [Path(path) for path in receipt["cleanup"]["retained_paths"]]
+            self.assertIn(checkpoint, retained)
+            self.assertEqual(checkpoint.stat().st_mode & 0o777, 0o600)
+            phase_text = checkpoint.read_text(encoding="utf-8")
+            phase = json.loads(phase_text)
+            self.assertEqual(phase["phase"], "readback")
+            self.assertEqual(phase["exit_code"], 23)
+            self.assertNotIn("cleanup-secret-sentinel", phase_text)
+            self.assertNotIn("cleanup-stderr-secret-sentinel", phase_text)
+            self.assertFalse(receipt["cleanup_verified"])
+            self.assertFalse(receipt["cleanup"]["outer_temp_root_removed"])
+            self.assertTrue(Path(receipt["cleanup"]["outer_temp_root"]).is_dir())
+            self.assertTrue(list(root.glob("*.container")))
+            self.assertTrue(list(root.glob("*.network")))
+
     def test_readback_schema_accepts_expected_and_probe_payloads(self) -> None:
         schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))
         validator = Draft202012Validator(schema)
