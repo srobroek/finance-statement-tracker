@@ -18,28 +18,9 @@ import {
   compileCleanup,
   validateBudgetAutomationConfig,
 } from "./budget-automation.mjs";
+import { ACTUALCTL_OPTIONS, parseCliArgs } from "./cli-args.mjs";
 
 let actualInternal = null;
-
-function parseArgs(values) {
-  const result = { _: [] };
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) {
-      result._.push(token);
-      continue;
-    }
-    const key = token.slice(2);
-    const next = values[index + 1];
-    if (next && !next.startsWith("--")) {
-      result[key] = next;
-      index += 1;
-    } else {
-      result[key] = true;
-    }
-  }
-  return result;
-}
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -1373,33 +1354,33 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const args = parseArgs(rest);
+  const args = parseCliArgs(rest, ACTUALCTL_OPTIONS);
   if (!command || !["account-reconciliation", "budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
     throw new Error("Usage: node actualctl.mjs <account-reconciliation|budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
-  if (command === "account-reconciliation") assertCommitEnabled(Boolean(args.apply));
-  if (command === "import") assertCommitEnabled(Boolean(args.commit));
-  if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "delete-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "dashboard-apply") assertCommitEnabled(Boolean(args.apply));
-  if (command === "budget-automation") assertCommitEnabled(Boolean(args.apply));
+  if (command === "account-reconciliation") assertCommitEnabled(args.apply);
+  if (command === "import") assertCommitEnabled(args.commit);
+  if (command === "repair-transactions") assertCommitEnabled(args.apply);
+  if (command === "enrich-transactions") assertCommitEnabled(args.apply);
+  if (command === "delete-transactions") assertCommitEnabled(args.apply);
+  if (command === "dashboard-apply") assertCommitEnabled(args.apply);
+  if (command === "budget-automation") assertCommitEnabled(args.apply);
   await openBudget();
   try {
     let result;
     if (command === "account-reconciliation") {
       if (!args.plan) throw new Error("account-reconciliation requires --plan <file>");
-      result = await reconcileAccounts(actual, await readJson(args.plan), Boolean(args.apply));
+      result = await reconcileAccounts(actual, await readJson(args.plan), args.apply);
     } else if (command === "doctor") {
       result = await doctor();
     } else if (command === "budget-automation") {
-      result = await budgetAutomation(args.config, Boolean(args.apply));
+      result = await budgetAutomation(args.config, args.apply);
     } else if (command === "dashboard-audit") {
       result = await dashboardAudit();
     } else if (command === "dashboard-export") {
       result = await dashboardExport(args.name);
     } else if (command === "dashboard-apply") {
-      result = await dashboardApply(args.config, Boolean(args.apply));
+      result = await dashboardApply(args.config, args.apply);
     } else if (command === "snapshot") {
       result = await snapshot(args.start, args.end);
     } else if (command === "tag-report") {
@@ -1414,19 +1395,19 @@ async function main() {
       result.generated_at = source.generated_at;
     } else if (command === "bootstrap") {
       if (!args.config) throw new Error("bootstrap requires --config <file>");
-      result = await bootstrap(await readJson(args.config), Boolean(args.apply), args.config);
+      result = await bootstrap(await readJson(args.config), args.apply, args.config);
     } else if (command === "repair-transactions") {
       if (!args.plan) throw new Error("repair-transactions requires --plan <file>");
-      result = await repairTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await repairTransactions(await readJson(args.plan), args.apply);
     } else if (command === "enrich-transactions") {
       if (!args.plan) throw new Error("enrich-transactions requires --plan <file>");
-      result = await enrichTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await enrichTransactions(await readJson(args.plan), args.apply);
     } else if (command === "delete-transactions") {
       if (!args.plan) throw new Error("delete-transactions requires --plan <file>");
-      result = await deleteTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await deleteTransactions(await readJson(args.plan), args.apply);
     } else {
       if (!args.input) throw new Error("import requires --input <file>");
-      result = await importEnvelopes(await readJson(args.input), Boolean(args.commit));
+      result = await importEnvelopes(await readJson(args.input), args.commit);
     }
     await writeResult(args.result, result);
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
