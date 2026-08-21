@@ -97,6 +97,7 @@ def executable(root: Path, name: str, body: str) -> Path:
 def fake_runtime(
     root: Path,
     *,
+    backend: str = "docker",
     collision: bool = False,
     network_collision: bool = False,
     inspect_failure: bool = False,
@@ -109,26 +110,34 @@ def fake_runtime(
     network_missing_stdout: str = "",
     start_failure: bool = False,
     restart_failure: bool = False,
+    network_internal: bool = True,
+    namespace_identity: str = "owned",
 ) -> Path:
     return executable(
         root,
         "runtime",
         f"""
 import pathlib
+import os
 import sys
 root = pathlib.Path({str(root)!r})
 command = sys.argv[1] if len(sys.argv) > 1 else ''
+if command == 'version':
+    print({backend!r} + ' version 1.0')
+    raise SystemExit(0)
 if command == 'network':
     action = sys.argv[2] if len(sys.argv) > 2 else ''
     name = sys.argv[-1]
     marker = root / (name + '.network')
     if action == 'inspect':
-        if {inspect_failure!r} or {network_inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
+        if {inspect_failure!r} or {network_inspect_failure!r} or ({cleanup_inspect_failure!r} and list(root.glob('*.container'))):
             print('runtime transport failure', file=sys.stderr)
             raise SystemExit(1)
         if {network_collision!r} and 'restore-net-1-' in name:
             raise SystemExit(0)
         if marker.exists():
+            if '--format' in sys.argv and sys.argv[sys.argv.index('--format') + 1] == '{{{{.Internal}}}}':
+                print('true' if {network_internal!r} else 'false')
             raise SystemExit(0)
         missing_message = {network_missing_message!r}
         if missing_message is None:
@@ -152,21 +161,28 @@ if command == 'network':
         raise SystemExit(0)
     raise SystemExit(1)
 name = sys.argv[sys.argv.index('--name') + 1] if '--name' in sys.argv else (sys.argv[2] if len(sys.argv) > 2 else '')
+if command == 'inspect' and '--format' in sys.argv:
+    name = sys.argv[-1]
 if command == 'rm' and len(sys.argv) > 3 and sys.argv[2] == '-f':
     name = sys.argv[3]
 marker = root / (name + '.container')
-if command == 'version':
-    raise SystemExit(0)
 if command == 'image' and len(sys.argv) > 3 and sys.argv[2] == 'inspect':
     print('a' * 64)
     raise SystemExit(0)
 if command == 'inspect':
-    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists()):
+    if {inspect_failure!r} or ({cleanup_inspect_failure!r} and marker.exists() and '--format' not in sys.argv):
         print('runtime transport failure', file=sys.stderr)
         raise SystemExit(1)
     if {collision!r} and 'restore-1-' in name:
         raise SystemExit(0)
     if marker.exists():
+        if '--format' in sys.argv:
+            format_string = sys.argv[sys.argv.index('--format') + 1]
+            if format_string == '{{{{.Id}}}}|{{{{.Name}}}}|{{{{.State.Pid}}}}':
+                identity_name = name if {namespace_identity!r} == 'owned' else 'foreign-sidecar'
+                identity_id = 'a' * 64 if {namespace_identity!r} != 'invalid-id' else 'not-an-id'
+                identity_pid = str(os.getppid()) if {namespace_identity!r} != 'invalid-pid' else 'not-a-pid'
+                print(identity_id + '|' + identity_name + '|' + identity_pid)
         raise SystemExit(0)
     if {container_missing_stdout!r}:
         print({container_missing_stdout!r})
@@ -198,6 +214,27 @@ raise SystemExit(1)
     )
 
 
+def namespace_tool(root: Path) -> Path:
+    return executable(
+        root,
+        "namespace-tool",
+        """
+import pathlib
+import subprocess
+import sys
+root = pathlib.Path(__file__).parent
+if '--target' not in sys.argv or '--net' not in sys.argv or '--' not in sys.argv:
+    raise SystemExit(1)
+target = sys.argv[sys.argv.index('--target') + 1]
+if not pathlib.Path('/proc', target, 'ns', 'net').exists():
+    raise SystemExit(1)
+(root / 'namespace-args').write_text(' '.join(sys.argv), encoding='utf-8')
+command = sys.argv[sys.argv.index('--') + 1:]
+raise SystemExit(subprocess.run(command, check=False).returncode)
+""",
+    )
+
+
 def probe(root: Path) -> Path:
     return executable(
         root,
@@ -222,19 +259,25 @@ class ActualRestoreTests(unittest.TestCase):
         expected: Path | None = None,
         probe_path: Path | None = None,
         health_path: Path | None = None,
+        health_attempts: int | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict]:
         receipt = root / "receipt.json"
+        namespace = namespace_tool(root)
+        command = [
+            str(SCRIPT),
+            "--backup-root", str(root),
+            "--receipt", str(receipt),
+            "--runtime", str(runtime),
+            "--namespace-tool", str(namespace),
+            "--expected-readback", str(expected or expected_fixture(root)),
+            "--readback-command", str(probe_path or probe(root)),
+            "--http-probe-command", str(health_path or executable(root, "health", "raise SystemExit(0)")),
+            "--temp-root", str(root),
+        ]
+        if health_attempts is not None:
+            command.extend(["--health-attempts", str(health_attempts)])
         result = subprocess.run(
-            [
-                str(SCRIPT),
-                "--backup-root", str(root),
-                "--receipt", str(receipt),
-                "--runtime", str(runtime),
-                "--expected-readback", str(expected or expected_fixture(root)),
-                "--readback-command", str(probe_path or probe(root)),
-                "--http-probe-command", str(health_path or executable(root, "health", "raise SystemExit(0)")),
-                "--temp-root", str(root),
-            ],
+            command,
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -324,6 +367,69 @@ class ActualRestoreTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(receipt["status"], "passed")
             self.assertEqual(len(receipt["runs"]), 2)
+
+    def test_docker_and_podman_aliases_report_the_detected_backend(self) -> None:
+        for backend, expected_backend in (("docker", "docker"), ("podman", "podman"), ("Emulate Docker CLI using Podman", "podman")):
+            with self.subTest(backend=backend), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                backup_fixture(root)
+                result, receipt = self.run_drill(root, fake_runtime(root, backend=backend))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(receipt["runtime"]["engine"], expected_backend)
+
+    def test_unsupported_runtime_identity_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, backend="runc"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "unsupported_container_runtime")
+            self.assertFalse(receipt["runtime"]["verified"])
+
+    def test_non_internal_network_fails_closed_without_starting_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, network_internal=False))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "network_not_internal")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_foreign_sidecar_namespace_identity_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, namespace_identity="foreign"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_namespace_identity_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_invalid_sidecar_namespace_pid_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            result, receipt = self.run_drill(root, fake_runtime(root, namespace_identity="invalid-pid"))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "runtime_namespace_identity_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+
+    def test_namespace_probe_timeout_fails_closed_and_cleans_owned_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            slow_health = executable(root, "slow-health", "import time; time.sleep(10)")
+            started = time.monotonic()
+            result, receipt = self.run_drill(root, fake_runtime(root), health_path=slow_health, health_attempts=1)
+            self.assertLess(time.monotonic() - started, 8)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "ui_http_probe_failed")
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
 
     def test_rootful_docker_network_stdout_prefix_is_bound_to_requested_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -588,6 +694,7 @@ print(json.dumps({'api': payload, 'ui': payload}))
             root = Path(temporary)
             backup_fixture(root)
             runtime = fake_runtime(root)
+            namespace = namespace_tool(root)
             expected = expected_fixture(root)
             probe_path = probe(root)
             slow_health = executable(root, "slow-health", "import time; time.sleep(10)")
@@ -598,6 +705,7 @@ print(json.dumps({'api': payload, 'ui': payload}))
                     "--backup-root", str(root),
                     "--receipt", str(receipt),
                     "--runtime", str(runtime),
+                    "--namespace-tool", str(namespace),
                     "--expected-readback", str(expected),
                     "--readback-command", str(probe_path),
                     "--http-probe-command", str(slow_health),
@@ -647,7 +755,10 @@ print(json.dumps({'api': payload, 'ui': payload}))
             self.assertFalse(list(root.glob("finance-actual-restore.*")))
             run_args = (root / "run-args").read_text(encoding="utf-8")
             self.assertIn("--network finance-actual-restore-net-", run_args)
-            self.assertNotIn("--network none", run_args)
+            self.assertNotIn(" -p ", f" {run_args} ")
+            namespace_args = (root / "namespace-args").read_text(encoding="utf-8")
+            self.assertIn("--target ", namespace_args)
+            self.assertIn(" --net ", f" {namespace_args} ")
             errors = list(Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8"))).iter_errors(receipt))
             self.assertEqual(errors, [])
 

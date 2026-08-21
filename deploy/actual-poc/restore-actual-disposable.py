@@ -16,8 +16,7 @@ import sys
 import tarfile
 import tempfile
 import time
-import urllib.error
-import urllib.request
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -87,8 +86,34 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     os.chmod(path, 0o600)
 
 
-def run_checked(argv: list[str], *, capture: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, check=False, capture_output=capture, text=True, env=env)
+def run_checked(
+    argv: list[str],
+    *,
+    capture: bool = True,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    if timeout is None:
+        return subprocess.run(argv, check=False, capture_output=capture, text=True, env=env)
+    process = subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.PIPE if capture else None,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        os.killpg(process.pid, signal.SIGKILL)
+        stdout, stderr = process.communicate()
+        if not isinstance(stdout, str):
+            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        if not isinstance(stderr, str):
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return subprocess.CompletedProcess(argv, 124, stdout, f"{stderr}\ncommand timed out".strip())
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
 
 def runtime_command(value: str | None) -> list[str]:
@@ -102,6 +127,76 @@ def runtime_command(value: str | None) -> list[str]:
     if not command:
         raise DrillError("container_runtime_unavailable", "runtime", "empty container runtime command")
     return command
+
+
+def detect_runtime_backend(runtime: list[str]) -> str:
+    """Identify the actual engine, including aliases that wrap Docker or Podman."""
+    result = runtime_call(runtime, "version")
+    if result.returncode != 0:
+        raise DrillError("container_runtime_unavailable", "runtime")
+    executable = Path(runtime[0]).name.lower()
+    version_text = f"{result.stdout}\n{result.stderr}".lower()
+    podman = bool(re.search(r"\bpodman\b", version_text))
+    docker = bool(re.search(r"\bdocker\b", version_text))
+    if podman and docker:
+        if re.search(r"(?:emulat|compatib).*\bdocker\b.*\bpodman\b", version_text):
+            return "podman"
+        raise DrillError("unsupported_container_runtime", "runtime", "runtime identity is ambiguous")
+    if podman:
+        return "podman"
+    if docker:
+        return "docker"
+    if executable in {"podman", "podman.exe"}:
+        return "podman"
+    if executable in {"docker", "docker.exe"}:
+        return "docker"
+    raise DrillError("unsupported_container_runtime", "runtime", "runtime is not Docker or Podman")
+
+
+@dataclass(frozen=True)
+class NetworkNamespace:
+    pid: int
+    device: int
+    inode: int
+
+
+def namespace_stat(pid: int) -> tuple[int, int]:
+    try:
+        status = os.stat(f"/proc/{pid}/ns/net")
+    except OSError as exc:
+        raise DrillError("runtime_namespace_identity_failed", "namespace", str(exc)) from exc
+    return status.st_dev, status.st_ino
+
+
+def inspect_sidecar_namespace(runtime: list[str], sidecar: str) -> NetworkNamespace:
+    result = runtime_call(runtime, "inspect", "--format", "{{.Id}}|{{.Name}}|{{.State.Pid}}", sidecar)
+    if result.returncode != 0:
+        raise DrillError("runtime_namespace_identity_failed", "namespace")
+    fields = result.stdout.strip().split("|")
+    if len(fields) != 3:
+        raise DrillError("runtime_namespace_identity_failed", "namespace", "unexpected inspect identity")
+    container_id, name, pid_text = fields
+    if not re.fullmatch(r"[0-9a-f]{12,64}", container_id, flags=re.IGNORECASE):
+        raise DrillError("runtime_namespace_identity_failed", "namespace", "invalid container identity")
+    if name not in {sidecar, f"/{sidecar}"} or not re.fullmatch(r"[1-9][0-9]*", pid_text):
+        raise DrillError("runtime_namespace_identity_failed", "namespace", "foreign sidecar identity")
+    pid = int(pid_text)
+    device, inode = namespace_stat(pid)
+    return NetworkNamespace(pid=pid, device=device, inode=inode)
+
+
+def assert_namespace_identity(namespace: NetworkNamespace) -> None:
+    device, inode = namespace_stat(namespace.pid)
+    if (device, inode) != (namespace.device, namespace.inode):
+        raise DrillError("runtime_namespace_identity_changed", "namespace")
+
+
+def namespace_command(tool: list[str], namespace: NetworkNamespace, command: list[str]) -> list[str]:
+    if not tool or not command:
+        raise DrillError("runtime_namespace_tool_invalid", "namespace")
+    assert_namespace_identity(namespace)
+    return [*tool, "--target", str(namespace.pid), "--net", "--", *command]
+
 
 def runtime_call(runtime: list[str], *args: str) -> subprocess.CompletedProcess[str]:
     return run_checked([*runtime, *args])
@@ -125,6 +220,15 @@ def inspect_network_state(runtime: list[str], network: str) -> str:
     if is_absent_inspect_response(message, network, "network"):
         return "absent"
     raise DrillError("runtime_network_inspect_failed", "cleanup")
+
+
+def inspect_network_internal(runtime: list[str], network: str) -> bool:
+    result = runtime_call(runtime, "network", "inspect", "--format", "{{.Internal}}", network)
+    if result.returncode != 0:
+        raise DrillError("runtime_network_inspect_failed", "network")
+    if result.stdout.strip().lower() != "true":
+        raise DrillError("network_not_internal", "network", "network is not egress-isolated")
+    return True
 
 
 def safe_extract_actual(archive: Path, destination: Path) -> None:
@@ -238,14 +342,23 @@ def validate_readback(actual_payload: dict[str, Any], expected: dict[str, Any]) 
     }
 
 
-def probe_readback(command: list[str], expected: dict[str, Any], *, run_index: int, url: str, data_dir: Path) -> dict[str, Any]:
+def probe_readback(
+    command: list[str],
+    expected: dict[str, Any],
+    *,
+    run_index: int,
+    url: str,
+    data_dir: Path,
+    namespace_tool: list[str],
+    namespace: NetworkNamespace,
+) -> dict[str, Any]:
     environment = os.environ.copy()
     environment.update({
         "ACTUAL_RESTORE_URL": url,
         "ACTUAL_RESTORE_DATA_DIR": str(data_dir),
         "ACTUAL_RESTORE_RUN_INDEX": str(run_index),
     })
-    result = run_checked(command, env=environment)
+    result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=30)
     if result.returncode != 0:
         raise DrillError("readback_probe_failed", "readback")
     try:
@@ -255,18 +368,27 @@ def probe_readback(command: list[str], expected: dict[str, Any], *, run_index: i
     return validate_readback(payload, expected)
 
 
-def probe_http(url: str, command: list[str] | None) -> None:
-    if command:
-        result = run_checked(command, env={**os.environ, "ACTUAL_RESTORE_URL": url})
-        if result.returncode != 0:
-            raise DrillError("ui_http_probe_failed", "health")
-        return
-    try:
-        with urllib.request.urlopen(f"{url}/", timeout=5) as response:
-            if response.status != 200:
-                raise DrillError("ui_http_probe_failed", "health", f"HTTP {response.status}")
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise DrillError("ui_http_probe_failed", "health", str(exc)) from exc
+def probe_http(
+    url: str,
+    command: list[str] | None,
+    *,
+    namespace_tool: list[str],
+    namespace: NetworkNamespace,
+) -> None:
+    if command is None:
+        command = [
+            sys.executable,
+            "-c",
+            "import sys, urllib.request; response = urllib.request.urlopen(sys.argv[1], timeout=5); raise SystemExit(0 if response.status == 200 else 1)",
+            f"{url}/",
+        ]
+    result = run_checked(
+        namespace_command(namespace_tool, namespace, command),
+        env={**os.environ, "ACTUAL_RESTORE_URL": url},
+        timeout=5,
+    )
+    if result.returncode != 0:
+        raise DrillError("ui_http_probe_failed", "health")
 
 
 def parse_args() -> argparse.Namespace:
@@ -280,6 +402,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--health-attempts", type=int, default=int(os.environ.get("FINANCE_ACTUAL_RESTORE_HEALTH_ATTEMPTS", "60")))
     parser.add_argument("--temp-root", default=os.environ.get("FINANCE_ACTUAL_RESTORE_TEMP_ROOT", "/tmp"))
     parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--namespace-tool", default=os.environ.get("FINANCE_ACTUAL_RESTORE_NAMESPACE_TOOL", "nsenter"))
     parser.add_argument("--expected-readback", required=True, help="Redacted account/balance/transaction contract JSON")
     parser.add_argument("--readback-command", required=True, help="Executable that emits the API/UI readback JSON")
     parser.add_argument("--http-probe-command", help="Optional executable used instead of urllib for UI health")
@@ -443,10 +566,7 @@ def main() -> int:
         backup_dir = Path(args.backup_root).resolve() / verified["backup"]
         archive = backup_dir / "finance-data.tar.gz"
         current_runtime = runtime_command(args.runtime)
-        result["runtime"]["engine"] = Path(current_runtime[0]).name
-        version = runtime_call(current_runtime, "version")
-        if version.returncode != 0:
-            raise DrillError("container_runtime_unavailable", "runtime")
+        result["runtime"]["engine"] = detect_runtime_backend(current_runtime)
         image = runtime_call(current_runtime, "image", "inspect", "--format", "{{.Id}}", args.image)
         if image.returncode != 0:
             raise DrillError("image_digest_unavailable", "runtime")
@@ -458,6 +578,9 @@ def main() -> int:
         result["runtime"].update({"image_digest": image_id, "available": True, "verified": True})
         readback_command = shlex.split(args.readback_command)
         http_command = shlex.split(args.http_probe_command) if args.http_probe_command else None
+        namespace_tool = shlex.split(args.namespace_tool)
+        if not namespace_tool or not (Path(namespace_tool[0]).is_file() or shutil.which(namespace_tool[0])):
+            raise DrillError("runtime_namespace_tool_unavailable", "namespace")
         for run_index in range(1, args.repeat + 1):
             sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
             data_dir = temp_root / f"data-{run_index}"
@@ -482,40 +605,59 @@ def main() -> int:
             )
             if created_network.returncode != 0:
                 raise DrillError("disposable_network_create_failed", "network")
+            network_internal = inspect_network_internal(current_runtime, network)
             data_sha = digest({str(path.relative_to(data_dir)): sha256(path) for path in sorted(data_dir.rglob("*")) if path.is_file()})
-            port = args.port or (5006 + run_index + (os.getpid() % 1000))
+            port = args.port or 5006
             url = f"http://127.0.0.1:{port}"
             started_container = runtime_call(
                 current_runtime, "run", "-d", "--pull=never", "--network", network, "--name", sidecar,
                 "--user", f"{os.getuid()}:{os.getgid()}",
-                "-p", f"127.0.0.1:{port}:5006", "-v", f"{data_dir}:/data", args.image,
+                "-v", f"{data_dir}:/data", args.image,
             )
             if started_container.returncode != 0:
                 raise DrillError("sidecar_start_failed", "start")
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar)
             health_error: DrillError | None = None
             for _attempt in range(args.health_attempts):
                 try:
-                    probe_http(url, http_command)
+                    probe_http(url, http_command, namespace_tool=namespace_tool, namespace=namespace)
                     break
                 except DrillError as error:
                     health_error = error
                     time.sleep(1)
             else:
                 raise health_error or DrillError("ui_http_probe_failed", "health")
-            first_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
+            first_readback = probe_readback(
+                readback_command,
+                expected,
+                run_index=run_index,
+                url=url,
+                data_dir=data_dir,
+                namespace_tool=namespace_tool,
+                namespace=namespace,
+            )
             restarted = runtime_call(current_runtime, "restart", sidecar)
             if restarted.returncode != 0:
                 raise DrillError("sidecar_restart_failed", "restart")
+            namespace = inspect_sidecar_namespace(current_runtime, sidecar)
             for _attempt in range(args.health_attempts):
                 try:
-                    probe_http(url, http_command)
+                    probe_http(url, http_command, namespace_tool=namespace_tool, namespace=namespace)
                     break
                 except DrillError as error:
                     health_error = error
                     time.sleep(1)
             else:
                 raise health_error or DrillError("ui_http_probe_failed", "restart_health")
-            second_readback = probe_readback(readback_command, expected, run_index=run_index, url=url, data_dir=data_dir)
+            second_readback = probe_readback(
+                readback_command,
+                expected,
+                run_index=run_index,
+                url=url,
+                data_dir=data_dir,
+                namespace_tool=namespace_tool,
+                namespace=namespace,
+            )
             repeat_match = first_readback == second_readback
             if not repeat_match:
                 raise DrillError("restart_readback_mismatch", "restart")
@@ -523,7 +665,7 @@ def main() -> int:
                 "run_index": run_index,
                 "sidecar_id": sidecar,
                 "network_name": network,
-                "network_internal": True,
+                "network_internal": network_internal,
                 "data_sha256": data_sha,
                 **first_readback,
                 "restart_verified": True,
