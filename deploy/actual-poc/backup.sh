@@ -52,40 +52,101 @@ mkdir -p "${payload}/actual-data" "${payload}/cashback-data" "${payload}/configu
 actual_running="$(docker inspect -f '{{.State.Status}}' finance-actual-poc 2>/dev/null || true)"
 proxy_running="$(docker inspect -f '{{.State.Status}}' finance-actual-proxy 2>/dev/null || true)"
 cashback_running="$(docker inspect -f '{{.State.Status}}' finance-cashback-control 2>/dev/null || true)"
+declare -A paused_services=()
+probe_failure_reason="probe_unhealthy"
+
+container_is_paused() {
+  local name="$1"
+  local status
+  local paused
+
+  status="$(docker inspect -f '{{.State.Status}}' "${name}" 2>/dev/null || true)"
+  [[ "${status}" == "paused" ]] && return 0
+  [[ "${status}" == "running" ]] || return 1
+  if paused="$(docker inspect -f '{{.State.Paused}}' "${name}" 2>/dev/null)"; then
+    [[ "${paused}" == "true" ]]
+    return
+  fi
+  return 1
+}
 
 resume_services() {
   local failed=0
-  if [[ "${actual_running}" == "running" ]]; then docker unpause finance-actual-poc >/dev/null || failed=1; fi
-  if [[ "${cashback_running}" == "running" ]]; then docker unpause finance-cashback-control >/dev/null || failed=1; fi
-  if [[ "${proxy_running}" == "running" ]]; then docker unpause finance-actual-proxy >/dev/null || failed=1; fi
+  local name
+  for name in finance-actual-poc finance-cashback-control finance-actual-proxy; do
+    [[ -n "${paused_services[${name}]+set}" ]] || continue
+    if ! container_is_paused "${name}"; then
+      unset "paused_services[${name}]"
+      continue
+    fi
+    if docker unpause "${name}" >/dev/null; then
+      unset "paused_services[${name}]"
+    else
+      failed=1
+    fi
+  done
   return "${failed}"
+}
+
+probe_cashback_health() {
+  local output
+  local lower_output
+  if output="$(docker exec finance-cashback-control python apps/cashback-control/probe_health.py 2>&1)"; then
+    probe_failure_reason=""
+    return 0
+  fi
+
+  lower_output="${output,,}"
+  if [[ ( "${lower_output}" == *"probe_health.py"* && ( "${lower_output}" == *"no such file"* || "${lower_output}" == *"can't open file"* || "${lower_output}" == *"not found"* ) ) || "${lower_output}" == *"missing probe"* || "${lower_output}" == *"missing_probe"* ]]; then
+    probe_failure_reason="missing_probe"
+  elif [[ "${lower_output}" == *"error response from daemon"* || "${lower_output}" == *"cannot connect to the docker daemon"* || "${lower_output}" == *"oci runtime exec failed"* || "${lower_output}" == *"runtime exec failed"* || ( "${lower_output}" == *"docker exec"* && "${lower_output}" == *"failed"* ) || "${lower_output}" == *"no such container"* || "${lower_output}" == *"no such object"* || "${lower_output}" == *"not running"* || "${lower_output}" == *"failed to exec"* ]]; then
+    probe_failure_reason="runtime_exec_failed"
+  else
+    probe_failure_reason="probe_unhealthy"
+  fi
+  return 1
 }
 
 wait_for_url() {
   local label="$1"
   local url="$2"
+  probe_failure_reason="probe_unhealthy"
   for _ in $(seq 1 90); do
     if [[ "${label}" == "cashback" ]]; then
-      if docker exec finance-cashback-control python apps/cashback-control/probe_health.py >/dev/null 2>&1; then
+      if probe_cashback_health; then
         return 0
       fi
+      [[ "${probe_failure_reason}" == "missing_probe" ]] && break
     elif curl -fsS "${url}" >/dev/null 2>&1; then
       return 0
+    else
+      probe_failure_reason="probe_unhealthy"
     fi
     sleep 1
   done
-  printf '{"level":"error","event":"backup_resume_unhealthy","service":"%s"}\n' "${label}" >&2
+  printf '{"level":"error","event":"backup_resume_unhealthy","service":"%s","reason":"%s"}\n' "${label}" "${probe_failure_reason}" >&2
   return 1
 }
 
 emergency_resume() {
-  resume_services || true
+  if ((${#paused_services[@]} > 0)); then
+    resume_services || true
+  fi
 }
 trap emergency_resume EXIT
 
-if [[ "${proxy_running}" == "running" ]]; then docker pause finance-actual-proxy >/dev/null; fi
-if [[ "${actual_running}" == "running" ]]; then docker pause finance-actual-poc >/dev/null; fi
-if [[ "${cashback_running}" == "running" ]]; then docker pause finance-cashback-control >/dev/null; fi
+if [[ "${proxy_running}" == "running" ]]; then
+  docker pause finance-actual-proxy >/dev/null
+  paused_services[finance-actual-proxy]=1
+fi
+if [[ "${actual_running}" == "running" ]]; then
+  docker pause finance-actual-poc >/dev/null
+  paused_services[finance-actual-poc]=1
+fi
+if [[ "${cashback_running}" == "running" ]]; then
+  docker pause finance-cashback-control >/dev/null
+  paused_services[finance-cashback-control]=1
+fi
 sync
 
 cp -a "${ACTUAL_DATA_DIR}/." "${payload}/actual-data/"

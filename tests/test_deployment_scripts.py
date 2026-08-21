@@ -1,8 +1,178 @@
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
+    def _run_backup_fixture(self, probe_mode: str) -> subprocess.CompletedProcess[str]:
+        script = Path("deploy/actual-poc/backup.sh")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            actual_stack = root / "actual"
+            cashback_stack = root / "cashback"
+            actual_data = actual_stack / "data"
+            cashback_data = actual_stack / "cashback-data"
+            backup_root = root / "backups"
+            actual_data.mkdir(parents=True)
+            cashback_data.mkdir(parents=True)
+            cashback_stack.mkdir()
+            (actual_stack / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+            (cashback_stack / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+            (actual_data / "actual.json").write_text("{}\n", encoding="utf-8")
+            (cashback_data / "cashback.json").write_text("{}\n", encoding="utf-8")
+            verify = actual_stack / "verify-backup.py"
+            verify.write_text("raise SystemExit(0)\n", encoding="utf-8")
+            sanitizer = actual_stack / "sanitize-cashback-backup.py"
+            sanitizer.write_text("raise SystemExit(0)\n", encoding="utf-8")
+
+            (bin_dir / "readlink").write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "path=\"${3}\"\n"
+                "case \"${path}\" in\n"
+                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
+                f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
+                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual-poc ;;\n"
+                "  *) printf '%s\\n' \"${path}\" ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "docker").write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "state=\"${STUB_STATE}\"\n"
+                "log=\"${STUB_LOG}\"\n"
+                "name=\"${@: -1}\"\n"
+                "case \"${1}\" in\n"
+                "  inspect)\n"
+                "    if [[ \"${3}\" == *'.State.Paused'* ]]; then\n"
+                "      [[ -e \"${state}/${name}.paused\" ]] && printf 'true\\n' || printf 'false\\n'\n"
+                "    elif [[ -e \"${state}/${name}.paused\" ]]; then\n"
+                "      printf 'paused\\n'\n"
+                "    else\n"
+                "      printf 'running\\n'\n"
+                "    fi\n"
+                "    ;;\n"
+                "  pause) touch \"${state}/${2}.paused\" ;;\n"
+                "  unpause) printf 'unpause:%s\\n' \"${2}\" >> \"${log}\"; rm -f \"${state}/${2}.paused\" ;;\n"
+                "  exec)\n"
+                "    case \"${PROBE_MODE}\" in\n"
+                "      success) exit 0 ;;\n"
+                "      missing_probe) printf \"python: can't open file 'apps/cashback-control/probe_health.py': No such file or directory\\n\" >&2; exit 1 ;;\n"
+                "      runtime_exec_failed) printf 'Error response from daemon: OCI runtime exec failed\\n' >&2; exit 1 ;;\n"
+                "      probe_unhealthy) exit 1 ;;\n"
+                "    esac\n"
+                "    ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "curl").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            (bin_dir / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            for executable in ("readlink", "docker", "curl", "sleep"):
+                (bin_dir / executable).chmod(0o755)
+            state = root / "state"
+            state.mkdir()
+            log = root / "docker.log"
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PATH": f"{bin_dir}:{environment['PATH']}",
+                    "FINANCE_ACTUAL_STACK_DIR": str(actual_stack),
+                    "FINANCE_CASHBACK_STACK_DIR": str(cashback_stack),
+                    "FINANCE_BACKUP_ROOT": str(backup_root),
+                    "FINANCE_ACTUAL_DATA_DIR": str(actual_data),
+                    "FINANCE_CASHBACK_DATA_DIR": str(cashback_data),
+                    "FINANCE_BACKUP_VERIFY_SCRIPT": str(verify),
+                    "FINANCE_CASHBACK_BACKUP_SANITIZE_SCRIPT": str(sanitizer),
+                    "STUB_STATE": str(state),
+                    "STUB_LOG": str(log),
+                    "PROBE_MODE": probe_mode,
+                }
+            )
+            command = ["bash", str(script)] if os.geteuid() == 0 else ["unshare", "-Ur", "bash", str(script)]
+            result = subprocess.run(
+                command,
+                cwd=Path.cwd(),
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertIn(
+                probe_mode,
+                ("success", "missing_probe", "runtime_exec_failed", "probe_unhealthy"),
+            )
+            if probe_mode == "success":
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(list(backup_root.glob("20??????T??????Z"))), 1)
+                self.assertFalse(list(backup_root.glob(".*.incomplete")))
+            else:
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(len(list(backup_root.glob(".*.incomplete"))), 1)
+                self.assertIn(f'"reason":"{probe_mode}"', result.stderr)
+            self.assertEqual(
+                result.stderr.count('"event":"backup_resume_unhealthy"'),
+                0 if probe_mode == "success" else 1,
+            )
+            self.assertEqual(log.read_text(encoding="utf-8").count("unpause:"), 3)
+            return result
+
+    def test_backup_stubbed_runtime_promotes_or_retains_redacted_failure(self) -> None:
+        for mode in ("success", "missing_probe", "runtime_exec_failed", "probe_unhealthy"):
+            with self.subTest(mode=mode):
+                self._run_backup_fixture(mode)
+
+    def test_backup_resume_helpers_are_exactly_once_and_state_aware(self) -> None:
+        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        helpers = script[script.index("declare -A paused_services=()"):script.index("emergency_resume()")]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            state = root / "state"
+            state.mkdir()
+            log = root / "docker.log"
+            docker = bin_dir / "docker"
+            docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "name=\"${@: -1}\"\n"
+                "case \"${1}\" in\n"
+                "  inspect)\n"
+                "    if [[ \"${3}\" == *'.State.Paused'* ]]; then\n"
+                "      [[ -e \"${STUB_STATE}/${name}.paused\" ]] && echo true || echo false\n"
+                "    elif [[ -e \"${STUB_STATE}/${name}.paused\" ]]; then echo paused; else echo running; fi\n"
+                "    ;;\n"
+                "  unpause) echo \"${2}\" >> \"${STUB_LOG}\"; rm -f \"${STUB_STATE}/${2}.paused\" ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            docker.chmod(0o755)
+            harness = (
+                "set -euo pipefail\n"
+                f"export PATH={bin_dir}:$PATH STUB_STATE={state} STUB_LOG={log}\n"
+                f"{helpers}\n"
+                "touch \"${STUB_STATE}/finance-actual-poc.paused\"\n"
+                "paused_services[finance-actual-poc]=1\n"
+                "resume_services\n"
+                "resume_services\n"
+                "[[ $(wc -l < \"${STUB_LOG}\") -eq 1 ]]\n"
+                "paused_services[finance-cashback-control]=1\n"
+                "resume_services\n"
+                "[[ $(wc -l < \"${STUB_LOG}\") -eq 1 ]]\n"
+            )
+            result = subprocess.run(
+                ["bash", "-c", harness],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_legacy_ingestion_bridge_is_absent(self) -> None:
         for path in (
             Path("finance_tracker/ingestion_jobs.py"),
