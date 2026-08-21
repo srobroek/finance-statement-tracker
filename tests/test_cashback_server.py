@@ -141,7 +141,8 @@ class CashbackServerTests(unittest.TestCase):
 
                 with urllib.request.urlopen(request, timeout=1) as response:
                     replay = json.loads(response.read())
-                self.assertEqual(replay["updated"], 1)
+                self.assertEqual(replay["updated"], 0)
+                self.assertEqual(replay["unchanged"], 1)
 
                 def post(endpoint: str, value: dict[str, object]) -> dict[str, object]:
                     api_request = urllib.request.Request(

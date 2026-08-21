@@ -4,7 +4,7 @@ import copy
 import datetime
 import hashlib
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -21,6 +21,7 @@ SCHEMA_PATH = ROOT / "config" / "cashback-profile-schema-v2.json"
 LEGACY_SCHEMA_PATH = ROOT / "config" / "cashback-profile-schema-v1.json"
 FIXTURE_PATH = "tests/fixtures/cashback-provenance/issuer-evidence.txt"
 FIXTURE_SHA256 = "d5da1c52b660e399c37e5e8a7faf353cf63bef3963cdd49c0c87b9ea2d32e56d"
+UTC_AS_OF = datetime.datetime.now(datetime.UTC).date()
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -283,7 +284,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         program["source_references"] = [reference]
         claims = authoritative_claims(program)
         claims[0]["effective_start"] = (
-            datetime.datetime.now(datetime.UTC).date() + timedelta(days=1)
+            UTC_AS_OF + timedelta(days=1)
         ).isoformat()
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -292,7 +293,29 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "exceeds the programme interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
+
+    def test_provenance_boundary_uses_injected_utc_as_of_not_local_date(self) -> None:
+        source = copy.deepcopy(self.config)
+        program = source["programs"][0]
+        reference = authoritative_fixture_reference()
+        reference["effective_end"] = "2026-08-22"
+        program["source_references"] = [reference]
+        claims = authoritative_claims(program)
+        for claim in claims:
+            claim["effective_end"] = "2026-08-22"
+        program["provenance"] = {
+            "authority": "AUTHORITATIVE",
+            "reason": "Test-only fixture exercises the injected UTC boundary.",
+            "claims": claims,
+        }
+
+        # 23:30Z is already 03:30 the next day in Asia/Dubai.  The explicit
+        # UTC clock must still validate the evidence through 22 August.
+        validate_program_configuration(
+            source,
+            as_of=datetime.datetime(2026, 8, 22, 23, 30, tzinfo=datetime.UTC),
+        )
 
     def test_drifted_issuer_fixture_digest_is_rejected(self) -> None:
         source = copy.deepcopy(self.config)
@@ -339,7 +362,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_start"] = date.today().isoformat()
+        reference["effective_start"] = UTC_AS_OF.isoformat()
         program["source_references"] = [reference]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -348,13 +371,13 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_issuer_interval_must_cover_programme_end(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_end"] = (date.today() - timedelta(days=1)).isoformat()
+        reference["effective_end"] = (UTC_AS_OF - timedelta(days=1)).isoformat()
         program["source_references"] = [reference]
         claims = authoritative_claims(program)
         program["provenance"] = {
@@ -364,14 +387,14 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_open_current_program_rejects_claim_ending_before_today(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         program["source_references"] = [authoritative_fixture_reference()]
         claims = authoritative_claims(program)
-        claims[0]["effective_end"] = (date.today() - timedelta(days=1)).isoformat()
+        claims[0]["effective_end"] = (UTC_AS_OF - timedelta(days=1)).isoformat()
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises exact current boundary coverage.",
@@ -379,14 +402,14 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not span the programme interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_open_current_program_rejects_future_claim(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         program["source_references"] = [authoritative_fixture_reference()]
         claims = authoritative_claims(program)
-        claims[0]["effective_start"] = (date.today() + timedelta(days=1)).isoformat()
+        claims[0]["effective_start"] = (UTC_AS_OF + timedelta(days=1)).isoformat()
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
             "reason": "Test-only fixture exercises current programme boundary.",
@@ -394,13 +417,13 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "exceeds the programme interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_open_current_program_rejects_today_only_evidence(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_start"] = date.today().isoformat()
+        reference["effective_start"] = UTC_AS_OF.isoformat()
         program["source_references"] = [reference]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -409,13 +432,13 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_open_current_program_rejects_future_evidence(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
         reference = authoritative_fixture_reference()
-        reference["effective_start"] = (date.today() + timedelta(days=1)).isoformat()
+        reference["effective_start"] = (UTC_AS_OF + timedelta(days=1)).isoformat()
         program["source_references"] = [reference]
         program["provenance"] = {
             "authority": "AUTHORITATIVE",
@@ -424,7 +447,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "does not cover claim interval"):
-            validate_program_configuration(source)
+            validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_pre_dating_evidence_may_cover_the_programme(self) -> None:
         source = copy.deepcopy(self.config)
@@ -438,12 +461,12 @@ class CashbackProgrammeProvenanceTests(TestCase):
             "claims": authoritative_claims(program),
         }
 
-        validate_program_configuration(source)
+        validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_configured_programme_boundary_requires_exact_claim_end(self) -> None:
         source = copy.deepcopy(self.config)
         program = source["programs"][0]
-        programme_end = (date.today() + timedelta(days=7)).isoformat()
+        programme_end = (UTC_AS_OF + timedelta(days=7)).isoformat()
         program["effective_end"] = programme_end
         reference = authoritative_fixture_reference()
         reference["effective_start"] = "2026-07-01"
@@ -458,7 +481,7 @@ class CashbackProgrammeProvenanceTests(TestCase):
             "claims": claims,
         }
 
-        validate_program_configuration(source)
+        validate_program_configuration(source, as_of=UTC_AS_OF)
 
     def test_authoritative_reference_without_fixture_content_is_rejected(self) -> None:
         source = copy.deepcopy(self.config)
