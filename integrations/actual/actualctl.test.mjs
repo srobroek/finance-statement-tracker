@@ -15,6 +15,11 @@ import {
   validateTransactionRepairPlan,
   validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
+import {
+  reconcileAccounts,
+  reconcileBootstrapResources,
+  reconcileRules,
+} from "./bootstrap-resources.mjs";
 
 test("split-child resolution rejects unknown categories consistently and keeps ids stable", () => {
   const categories = new Map([
@@ -540,4 +545,211 @@ test("transaction enrichment accepts the production server-version response shap
   const result = await enrichTransactions(plan, false, api, { syncRemote: false });
   assert.equal(result.status, "planned");
   assert.equal(result.pending.length, 1);
+});
+
+test("bootstrap account phase closes only zero-balance retirees and refreshes once", async () => {
+  const calls = [];
+  const accounts = [
+    { id: "legacy", name: "Legacy", offbudget: false, closed: false },
+    { id: "current", name: "Current", offbudget: false, closed: false },
+  ];
+  const api = {
+    createAccount: async (...args) => calls.push(["createAccount", ...args]),
+    updateAccount: async (...args) => calls.push(["updateAccount", ...args]),
+    getAccountBalance: async id => {
+      calls.push(["getAccountBalance", id]);
+      return 0;
+    },
+    closeAccount: async id => {
+      calls.push(["closeAccount", id]);
+      accounts.find(account => account.id === id).closed = true;
+    },
+    getAccounts: async () => {
+      calls.push(["getAccounts"]);
+      return accounts;
+    },
+  };
+  const changes = [];
+  const result = await reconcileAccounts({
+    api,
+    config: {
+      accounts: [{ name: "Current", offbudget: true }],
+      retired_accounts: ["Legacy"],
+    },
+    apply: true,
+    accounts,
+    changes,
+  });
+
+  assert.equal(result, accounts);
+  assert.deepEqual(changes, [
+    { action: "update", type: "account", name: "Current", fields: { offbudget: true } },
+    { action: "close", type: "account", name: "Legacy" },
+  ]);
+  assert.deepEqual(calls.map(call => call[0]), [
+    "updateAccount",
+    "getAccountBalance",
+    "closeAccount",
+    "getAccounts",
+  ]);
+});
+
+test("bootstrap resource phases preserve dry-run reads and one terminal sync", async () => {
+  const makeApi = () => {
+    const state = {
+      accounts: [{ id: "account-1", name: "Current", offbudget: false, closed: false }],
+      groups: [{ id: "group-1", name: "Existing" }],
+      categories: [{ id: "category-1", name: "Existing", group_id: "group-1" }],
+      tags: [],
+      payees: [],
+      rules: [],
+      schedules: [],
+      budget: { categoryGroups: [{ categories: [{ id: "category-1", budgeted: 0, carryover: false }] }] },
+      calls: [],
+      syncs: 0,
+    };
+    const api = {
+      getAccounts: async () => { state.calls.push("getAccounts"); return state.accounts; },
+      getCategoryGroups: async () => { state.calls.push("getCategoryGroups"); return state.groups; },
+      getCategories: async () => { state.calls.push("getCategories"); return state.categories; },
+      getTags: async () => { state.calls.push("getTags"); return state.tags; },
+      getPayees: async () => { state.calls.push("getPayees"); return state.payees; },
+      createAccount: async fields => {
+        state.calls.push("createAccount");
+        state.accounts.push({ id: "account-2", ...fields });
+      },
+      updateAccount: async () => state.calls.push("updateAccount"),
+      getAccountBalance: async () => 0,
+      closeAccount: async () => state.calls.push("closeAccount"),
+      createCategoryGroup: async fields => {
+        state.calls.push("createCategoryGroup");
+        state.groups.push({ id: "group-2", ...fields });
+        return "group-2";
+      },
+      createCategory: async fields => {
+        state.calls.push("createCategory");
+        state.categories.push({ id: "category-2", name: fields.name, group_id: fields.group_id });
+      },
+      updateCategory: async (...args) => state.calls.push(["updateCategory", ...args]),
+      createTag: async fields => { state.calls.push("createTag"); state.tags.push(fields); },
+      createPayee: async fields => { state.calls.push("createPayee"); state.payees.push({ id: "payee-1", ...fields }); },
+      aqlQuery: async () => ({ data: [] }),
+      q: name => ({ select: fields => ({ name, fields }) }),
+      updatePayee: async () => state.calls.push("updatePayee"),
+      getRules: async () => { state.calls.push("getRules"); return state.rules; },
+      createRule: async rule => { state.calls.push("createRule"); state.rules.push({ id: "rule-1", ...rule }); },
+      deleteRule: async () => true,
+      getSchedules: async () => { state.calls.push("getSchedules"); return state.schedules; },
+      createSchedule: async schedule => { state.calls.push("createSchedule"); state.schedules.push({ id: "schedule-1", ...schedule }); },
+      updateSchedule: async () => state.calls.push("updateSchedule"),
+      getBudgetMonth: async () => { state.calls.push("getBudgetMonth"); return state.budget; },
+      setBudgetAmount: async (...args) => state.calls.push(["setBudgetAmount", ...args]),
+      setBudgetCarryover: async (...args) => state.calls.push(["setBudgetCarryover", ...args]),
+      sync: async () => { state.calls.push("sync"); state.syncs += 1; },
+    };
+    return { api, state };
+  };
+  const config = {
+    schema_version: 1,
+    accounts: [{ name: "Savings", type: "checking", initial_balance: 100 }],
+    category_groups: [{ name: "Food", categories: ["Groceries"] }],
+    tags: [{ tag: "shared" }],
+    payees: [{ name: "Market" }],
+    rules: [{
+      name: "Market category",
+      conditions: [{ field: "payee", op: "is", value: { ref: "payee", name: "Market" } }],
+      actions: [{ field: "category", op: "set", value: { ref: "category", name: "Groceries" } }],
+    }],
+    schedules: [{
+      name: "Market bill",
+      account: "Current",
+      payee: "Market",
+      amount_minor: -100,
+      date: "2026-09-01",
+    }],
+    budget_months: [{ month: "2026-08", categories: [{ name: "Existing", amount_minor: 500 }] }],
+  };
+
+  const dry = makeApi();
+  const planned = await reconcileBootstrapResources({
+    api: dry.api,
+    config,
+    apply: false,
+    configPath: "/tmp/actual-bootstrap.json",
+    readJson: async () => [],
+  });
+  assert.equal(planned.status, "planned");
+  assert.equal(dry.state.syncs, 0);
+  assert.ok(!dry.state.calls.includes("createAccount"));
+  assert.ok(planned.changes.some(change => change.type === "rule"));
+  assert.ok(planned.changes.some(change => change.type === "schedule"));
+  assert.ok(planned.changes.some(change => change.type === "budget"));
+
+  const applied = makeApi();
+  const result = await reconcileBootstrapResources({
+    api: applied.api,
+    config,
+    apply: true,
+    configPath: "/tmp/actual-bootstrap.json",
+    readJson: async () => [],
+  });
+  assert.equal(result.status, "applied");
+  assert.equal(applied.state.syncs, 1);
+  assert.equal(applied.state.calls.at(-1), "sync");
+  assert.deepEqual(applied.state.calls.filter(call => call === "sync"), ["sync"]);
+  assert.ok(applied.state.calls.indexOf("createRule") < applied.state.calls.indexOf("createSchedule"));
+});
+
+test("bootstrap rule phase resolves references and refreshes retired rules before creates", async () => {
+  const calls = [];
+  const refs = {
+    account: new Map(),
+    category: new Map([["groceries", { id: "category-1" }]]),
+    category_group: new Map(),
+    payee: new Map([["market", { id: "payee-1" }]]),
+    tag: new Map(),
+  };
+  const api = {
+    getRules: async () => {
+      calls.push("getRules");
+      return calls.includes("deleteRule") ? [] : [{
+        id: "old",
+        stage: "pre",
+        conditionsOp: "and",
+        conditions: [{ field: "payee", op: "is", value: "payee-1" }],
+        actions: [{ field: "category", op: "set", value: "category-1" }],
+      }];
+    },
+    deleteRule: async id => { calls.push("deleteRule"); assert.equal(id, "old"); return true; },
+    createRule: async rule => {
+      calls.push("createRule");
+      assert.equal(rule.conditions[0].value, "payee-1");
+      assert.equal(rule.actions[0].value, "category-1");
+    },
+  };
+  const changes = [];
+  const compiled = await reconcileRules({
+    api,
+    config: {
+      rules: [{
+        name: "New market rule",
+        conditions: [{ field: "payee", op: "is", value: { ref: "payee", name: "Market" } }],
+        actions: [{ field: "category", op: "set", value: { ref: "category", name: "Groceries" } }],
+      }],
+      retired_rules: [{
+        stage: "pre",
+        conditions: [{ field: "payee", op: "is", value: { ref: "payee", name: "Market" } }],
+        actions: [{ field: "category", op: "set", value: { ref: "category", name: "Groceries" } }],
+      }],
+    },
+    apply: true,
+    configPath: "/tmp/actual-bootstrap.json",
+    refs,
+    changes,
+    readJson: async () => [],
+  });
+
+  assert.deepEqual(compiled, { rules: [], skipped: [], deferred: [] });
+  assert.deepEqual(calls, ["getRules", "deleteRule", "getRules", "createRule"]);
+  assert.equal(changes[0].type, "rule");
 });
