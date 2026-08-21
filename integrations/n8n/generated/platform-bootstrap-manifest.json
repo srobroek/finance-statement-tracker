@@ -576,7 +576,8 @@
   },
   "activation_blockers": [
     "EXACT_IMAGE_IMPORT_REQUIRED",
-    "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"
+    "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+    "SOURCE_MIGRATION_GATE_REQUIRED"
   ],
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {

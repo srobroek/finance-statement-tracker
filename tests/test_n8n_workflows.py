@@ -1140,6 +1140,11 @@ try {{
         self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
         self.assertEqual(manifest["n8n_version"], "2.36.2")
         self.assertEqual(set(manifest["execution_evidence"].values()), {False})
+        self.assertIn("SOURCE_MIGRATION_GATE_REQUIRED", manifest["activation_blockers"])
+        self.assertIn(
+            "SOURCE_MIGRATION_GATE_REQUIRED",
+            self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
+        )
         self.assertEqual(
             manifest["sources"]["data_tables_sha256"],
             git_canonical_sha256(N8N / "data-tables.json"),

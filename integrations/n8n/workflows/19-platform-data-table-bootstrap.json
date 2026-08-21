@@ -841,7 +841,8 @@
     "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
     "activationBlockers": [
       "EXACT_IMAGE_IMPORT_REQUIRED",
-      "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"
+      "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+      "SOURCE_MIGRATION_GATE_REQUIRED"
     ],
     "importTested": false,
     "fixtureExecuted": false,
