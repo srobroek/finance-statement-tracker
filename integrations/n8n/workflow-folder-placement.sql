@@ -19,8 +19,11 @@ CREATE TEMP TABLE finance_organization_context (project_id varchar(36) PRIMARY K
 INSERT INTO finance_organization_context VALUES (:'finance_project_id');
 
 DO $$
+DECLARE
+  expected_project_id varchar(36);
 BEGIN
-  IF :'finance_project_id' !~ '^[0-9a-fA-F-]{36}$' THEN
+  SELECT project_id INTO expected_project_id FROM finance_organization_context;
+  IF expected_project_id !~ '^[0-9a-fA-F-]{36}$' THEN
     RAISE EXCEPTION 'FINANCE_PROJECT_ID_INVALID';
   END IF;
   IF NOT EXISTS (
@@ -91,8 +94,8 @@ BEGIN
     SELECT 1 FROM finance_workflow_contract c
     LEFT JOIN workflow_entity w ON w.id = c.workflow_id
     LEFT JOIN shared_workflow s ON s."workflowId" = w.id
-      AND s."projectId" = :'finance_project_id'
-    WHERE w.id IS NULL OR s."workflowId" IS NULL
+    LEFT JOIN finance_organization_context context ON context.project_id = s."projectId"
+    WHERE w.id IS NULL OR s."workflowId" IS NULL OR context.project_id IS NULL
       OR w.name NOT IN (c.current_name, c.target_name)
       OR c.target_name ILIKE ANY (ARRAY['%setup required%', '%spec_only%', '%inactive%', '%blocked%'])
   ) THEN
@@ -223,19 +226,22 @@ WHERE f."projectId" = :'finance_project_id'
   AND NOT EXISTS (SELECT 1 FROM folder child WHERE child."parentFolderId" = f.id);
 
 DO $$
+DECLARE
+  expected_project_id varchar(36);
 BEGIN
+  SELECT project_id INTO expected_project_id FROM finance_organization_context;
   IF EXISTS (
     SELECT 1 FROM folder
-    WHERE "projectId" = :'finance_project_id'
+    WHERE "projectId" = expected_project_id
       AND id IN ('f1000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000002', 'f1000000-0000-4000-8000-000000000003', 'f1000000-0000-4000-8000-000000000004', 'f1000000-0000-4000-8000-000000000005', 'f1000000-0000-4000-8000-000000000006', 'f1000000-0000-4000-8000-000000000007', 'f1000000-0000-4000-8000-000000000090')
   ) THEN
     RAISE EXCEPTION 'LEGACY_FOLDER_REMAINS';
   END IF;
-  IF (SELECT COUNT(*) FROM folder f JOIN finance_folder_contract c ON c.folder_id = f.id WHERE f."projectId" = :'finance_project_id') <> 6
+  IF (SELECT COUNT(*) FROM folder f JOIN finance_folder_contract c ON c.folder_id = f.id WHERE f."projectId" = expected_project_id) <> 6
      OR EXISTS (
        SELECT 1 FROM finance_folder_contract c
        LEFT JOIN folder f ON f.id = c.folder_id
-         AND f."projectId" = :'finance_project_id'
+         AND f."projectId" = expected_project_id
          AND f.name = c.folder_name
          AND f."parentFolderId" IS NOT DISTINCT FROM c.parent_folder_id
        WHERE f.id IS NULL

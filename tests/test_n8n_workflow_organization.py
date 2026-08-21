@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import unittest
@@ -203,6 +204,16 @@ class WorkflowOrganizationTests(unittest.TestCase):
             self.assertIn(row["id"], sql)
             self.assertIn(row["target_name"], sql)
             self.assertIn(row["folder_id"], sql)
+
+    def test_sql_do_blocks_read_context_instead_of_using_psql_variables(self):
+        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
+        blocks = re.findall(r"DO \$\$.*?END \$\$;", sql, flags=re.DOTALL)
+        self.assertGreaterEqual(len(blocks), 4)
+        for block in blocks:
+            self.assertNotIn(":'finance_project_id'", block)
+        self.assertGreaterEqual(
+            sum("finance_organization_context" in block for block in blocks), 3
+        )
 
     def test_cli_contract_and_rehearsal_are_side_effect_free(self):
         contract = subprocess.run(
