@@ -13,7 +13,22 @@
         0
       ],
       "parameters": {
-        "inputSource": "passthrough"
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cycle_context",
+              "type": "json"
+            },
+            {
+              "name": "deadline_policy",
+              "type": "json"
+            },
+            {
+              "name": "execution_id",
+              "type": "string"
+            }
+          ]
+        }
       }
     },
     {

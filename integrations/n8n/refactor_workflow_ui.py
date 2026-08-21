@@ -70,6 +70,16 @@ MONTHLY_SHARED_INPUT_CONTRACT = {
         "execution_id": {"type": "string", "minLength": 1},
     },
 }
+MONTHLY_SHARED_TRIGGER_INPUTS = [
+    {"name": "cycle_context", "type": "json"},
+    {"name": "deadline_policy", "type": "json"},
+    {"name": "execution_id", "type": "string"},
+]
+
+
+def monthly_shared_trigger_parameters() -> dict:
+    """Return the native Execute Workflow trigger input declaration."""
+    return {"workflowInputs": {"values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))}}
 FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
@@ -276,7 +286,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
             "type": "n8n-nodes-base.executeWorkflowTrigger",
             "typeVersion": 1.1,
             "position": [-1120, 0],
-            "parameters": {"inputSource": "passthrough"},
+            "parameters": monthly_shared_trigger_parameters(),
         }
         nodes = [trigger]
         for name in core_names:
@@ -353,7 +363,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
     by_code[MONTHLY_SHARED_WORKFLOW_CODE] = shared
     shared_nodes = {node["name"]: node for node in shared["nodes"]}
     source_context = shared_nodes["Monthly Cycle Context"]
-    source_context["parameters"] = {"inputSource": "passthrough"}
+    source_context["parameters"] = monthly_shared_trigger_parameters()
     source_contract = shared_nodes["Load Trusted Source Contract"]
     source_contract["parameters"]["filters"]["conditions"][0]["keyValue"] = (
         "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
