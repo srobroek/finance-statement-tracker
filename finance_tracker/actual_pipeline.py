@@ -23,6 +23,11 @@ from .transaction_semantics import CASHBACK_TOPICS, finalize_transaction_topic
 from .classification_audit import enforce_transaction_invariants
 
 
+_ACTUAL_ACCOUNT_TYPES = frozenset(
+    {"checking", "savings", "investment", "trade", "credit", "mortgage"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ActualStatementRun:
     """Auditable hand-off from the deterministic parser to Actual's API."""
@@ -67,6 +72,17 @@ def load_actual_config(path: str | Path) -> dict[str, Any]:
         name = account.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"Actual bootstrap config account {index} requires a name")
+        if "type" in account:
+            account_type = account["type"]
+            if not isinstance(account_type, str) or account_type not in _ACTUAL_ACCOUNT_TYPES:
+                raise ValueError(
+                    f"Actual bootstrap config account {index} type must be one of "
+                    f"{', '.join(sorted(_ACTUAL_ACCOUNT_TYPES))}"
+                )
+        if "enabled" in account and type(account["enabled"]) is not bool:
+            raise ValueError(
+                f"Actual bootstrap config account {index} enabled must be a boolean"
+            )
         for field in ("card_last4", "aliases"):
             values = account.get(field, [])
             if not isinstance(values, list):
@@ -103,6 +119,11 @@ def account_maps(config: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]
     for account in config["accounts"]:
         name = str(account["name"])
         card_code = str(account.get("card_code") or name).upper()
+        if card_code in account_by_card and account_by_card[card_code] != name:
+            raise ValueError(
+                f"Card code {card_code} is mapped to multiple accounts: "
+                f"{account_by_card[card_code]}, {name}"
+            )
         account_by_card[card_code] = name
         for last4 in account.get("card_last4", []):
             token = str(last4).strip()

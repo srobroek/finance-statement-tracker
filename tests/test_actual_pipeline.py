@@ -33,11 +33,12 @@ class ActualStatementPipelineTests(TestCase):
                     "card_last4": ["1234"],
                     "aliases": ["Old Card"],
                     "owner": "Owner",
-                    "type": {"opaque": "configuration"},
+                    "type": "checking",
                 }
             ],
             "retired_accounts": ["Retired Card"],
             "unconsumed": {"may": "change"},
+            "offbudget": {"opaque": "configuration"},
         }
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / "actual.json"
@@ -49,6 +50,9 @@ class ActualStatementPipelineTests(TestCase):
                 ("accounts", [{"name": "Card", "card_last4": [1234]}]),
                 ("accounts", [{"name": "Card", "aliases": "Old Card"}]),
                 ("accounts", [{"name": "Card", "owner": False}]),
+                ("accounts", [{"name": "Card", "type": {"opaque": "configuration"}}]),
+                ("accounts", [{"name": "Card", "type": "crypto"}]),
+                ("accounts", [{"name": "Card", "enabled": "false"}]),
                 ("retired_accounts", "Retired Card"),
             )
             for field, value in invalid_values:
@@ -340,6 +344,39 @@ Closing balance (Total to pay) -25.00
         )
         self.assertEqual(rows[0].card, "FAB_CURRENT_2001")
         self.assertIsNone(rows[0].reward_bucket)
+
+    def test_snapshot_skips_disabled_accounts(self) -> None:
+        snapshot = {
+            "transactions": [
+                {
+                    "id": "disabled",
+                    "account_name": "Disabled Account",
+                    "date": "2026-07-10",
+                    "amount": -100,
+                }
+            ]
+        }
+        config = {
+            "accounts": [
+                {"name": "Disabled Account", "card_code": "DISABLED", "enabled": False},
+                {"name": "Active Account", "card_code": "ACTIVE"},
+            ]
+        }
+        self.assertEqual(
+            transactions_from_actual_snapshot(snapshot, config, self.cashback_config()), []
+        )
+
+    def test_snapshot_rejects_alias_collision_between_accounts(self) -> None:
+        config = {
+            "accounts": [
+                {"name": "One", "card_code": "ONE", "aliases": ["Shared"]},
+                {"name": "Two", "card_code": "TWO", "aliases": ["Shared"]},
+            ]
+        }
+        with self.assertRaisesRegex(ValueError, "alias .* maps to multiple cards"):
+            transactions_from_actual_snapshot(
+                {"transactions": []}, config, self.cashback_config()
+            )
 
     def test_filler_route_is_inactive_after_all_card_thresholds_are_met(self) -> None:
         rows = [

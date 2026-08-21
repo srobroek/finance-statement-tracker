@@ -85,25 +85,58 @@ def transactions_from_actual_snapshot(
     cashback_source = cashback_config or load_program_configuration()
     base_currency = str(cashback_source.get("currency") or config.get("currency") or "XXX").upper()
     programs = programs_from_config(cashback_source)
-    _, account_by_card = account_maps(config)
-    owner_by_card = account_owner_map(config)
-    card_by_account = {name.casefold(): card for card, name in account_by_card.items()}
     retired_config = config.get("retired_accounts", [])
     if not isinstance(retired_config, list) or any(
         not isinstance(name, str) or not name.strip() for name in retired_config
     ):
         raise ValueError("Actual snapshot retired_accounts must be a list of strings")
     retired_accounts = {name.casefold() for name in retired_config}
+
+    disabled_accounts: set[str] = set()
+    active_accounts: list[dict[str, Any]] = []
     for account in config["accounts"]:
+        enabled = account.get("enabled", True)
+        if type(enabled) is not bool:
+            raise ValueError("Actual snapshot account enabled must be a boolean")
+        name = str(account["name"])
+        if not enabled:
+            disabled_accounts.add(name.casefold())
+            disabled_accounts.update(
+                str(alias).casefold() for alias in account.get("aliases", [])
+            )
+            continue
+        active_accounts.append(account)
+
+    active_config = {"accounts": active_accounts}
+    _, account_by_card = account_maps(active_config)
+    owner_by_card = account_owner_map(active_config)
+    active_account_by_card = account_by_card
+
+    card_by_account: dict[str, str] = {}
+
+    def bind_account_identifier(identifier: str, card: str) -> None:
+        key = identifier.casefold()
+        previous = card_by_account.get(key)
+        if previous is not None and previous != card:
+            raise ValueError(
+                f"Actual snapshot account alias {identifier!r} maps to multiple cards: "
+                f"{previous}, {card}"
+            )
+        card_by_account[key] = card
+
+    for card, name in active_account_by_card.items():
+        bind_account_identifier(name, card)
+    for account in active_accounts:
         card = str(account.get("card_code") or account["name"]).upper()
         for alias in account.get("aliases", []):
-            card_by_account[str(alias).casefold()] = card
+            bind_account_identifier(str(alias), card)
 
     unknown_accounts = sorted({
         str(row["account_name"])
         for row in snapshot.get("transactions", [])
         if str(row["account_name"]).casefold() not in card_by_account
         and str(row["account_name"]).casefold() not in retired_accounts
+        and str(row["account_name"]).casefold() not in disabled_accounts
     })
     if unknown_accounts:
         raise ValueError(
@@ -115,7 +148,7 @@ def transactions_from_actual_snapshot(
         account_name = str(row["account_name"])
         card = card_by_account.get(account_name.casefold())
         if card is None:
-            # Retired/non-reward accounts are intentionally outside the replay set.
+            # Retired, disabled, and non-reward accounts stay outside replay.
             continue
         notes = str(row.get("notes") or "")
         tags = _tags(notes)
