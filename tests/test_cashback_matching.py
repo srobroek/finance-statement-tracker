@@ -6,7 +6,11 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from finance_tracker.cashback_events import CashbackEventStore
+from finance_tracker.cashback_events import (
+    CashbackEventStore,
+    _canonical_statement_events,
+    _rank_statement_candidates,
+)
 
 
 class CashbackStatementMatchingTests(unittest.TestCase):
@@ -58,6 +62,59 @@ class CashbackStatementMatchingTests(unittest.TestCase):
             "merchant": merchant,
             "event_type": "PURCHASE",
         }
+
+    def test_canonical_statement_events_preserve_normalized_payload_contract(self) -> None:
+        statement = self._statement(merchant="Expected Merchant")
+
+        events, transaction_ids = _canonical_statement_events(
+            statement,
+            statement_reference="RAK-2026-08",
+            card_code="RAK_WORLD",
+            period_start=date(2026, 8, 1),
+            period_end=date(2026, 8, 31),
+        )
+
+        self.assertEqual(transaction_ids, ["line-1"])
+        self.assertEqual(events[0]["source_event_id"], "statement:RAK-2026-08:line-1")
+        self.assertEqual(events[0]["card_code"], "RAK_WORLD")
+        self.assertEqual(events[0]["source"], "statement")
+        self.assertEqual(events[0]["reconciliation_status"], "RECONCILED")
+
+    def test_candidate_ranking_preserves_amount_currency_polarity_and_order(self) -> None:
+        event = {
+            "occurred_at": "2026-08-10T12:00:00+04:00",
+            "amount_aed_minor": 10000,
+            "currency": "AED",
+            "event_type": "PURCHASE",
+            "merchant": "Expected Merchant",
+        }
+        candidates = [
+            {
+                **event,
+                "source_event_id": "exact-near",
+                "occurred_at": "2026-08-11T12:00:00+04:00",
+            },
+            {
+                **event,
+                "source_event_id": "alias-same-day",
+                "merchant": "Expected Merchant LLC",
+            },
+            {**event, "source_event_id": "wrong-currency", "currency": "USD"},
+            {**event, "source_event_id": "wrong-amount", "amount_aed_minor": 10001},
+            {**event, "source_event_id": "wrong-polarity", "event_type": "REFUND"},
+            {
+                **event,
+                "source_event_id": "outside-window",
+                "occurred_at": "2026-08-14T12:00:00+04:00",
+            },
+        ]
+
+        ranked = _rank_statement_candidates(event, candidates)
+
+        self.assertEqual(
+            ranked,
+            [(2, -1, "exact-near"), (1, 0, "alias-same-day")],
+        )
 
     def test_unrelated_merchant_is_statement_only_and_notification_is_variance(
         self,
