@@ -1397,6 +1397,64 @@ try {{
         for marker in ("runtime_cutover:false", "deletion_authorized:false", "second_run_noop:true", "mode:'0600'"):
             self.assertIn(marker, receipt)
 
+    def test_platform_bootstrap_readback_rejects_partial_extra_type_and_id_drift(self) -> None:
+        workflow = self.workflow("19-platform-data-table-bootstrap.json")
+        nodes = self.nodes("19-platform-data-table-bootstrap.json")
+        verifier = nodes["Verify Four Target Table Readback"]["parameters"]["jsCode"]
+        matrix = load_json(N8N / "data-table-migration-matrix.json")
+        contract = {
+            "target_tables": matrix["targets"],
+            "target_schemas": matrix["target_schemas"],
+            "target_schema_digest": workflow["meta"]["targetSchemaDigest"],
+        }
+        created = {
+            target: {"id": f"table-id-{index}"}
+            for index, target in enumerate(matrix["targets"], start=1)
+        }
+        valid_rows = [
+            {
+                "name": target,
+                "id": created[target]["id"],
+                "columns": [
+                    {"name": field, "type": definition["type"]}
+                    for field, definition in matrix["target_schemas"][target]["columns"].items()
+                ],
+            }
+            for target in matrix["targets"]
+        ]
+
+        def run(rows: list[dict]) -> subprocess.CompletedProcess[str]:
+            harness = f"""
+const contract = {json.dumps(contract)};
+const created = {json.dumps(created)};
+const inputRows = {json.dumps(rows)};
+function $(name) {{
+  if (name === 'Verify Four-Table Target Contract') return {{ first: () => ({{ json: contract }}) }};
+  return {{ first: () => ({{ json: created[name.replace('Create or Reuse ', '')] || {{}} }}) }};
+}}
+const $input = {{ all: () => inputRows.map(json => ({{ json }})) }};
+const execute = () => {{ {verifier} }};
+try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error(String(error.message)); process.exit(1); }}
+"""
+            return subprocess.run(["node", "-e", harness], capture_output=True, text=True, check=False)
+
+        valid = run(valid_rows)
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertIn("TARGET_SCHEMA_READBACK_VERIFIED", valid.stdout)
+        self.assertEqual(run(valid_rows).stdout, valid.stdout, "second readback must be a deterministic no-op")
+
+        cases = [
+            (valid_rows[:-1], "TARGET_TABLE_MISSING"),
+            ([{**row, "columns": [*row["columns"], {"name": "unexpected", "type": "string"}]} if row["name"] == matrix["targets"][0] else row for row in valid_rows], "TARGET_SCHEMA_MISMATCH"),
+            ([{**row, "columns": [{**column, "type": "number"} if index == 0 and row["name"] == matrix["targets"][0] else column for index, column in enumerate(row["columns"])]} for row in valid_rows], "TARGET_SCHEMA_MISMATCH"),
+            ([{**row, "id": "different-id"} if row["name"] == matrix["targets"][0] else row for row in valid_rows], "TARGET_TABLE_ID_MISMATCH"),
+            ([*valid_rows, {"name": "finance_documents_extra", "id": "extra", "columns": []}], "TARGET_TABLE_EXTRA"),
+        ]
+        for rows, marker in cases:
+            result = run(rows)
+            self.assertNotEqual(result.returncode, 0, marker)
+            self.assertIn(marker, result.stderr, result.stderr)
+
     def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:
         facade = self.nodes("15-finance-mcp-facade.json")
         for name in (
