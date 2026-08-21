@@ -45,7 +45,7 @@ function transactionKey(row, index = 0) {
   return importedId || `unimported:${index}`;
 }
 
-function canonicalTransactionIdentity(row, index = 0) {
+function canonicalEconomicProjection(row, index = 0) {
   if (!row) return null;
   return {
     key: transactionKey(row, index),
@@ -80,19 +80,6 @@ function semanticSubtransactions(children) {
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 }
 
-function canonicalEconomicRecord(row, index) {
-  return {
-    key: transactionKey(row, index),
-    account: String(row.account_name ?? ""),
-    date: String(row.date ?? ""),
-    amount: Number(row.amount ?? 0),
-    imported_payee: String(row.imported_payee ?? ""),
-    payee: String(row.payee_name ?? ""),
-    category: String(row.category_name ?? ""),
-    cleared: Boolean(row.cleared),
-  };
-}
-
 function canonicalManualRecord(row, index, {
   rowsById = new Map(),
   rowIndexesById = new Map(),
@@ -109,7 +96,7 @@ function canonicalManualRecord(row, index, {
     cleared: Boolean(row.cleared),
     reconciled: Boolean(row.reconciled),
     transfer: row.transfer_id
-      ? { present: true, peer: canonicalTransactionIdentity(transferPeer, transferPeerIndex) }
+      ? { present: true, peer: canonicalEconomicProjection(transferPeer, transferPeerIndex) }
       : null,
     schedule: row.schedule
       ? { present: true, semantic: canonicalSchedule(schedule), missing: !schedule }
@@ -119,7 +106,7 @@ function canonicalManualRecord(row, index, {
     parent: row.parent_id
       ? {
           present: true,
-          semantic: canonicalTransactionIdentity(parent, parentIndex),
+          semantic: canonicalEconomicProjection(parent, parentIndex),
           missing: !parent,
         }
       : null,
@@ -160,7 +147,7 @@ export function summarizeRebuildState(snapshotDocument, {
   const rowsById = new Map(active.filter(row => row.id).map(row => [row.id, row]));
   const rowIndexesById = new Map(active.filter(row => row.id).map((row, index) => [row.id, index]));
   const schedulesById = new Map(schedules.filter(row => row.id).map(row => [row.id, row]));
-  const economic = sortByKey(active.map(canonicalEconomicRecord));
+  const economic = sortByKey(active.map(canonicalEconomicProjection));
   const manual = sortByKey(active.map((row, index) =>
     canonicalManualRecord(row, index, { rowsById, rowIndexesById, schedulesById })));
   const notes = manual.filter(row => row.notes.length > 0);
@@ -184,7 +171,7 @@ export function summarizeRebuildState(snapshotDocument, {
     balance: Number(balances[index] ?? 0),
   })).sort((left, right) => JSON.stringify(stable(left)).localeCompare(JSON.stringify(stable(right))));
   const transactionRows = sortByKey(active.map((row, index) => ({
-    ...canonicalEconomicRecord(row, index),
+    ...canonicalEconomicProjection(row, index),
     notes: String(row.notes ?? ""),
     reconciled: Boolean(row.reconciled),
     ...canonicalManualRecord(row, index, { rowsById, rowIndexesById, schedulesById }),
