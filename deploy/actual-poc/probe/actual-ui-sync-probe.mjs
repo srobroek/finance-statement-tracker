@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { preflightNativeDb } from './native-db-preflight.mjs';
 
 if (typeof chromium?.launch !== 'function') throw new Error('Playwright chromium launch export missing');
 const requireApi = createRequire('/probe/package.json');
@@ -9,6 +10,7 @@ const actualApi = requireApi('@actual-app/api');
 if (typeof actualApi.downloadBudget !== 'function' || typeof actualApi.sync !== 'function') {
   throw new Error('Actual API downloadBudget/sync exports missing');
 }
+await preflightNativeDb();
 const base = process.env.ACTUAL_RESTORE_URL;
 const password = process.env.ACTUAL_PASSWORD;
 const runIndex = process.env.ACTUAL_RESTORE_RUN_INDEX ?? 'unknown';
