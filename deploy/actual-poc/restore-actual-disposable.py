@@ -1095,7 +1095,10 @@ def main() -> int:
             result["cleanup_verified"] = cleanup() and result["cleanup_verified"]
         if current_sidecar or current_network or current_data:
             result["cleanup"]["outer_temp_root_removed"] = False
-            result["cleanup"]["retained_paths"] = [str(temp_root_for_cleanup)] if temp_root_for_cleanup else []
+            result["cleanup"]["retained_paths"] = (
+                ([str(temp_root_for_cleanup)] if temp_root_for_cleanup else [])
+                + retained_failure_paths
+            )
             outer_cleanup_verified = False
         else:
             outer_cleanup_verified = cleanup_outer_root()
