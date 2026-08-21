@@ -4,7 +4,7 @@ import calendar
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
@@ -246,10 +246,10 @@ def _as_of_date(value: date | datetime | None) -> date:
     timezone, so a Dubai process and a UTC process validate the same interval.
     """
     if value is None:
-        return datetime.now(timezone.utc).date()
+        return datetime.now(UTC).date()
     if isinstance(value, datetime):
-        normalized = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-        return normalized.astimezone(timezone.utc).date()
+        normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return normalized.astimezone(UTC).date()
     if isinstance(value, date):
         return value
     raise TypeError("as_of must be a date, datetime, or None")
