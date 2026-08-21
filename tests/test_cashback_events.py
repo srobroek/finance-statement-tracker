@@ -82,8 +82,14 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "channel": "PHYSICAL_POS",
                 "merchant": "Carrefour",
             }
-            self.assertEqual(store.upsert([event]), {"inserted": 1, "updated": 0, "duplicates": 0})
-            self.assertEqual(store.upsert([event]), {"inserted": 0, "updated": 1, "duplicates": 0})
+            self.assertEqual(
+                store.upsert([event]),
+                {"inserted": 1, "updated": 0, "unchanged": 0, "duplicates": 0},
+            )
+            self.assertEqual(
+                store.upsert([event]),
+                {"inserted": 0, "updated": 0, "unchanged": 1, "duplicates": 0},
+            )
 
             dashboard = build_live_dashboard(store, date(2026, 8, 16))
 
@@ -125,8 +131,60 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             result = store.upsert([{**base, "source_event_id": "forwarded-mail:1"}])
 
-            self.assertEqual(result, {"inserted": 0, "updated": 0, "duplicates": 1})
+            self.assertEqual(
+                result,
+                {"inserted": 0, "updated": 0, "unchanged": 0, "duplicates": 1},
+            )
             self.assertEqual(store.stats()["event_count"], 1)
+
+    def test_source_event_replay_is_immutable_and_requires_correction_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            event = {
+                "source_event_id": "immutable-source:1",
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "25.50",
+                "currency": "AED",
+                "purchase_type": "GROCERY",
+                "channel": "PHYSICAL_POS",
+                "merchant": "Carrefour Market",
+            }
+            store.upsert([event])
+
+            metadata_replay = store.upsert([
+                {**event, "purchase_type": "DINING", "tags": ["reprocessed"]}
+            ])
+            self.assertEqual(
+                metadata_replay,
+                {"inserted": 0, "updated": 0, "unchanged": 1, "duplicates": 0},
+            )
+            self.assertEqual(
+                store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]["purchase_type"],
+                "GROCERY",
+            )
+
+            with self.assertRaisesRegex(ValueError, "corrections path"):
+                store.upsert([{**event, "amount_aed": "999"}])
+            stored = store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]
+            self.assertEqual(stored["amount_aed_minor"], 2550)
+            self.assertEqual(stored["merchant"], "Carrefour Market")
+
+            correction = store.correct_event({
+                "correction_id": "immutable-correction:1",
+                "source_event_id": "immutable-source:1",
+                "source": "manual-review",
+                "reason": "Issuer correction",
+                "changes": {"amount_aed": "999", "merchant": "Carrefour Express"},
+            })
+            self.assertFalse(correction["idempotent_replay"])
+            corrected = store.rows(date(2026, 8, 1), date(2026, 8, 31))[0]
+            self.assertEqual(corrected["amount_aed_minor"], 99900)
+            self.assertEqual(corrected["merchant"], "Carrefour Express")
+            self.assertEqual(store.stats()["correction_count"], 1)
+
+            with self.assertRaisesRegex(ValueError, "corrections path"):
+                store.upsert([event])
 
     def test_refund_reduces_live_bucket_and_ignored_event_does_not_count(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
