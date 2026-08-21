@@ -17,11 +17,11 @@
           "values": [
             {
               "name": "cycle_context",
-              "type": "json"
+              "type": "object"
             },
             {
               "name": "deadline_policy",
-              "type": "json"
+              "type": "object"
             },
             {
               "name": "execution_id",

@@ -71,9 +71,18 @@ MONTHLY_SHARED_INPUT_CONTRACT = {
     },
 }
 MONTHLY_SHARED_TRIGGER_INPUTS = [
-    {"name": "cycle_context", "type": "json"},
-    {"name": "deadline_policy", "type": "json"},
+    {"name": "cycle_context", "type": "object"},
+    {"name": "deadline_policy", "type": "object"},
     {"name": "execution_id", "type": "string"},
+]
+MONTHLY_SHARED_CALLER_SCHEMA = [
+    {
+        "id": field["name"],
+        "displayName": field["name"],
+        "type": field["type"],
+        "display": True,
+    }
+    for field in MONTHLY_SHARED_TRIGGER_INPUTS
 ]
 
 
@@ -436,7 +445,7 @@ return [{ json: {
                 "workflowInputs": {
                     "mappingMode": "defineBelow",
                     "matchingColumns": [],
-                    "schema": [],
+                    "schema": json.loads(json.dumps(MONTHLY_SHARED_CALLER_SCHEMA)),
                     "value": {
                         "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: '" + source_code + "', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
                         "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: " + str(caller["meta"].get("deadlineDays", 5)) + " } }}",

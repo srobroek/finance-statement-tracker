@@ -58,7 +58,26 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "matchingColumns": [],
-          "schema": [],
+          "schema": [
+            {
+              "id": "cycle_context",
+              "displayName": "cycle_context",
+              "type": "object",
+              "display": true
+            },
+            {
+              "id": "deadline_policy",
+              "displayName": "deadline_policy",
+              "type": "object",
+              "display": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "type": "string",
+              "display": true
+            }
+          ],
           "value": {
             "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: 'EI_AMAZON', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
             "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: 5 } }}",
