@@ -105,6 +105,10 @@ FOLDER_BY_CODE = {
     for folder in FOLDER_CONTRACT["folders"]
     for code in folder["workflow_codes"]
 }
+TAG_BY_NAME = {
+    tag["name"]: tag["id"] for tag in FOLDER_CONTRACT["tag_definitions"]
+}
+DEFAULT_WORKFLOW_TAGS = FOLDER_CONTRACT["workflow_tags"]
 
 def normalize_workflow_name(name: str) -> str:
     """Keep imported workflow titles descriptive and free of legacy status labels."""
@@ -114,19 +118,15 @@ def normalize_workflow_name(name: str) -> str:
     return name.rstrip()
 
 BLOCKER_WORKFLOW_CODES = {
-    "RAK_MONTHLY_STATEMENT",
-    "SC_MONTHLY_STATEMENT",
-    "SC_LIVE_CASHBACK",
     "FINANCE_MCP_FACADE",
 }
 
-# These four notes are operational stop-gate warnings, not generated stage
-# labels.  Their blocker contracts reference the notes by name, so retain the
+# This note is an operational stop-gate warning, not a generated stage
+# label.  Its blocker contract references the note by name, so retain the
 # exact export node (including its position/content) during layout rendering.
 OPERATOR_WARNING_NOTE_IDS = {
-    f"10000000-0000-4000-8000-00000000000{suffix}-generated-note-1"
-    for suffix in (6, 7, 8)
-} | {"10000000-0000-4000-8000-000000000015-generated-note-1"}
+    "10000000-0000-4000-8000-000000000015-generated-note-1",
+}
 
 FORMATTER = r"""
 const fs = require('fs');
@@ -473,7 +473,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
                 "setupRequired": True,
                 "importTested": False,
                 "workflowFolder": json.loads(json.dumps(source_for_graph["meta"].get("workflowFolder", {}))),
-                "workflowTags": json.loads(json.dumps(source_for_graph["meta"].get("workflowTags", FOLDER_CONTRACT["tags"]))),
+                "workflowTags": json.loads(json.dumps(source_for_graph["meta"].get("workflowTags", DEFAULT_WORKFLOW_TAGS))),
             },
             "tags": json.loads(json.dumps(source_for_graph.get("tags", []))),
         }
@@ -489,7 +489,7 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
         shared["meta"]["callerInputAllowlist"] = ["cycle_context", "deadline_policy", "execution_id"]
         shared["meta"]["workflowInputContract"] = json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT))
         shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
-        shared["meta"]["workflowTags"] = json.loads(json.dumps(FOLDER_CONTRACT["tags"]))
+        shared["meta"]["workflowTags"] = json.loads(json.dumps(DEFAULT_WORKFLOW_TAGS))
         for node in shared["nodes"]:
             if node.get("type") == "n8n-nodes-base.stickyNote" and str(node.get("id", "")).endswith("-generated-note-1"):
                 node["id"] = f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1"
@@ -4323,10 +4323,10 @@ def layout(workflow: dict) -> None:
         "name": folder["name"],
         "placement": "POST_IMPORT_REVIEWED_MIGRATION",
     }
-    workflow["meta"]["workflowTags"] = FOLDER_CONTRACT["tags"]
+    workflow["meta"]["workflowTags"] = DEFAULT_WORKFLOW_TAGS
     workflow["tags"] = [
-        {"id": f"fin{index:013d}", "name": name}
-        for index, name in enumerate(FOLDER_CONTRACT["tags"], start=1)
+        {"id": TAG_BY_NAME[name], "name": name}
+        for name in DEFAULT_WORKFLOW_TAGS
     ]
 
 

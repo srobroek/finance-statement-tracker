@@ -14,7 +14,7 @@ The deterministic core is materially implemented and the current local code
 suites are green. Actual note-v2 and transaction semantics have a strong
 read-only full-corpus result, the finance custom nodes and bounded Codex runner
 pass their local suites, and the n8n exports now form a coherent inactive
-21-workflow specification. Those facts do not prove the current bytes in the
+19-workflow specification. Those facts do not prove the current bytes in the
 target runtime. The remaining blockers cross financial correctness, current
 Actual state, credentials, workflow execution, account completeness, recovery,
 and public/mobile acceptance.
@@ -43,7 +43,7 @@ against later issuer evidence without a synthetic balancing row.
 | Actual adapter/parser core for ADCB, EI and Wio | **Implemented + verified (code/fixtures)** | `config/statement-sources.json`; parser/projection tests; finance-node suite 21/21 | No current n8n execution through archive, extraction, outbox, writer, and Actual readback |
 | RAK and Standard Chartered statements | **Missing** | Both are explicit `PLACEHOLDER` sources | Capture real statement/email fixtures, implement adapters, tie balances, and pass replay/reconciliation |
 | Actual corpus note-v2 and transaction semantics | **Implemented + verified (read-only corpus)** | `config/evidence/actual-corpus-migration-dry-run-2026-08-19.json`: 45 manifests, 3,927 unique IDs, zero amount/sign mutations, zero note violations; two known EI Amazon credits are refunds | Review 877 semantic/note deltas, 28 manual-category conflicts, and 15 snapshot-missing identities; replay current plan twice in disposable Actual; separately authorize production delta and verify UI/API |
-| Actual full import and writer path | **Implemented-unverified** | Exact-state writer, cross-source suppression, manual-state checks, and offline Actual integration pass | No current full corpus replay through the 21-workflow n8n path; no writer-lease concurrency/kill/recovery receipt; no current production UI/API parity |
+| Actual full import and writer path | **Implemented-unverified** | Exact-state writer, cross-source suppression, manual-state checks, and offline Actual integration pass | No current full corpus replay through the 19-workflow n8n path; no writer-lease concurrency/kill/recovery receipt; no current production UI/API parity |
 | Classification/review queue | **Implemented-unverified** | Static/history/scoped-AI ownership and locked-field tests pass | No current full disposable and production exception report proving every unresolved row appears exactly once and every manual override survives |
 | Live cashback event store and arithmetic | **Implemented + verified (unit/retained fixture scope)** | Provisional events, dedupe, cursor heartbeat, refunds/reversals, reconciliation/finalization guards, alerts, routing, and push-store tests pass | Current deployed service health/state and n8n cutover were not read back in this audit; statement-only finalization still depends on missing RAK/SC statement sources |
 | Live notification sources | **Partial** | RAK is `ACTIVE`; historical cursor receipts show accepted RAK messages; unsupported formats fail closed | SC remains a placeholder; no current source-to-n8n-to-companion execution receipt; EI is intentionally statement-only and Wio is outside live cashback |
@@ -181,7 +181,7 @@ with hash-preserving catalogue updates before promotion.
 
 Static state is coherent and conservative:
 
-- 21 workflows, all inactive and tagged setup-required;
+- 19 workflows, all inactive and tagged setup-required;
 - 15 Data Tables with explicit retention/idempotency/concurrency contracts;
 - all declared tables are referenced by connected executable nodes;
 - all 17 Execute Sub-workflow nodes use n8n `From list` mode, stable workflow
@@ -194,7 +194,7 @@ Static state is coherent and conservative:
 The current registry intentionally records zero import, fixture, disposable and
 production validations. A retained local receipt at `fa8fd58` proves an exact
 n8n 2.36.2 image registered eight extension nodes/three credentials, imported
-21 inactive workflows, and created 15 tables with no production mounts or
+19 inactive workflows, and created 15 tables with no production mounts or
 writes. It is not current-byte proof: after `fa8fd58`, workflows 09, 19 and 21,
 the AI proposal schema, policy seed, platform bootstrap manifest and fixtures
 changed.
@@ -283,7 +283,7 @@ These artifacts remain useful history but cannot prove the current end state:
    generate SBOMs, publish immutable digests, and generate a current lock.
 7. Complete least-privilege Outlook/OneDrive and statement/Actual credentials
    in disposable with the user present. Verify scopes without exposing secrets.
-8. Import all 21 workflows inactive, place folders, bootstrap all 15 current
+8. Import all 19 workflows inactive, place folders, bootstrap all 15 current
    tables/seeds, and read them back exactly. Execute the resilience/security
    fixture matrix, including zero/101-page/late-order/pagination failure,
    duplicate delivery, writer concurrency, kill-after-Actual, restart, backup,

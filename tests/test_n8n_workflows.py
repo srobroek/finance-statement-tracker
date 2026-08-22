@@ -291,19 +291,18 @@ try {{
         self.assertEqual(catalog["schema_version"], 1)
         self.assertEqual(catalog["evaluation"], "ALL_REQUIRED")
         definitions = catalog["definitions"]
-        expected = {
-            "06-rak-monthly-statement.json": [
+        self.assertEqual(
+            set(definitions),
+            {
                 "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
                 "ACTIVE_ADAPTER_REQUIRED",
-            ],
-            "07-sc-monthly-statement.json": [
-                "VERIFIED_STATEMENT_FIXTURE_REQUIRED",
-                "ACTIVE_ADAPTER_REQUIRED",
-            ],
-            "08-sc-live-cashback.json": [
                 "ACTIVE_EMAIL_SOURCE_REQUIRED",
                 "VERIFIED_MESSAGE_FIXTURE_REQUIRED",
-            ],
+                "MCP_FACADE_CREDENTIAL_REQUIRED",
+                "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
+            },
+        )
+        expected = {
             "15-finance-mcp-facade.json": [
                 "MCP_FACADE_CREDENTIAL_REQUIRED",
                 "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
@@ -711,9 +710,9 @@ try {{
 
     def test_monthly_workflows_poll_daily_until_deadline(self) -> None:
         rows = {row["code"]: row for row in self.registry["workflows"] if row["code"] in {
-            "EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT", "RAK_MONTHLY_STATEMENT", "SC_MONTHLY_STATEMENT",
+            "EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT",
         }}
-        self.assertEqual(len(rows), 4)
+        self.assertEqual(len(rows), 2)
         for row in rows.values():
             self.assertTrue(row["schedule"].startswith("FREQ=DAILY;"))
             self.assertGreater(row["cycle_poll"]["cycle_day"], 0)
@@ -1872,15 +1871,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         after = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
         self.assertEqual(before, after)
         operator_warning_codes = {
-            "RAK_MONTHLY_STATEMENT",
-            "SC_MONTHLY_STATEMENT",
-            "SC_LIVE_CASHBACK",
             "FINANCE_MCP_FACADE",
         }
         operator_warning_ids = {
-            "10000000-0000-4000-8000-000000000006-generated-note-1",
-            "10000000-0000-4000-8000-000000000007-generated-note-1",
-            "10000000-0000-4000-8000-000000000008-generated-note-1",
             "10000000-0000-4000-8000-000000000015-generated-note-1",
         }
         for filename, workflow in self.workflows.items():
@@ -1934,19 +1927,24 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
     def test_workflow_folder_manifest_is_complete_and_post_import_guarded(self) -> None:
         contract = load_json(N8N / "workflow-folders.json")
         self.assertEqual(contract["n8n_version"], "2.36.2")
-        self.assertEqual(len(contract["folders"]), 8)
+        self.assertEqual(len(contract["folders"]), 6)
         mapped = [code for folder in contract["folders"] for code in folder["workflow_codes"]]
         self.assertEqual(len(mapped), len(set(mapped)))
         self.assertEqual(set(mapped), {row["code"] for row in self.registry["workflows"]})
         by_code = {
             code: folder for folder in contract["folders"] for code in folder["workflow_codes"]
         }
+        tag_by_name = {tag["name"]: tag["id"] for tag in contract["tag_definitions"]}
         for workflow in self.workflows.values():
             code = workflow["meta"]["financeWorkflowCode"]
             self.assertEqual(workflow["meta"]["workflowFolder"]["id"], by_code[code]["id"])
-            self.assertEqual(workflow["meta"]["workflowTags"], contract["tags"])
-            self.assertEqual([tag["name"] for tag in workflow["tags"]], contract["tags"])
-            self.assertEqual(len({tag["id"] for tag in workflow["tags"]}), len(contract["tags"]))
+            self.assertEqual(workflow["meta"]["workflowTags"], contract["workflow_tags"])
+            self.assertEqual([tag["name"] for tag in workflow["tags"]], contract["workflow_tags"])
+            self.assertEqual(
+                workflow["tags"],
+                [{"id": tag_by_name[name], "name": name} for name in contract["workflow_tags"]],
+            )
+            self.assertEqual(len({tag["id"] for tag in workflow["tags"]}), len(contract["workflow_tags"]))
             self.assertNotIn("parentFolderId", workflow)
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
         for marker in (

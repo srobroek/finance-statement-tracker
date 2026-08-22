@@ -1,7 +1,7 @@
 # Explicit n8n setup workflows
 
 These exports are deliberately outside `integrations/n8n/workflows/`. They are
-not part of the regular 21-workflow import or activation set and must be
+not part of the regular 19-workflow import or activation set and must be
 imported one file at a time only for a reviewed setup action.
 
 `22-onedrive-finance-evidence-root-setup.json` is manual-only and inactive. It
@@ -64,9 +64,9 @@ performs this exact reviewed sequence:
 
 The runner requires explicit `FINANCE_MICROSOFT_OAUTH_PROOF_ACK`, exact finance
 and orchestrator commits, and the exact retained project. It starts only from
-the reviewed `21 workflows / 0 active / 0 published` state, imports exactly one
+the reviewed `19 workflows / 0 active / 0 published` state, imports exactly one
 inactive workflow, places it in `90 Platform & Admin`, and returns to the exact
-21-workflow baseline. Raw n8n `IRun` objects and provider responses exist only
+19-workflow baseline. Raw n8n `IRun` objects and provider responses exist only
 inside the execution process long enough to validate the terminal node; only
 the redacted terminal result leaves that process. Execution persistence is
 disabled and independently checked in PostgreSQL after both calls.

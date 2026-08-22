@@ -76,9 +76,9 @@ step.
 
 ## Promotion readback
 
-- [ ] Import all 21 workflows inactive into the exact n8n 2.36.2 disposable
+- [ ] Import all 19 workflows inactive into the exact n8n 2.36.2 disposable
   project.
-- [ ] Create/reconcile the eight folders from `workflow-folders.json`; verify
+- [ ] Create/reconcile the six folders from `workflow-folders.json`; verify
   membership through package response or direct read-only Postgres join because
   the public workflow GET omits write-only `parentFolderId`.
 - [ ] Verify exact workflow tags and all `From list` subworkflow references.
