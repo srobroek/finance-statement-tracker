@@ -1951,10 +1951,12 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertNotIn("parentFolderId", workflow)
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
         for marker in (
-            "finance_project_id", "w.active = TRUE", "shared_workflow",
+            "application_project_id", "WORKFLOW_ACTIVATION_VERSION_CHANGED", "shared_workflow",
             "WORKFLOW_FOLDER_MAP_COUNT_MISMATCH", "WORKFLOW_FOLDER_READBACK_MISMATCH",
         ):
             self.assertIn(marker, sql)
+        self.assertNotIn("finance_project_id", sql)
+        self.assertNotIn("finance_commit", sql)
 
     def test_execute_subworkflow_references_use_from_list(self) -> None:
         workflow_names = {workflow["id"]: workflow["name"] for workflow in self.workflows.values()}

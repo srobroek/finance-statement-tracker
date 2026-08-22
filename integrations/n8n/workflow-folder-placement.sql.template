@@ -1,463 +1,123 @@
--- n8n 2.36.2.  This is a bounded organization cutover for inactive workflows.
--- Required: psql -v finance_project_id='<exact project id>'.
--- Optional: psql -v finance_commit=true.  The default is a rehearsal and ROLLBACK.
--- The known disposable orphan 115 is backed up and retired only after the
--- canonical 024 export is present.  Active/published W15 is never changed.
+-- n8n 2.36.2.  Idempotent application workflow-folder placement.
+-- Required: psql -v application_project_id='<exact project id>'.
 
-\if :{?finance_project_id}
+\if :{?application_project_id}
 \else
   \quit 3
-\endif
-\if :{?finance_commit}
-\else
-  \set finance_commit false
 \endif
 
 BEGIN;
 
-CREATE TEMP TABLE finance_organization_context (project_id varchar(64) PRIMARY KEY) ON COMMIT DROP;
-INSERT INTO finance_organization_context VALUES (:'finance_project_id');
+CREATE TEMP TABLE application_folder_context (
+  project_id varchar(64) PRIMARY KEY
+) ON COMMIT DROP;
+INSERT INTO application_folder_context VALUES (:'application_project_id');
 
 DO $$
 DECLARE
   expected_project_id varchar(64);
 BEGIN
-  SELECT project_id INTO expected_project_id FROM finance_organization_context;
+  SELECT project_id INTO expected_project_id FROM application_folder_context;
   IF expected_project_id !~ '^[A-Za-z0-9_-]{8,64}$' THEN
-    RAISE EXCEPTION 'FINANCE_PROJECT_ID_INVALID';
+    RAISE EXCEPTION 'APPLICATION_PROJECT_ID_INVALID';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM project p
-    JOIN finance_organization_context c ON c.project_id = p.id
+    JOIN application_folder_context c ON c.project_id = p.id
   ) THEN
-    RAISE EXCEPTION 'FINANCE_PROJECT_NOT_FOUND';
+    RAISE EXCEPTION 'APPLICATION_PROJECT_NOT_FOUND';
   END IF;
 END $$;
 
--- The canonical {{FOLDER_COUNT_WORD}}-folder hierarchy: two roots and four role-oriented children.
-CREATE TEMP TABLE finance_folder_contract (
+CREATE TEMP TABLE application_folder_contract (
   folder_id varchar(36) PRIMARY KEY,
   folder_name varchar(128) NOT NULL,
   parent_folder_id varchar(36),
   is_root boolean NOT NULL
 ) ON COMMIT DROP;
-INSERT INTO finance_folder_contract VALUES
+INSERT INTO application_folder_contract VALUES
 {{FOLDER_CONTRACT_ROWS}};
 
-CREATE TEMP TABLE finance_workflow_contract (
+CREATE TEMP TABLE application_workflow_folder_contract (
   workflow_id varchar(36) PRIMARY KEY,
-  current_name varchar(128) NOT NULL,
-  target_name varchar(128) NOT NULL,
   folder_id varchar(36) NOT NULL
 ) ON COMMIT DROP;
-INSERT INTO finance_workflow_contract VALUES
-{{WORKFLOW_CONTRACT_ROWS}};
-
--- Bind the database precondition to the checked-in 024 export.  The Python
--- rehearsal checks the source bytes; SQL checks the import identity, persisted
--- body digest, and shape before it can retire 115.  expected_body_md5 follows
--- PostgreSQL jsonb text ordering over id/nodes/connections/settings/pinData/meta;
--- the mutable display name is guarded separately.
-CREATE TEMP TABLE finance_canonical_source_contract (
-  workflow_id varchar(36) PRIMARY KEY,
-  source_path text NOT NULL,
-  source_sha256 varchar(64) NOT NULL,
-  expected_body_md5 varchar(32) NOT NULL,
-  expected_name varchar(128) NOT NULL,
-  expected_target_name varchar(128) NOT NULL,
-  expected_code varchar(128) NOT NULL,
-  expected_node_count integer NOT NULL
-) ON COMMIT DROP;
-INSERT INTO finance_canonical_source_contract VALUES (
-  '10000000-0000-4000-8000-000000000024',
-  'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
-  '0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1',
-  '4f413c5986362dee47db7e1fd39e128d',
-  'Finance · Shared Monthly Statement Cycle',
-  'Shared Monthly Statement Cycle',
-  'SHARED_MONTHLY_STATEMENT_CYCLE',
-  16
-);
-
--- Capture the disposable duplicate as a redacted retirement receipt.  The
--- complete JSON is held only in the transaction snapshot and is never emitted
--- by this script; ROLLBACK restores it byte-for-byte during rehearsal/failure.
-CREATE TEMP TABLE finance_workflow_retirement (
-  legacy_workflow_id varchar(36) PRIMARY KEY,
-  replacement_workflow_id varchar(36) NOT NULL,
-  project_id varchar(64) NOT NULL,
-  workflow_row_json jsonb NOT NULL,
-  shared_row_json jsonb,
-  workflow_row_count integer NOT NULL,
-  shared_row_count integer NOT NULL,
-  tag_row_count integer NOT NULL,
-  backup_md5 varchar(32) NOT NULL
-) ON COMMIT DROP;
-
-DO $$
-DECLARE
-  expected_project_id varchar(64);
-  orphan_workflow_present boolean;
-  orphan_shared_present boolean;
-  orphan_tag_present boolean;
-BEGIN
-  SELECT project_id INTO expected_project_id FROM finance_organization_context;
-  SELECT EXISTS (
-    SELECT 1 FROM workflow_entity WHERE id = '10000000-0000-4000-8000-000000000115'
-  ) INTO orphan_workflow_present;
-  SELECT EXISTS (
-    SELECT 1 FROM shared_workflow
-    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  ) INTO orphan_shared_present;
-  SELECT EXISTS (
-    SELECT 1 FROM workflows_tags
-    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  ) INTO orphan_tag_present;
-  IF NOT orphan_workflow_present AND (orphan_shared_present OR orphan_tag_present) THEN
-    RAISE EXCEPTION 'ORPHAN_RELATION_PRECONDITION_FAILED';
-  END IF;
-  IF orphan_workflow_present AND NOT orphan_shared_present THEN
-    RAISE EXCEPTION 'ORPHAN_SHARED_ROW_MISSING';
-  END IF;
-  IF orphan_shared_present AND NOT EXISTS (
-    SELECT 1 FROM shared_workflow
-    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-      AND "projectId" = expected_project_id
-  ) THEN
-    RAISE EXCEPTION 'ORPHAN_PROJECT_MISMATCH';
-  END IF;
-END $$;
-
--- Lock the canonical and orphan rows, including all orphan tag edges, before
--- taking the backup.  A concurrent writer cannot create a partial cutover.
-DO $$
-BEGIN
-  PERFORM 1
-  FROM workflow_entity w
-  JOIN shared_workflow s ON s."workflowId" = w.id
-  JOIN finance_canonical_source_contract c ON c.workflow_id = w.id
-  WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
-  FOR UPDATE OF w, s;
-  PERFORM 1 FROM workflow_entity
-  WHERE id = '10000000-0000-4000-8000-000000000115'
-  FOR UPDATE;
-  PERFORM 1 FROM shared_workflow
-  WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  FOR UPDATE;
-  PERFORM 1 FROM workflows_tags
-  WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  FOR UPDATE;
-END $$;
-
-INSERT INTO finance_workflow_retirement
-SELECT w.id,
-       '10000000-0000-4000-8000-000000000024',
-       s."projectId",
-       to_jsonb(w),
-       to_jsonb(s),
-       1,
-       1,
-       COUNT(wt."workflowId"),
-       md5(to_jsonb(w)::text || E'\n' || to_jsonb(s)::text)
-FROM workflow_entity w
-JOIN shared_workflow s ON s."workflowId" = w.id
-LEFT JOIN workflows_tags wt ON wt."workflowId" = w.id
-WHERE w.id = '10000000-0000-4000-8000-000000000115'
-  AND s."projectId" = :'finance_project_id'
-GROUP BY w.id, s."projectId", to_jsonb(w), to_jsonb(s);
+INSERT INTO application_workflow_folder_contract VALUES
+{{WORKFLOW_FOLDER_ROWS}};
 
 DO $$
 BEGIN
-  IF (SELECT COUNT(*) FROM finance_folder_contract) <> {{FOLDER_COUNT}}
-     OR (SELECT COUNT(*) FROM finance_folder_contract WHERE is_root) <> {{ROOT_FOLDER_COUNT}}
-     OR (SELECT COUNT(*) FROM finance_folder_contract WHERE NOT is_root) <> {{CHILD_FOLDER_COUNT}} THEN
+  IF (SELECT COUNT(*) FROM application_folder_contract) <> {{FOLDER_COUNT}}
+     OR (SELECT COUNT(*) FROM application_folder_contract WHERE is_root) <> {{ROOT_FOLDER_COUNT}}
+     OR (SELECT COUNT(*) FROM application_folder_contract WHERE NOT is_root) <> {{CHILD_FOLDER_COUNT}} THEN
     RAISE EXCEPTION 'FOLDER_CONTRACT_COUNT_MISMATCH';
   END IF;
-  -- WORKFLOW_FOLDER_MAP_COUNT_MISMATCH is retained as the legacy guard name.
-  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> {{WORKFLOW_COUNT}} THEN
-    RAISE EXCEPTION 'WORKFLOW_CONTRACT_COUNT_MISMATCH';
-  END IF;
-  IF (SELECT COUNT(*) FROM finance_workflow_retirement) > 1 THEN
-    RAISE EXCEPTION 'RETIREMENT_BACKUP_DUPLICATE';
+  IF (SELECT COUNT(*) FROM application_workflow_folder_contract) <> {{WORKFLOW_COUNT}} THEN
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_MAP_COUNT_MISMATCH';
   END IF;
   IF EXISTS (
-    SELECT 1 FROM finance_workflow_retirement
-    WHERE (workflow_row_json ->> 'active')::boolean
-       OR NULLIF(workflow_row_json ->> 'activeVersionId', '') IS NOT NULL
+    SELECT 1 FROM application_workflow_folder_contract w
+    LEFT JOIN application_folder_contract f ON f.folder_id = w.folder_id
+    WHERE f.folder_id IS NULL
   ) THEN
-    RAISE EXCEPTION 'ORPHAN_WORKFLOW_ACTIVE_OR_PUBLISHED';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1
-    FROM finance_canonical_source_contract c
-    JOIN workflow_entity w ON w.id = c.workflow_id
-    JOIN shared_workflow s ON s."workflowId" = w.id
-    WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
-      AND w.name IN (c.expected_name, c.expected_target_name)
-      AND jsonb_typeof(w.nodes::jsonb) = 'array'
-      AND jsonb_array_length(w.nodes::jsonb) = c.expected_node_count
-      AND w.meta::jsonb ->> 'financeWorkflowCode' = c.expected_code
-  ) THEN
-    RAISE EXCEPTION 'CANONICAL_EXPORT_PRECONDITION_FAILED';
-  END IF;
-  IF EXISTS (
-    SELECT 1 FROM finance_workflow_contract c
-    LEFT JOIN workflow_entity w ON w.id = c.workflow_id
-    LEFT JOIN shared_workflow s ON s."workflowId" = w.id
-    LEFT JOIN finance_organization_context context ON context.project_id = s."projectId"
-    WHERE w.id IS NULL OR s."workflowId" IS NULL OR context.project_id IS NULL
-      OR w.name NOT IN (
-        c.current_name,
-        c.target_name,
-        regexp_replace(c.current_name, ' · Setup Required$', '')
-      )
-      OR c.target_name ILIKE ANY (ARRAY['%setup required%', '%spec_only%', '%inactive%', '%blocked%'])
-  ) THEN
-    RAISE EXCEPTION 'WORKFLOW_CONTRACT_SCOPE_OR_NAME_GUARD_FAILED';
-  END IF;
-  IF EXISTS (
-    SELECT 1
-    FROM finance_canonical_source_contract c
-    JOIN workflow_entity w ON w.id = c.workflow_id
-    JOIN shared_workflow s ON s."workflowId" = w.id
-    WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
-      AND w.name IN (c.expected_name, c.expected_target_name)
-      AND jsonb_typeof(w.nodes::jsonb) = 'array'
-      AND jsonb_array_length(w.nodes::jsonb) = c.expected_node_count
-      AND w.meta::jsonb ->> 'financeWorkflowCode' = c.expected_code
-      AND md5(
-        jsonb_build_object(
-          'id', w.id,
-          'nodes', w.nodes::jsonb,
-          'connections', w.connections::jsonb,
-          'settings', w.settings::jsonb,
-          'pinData', w."pinData"::jsonb,
-          'meta', w.meta::jsonb
-        )::text
-      ) <> c.expected_body_md5
-  ) THEN
-    RAISE EXCEPTION 'CANONICAL_EXPORT_BODY_DIGEST_MISMATCH';
-  END IF;
-  IF EXISTS (
-    SELECT 1 FROM finance_workflow_contract c
-    JOIN workflow_entity w ON w.id = c.workflow_id
-    WHERE (c.workflow_id <> '10000000-0000-4000-8000-000000000015' AND w.active)
-       OR (c.workflow_id <> '10000000-0000-4000-8000-000000000015' AND w."activeVersionId" IS NOT NULL)
-  ) THEN
-    RAISE EXCEPTION 'UNEXPECTED_ACTIVE_OR_PUBLISHED_WORKFLOW';
-  END IF;
-  IF (SELECT COUNT(*) FROM workflow_entity w JOIN finance_workflow_contract c ON c.workflow_id = w.id WHERE w.active = TRUE) <> 1
-     OR (SELECT COUNT(*) FROM workflow_entity w JOIN finance_workflow_contract c ON c.workflow_id = w.id WHERE w."activeVersionId" IS NOT NULL) <> 1
-     OR (SELECT w."activeVersionId" FROM workflow_entity w WHERE w.id = '10000000-0000-4000-8000-000000000015') IS DISTINCT FROM '1bd2090e-13e8-4427-bfe7-630c11bf0da5' THEN
-    RAISE EXCEPTION 'ACTIVE_VERSION_TUPLE_GUARD_FAILED';
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_REFERENCE_MISMATCH';
   END IF;
 END $$;
 
--- Capture opaque rows before mutation.  These temporary records make a
--- rollback rehearsal exact without exposing workflow nodes or credentials.
-CREATE TEMP TABLE finance_organization_prestate AS
-SELECT 'workflow' AS kind, w.id AS row_id, to_jsonb(w) AS row_json
+CREATE TEMP TABLE application_workflow_activation_prestate (
+  workflow_id varchar(36) PRIMARY KEY,
+  active boolean NOT NULL,
+  active_version_id varchar(36)
+) ON COMMIT DROP;
+INSERT INTO application_workflow_activation_prestate
+SELECT w.id, w.active, w."activeVersionId"
 FROM workflow_entity w
-JOIN finance_workflow_contract c ON c.workflow_id = w.id
-JOIN shared_workflow ws ON ws."workflowId" = w.id
-WHERE ws."projectId" = :'finance_project_id'
-UNION ALL
-SELECT 'retirement_workflow', w.id, to_jsonb(w)
-FROM workflow_entity w
-JOIN shared_workflow ws ON ws."workflowId" = w.id
-WHERE w.id = '10000000-0000-4000-8000-000000000115'
-  AND ws."projectId" = :'finance_project_id'
-UNION ALL
-SELECT 'shared_workflow', s."workflowId", to_jsonb(s)
-FROM shared_workflow s
-JOIN finance_workflow_contract c ON c.workflow_id = s."workflowId"
-WHERE s."projectId" = :'finance_project_id'
-UNION ALL
-SELECT 'retirement_shared_workflow', s."workflowId", to_jsonb(s)
-FROM shared_workflow s
-WHERE s."workflowId" = '10000000-0000-4000-8000-000000000115'
-  AND s."projectId" = :'finance_project_id'
-UNION ALL
-SELECT 'folder', f.id, to_jsonb(f)
-FROM folder f
-JOIN finance_folder_contract c ON c.folder_id = f.id
-WHERE f."projectId" = :'finance_project_id'
-UNION ALL
-SELECT 'tag_edge', wt."workflowId" || ':' || wt."tagId", to_jsonb(wt)
-FROM workflows_tags wt
-JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId"
-UNION ALL
-SELECT 'retirement_tag_edge', wt."workflowId" || ':' || wt."tagId", to_jsonb(wt)
-FROM workflows_tags wt
-WHERE wt."workflowId" = '10000000-0000-4000-8000-000000000115';
-
-SELECT 'ORGANIZATION_PRESTATE' AS receipt,
-       COUNT(*) AS captured_rows,
-       md5(COALESCE(string_agg(kind || '|' || row_id || '|' || row_json::text, E'\n' ORDER BY kind, row_id), '')) AS full_row_md5,
-       md5(COALESCE(string_agg((row_json ->> 'id') || '|' || (row_json ->> 'name') || '|' || (row_json ->> 'parentFolderId') || '|' || (row_json ->> 'active') || '|' || (row_json ->> 'activeVersionId'), E'\n' ORDER BY row_id) FILTER (WHERE kind = 'workflow'), '')) AS logical_md5
-FROM finance_organization_prestate;
-
-SELECT 'RETIREMENT_BACKUP' AS receipt,
-       COUNT(*) AS retired_workflow_rows,
-       MIN(backup_md5) AS backup_md5,
-       BOOL_OR(legacy_workflow_id = '10000000-0000-4000-8000-000000000115') AS orphan_captured,
-       BOOL_OR(replacement_workflow_id = '10000000-0000-4000-8000-000000000024') AS replacement_bound
-FROM finance_workflow_retirement;
-
--- Tag identities are stable contracts.  Existing tags are never renamed.
-INSERT INTO tag_entity (id, name, "createdAt", "updatedAt") VALUES
-{{TAG_CONTRACT_ROWS}}
-ON CONFLICT (id) DO NOTHING;
+JOIN application_workflow_folder_contract c ON c.workflow_id = w.id
+JOIN shared_workflow s ON s."workflowId" = w.id
+JOIN application_folder_context context ON context.project_id = s."projectId";
 
 DO $$
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM tag_entity
-    WHERE (id, name) NOT IN (
-{{TAG_CONTRACT_TUPLES}}
-    ) AND id IN ({{TAG_CONTRACT_IDS}})
-  ) THEN
-    RAISE EXCEPTION 'TAG_ID_NAME_CONFLICT';
+  IF (SELECT COUNT(*) FROM application_workflow_activation_prestate) <> {{WORKFLOW_COUNT}} THEN
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_PROJECT_SCOPE_MISMATCH';
   END IF;
 END $$;
 
--- Create/reuse roots first so the child parent references are valid.
 INSERT INTO folder (id, name, "projectId", "parentFolderId", "createdAt", "updatedAt") VALUES
-{{FOLDER_ROOT_ROWS}}
+{{APPLICATION_FOLDER_ROOT_ROWS}}
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name, "parentFolderId" = EXCLUDED."parentFolderId"
 WHERE folder."projectId" = EXCLUDED."projectId"
-  AND (folder.name IS DISTINCT FROM EXCLUDED.name OR folder."parentFolderId" IS DISTINCT FROM EXCLUDED."parentFolderId");
+  AND (folder.name IS DISTINCT FROM EXCLUDED.name
+    OR folder."parentFolderId" IS DISTINCT FROM EXCLUDED."parentFolderId");
 
 INSERT INTO folder (id, name, "projectId", "parentFolderId", "createdAt", "updatedAt") VALUES
-{{FOLDER_CHILD_ROWS}}
+{{APPLICATION_FOLDER_CHILD_ROWS}}
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name, "parentFolderId" = EXCLUDED."parentFolderId"
 WHERE folder."projectId" = EXCLUDED."projectId"
-  AND (folder.name IS DISTINCT FROM EXCLUDED.name OR folder."parentFolderId" IS DISTINCT FROM EXCLUDED."parentFolderId");
+  AND (folder.name IS DISTINCT FROM EXCLUDED.name
+    OR folder."parentFolderId" IS DISTINCT FROM EXCLUDED."parentFolderId");
 
--- Move and normalize only the exact {{WORKFLOW_COUNT}} rows.  The guarded update cannot alter
--- active/version state and is a no-op on the second invocation.
 UPDATE workflow_entity w
-SET name = c.target_name, "parentFolderId" = c.folder_id, "updatedAt" = NOW()
-FROM finance_workflow_contract c
+SET "parentFolderId" = c.folder_id, "updatedAt" = NOW()
+FROM application_workflow_folder_contract c
 JOIN shared_workflow s ON s."workflowId" = c.workflow_id
 WHERE w.id = c.workflow_id
-  AND s."projectId" = :'finance_project_id'
-  AND (w.name IS DISTINCT FROM c.target_name OR w."parentFolderId" IS DISTINCT FROM c.folder_id);
-
--- Retire only the inactive disposable duplicate after the canonical source row
--- is present and its opaque prestate is captured.  The transaction remains the
--- rollback boundary; a rehearsal therefore leaves the old row untouched.
-DO $$
-DECLARE
-  expected_workflow_rows integer := COALESCE((SELECT SUM(workflow_row_count) FROM finance_workflow_retirement), 0);
-  expected_shared_rows integer := COALESCE((SELECT SUM(shared_row_count) FROM finance_workflow_retirement), 0);
-  expected_tag_rows integer := COALESCE((SELECT SUM(tag_row_count) FROM finance_workflow_retirement), 0);
-  deleted_workflow_rows integer;
-  deleted_shared_rows integer;
-  deleted_tag_rows integer;
-BEGIN
-  WITH deleted AS (
-    DELETE FROM workflows_tags wt
-    USING finance_workflow_retirement r
-    WHERE wt."workflowId" = r.legacy_workflow_id
-    RETURNING wt."workflowId"
-  )
-  SELECT COUNT(*) INTO deleted_tag_rows FROM deleted;
-  IF deleted_tag_rows <> expected_tag_rows THEN
-    RAISE EXCEPTION 'ORPHAN_TAG_DELETE_COUNT_MISMATCH';
-  END IF;
-
-  WITH deleted AS (
-    DELETE FROM shared_workflow s
-    USING finance_workflow_retirement r
-    WHERE s."workflowId" = r.legacy_workflow_id
-      AND s."projectId" = r.project_id
-    RETURNING s."workflowId"
-  )
-  SELECT COUNT(*) INTO deleted_shared_rows FROM deleted;
-  IF deleted_shared_rows <> expected_shared_rows THEN
-    RAISE EXCEPTION 'ORPHAN_SHARED_DELETE_COUNT_MISMATCH';
-  END IF;
-
-  WITH deleted AS (
-    DELETE FROM workflow_entity w
-    USING finance_workflow_retirement r
-    WHERE w.id = r.legacy_workflow_id
-      AND w.active = FALSE
-      AND w."activeVersionId" IS NULL
-    RETURNING w.id
-  )
-  SELECT COUNT(*) INTO deleted_workflow_rows FROM deleted;
-  IF deleted_workflow_rows <> expected_workflow_rows THEN
-    RAISE EXCEPTION 'ORPHAN_WORKFLOW_DELETE_COUNT_MISMATCH';
-  END IF;
-END $$;
-
-DELETE FROM workflows_tags wt
-USING finance_workflow_contract c
-WHERE wt."workflowId" = c.workflow_id
-  AND c.workflow_id = '10000000-0000-4000-8000-000000000015'
-  AND wt."tagId" = '{{INACTIVE_TAG_ID}}';
-
-INSERT INTO workflows_tags ("workflowId", "tagId")
-VALUES ('10000000-0000-4000-8000-000000000015', '{{ACTIVE_TAG_ID}}')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO workflows_tags ("workflowId", "tagId")
-SELECT c.workflow_id, t.tag_id
-FROM finance_workflow_contract c
-CROSS JOIN (VALUES {{WORKFLOW_TAG_ROWS}}) AS t(tag_id)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO workflows_tags ("workflowId", "tagId")
-SELECT c.workflow_id, '{{INACTIVE_TAG_ID}}'
-FROM finance_workflow_contract c
-WHERE c.workflow_id <> '10000000-0000-4000-8000-000000000015'
-ON CONFLICT DO NOTHING;
-
--- Remove only the known legacy flat folders once no target workflow references
--- them.  Unrelated folders in the project are not touched.
-DELETE FROM folder f
-WHERE f."projectId" = :'finance_project_id'
-  AND f.id IN ({{LEGACY_FOLDER_IDS}})
-  AND NOT EXISTS (SELECT 1 FROM workflow_entity w WHERE w."parentFolderId" = f.id)
-  AND NOT EXISTS (SELECT 1 FROM folder child WHERE child."parentFolderId" = f.id);
+  AND s."projectId" = :'application_project_id'
+  AND w."parentFolderId" IS DISTINCT FROM c.folder_id;
 
 DO $$
 DECLARE
   expected_project_id varchar(64);
 BEGIN
-  SELECT project_id INTO expected_project_id FROM finance_organization_context;
-  IF EXISTS (
-    SELECT 1 FROM workflow_entity
-    WHERE id = '10000000-0000-4000-8000-000000000115'
-  ) OR EXISTS (
-    SELECT 1 FROM shared_workflow
-    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  ) OR EXISTS (
-    SELECT 1 FROM workflows_tags
-    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
-  ) THEN
-    RAISE EXCEPTION 'ORPHAN_WORKFLOW_REMAINS';
-  END IF;
-  IF (SELECT COUNT(*) FROM workflow_entity w
-      JOIN shared_workflow s ON s."workflowId" = w.id
-      JOIN finance_workflow_contract c ON c.workflow_id = w.id
-      WHERE s."projectId" = expected_project_id) <> {{WORKFLOW_COUNT}} THEN
-    RAISE EXCEPTION 'CANONICAL_WORKFLOW_ROSTER_COUNT_MISMATCH';
-  END IF;
-  IF EXISTS (
-    SELECT 1 FROM folder
-    WHERE "projectId" = expected_project_id
-      AND id IN ({{LEGACY_FOLDER_IDS}})
-  ) THEN
-    RAISE EXCEPTION 'LEGACY_FOLDER_REMAINS';
-  END IF;
-  IF (SELECT COUNT(*) FROM folder f JOIN finance_folder_contract c ON c.folder_id = f.id WHERE f."projectId" = expected_project_id) <> {{FOLDER_COUNT}}
+  SELECT project_id INTO expected_project_id FROM application_folder_context;
+  IF (SELECT COUNT(*)
+      FROM folder f
+      JOIN application_folder_contract c ON c.folder_id = f.id
+      WHERE f."projectId" = expected_project_id) <> {{FOLDER_COUNT}}
      OR EXISTS (
-       SELECT 1 FROM finance_folder_contract c
+       SELECT 1 FROM application_folder_contract c
        LEFT JOIN folder f ON f.id = c.folder_id
          AND f."projectId" = expected_project_id
          AND f.name = c.folder_name
@@ -466,54 +126,27 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'FOLDER_READBACK_MISMATCH';
   END IF;
-  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> {{WORKFLOW_COUNT}}
+  IF (SELECT COUNT(*) FROM application_workflow_folder_contract) <> {{WORKFLOW_COUNT}}
      OR EXISTS (
-       SELECT 1 FROM finance_workflow_contract c
-       JOIN workflow_entity w ON w.id = c.workflow_id
-       WHERE w.name IS DISTINCT FROM c.target_name
+       SELECT 1 FROM application_workflow_folder_contract c
+       LEFT JOIN workflow_entity w ON w.id = c.workflow_id
+       LEFT JOIN shared_workflow s ON s."workflowId" = w.id
+         AND s."projectId" = expected_project_id
+       WHERE w.id IS NULL OR s."workflowId" IS NULL
           OR w."parentFolderId" IS DISTINCT FROM c.folder_id
      ) THEN
-    -- WORKFLOW_FOLDER_READBACK_MISMATCH is the legacy placement guard name.
-    RAISE EXCEPTION 'WORKFLOW_NAME_OR_FOLDER_READBACK_MISMATCH';
+    RAISE EXCEPTION 'WORKFLOW_FOLDER_READBACK_MISMATCH';
   END IF;
   IF EXISTS (
     SELECT 1
-    FROM finance_workflow_contract c
-    JOIN workflow_entity w ON w.id = c.workflow_id
-    JOIN finance_organization_prestate p ON p.kind = 'workflow' AND p.row_id = w.id
-    WHERE (w.active, w."activeVersionId") IS DISTINCT FROM ((p.row_json ->> 'active')::boolean, p.row_json ->> 'activeVersionId')
+    FROM application_workflow_activation_prestate p
+    JOIN workflow_entity w ON w.id = p.workflow_id
+    WHERE (w.active, w."activeVersionId")
+      IS DISTINCT FROM (p.active, p.active_version_id)
   ) THEN
-    RAISE EXCEPTION 'VERSION_TUPLE_READBACK_MISMATCH';
-  END IF;
-  IF (SELECT COUNT(*) FROM workflow_entity w JOIN finance_workflow_contract c ON c.workflow_id = w.id WHERE w.active) <> 1
-     OR (SELECT COUNT(*) FROM workflow_entity w JOIN finance_workflow_contract c ON c.workflow_id = w.id WHERE w."activeVersionId" IS NOT NULL) <> 1
-     OR (SELECT w."activeVersionId" FROM workflow_entity w WHERE w.id = '10000000-0000-4000-8000-000000000015') IS DISTINCT FROM '1bd2090e-13e8-4427-bfe7-630c11bf0da5' THEN
-    RAISE EXCEPTION 'ACTIVE_PUBLISHED_READBACK_MISMATCH';
-  END IF;
-{{TAG_EDGE_READBACK_GUARDS}}
-     OR EXISTS (SELECT 1 FROM workflows_tags WHERE "workflowId" = '10000000-0000-4000-8000-000000000015' AND "tagId" = '{{INACTIVE_TAG_ID}}') THEN
-    RAISE EXCEPTION 'TAG_EDGE_READBACK_MISMATCH';
+    RAISE EXCEPTION 'WORKFLOW_ACTIVATION_VERSION_CHANGED';
   END IF;
 END $$;
 
-SELECT 'ORGANIZATION_POSTSTATE' AS receipt,
-       COUNT(*) AS workflow_count,
-       COUNT(*) FILTER (WHERE w.active) AS active_count,
-       COUNT(*) FILTER (WHERE w."activeVersionId" IS NOT NULL) AS published_count,
-       (SELECT source_path FROM finance_canonical_source_contract) AS canonical_source_path,
-       (SELECT source_sha256 FROM finance_canonical_source_contract) AS canonical_source_sha256,
-       (SELECT expected_body_md5 FROM finance_canonical_source_contract) AS canonical_body_md5,
-       (SELECT COUNT(*) FROM finance_workflow_retirement) AS retired_workflow_count,
-       (SELECT MIN(backup_md5) FROM finance_workflow_retirement) AS retirement_backup_md5,
-       md5(COALESCE(string_agg(to_jsonb(w)::text, E'\n' ORDER BY w.id), '')) AS full_row_md5,
-       md5(COALESCE(string_agg(jsonb_build_object('id', w.id, 'name', w.name, 'parentFolderId', w."parentFolderId", 'active', w.active, 'activeVersionId', w."activeVersionId")::text, E'\n' ORDER BY w.id), '')) AS logical_md5
-FROM workflow_entity w
-JOIN finance_workflow_contract c ON c.workflow_id = w.id;
-
-\if :finance_commit
-  COMMIT;
-  \echo 'ORGANIZATION_COMMITTED'
-\else
-  ROLLBACK;
-  \echo 'ORGANIZATION_REHEARSAL_ROLLED_BACK'
-\endif
+COMMIT;
+\echo 'WORKFLOW_FOLDER_PLACEMENT_COMMITTED'

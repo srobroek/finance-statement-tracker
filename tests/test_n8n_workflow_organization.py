@@ -75,6 +75,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
         owned = [
             root / "organize-workflows.py",
             root / "workflow-folder-placement.sql",
+            root / "workflow-organization-cutover.sql",
             root / "workflow-folders.json",
             root / "application-manifest.json",
             root / "workflows" / "22-shared-monthly-statement-cycle.json",
@@ -104,8 +105,30 @@ class WorkflowOrganizationTests(unittest.TestCase):
             o.persisted_workflow_body_md5(renamed), o.CANONICAL_PERSISTED_BODY_MD5
         )
 
-    def test_sql_is_guarded_rehearsal_and_contains_exact_target_contract(self):
+    def test_minimal_placement_has_exact_scope_and_preserves_activation_state(self):
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
+        self.assertIn(":{?application_project_id}", sql)
+        self.assertIn("COMMIT;", sql)
+        self.assertNotIn("ROLLBACK", sql)
+        self.assertNotIn("finance_project_id", sql)
+        self.assertNotIn("finance_commit", sql)
+        self.assertNotIn("workflows_tags", sql)
+        self.assertNotIn("000000000115", sql)
+        self.assertIn("WORKFLOW_ACTIVATION_VERSION_CHANGED", sql)
+        update = re.search(r"UPDATE workflow_entity w.*?;", sql, flags=re.DOTALL)
+        self.assertIsNotNone(update)
+        update_sql = update.group(0)
+        self.assertIn('SET "parentFolderId" = c.folder_id, "updatedAt" = NOW()', update_sql)
+        self.assertNotIn("active =", update_sql)
+        self.assertNotIn('"activeVersionId" =', update_sql)
+        self.assertNotIn("name =", update_sql)
+        for row in self.organizer.WORKFLOW_MAP:
+            self.assertIn(row["id"], sql)
+            self.assertIn(row["folder_id"], sql)
+            self.assertNotIn(row["target_name"], sql)
+
+    def test_cutover_is_guarded_rehearsal_and_contains_exact_target_contract(self):
+        sql = (N8N / "workflow-organization-cutover.sql").read_text(encoding="utf-8")
         self.assertIn("\\set finance_commit false", sql)
         self.assertIn("\\if :finance_commit", sql)
         self.assertIn("ROLLBACK", sql)
@@ -124,10 +147,19 @@ class WorkflowOrganizationTests(unittest.TestCase):
             self.assertIn(row["target_name"], sql)
             self.assertIn(row["folder_id"], sql)
 
-    def test_sql_is_byte_identical_to_canonical_contract_renderer(self):
+    def test_both_sql_outputs_are_byte_identical_to_canonical_contract_renderer(self):
         generator = load_sql_generator()
-        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
-        self.assertEqual(generator.render(), sql)
+        rendered = generator.render_outputs()
+        self.assertEqual(
+            set(rendered),
+            {
+                N8N / "workflow-folder-placement.sql",
+                N8N / "workflow-organization-cutover.sql",
+            },
+        )
+        for path, expected in rendered.items():
+            self.assertEqual(path.read_text(encoding="utf-8"), expected)
+            self.assertNotIn("{{", expected)
         completed = subprocess.run(
             [sys.executable, str(SQL_GENERATOR_SOURCE), "--check"],
             cwd=ROOT,
@@ -136,21 +168,26 @@ class WorkflowOrganizationTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertNotIn("{{", sql)
 
     def test_sql_do_blocks_read_context_instead_of_using_psql_variables(self):
-        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
-        blocks = re.findall(r"DO \$\$.*?END \$\$;", sql, flags=re.DOTALL)
-        self.assertGreaterEqual(len(blocks), 4)
-        for block in blocks:
-            self.assertNotIn(":'finance_project_id'", block)
-        self.assertGreaterEqual(
-            sum("finance_organization_context" in block for block in blocks), 3
+        cases = (
+            ("workflow-folder-placement.sql", "application_project_id", "application_folder_context", 2),
+            ("workflow-organization-cutover.sql", "finance_project_id", "finance_organization_context", 3),
         )
+        for filename, variable, context, minimum_context_blocks in cases:
+            with self.subTest(filename=filename):
+                sql = (N8N / filename).read_text(encoding="utf-8")
+                blocks = re.findall(r"DO \$\$.*?END \$\$;", sql, flags=re.DOTALL)
+                self.assertGreaterEqual(len(blocks), 3)
+                for block in blocks:
+                    self.assertNotIn(f":'{variable}'", block)
+                self.assertGreaterEqual(
+                    sum(context in block for block in blocks), minimum_context_blocks
+                )
 
     def test_sql_cutover_contract_has_transactional_guards(self):
         o = self.organizer
-        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
+        sql = (N8N / "workflow-organization-cutover.sql").read_text(encoding="utf-8")
         for marker in (
             "FOR UPDATE",
             "RETURNING",
@@ -179,7 +216,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
                 "--set",
                 "finance_commit=false",
                 "--file",
-                str(N8N / "workflow-folder-placement.sql"),
+                str(N8N / "workflow-organization-cutover.sql"),
             ],
             cwd=ROOT,
             capture_output=True,

@@ -126,6 +126,10 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 self.assertTrue(resolved.exists(), relative)
             self.assertTrue((root / "bootstrap").is_dir())
             self.assertTrue((root / "fixtures").is_dir())
+            placement = (root / manifest["folders"]["sql"]).read_text(encoding="utf-8")
+            self.assertIn("application_project_id", placement)
+            self.assertNotIn("finance_project_id", placement)
+            self.assertFalse((root / "workflow-organization-cutover.sql").exists())
             self.assertNotIn("finance_commit", manifest)
             self.assertNotIn("extension_image", manifest)
 
@@ -148,13 +152,15 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             self.assertEqual(by_code[code]["id"], workflow["meta"]["workflowFolder"]["id"])
         placement = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
         for marker in (
-            "finance_project_id",
+            "application_project_id",
             "shared_workflow",
             "WORKFLOW_FOLDER_MAP_COUNT_MISMATCH",
             "WORKFLOW_FOLDER_READBACK_MISMATCH",
-            "w.active = TRUE",
+            "WORKFLOW_ACTIVATION_VERSION_CHANGED",
         ):
             self.assertIn(marker, placement)
+        self.assertNotIn("finance_project_id", placement)
+        self.assertNotIn("finance_commit", placement)
 
     def test_finance_application_manifest_binds_the_generic_input_corpus(self) -> None:
         manifest = load_json(N8N / "application-manifest.json")
