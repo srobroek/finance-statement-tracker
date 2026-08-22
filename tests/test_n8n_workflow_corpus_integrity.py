@@ -15,7 +15,7 @@ WORKFLOWS = N8N / "workflows"
 # The approved visual rebaseline removes these historical generated stage
 # labels.  The current-head extraction removed a few of these nodes before
 # this cleanup, but the full allowlist remains a regression guard against any
-# reintroduction.  Four blocker warning notes are intentionally retained and
+# reintroduction.  One blocker warning note is intentionally retained and
 # are asserted separately below.
 _REMOVED_STAGE_NOTE_RANGES = {
     "001": range(1, 7),
@@ -42,9 +42,6 @@ REMOVED_STAGE_NOTE_IDS = {
     for number in numbers
 }
 RETAINED_OPERATOR_WARNING_NOTE_IDS = {
-    "10000000-0000-4000-8000-000000000006-generated-note-1",
-    "10000000-0000-4000-8000-000000000007-generated-note-1",
-    "10000000-0000-4000-8000-000000000008-generated-note-1",
     "10000000-0000-4000-8000-000000000015-generated-note-1",
 }
 
@@ -99,30 +96,6 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 48,
                                             'connections_sha256': 'c64db46a4ea0c005bfc3ae8f094b4bb992ee507b8e73152d39558aaeb047b6e2',
                                             'parameters_sha256': '09af79d9f176227d038496e8de187baf0fda1c3f761ab762f1daba819f83a3ac',
                                             'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
- '06-rak-monthly-statement.json': {'nodes': 3,
-                                   'edges': 1,
-                                   'sticky': 1,
-                                   'groups': 0,
-                                   'node_ids_sha256': '641f342dce57c84d7fe8a7f44645254e69beb0b4929a2aeb340cc2a616c380c4',
-                                   'connections_sha256': '68149936edb392300084b7ed26b8bfb355d51ae7b8f289fb0a8a9c4fd0c604a8',
-                                   'parameters_sha256': '78318a7e16de31394fb97413f9cc0fcefa564b30bc977ae4d922df5f6fbce65d',
-                                   'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
- '07-sc-monthly-statement.json': {'nodes': 3,
-                                  'edges': 1,
-                                  'sticky': 1,
-                                  'groups': 0,
-                                  'node_ids_sha256': '1743e0dfdb36a7792a76d0ffc55aec64728c7a321cb8e1ff7e604c1ff003dd3b',
-                                  'connections_sha256': 'c491278e0f758fff53c4a8b02e92cd925f4e0cf762ab35fc7307832969d2714c',
-                                  'parameters_sha256': '53b53ff9838ac93b49b4b7eda164ed6edfe3327b0f3d97d63c94e97df3191110',
-                                  'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
- '08-sc-live-cashback.json': {'nodes': 3,
-                              'edges': 1,
-                              'sticky': 1,
-                              'groups': 0,
-                              'node_ids_sha256': '75dbf945741aeb3ea806a352a594bfd3af6a4f829ea98527dae0c85e5d94ec33',
-                              'connections_sha256': '7aee054de6ffe42194a96f02c24410ea11dc384c490706333b6649518ade56dd',
-                              'parameters_sha256': 'b8a2348b6070980403857b743ff168f554c584a11b5950fce6162f7f0f90be1e',
-                              'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
  '09-ai-proposal.json': {'nodes': 35,
                          'edges': 30,
                          'sticky': 4,
@@ -407,7 +380,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
         )
 
     def test_regular_exports_are_exactly_inactive_and_unpublished(self) -> None:
-        self.assert_metric("corpus", "regular export count", 22, len(self.workflows))
+        self.assert_metric("corpus", "regular export count", 19, len(self.workflows))
         missing = sorted(set(CORPUS_SNAPSHOT) - set(self.workflows))
         extra = sorted(set(self.workflows) - set(CORPUS_SNAPSHOT))
         self.assertEqual(
@@ -441,7 +414,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
 
     def test_registry_and_folder_manifest_are_bijective(self) -> None:
         rows = self.registry["workflows"]
-        self.assert_metric("registry", "workflow row count", 22, len(rows))
+        self.assert_metric("registry", "workflow row count", 19, len(rows))
         registry_files = [row["file"] for row in rows]
         registry_codes = [row["code"] for row in rows]
         self.assertEqual(len(registry_files), len(set(registry_files)), "duplicate registry files")
@@ -488,16 +461,24 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
         )
 
         folders = self.folder_manifest["folders"]
-        self.assert_metric("folder manifest", "folder count", 8, len(folders))
+        self.assert_metric("folder manifest", "folder count", 6, len(folders))
         folder_ids = [folder["id"] for folder in folders]
-        folder_names = [folder["name"] for folder in folders]
         self.assertEqual(len(folder_ids), len(set(folder_ids)), "duplicate folder IDs")
-        self.assertEqual(len(folder_names), len(set(folder_names)), "duplicate folder names")
+        folder_keys = [(folder["parentFolderId"], folder["name"]) for folder in folders]
+        self.assertEqual(len(folder_keys), len(set(folder_keys)), "duplicate folder names within a parent")
         codes = [code for folder in folders for code in folder["workflow_codes"]]
         self.assertEqual(len(codes), len(set(codes)), "duplicate folder workflow codes")
         self.assertEqual(set(codes), set(registry_codes), "folder/registry workflow-code bijection drift")
+        self.assertEqual(
+            self.folder_manifest["tags"],
+            ["finance", "setup-required", "inactive", "active"],
+        )
+        self.assertEqual(
+            self.folder_manifest["workflow_tags"],
+            ["finance", "setup-required", "inactive"],
+        )
         by_code = folder_by_code
-        expected_tags = self.folder_manifest["tags"]
+        expected_tags = self.folder_manifest["workflow_tags"]
         for row in rows:
             filename = row["file"]
             workflow = self.workflows[filename]

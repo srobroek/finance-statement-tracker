@@ -4,11 +4,11 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "75cfc8e8a005a33162430860f9b82ace2963d6923bef038f1bbc25ab1d381ee4",
-    "12-outlook-message-sweep.json": "0467ff93693e624be9bdcdfa0c734641bfb5865ddb6e9c3a2a80c981ecad5b52",
-    "16-operations-error-handler.json": "f6d6e6c97960da2b34a408aea20788586162be28bfb2fce662253073f5576fea",
-    "17-actual-outbox-recovery.json": "76119b0e774d6ceda555471cd2be11d663bb634896920f4603245c6b26a2e205",
-    "18-finance-writer-lease.json": "3eeb375f5c0ec2644dd11877c77222d62541c85884fc6a15aa652662fde464d9"
+    "09-ai-proposal.json": "b90b09cf6f2128828d74b548492f987ede45ef59db3d2725332b8c76eb3c5c6c",
+    "12-outlook-message-sweep.json": "2b3e33daec7b1056cf683e5b08060eca07bd8a9036228ebe31c30fab64b3d6c7",
+    "16-operations-error-handler.json": "fcf3326a7d446022dcff55bd0a127dcdaf30964924c3af5341d2b3f517211054",
+    "17-actual-outbox-recovery.json": "ff475799c5f1f69e79d946dd60db9a4914dd8f477caf80f8689d50982a4216ff",
+    "18-finance-writer-lease.json": "863f034e5868a8eda8f882bf7427af6b61ac1ed3ff7c73e3b26f71c871afd0f8"
   },
   "workflows": [
     {

@@ -20,262 +20,20 @@ from typing import Any
 FINANCE_PROJECT = "Finance"
 GLOBAL_PROJECT = "Global"
 
-TAG_IDS = {
-    "finance": "fin0000000000001",
-    "setup-required": "fin0000000000002",
-    "inactive": "fin0000000000003",
-    "active": "fin0000000000004",
-}
-
-FOLDER_SPECS = (
+CONTRACT_PATH = Path(__file__).resolve().parent / "workflow-folders.json"
+CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+TAG_IDS = {row["name"]: row["id"] for row in CONTRACT["tag_definitions"]}
+FOLDER_SPECS = tuple(
     {
-        "id": "f1000000-0000-4000-8000-000000000100",
-        "name": "Finance",
-        "parentFolderId": None,
-        "root": True,
-    },
-    {
-        "id": "f1000000-0000-4000-8000-000000000190",
-        "name": "Global",
-        "parentFolderId": None,
-        "root": True,
-    },
-    {
-        "id": "f1000000-0000-4000-8000-000000000101",
-        "name": "Account Reconciliation",
-        "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-        "root": False,
-    },
-    {
-        "id": "f1000000-0000-4000-8000-000000000102",
-        "name": "Cashback Sweep",
-        "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-        "root": False,
-    },
-    {
-        "id": "f1000000-0000-4000-8000-000000000103",
-        "name": "Shared",
-        "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-        "root": False,
-    },
-    {
-        "id": "f1000000-0000-4000-8000-000000000191",
-        "name": "Shared",
-        "parentFolderId": "f1000000-0000-4000-8000-000000000190",
-        "root": False,
-    },
-)
-
-LEGACY_FOLDER_IDS = frozenset(
-    {
-        "f1000000-0000-4000-8000-000000000001",
-        "f1000000-0000-4000-8000-000000000002",
-        "f1000000-0000-4000-8000-000000000003",
-        "f1000000-0000-4000-8000-000000000004",
-        "f1000000-0000-4000-8000-000000000005",
-        "f1000000-0000-4000-8000-000000000006",
-        "f1000000-0000-4000-8000-000000000007",
-        "f1000000-0000-4000-8000-000000000090",
+        "id": row["id"],
+        "name": row["name"],
+        "parentFolderId": row["parentFolderId"],
+        "root": row["root"],
     }
+    for row in CONTRACT["folders"]
 )
-
-
-def _workflow(
-    number: str,
-    code: str,
-    current_name: str,
-    target_name: str,
-    folder_id: str,
-    source: str,
-) -> dict[str, str]:
-    return {
-        "id": f"10000000-0000-4000-8000-{number}",
-        "code": code,
-        "current_name": current_name,
-        "target_name": target_name,
-        "folder_id": folder_id,
-        "source": source,
-    }
-
-
-WORKFLOW_MAP = (
-    _workflow(
-        "000000000001",
-        "OUTLOOK_FINANCE_ACQUISITION",
-        "Finance · Acquire Outlook Documents · Setup Required",
-        "Acquire Outlook Documents",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-    ),
-    _workflow(
-        "000000000002",
-        "RAKBANK_LIVE_CASHBACK",
-        "Finance · RAKBANK Live Cashback · Setup Required",
-        "RAKBANK Live Cashback",
-        "f1000000-0000-4000-8000-000000000102",
-        "integrations/n8n/workflows/02-rakbank-live-cashback.json",
-    ),
-    _workflow(
-        "000000000003",
-        "SHARED_STATEMENT_PIPELINE",
-        "Finance · Shared Deterministic Statement Pipeline · Setup Required",
-        "Shared Deterministic Statement Pipeline",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-    ),
-    _workflow(
-        "000000000004",
-        "EI_MONTHLY_STATEMENT",
-        "Finance · EI Statement Cycle Poll · Setup Required",
-        "EI Statement Cycle Poll",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/04-ei-monthly-statement.json",
-    ),
-    _workflow(
-        "000000000005",
-        "WIO_MONTHLY_STATEMENT",
-        "Finance · Wio Statement Cycle Poll · Setup Required",
-        "Wio Statement Cycle Poll",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/05-wio-monthly-statement.json",
-    ),
-    _workflow(
-        "000000000006",
-        "RAK_MONTHLY_STATEMENT",
-        "Finance · RAK Monthly Statement · Setup Required",
-        "RAK Monthly Statement",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/06-rak-monthly-statement.json",
-    ),
-    _workflow(
-        "000000000007",
-        "SC_MONTHLY_STATEMENT",
-        "Finance · SC Monthly Statement · Setup Required",
-        "SC Monthly Statement",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/07-sc-monthly-statement.json",
-    ),
-    _workflow(
-        "000000000008",
-        "SC_LIVE_CASHBACK",
-        "Finance · SC Live Cashback · Setup Required",
-        "SC Live Cashback",
-        "f1000000-0000-4000-8000-000000000102",
-        "integrations/n8n/workflows/08-sc-live-cashback.json",
-    ),
-    _workflow(
-        "000000000009",
-        "AI_PROPOSAL",
-        "Finance · Subscription Agent Proposal · Setup Required",
-        "Subscription Agent Proposal",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/09-ai-proposal.json",
-    ),
-    _workflow(
-        "000000000010",
-        "FINANCE_OPERATIONS_STATUS",
-        "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
-        "Operations Status and Audited MCP Dispatch",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/10-finance-operations-status.json",
-    ),
-    _workflow(
-        "000000000011",
-        "INTERACTIVE_ARTIFACT_HANDOFF",
-        "Finance · Interactive Artifact Handoff · Setup Required",
-        "Interactive Artifact Handoff",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-    ),
-    _workflow(
-        "000000000012",
-        "OUTLOOK_MESSAGE_SWEEP",
-        "Finance · Sweep Outlook Messages · Setup Required",
-        "Sweep Outlook Messages",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/12-outlook-message-sweep.json",
-    ),
-    _workflow(
-        "000000000013",
-        "DOCUMENT_EXTRACTION_REQUEST",
-        "Finance · Request Document Extraction · Setup Required",
-        "Request Document Extraction",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/13-document-extraction-request.json",
-    ),
-    _workflow(
-        "000000000014",
-        "LOCAL_PDF_EXTRACTION",
-        "Finance · Local PDF Extraction Ladder · Setup Required",
-        "Local PDF Extraction Ladder",
-        "f1000000-0000-4000-8000-000000000101",
-        "integrations/n8n/workflows/14-local-pdf-extraction.json",
-    ),
-    _workflow(
-        "000000000015",
-        "FINANCE_MCP_FACADE",
-        "Finance · Bounded MCP Facade · Setup Required",
-        "Bounded MCP Facade",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/15-finance-mcp-facade.json",
-    ),
-    _workflow(
-        "000000000016",
-        "OPERATIONS_ERROR_HANDLER",
-        "Finance · Redacted Operations Error Handler · Setup Required",
-        "Redacted Operations Error Handler",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/16-operations-error-handler.json",
-    ),
-    _workflow(
-        "000000000017",
-        "ACTUAL_OUTBOX_RECOVERY",
-        "Finance · Actual Outbox Recovery · Setup Required",
-        "Actual Outbox Recovery",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/17-actual-outbox-recovery.json",
-    ),
-    _workflow(
-        "000000000018",
-        "FINANCE_WRITER_LEASE",
-        "Finance · Fenced Actual Writer Lease · Setup Required",
-        "Fenced Actual Writer Lease",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/18-finance-writer-lease.json",
-    ),
-    _workflow(
-        "000000000019",
-        "PLATFORM_DATA_TABLE_BOOTSTRAP",
-        "Finance · Platform Data Table Bootstrap · Setup Required",
-        "Platform Data Table Bootstrap",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/19-platform-data-table-bootstrap.json",
-    ),
-    _workflow(
-        "000000000020",
-        "ACTUAL_OUTBOX_APPLY",
-        "Finance · Apply Prepared Actual Outbox · Setup Required",
-        "Apply Prepared Actual Outbox",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/20-actual-outbox-apply.json",
-    ),
-    _workflow(
-        "000000000021",
-        "SUBSCRIPTION_AGENT_ADAPTER",
-        "Finance · Subscription Agent Adapter · Setup Required",
-        "Subscription Agent Adapter",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
-    ),
-    _workflow(
-        "000000000024",
-        "SHARED_MONTHLY_STATEMENT_CYCLE",
-        "Finance · Shared Monthly Statement Cycle",
-        "Shared Monthly Statement Cycle",
-        "f1000000-0000-4000-8000-000000000103",
-        "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
-    ),
-)
+WORKFLOW_MAP = tuple(dict(row) for row in CONTRACT["workflows"])
+LEGACY_FOLDER_IDS = frozenset(CONTRACT["legacy_folder_ids"])
 
 WORKFLOW_BY_ID = {row["id"]: row for row in WORKFLOW_MAP}
 TARGET_FOLDER_BY_ID = {row["id"]: row for row in FOLDER_SPECS}
@@ -290,12 +48,12 @@ CANONICAL_EXPORT_RELATIVE_PATH = (
     "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json"
 )
 CANONICAL_EXPORT_SHA256 = (
-    "2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2"
+    "0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1"
 )
 # These are the workflow_entity fields that make up the imported workflow body.
 # Keep mutable name, runtime/version, and folder columns out of this digest;
 # those are normalized or guarded independently by the cutover contract.
-CANONICAL_PERSISTED_BODY_MD5 = "be22ef98b1a3a9aaea79a24673e85a57"
+CANONICAL_PERSISTED_BODY_MD5 = "4f413c5986362dee47db7e1fd39e128d"
 PERSISTED_BODY_FIELDS = (
     "id",
     "nodes",
@@ -476,7 +234,16 @@ def canonical_workflow_export() -> dict[str, Any]:
 def validate_contract() -> None:
     """Validate the checked-in organization contract at import time and in tests."""
 
-    if len(WORKFLOW_MAP) != 22 or len(WORKFLOW_BY_ID) != 22:
+    if CONTRACT.get("schema_version") != 2:
+        _fail("CONTRACT_SCHEMA_VERSION_MISMATCH")
+    if len(TAG_IDS) != 4 or set(TAG_IDS) != {
+        "finance",
+        "setup-required",
+        "inactive",
+        "active",
+    }:
+        _fail("TAG_CONTRACT_MISMATCH")
+    if len(WORKFLOW_MAP) != 19 or len(WORKFLOW_BY_ID) != 19:
         _fail("WORKFLOW_MAP_COUNT_MISMATCH")
     if CANONICAL_REPLACEMENT_ID not in TARGET_IDS or ORPHAN_WORKFLOW_ID in TARGET_IDS:
         _fail("CANONICAL_REPLACEMENT_ROSTER_MISMATCH")
@@ -502,6 +269,13 @@ def validate_contract() -> None:
             _fail("ROOT_PARENT_MISMATCH")
         if not row["root"] and row["parentFolderId"] not in folder_ids:
             _fail("CHILD_PARENT_MISMATCH")
+    manifest_workflow_codes = {
+        code
+        for folder in CONTRACT["folders"]
+        for code in folder.get("workflow_codes", [])
+    }
+    if manifest_workflow_codes != {row["code"] for row in WORKFLOW_MAP}:
+        _fail("WORKFLOW_FOLDER_ASSIGNMENT_MISMATCH")
     for row in WORKFLOW_MAP:
         if row["folder_id"] not in folder_ids or not row["target_name"].strip():
             _fail(f"WORKFLOW_TARGET_MISMATCH:{row['id']}")

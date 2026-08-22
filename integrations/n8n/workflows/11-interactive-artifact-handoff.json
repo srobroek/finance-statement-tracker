@@ -741,8 +741,8 @@
     "reuploadForbidden": true,
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000003",
-      "name": "03 Documents & Evidence",
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "name": "Account Reconciliation",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [

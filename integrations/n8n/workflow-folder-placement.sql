@@ -61,9 +61,6 @@ INSERT INTO finance_workflow_contract VALUES
   ('10000000-0000-4000-8000-000000000003', 'Finance · Shared Deterministic Statement Pipeline · Setup Required', 'Shared Deterministic Statement Pipeline', 'f1000000-0000-4000-8000-000000000101'),
   ('10000000-0000-4000-8000-000000000004', 'Finance · EI Statement Cycle Poll · Setup Required', 'EI Statement Cycle Poll', 'f1000000-0000-4000-8000-000000000101'),
   ('10000000-0000-4000-8000-000000000005', 'Finance · Wio Statement Cycle Poll · Setup Required', 'Wio Statement Cycle Poll', 'f1000000-0000-4000-8000-000000000101'),
-  ('10000000-0000-4000-8000-000000000006', 'Finance · RAK Monthly Statement · Setup Required', 'RAK Monthly Statement', 'f1000000-0000-4000-8000-000000000101'),
-  ('10000000-0000-4000-8000-000000000007', 'Finance · SC Monthly Statement · Setup Required', 'SC Monthly Statement', 'f1000000-0000-4000-8000-000000000101'),
-  ('10000000-0000-4000-8000-000000000008', 'Finance · SC Live Cashback · Setup Required', 'SC Live Cashback', 'f1000000-0000-4000-8000-000000000102'),
   ('10000000-0000-4000-8000-000000000009', 'Finance · Subscription Agent Proposal · Setup Required', 'Subscription Agent Proposal', 'f1000000-0000-4000-8000-000000000103'),
   ('10000000-0000-4000-8000-000000000010', 'Finance · Operations Status and Audited MCP Dispatch · Setup Required', 'Operations Status and Audited MCP Dispatch', 'f1000000-0000-4000-8000-000000000103'),
   ('10000000-0000-4000-8000-000000000011', 'Finance · Interactive Artifact Handoff · Setup Required', 'Interactive Artifact Handoff', 'f1000000-0000-4000-8000-000000000101'),
@@ -97,8 +94,8 @@ CREATE TEMP TABLE finance_canonical_source_contract (
 INSERT INTO finance_canonical_source_contract VALUES (
   '10000000-0000-4000-8000-000000000024',
   'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
-  '2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2',
-  'be22ef98b1a3a9aaea79a24673e85a57',
+  '0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1',
+  '4f413c5986362dee47db7e1fd39e128d',
   'Finance · Shared Monthly Statement Cycle',
   'Shared Monthly Statement Cycle',
   'SHARED_MONTHLY_STATEMENT_CYCLE',
@@ -200,7 +197,7 @@ BEGIN
     RAISE EXCEPTION 'FOLDER_CONTRACT_COUNT_MISMATCH';
   END IF;
   -- WORKFLOW_FOLDER_MAP_COUNT_MISMATCH is retained as the legacy guard name.
-  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> 22 THEN
+  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> 19 THEN
     RAISE EXCEPTION 'WORKFLOW_CONTRACT_COUNT_MISMATCH';
   END IF;
   IF (SELECT COUNT(*) FROM finance_workflow_retirement) > 1 THEN
@@ -372,7 +369,7 @@ SET name = EXCLUDED.name, "parentFolderId" = EXCLUDED."parentFolderId"
 WHERE folder."projectId" = EXCLUDED."projectId"
   AND (folder.name IS DISTINCT FROM EXCLUDED.name OR folder."parentFolderId" IS DISTINCT FROM EXCLUDED."parentFolderId");
 
--- Move and normalize only the exact 22 rows.  The guarded update cannot alter
+-- Move and normalize only the exact 19 rows.  The guarded update cannot alter
 -- active/version state and is a no-op on the second invocation.
 UPDATE workflow_entity w
 SET name = c.target_name, "parentFolderId" = c.folder_id, "updatedAt" = NOW()
@@ -481,7 +478,7 @@ BEGIN
   IF (SELECT COUNT(*) FROM workflow_entity w
       JOIN shared_workflow s ON s."workflowId" = w.id
       JOIN finance_workflow_contract c ON c.workflow_id = w.id
-      WHERE s."projectId" = expected_project_id) <> 22 THEN
+      WHERE s."projectId" = expected_project_id) <> 19 THEN
     RAISE EXCEPTION 'CANONICAL_WORKFLOW_ROSTER_COUNT_MISMATCH';
   END IF;
   IF EXISTS (
@@ -502,7 +499,7 @@ BEGIN
      ) THEN
     RAISE EXCEPTION 'FOLDER_READBACK_MISMATCH';
   END IF;
-  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> 22
+  IF (SELECT COUNT(*) FROM finance_workflow_contract) <> 19
      OR EXISTS (
        SELECT 1 FROM finance_workflow_contract c
        JOIN workflow_entity w ON w.id = c.workflow_id
@@ -526,9 +523,9 @@ BEGIN
      OR (SELECT w."activeVersionId" FROM workflow_entity w WHERE w.id = '10000000-0000-4000-8000-000000000015') IS DISTINCT FROM '1bd2090e-13e8-4427-bfe7-630c11bf0da5' THEN
     RAISE EXCEPTION 'ACTIVE_PUBLISHED_READBACK_MISMATCH';
   END IF;
-  IF (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000001') <> 22
-     OR (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000002') <> 22
-     OR (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000003') <> 21
+  IF (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000001') <> 19
+     OR (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000002') <> 19
+     OR (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000003') <> 18
      OR (SELECT COUNT(*) FROM workflows_tags wt JOIN finance_workflow_contract c ON c.workflow_id = wt."workflowId" WHERE wt."tagId" = 'fin0000000000004') <> 1
      OR EXISTS (SELECT 1 FROM workflows_tags WHERE "workflowId" = '10000000-0000-4000-8000-000000000015' AND "tagId" = 'fin0000000000003') THEN
     RAISE EXCEPTION 'TAG_EDGE_READBACK_MISMATCH';

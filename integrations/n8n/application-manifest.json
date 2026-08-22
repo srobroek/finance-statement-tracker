@@ -26,16 +26,16 @@
   },
   "workflow_manifest": {
     "path": "integrations/n8n/pipeline-registry.json",
-    "sha256": "051a326f289181bf2105dfb2db8b235c00adfd7032cb4bd940cd30dcdd093512"
+    "sha256": "422503d6ea84560073f21ddbb0a9c2b6fd5409560732cd79bb786de6d5649ee9"
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "4c3cd002069cffd76443f44685c5dc18063523a42053b8df8c4e6a5c68a43813"
+    "sha256": "81cd4e80b6bd6de35742feb834adc906d5a449b6a5d64dc906fcc2963444bb1d"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
-    "file_count": 22,
-    "sha256": "a2dcf378860499f21c18d70470820fd343b2ab46e75b8e6809c97df10e63dcb2",
+    "file_count": 19,
+    "sha256": "245d953f8435d182f8cc0b83db80f5cb7edcc76136220fd0ab7cab9300b4e2e5",
     "required_state": {
       "active": false,
       "published": false,
@@ -57,7 +57,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "62d24b19061cba176f95e63a30b8d9bf6e9f06203cc6152734acbee1d6c6d1eb"
+      "sha256": "9ec4ec01884a00a7fdb8460610f87525d4223b69f7504152f8537183c3e9a9e4"
     },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]

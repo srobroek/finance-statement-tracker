@@ -495,7 +495,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
         registry_codes = set(self.registry_by_code)
         actual_codes = set(self.by_code)
         self.assertEqual(actual_codes, registry_codes)
-        self.assertEqual(len(actual_codes), 22)
+        self.assertEqual(len(actual_codes), 19)
 
         ids = {workflow["id"]: workflow for workflow in self.workflows.values()}
         for filename, workflow in self.workflows.items():

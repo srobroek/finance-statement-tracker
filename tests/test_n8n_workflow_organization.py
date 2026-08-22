@@ -190,10 +190,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.organizer = load_organizer()
 
-    def test_contract_has_exact_two_roots_four_children_and_22_rows(self):
+    def test_contract_has_exact_two_roots_four_children_and_19_rows(self):
         o = self.organizer
-        self.assertEqual(len(o.WORKFLOW_MAP), 22)
-        self.assertEqual(len({row["id"] for row in o.WORKFLOW_MAP}), 22)
+        self.assertEqual(len(o.WORKFLOW_MAP), 19)
+        self.assertEqual(len({row["id"] for row in o.WORKFLOW_MAP}), 19)
         self.assertIn(o.CANONICAL_REPLACEMENT_ID, {row["id"] for row in o.WORKFLOW_MAP})
         self.assertNotIn(o.ORPHAN_WORKFLOW_ID, {row["id"] for row in o.WORKFLOW_MAP})
         self.assertEqual(len(o.FOLDER_SPECS), 6)
@@ -236,14 +236,17 @@ class WorkflowOrganizationTests(unittest.TestCase):
         o = self.organizer
         before = fixture_state(o)
         after = o.apply_plan(before)
-        self.assertEqual(len(after["workflows"]), 22)
+        self.assertEqual(len(after["workflows"]), 19)
         self.assertNotIn(o.ORPHAN_WORKFLOW_ID, {row["id"] for row in after["workflows"]})
         self.assertIn(o.CANONICAL_REPLACEMENT_ID, {row["id"] for row in after["workflows"]})
         self.assertEqual(sum(row["active"] for row in after["workflows"]), 1)
         w15 = next(row for row in after["workflows"] if row["id"] == o.W15_ID)
         self.assertEqual(w15["activeVersionId"], o.W15_ACTIVE_VERSION)
-        self.assertEqual(w15["nodes"], before["workflows"][14]["nodes"])
-        self.assertEqual(w15["connections"], before["workflows"][14]["connections"])
+        before_w15 = next(
+            row for row in before["workflows"] if row["id"] == o.W15_ID
+        )
+        self.assertEqual(w15["nodes"], before_w15["nodes"])
+        self.assertEqual(w15["connections"], before_w15["connections"])
         self.assertTrue(
             all(
                 row["name"] == o.WORKFLOW_BY_ID[row["id"]]["target_name"]
@@ -287,13 +290,13 @@ class WorkflowOrganizationTests(unittest.TestCase):
             o.persisted_workflow_body_md5(renamed), o.CANONICAL_PERSISTED_BODY_MD5
         )
 
-    def test_tag_transition_is_exactly_21_inactive_and_one_active(self):
+    def test_tag_transition_is_exactly_18_inactive_and_one_active(self):
         o = self.organizer
         after = o.apply_plan(fixture_state(o))
         edges = after["workflow_tags"]
         inactive = [edge for edge in edges if edge["tagId"] == o.TAG_IDS["inactive"]]
         active = [edge for edge in edges if edge["tagId"] == o.TAG_IDS["active"]]
-        self.assertEqual(len(inactive), 21)
+        self.assertEqual(len(inactive), 18)
         self.assertEqual(len(active), 1)
         self.assertEqual(
             active[0], {"workflowId": o.W15_ID, "tagId": o.TAG_IDS["active"]}
@@ -308,10 +311,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
             "inactive",
         )
         self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 22
+            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 19
         )
         self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 22
+            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 19
         )
 
     def test_missing_required_edges_are_repaired_without_touching_other_tags(self):
@@ -327,10 +330,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
         after = o.apply_plan(state)
         edges = after["workflow_tags"]
         self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 22
+            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 19
         )
         self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 22
+            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 19
         )
         self.assertIn({"workflowId": o.W15_ID, "tagId": "other"}, edges)
 
@@ -380,10 +383,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
     ):
         o = self.organizer
         summary = o.snapshot_summary(fixture_state(o))
-        self.assertEqual(summary["workflow_count"], 22)
+        self.assertEqual(summary["workflow_count"], 19)
         self.assertEqual(summary["active_count"], 1)
         self.assertEqual(summary["published_count"], 1)
-        self.assertEqual(summary["inactive_edge_count"], 22)
+        self.assertEqual(summary["inactive_edge_count"], 19)
         self.assertEqual(summary["active_edge_count"], 0)
         self.assertRegex(summary["full_row_md5"], r"^[0-9a-f]{32}$")
         self.assertRegex(summary["logical_sha256"], r"^[0-9a-f]{64}$")
@@ -500,7 +503,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
             [sys.executable, str(SOURCE)], text=True, capture_output=True, check=True
         )
         payload = json.loads(contract.stdout)
-        self.assertEqual(len(payload["workflows"]), 22)
+        self.assertEqual(len(payload["workflows"]), 19)
         with self.subTest("rehearsal"):
             import tempfile
 
