@@ -1631,7 +1631,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertIsInstance(create["name"], str)
         self.assertTrue(create["name"].strip())
         self.assertNotIn("workflow", create)
-        self.assertEqual(payload["publish"], {"id": payload["workflow_id"]})
+        self.assertEqual(payload["publish"], {"id": payload["create_response"]["id"]})
 
         module_path = N8N / "disposable" / "runtime_payload.py"
         spec = importlib.util.spec_from_file_location("n8n_disposable_runtime_payload", module_path)
@@ -1640,11 +1640,15 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         workflow = load_json(WORKFLOWS / "12-outlook-message-sweep.json")
-        created = module.build_runtime_payload(workflow)
+        create_response = {"id": "created-workflow-id"}
+        created = module.build_runtime_payload(workflow, create_response)
         self.assertEqual(created["create"]["name"], workflow["name"])
-        self.assertEqual(created["publish"], {"id": workflow["id"]})
+        self.assertEqual(created["publish"], create_response)
+        self.assertNotEqual(created["publish"]["id"], workflow["id"])
         with self.assertRaisesRegex(ValueError, "N8N_WORKFLOW_NAME_REQUIRED"):
-            module.build_create_payload({**workflow, "name": None})
+            module.build_runtime_payload({**workflow, "name": None}, create_response)
+        with self.assertRaisesRegex(ValueError, "N8N_WORKFLOW_CREATED_ID_REQUIRED"):
+            module.build_runtime_payload(workflow, {})
 
     def test_disposable_fixtures_are_inactive_manual_and_external_write_free(self) -> None:
         generated = N8N / "disposable" / "generated"

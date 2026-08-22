@@ -63,10 +63,19 @@ def build_publish_payload(workflow_id: object) -> dict[str, str]:
     return {"id": _required_string(workflow_id, "ID")}
 
 
-def build_runtime_payload(workflow: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    """Return the create body and separate publish identity for a fixture."""
+def build_runtime_payload(
+    workflow: Mapping[str, Any], create_response: Mapping[str, Any]
+) -> dict[str, dict[str, Any]]:
+    """Return create and publish bodies using the create response identity."""
+
+    create_payload = build_create_payload(workflow)
+    if not isinstance(create_response, Mapping):
+        raise ValueError("N8N_WORKFLOW_CREATE_RESPONSE_REQUIRED")
+    created_id = create_response.get("id")
+    if not isinstance(created_id, str) or not created_id.strip():
+        raise ValueError("N8N_WORKFLOW_CREATED_ID_REQUIRED")
 
     return {
-        "create": build_create_payload(workflow),
-        "publish": build_publish_payload(workflow.get("id")),
+        "create": create_payload,
+        "publish": build_publish_payload(created_id),
     }
