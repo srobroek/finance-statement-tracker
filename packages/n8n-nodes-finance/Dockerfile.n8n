@@ -28,7 +28,7 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
-ARG N8N_BASE_IMAGE=localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9
+ARG N8N_BASE_IMAGE=ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6
 FROM ${N8N_BASE_IMAGE}
 
 ARG N8N_BASE_IMAGE
@@ -36,7 +36,7 @@ ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
       org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
       io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
-      io.finance.n8n.base-source="https://github.com/srobroek/n8n@e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7"
+      io.finance.n8n.base-source="https://github.com/srobroek/n8n@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 
 USER root
 RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance

@@ -1,39 +1,45 @@
 {
   "schema_version": 1,
-  "status": "SPEC_ONLY",
+  "status": "PUBLISHED_READBACK_VERIFIED",
   "package": "n8n-nodes-finance@0.1.0",
   "image": {
-    "requested_reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
-    "image_digest": null,
-    "local_image_id": null
+    "requested_reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "image_digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "local_image_id": "a4293646b8490017b06c222bb5145ac555356fbb1caaa13cf618bdfe8d155bef"
   },
   "base_image": {
-    "reference": "localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
-    "digest": "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
+    "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+    "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
     "source_repository": "https://github.com/srobroek/n8n",
-    "source_commit": "e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7",
+    "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
     "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json"
   },
-  "source_commit": null,
-  "sbom_sha256": null,
-  "scan_sha256": null,
+  "source_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
+  "sbom_sha256": "bc122f6386d9e71e7f18869a753341fcae04a8d68cfc38dc949606ac6c49db7a",
+  "scan_sha256": "ce885763462b74d65c8bff055be5be50b7e337477b0aa3673ad46f91f765cdf5",
   "scan": {
-    "tool": null,
-    "result": "NOT_RUN",
-    "high": null,
-    "critical": null
+    "tool": "trivy",
+    "result": "PASS",
+    "high": 0,
+    "critical": 0
   },
   "attestation": {
-    "type": null,
-    "predicate_type": null,
-    "subject_digest": null,
-    "source_commit": null,
-    "sha256": null,
-    "status": "NOT_AVAILABLE"
+    "type": "local-build-provenance",
+    "predicate_type": "https://slsa.dev/provenance/v1",
+    "subject_digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "source_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
+    "sha256": "6af4d78fade5957d179ac4cd4fa13e78865d615b8be99ab0d4a81e9d3a0dfab6",
+    "status": "VERIFIED"
   },
-  "blockers": [
-    "LIVE_REGISTRY_DIGEST_REQUIRED",
-    "SBOM_SCAN_ATTESTATION_REQUIRED",
-    "DISPOSABLE_IMAGE_IMPORT_REQUIRED"
-  ]
+  "registry": {
+    "target": "ghcr.io/srobroek/finance-n8n",
+    "tag": "ghcr.io/srobroek/finance-n8n:170328b7f6aefa068da9c9a864cd03ca91635c70",
+    "digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "readback_reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "readback_sha256": "a92f463cb0ae6b6b76bcf3d3e119703b72da03fb3880e0e59f5cdc8257d00fe9",
+    "source_label_match": true,
+    "base_label_match": true,
+    "provenance_match": true
+  },
+  "blockers": []
 }

@@ -1,27 +1,27 @@
 {
   "schema_version": 1,
-  "contract_status": "SPEC_ONLY",
+  "contract_status": "DISPOSABLE_VERIFIED",
   "application": {
     "name": "finance-statement-tracker",
     "repository": "srobroek/finance-statement-tracker"
   },
-  "finance_commit": null,
+  "finance_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "ae97818e59c68b86bb094f01e7125667e43f91121bf4f066a9b78b685143f168"
+    "sha256": "1525fd2a690e227f81a34c7954b7bb6f0684fb7b609ced00ade77c64c40163b0"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
-    "reference": "localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
-    "digest": "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9"
+    "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+    "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
   },
   "extension_image": {
-    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
-    "digest": null,
-    "base_digest": "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
+    "reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "base_digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "c5becc3d9500fc9fe7a43f1b2640d64b521c8b860a439b95e6fc5e4bae70eb45"
+      "sha256": "3fa12683aeecdad7ecc40af0ce95869849921d00f5eb91209995bba3ffe5ff78"
     }
   },
   "workflow_manifest": {
@@ -88,10 +88,6 @@
     {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
   ],
   "blockers": [
-    "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",
-    "LIVE_REGISTRY_DIGEST_REQUIRED",
-    "SBOM_SCAN_ATTESTATION_REQUIRED",
-    "DISPOSABLE_IMAGE_IMPORT_REQUIRED",
     "DISPOSABLE_WORKFLOW_EXECUTION_REQUIRED"
   ]
 }
