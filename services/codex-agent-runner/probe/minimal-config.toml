@@ -1,0 +1,5 @@
+[plugins."outlook-email@openai-curated"]
+enabled = true
+
+[plugins."sharepoint@openai-curated"]
+enabled = true

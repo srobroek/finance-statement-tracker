@@ -59,6 +59,13 @@ and never commit, log, back up without encryption, or expose it to n8n Code
 nodes. The runner calls `codex login status` before every proposal and requires
 `Logged in using ChatGPT`.
 
+OpenAI's Outlook Email and SharePoint plugins can reuse the same OpenAI login
+and server-side app grants in a fresh non-interactive container. The verified
+setup and disposable proof are documented in
+[`docs/codex-microsoft-connectors.md`](../../docs/codex-microsoft-connectors.md).
+The production proposal runner intentionally continues to ignore user config
+and disable tools; the connector proof does not silently widen that boundary.
+
 ## Tests
 
 ```text
