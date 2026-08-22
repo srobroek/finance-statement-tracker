@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/real-mail-e2e-fixture-bundle-v1.json",
+  "title": "Synthetic real-mail n8n fixture bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract_status", "provider_proof", "receipts"],
+  "properties": {
+    "schema_version": {"const": "real-mail-e2e-fixture-bundle-v1"},
+    "contract_status": {"const": "SYNTHETIC_OFFLINE"},
+    "provider_proof": {"const": false},
+    "receipts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["schema_version", "proof_kind", "provider_proof", "receipt_sha256"],
+        "properties": {
+          "schema_version": {"const": "real-mail-e2e-receipt-v1"},
+          "proof_kind": {"const": "SYNTHETIC_OFFLINE"},
+          "provider_proof": {"const": false},
+          "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}
