@@ -612,6 +612,44 @@ try {{
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
         self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
 
+    def test_email_identity_is_derived_after_authoritative_policy_binding(self) -> None:
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        nodes = self.nodes("12-outlook-message-sweep.json")
+        prepare = nodes["Prepare W21 Email Request"]["parameters"]["jsCode"]
+        policy = nodes["Build Authoritative W09 Email Job"]["parameters"]["jsCode"]
+        request_hash = nodes["SHA-256 W09 Email Request"]
+        handoff = nodes["Build Idempotent W09 Email Handoff"]["parameters"]["jsCode"]
+        self.assertNotIn("handoff.idempotency_key", prepare)
+        self.assertIn("request_canonical", policy)
+        self.assertEqual(request_hash["parameters"]["value"], "={{ $json.request_canonical }}")
+        self.assertEqual(request_hash["parameters"]["dataPropertyName"], "request_sha256")
+        self.assertIn("...request", handoff)
+        self.assertIn("job_id: `finance-ai:${requestSha256}`", handoff)
+        self.assertIn("idempotency_key: requestSha256", handoff)
+        self.assertEqual(
+            workflow["connections"]["Build Authoritative W09 Email Job"]["main"][0][0]["node"],
+            "SHA-256 W09 Email Request",
+        )
+        self.assertEqual(
+            workflow["connections"]["SHA-256 W09 Email Request"]["main"][0][0]["node"],
+            "Build Idempotent W09 Email Handoff",
+        )
+        base = {
+            "agent_provider": "CODEX_SUBSCRIPTION",
+            "policy_id": "classify-unresolved",
+            "policy_class": "NORMAL",
+            "config_sha256": "c" * 64,
+            "output_schema_sha256": "d" * 64,
+            "unresolved": [{"transaction_id": "tx-1", "allowed_fields": ["vendor"], "allowed_values": {}}],
+        }
+        hashes = []
+        for policy_sha256 in ("a" * 64, "b" * 64):
+            canonical = json.dumps({**base, "policy_sha256": policy_sha256}, sort_keys=True, separators=(",", ":"))
+            digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            hashes.append(digest)
+        self.assertNotEqual(hashes[0], hashes[1])
+        self.assertNotEqual(f"finance-ai:{hashes[0]}", f"finance-ai:{hashes[1]}")
+
     def test_fixture_matrix_covers_zero_101_late_duplicates_and_failures(self) -> None:
         self.assertEqual(self.fixtures["contract_status"], "SPEC_ONLY")
         cases = {row["id"]: row for row in self.fixtures["mail_sweep_cases"]}

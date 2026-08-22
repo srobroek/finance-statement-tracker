@@ -3934,6 +3934,21 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "unresolved: [...proposalInputs, ...unresolved]",
         "unresolved: proposalInputs, evidence_unresolved: unresolved",
     )
+    # The evidence hash is intentionally not an agent identity.  W12 must
+    # wait for the authoritative W09 policy row before deriving job_id and
+    # idempotency_key from the complete policy-bound request.
+    prepare_code = prepare_code.replace(
+        "if (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');",
+        "if (!/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_HASH_PROOF_REQUIRED');",
+    )
+    prepare_code = prepare_code.replace(
+        "policy_id: 'classify-unresolved', job_id: 'finance-ai:' + handoff.idempotency_key, idempotency_key: handoff.idempotency_key, agent_provider: 'CODEX_SUBSCRIPTION', policy_class: 'NORMAL', archive_sha256:",
+        "policy_id: 'classify-unresolved', agent_provider: 'CODEX_SUBSCRIPTION', policy_class: 'NORMAL', archive_sha256:",
+    )
+    prepare_code = prepare_code.replace(
+        ", archive_item_ids: handoff.archive_item_ids, unresolved: proposalInputs, evidence_unresolved: unresolved, evidence_handoff_sha256: handoff.idempotency_key",
+        ", archive_item_ids: handoff.archive_item_ids, unresolved: proposalInputs, evidence_unresolved: unresolved",
+    )
     prepare_code = prepare_code.replace(
         "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true,",
         "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true, policy_id: 'classify-unresolved',",
@@ -3982,9 +3997,33 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "return [{ json: { ...request, ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
     )
     policy_builder["parameters"]["jsCode"] = policy_builder_code
+    # W09 owns the request-hash and handoff semantics.  Keep W12's evidence
+    # metadata on the item while composing those two nodes so the final
+    # identity is derived only after the active policy has been resolved.
+    request_hash = json.loads(json.dumps(node_by_name(w09, "SHA-256 Agent Request")))
+    request_hash["id"] = "12084"
+    request_hash["name"] = "SHA-256 W09 Email Request"
+    request_hash["position"] = [320, 2860]
+    handoff = json.loads(json.dumps(node_by_name(w09, "Build Idempotent Agent Handoff")))
+    handoff["id"] = "12085"
+    handoff["name"] = "Build Idempotent W09 Email Handoff"
+    handoff["position"] = [600, 2860]
+    handoff_code = handoff["parameters"]["jsCode"]
+    handoff_code = handoff_code.replace(
+        "schema_version: 1,",
+        "...request,\n            schema_version: 1,",
+        1,
+    )
+    if "...request," not in handoff_code:
+        raise RuntimeError("W09 handoff source drifted before W12 composition")
+    handoff["parameters"]["jsCode"] = handoff_code
     policy_names = {policy_read["name"], policy_builder["name"]}
     sweep["nodes"] = [node for node in sweep["nodes"] if node["name"] not in policy_names]
-    sweep["nodes"].extend([policy_read, policy_builder])
+    sweep["nodes"] = [
+        node for node in sweep["nodes"]
+        if node["name"] not in {request_hash["name"], handoff["name"]}
+    ]
+    sweep["nodes"].extend([policy_read, policy_builder, request_hash, handoff])
     sweep["connections"]["Prepare W21 Email Request"] = {
         "main": [[{"node": policy_read["name"], "type": "main", "index": 0}]],
     }
@@ -3992,6 +4031,12 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "main": [[{"node": policy_builder["name"], "type": "main", "index": 0}]],
     }
     sweep["connections"][policy_builder["name"]] = {
+        "main": [[{"node": request_hash["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][request_hash["name"]] = {
+        "main": [[{"node": handoff["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][handoff["name"]] = {
         "main": [[{"node": "Send Evidence to W21", "type": "main", "index": 0}]],
     }
 
@@ -4061,6 +4106,10 @@ const response = normalized;
     )
     terminal = node_by_name(sweep, "Validate Email Proposal Result")
     terminal["parameters"]["jsCode"] = w12_validator_code
+    terminal["parameters"]["jsCode"] = terminal["parameters"]["jsCode"].replace(
+        "const input = $('Build Authoritative W09 Email Job').first().json;",
+        "const input = $('Build Idempotent W09 Email Handoff').first().json;",
+    )
 
 def apply_blocker_metadata(workflows: list[dict]) -> None:
     """Project objective blocker evidence from the registry into four exports.
