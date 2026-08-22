@@ -275,11 +275,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "c9bb56497d735ceeb7cd432e443d898795bae47697020713905cd8182ef6e6a4",
     },
     "12-outlook-message-sweep.json": {
-        "nodes": 80, "edges": 85, "sticky": 0, "groups": 12,
-        "node_ids_sha256": "9bb8444db0c7ec3997557b3bc9fb5e4430105e64b8347af1d1db3c2c35b82ca6",
-        "connections_sha256": "18b4ee631ffd197554a08614df41901e7657c70c3decaedaf2dc49320582185c",
-        "parameters_sha256": "dc7a1e02a9443a89b187343e8a5ab5a33381bf56a88fc0826c5c1ebb5c4163ef",
-        "groups_sha256": "04b387b3f2646644771736369bf8f6628a3761edf7da81f35987cd26be2c2d18",
+        "nodes": 82, "edges": 87, "sticky": 0, "groups": 13,
+        "node_ids_sha256": "24db9f9fabf35d1feb5efb678e456fc57572838f242d9ebc5a3377117500c215",
+        "connections_sha256": "2f7bc74524595bc47ef8649276bcf80266e1e7f3fe9bbd761998be561a8fbf50",
+        "parameters_sha256": "1327d2c3c61a4964c7471b727f999279ded3bce95b6b940449e97be727efd26c",
+        "groups_sha256": "5a71259f8961f17ca317c8173812daf8d381947c04e1206be97636c215a36af4",
     },
     "13-document-extraction-request.json": {
         "nodes": 8, "sticky": 0,

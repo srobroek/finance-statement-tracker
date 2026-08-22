@@ -3407,8 +3407,18 @@ try {
             refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
         )
         self.assertTrue(authoritative["ok"], authoritative)
+        policy_bound_request = authoritative["output"][0]["json"]
+        request_sha256 = hashlib.sha256(
+            policy_bound_request["request_canonical"].encode("utf-8")
+        ).hexdigest()
+        authoritative_handoff = self.execute_code_node(
+            w12,
+            "Build Idempotent W09 Email Handoff",
+            json_value={**policy_bound_request, "request_sha256": request_sha256},
+        )
+        self.assertTrue(authoritative_handoff["ok"], authoritative_handoff)
         job = {
-            **authoritative["output"][0]["json"],
+            **authoritative_handoff["output"][0]["json"],
             "codex_normal_model": "gpt-5.6-luna", "codex_normal_reasoning_effort": "max",
             "codex_exception_model": "gpt-5.6-sol", "codex_exception_reasoning_effort": "medium",
             "codex_auth_mode": "CHATGPT_SUBSCRIPTION", "claude_normal_model": "claude-sonnet-4-6",
@@ -3445,7 +3455,7 @@ try {
         w12_terminal = self.workflow("12-outlook-message-sweep.json")
         valid_terminal = self.execute_code_node(
             w12_terminal, "Validate Email Proposal Result", json_value=proposal,
-            refs={"Build Authoritative W09 Email Job": authoritative["output"][0]["json"]},
+            refs={"Build Idempotent W09 Email Handoff": authoritative_handoff["output"][0]["json"]},
         )
         self.assertTrue(valid_terminal["ok"], valid_terminal)
         protected = {**proposal, "proposals": [{
@@ -3454,7 +3464,7 @@ try {
         }]}
         rejected = self.execute_code_node(
             w12_terminal, "Validate Email Proposal Result", json_value=protected,
-            refs={"Build Authoritative W09 Email Job": authoritative["output"][0]["json"]},
+            refs={"Build Idempotent W09 Email Handoff": authoritative_handoff["output"][0]["json"]},
         )
         self.assertFalse(rejected["ok"])
         self.assertIn("Agent proposed forbidden field", rejected["error"])
