@@ -634,21 +634,66 @@ try {{
             workflow["connections"]["SHA-256 W09 Email Request"]["main"][0][0]["node"],
             "Build Idempotent W09 Email Handoff",
         )
-        base = {
-            "agent_provider": "CODEX_SUBSCRIPTION",
+        # Execute both real W12 code nodes with the same redacted evidence and
+        # two authoritative policy rows.  This proves policy rotation cannot
+        # reuse an evidence-only identity.
+        request = {
+            "operation_code": "FINANCE_AI_PROPOSAL",
+            "email_evidence": True,
             "policy_id": "classify-unresolved",
+            "agent_provider": "CODEX_SUBSCRIPTION",
             "policy_class": "NORMAL",
-            "config_sha256": "c" * 64,
-            "output_schema_sha256": "d" * 64,
-            "unresolved": [{"transaction_id": "tx-1", "allowed_fields": ["vendor"], "allowed_values": {}}],
+            "archive_sha256": "e" * 64,
+            "evidence_replay_keys": ["replay-1"],
+            "archive_identity_keys": ["message-1:INLINE_BODY"],
+            "archive_item_ids": ["drive-1"],
+            "unresolved": [{
+                "transaction_id": "tx-1",
+                "allowed_fields": ["category"],
+                "redacted_context": {"source_message_id": "message-1", "facts": {"total_minor": 123}},
+            }],
         }
-        hashes = []
-        for policy_sha256 in ("a" * 64, "b" * 64):
-            canonical = json.dumps({**base, "policy_sha256": policy_sha256}, sort_keys=True, separators=(",", ":"))
-            digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-            hashes.append(digest)
-        self.assertNotEqual(hashes[0], hashes[1])
-        self.assertNotEqual(f"finance-ai:{hashes[0]}", f"finance-ai:{hashes[1]}")
+        policy_rows = [
+            {
+                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
+                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "a" * 64,
+                "config_sha256": "c" * 64, "output_schema_sha256": "d" * 64,
+                "allowed_fields_json": json.dumps(["category"]),
+                "allowed_values_json": json.dumps({"category": ["Groceries"]}),
+            },
+            {
+                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
+                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "b" * 64,
+                "config_sha256": "c" * 64, "output_schema_sha256": "d" * 64,
+                "allowed_fields_json": json.dumps(["category"]),
+                "allowed_values_json": json.dumps({"category": ["Household"]}),
+            },
+        ]
+        identities = []
+        for policy_row in policy_rows:
+            authoritative = self.run_exported_workflow_node_with_items(
+                "12-outlook-message-sweep.json",
+                "Build Authoritative W09 Email Job",
+                [policy_row],
+                {"Prepare W21 Email Request": {"json": request}},
+            )
+            self.assertTrue(authoritative["ok"], authoritative)
+            built_request = authoritative["output"][0]["json"]
+            request_sha256 = hashlib.sha256(
+                built_request["request_canonical"].encode("utf-8")
+            ).hexdigest()
+            handoff = self.run_exported_workflow_node(
+                "12-outlook-message-sweep.json",
+                "Build Idempotent W09 Email Handoff",
+                {**built_request, "request_sha256": request_sha256},
+                {},
+            )
+            self.assertTrue(handoff["ok"], handoff)
+            result = handoff["output"][0]["json"]
+            identities.append((request_sha256, result["job_id"], result["idempotency_key"]))
+        self.assertNotEqual(identities[0][0], identities[1][0])
+        self.assertNotEqual(identities[0][1], identities[1][1])
+        self.assertNotEqual(identities[0][2], identities[1][2])
 
     def test_fixture_matrix_covers_zero_101_late_duplicates_and_failures(self) -> None:
         self.assertEqual(self.fixtures["contract_status"], "SPEC_ONLY")
