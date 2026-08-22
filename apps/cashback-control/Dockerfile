@@ -19,7 +19,13 @@ COPY config/cashback-profile-schema-v2.json ./config/cashback-profile-schema-v2.
 COPY config/actual-bootstrap.json ./config/actual-bootstrap.json
 COPY config/static-rules.seed.json ./config/static-rules.seed.json
 COPY config/transaction-email-sources.json ./config/transaction-email-sources.json
-RUN uv sync --frozen --no-dev --no-cache
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+        util-linux=2.41.5-0+deb13u1 \
+        libblkid1=2.41.5-0+deb13u1 \
+        libmount1=2.41.5-0+deb13u1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && uv sync --frozen --no-dev --no-cache
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY apps/cashback-control ./apps/cashback-control
