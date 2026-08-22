@@ -278,7 +278,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 78, "edges": 83, "sticky": 0, "groups": 15,
         "node_ids_sha256": "0d3106f0b14fbcc53ec31c7f9424a048727438f9f73c1a4c755231447ef8789f",
         "connections_sha256": "eab93fc5367a39d46afeb429bed88431923f7e15f5bee950fdf03ca777e9972d",
-        "parameters_sha256": "f1b5318098b9d2e625f4864e7891485f26081becc0bea4e8caa627e0a8c40dc9",
+        "parameters_sha256": "ae58a00c86f047b1a4de9f775b8761efc1b58c8779a9afa40984fce29d0e2736",
         "groups_sha256": "2dd7721ada4cda02b14f5bfda73f07ece4d06de20f61178befa852a2aacf6992",
     },
     "13-document-extraction-request.json": {

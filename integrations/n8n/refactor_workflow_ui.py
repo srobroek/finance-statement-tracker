@@ -3835,6 +3835,142 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "emailEvidenceAuthFailure": "PRODEX_AUTH_REQUIRED",
     })
 
+    # Keep the deterministic matcher and handoff rules in the canonical
+    # renderer.  The exported W12 JSON is a generated surface, so these
+    # narrow rewrites make the split ownership and archive proof contracts
+    # reproducible without introducing a second workflow implementation.
+    matcher = node_by_name(sweep, "Match Outlook Evidence to Transactions")
+    matcher_code = matcher["parameters"]["jsCode"]
+    if "splitMessage = new Map()" not in matcher_code and "messageOwners = new Map()" not in matcher_code:
+        raise RuntimeError("W12 matcher source drifted before canonical rewrite")
+    if "splitMessage = new Map()" in matcher_code:
+        matcher_code = matcher_code.replace(
+            "const matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), splitMessage = new Map();",
+            "const matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), messageOwners = new Map();",
+        )
+        matcher_code = matcher_code.replace(
+            "const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor);",
+            "const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor), ownership = transaction.split_group ? 'SPLIT:' + transaction.split_group : 'NON_SPLIT';",
+        )
+    matcher_code = matcher_code.replace(
+        ".filter(candidate => transaction.split_group ? (!splitMessage.has(transaction.split_group) || splitMessage.get(transaction.split_group) === candidate.id) : !usedIds.has(candidate.id))",
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || (transaction.split_group && owner === ownership); })",
+    )
+    matcher_code = matcher_code.replace(
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || owner === ownership; })",
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || (transaction.split_group && owner === ownership); })",
+    )
+    matcher_code = matcher_code.replace(
+        "const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), status = !transaction.split_group && allEligible.some(candidate => usedIds.has(candidate.id)) ? 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP' : 'NO_MATCH';",
+        "const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), ownershipConflict = allEligible.some(candidate => { const owner = messageOwners.get(candidate.id); return owner && (!transaction.split_group || owner !== ownership); }), status = ownershipConflict ? (transaction.split_group ? 'SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT' : 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP') : 'NO_MATCH';",
+    )
+    matcher_code = matcher_code.replace(
+        "return owner && owner !== ownership; }), status = ownershipConflict",
+        "return owner && (!transaction.split_group || owner !== ownership); }), status = ownershipConflict",
+    )
+    matcher_code = matcher_code.replace(
+        "if (transaction.split_group)\n        splitMessage.set(transaction.split_group, sourceMessageId);\n    else\n        usedIds.add(sourceMessageId);",
+        "messageOwners.set(sourceMessageId, ownership);\n    if (!transaction.split_group)\n        usedIds.add(sourceMessageId);",
+    )
+    if "splitMessage" in matcher_code or "messageOwners" not in matcher_code:
+        raise RuntimeError("W12 matcher canonical ownership rewrite incomplete")
+    matcher["parameters"]["jsCode"] = matcher_code
+
+    build_handoff = node_by_name(sweep, "Build Evidence Handoff")
+    handoff_code = build_handoff["parameters"]["jsCode"]
+    archive_marker = "            archive_proof: archiveProof,\n"
+    if archive_marker not in handoff_code and "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
+        raise RuntimeError("W12 handoff source drifted before canonical rewrite")
+    if "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
+        handoff_code = handoff_code.replace(
+            archive_marker,
+            "            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n" + archive_marker,
+        )
+    build_handoff["parameters"]["jsCode"] = handoff_code
+
+    prepare = node_by_name(sweep, "Prepare W21 Email Request")
+    prepare_code = prepare["parameters"]["jsCode"]
+    if "unresolved: [...proposalInputs, ...unresolved]" not in prepare_code and "unresolved: proposalInputs" not in prepare_code:
+        raise RuntimeError("W12 request source drifted before canonical rewrite")
+    prepare_code = prepare_code.replace(
+        "unresolved: [...proposalInputs, ...unresolved]",
+        "unresolved: proposalInputs, evidence_unresolved: unresolved",
+    )
+    proof_guard = "if (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))"
+    if proof_guard not in prepare_code:
+        prepare_code = prepare_code.replace(
+            "const handoff = $json;\nif (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');",
+            "const handoff = $json;\nif (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');\nif (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_REQUIRED');",
+        )
+    guard_block = "if (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_REQUIRED');"
+    prepare_code = re.sub(
+        rf"(?:{re.escape(guard_block)}\n?)+",
+        guard_block + "\n",
+        prepare_code,
+    )
+    prepare_code = prepare_code.replace(
+        "archive_identity_keys: handoff.archive_proof.identity_keys, archive_item_ids: handoff.archive_proof.item_ids,",
+        "archive_identity_keys: handoff.archive_identity_keys, archive_item_ids: handoff.archive_item_ids,",
+    )
+    prepare["parameters"]["jsCode"] = prepare_code
+
+    # W12 reuses the authoritative W09 proposal validator.  Only the input
+    # adapter differs: W12 has provider output from W21 and its own evidence
+    # request, while W09 owns the validator body and policy rules.
+    w09 = by_code["AI_PROPOSAL"]
+    w09_validator = node_by_name(w09, "Validate Proposal Schema and Policy Boundary")
+    w09_code = w09_validator["parameters"]["jsCode"]
+    w09_header = "const request = $('Build Idempotent Agent Handoff').first().json;\nconst response = $json;"
+    if w09_header not in w09_code:
+        raise RuntimeError("W09 validator source drifted before W12 composition")
+    w12_prefix = r"""
+const input = $('Prepare W21 Email Request').first().json;
+const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
+if (providerError) {
+  if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
+    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+  }
+  throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
+}
+let providerResult;
+try {
+  providerResult = typeof $json.output === 'string'
+    ? JSON.parse($json.output)
+    : ($json.output && typeof $json.output === 'object' ? $json.output : $json);
+} catch {
+  throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
+}
+if (!providerResult || typeof providerResult !== 'object' || Array.isArray(providerResult)) {
+  throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
+}
+const normalized = {
+  ...providerResult,
+  agent_provider: providerResult.agent_provider || input.agent_provider,
+  runner_model: providerResult.runner_model || input.provider_model,
+  runner_reasoning_effort: providerResult.runner_reasoning_effort || input.provider_reasoning_effort,
+  auth_mode: providerResult.auth_mode || input.provider_auth_mode,
+};
+const request = {
+  job_id: input.job_id,
+  idempotency_key: input.idempotency_key,
+  agent_provider: input.agent_provider,
+  policy_id: input.policy_id || normalized.policy_id,
+  policy_class: input.policy_class,
+  policy_sha256: input.policy_sha256 || normalized.policy_sha256,
+  config_sha256: input.config_sha256 || normalized.config_sha256,
+  output_schema_sha256: input.output_schema_sha256 || normalized.output_schema_sha256,
+  unresolved: Array.isArray(input.unresolved) ? input.unresolved : [],
+};
+const response = normalized;
+""".strip()
+    w12_validator_code = w09_code.replace(w09_header, w12_prefix)
+    w12_validator_code = w12_validator_code.replace(
+        "return [{ json: response }];",
+        "return [{ json: { ...response, evidence_archive_sha256: input.archive_sha256, evidence_replay_keys: input.evidence_replay_keys, archive_identity_keys: input.archive_identity_keys, archive_item_ids: input.archive_item_ids, evidence_unresolved: input.evidence_unresolved, archive_readback_verified: true, proposal_dispatch: 'SUBMITTED' } }];",
+    )
+    terminal = node_by_name(sweep, "Validate Email Proposal Result")
+    terminal["parameters"]["jsCode"] = w12_validator_code
+
 def apply_blocker_metadata(workflows: list[dict]) -> None:
     """Project objective blocker evidence from the registry into four exports.
 

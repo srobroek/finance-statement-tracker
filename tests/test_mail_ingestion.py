@@ -3232,6 +3232,53 @@ try {
         self.assertTrue(result["ok"], result)
         self.assertEqual([row["transaction_id"] for row in result["output"][0]["json"]["matched"]], ["split:1", "split:2"])
 
+    def test_generic_evidence_reserves_split_message_globally(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        base = {
+            "operation": "EVIDENCE", "run_id": "email:split-ownership", "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"], "subjects": ["order"],
+        }
+        message = {
+            "id": "owned-message", "receivedDateTime": "2026-08-20T09:00:00Z",
+            "from": {"emailAddress": {"address": "orders@example.test"}},
+            "subject": "Amazon order", "body": "Order total AED 100.00",
+        }
+        cross_group = {
+            **base,
+            "transactions": [
+                {"transaction_id": "split:g1", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
+                {"transaction_id": "split:g2", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g2"},
+            ],
+        }
+        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=cross_group)
+        result = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(result["ok"], result)
+        evidence = result["output"][0]["json"]
+        self.assertEqual([row["transaction_id"] for row in evidence["matched"]], ["split:g1"])
+        self.assertEqual(evidence["unresolved"][0]["status"], "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT")
+
+        split_then_normal = {
+            **base,
+            "transactions": [
+                {"transaction_id": "split:only", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
+                {"transaction_id": "normal:reuse", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER"},
+            ],
+        }
+        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=split_then_normal)
+        result = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(result["ok"], result)
+        evidence = result["output"][0]["json"]
+        self.assertEqual([row["transaction_id"] for row in evidence["matched"]], ["split:only"])
+        self.assertEqual(evidence["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP")
+
     def test_generic_evidence_dispatches_finance_ai_job_through_existing_w21_contract(self):
         w12 = self.workflow("12-outlook-message-sweep.json")
         w21 = self.workflow("21-subscription-agent-adapter.json")
@@ -3268,6 +3315,16 @@ try {
             "Archive Matched Email Evidence in W01": archive,
         })
         self.assertTrue(handoff["ok"], handoff)
+        built_handoff = handoff["output"][0]["json"]
+        archive_sha = hashlib.sha256(
+            json.dumps(built_handoff["archive_proof"], separators=(",", ":")).encode()
+        ).hexdigest()
+        hashed_handoff = {**built_handoff, "archive_sha256": archive_sha}
+        hashed_handoff["idempotency_key"] = hashlib.sha256(
+            json.dumps(hashed_handoff, separators=(",", ":")).encode()
+        ).hexdigest()
+        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(hashed_handoff)), [])
         replay_handoff = self.execute_code_node(w12, "Build Evidence Handoff", refs={
             "Match Outlook Evidence to Transactions": evidence,
             "Archive Matched Email Evidence in W01": archive,
@@ -3282,7 +3339,7 @@ try {
         self.assertIn("ARCHIVE_MESSAGE_PROOF", rejected["error"])
         request_to_w21 = self.execute_code_node(
             w12, "Prepare W21 Email Request",
-            json_value={**handoff["output"][0]["json"], "idempotency_key": "b" * 64, "archive_sha256": "c" * 64},
+            json_value=hashed_handoff,
             refs={"Match Outlook Evidence to Transactions": evidence},
         )
         self.assertTrue(request_to_w21["ok"], request_to_w21)
@@ -3311,6 +3368,23 @@ try {
         )
         self.assertTrue(normalized["ok"], normalized)
         self.assertEqual(normalized["output"][0]["json"]["job_id"], job["job_id"])
+
+        w12_terminal = self.workflow("12-outlook-message-sweep.json")
+        valid_terminal = self.execute_code_node(
+            w12_terminal, "Validate Email Proposal Result", json_value=proposal,
+            refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
+        )
+        self.assertTrue(valid_terminal["ok"], valid_terminal)
+        protected = {**proposal, "proposals": [{
+            "transaction_id": "actual:dispatch", "field": "amount", "value": 2,
+            "confidence": 2, "reason_code": "ATTACK",
+        }]}
+        rejected = self.execute_code_node(
+            w12_terminal, "Validate Email Proposal Result", json_value=protected,
+            refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
+        )
+        self.assertFalse(rejected["ok"])
+        self.assertIn("Agent proposed forbidden field", rejected["error"])
 
 
 if __name__ == "__main__":
