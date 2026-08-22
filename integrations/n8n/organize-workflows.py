@@ -16,9 +16,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-FINANCE_PROJECT = "Finance"
-GLOBAL_PROJECT = "Global"
-
 CONTRACT_PATH = Path(__file__).resolve().parent / "workflow-folders.json"
 CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 TAG_IDS = {row["name"]: row["id"] for row in CONTRACT["tag_definitions"]}
@@ -59,12 +56,6 @@ PERSISTED_BODY_FIELDS = (
     "meta",
 )
 STATUS_MARKERS = ("setup required", "spec_only", "spec only", "inactive", "blocked")
-
-
-def canonical_json(value: Any) -> str:
-    """Return stable JSON suitable for a digest or a redacted plan receipt."""
-
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _postgres_jsonb_text(value: Any) -> str:

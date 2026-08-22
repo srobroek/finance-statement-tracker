@@ -35,7 +35,7 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
 | Transaction semantics | Direction/topic locking, EI Amazon refund behavior, generic positive merchant credits, immutable amounts, and ADCB closing-payment transfer behavior have regression coverage. | Not deployed or full-corpus audited. |
 | Note contract v2 | Tags-first minimal grammar, removal of routine FX/source/message/derived-cashback clutter, evidence formatting, and technical-tag rejection are tested in Python and Node. | Existing production/UI rows are not proven migrated. |
 | FAB/Sarwa inventory model | Stable redacted identities and source captures exist; account, wealth, and acceptance validators have tests. | Fresh Sarwa/FX and authenticated Actual UI/API readback remain open. |
-| Browser adapter foundation | ADCB, EI, FAB, Amazon, Wio, and Sarwa report ready in the registry and browser tests pass. | RAK/SC statement adapters and the greenfield n8n end-to-end route remain missing. |
+| Browser adapter foundation | ADCB, EI, FAB, Wio, and Sarwa report ready in the registry and browser tests pass. Generic merchant order enrichment uses email evidence. | RAK/SC statement adapters and the greenfield n8n end-to-end route remain missing. |
 | Cashback companion | Configurable app, separate compose, CI image flow, deterministic routing, and push foundations exist. | Current public health/mobile/push and n8n live-feed cutover were not independently revalidated. |
 
 ## Current contradictions and stale evidence

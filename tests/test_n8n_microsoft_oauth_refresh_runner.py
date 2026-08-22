@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import importlib.util
 import os
@@ -14,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "integrations" / "n8n" / "setup-workflows"
 RUNNER = SETUP / "runner"
 SOURCE = SETUP / "23-microsoft-oauth-refresh-proof.json"
-SOURCE_COMMIT = "f2f8d772bb3f397278d4aa5ded8c741a71d73466"
-SOURCE_SHA = "2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
+SOURCE_COMMIT = "b3bce6e197c6603d3e8708156bed987f26ac8513"
+SOURCE_SHA = "879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
 
 
@@ -102,6 +103,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             subprocess.check_output(["git", "show", f"{SOURCE_COMMIT}:integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json"], cwd=ROOT),
             SOURCE.read_bytes(),
         )
+        self.assertEqual(hashlib.sha256(SOURCE.read_bytes()).hexdigest(), SOURCE_SHA)
         with tempfile.TemporaryDirectory() as tmp:
             destination = Path(tmp) / "bound" / SOURCE.name
             env = os.environ.copy()
