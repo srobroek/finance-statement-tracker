@@ -74,6 +74,7 @@ SELECT w.id, w.active, w."activeVersionId"
 FROM workflow_entity w
 JOIN application_workflow_folder_contract c ON c.workflow_id = w.id
 JOIN shared_workflow s ON s."workflowId" = w.id
+  AND s.role = 'workflow:owner'
 JOIN application_folder_context context ON context.project_id = s."projectId";
 
 DO $$
@@ -103,6 +104,7 @@ UPDATE workflow_entity w
 SET "parentFolderId" = c.folder_id, "updatedAt" = NOW()
 FROM application_workflow_folder_contract c
 JOIN shared_workflow s ON s."workflowId" = c.workflow_id
+  AND s.role = 'workflow:owner'
 WHERE w.id = c.workflow_id
   AND s."projectId" = :'application_project_id'
   AND w."parentFolderId" IS DISTINCT FROM c.folder_id;
@@ -132,6 +134,7 @@ BEGIN
        LEFT JOIN workflow_entity w ON w.id = c.workflow_id
        LEFT JOIN shared_workflow s ON s."workflowId" = w.id
          AND s."projectId" = expected_project_id
+         AND s.role = 'workflow:owner'
        WHERE w.id IS NULL OR s."workflowId" IS NULL
           OR w."parentFolderId" IS DISTINCT FROM c.folder_id
      ) THEN
