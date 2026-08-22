@@ -13,10 +13,8 @@ import re
 import shutil
 from pathlib import Path
 
-
 APPLICATION_ID = "finance-statement-tracker"
 WORKFLOW_COUNT = 19
-TABLE_COUNT = 15
 FIXTURE_WORKFLOW_COUNT = 18
 MCP_ROUTE = "/mcp/finance-operations-v1"
 BOOTSTRAP_WORKFLOW_ID = "10000000-0000-4000-8000-000000000019"
@@ -51,6 +49,40 @@ def _validate_commit(source_commit: str) -> None:
         raise ValueError("application source commit must be a lowercase 40-character SHA")
 
 
+def _target_tables(finance_root: Path) -> list[dict[str, str]]:
+    """Project the current Data Table targets from the migration matrix.
+
+    ``data-tables.json`` remains the source/legacy inventory.  The application
+    bootstrap contract instead follows the matrix targets consumed by workflow
+    19, so this adapter must not maintain a second authored table list.
+    """
+
+    matrix = _load(finance_root / "data-table-migration-matrix.json")
+    targets = matrix.get("targets")
+    target_schemas = matrix.get("target_schemas")
+    if (
+        not isinstance(targets, list)
+        or not targets
+        or any(not isinstance(name, str) or not name for name in targets)
+        or len(set(targets)) != len(targets)
+        or not isinstance(target_schemas, dict)
+        or set(target_schemas) != set(targets)
+    ):
+        raise ValueError("finance Data Table migration matrix target contract is invalid")
+
+    tables = matrix.get("tables")
+    if not isinstance(tables, list):
+        raise TypeError("finance Data Table migration matrix tables are invalid")
+    for table in tables:
+        if not isinstance(table, dict):
+            raise TypeError("finance Data Table migration matrix table row is invalid")
+        target = table.get("target_table")
+        if target is not None and target not in targets:
+            raise ValueError("finance Data Table migration matrix has an unknown target")
+
+    return [{"name": name} for name in targets]
+
+
 def stage_application(source_root: Path, destination: Path, source_commit: str) -> Path:
     """Copy finance inputs and emit a generic n8n manifest at ``destination``.
 
@@ -72,9 +104,15 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
     registry_files = sorted(row["file"] for row in registry["workflows"])
     if registry_files != [path.name for path in workflows]:
         raise ValueError("finance workflow registry does not match the workflow corpus")
-    tables = _load(finance_root / "data-tables.json")["tables"]
-    if len(tables) != TABLE_COUNT or len({row["name"] for row in tables}) != TABLE_COUNT:
+    source_tables = _load(finance_root / "data-tables.json").get("tables")
+    source_names = [row.get("name") for row in source_tables or [] if isinstance(row, dict)]
+    if (
+        not isinstance(source_tables, list)
+        or len(source_names) != len(source_tables)
+        or len(set(source_names)) != len(source_names)
+    ):
         raise ValueError("finance Data Table schema does not match the application contract")
+    tables = _target_tables(finance_root)
     fixture_manifest = _load(finance_root / "disposable" / "fixture-manifest.json")
     fixture_workflows = fixture_manifest["workflows"]
     if len(fixture_workflows) != FIXTURE_WORKFLOW_COUNT:

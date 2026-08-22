@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-
 ROOT = Path(__file__).resolve().parents[1]
 N8N = ROOT / "integrations" / "n8n"
 INTERFACE = N8N / "application-interface"
@@ -31,6 +30,12 @@ TABLE_NAMES = {
     "finance_mcp_requests",
     "finance_agent_jobs",
     "finance_ai_policy_contracts",
+}
+TARGET_TABLE_NAMES = {
+    "finance_ingestion_state",
+    "finance_documents",
+    "finance_actual_batches",
+    "finance_ai_reviews",
 }
 
 
@@ -58,6 +63,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         cls.registry = load_json(N8N / "pipeline-registry.json")
         cls.tables = load_json(N8N / "data-tables.json")
         cls.table_schema = load_json(N8N / "data-tables.schema.json")
+        cls.matrix = load_json(N8N / "data-table-migration-matrix.json")
         cls.folders = load_json(N8N / "workflow-folders.json")
         cls.fixture_manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
 
@@ -84,7 +90,11 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             self.assertTrue(manifest["workflows"]["inactive"])
             self.assertFalse(manifest["workflows"]["published"])
             self.assertEqual(manifest["bootstrap"]["workflow_id"], "10000000-0000-4000-8000-000000000019")
-            self.assertEqual(len(manifest["bootstrap"]["tables"]), 15)
+            self.assertEqual(len(manifest["bootstrap"]["tables"]), 4)
+            self.assertEqual(
+                {row["name"] for row in manifest["bootstrap"]["tables"]},
+                TARGET_TABLE_NAMES,
+            )
             self.assertEqual(manifest["fixtures"], {"directory": "fixtures", "manifest": "fixtures/fixture-manifest.json"})
             self.assertEqual(
                 manifest["route"],
@@ -181,7 +191,19 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             _, manifest = self.stage(temporary)
             self.assertEqual(
                 {row["name"] for row in manifest["bootstrap"]["tables"]},
-                TABLE_NAMES,
+                TARGET_TABLE_NAMES,
+            )
+
+    def test_bootstrap_targets_are_derived_from_the_canonical_matrix(self) -> None:
+        self.assertEqual(set(self.matrix["targets"]), TARGET_TABLE_NAMES)
+        self.assertEqual(set(self.matrix["target_schemas"]), TARGET_TABLE_NAMES)
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            _, first_manifest = self.stage(first)
+            _, second_manifest = self.stage(second)
+            self.assertEqual(first_manifest["bootstrap"], second_manifest["bootstrap"])
+            self.assertEqual(
+                first_manifest["bootstrap"]["tables"],
+                [{"name": name} for name in self.matrix["targets"]],
             )
 
     def test_onedrive_root_and_folder_fixture_contract_stays_finance_owned(self) -> None:
@@ -252,15 +274,16 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             )
 
     def test_adapter_rejects_unpinned_source_commits(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaisesRegex(ValueError, "source commit"):
-                self.adapter.stage_application(ROOT, Path(temporary) / "application", "finance")
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(ValueError, "source commit"):
+            self.adapter.stage_application(ROOT, Path(temporary) / "application", "finance")
 
     def test_adapter_rejects_fixture_hash_drift(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            with patch.object(self.adapter, "_sha256", return_value="0" * 64):
-                with self.assertRaisesRegex(ValueError, "fixture workflow hash mismatch"):
-                    self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(self.adapter, "_sha256", return_value="0" * 64),
+            self.assertRaisesRegex(ValueError, "fixture workflow hash mismatch"),
+        ):
+            self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
 
 
 if __name__ == "__main__":
