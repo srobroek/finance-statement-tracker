@@ -4,17 +4,17 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "cbb7da7428cff2ac6d76277aa840bae5eecd4c236816637bb81b0499583d28d1",
-    "12-outlook-message-sweep.json": "889340ee70a65fd69a1bb158a36d066839d2f30ea0df0db4ca74b4c9da7308fc",
-    "16-operations-error-handler.json": "40b9b068052d875c177f19b84bfa231c43baf3beb076bc22692e939fea43443a",
-    "17-actual-outbox-recovery.json": "148c3c308cfed6e0cc8cae11fef0c3150972471936d3601104522c888401cf74",
-    "18-finance-writer-lease.json": "86b7fdb190708456ba76bbb46f381b1393ff37cec5e2500f11bedd310f01c856"
+    "09-ai-proposal.json": "75cfc8e8a005a33162430860f9b82ace2963d6923bef038f1bbc25ab1d381ee4",
+    "12-outlook-message-sweep.json": "0467ff93693e624be9bdcdfa0c734641bfb5865ddb6e9c3a2a80c981ecad5b52",
+    "16-operations-error-handler.json": "f6d6e6c97960da2b34a408aea20788586162be28bfb2fce662253073f5576fea",
+    "17-actual-outbox-recovery.json": "76119b0e774d6ceda555471cd2be11d663bb634896920f4603245c6b26a2e205",
+    "18-finance-writer-lease.json": "3eeb375f5c0ec2644dd11877c77222d62541c85884fc6a15aa652662fde464d9"
   },
   "workflows": [
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "801e356030f0818571da9091c0cc256475a53d796f47a5396d870f5c0dfd6e7c"
+      "sha256": "3a5b9eae7df9d33ad358029ddd376ee185e60f2b39b8a49a8f8123039a4e10f5"
     },
     {
       "file": "91-sweep-zero.json",
@@ -79,12 +79,12 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "214ef01661e54c161ada47c96e7e4af32d136649c6f03c2a7686359aadcd85ef"
+      "sha256": "e9b44e2697a99e95fc8a315f19acfe3d9d0428d11c035a15ec704132e25a3e27"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "ea4fdc7fb5c33b215fdddec147d926a6c15df2df616626f54163558e82990227"
+      "sha256": "4cc2b97546a8f7dadd2fd9a8133c3983df03c5dd51f0ce867f26254ef352e00b"
     },
     {
       "file": "103-recover-prepared.json",

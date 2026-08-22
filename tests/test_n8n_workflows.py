@@ -1625,6 +1625,27 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"])
 
+    def test_r11_disposable_create_publish_payload_is_flat_and_named(self) -> None:
+        payload = load_json(N8N / "disposable" / "create-publish-payload.json")
+        create = payload["create"]
+        self.assertIsInstance(create["name"], str)
+        self.assertTrue(create["name"].strip())
+        self.assertNotIn("workflow", create)
+        self.assertEqual(payload["publish"], {"id": payload["workflow_id"]})
+
+        module_path = N8N / "disposable" / "runtime_payload.py"
+        spec = importlib.util.spec_from_file_location("n8n_disposable_runtime_payload", module_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        workflow = load_json(WORKFLOWS / "12-outlook-message-sweep.json")
+        created = module.build_runtime_payload(workflow)
+        self.assertEqual(created["create"]["name"], workflow["name"])
+        self.assertEqual(created["publish"], {"id": workflow["id"]})
+        with self.assertRaisesRegex(ValueError, "N8N_WORKFLOW_NAME_REQUIRED"):
+            module.build_create_payload({**workflow, "name": None})
+
     def test_disposable_fixtures_are_inactive_manual_and_external_write_free(self) -> None:
         generated = N8N / "disposable" / "generated"
         fixtures = [load_json(path) for path in sorted(generated.glob("*.json"))]

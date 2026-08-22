@@ -357,6 +357,47 @@ def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
             raise ValueError(f"{code} source identity is not caller-bound")
 
 
+def assert_archive_readback_contract(workflows: list[dict]) -> None:
+    """Keep W12's returned archive item aligned with W22's commit guard."""
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
+    w12 = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    w22 = by_code[MONTHLY_SHARED_WORKFLOW_CODE]
+    w12_nodes = {node["name"]: node for node in w12["nodes"]}
+    required = {
+        "Verify ARCHIVED Acquisition Receipt",
+        "Mark ARCHIVED Receipt Readback Verified",
+        "Read Back Verified ARCHIVED Receipt",
+        "Return Verified ARCHIVED Receipt",
+    }
+    missing = sorted(required - w12_nodes.keys())
+    if missing:
+        raise ValueError("W12 archive readback nodes missing: " + ", ".join(missing))
+    expected_edges = {
+        "Verify ARCHIVED Acquisition Receipt": "Mark ARCHIVED Receipt Readback Verified",
+        "Mark ARCHIVED Receipt Readback Verified": "Read Back Verified ARCHIVED Receipt",
+        "Read Back Verified ARCHIVED Receipt": "Return Verified ARCHIVED Receipt",
+    }
+    for source, target in expected_edges.items():
+        edges = w12["connections"].get(source, {}).get("main", [[]])[0]
+        if not any(edge.get("node") == target for edge in edges):
+            raise ValueError(f"W12 archive readback missing connection {source} -> {target}")
+    verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"]
+    return_code = w12_nodes["Return Verified ARCHIVED Receipt"]["parameters"]["jsCode"]
+    if "receipt_readback_verified: false" not in verify_code:
+        raise ValueError("W12 pre-update archive verifier must expose a pending canonical receipt")
+    if "receipt_readback_verified: true" not in return_code:
+        raise ValueError("W12 terminal archive return must expose canonical receipt_readback_verified")
+    build_code = next(
+        node for node in w22["nodes"] if node["name"] == "Build W12 COMMIT Request"
+    )["parameters"]["jsCode"]
+    if "archive.receipt_readback_verified !== true" not in build_code:
+        raise ValueError("W22 commit guard must require W12 canonical archive readback")
+    if "receipt_readback_verified: archive.receipt_readback_verified" not in build_code:
+        raise ValueError("W22 commit request must propagate W12 canonical archive readback")
+
+
 def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
     """Extract EI/Wio's immutable cycle core behind one source-aware boundary."""
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
@@ -3951,6 +3992,7 @@ def main() -> int:
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
     assert_monthly_cycle_commit_graph(workflows)
+    assert_archive_readback_contract(workflows)
     assert_four_table_bootstrap(workflows)
     paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])

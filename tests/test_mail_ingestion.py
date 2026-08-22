@@ -1442,6 +1442,73 @@ try {
         self.assertIn("EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH", w01_nodes["Verify Durable Email Evidence Receipt"]["parameters"]["jsCode"])
         self.assertIn("Archive Enumerated Attachment in OneDrive", w01["connections"])
 
+    def test_w12_archive_return_has_canonical_post_update_readback(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        for name in (
+            "Verify ARCHIVED Acquisition Receipt",
+            "Mark ARCHIVED Receipt Readback Verified",
+            "Read Back Verified ARCHIVED Receipt",
+            "Return Verified ARCHIVED Receipt",
+        ):
+            self.assertIn(name, nodes)
+        self.assertEqual(
+            workflow["connections"]["Mark ARCHIVED Receipt Readback Verified"]["main"][0][0]["node"],
+            "Read Back Verified ARCHIVED Receipt",
+        )
+        self.assertEqual(
+            workflow["connections"]["Read Back Verified ARCHIVED Receipt"]["main"][0][0]["node"],
+            "Return Verified ARCHIVED Receipt",
+        )
+        self.assertIn(
+            "receipt_readback_verified: false",
+            nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "receipt_readback_verified: true",
+            nodes["Return Verified ARCHIVED Receipt"]["parameters"]["jsCode"],
+        )
+
+    def test_r10_w22_rejects_adapter_only_archive_readback(self):
+        cycle = self.workflow("22-shared-monthly-statement-cycle.json")
+        source = {
+            "run_id": "fixture:r10",
+            "source_code": "EI_AMAZON",
+            "window_start": "2026-08-01T00:00:00.000Z",
+            "run_upper_bound": "2026-08-20T00:00:00.000Z",
+        }
+        archive = {
+            "archive_ready": True,
+            "attachment_verification_barrier": "VERIFIED",
+            "email_evidence_receipt_barrier": "VERIFIED",
+            "cursor_commit_eligible": False,
+            "readback_verified": True,
+            "email_evidence_receipts_verified": 0,
+        }
+        pipeline = {
+            "state": "SUCCEEDED",
+            "terminal_readback_verified": True,
+            "receipt_sha256": "a" * 64,
+        }
+        result = self.execute_code_node(
+            cycle,
+            "Build W12 COMMIT Request",
+            json_value={
+                "source_code": source["source_code"],
+                "cursor_version": 0,
+                "cursor_value": source["window_start"],
+                "run_upper_bound": source["window_start"],
+                "committed_run_id": None,
+            },
+            refs={
+                "Assemble Trusted Acquisition Contract": source,
+                "Acquire Archive and Read Back": archive,
+                "Run Shared Statement Pipeline": pipeline,
+            },
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT", result["error"])
+
     def test_executable_w12_archive_barrier_is_durable_before_commit(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         for count in (0, 1, 101):

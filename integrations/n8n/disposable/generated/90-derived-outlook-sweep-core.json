@@ -519,8 +519,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        680,
-        1900
+        -1120,
+        2280
       ],
       "parameters": {
         "rules": {
@@ -668,8 +668,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        1900
+        -820,
+        2280
       ],
       "parameters": {
         "resource": "row",
@@ -729,7 +729,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -520,
         2280
       ],
       "parameters": {
@@ -797,7 +797,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -220,
         2280
       ],
       "parameters": {
@@ -854,7 +854,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        80,
         2280
       ],
       "parameters": {
@@ -867,7 +867,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        380,
         2280
       ],
       "parameters": {
@@ -880,7 +880,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        680,
         2280
       ],
       "parameters": {
@@ -934,7 +934,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        980,
         2280
       ],
       "parameters": {
@@ -976,8 +976,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        2280
+        -1120,
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
@@ -989,8 +989,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        2280
+        -820,
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -1050,7 +1050,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -520,
         2660
       ],
       "parameters": {
@@ -1097,7 +1097,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -220,
         2660
       ],
       "parameters": {
@@ -1110,7 +1110,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        80,
         2660
       ],
       "parameters": {
@@ -1123,7 +1123,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        380,
         2660
       ],
       "parameters": {
@@ -1186,7 +1186,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        680,
         2660
       ],
       "parameters": {
@@ -1248,7 +1248,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        980,
         2660
       ],
       "parameters": {
@@ -1261,8 +1261,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        2660
+        -1120,
+        3040
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Replayed Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, replay = $('Verify Replayed Terminal Acquisition Receipt').first().json;\nif (replay.replay_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_NOT_VERIFIED');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: true, replayed: true } }];\n"
@@ -1659,7 +1659,7 @@
         1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify ARCHIVED Acquisition Receipt. Keep this deterministic and fail closed.\nconst expected = $('Build Durable Archive Barrier Receipt').first().json, hash = $('SHA-256 Durable Archive Barrier Receipt').first().json.downstream_receipt_sha256, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(field === 'downstream_receipt_sha256' ? hash : field === 'terminal_state' ? 'ARCHIVED' : expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_READBACK_MISMATCH:' + field);\nif (observed.cursor_commit_eligible !== false || observed.archive_ready !== true || observed.readback_verified !== false)\n    throw new Error('ARCHIVED_RECEIPT_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...observed, readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify ARCHIVED Acquisition Receipt. Keep this deterministic and fail closed.\nconst expected = $('Build Durable Archive Barrier Receipt').first().json, hash = $('SHA-256 Durable Archive Barrier Receipt').first().json.downstream_receipt_sha256, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(field === 'downstream_receipt_sha256' ? hash : field === 'terminal_state' ? 'ARCHIVED' : expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_READBACK_MISMATCH:' + field);\nif (observed.cursor_commit_eligible !== false || observed.archive_ready !== true || observed.readback_verified !== false)\n    throw new Error('ARCHIVED_RECEIPT_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...observed, readback_verified: true, receipt_readback_verified: false } }];\n"
       }
     },
     {
@@ -1701,6 +1701,11 @@
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
               "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": false
             }
           ]
         },
@@ -1721,13 +1726,78 @@
       }
     },
     {
-      "id": "12060",
-      "name": "Read Source Cursor for Initialization",
+      "id": "12068",
+      "name": "Read Back Verified ARCHIVED Receipt",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
         680,
         1520
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_acquisition_receipts",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
+            },
+            {
+              "keyName": "terminal_state",
+              "condition": "eq",
+              "keyValue": "ARCHIVED"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12069",
+      "name": "Return Verified ARCHIVED Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        1520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified ARCHIVED Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.readback_verified !== true || observed.archive_ready !== true || observed.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVED_RECEIPT_TERMINAL_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...expected, ...observed, readback_verified: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
+      }
+    },
+    {
+      "id": "12060",
+      "name": "Read Source Cursor for Initialization",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        1900
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -1758,8 +1828,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        1520
+        -820,
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Cursor v0 Initialization. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length > 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst initial = new Date(request.initial_cursor_value);\nif (!Number.isFinite(initial.valueOf()))\n    throw new Error('VERSIONED_CURSOR_INITIAL_VALUE_INVALID');\nif (rows.length === 1) {\n    const row = rows[0], version = Number(row.cursor_version);\n    if (row.source_code !== request.source_code || !Number.isInteger(version) || version < 0 || !row.cursor_value)\n        throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_INVALID');\n    return [{ json: { ...request, status: 'CURSOR_ALREADY_INITIALIZED', cursor_version: version, cursor_value: row.cursor_value, readback_verified: true, initialized: false } }];\n}\nreturn [{ json: { ...request, status: 'CURSOR_V0_PENDING', cursor_value: initial.toISOString(), run_upper_bound: initial.toISOString(), committed_run_id: '', overlap_seconds: Number(request.overlap_seconds || 0), scanned_count: 0, matched_count: 0, cursor_version: 0, readback_verified: true, initialized: true } }];\n"
@@ -1771,7 +1841,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1120,
+        -520,
         1900
       ],
       "parameters": {
@@ -1801,7 +1871,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -220,
         1900
       ],
       "parameters": {
@@ -1842,7 +1912,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        80,
         1900
       ],
       "alwaysOutputData": true,
@@ -1874,7 +1944,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        380,
         1900
       ],
       "parameters": {
@@ -1887,7 +1957,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        680,
         1900
       ],
       "parameters": {
@@ -1900,7 +1970,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        980,
         1900
       ],
       "parameters": {
@@ -2544,6 +2614,28 @@
         ]
       ]
     },
+    "Mark ARCHIVED Receipt Readback Verified": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified ARCHIVED Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified ARCHIVED Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return Verified ARCHIVED Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Read Source Cursor for Initialization": {
       "main": [
         [
@@ -2705,28 +2797,24 @@
       "description": "Finance stage 4. Input starts at Close Outlook Circuit; verified output leaves through Verify Attachment Archive Barrier."
     },
     {
-      "name": "Stage 5: Build Durable Archive Barrier Receipt to Mark ARCHIVED Receipt Readback Verified",
+      "name": "Stage 5: Build Durable Archive Barrier Receipt to Return Verified ARCHIVED Receipt",
       "nodeIds": [
         "12039",
         "12040",
         "12041",
         "12042",
         "12043",
-        "12044"
+        "12044",
+        "12068",
+        "12069"
       ],
-      "description": "Finance stage 5. Input starts at Build Durable Archive Barrier Receipt; verified output leaves through Mark ARCHIVED Receipt Readback Verified."
+      "description": "Finance stage 5. Input starts at Build Durable Archive Barrier Receipt; verified output leaves through Return Verified ARCHIVED Receipt."
     },
     {
-      "name": "Stage 5: Read Source Cursor for Initialization to Build Cursor v0 Initialization",
+      "name": "Stage 6: Read Source Cursor for Initialization to Return Verified Cursor Initialization",
       "nodeIds": [
         "12060",
-        "12061"
-      ],
-      "description": "Finance stage 5. Input starts at Read Source Cursor for Initialization; verified output leaves through Build Cursor v0 Initialization."
-    },
-    {
-      "name": "Stage 6: Cursor Initialization Needed to Return Verified Cursor Initialization",
-      "nodeIds": [
+        "12061",
         "12062",
         "12063",
         "12064",
@@ -2734,47 +2822,40 @@
         "12066",
         "12067"
       ],
-      "description": "Finance stage 6. Input starts at Cursor Initialization Needed; verified output leaves through Return Verified Cursor Initialization."
+      "description": "Finance stage 6. Input starts at Read Source Cursor for Initialization; verified output leaves through Return Verified Cursor Initialization."
     },
     {
-      "name": "Stage 6: Route Commit Resume State to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+      "name": "Stage 7: Route Commit Resume State to Read Back CAS Cursor",
       "nodeIds": [
         "12046",
-        "12047"
-      ],
-      "description": "Finance stage 6. Input starts at Route Commit Resume State; verified output leaves through Mark Recovered Acquisition DOWNSTREAM_VERIFIED."
-    },
-    {
-      "name": "Stage 7: Mark Source Cursor Readback Verified to Compare CAS Cursor Readback",
-      "nodeIds": [
+        "12047",
         "12052",
         "12053",
         "12054",
         "12023",
         "12024",
-        "12025",
-        "12026"
+        "12025"
       ],
-      "description": "Finance stage 7. Input starts at Mark Source Cursor Readback Verified; verified output leaves through Compare CAS Cursor Readback."
+      "description": "Finance stage 7. Input starts at Route Commit Resume State; verified output leaves through Read Back CAS Cursor."
     },
     {
-      "name": "Stage 8: Read Back Terminal Acquisition Receipt to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+      "name": "Stage 8: Mark Acquisition DOWNSTREAM_VERIFIED to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
       "nodeIds": [
+        "12027",
         "12028",
         "12029",
         "12048",
         "12049"
       ],
-      "description": "Finance stage 8. Input starts at Read Back Terminal Acquisition Receipt; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
+      "description": "Finance stage 8. Input starts at Mark Acquisition DOWNSTREAM_VERIFIED; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
     },
     {
-      "name": "Stage 8: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Return Replayed Cursor Commit",
+      "name": "Stage 8: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Verify Replayed Terminal Acquisition Receipt",
       "nodeIds": [
         "12055",
-        "12056",
-        "12057"
+        "12056"
       ],
-      "description": "Finance stage 8. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Return Replayed Cursor Commit."
+      "description": "Finance stage 8. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Verify Replayed Terminal Acquisition Receipt."
     }
   ],
   "tags": [
