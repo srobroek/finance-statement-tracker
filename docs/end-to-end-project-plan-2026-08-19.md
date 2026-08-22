@@ -26,7 +26,8 @@ Deliver a production-validated, Actual-first finance platform where:
   reconciliation, and cashback arithmetic precede AI;
 - scoped AI proposes only unresolved classifications/evidence policies through
   a fixed, schema-constrained subscription adapter;
-- user-assisted browser capture covers FAB, Sarwa, and Amazon;
+- user-assisted browser capture covers FAB and Sarwa; generic email enrichment
+  covers Amazon and other merchant order evidence;
 - FAB non-credit accounts, Sarwa wealth, ADCB at AED 0, net worth, notes,
   refunds/transfers/rewards, budgets, schedules, owners, evidence, and reports
   reconcile to authoritative sources;
@@ -67,10 +68,10 @@ Repository:
   compose, network, secret, image-lock, and runner-boundary checks;
 - **18** inactive `SPEC_ONLY` workflow exports and Postgres-backed state
   contracts exist; none has yet imported or executed in disposable n8n;
-- the fixed-purpose finance nodes, networkless PDF utility, and private Codex
-  runner are implemented and locally tested but their exact images have not
-  yet passed Linux/container/runtime acceptance;
-- Python, Actual, custom-node, and Codex-runner tests pass but do not prove
+- the fixed-purpose finance nodes, networkless PDF utility, and direct
+  subscription adapter are implemented and locally tested but their exact
+  images have not yet passed Linux/container/runtime acceptance;
+- Python, Actual, custom-node, and subscription-adapter tests pass but do not prove
   deployed workflows or production finance state.
 
 Runtime on `ci@172.20.10.20`:
@@ -78,8 +79,8 @@ Runtime on `ci@172.20.10.20`:
 - Actual, proxy, and cashback are running; the legacy ingestion bridge/runtime
   has been removed rather than retained as a fallback;
 - n8n and n8n Postgres are not deployed;
-- the Codex CLI is authenticated with ChatGPT on the trusted CI host, but the
-  isolated runner-container mount and three-receipt path are not yet proven;
+- the subscription adapter's credential binding and three-receipt path are not
+  yet proven;
 - Sarwa is absent from Actual; FAB inventory/opening evidence is incomplete;
 - ADCB zero is not proven; Actual UI/API state has diverged;
 - existing Codex schedules remain the active orchestration.
@@ -92,13 +93,13 @@ workflow JSON, or a green unit test alone.
 ```mermaid
 flowchart LR
     O["Outlook / Graph"] --> N["n8n orchestration"]
-    B["User-assisted FAB / Sarwa / Amazon"] --> N
+    B["User-assisted FAB / Sarwa"] --> N
     N --> OD["OneDrive immutable evidence"]
     N --> PDF["Networkless PDF utility sandbox"]
     PDF --> ETL["Visible native n8n ETL"]
     ETL --> RULES["Exclusive static-rule owner"]
     RULES --> AI{"Unresolved?"}
-    AI -->|"yes"| MODEL["Ephemeral Codex proposal runner"]
+    AI -->|"yes"| MODEL["Workflow 21 subscription adapter"]
     AI -->|"no"| VALIDATE["Validate / reconcile"]
     MODEL --> VALIDATE
     VALIDATE --> OUTBOX["Postgres Actual outbox"]
@@ -295,16 +296,15 @@ Implement and failure-test inactive workflows for:
 4. EI and Wio monthly statements;
 5. RAK and SC monthly placeholders that cannot activate without real fixtures;
 6. RAK live cashback and SC placeholder;
-7. bounded Codex proposal fixed point: n8n submits only redacted unresolved
-   fields and policy/config hashes to a fixed runner contract; the runner uses
-   `codex exec --ephemeral` in a read-only sandbox with a checked-in output
-   schema, has no Actual/OneDrive/cashback credentials, cannot accept a caller
-   command/model/path/prompt, and returns proposal data only. n8n validates and
-   rejects protected-field output before review. The credential is scoped to
-   the single invocation, and job/idempotency/receipt state is durable;
+7. bounded subscription proposal fixed point: Workflow 21 submits only
+   redacted unresolved fields and policy/config hashes to direct pinned
+   subscription nodes with a checked-in output schema. n8n validates and
+   rejects protected-field output before review; job/idempotency/receipt state
+   is durable;
 8. selective receipts/bills/warranties using strong evidence and durable-goods/
    value/category policies;
-9. interactive FAB/Sarwa/Amazon artifact handoff;
+9. interactive FAB/Sarwa artifact handoff and generic email order/document
+   enrichment;
 10. single Actual writer/outbox/recovery and separate cashback close;
 11. redacted error/status/recovery workflows;
 12. bounded MCP operations for status, reviewed artifact handoff, and document
@@ -420,7 +420,7 @@ Exit: all acceptance rows are `VERIFIED`; no required work remains.
 | Reports | overview, review, categories, trends, tags, shared/owner, bills/subscriptions, property, savings, wealth, retirement, Sankey |
 | Wealth | fresh FAB/Sarwa, price/FX source/time, historical series, stale indicator, signed UI/API parity |
 | Cashback | arbitrary public schema, fictional portfolios, live routing, weekly pace, alerts, history, mobile/PWA/push |
-| Browser sources | user-assisted FAB/Sarwa/Amazon, no session persistence, immutable artifact handoff |
+| Browser sources | user-assisted FAB/Sarwa, no session persistence, immutable artifact handoff; merchant order evidence uses email enrichment |
 | Mail/PDF | exact source contracts, pagination/empty heartbeat, isolated extraction, quarantine/replay |
 
 ## 10. Acceptance evidence contract
@@ -449,7 +449,7 @@ Work can continue without interruption until:
 
 1. FAB login/MFA for inventory and maximum history;
 2. Sarwa login/MFA for fresh holdings;
-3. Amazon login for exact order/evidence matching when required;
+3. Review of Amazon and other merchant order-email evidence when required;
 4. Cloudflare AD login and approval/testing of the MCP Service Auth policy;
 5. explicit review of budgets and the exact production delta touching manual
    finance state.

@@ -123,11 +123,13 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         registry_rows = self.registry["workflows"]
         self.assertEqual(len(registry_rows), 19)
         registry_codes = {row["code"] for row in registry_rows}
-        mapped_codes = [code for folder in self.folders["folders"] for code in folder["workflow_codes"]]
+        folder_rows = self.folders["workflows"]
+        mapped_codes = [row["code"] for row in folder_rows]
         self.assertEqual(len(mapped_codes), 19)
         self.assertEqual(len(mapped_codes), len(set(mapped_codes)))
         self.assertEqual(set(mapped_codes), registry_codes)
-        by_code = {code: folder for folder in self.folders["folders"] for code in folder["workflow_codes"]}
+        folders_by_id = {folder["id"]: folder for folder in self.folders["folders"]}
+        by_code = {row["code"]: folders_by_id[row["folder_id"]] for row in folder_rows}
         for row in registry_rows:
             workflow = load_json(WORKFLOWS / row["file"])
             code = workflow["meta"]["financeWorkflowCode"]

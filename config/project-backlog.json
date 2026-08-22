@@ -1844,8 +1844,8 @@
     {
       "id": "AGENT-003",
       "domain": "AI providers and agent execution",
-      "title": "Ephemeral bounded Codex proposal runner",
-      "requirement": "Run one ChatGPT-subscription-authenticated Codex invocation per AI proposal in a read-only sandbox with fixed schema, fixed operation, no finance credentials, and no caller command/prompt/path/URL.",
+      "title": "Direct subscription proposal adapter",
+      "requirement": "Run one bounded ChatGPT-subscription proposal through the pinned Workflow 21 adapter with a fixed schema, fixed operation, and no caller command/prompt/path/URL.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "agent_runtime",
@@ -1858,7 +1858,7 @@
         "Three consecutive valid disposable receipts",
         "Malicious output and protected fields rejected",
         "ChatGPT login forced and API-key fallback forbidden",
-        "Container cannot reach Actual, OneDrive or cashback credentials"
+        "Provider parameters remain server-owned"
       ],
       "implementation_state": "PARTIAL",
       "verification_state": "HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED",
@@ -1886,7 +1886,7 @@
       ],
       "source_status": "ASSISTANT_CLAIM_ONLY",
       "contradictions": [
-        "The user correctly noted AI enrichment cannot run inside the ordinary container because Codex is unavailable there; the target uses a dedicated runner with cached ChatGPT auth",
+        "The earlier dedicated-runner design is superseded by direct pinned Workflow 21 subscription nodes",
         "Scheduled-task subagents are superseded by workflow-level fixed AI calls"
       ],
       "last_verified": "2026-08-20",
@@ -3665,8 +3665,8 @@
     {
       "id": "BROWSER-001",
       "domain": "browser acquisition",
-      "title": "User-assisted browser acquisition pipeline",
-      "requirement": "Use authenticated browser sessions for FAB, Sarwa and Amazon; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer.",
+      "title": "User-assisted browser acquisition and email enrichment",
+      "requirement": "Use authenticated browser sessions for FAB and Sarwa; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer. Enrich Amazon and other merchant transactions through generic order-email search.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "browser_acquisition",
@@ -3814,8 +3814,8 @@
     {
       "id": "BROWSER-004",
       "domain": "browser acquisition",
-      "title": "Amazon authenticated order capture",
-      "requirement": "Capture order IDs, order totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata from the authenticated Amazon account.",
+      "title": "Merchant order-email enrichment",
+      "requirement": "Search generic order emails around each transaction date and capture order IDs, totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata for Amazon and other merchants.",
       "priority": "P1",
       "status": "PARTIAL",
       "owner_workstream": "browser_acquisition",
@@ -3849,7 +3849,7 @@
       ],
       "source_status": "MIXED",
       "contradictions": [
-        "Browser login success is not proof that every historical order/invoice was captured"
+        "The earlier authenticated-browser order-capture design is superseded by generic order-email enrichment"
       ],
       "last_verified": "2026-08-19",
       "next_action": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures."
@@ -3999,7 +3999,7 @@
       "id": "PLATFORM-001",
       "domain": "platform, security and deployment",
       "title": "Separate containerized services on the CI host",
-      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres, PDF utility and Codex runner as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
+      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres and PDF utility as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "platform_operations",

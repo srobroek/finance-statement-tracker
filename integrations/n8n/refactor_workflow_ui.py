@@ -175,23 +175,6 @@ def format_code_nodes(workflows: list[dict]) -> None:
         node["parameters"]["jsCode"] = rendered
 
 
-def normalize_subscription_provider_labels(workflows: list[dict]) -> None:
-    """Keep provider errors aligned with the direct subscription adapter."""
-    replacements = {
-        "Codex|Agent Runner": "Codex|Subscription Agent",
-        "CODEX_AGENT_RUNNER": "CODEX_SUBSCRIPTION",
-        "Agent runner auth or model policy mismatch": "Subscription provider auth or model policy mismatch",
-    }
-    for workflow in workflows:
-        for node in workflow.get("nodes", []):
-            code = node.get("parameters", {}).get("jsCode")
-            if not isinstance(code, str):
-                continue
-            for old, new in replacements.items():
-                code = code.replace(old, new)
-            node["parameters"]["jsCode"] = code
-
-
 def repair_mojibake(value: object) -> object:
     """Normalize the historical mojibake around the finance middle-dot label."""
     if isinstance(value, dict):
@@ -4367,7 +4350,6 @@ def main() -> int:
         if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
     }
     workflows = [by_code[path_to_code[path]] for path in paths]
-    normalize_subscription_provider_labels(workflows)
     format_code_nodes(workflows)
     for workflow in workflows:
         # W03 is a reviewed migration canvas. Preserve its existing positions

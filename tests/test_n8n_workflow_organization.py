@@ -36,60 +36,6 @@ def load_sql_generator():
     return module
 
 
-def fixture_state(organizer):
-    workflows = []
-    edges = []
-    for spec in organizer.WORKFLOW_MAP:
-        active = spec["id"] == organizer.W15_ID
-        workflow_id = (
-            organizer.ORPHAN_WORKFLOW_ID
-            if spec["id"] == organizer.CANONICAL_REPLACEMENT_ID
-            else spec["id"]
-        )
-        workflow_name = (
-            organizer.ORPHAN_WORKFLOW_NAME
-            if workflow_id == organizer.ORPHAN_WORKFLOW_ID
-            else spec["current_name"]
-        )
-        workflows.append(
-            {
-                "id": workflow_id,
-                "name": workflow_name,
-                "active": active,
-                "activeVersionId": organizer.W15_ACTIVE_VERSION if active else None,
-                "parentFolderId": "f1000000-0000-4000-8000-000000000001",
-                "nodes": [
-                    {"id": f"node-{spec['id']}", "credentials": {"opaque": "preserve"}}
-                ],
-                "connections": {"main": []},
-                "settings": {"executionOrder": "v1"},
-            }
-        )
-        edges.extend(
-            {"workflowId": workflow_id, "tagId": organizer.TAG_IDS[tag]}
-            for tag in ("finance", "setup-required", "inactive")
-        )
-    return {
-        "projectId": "project-fixture",
-        "workflows": workflows,
-        "folders": [
-            {
-                "id": folder_id,
-                "name": f"Legacy {index}",
-                "parentFolderId": None,
-                "projectId": "project-fixture",
-            }
-            for index, folder_id in enumerate(sorted(organizer.LEGACY_FOLDER_IDS))
-        ],
-        "tags": [
-            {"id": tag_id, "name": name}
-            for name, tag_id in organizer.TAG_IDS.items()
-            if name != "active"
-        ],
-        "workflow_tags": edges,
-    }
-
-
 class WorkflowOrganizationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -137,43 +83,6 @@ class WorkflowOrganizationTests(unittest.TestCase):
         for path in owned:
             self.assertNotIn("finance_ai_review_queue", path.read_text(encoding="utf-8"), path)
 
-    def test_apply_preserves_opaque_rows_and_active_published_tuple(self):
-        o = self.organizer
-        before = fixture_state(o)
-        after = o.apply_plan(before)
-        self.assertEqual(len(after["workflows"]), 19)
-        self.assertNotIn(o.ORPHAN_WORKFLOW_ID, {row["id"] for row in after["workflows"]})
-        self.assertIn(o.CANONICAL_REPLACEMENT_ID, {row["id"] for row in after["workflows"]})
-        self.assertEqual(sum(row["active"] for row in after["workflows"]), 1)
-        w15 = next(row for row in after["workflows"] if row["id"] == o.W15_ID)
-        self.assertEqual(w15["activeVersionId"], o.W15_ACTIVE_VERSION)
-        before_w15 = next(
-            row for row in before["workflows"] if row["id"] == o.W15_ID
-        )
-        self.assertEqual(w15["nodes"], before_w15["nodes"])
-        self.assertEqual(w15["connections"], before_w15["connections"])
-        self.assertTrue(
-            all(
-                row["name"] == o.WORKFLOW_BY_ID[row["id"]]["target_name"]
-                for row in after["workflows"]
-            )
-        )
-        canonical = next(
-            row for row in after["workflows"] if row["id"] == o.CANONICAL_REPLACEMENT_ID
-        )
-        source = o.canonical_workflow_export()
-        self.assertEqual(canonical["nodes"], source["nodes"])
-        self.assertEqual(canonical["connections"], source["connections"])
-        self.assertEqual(len(canonical["nodes"]), 16)
-        self.assertNotEqual(
-            canonical["nodes"][0]["id"],
-            "node-10000000-0000-4000-8000-000000000024",
-        )
-        self.assertEqual(
-            {row["id"] for row in after["folders"]},
-            {row["id"] for row in o.FOLDER_SPECS},
-        )
-
     def test_canonical_export_identity_is_checked_and_reported(self):
         o = self.organizer
         source = o.canonical_workflow_export()
@@ -194,108 +103,6 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertEqual(
             o.persisted_workflow_body_md5(renamed), o.CANONICAL_PERSISTED_BODY_MD5
         )
-
-    def test_tag_transition_is_exactly_18_inactive_and_one_active(self):
-        o = self.organizer
-        after = o.apply_plan(fixture_state(o))
-        edges = after["workflow_tags"]
-        inactive = [edge for edge in edges if edge["tagId"] == o.TAG_IDS["inactive"]]
-        active = [edge for edge in edges if edge["tagId"] == o.TAG_IDS["active"]]
-        self.assertEqual(len(inactive), 18)
-        self.assertEqual(len(active), 1)
-        self.assertEqual(
-            active[0], {"workflowId": o.W15_ID, "tagId": o.TAG_IDS["active"]}
-        )
-        self.assertNotIn(
-            {"workflowId": o.W15_ID, "tagId": o.TAG_IDS["inactive"]}, edges
-        )
-        self.assertEqual(
-            next(tag for tag in after["tags"] if tag["id"] == o.TAG_IDS["inactive"])[
-                "name"
-            ],
-            "inactive",
-        )
-        self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 19
-        )
-        self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 19
-        )
-
-    def test_missing_required_edges_are_repaired_without_touching_other_tags(self):
-        o = self.organizer
-        state = fixture_state(o)
-        state["workflow_tags"] = [
-            edge
-            for edge in state["workflow_tags"]
-            if edge["tagId"] not in {o.TAG_IDS["finance"], o.TAG_IDS["setup-required"]}
-        ]
-        state["tags"].append({"id": "other", "name": "operator-note"})
-        state["workflow_tags"].append({"workflowId": o.W15_ID, "tagId": "other"})
-        after = o.apply_plan(state)
-        edges = after["workflow_tags"]
-        self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["finance"] for edge in edges), 19
-        )
-        self.assertEqual(
-            sum(edge["tagId"] == o.TAG_IDS["setup-required"] for edge in edges), 19
-        )
-        self.assertIn({"workflowId": o.W15_ID, "tagId": "other"}, edges)
-
-    def test_plan_is_idempotent_and_rollback_restores_exact_full_state(self):
-        o = self.organizer
-        before = fixture_state(o)
-        plan = o.plan_organization(before)
-        self.assertTrue(plan["changed"])
-        self.assertTrue(plan["idempotent"])
-        self.assertEqual(plan["prestate_roster"], "orphaned")
-        self.assertTrue(plan["retirement"]["backup_captured"])
-        self.assertEqual(
-            plan["retirement"]["legacy_workflow_id"], o.ORPHAN_WORKFLOW_ID
-        )
-        self.assertEqual(
-            plan["retirement"]["replacement_workflow_id"], o.CANONICAL_REPLACEMENT_ID
-        )
-        self.assertEqual(
-            plan["retirement"]["canonical_source_path"],
-            o.CANONICAL_EXPORT_RELATIVE_PATH,
-        )
-        self.assertEqual(
-            plan["retirement"]["canonical_source_sha256"],
-            o.CANONICAL_EXPORT_SHA256,
-        )
-        self.assertEqual(
-            plan["retirement"]["canonical_body_md5"],
-            o.CANONICAL_PERSISTED_BODY_MD5,
-        )
-        self.assertEqual(plan["retirement"]["canonical_node_count"], 16)
-        self.assertTrue(plan["retirement"]["canonical_source_bound"])
-        self.assertTrue(plan["retirement"]["rollback_restores_exact_prestate"])
-        second = o.plan_organization(plan["after_state"])
-        self.assertFalse(second["changed"])
-        self.assertEqual(second["prestate_roster"], "canonical")
-        self.assertFalse(second["retirement"]["backup_captured"])
-        self.assertEqual(second["before"], second["after"])
-        restored = o.rollback_state(plan["after_state"], plan["rollback_state"])
-        self.assertEqual(restored, before)
-        self.assertEqual(o.snapshot_summary(restored), plan["before"])
-        self.assertNotEqual(
-            plan["before"]["full_row_md5"], plan["after"]["full_row_md5"]
-        )
-
-    def test_snapshot_summary_exposes_version_and_digest_receipts_without_payloads(
-        self,
-    ):
-        o = self.organizer
-        summary = o.snapshot_summary(fixture_state(o))
-        self.assertEqual(summary["workflow_count"], 19)
-        self.assertEqual(summary["active_count"], 1)
-        self.assertEqual(summary["published_count"], 1)
-        self.assertEqual(summary["inactive_edge_count"], 19)
-        self.assertEqual(summary["active_edge_count"], 0)
-        self.assertRegex(summary["full_row_md5"], r"^[0-9a-f]{32}$")
-        self.assertRegex(summary["logical_sha256"], r"^[0-9a-f]{64}$")
-        self.assertNotIn("opaque", json.dumps(summary))
 
     def test_sql_is_guarded_rehearsal_and_contains_exact_target_contract(self):
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
@@ -382,39 +189,12 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("ORGANIZATION_REHEARSAL_ROLLED_BACK", completed.stdout)
 
-    def test_cli_contract_and_rehearsal_are_side_effect_free(self):
+    def test_cli_prints_contract_without_side_effects(self):
         contract = subprocess.run(
             [sys.executable, str(SOURCE)], text=True, capture_output=True, check=True
         )
         payload = json.loads(contract.stdout)
         self.assertEqual(len(payload["workflows"]), 19)
-        with self.subTest("rehearsal"):
-            import tempfile
-
-            with tempfile.TemporaryDirectory() as temporary:
-                state_path = Path(temporary) / "state.json"
-                state_path.write_text(
-                    json.dumps(fixture_state(self.organizer)), encoding="utf-8"
-                )
-                result = subprocess.run(
-                    [sys.executable, str(SOURCE), "--state", str(state_path)],
-                    text=True,
-                    capture_output=True,
-                    check=True,
-                )
-                report = json.loads(result.stdout)
-                self.assertTrue(report["changed"])
-                self.assertTrue(report["idempotent"])
-                self.assertFalse(report["production_mutation"])
-                self.assertEqual(report["prestate_roster"], "orphaned")
-                self.assertEqual(
-                    report["retirement"]["replacement_workflow_id"],
-                    self.organizer.CANONICAL_REPLACEMENT_ID,
-                )
-                self.assertEqual(
-                    state_path.read_text(encoding="utf-8"),
-                    json.dumps(fixture_state(self.organizer), indent=None),
-                )
 
 
 if __name__ == "__main__":

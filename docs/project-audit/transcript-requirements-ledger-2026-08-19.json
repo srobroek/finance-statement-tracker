@@ -249,15 +249,15 @@
     },
     {
       "id": "AGENT-003",
-      "title": "Ephemeral bounded Codex proposal runner",
-      "requirement": "Run one ChatGPT-subscription-authenticated Codex invocation per AI proposal in a read-only sandbox with fixed schema, fixed operation, no finance credentials, and no caller command/prompt/path/URL.",
-      "expected_state": "Only schema-valid proposals return to n8n; n8n revalidates and never lets the runner commit directly.",
+      "title": "Direct subscription proposal adapter",
+      "requirement": "Run one bounded ChatGPT-subscription proposal through the pinned Workflow 21 adapter with a fixed schema, fixed operation, and no caller command/prompt/path/URL.",
+      "expected_state": "Only schema-valid proposals return to n8n; n8n revalidates and never lets the provider write finance state directly.",
       "status_from_transcript": "ASSISTANT_CLAIM_ONLY",
       "priority": "P0",
       "dependencies": ["PLATFORM-003", "N8N-007"],
-      "acceptance_criteria": ["Three consecutive valid disposable receipts", "Malicious output and protected fields rejected", "ChatGPT login forced and API-key fallback forbidden", "Container cannot reach Actual, OneDrive or cashback credentials"],
+      "acceptance_criteria": ["Three consecutive valid disposable receipts", "Malicious output and protected fields rejected", "ChatGPT login forced and API-key fallback forbidden", "Provider parameters remain server-owned"],
       "claimed_evidence": ["integrations/n8n/workflows/21-subscription-agent-adapter.json", "config/project-acceptance.json marks bounded-subscription-agent-handoff IMPLEMENTED_NOT_DEPLOYED"],
-      "contradictions": ["The user correctly noted AI enrichment cannot run inside the ordinary container because Codex is unavailable there; the target uses a dedicated runner with cached ChatGPT auth", "Scheduled-task subagents are superseded by workflow-level fixed AI calls"],
+      "contradictions": ["The earlier dedicated-runner design is superseded by direct pinned Workflow 21 subscription nodes", "Scheduled-task subagents are superseded by workflow-level fixed AI calls"],
       "source_turn_summary": "The user asked whether a scheduled orchestrator could use subagents/models and emphasized Codex subscription access rather than an in-container API model."
     },
     {
@@ -743,8 +743,8 @@
     },
     {
       "id": "BROWSER-001",
-      "title": "User-assisted browser acquisition pipeline",
-      "requirement": "Use authenticated browser sessions for FAB, Sarwa and Amazon; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer.",
+      "title": "User-assisted browser acquisition and email enrichment",
+      "requirement": "Use authenticated browser sessions for FAB and Sarwa; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer. Enrich Amazon and other merchant transactions through generic order-email search.",
       "expected_state": "Browser never writes Actual directly and never persists cookies, MFA state, passwords, full account numbers, PINs or CVVs.",
       "status_from_transcript": "FINAL_DECISION",
       "priority": "P0",
@@ -752,7 +752,7 @@
       "acceptance_criteria": ["Provider/data recipe and capture schema", "Immutable source archive", "User-approved visible-row capture when no export", "No session secret in repository/logs"],
       "claimed_evidence": ["browser_adapters", "config/browser-capture-schema-v1.json", "AGENTS.md browser boundary"],
       "contradictions": ["The user earlier said Chrome should be controlled; the target permits the authenticated browser but routes artifacts through n8n, not a direct scraper-to-Actual path"],
-      "source_turn_summary": "The user logged into FAB, Sarwa and Amazon and asked to preserve the original app's browser ingestion capability."
+      "source_turn_summary": "The user retained interactive FAB/Sarwa capture but later directed Amazon and merchant order enrichment through generic email search."
     },
     {
       "id": "BROWSER-002",
@@ -782,16 +782,16 @@
     },
     {
       "id": "BROWSER-004",
-      "title": "Amazon authenticated order capture",
-      "requirement": "Capture order IDs, order totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata from the authenticated Amazon account.",
-      "expected_state": "Captured artifacts enrich ledger rows and evidence catalogue without storing browser credentials/session state.",
+      "title": "Merchant order-email enrichment",
+      "requirement": "Search generic order emails around each transaction date and capture order IDs, totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata for Amazon and other merchants.",
+      "expected_state": "Email-derived evidence enriches ledger rows and the evidence catalogue without browser credentials or session state.",
       "status_from_transcript": "MIXED",
       "priority": "P1",
       "dependencies": ["BROWSER-001", "DOC-006"],
       "acceptance_criteria": ["Order capture recipe", "Exact order/transaction matching", "Invoice/archive hash", "Ambiguous orders remain reviewable"],
       "claimed_evidence": ["browser_adapters/amazon", "Prior historical audit reported matched and unresolved orders", "User completed browser login"],
-      "contradictions": ["Browser login success is not proof that every historical order/invoice was captured"],
-      "source_turn_summary": "The user directed the agent to open Amazon after login and scrape/import relevant order data."
+      "contradictions": ["The earlier authenticated-browser order-capture design is superseded by generic order-email enrichment"],
+      "source_turn_summary": "The user replaced Amazon browser order capture with generic email-based enrichment that can cover every merchant."
     },
     {
       "id": "AUTO-001",
@@ -835,7 +835,7 @@
     {
       "id": "PLATFORM-001",
       "title": "Separate containerized services on the CI host",
-      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres, PDF utility and task runners as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
+      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres and PDF utility as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
       "expected_state": "Services restart independently and use private networks/volumes; Actual and cashback are not one compose unit.",
       "status_from_transcript": "FINAL_DECISION",
       "priority": "P0",

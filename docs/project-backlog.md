@@ -126,7 +126,7 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 | --- | --- | --- | --- | --- | --- |
 | `AGENT-001` | `agent_runtime` | `ACTUAL-005`, `ACTUAL-010` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 2 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | AI runs only after deterministic rules and history matching |
 | `AGENT-002` | `agent_runtime` | `AGENT-003` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 2 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Luna normal path and gated Sol exception path |
-| `AGENT-003` | `agent_runtime` | `PLATFORM-003`, `N8N-007` | `PARTIAL` | PARTIAL / HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED; 6 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Ephemeral bounded Codex proposal runner |
+| `AGENT-003` | `agent_runtime` | `PLATFORM-003`, `N8N-007` | `PARTIAL` | PARTIAL / HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED; 6 files, 4 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Direct subscription proposal adapter |
 | `AGENT-004` | `agent_runtime` | `AGENT-001`, `ACTUAL-009` | `PARTIAL` | PARTIAL / FAILING_WORKTREE; 2 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | AI category and rule recommendations remain proposals |
 | `AGENT-005` | `agent_runtime` | `AGENT-003`, `N8N-008` | `PARTIAL` | PARTIAL / HOST_REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING; 5 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: runner contract tests plus isolated structured-output receipt review | Community AI nodes are optional, pinned pilots only |
 
@@ -172,10 +172,10 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 
 | ID | Owner | Dependencies | Status | Acceptance evidence and validator | Title |
 | --- | --- | --- | --- | --- | --- |
-| `BROWSER-001` | `browser_acquisition` | `N8N-005`, `DOC-001` | `PARTIAL` | PARTIAL / ADAPTER_TESTED_NOT_END_TO_END; 4 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | User-assisted browser acquisition pipeline |
+| `BROWSER-001` | `browser_acquisition` | `N8N-005`, `DOC-001` | `PARTIAL` | PARTIAL / ADAPTER_TESTED_NOT_END_TO_END; 4 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | User-assisted browser acquisition and email enrichment |
 | `BROWSER-002` | `browser_acquisition` | `BROWSER-001`, `ACTUAL-002` | `IMPLEMENTED_UNVERIFIED` | PARTIAL / MIXED: ADAPTER_TESTED_NOT_END_TO_END, REPOSITORY_AND_RECEIPT_ONLY; 8 files, 2 tests; live readback: recorded; 4 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | FAB complete non-credit inventory and history |
 | `BROWSER-003` | `browser_acquisition` | `BROWSER-001`, `ACTUAL-017` | `PARTIAL` | PARTIAL / MIXED: ADAPTER_TESTED_NOT_END_TO_END, FIXTURE_AND_CAPTURE_VERIFIED; 8 files, 4 tests; live readback: recorded; 5 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | Sarwa provider-native holdings and wealth snapshots |
-| `BROWSER-004` | `browser_acquisition` | `BROWSER-001`, `DOC-006` | `PARTIAL` | PARTIAL / ADAPTER_TESTED_NOT_END_TO_END; 4 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | Amazon authenticated order capture |
+| `BROWSER-004` | `browser_acquisition` | `BROWSER-001`, `DOC-006` | `PARTIAL` | PARTIAL / ADAPTER_TESTED_NOT_END_TO_END; 4 files, 1 tests; live readback: recorded; 4 acceptance checks; validator: capture-schema tests plus immutable source and guarded-ingestion receipt review | Merchant order-email enrichment |
 
 ### cashback companion
 

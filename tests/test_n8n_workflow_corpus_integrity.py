@@ -96,14 +96,14 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 48,
                                             'connections_sha256': 'c64db46a4ea0c005bfc3ae8f094b4bb992ee507b8e73152d39558aaeb047b6e2',
                                             'parameters_sha256': '09af79d9f176227d038496e8de187baf0fda1c3f761ab762f1daba819f83a3ac',
                                             'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'},
- '09-ai-proposal.json': {'nodes': 35,
-                         'edges': 30,
+ '09-ai-proposal.json': {'nodes': 27,
+                         'edges': 26,
                          'sticky': 4,
                          'groups': 4,
-                         'node_ids_sha256': '5adc8b6735156f9707654c224992b4222aaf57ce1e04aa75a0febf3b8fa367bf',
-                         'connections_sha256': '4ff52193b65ee9e9b3127e162d9237ea98098100e31d7ed51faa53d9d9b1f103',
-                         'parameters_sha256': '80c3ec2a332d08e1a59b68d5188107b1a2716c856ee2a00f4128e5b4fc124a29',
-                         'groups_sha256': '76109032e9b59e76b1b3e2b357b4359123e35e040d34f2ee82d486edf1f532a6'},
+                         'node_ids_sha256': '8400f4d566da50dc7f4ee9a7fb78004b777e8be1269217b893a52dfce610584e',
+                         'connections_sha256': '47a2d6f22243d5b6d7d797759ee7009165846e8b8f8a145b51c0e6ccaa470121',
+                         'parameters_sha256': 'f74980cfbbee19721d40396b35a8ff01d09aaa05bf7a8a8570c536dfe55423b8',
+                         'groups_sha256': 'eac7f53359623e5596f8bf8d03060139765f5ddcc8f474d485fc4786f1be480a'},
  '10-finance-operations-status.json': {'nodes': 25,
                                        'edges': 22,
                                        'sticky': 3,
@@ -233,9 +233,9 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "acffbb0c6e3000cb97dcc979cf702587faf8f43724c1559bcfe23eb845f8a6ad",
     },
     "09-ai-proposal.json": {
-        "nodes": 31, "sticky": 0,
-        "node_ids_sha256": "05c31cba68050588f13ffee323eceae6cec7efe65ea83833a397232d8b633053",
-        "parameters_sha256": "eae1503a733acfe4f1b50c8ba473734945f21a103a3e4da528ff9b742a827455",
+        "nodes": 27, "sticky": 0,
+        "node_ids_sha256": "8400f4d566da50dc7f4ee9a7fb78004b777e8be1269217b893a52dfce610584e",
+        "parameters_sha256": "f74980cfbbee19721d40396b35a8ff01d09aaa05bf7a8a8570c536dfe55423b8",
     },
     "10-finance-operations-status.json": {
         "nodes": 22, "sticky": 0,
@@ -267,7 +267,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "16-operations-error-handler.json": {
         "nodes": 13, "sticky": 0,
         "node_ids_sha256": "6d4bb1d21f537808601ee5ba2e7d266d1f2d940712b21bfbc92bd796175f1738",
-        "parameters_sha256": "8888e46e5579d9be4d627a36331d2c18fbcd9691df3ff3a2a65e22b27556d509",
+        "parameters_sha256": "19f185b784377be50dee16e7086ffa90132f50b1f9221468a2674a94e21d3fbc",
     },
     "17-actual-outbox-recovery.json": {
         "nodes": 3, "sticky": 0,
@@ -282,7 +282,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "19-platform-data-table-bootstrap.json": {
         "nodes": 12, "sticky": 0,
         "node_ids_sha256": "5be5f493de12fe7d6ad7f44f7bc7c3d13cdc653cabf149df14c128b0b0038a38",
-        "parameters_sha256": "ff144f3b27905cf0d3fd80d54c3289bbf8a6fd7424403b9aca68a61e43869bc6",
+        "parameters_sha256": "ece9fcc3f55b2a93fbb58a6663b1fd864e77da5d21d9500cff59a9748dbf92bd",
     },
     "20-actual-outbox-apply.json": {
         "nodes": 35, "sticky": 0,
@@ -436,10 +436,10 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
             f"{registry_export_code_mismatches(rows, self.workflows)}",
         )
 
+        folders_by_id = {folder["id"]: folder for folder in self.folder_manifest["folders"]}
         folder_by_code = {
-            code: folder
-            for folder in self.folder_manifest["folders"]
-            for code in folder["workflow_codes"]
+            row["code"]: folders_by_id[row["folder_id"]]
+            for row in self.folder_manifest["workflows"]
         }
         same_folder_id = folder_by_code[rows[0]["code"]]["id"]
         same_folder_indices = [
@@ -470,7 +470,7 @@ class N8nWorkflowCorpusIntegrityTests(unittest.TestCase):
         self.assertEqual(len(folder_ids), len(set(folder_ids)), "duplicate folder IDs")
         folder_keys = [(folder["parentFolderId"], folder["name"]) for folder in folders]
         self.assertEqual(len(folder_keys), len(set(folder_keys)), "duplicate folder names within a parent")
-        codes = [code for folder in folders for code in folder["workflow_codes"]]
+        codes = [row["code"] for row in self.folder_manifest["workflows"]]
         self.assertEqual(len(codes), len(set(codes)), "duplicate folder workflow codes")
         self.assertEqual(set(codes), set(registry_codes), "folder/registry workflow-code bijection drift")
         self.assertEqual(
