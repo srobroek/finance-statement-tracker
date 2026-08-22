@@ -308,6 +308,7 @@
     "cashbackVerifiedRoute": {
       "type": "object",
       "required": ["status"],
+      "not": {"required": ["reason"]},
       "properties": {"status": {"const": "VERIFIED"}}
     },
     "cashbackNaRoute": {
@@ -317,6 +318,7 @@
         "status": {"const": "N/A"},
         "reason": {"const": "SOURCE_HAS_NO_CASHBACK_ROUTE_IN_SYNTHETIC_FIXTURE"},
         "rows": {"maxItems": 0},
+        "readback_sha256": {"const": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
         "write_count": {"const": 0}
       }
     },

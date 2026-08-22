@@ -318,6 +318,12 @@ class N8nMailE2EContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID"):
             verify_receipt(_rehash(ei))
 
+        ei_reason = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+        ei_reason["cashback"]["reason"] = "arbitrary"
+        ei_reason["pipeline"]["cashback_readback"]["reason"] = "arbitrary"
+        with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID"):
+            verify_receipt(_rehash(ei_reason))
+
         wio = copy.deepcopy(run_synthetic_e2e(source_code="WIO_CREDIT", count=1))
         verified_empty = {
             "status": "VERIFIED",
