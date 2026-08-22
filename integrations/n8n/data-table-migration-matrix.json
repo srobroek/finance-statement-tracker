@@ -6,7 +6,7 @@
   "source_snapshot": {
     "finance_commit": "dfa4e53f9e5bdc67284e32926f006a2768515e7b",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "29753782b0b66b4b03c178dacf15bbe13a7291f060b1fa130e94d3c7b694fe16",
+    "node_scan_corpus_sha256": "249905b3c36fd8d9c5479ea5c8492c8f92f81d9eb65342b063a79620876f89ca",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },

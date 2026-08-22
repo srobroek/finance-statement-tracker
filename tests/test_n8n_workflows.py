@@ -1072,6 +1072,61 @@ try {{
         self.assertIn("provider_code", code)
         self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
 
+    def test_microsoft_nodes_stop_and_route_auth_failures_to_redacted_receipt(self) -> None:
+        microsoft_types = {
+            "n8n-nodes-base.microsoftOutlook",
+            "n8n-nodes-base.microsoftOneDrive",
+        }
+        observed = 0
+        for filename, workflow in self.workflows.items():
+            microsoft_nodes = [node for node in workflow["nodes"] if node["type"] in microsoft_types]
+            if not microsoft_nodes:
+                continue
+            observed += len(microsoft_nodes)
+            self.assertEqual(workflow["settings"]["errorWorkflow"], ERROR_WORKFLOW_ID, filename)
+            for node in microsoft_nodes:
+                with self.subTest(workflow=filename, node=node["name"]):
+                    self.assertFalse(node.get("continueOnFail", False))
+                    self.assertNotIn(node.get("onError"), {"continueRegularOutput", "continueErrorOutput"})
+        self.assertGreater(observed, 0)
+
+        auth_failures = (
+            {"httpCode": 401, "message": "invalid_grant token=synthetic-sensitive-value"},
+            {"statusCode": 403, "message": "AADSTS consent_required for user@example.invalid"},
+            {"message": "OAuth credential unavailable: synthetic-sensitive-value"},
+        )
+        for provider_node in ("Exhaust Outlook Pagination", "Archive Email Evidence in OneDrive"):
+            for failure in auth_failures:
+                with self.subTest(node=provider_node, failure=failure):
+                    result = self.run_exported_workflow_node(
+                        "16-operations-error-handler.json",
+                        "Redact and Classify Failure",
+                        {
+                            "execution": {
+                                "id": "execution-1",
+                                "lastNodeExecuted": provider_node,
+                                "error": failure,
+                            },
+                            "workflow": {
+                                "id": "workflow-1",
+                                "name": "Finance test",
+                                "financeWorkflowCode": "TEST",
+                            },
+                        },
+                        {},
+                    )
+                    self.assertTrue(result["ok"])
+                    receipt = result["output"][0]["json"]
+                    self.assertEqual(receipt["provider_code"], "MICROSOFT_GRAPH")
+                    self.assertEqual(receipt["error_class"], "MICROSOFT_AUTH_UNAVAILABLE")
+                    self.assertEqual(
+                        receipt["error_message_redacted"],
+                        "Microsoft authentication unavailable; reconnect the credential.",
+                    )
+                    serialized = json.dumps(receipt)
+                    self.assertNotIn("synthetic-sensitive-value", serialized)
+                    self.assertNotIn("user@example.invalid", serialized)
+
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
         contract = load_json(N8N / "codex-agent-handoff.json")
         runner = contract["runner_contract"]

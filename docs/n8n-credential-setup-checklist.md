@@ -9,6 +9,11 @@ step.
 
 ## Microsoft acquisition and evidence
 
+Codex's OpenAI-managed Outlook Email and SharePoint app grants are a separate
+credential boundary. Follow
+[`codex-microsoft-connectors.md`](codex-microsoft-connectors.md); never export
+those Microsoft tokens into n8n or reuse n8n credential ciphertext in Codex.
+
 - [ ] Create one least-privilege Microsoft Outlook OAuth2 credential for
   `BIND_OUTLOOK` and complete browser consent.
 - [ ] Confirm the Outlook identity can read only the intended mailbox/folders.
@@ -22,6 +27,10 @@ step.
   SHA-256 download readback, and redacted Data Table receipt.
 - [ ] Keep the >4 MiB upload-session path and HTML/MIME-to-PDF renderer blocked
   until exact implementations pass disposable tests.
+- [ ] Revoke or disconnect each Microsoft credential in a disposable run and
+  confirm the first provider failure stops the workflow, creates a redacted
+  `MICROSOFT_AUTH_UNAVAILABLE` operations receipt, and performs no downstream
+  archive, cursor, enrichment, or ledger mutation.
 
 ## Statement and Actual
 
