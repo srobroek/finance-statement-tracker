@@ -829,7 +829,7 @@
       "dependencies": ["N8N-001", "N8N-007"],
       "acceptance_criteria": ["Three consecutive successful routine runs create no visible Codex task clutter", "Forced failure remains visible", "Exact-ID archive acknowledgement and lifecycle-location verification for transitional tasks", "No unsupported ephemeral scheduled-task claim"],
       "claimed_evidence": ["User reported 'Archival was attempted ... did not confirm archived state'", "docs/automation-lifecycle-audit-2026-08-19.md shows external exact-ID archival can work but self-archive cannot be assumed", "Official docs do not promise ephemeral scheduled tasks"],
-      "contradictions": ["Earlier prompts instructed tasks to self-archive; repeated runs hung", "Cloud tasks are not a substitute for local/private workflow access", "The bounded Codex AI runner can use codex exec --ephemeral, but that is not the same as a recurring app scheduled task"],
+      "contradictions": ["Earlier prompts instructed tasks to self-archive; repeated runs hung", "Cloud tasks are not a substitute for local/private workflow access", "The earlier Codex runner proposal is superseded by direct Workflow 21 subscription nodes; it was not a recurring scheduled-task design"],
       "source_turn_summary": "The user complained about many chats, asked about auto-archive/ephemeral/cloud tasks, and reported repeated archive failure."
     },
     {

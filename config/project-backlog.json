@@ -3990,7 +3990,7 @@
       "contradictions": [
         "Earlier prompts instructed tasks to self-archive; repeated runs hung",
         "Cloud tasks are not a substitute for local/private workflow access",
-        "The bounded Codex AI runner can use codex exec --ephemeral, but that is not the same as a recurring app scheduled task"
+        "The earlier Codex runner proposal is superseded by direct Workflow 21 subscription nodes; it was not a recurring scheduled-task design"
       ],
       "last_verified": "2026-08-19",
       "next_action": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats."
