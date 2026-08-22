@@ -10,8 +10,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
 CONTRACT = N8N / "workflow-folders.json"
-TEMPLATE = N8N / "workflow-folder-placement.sql.template"
-OUTPUT = N8N / "workflow-folder-placement.sql"
+PLACEMENT_TEMPLATE = N8N / "workflow-folder-placement.sql.template"
+PLACEMENT_OUTPUT = N8N / "workflow-folder-placement.sql"
+CUTOVER_TEMPLATE = N8N / "workflow-organization-cutover.sql.template"
+CUTOVER_OUTPUT = N8N / "workflow-organization-cutover.sql"
 
 NUMBER_WORDS = {
     0: "zero",
@@ -78,6 +80,10 @@ def load_contract() -> dict[str, Any]:
     if any(folder.get("parentFolderId") not in folder_ids
            for folder in folders if folder.get("parentFolderId") is not None):
         raise ContractError("every folder parent must be canonical")
+    if len(folders) != 6 or len(workflows) != 19:
+        raise ContractError("canonical placement must define six folders and 19 workflows")
+    if sum(bool(folder.get("root")) for folder in folders) != 2:
+        raise ContractError("canonical placement must define two root folders")
     return contract
 
 
@@ -105,6 +111,13 @@ def rows_workflow_contract(workflows: list[dict[str, Any]]) -> str:
     )
 
 
+def rows_workflow_folder_contract(workflows: list[dict[str, Any]]) -> str:
+    return ",\n".join(
+        f"  ({sql_text(workflow['id'])}, {sql_text(workflow['folder_id'])})"
+        for workflow in workflows
+    )
+
+
 def rows_tag_contract(tags: list[dict[str, str]]) -> str:
     return ",\n".join(
         f"  ({sql_text(tag['id'])}, {sql_text(tag['name'])}, NOW(), NOW())"
@@ -119,11 +132,12 @@ def rows_tag_tuples(tags: list[dict[str, str]]) -> str:
     )
 
 
-def rows_folder_insert(folders: list[dict[str, Any]]) -> str:
+def rows_folder_insert(folders: list[dict[str, Any]], project_id_variable: str) -> str:
     return ",\n".join(
-        "  ({}, {}, :'finance_project_id', {}, NOW(), NOW())".format(
+        "  ({}, {}, :'{}', {}, NOW(), NOW())".format(
             sql_text(folder["id"]),
             sql_text(folder["name"]),
+            project_id_variable,
             sql_nullable(folder.get("parentFolderId")),
         )
         for folder in folders
@@ -158,8 +172,7 @@ def tag_edge_guards(
     return "\n".join(lines)
 
 
-def render() -> str:
-    contract = load_contract()
+def template_values(contract: dict[str, Any]) -> dict[str, str]:
     folders = contract["folders"]
     workflows = contract["workflows"]
     tags = contract["tag_definitions"]
@@ -175,11 +188,18 @@ def render() -> str:
     values = {
         "FOLDER_CONTRACT_ROWS": rows_folder_contract(folders),
         "WORKFLOW_CONTRACT_ROWS": rows_workflow_contract(workflows),
+        "WORKFLOW_FOLDER_ROWS": rows_workflow_folder_contract(workflows),
         "TAG_CONTRACT_ROWS": rows_tag_contract(tags),
         "TAG_CONTRACT_TUPLES": rows_tag_tuples(tags),
         "TAG_CONTRACT_IDS": ", ".join(sql_text(tag["id"]) for tag in tags),
-        "FOLDER_ROOT_ROWS": rows_folder_insert(root_folders),
-        "FOLDER_CHILD_ROWS": rows_folder_insert(child_folders),
+        "FOLDER_ROOT_ROWS": rows_folder_insert(root_folders, "finance_project_id"),
+        "FOLDER_CHILD_ROWS": rows_folder_insert(child_folders, "finance_project_id"),
+        "APPLICATION_FOLDER_ROOT_ROWS": rows_folder_insert(
+            root_folders, "application_project_id"
+        ),
+        "APPLICATION_FOLDER_CHILD_ROWS": rows_folder_insert(
+            child_folders, "application_project_id"
+        ),
         "LEGACY_FOLDER_IDS": ", ".join(sql_text(value) for value in contract["legacy_folder_ids"]),
         "WORKFLOW_TAG_ROWS": ", ".join(
             f"({sql_text(tag_ids[name])})"
@@ -195,15 +215,24 @@ def render() -> str:
         "WORKFLOW_COUNT": str(workflow_count),
         "TAG_EDGE_READBACK_GUARDS": tag_edge_guards(tags, workflow_tags, workflow_count),
     }
-    rendered = TEMPLATE.read_text(encoding="utf-8")
+    return values
+
+
+def render_template(template: Path, values: dict[str, str]) -> str:
+    rendered = template.read_text(encoding="utf-8")
     for name, value in values.items():
-        marker = "{{" + name + "}}"
-        if marker not in rendered:
-            raise ContractError(f"template marker {marker} is missing")
-        rendered = rendered.replace(marker, value)
+        rendered = rendered.replace("{{" + name + "}}", value)
     if "{{" in rendered:
         raise ContractError("template has unresolved markers")
     return rendered.replace("\r\n", "\n")
+
+
+def render_outputs() -> dict[Path, str]:
+    values = template_values(load_contract())
+    return {
+        PLACEMENT_OUTPUT: render_template(PLACEMENT_TEMPLATE, values),
+        CUTOVER_OUTPUT: render_template(CUTOVER_TEMPLATE, values),
+    }
 
 
 def main() -> int:
@@ -212,12 +241,20 @@ def main() -> int:
     mode.add_argument("--write", action="store_true", help="write generated SQL")
     mode.add_argument("--check", action="store_true", help="verify generated SQL")
     args = parser.parse_args()
-    rendered = render()
+    rendered_outputs = render_outputs()
     if args.write:
-        OUTPUT.write_text(rendered, encoding="utf-8", newline="\n")
+        for output, rendered in rendered_outputs.items():
+            output.write_text(rendered, encoding="utf-8", newline="\n")
         return 0
-    if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != rendered:
-        raise SystemExit(f"generated workflow placement SQL drift: {OUTPUT.relative_to(ROOT)}")
+    drifted = [
+        output.relative_to(ROOT)
+        for output, rendered in rendered_outputs.items()
+        if not output.exists() or output.read_text(encoding="utf-8") != rendered
+    ]
+    if drifted:
+        raise SystemExit(
+            "generated workflow SQL drift: " + ", ".join(str(path) for path in drifted)
+        )
     return 0
 
 
