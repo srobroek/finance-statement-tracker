@@ -292,6 +292,19 @@ CANONICAL_EXPORT_RELATIVE_PATH = (
 CANONICAL_EXPORT_SHA256 = (
     "2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2"
 )
+# These are the workflow_entity fields that make up the imported workflow body.
+# Keep runtime/version/folder columns out of this digest; those are guarded
+# independently by the cutover contract.
+CANONICAL_PERSISTED_BODY_MD5 = "d62d4c804421e09161a892a180c1bca9"
+PERSISTED_BODY_FIELDS = (
+    "id",
+    "name",
+    "nodes",
+    "connections",
+    "settings",
+    "pinData",
+    "meta",
+)
 LEGACY_IDS = frozenset((TARGET_IDS - {CANONICAL_REPLACEMENT_ID}) | {ORPHAN_WORKFLOW_ID})
 STATUS_MARKERS = ("setup required", "spec_only", "spec only", "inactive", "blocked")
 W15_ID = "10000000-0000-4000-8000-000000000015"
@@ -318,6 +331,40 @@ def _md5(value: Any) -> str:
 
 def _sha256(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _postgres_jsonb_text(value: Any) -> str:
+    """Render JSON using PostgreSQL jsonb's deterministic text representation."""
+
+    if isinstance(value, Mapping):
+        items = sorted(
+            value.items(),
+            key=lambda item: (
+                len(str(item[0]).encode("utf-8")),
+                str(item[0]).encode("utf-8"),
+            ),
+        )
+        encoded = ", ".join(
+            f"{json.dumps(str(key), ensure_ascii=False)}: {_postgres_jsonb_text(child)}"
+            for key, child in items
+        )
+        return "{" + encoded + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(_postgres_jsonb_text(child) for child in value) + "]"
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def persisted_workflow_body(workflow: Mapping[str, Any]) -> dict[str, Any]:
+    """Select the workflow_entity fields covered by the canonical body digest."""
+
+    return {field: copy.deepcopy(workflow.get(field)) for field in PERSISTED_BODY_FIELDS}
+
+
+def persisted_workflow_body_md5(workflow: Mapping[str, Any]) -> str:
+    """Return the digest equivalent to PostgreSQL's jsonb body expression."""
+
+    body = _postgres_jsonb_text(persisted_workflow_body(workflow))
+    return hashlib.md5(body.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _workflow_tags(state: Mapping[str, Any]) -> list[dict[str, str]]:
@@ -422,6 +469,8 @@ def canonical_workflow_export() -> dict[str, Any]:
     meta = export.get("meta")
     if not isinstance(meta, dict) or meta.get("financeWorkflowCode") != "SHARED_MONTHLY_STATEMENT_CYCLE":
         _fail("CANONICAL_EXPORT_CODE_MISMATCH")
+    if persisted_workflow_body_md5(export) != CANONICAL_PERSISTED_BODY_MD5:
+        _fail("CANONICAL_EXPORT_BODY_DIGEST_MISMATCH")
     return copy.deepcopy(export)
 
 
@@ -667,6 +716,7 @@ def plan_organization(state: Mapping[str, Any]) -> dict[str, Any]:
         "replacement_workflow_id": CANONICAL_REPLACEMENT_ID,
         "canonical_source_path": CANONICAL_EXPORT_RELATIVE_PATH,
         "canonical_source_sha256": CANONICAL_EXPORT_SHA256,
+        "canonical_body_md5": CANONICAL_PERSISTED_BODY_MD5,
         "canonical_node_count": len(canonical_workflow_export()["nodes"]),
         "canonical_source_bound": True,
         "legacy_present": orphan is not None,

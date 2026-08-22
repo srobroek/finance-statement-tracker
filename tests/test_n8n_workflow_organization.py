@@ -140,6 +140,11 @@ class DeterministicPostgresEquivalent:
                 != "SHARED_MONTHLY_STATEMENT_CYCLE"
             ):
                 raise ValueError("CANONICAL_EXPORT_PRECONDITION_FAILED")
+            if (
+                self.organizer.persisted_workflow_body_md5(canonical)
+                != self.organizer.CANONICAL_PERSISTED_BODY_MD5
+            ):
+                raise ValueError("CANONICAL_EXPORT_BODY_DIGEST_MISMATCH")
             orphan_id = self.organizer.ORPHAN_WORKFLOW_ID
             orphan = self.tables["workflow_entity"].get(orphan_id)
             orphan_shared = self.tables["shared_workflow"].get(orphan_id)
@@ -267,6 +272,9 @@ class WorkflowOrganizationTests(unittest.TestCase):
             hashlib.sha256(o.CANONICAL_EXPORT_PATH.read_bytes()).hexdigest(),
             o.CANONICAL_EXPORT_SHA256,
         )
+        self.assertEqual(
+            o.persisted_workflow_body_md5(source), o.CANONICAL_PERSISTED_BODY_MD5
+        )
 
     def test_tag_transition_is_exactly_21_inactive_and_one_active(self):
         o = self.organizer
@@ -337,6 +345,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
             plan["retirement"]["canonical_source_sha256"],
             o.CANONICAL_EXPORT_SHA256,
         )
+        self.assertEqual(
+            plan["retirement"]["canonical_body_md5"],
+            o.CANONICAL_PERSISTED_BODY_MD5,
+        )
         self.assertEqual(plan["retirement"]["canonical_node_count"], 16)
         self.assertTrue(plan["retirement"]["canonical_source_bound"])
         self.assertTrue(plan["retirement"]["rollback_restores_exact_prestate"])
@@ -403,6 +415,9 @@ class WorkflowOrganizationTests(unittest.TestCase):
             "RETURNING",
             "finance_canonical_source_contract",
             o.CANONICAL_EXPORT_SHA256,
+            o.CANONICAL_PERSISTED_BODY_MD5,
+            "expected_body_md5",
+            "CANONICAL_EXPORT_BODY_DIGEST_MISMATCH",
             "CANONICAL_EXPORT_PRECONDITION_FAILED",
             "ORPHAN_TAG_DELETE_COUNT_MISMATCH",
             "ORPHAN_SHARED_DELETE_COUNT_MISMATCH",
@@ -440,6 +455,19 @@ class WorkflowOrganizationTests(unittest.TestCase):
                         "00000000-0000-0000-0000-000000000001", **kwargs
                     )
                 self.assertEqual(harness.tables, before)
+
+    def test_sql_equivalent_rejects_same_shape_canonical_body_mutation(self):
+        o = self.organizer
+        harness = DeterministicPostgresEquivalent(o)
+        canonical = harness.tables["workflow_entity"][o.CANONICAL_REPLACEMENT_ID]
+        canonical["nodes"][0]["parameters"] = {"mutant": True}
+        before = copy.deepcopy(harness.tables)
+        with self.assertRaisesRegex(
+            ValueError, "CANONICAL_EXPORT_BODY_DIGEST_MISMATCH"
+        ):
+            harness.execute("00000000-0000-0000-0000-000000000001")
+        self.assertEqual(harness.tables, before)
+        self.assertIn(o.ORPHAN_WORKFLOW_ID, harness.tables["workflow_entity"])
 
     def test_sql_equivalent_second_apply_is_noop(self):
         o = self.organizer

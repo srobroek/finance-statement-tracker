@@ -80,12 +80,15 @@ INSERT INTO finance_workflow_contract VALUES
   ('10000000-0000-4000-8000-000000000024', 'Finance · Shared Monthly Statement Cycle', 'Shared Monthly Statement Cycle', 'f1000000-0000-4000-8000-000000000103');
 
 -- Bind the database precondition to the checked-in 024 export.  The Python
--- rehearsal checks the source bytes; SQL checks the import identity and body
--- shape before it can retire 115.
+-- rehearsal checks the source bytes; SQL checks the import identity, persisted
+-- body digest, and shape before it can retire 115.  expected_body_md5 follows
+-- PostgreSQL jsonb text ordering over id/name/nodes/connections/settings/
+-- pinData/meta.
 CREATE TEMP TABLE finance_canonical_source_contract (
   workflow_id varchar(36) PRIMARY KEY,
   source_path text NOT NULL,
   source_sha256 varchar(64) NOT NULL,
+  expected_body_md5 varchar(32) NOT NULL,
   expected_name varchar(128) NOT NULL,
   expected_target_name varchar(128) NOT NULL,
   expected_code varchar(128) NOT NULL,
@@ -95,6 +98,7 @@ INSERT INTO finance_canonical_source_contract VALUES (
   '10000000-0000-4000-8000-000000000024',
   'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
   '2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2',
+  'd62d4c804421e09161a892a180c1bca9',
   'Finance · Shared Monthly Statement Cycle',
   'Shared Monthly Statement Cycle',
   'SHARED_MONTHLY_STATEMENT_CYCLE',
@@ -236,6 +240,30 @@ BEGIN
       OR c.target_name ILIKE ANY (ARRAY['%setup required%', '%spec_only%', '%inactive%', '%blocked%'])
   ) THEN
     RAISE EXCEPTION 'WORKFLOW_CONTRACT_SCOPE_OR_NAME_GUARD_FAILED';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM finance_canonical_source_contract c
+    JOIN workflow_entity w ON w.id = c.workflow_id
+    JOIN shared_workflow s ON s."workflowId" = w.id
+    WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
+      AND w.name IN (c.expected_name, c.expected_target_name)
+      AND jsonb_typeof(w.nodes::jsonb) = 'array'
+      AND jsonb_array_length(w.nodes::jsonb) = c.expected_node_count
+      AND w.meta::jsonb ->> 'financeWorkflowCode' = c.expected_code
+      AND md5(
+        jsonb_build_object(
+          'id', w.id,
+          'name', w.name,
+          'nodes', w.nodes::jsonb,
+          'connections', w.connections::jsonb,
+          'settings', w.settings::jsonb,
+          'pinData', w."pinData"::jsonb,
+          'meta', w.meta::jsonb
+        )::text
+      ) <> c.expected_body_md5
+  ) THEN
+    RAISE EXCEPTION 'CANONICAL_EXPORT_BODY_DIGEST_MISMATCH';
   END IF;
   IF EXISTS (
     SELECT 1 FROM finance_workflow_contract c
@@ -514,6 +542,7 @@ SELECT 'ORGANIZATION_POSTSTATE' AS receipt,
        COUNT(*) FILTER (WHERE w."activeVersionId" IS NOT NULL) AS published_count,
        (SELECT source_path FROM finance_canonical_source_contract) AS canonical_source_path,
        (SELECT source_sha256 FROM finance_canonical_source_contract) AS canonical_source_sha256,
+       (SELECT expected_body_md5 FROM finance_canonical_source_contract) AS canonical_body_md5,
        (SELECT COUNT(*) FROM finance_workflow_retirement) AS retired_workflow_count,
        (SELECT MIN(backup_md5) FROM finance_workflow_retirement) AS retirement_backup_md5,
        md5(COALESCE(string_agg(to_jsonb(w)::text, E'\n' ORDER BY w.id), '')) AS full_row_md5,
