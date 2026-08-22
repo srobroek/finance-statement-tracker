@@ -6,6 +6,7 @@
     {"id": "zero", "source_code": "EI_AMAZON", "count": 0, "expected_scanned": 0},
     {"id": "one", "source_code": "EI_AMAZON", "count": 1, "expected_scanned": 1},
     {"id": "one-hundred-one", "source_code": "WIO_CREDIT", "count": 101, "expected_scanned": 101},
+    {"id": "one-hundred-one-plus", "source_code": "WIO_CREDIT", "count": 102, "expected_scanned": 102},
     {"id": "late-order", "source_code": "EI_AMAZON", "input_order": "reverse_received_time", "expected_order": "receivedDateTime,id"},
     {"id": "duplicate-message", "source_code": "EI_AMAZON", "expected_error": "DUPLICATE_MESSAGE_ID"},
     {"id": "attachmentless", "source_code": "EI_AMAZON", "expected_actual_writes": 0},

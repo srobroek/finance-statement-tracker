@@ -6,27 +6,39 @@ import argparse
 from pathlib import Path
 
 try:
-    from .real_mail_e2e import canonical_json, run_synthetic_e2e
+    from .real_mail_e2e import (
+        MAX_SYNTHETIC_COUNT,
+        canonical_json,
+        run_synthetic_e2e,
+        verify_bundle,
+    )
 except ImportError:  # pragma: no cover - exercised by direct script invocation
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from real_mail_e2e import canonical_json, run_synthetic_e2e
+    from real_mail_e2e import (
+        MAX_SYNTHETIC_COUNT,
+        canonical_json,
+        run_synthetic_e2e,
+        verify_bundle,
+    )
 
 
 def generate_bundle(*, count: int = 1) -> dict:
-    if count < 0 or count > 101:
-        raise ValueError("count must be between 0 and 101")
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0 or count > MAX_SYNTHETIC_COUNT:
+        raise ValueError(f"count must be between 0 and {MAX_SYNTHETIC_COUNT}")
     receipts = [
         run_synthetic_e2e(source_code=source_code, count=count)
         for source_code in ("EI_AMAZON", "WIO_CREDIT")
     ]
-    return {
+    bundle = {
         "schema_version": "real-mail-e2e-fixture-bundle-v1",
         "contract_status": "SYNTHETIC_OFFLINE",
         "provider_proof": False,
         "receipts": receipts,
     }
+    verify_bundle(bundle)
+    return bundle
 
 
 def main() -> int:

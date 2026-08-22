@@ -14,9 +14,12 @@ if str(ROOT) not in sys.path:
 
 from integrations.n8n.e2e.generate_real_mail_fixtures import generate_bundle
 from integrations.n8n.e2e.real_mail_e2e import (
+    MAX_SYNTHETIC_COUNT,
     ContractError,
     SyntheticMailPipeline,
     run_synthetic_e2e,
+    sha256_json,
+    verify_bundle,
     verify_receipt,
 )
 
@@ -44,6 +47,13 @@ def _attachment(attachment_id: str, *, name: str = "statement.pdf", content_type
     }
 
 
+def _rehash(receipt: dict) -> dict:
+    receipt["receipt_sha256"] = sha256_json(
+        {key: value for key, value in receipt.items() if key != "receipt_sha256"}
+    )
+    return receipt
+
+
 class N8nMailE2EContractTests(unittest.TestCase):
     def test_manifest_is_explicitly_synthetic_and_covers_required_cases(self) -> None:
         manifest = json.loads(FIXTURES.read_text(encoding="utf-8"))
@@ -53,7 +63,7 @@ class N8nMailE2EContractTests(unittest.TestCase):
         scenario_ids = {scenario["id"] for scenario in manifest["scenarios"]}
         self.assertTrue(
             {
-                "zero", "one", "one-hundred-one", "late-order", "duplicate-message",
+                "zero", "one", "one-hundred-one", "one-hundred-one-plus", "late-order", "duplicate-message",
                 "attachmentless", "non-pdf", "archive-hash-failure", "cursor-cas-conflict",
             }.issubset(scenario_ids)
         )
@@ -181,6 +191,70 @@ class N8nMailE2EContractTests(unittest.TestCase):
         ).sha256_json({key: value for key, value in tampered.items() if key != "receipt_sha256"})
         with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID|PROVIDER_PROOF_MUST_REMAIN_UNPROVEN"):
             verify_receipt(tampered)
+
+    def test_self_rehashed_cross_field_mutations_fail_closed(self) -> None:
+        mutations = {
+            "source binding": lambda receipt: receipt["source_bindings"].update({"config_sha256": "0" * 64}),
+            "message record": lambda receipt: receipt["enumeration"]["message_records"][0].update({"body": "forged"}),
+            "message fingerprint": lambda receipt: receipt["enumeration"]["message_fingerprints"][0].update({"sha256": "0" * 64}),
+            "archive row": lambda receipt: receipt["archive"]["email_rows"][0].update({"readback_sha256": "0" * 64}),
+            "archive hash": lambda receipt: receipt["archive"].update({"rows_sha256": "0" * 64}),
+            "outbox hash": lambda receipt: receipt["pipeline"].update({"outbox_rows_sha256": "0" * 64}),
+            "actual readback": lambda receipt: receipt["actual"].update({"economic_readback_sha256": "0" * 64}),
+            "nested actual": lambda receipt: receipt["pipeline"]["actual_readback"].update({"write_count": 0}),
+            "cashback readback": lambda receipt: receipt["cashback"].update({"readback_sha256": "0" * 64}),
+            "cursor table": lambda receipt: receipt["data_tables"]["cursor_cas"]["rows"][0].update({"cursor_version": 99}),
+            "replay counts": lambda receipt: receipt["replay"]["final_counts"].update({"actual": 0}),
+            "restart point": lambda receipt: receipt["restart"]["injections"][0].update({"point": "after_actual"}),
+            "cleanup": lambda receipt: receipt["cleanup"].update({"production_writes": 1}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                tampered = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+                mutate(tampered)
+                with self.assertRaises(ContractError):
+                    verify_receipt(_rehash(tampered))
+
+    def test_source_artifact_allowlist_rejects_path_mutations(self) -> None:
+        mutations = {
+            "absolute": lambda receipt: receipt["source_bindings"]["source_artifacts"][0].update({"path": "/tmp/escape"}),
+            "traversal": lambda receipt: receipt["source_bindings"]["source_artifacts"][0].update({"path": "../escape"}),
+            "extra": lambda receipt: receipt["source_bindings"]["source_artifacts"].append({"path": "extra.json", "sha256": "0" * 64}),
+            "duplicate": lambda receipt: receipt["source_bindings"]["source_artifacts"].append(copy.deepcopy(receipt["source_bindings"]["source_artifacts"][0])),
+            "extra workflow": lambda receipt: receipt["source_bindings"]["workflow_sha256"].update({"extra.json": "0" * 64}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                tampered = copy.deepcopy(run_synthetic_e2e(source_code="WIO_CREDIT", count=1))
+                mutate(tampered)
+                with self.assertRaises(ContractError):
+                    verify_receipt(_rehash(tampered))
+
+    def test_sensitive_plaintext_and_bundle_completeness_fail_closed(self) -> None:
+        receipt = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+        receipt["enumeration"]["message_records"][0]["body"] = "password=plaintext"
+        with self.assertRaisesRegex(ContractError, "SENSITIVE_PLAINTEXT_REJECTED"):
+            verify_receipt(_rehash(receipt))
+
+        bundle = generate_bundle(count=1)
+        incomplete = copy.deepcopy(bundle)
+        del incomplete["receipts"][0]["actual"]
+        with self.assertRaises(ContractError):
+            verify_bundle(incomplete)
+        forged = copy.deepcopy(bundle)
+        forged["receipts"][0]["provider_evidence"] = {"provider_proof": True}
+        with self.assertRaises(ContractError):
+            verify_bundle(forged)
+        duplicate = copy.deepcopy(bundle)
+        duplicate["receipts"] = [duplicate["receipts"][0], duplicate["receipts"][0]]
+        with self.assertRaisesRegex(ContractError, "BUNDLE_SOURCE_SET_INVALID"):
+            verify_bundle(duplicate)
+
+    def test_count_102_remains_schema_bound_and_provider_free(self) -> None:
+        self.assertGreaterEqual(MAX_SYNTHETIC_COUNT, 102)
+        receipt = run_synthetic_e2e(source_code="WIO_CREDIT", count=102)
+        self.assertEqual(receipt["enumeration"]["scanned_count"], 102)
+        self.assertEqual(verify_receipt(receipt, root=ROOT)["status"], "VERIFIED")
 
     def test_cli_emits_verified_synthetic_receipt(self) -> None:
         result = subprocess.run(

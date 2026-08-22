@@ -54,12 +54,13 @@
     },
     "enumeration": {
       "type": "object", "additionalProperties": false,
-      "required": ["workflow_chain", "scanned_count", "matched_count", "ordered_message_ids", "message_fingerprints", "attachment_fingerprints", "enumerated_exactly_once"],
+      "required": ["workflow_chain", "scanned_count", "matched_count", "ordered_message_ids", "message_records", "message_fingerprints", "attachment_fingerprints", "enumerated_exactly_once"],
       "properties": {
         "workflow_chain": {"type": "array", "minItems": 6, "items": {"type": "string"}},
         "scanned_count": {"type": "integer", "minimum": 0},
         "matched_count": {"type": "integer", "minimum": 0},
         "ordered_message_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "message_records": {"type": "array", "items": {"$ref": "#/$defs/messageRecord"}},
         "message_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/messageFingerprint"}},
         "attachment_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/attachmentFingerprint"}},
         "enumerated_exactly_once": {"const": true}
@@ -171,16 +172,41 @@
       "required": ["message_id", "sha256"],
       "properties": {"message_id": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}
     },
+    "messageRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "receivedDateTime", "from", "subject", "body", "attachments"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "receivedDateTime": {"type": "string", "format": "date-time"},
+        "from": {"type": "string", "format": "idn-email"},
+        "subject": {"type": "string"},
+        "body": {"type": "string"},
+        "attachments": {"type": "array", "items": {"$ref": "#/$defs/attachmentRecord"}}
+      }
+    },
+    "attachmentRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "content_type", "content_base64", "amount_minor"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "content_type": {"type": "string"},
+        "content_base64": {"type": "string", "minLength": 1},
+        "amount_minor": {"type": ["integer", "null"]}
+      }
+    },
     "attachmentFingerprint": {
       "type": "object", "additionalProperties": false,
-      "required": ["message_id", "attachment_id", "name", "content_type", "content_sha256", "size_bytes", "identity_key", "fingerprint_sha256"],
+      "required": ["message_id", "attachment_id", "name", "content_type", "content_base64", "content_sha256", "size_bytes", "amount_minor", "identity_key", "fingerprint_sha256"],
       "properties": {
         "message_id": {"type": "string", "minLength": 1},
         "attachment_id": {"type": "string", "minLength": 1},
         "name": {"type": "string"},
         "content_type": {"type": "string"},
+        "content_base64": {"type": "string", "minLength": 1},
         "content_sha256": {"$ref": "#/$defs/sha256"},
         "size_bytes": {"type": "integer", "minimum": 1},
+        "amount_minor": {"type": ["integer", "null"]},
         "identity_key": {"type": "string", "minLength": 3},
         "fingerprint_sha256": {"$ref": "#/$defs/sha256"}
       }

@@ -15,6 +15,7 @@ __all__ = [
     "SyntheticOutlook",
     "build_source_bindings",
     "run_synthetic_e2e",
+    "verify_bundle",
     "verify_receipt",
 ]
 
