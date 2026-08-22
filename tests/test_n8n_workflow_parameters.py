@@ -68,8 +68,7 @@ class N8nWorkflowParameterTests(unittest.TestCase):
         self.assertEqual(proposal_spec["category"], "global_generated_contract")
         self.assertEqual(proposal_spec["source"]["selector"], "$")
         self.assertEqual(report["findings"], [])
-        self.assertEqual(report["duplicate_literals"][0]["literal"], "default")
-        self.assertTrue(report["duplicate_literals"][0]["allowed"])
+        self.assertEqual(report["duplicate_literals"], [])
 
     def test_parameter_sets_are_validated_caller_json_merges(self) -> None:
         """Execute the Set merge contract for every owned node and key consumer."""
@@ -188,7 +187,7 @@ class N8nWorkflowParameterTests(unittest.TestCase):
             for name, spec in fields.items()
             if "model" in name or "reasoning_effort" in name or name.endswith("package")
         }
-        self.assertEqual(len(selected), 10)
+        self.assertEqual(len(selected), 2)
         for name, spec in selected.items():
             if spec["category"] != "global_generated_contract":
                 continue

@@ -17,6 +17,19 @@
       }
     },
     {
+      "id": "12000",
+      "name": "Evidence Request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        -520
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
       "id": "12002",
       "name": "Validate Sweep or Commit",
       "type": "n8n-nodes-base.code",
@@ -2011,6 +2024,186 @@
       "parameters": {
         "jsCode": "// Purpose: Return Verified Cursor Initialization. Keep this deterministic and fail closed.\nconst row = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(row.status) || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { run_id: row.run_id, source_code: row.source_code, config_version: row.config_version, status: row.status, cursor_value: row.cursor_value, cursor_version: Number(row.cursor_version), initialized: row.initialized === true, readback_verified: true } }];\n"
       }
+    },
+    {
+      "id": "12070",
+      "name": "Validate Evidence Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        -520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Evidence Request. Keep this deterministic and fail closed.\nconst request = $json;\nif (String(request.operation || request.mode || '') !== 'EVIDENCE')\n    throw new Error('INVALID_EVIDENCE_OPERATION');\nfor (const field of ['run_id', 'source_code', 'folder_id', 'onedrive_parent_id', 'window_start', 'run_upper_bound', 'senders', 'subjects', 'transactions']) {\n    if (request[field] === undefined || request[field] === null || request[field] === '')\n        throw new Error(`Missing evidence field ${field}`);\n}\nconst start = new Date(request.window_start), upper = new Date(request.run_upper_bound);\nif (!Number.isFinite(start.valueOf()) || !Number.isFinite(upper.valueOf()) || !(start < upper) || upper > new Date())\n    throw new Error('INVALID_EVIDENCE_WINDOW');\nif (!Array.isArray(request.senders) || !request.senders.length || request.senders.length > 50)\n    throw new Error('EVIDENCE_SENDER_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.subjects) || !request.subjects.length || request.subjects.length > 50)\n    throw new Error('EVIDENCE_SUBJECT_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.transactions) || !request.transactions.length || request.transactions.length > 100)\n    throw new Error('EVIDENCE_TRANSACTION_BATCH_INVALID');\nconst senders = [...new Set(request.senders.map(value => String(value).trim().toLowerCase()).filter(Boolean))];\nconst subjects = [...new Set(request.subjects.map(value => String(value).trim()).filter(Boolean))];\nif (!senders.length || !subjects.length)\n    throw new Error('EVIDENCE_ALLOWLIST_EMPTY');\nconst seen = new Set();\nconst transactions = request.transactions.map(transaction => {\n    const transactionId = String(transaction?.transaction_id || '').trim();\n    if (!transactionId || transactionId.length > 256 || seen.has(transactionId))\n        throw new Error('EVIDENCE_TRANSACTION_ID_MISSING_OR_DUPLICATE');\n    seen.add(transactionId);\n    const date = String(transaction.transaction_date || '');\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isInteger(transaction.amount_minor) || !Number.isFinite(transaction.amount_minor))\n        throw new Error('EVIDENCE_TRANSACTION_FACTS_INVALID');\n    const currency = String(transaction.currency || '').trim().toUpperCase();\n    const merchant = String(transaction.merchant || '').trim();\n    if (!/^[A-Z]{3}$/.test(currency) || !merchant || merchant.length > 160)\n        throw new Error('EVIDENCE_TRANSACTION_FACTS_INVALID');\n    const allowedFields = Array.isArray(transaction.allowed_fields) && transaction.allowed_fields.length\n        ? [...new Set(transaction.allowed_fields.map(String))].sort()\n        : ['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription'];\n    const allowed = new Set(['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket']);\n    if (!allowedFields.length || allowedFields.some(field => !allowed.has(field)))\n        throw new Error('EVIDENCE_ALLOWED_FIELDS_INVALID');\n    return { transaction_id: transactionId, transaction_date: date, amount_minor: transaction.amount_minor, currency, merchant, kind: String(transaction.kind || 'ORDER').slice(0, 32), allowed_fields: allowedFields };\n});\nconst maxMessages = Number(request.max_messages ?? 250);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 1000)\n    throw new Error('EVIDENCE_MAX_MESSAGES_INVALID');\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders.map(value => `from/emailAddress/address eq ${quoteOData(value)}`).join(' or ');\nconst subjectFilter = subjects.map(value => `contains(subject,${quoteOData(value)})`).join(' or ');\nreturn [{ json: {\n    operation: 'EVIDENCE', run_id: String(request.run_id), source_code: String(request.source_code), folder_id: String(request.folder_id),\n    onedrive_parent_id: String(request.onedrive_parent_id), window_start: start.toISOString(), run_upper_bound: upper.toISOString(),\n    senders, subjects, transactions, max_messages: maxMessages, server_filter: `(${senderFilter}) and (${subjectFilter})`,\n} }];"
+      }
+    },
+    {
+      "id": "12071",
+      "name": "Search Outlook Evidence",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        -520
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "folderMessage",
+        "operation": "getAll",
+        "folderId": "={{ $('Validate Evidence Request').item.json.folder_id }}",
+        "returnAll": true,
+        "output": "raw",
+        "filtersUI": {
+          "values": {
+            "filterBy": "filters",
+            "filters": {
+              "receivedAfter": "={{ $('Validate Evidence Request').item.json.window_start }}",
+              "receivedBefore": "={{ $('Validate Evidence Request').item.json.run_upper_bound }}",
+              "readStatus": "both",
+              "custom": "={{ $('Validate Evidence Request').item.json.server_filter }}"
+            }
+          }
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "BIND_OUTLOOK",
+          "name": "Finance Outlook"
+        }
+      }
+    },
+    {
+      "id": "12072",
+      "name": "Match Outlook Evidence to Transactions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        -520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Match Outlook Evidence to transactions. Keep this deterministic and fail closed.\nconst request = $('Validate Evidence Request').first().json;\nconst rows = $input.all().map(item => item.json || {});\nif (rows.length > request.max_messages)\n    throw new Error('EVIDENCE_SEARCH_BOUND_EXCEEDED');\nconst normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst tokens = value => normalize(value).split(/\\s+/).filter(token => token.length >= 3);\nconst bodyText = message => typeof message.body === 'string' ? message.body : String(message.body?.content || message.bodyPreview || '');\nconst sender = message => String(message.from?.emailAddress?.address || message.sender?.emailAddress?.address || '').trim().toLowerCase();\nconst messageDate = message => String(message.receivedDateTime || message.order_date || '').slice(0, 10);\nconst dayDistance = (left, right) => Math.round(Math.abs(new Date(`${left}T00:00:00Z`) - new Date(`${right}T00:00:00Z`)) / 86400000);\nconst amountValues = message => {\n    const explicit = [message.amount_minor, message.total_amount_minor, message.totalAmountMinor, message.amountMinor].filter(value => Number.isInteger(value)).map(Math.abs);\n    const text = bodyText(message);\n    const parsed = [...text.matchAll(/(?:AED|USD|EUR|GBP|\\$|€|£)\\s*([0-9]+(?:[.,][0-9]{1,2})?)/gi)].map(match => Math.round(Number(match[1].replace(',', '.')) * 100));\n    return [...new Set([...explicit, ...parsed])];\n};\nconst candidateRows = rows.map(message => {\n    const id = String(message.id || message.message_id || '').trim();\n    if (!id)\n        throw new Error('EVIDENCE_SOURCE_MESSAGE_ID_MISSING');\n    return { message, id, sender: sender(message), date: messageDate(message), text: normalize(`${message.subject || ''} ${bodyText(message)}`) };\n});\nconst matched = [], unresolved = [], replayKeys = [];\nfor (const transaction of request.transactions) {\n    const merchantTokens = tokens(transaction.merchant);\n    const candidates = candidateRows.map(candidate => {\n        const merchantMatch = merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token));\n        const amountMatch = amountValues(candidate.message).includes(Math.abs(transaction.amount_minor));\n        const dateMatch = /^\\d{4}-\\d{2}-\\d{2}$/.test(candidate.date) && dayDistance(candidate.date, transaction.transaction_date) <= 3;\n        const referenceMatch = normalize(candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref || '').length > 0 && normalize(`${candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref}`).includes(normalize(transaction.transaction_id));\n        const score = (merchantMatch ? 3 : 0) + (amountMatch ? 3 : 0) + (dateMatch ? 1 : 0) + (referenceMatch ? 2 : 0);\n        return { ...candidate, score, merchantMatch, amountMatch, dateMatch };\n    }).filter(candidate => candidate.merchantMatch && candidate.amountMatch && candidate.dateMatch && candidate.score >= 7)\n        .sort((left, right) => right.score - left.score || left.date.localeCompare(right.date) || left.id.localeCompare(right.id));\n    if (!candidates.length) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'NO_MATCH', candidate_count: 0, candidate_ids: [] });\n        continue;\n    }\n    const best = candidates[0], tied = candidates.filter(candidate => candidate.score === best.score);\n    if (tied.length !== 1) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'AMBIGUOUS', candidate_count: candidates.length, candidate_ids: candidates.map(candidate => candidate.id) });\n        continue;\n    }\n    const sourceMessageId = best.id, replayKey = `${request.source_code}:${transaction.transaction_id}:${sourceMessageId}`;\n    replayKeys.push(replayKey);\n    matched.push({\n        transaction_id: transaction.transaction_id, replay_key: replayKey,\n        identity: { source_message_id: sourceMessageId, internet_message_id: best.message.internetMessageId || best.message.internet_message_id || null, received_at: best.message.receivedDateTime, sender: best.sender, subject: String(best.message.subject || '').slice(0, 500) },\n        facts: { merchant: transaction.merchant, amount_minor: transaction.amount_minor, currency: transaction.currency, transaction_date: transaction.transaction_date },\n        confidence: Math.min(1, best.score / 9), allowed_fields: transaction.allowed_fields,\n    });\n}\nconst selectedIds = new Set(matched.map(row => row.identity.source_message_id));\nconst messages = candidateRows.filter(candidate => selectedIds.has(candidate.id)).map(candidate => ({ ...candidate.message, id: candidate.id, message_id: candidate.id, attachment_inventory: [] }));\nreturn [{ json: { schema_version: 1, operation_code: 'EMAIL_ENRICHMENT_EVIDENCE', run_id: request.run_id, source_code: request.source_code, folder_id: request.folder_id, senders: request.senders, subjects: request.subjects, window_start: request.window_start, run_upper_bound: request.run_upper_bound, onedrive_parent_id: request.onedrive_parent_id, messages, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: [], empty_inventory: messages.length === 0, matched, unresolved, replay_keys: [...new Set(replayKeys)], matched_count: matched.length, unresolved_count: unresolved.length, evidence_status: matched.length ? 'MATCHED' : (unresolved.some(row => row.status === 'AMBIGUOUS') ? 'AMBIGUOUS' : 'NO_MATCH') } }];"
+      }
+    },
+    {
+      "id": "12073",
+      "name": "Archive Matched Email Evidence in W01",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        -520
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000001",
+          "mode": "list",
+          "cachedResultName": "Finance · Acquire Outlook Documents"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "12074",
+      "name": "Build Evidence Handoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        -520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build schema-bound W12 to W21 evidence handoff. Keep this deterministic and fail closed.\nconst evidence = $('Match Outlook Evidence to Transactions').first().json;\nconst archive = $('Archive Matched Email Evidence in W01').first().json;\nif (archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.archive_ready !== true)\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_BARRIER_REQUIRED');\nconst matched = Array.isArray(evidence.matched) ? evidence.matched : [];\nconst unresolved = Array.isArray(evidence.unresolved) ? evidence.unresolved : [];\nconst replayKeys = [...new Set(matched.map(row => String(row.replay_key || '')).filter(Boolean))];\nif (replayKeys.length !== matched.length)\n    throw new Error('EMAIL_ENRICHMENT_REPLAY_KEY_MISSING');\nreturn [{ json: {\n    schema_version: 1, operation_code: 'EMAIL_ENRICHMENT_EVIDENCE', run_id: evidence.run_id, source_code: evidence.source_code,\n    window_start: evidence.window_start, run_upper_bound: evidence.run_upper_bound, matched, unresolved, replay_keys: replayKeys,\n    archive_receipt: { status: archive.status, source_message_id: archive.source_message_id || null, archive_ready: archive.archive_ready === true, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified || 0) },\n    replay_protected: true, archive_readback_verified: true,\n} }];"
+      }
+    },
+    {
+      "id": "12075",
+      "name": "SHA-256 Evidence Handoff",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        680,
+        -520
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ JSON.stringify($json) }}",
+        "dataPropertyName": "idempotency_key"
+      }
+    },
+    {
+      "id": "12076",
+      "name": "Evidence Has Matches?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        -520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "evidence-matches",
+              "leftValue": "={{ $json.matched.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12077",
+      "name": "Return Evidence No Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -320
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Evidence No Match. Keep this deterministic and fail closed.\nif (Array.isArray($json.matched) && $json.matched.length)\n    throw new Error('EVIDENCE_MATCH_ROUTE_MISMATCH');\nreturn [{ json: { ...$json, status: 'NO_MATCH', proposal_dispatch: 'NOT_DISPATCHED', readback_verified: true } }];"
+      }
+    },
+    {
+      "id": "12078",
+      "name": "Send Evidence to W21",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        -520
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000021",
+          "mode": "list",
+          "cachedResultName": "Finance · Subscription Agent Adapter"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
     }
   ],
   "connections": {
@@ -2754,6 +2947,101 @@
           }
         ]
       ]
+    },
+    "Evidence Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Evidence Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Evidence Request": {
+      "main": [
+        [
+          {
+            "node": "Search Outlook Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Outlook Evidence": {
+      "main": [
+        [
+          {
+            "node": "Match Outlook Evidence to Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Outlook Evidence to Transactions": {
+      "main": [
+        [
+          {
+            "node": "Archive Matched Email Evidence in W01",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Matched Email Evidence in W01": {
+      "main": [
+        [
+          {
+            "node": "Build Evidence Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Evidence Handoff": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Evidence Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Evidence Handoff": {
+      "main": [
+        [
+          {
+            "node": "Evidence Has Matches?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evidence Has Matches?": {
+      "main": [
+        [
+          {
+            "node": "Send Evidence to W21",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Evidence No Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -2810,7 +3098,15 @@
     "durableEmailEvidenceBarrier": "REQUIRED",
     "cursorInitializationExactlyOnce": true,
     "cursorInitializationConfigSource": "statement-sources",
-    "cursorInitializationCollisionPolicy": "FAIL_CLOSED_EXACT_READBACK"
+    "cursorInitializationCollisionPolicy": "FAIL_CLOSED_EXACT_READBACK",
+    "evidenceTrigger": "Evidence Request",
+    "evidenceHandoffSchema": "contracts/email-enrichment-handoff-v1.schema.json",
+    "evidenceReplayTable": "finance_agent_jobs",
+    "evidenceSearchBound": 1000,
+    "evidenceArchiveReadback": "W01_REQUIRED",
+    "evidenceProviderAuth": "NATIVE_N8N_OUTLOOK_ONEDRIVE_OAUTH",
+    "evidenceArchiveOwner": "OUTLOOK_FINANCE_ACQUISITION",
+    "evidenceReplayProtection": "W01_CONTENT_ADDRESSED_ARCHIVE_AND_W21_IDEMPOTENCY_KEY"
   },
   "nodeGroups": [
     {
@@ -2934,6 +3230,21 @@
         "12056"
       ],
       "description": "Finance stage 8. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Verify Replayed Terminal Acquisition Receipt."
+    },
+    {
+      "name": "Stage E: Evidence Request to Send Evidence to W21",
+    "nodeIds": [
+      "12070",
+        "12071",
+        "12072",
+        "12073",
+        "12074",
+        "12075",
+        "12076",
+        "12077",
+        "12078"
+      ],
+      "description": "Finance stage E. Bounded generic Outlook evidence search, W01-owned redacted OneDrive archive/readback, replay key, and schema-bound W21 proposal handoff."
     }
   ],
   "tags": [

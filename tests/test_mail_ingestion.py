@@ -6,6 +6,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 from finance_tracker.cashback_events import CashbackEventStore, IngestCursorConflict
 from finance_tracker.mail_ingestion import (
     build_ingest_commit_payload,
@@ -719,8 +721,8 @@ try {
                 and node["parameters"].get("resource") == "folderMessage"
                 for node in w12["nodes"]
             ),
-            1,
-            "W12 owns the only message listing",
+            2,
+            "W12 owns both statement and evidence message listings",
         )
         self.assertFalse(
             any(
@@ -3045,6 +3047,103 @@ try {
         self.assertEqual(cursor_cas.writes, 1)
         self.assertEqual(len(onedrive.attachment_calls), 101)
         self.assertEqual(len(onedrive.email_calls), 101)
+
+    def test_generic_evidence_matches_order_and_preserves_only_immutable_identity(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        request = {
+            "operation": "EVIDENCE", "run_id": "email:order-1", "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"], "subjects": ["order"],
+            "transactions": [{"transaction_id": "actual:1", "transaction_date": "2026-08-20", "amount_minor": 12345, "currency": "AED", "merchant": "Amazon", "kind": "ORDER"}],
+        }
+        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=request)
+        self.assertTrue(validated["ok"], validated)
+        message = {
+            "id": "message-1", "receivedDateTime": "2026-08-20T09:00:00Z",
+            "from": {"emailAddress": {"address": "orders@example.test"}},
+            "subject": "Amazon order confirmation", "body": "Order total AED 123.45", "internetMessageId": "<opaque@example.test>",
+        }
+        matched = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(matched["ok"], matched)
+        evidence = matched["output"][0]["json"]
+        self.assertEqual(evidence["matched"][0]["identity"]["source_message_id"], "message-1")
+        self.assertEqual(evidence["matched"][0]["facts"]["amount_minor"], 12345)
+        self.assertNotIn("body", evidence["matched"][0])
+        self.assertEqual(evidence["messages"][0]["id"], "message-1")
+        self.assertEqual(evidence["replay_keys"], ["GENERIC_EMAIL:actual:1:message-1"])
+
+    def test_generic_evidence_no_match_and_ambiguous_cases_fail_closed_without_guessing(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        base = {
+            "operation": "EVIDENCE", "run_id": "email:negative", "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"], "subjects": ["order"],
+            "transactions": [{"transaction_id": "actual:1", "transaction_date": "2026-08-20", "amount_minor": 12345, "currency": "AED", "merchant": "Amazon", "kind": "REFUND"}],
+        }
+        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=base)
+        no_match = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[{
+                "id": "message-no", "receivedDateTime": "2026-08-20T09:00:00Z",
+                "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 9.99",
+            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(no_match["ok"], no_match)
+        self.assertEqual(no_match["output"][0]["json"]["evidence_status"], "NO_MATCH")
+        ambiguous = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[
+                {"id": "message-a", "receivedDateTime": "2026-08-20T09:00:00Z", "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 123.45"},
+                {"id": "message-b", "receivedDateTime": "2026-08-20T10:00:00Z", "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 123.45"},
+            ], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(ambiguous["ok"], ambiguous)
+        result = ambiguous["output"][0]["json"]
+        self.assertEqual(result["matched"], [])
+        self.assertEqual(result["unresolved"][0]["status"], "AMBIGUOUS")
+        self.assertEqual(result["unresolved"][0]["candidate_count"], 2)
+
+    def test_generic_evidence_handoff_schema_and_replay_key_are_deterministic(self):
+        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
+        matched = {
+            "transaction_id": "actual:1", "replay_key": "GENERIC_EMAIL:actual:1:message-1",
+            "identity": {"source_message_id": "message-1", "internet_message_id": None, "received_at": "2026-08-20T09:00:00Z", "sender": "orders@example.test", "subject": "Amazon order"},
+            "facts": {"merchant": "Amazon", "amount_minor": 12345, "currency": "AED", "transaction_date": "2026-08-20"},
+            "confidence": 0.77, "allowed_fields": ["vendor", "category"],
+        }
+        handoff = {
+            "schema_version": 1, "operation_code": "EMAIL_ENRICHMENT_EVIDENCE", "run_id": "email:1", "source_code": "GENERIC_EMAIL",
+            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z", "matched": [matched], "unresolved": [],
+            "replay_keys": [matched["replay_key"]], "idempotency_key": "a" * 64, "replay_protected": True, "archive_readback_verified": True,
+            "archive_receipt": {"status": "ARCHIVED", "source_message_id": "message-1", "archive_ready": True, "email_evidence_receipts_verified": 1},
+        }
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(handoff)), [])
+        tampered = dict(handoff)
+        tampered["matched"] = [{**matched, "identity": {**matched["identity"], "source_message_id": "other"}}]
+        # The structural schema permits the identity fields, but replay keys are
+        # content-addressed by the source message identity in the W12 matcher.
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(tampered)), [])
+        self.assertNotEqual(tampered["matched"][0]["identity"]["source_message_id"], matched["identity"]["source_message_id"])
+        workflow = self.workflow("21-subscription-agent-adapter.json")
+        invocation = {
+            "job_id": "finance-email:" + "a" * 64,
+            "idempotency_key": "a" * 64,
+            "archive_sha256": "b" * 64,
+            "matched": [matched],
+        }
+        for auth_error in ("authentication token revoked", "codex login required"):
+            with self.subTest(auth_error=auth_error):
+                invalid = self.execute_code_node(
+                    workflow, "Validate Proposal Schema and Normalize Provider Output",
+                    json_value={"errorMessage": auth_error},
+                    refs={"Validate and Build Fixed Provider Invocation": invocation},
+                )
+                self.assertFalse(invalid["ok"])
+                self.assertIn("PRODEX_AUTH_REQUIRED", invalid["error"])
+                self.assertIn("run codex login", invalid["error"])
 
 
 if __name__ == "__main__":

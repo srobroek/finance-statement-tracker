@@ -1659,7 +1659,6 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "n8n-nodes-base.scheduleTrigger",
             "n8n-nodes-base.webhook",
             "@n8n/n8n-nodes-langchain.mcpTrigger",
-            "n8n-nodes-base.microsoftOutlook",
             "n8n-nodes-base.microsoftOneDrive",
             "n8n-nodes-finance.actualBudget",
         }
@@ -1670,6 +1669,11 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                 self.assertTrue(workflow["meta"]["disposableOnly"])
                 self.assertTrue(workflow["meta"]["productionImportForbidden"])
                 self.assertFalse({node["type"] for node in workflow["nodes"]} & forbidden)
+                self.assertFalse(any(
+                    node["type"] == "n8n-nodes-base.microsoftOutlook"
+                    and node.get("parameters", {}).get("operation") != "getAll"
+                    for node in workflow["nodes"]
+                ))
                 self.assertTrue(any(
                     node["type"] in {
                         "n8n-nodes-base.manualTrigger",
@@ -1892,20 +1896,21 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                 and node.get("parameters", {}).get("resource") == "folderMessage"
                 and node.get("parameters", {}).get("operation") == "getAll"
             ]
-            expected_count = 1 if filename == "12-outlook-message-sweep.json" else 0
+            expected_count = 2 if filename == "12-outlook-message-sweep.json" else 0
             self.assertEqual(len(outlook_nodes), expected_count)
             if not outlook_nodes:
                 continue
-            params = outlook_nodes[0]["parameters"]
-            self.assertEqual(params["output"], "raw")
-            self.assertTrue(params["returnAll"])
-            values = params["filtersUI"]["values"]
-            self.assertEqual(values["filterBy"], "filters")
-            filters = values["filters"]
-            self.assertIn("receivedAfter", filters)
-            self.assertIn("receivedBefore", filters)
-            self.assertIn("custom", filters)
-            self.assertNotIn("filters", params)
+            for node in outlook_nodes:
+                params = node["parameters"]
+                self.assertEqual(params["output"], "raw")
+                self.assertTrue(params["returnAll"])
+                values = params["filtersUI"]["values"]
+                self.assertEqual(values["filterBy"], "filters")
+                filters = values["filters"]
+                self.assertIn("receivedAfter", filters)
+                self.assertIn("receivedBefore", filters)
+                self.assertIn("custom", filters)
+                self.assertNotIn("filters", params)
         uploads = []
         for workflow in self.workflows.values():
             uploads.extend(
@@ -2558,14 +2563,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             {"outputSchema", "streamProgress", "timeoutSeconds"},
         )
         self.assertTrue(codex["parameters"]["options"]["outputSchema"])
-        claude = nodes["Run Claude Subscription Provider"]
-        self.assertEqual(
-            (claude["type"], claude["typeVersion"]),
-            ("@ggomez91npm/n8n-nodes-claude-code.claude", 1),
-        )
-        self.assertEqual(claude["parameters"]["responseFormat"], "json")
-        self.assertFalse(claude["parameters"]["options"]["useCache"])
-        self.assertEqual(claude["parameters"]["model"], "={{ $json.provider_model }}")
+        self.assertNotIn("Run Claude Subscription Provider", nodes)
         proposal_schema = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         self.assertEqual(
             json.loads(codex["parameters"]["options"]["outputSchema"]),
@@ -2577,39 +2575,24 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
         self.assertEqual(json.loads(assignments["proposal_output_schema"]), proposal_schema)
         build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"]["jsCode"]
-        for forbidden in ("command", "working_directory", "sandbox", "prompt"):
-            self.assertIn(forbidden, build)
+        self.assertIn("provider_prompt", build)
         for expected in (
-            "CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION", "provider_model",
-            "provider_reasoning_effort", "provider_auth_mode", "Output JSON Schema",
+            "CODEX_SUBSCRIPTION", "provider_model", "provider_reasoning_effort",
+            "provider_auth_mode", "Output JSON Schema",
         ):
             self.assertIn(expected, build)
-        validator_name = "Validate Claude Proposal Schema and Normalize Provider Output"
+        validator_name = "Validate Proposal Schema and Normalize Provider Output"
         normalizer = nodes[validator_name]["parameters"]["jsCode"]
-        self.assertIn("FINANCE_AI_SCHEMA_V1", normalizer)
-        claude_targets = self.workflow("21-subscription-agent-adapter.json")["connections"][
-            "Run Claude Subscription Provider"
-        ]["main"]
-        self.assertEqual(claude_targets[0][0]["node"], validator_name)
-        for expected in (
-            "runner_model: invocation.provider_model",
-            "runner_reasoning_effort: invocation.provider_reasoning_effort",
-            "auth_mode: invocation.provider_auth_mode",
-        ):
-            self.assertIn(expected, normalizer)
+        self.assertIn("PRODEX_AUTH_REQUIRED", normalizer)
+        self.assertIn("invocation.archive_sha256", normalizer)
         adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
-        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", adapter_json)
+        self.assertNotIn("Run Claude Subscription Provider", adapter_json)
         self.assertEqual(
             self.workflow("21-subscription-agent-adapter.json")["meta"]["providerBranchesEnabled"],
-            ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+            ["CODEX_SUBSCRIPTION"],
         )
-        route = self.workflow("21-subscription-agent-adapter.json")["connections"]["Provider Route"]["main"]
-        self.assertEqual(
-            [branch[0]["node"] for branch in route[:2]],
-            ["Run Codex Subscription Provider", "Run Claude Subscription Provider"],
-        )
+        self.assertNotIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
         self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
-        self.assertIn("gpt-5.6-sol", json.dumps(nodes["Subscription Provider Parameters"]))
 
     def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:
         contract = self.registry["custom_nodes"]

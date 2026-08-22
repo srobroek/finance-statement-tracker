@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/email-enrichment-handoff-v1.json",
+  "title": "Bounded Outlook evidence to finance proposal handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "operation_code", "run_id", "source_code", "window_start",
+    "run_upper_bound", "matched", "unresolved", "replay_keys", "idempotency_key"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "operation_code": {"const": "EMAIL_ENRICHMENT_EVIDENCE"},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "source_code": {"type": "string", "pattern": "^[A-Z0-9:_-]{1,64}$"},
+    "window_start": {"type": "string", "format": "date-time"},
+    "run_upper_bound": {"type": "string", "format": "date-time"},
+    "matched": {
+      "type": "array", "maxItems": 100,
+      "items": {"$ref": "#/$defs/match"}
+    },
+    "unresolved": {
+      "type": "array", "maxItems": 100,
+      "items": {"$ref": "#/$defs/unresolved"}
+    },
+    "replay_keys": {
+      "type": "array", "maxItems": 100, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "idempotency_key": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "replay_protected": {"const": true},
+    "archive_readback_verified": {"const": true},
+    "archive_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["archive_ready", "email_evidence_receipts_verified"],
+      "properties": {
+        "status": {"type": ["string", "null"]},
+        "source_message_id": {"type": ["string", "null"]},
+        "archive_ready": {"const": true},
+        "email_evidence_receipts_verified": {"type": "integer", "minimum": 0}
+      }
+    },
+    "archive_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "archive_item_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "archive_readback_verified": {"const": true}
+  },
+  "$defs": {
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_message_id", "received_at", "sender", "subject"],
+      "properties": {
+        "source_message_id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "internet_message_id": {"type": ["string", "null"], "maxLength": 512},
+        "received_at": {"type": "string", "format": "date-time"},
+        "sender": {"type": "string", "minLength": 1, "maxLength": 320},
+        "subject": {"type": "string", "maxLength": 500}
+      }
+    },
+    "match": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transaction_id", "replay_key", "identity", "facts", "confidence", "allowed_fields"],
+      "properties": {
+        "transaction_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "replay_key": {"type": "string", "minLength": 1, "maxLength": 512},
+        "identity": {"$ref": "#/$defs/identity"},
+        "facts": {
+          "type": "object", "additionalProperties": false,
+          "required": ["merchant", "amount_minor", "currency", "transaction_date"],
+          "properties": {
+            "merchant": {"type": "string", "minLength": 1, "maxLength": 160},
+            "amount_minor": {"type": "integer"},
+            "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+            "transaction_date": {"type": "string", "format": "date"}
+          }
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "allowed_fields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}}
+      }
+    },
+    "unresolved": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transaction_id", "status", "candidate_count"],
+      "properties": {
+        "transaction_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "status": {"enum": ["NO_MATCH", "AMBIGUOUS"]},
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "candidate_ids": {
+          "type": "array", "maxItems": 100, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+        }
+      }
+    }
+  }
+}

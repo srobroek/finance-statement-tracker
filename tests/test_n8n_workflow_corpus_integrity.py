@@ -275,9 +275,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "c9bb56497d735ceeb7cd432e443d898795bae47697020713905cd8182ef6e6a4",
     },
     "12-outlook-message-sweep.json": {
-        "nodes": 65, "sticky": 0,
-        "node_ids_sha256": "f987d7ba00e20589d05f61ba7264c81ade01d1c3f7d980284de7ca8d3ef3af03",
-        "parameters_sha256": "051a226f5df765faeb37df669c8c183f76d21ba59dd141a62f1ae287e2cb32a1",
+        "nodes": 75, "edges": 80, "sticky": 0, "groups": 11,
+        "node_ids_sha256": "861c87e5bc6272251be4863859ac61f12b8f6a08c2f13481f354c5d2f0ceeed7",
+        "connections_sha256": "28b04174b03bf2ddf924071ab0086efb958bdc334dc4cbec7e38d4a16ee3b3ba",
+        "parameters_sha256": "85fd6e0b7a49b6f582167624fd7539ae1e733f85304f1b2d78a2b3e19174b48e",
+        "groups_sha256": "98e3eb1715a75be466e3df87164c2a092331e8c5069f577401c2e64096321b40",
     },
     "13-document-extraction-request.json": {
         "nodes": 8, "sticky": 0,
@@ -315,9 +317,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "8e77a08e6fc783ab868205c4e9bc242d5829bf66cbcc94163ee8a6cd031e2755",
     },
     "21-subscription-agent-adapter.json": {
-        "nodes": 8, "sticky": 0,
-        "node_ids_sha256": "b0e22a3275e99b1bf397cfc1b96a9ef6b9866af7ae71411edd3b4a7dc9c1f56a",
-        "parameters_sha256": "df92d9b3c2e4d3d6bf333f4d6f8bee20d0e7a85c84c64adcacc89dbbbc82e353",
+        "nodes": 5, "edges": 4, "sticky": 0, "groups": 1,
+        "node_ids_sha256": "8b8dc2558690c7d9a12ec6656bc6075716ac0bd1a232f3b96990aef087c7fd76",
+        "connections_sha256": "fb25781b3ee9e12e06e61f3ae7b02b9d1810c3f104f063466d18f3db63112142",
+        "parameters_sha256": "492ddfaa4e5287b4cc2da42f5c0c3fc4d25c32b1a25b820fccacfc522e6752e1",
+        "groups_sha256": "5737e3d167a78bf99cc8c472018cc36f9f18a979b3ad58a0b9a8cff08bb9e301",
     },
     "22-shared-monthly-statement-cycle.json": {
         "nodes": 16, "sticky": 0,
