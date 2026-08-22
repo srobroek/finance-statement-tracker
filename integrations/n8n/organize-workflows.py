@@ -268,18 +268,22 @@ WORKFLOW_MAP = (
         "integrations/n8n/workflows/21-subscription-agent-adapter.json",
     ),
     _workflow(
-        "000000000115",
-        "FINANCE_MCP_FACADE_RUNTIME_COPY",
-        "Finance · Bounded MCP Facade · Setup Required",
-        "Bounded MCP Facade",
+        "000000000024",
+        "SHARED_MONTHLY_STATEMENT_CYCLE",
+        "Finance · Shared Monthly Statement Cycle",
+        "Shared Monthly Statement Cycle",
         "f1000000-0000-4000-8000-000000000103",
-        "runtime-only disposable copy of W15",
+        "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
     ),
 )
 
 WORKFLOW_BY_ID = {row["id"]: row for row in WORKFLOW_MAP}
 TARGET_FOLDER_BY_ID = {row["id"]: row for row in FOLDER_SPECS}
 TARGET_IDS = frozenset(WORKFLOW_BY_ID)
+CANONICAL_REPLACEMENT_ID = "10000000-0000-4000-8000-000000000024"
+ORPHAN_WORKFLOW_ID = "10000000-0000-4000-8000-000000000115"
+ORPHAN_WORKFLOW_NAME = "Finance · Bounded MCP Facade"
+LEGACY_IDS = frozenset((TARGET_IDS - {CANONICAL_REPLACEMENT_ID}) | {ORPHAN_WORKFLOW_ID})
 STATUS_MARKERS = ("setup required", "spec_only", "spec only", "inactive", "blocked")
 W15_ID = "10000000-0000-4000-8000-000000000015"
 W15_ACTIVE_VERSION = "1bd2090e-13e8-4427-bfe7-630c11bf0da5"
@@ -388,6 +392,8 @@ def validate_contract() -> None:
 
     if len(WORKFLOW_MAP) != 22 or len(WORKFLOW_BY_ID) != 22:
         _fail("WORKFLOW_MAP_COUNT_MISMATCH")
+    if CANONICAL_REPLACEMENT_ID not in TARGET_IDS or ORPHAN_WORKFLOW_ID in TARGET_IDS:
+        _fail("CANONICAL_REPLACEMENT_ROSTER_MISMATCH")
     if len(FOLDER_SPECS) != 6:
         _fail("FOLDER_SPEC_COUNT_MISMATCH")
     if sum(row["root"] for row in FOLDER_SPECS) != 2:
@@ -415,14 +421,34 @@ def validate_contract() -> None:
         _fail("W19_NOT_FINANCE_SHARED")
 
 
-def _validate_state_shape(state: Mapping[str, Any]) -> None:
+def _validate_state_shape(state: Mapping[str, Any]) -> str:
     workflows = list(state.get("workflows", []))
     ids = [str(row.get("id")) for row in workflows]
-    if set(ids) != TARGET_IDS or len(ids) != len(set(ids)):
+    if len(ids) != len(set(ids)):
+        _fail("LIVE_WORKFLOW_SET_MISMATCH")
+    roster = frozenset(ids)
+    if roster == TARGET_IDS:
+        roster_kind = "canonical"
+    elif roster == LEGACY_IDS:
+        roster_kind = "orphaned"
+    else:
         _fail("LIVE_WORKFLOW_SET_MISMATCH")
     for row in workflows:
-        spec = WORKFLOW_BY_ID[row["id"]]
-        if row.get("name") not in (spec["current_name"], spec["target_name"]):
+        spec = WORKFLOW_BY_ID.get(row["id"])
+        allowed_names = (
+            (
+                spec["current_name"],
+                spec["current_name"].removesuffix(" · Setup Required"),
+                spec["target_name"],
+            )
+            if spec is not None
+            else (
+                ORPHAN_WORKFLOW_NAME,
+                "Finance · Bounded MCP Facade · Setup Required",
+                "Bounded MCP Facade",
+            )
+        )
+        if row.get("name") not in allowed_names:
             _fail(f"UNEXPECTED_WORKFLOW_NAME:{row['id']}")
         if not isinstance(row.get("active"), bool):
             _fail(f"ACTIVE_STATE_NOT_BOOLEAN:{row['id']}")
@@ -432,9 +458,9 @@ def _validate_state_shape(state: Mapping[str, Any]) -> None:
     published = [
         row for row in workflows if row.get("activeVersionId") not in (None, "")
     ]
-    if [row["id"] for row in active] != [W15_ID]:
+    if {row["id"] for row in active} != {W15_ID} or len(active) != 1:
         _fail("ACTIVE_WORKFLOW_TUPLE_MISMATCH")
-    if [row["id"] for row in published] != [W15_ID]:
+    if {row["id"] for row in published} != {W15_ID} or len(published) != 1:
         _fail("PUBLISHED_WORKFLOW_TUPLE_MISMATCH")
     w15 = next(row for row in workflows if row["id"] == W15_ID)
     if w15.get("activeVersionId") != W15_ACTIVE_VERSION:
@@ -445,6 +471,7 @@ def _validate_state_shape(state: Mapping[str, Any]) -> None:
         for edge in edges
     ):
         _fail("ACTIVE_TAG_ASSIGNED_TO_NON_W15")
+    return roster_kind
 
 
 def _ensure_target_folders(state: dict[str, Any], project_id: str | None) -> None:
@@ -493,11 +520,19 @@ def apply_plan(state: Mapping[str, Any]) -> dict[str, Any]:
     """Apply the map to an in-memory copy, preserving version and active state."""
 
     validate_contract()
-    _validate_state_shape(state)
+    roster_kind = _validate_state_shape(state)
     result = snapshot_state(state)
     project_id = result.get("projectId")
     _ensure_target_folders(result, project_id)
     workflows = {row["id"]: row for row in result["workflows"]}
+    if roster_kind == "orphaned":
+        # A live deployment can contain the old disposable duplicate while the
+        # canonical export is imported in the same bounded cutover.  Preserve
+        # the opaque row contents while replacing only its identity; the exact
+        # prestate remains available through plan_organization.rollback_state.
+        orphan = workflows.pop(ORPHAN_WORKFLOW_ID)
+        orphan["id"] = CANONICAL_REPLACEMENT_ID
+        workflows[CANONICAL_REPLACEMENT_ID] = orphan
     for workflow_id, spec in WORKFLOW_BY_ID.items():
         row = workflows[workflow_id]
         row["name"] = spec["target_name"]
@@ -512,6 +547,17 @@ def apply_plan(state: Mapping[str, Any]) -> dict[str, Any]:
     ]
     _ensure_tags(result)
     edges = _workflow_tags(result)
+    edges = [
+        {
+            **edge,
+            "workflowId": CANONICAL_REPLACEMENT_ID
+            if edge["workflowId"] == ORPHAN_WORKFLOW_ID
+            else edge["workflowId"],
+        }
+        for edge in edges
+        if edge["workflowId"] != ORPHAN_WORKFLOW_ID
+        or roster_kind == "orphaned"
+    ]
     w15 = W15_ID
     inactive = TAG_IDS["inactive"]
     active = TAG_IDS["active"]
@@ -542,11 +588,30 @@ def plan_organization(state: Mapping[str, Any]) -> dict[str, Any]:
     """Return a redacted rehearsal, including exact rollback state in memory."""
 
     before_state = snapshot_state(state)
+    roster_kind = _validate_state_shape(before_state)
     after_state = apply_plan(state)
     before = snapshot_summary(before_state)
     after = snapshot_summary(after_state)
+    orphan = next(
+        (
+            row
+            for row in before_state.get("workflows", [])
+            if row.get("id") == ORPHAN_WORKFLOW_ID
+        ),
+        None,
+    )
+    retirement = {
+        "mode": "backup_then_replace",
+        "legacy_workflow_id": ORPHAN_WORKFLOW_ID,
+        "replacement_workflow_id": CANONICAL_REPLACEMENT_ID,
+        "legacy_present": orphan is not None,
+        "backup_captured": orphan is not None,
+        "backup_sha256": _sha256(orphan) if orphan is not None else None,
+        "rollback_supported": True,
+        "rollback_restores_exact_prestate": True,
+    }
     return {
-        "contract_version": 2,
+        "contract_version": 3,
         "changed": before != after,
         "before": before,
         "after": after,
@@ -554,6 +619,8 @@ def plan_organization(state: Mapping[str, Any]) -> dict[str, Any]:
         "after_state": after_state,
         "idempotent": snapshot_summary(apply_plan(after_state)) == after,
         "production_mutation": False,
+        "retirement": retirement,
+        "prestate_roster": roster_kind,
     }
 
 
@@ -576,6 +643,8 @@ def _public_report(plan: Mapping[str, Any]) -> dict[str, Any]:
             "after",
             "idempotent",
             "production_mutation",
+            "retirement",
+            "prestate_roster",
         )
     }
 

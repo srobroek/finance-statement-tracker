@@ -27,10 +27,20 @@ def fixture_state(organizer):
     edges = []
     for spec in organizer.WORKFLOW_MAP:
         active = spec["id"] == organizer.W15_ID
+        workflow_id = (
+            organizer.ORPHAN_WORKFLOW_ID
+            if spec["id"] == organizer.CANONICAL_REPLACEMENT_ID
+            else spec["id"]
+        )
+        workflow_name = (
+            organizer.ORPHAN_WORKFLOW_NAME
+            if workflow_id == organizer.ORPHAN_WORKFLOW_ID
+            else spec["current_name"]
+        )
         workflows.append(
             {
-                "id": spec["id"],
-                "name": spec["current_name"],
+                "id": workflow_id,
+                "name": workflow_name,
                 "active": active,
                 "activeVersionId": organizer.W15_ACTIVE_VERSION if active else None,
                 "parentFolderId": "f1000000-0000-4000-8000-000000000001",
@@ -42,7 +52,7 @@ def fixture_state(organizer):
             }
         )
         edges.extend(
-            {"workflowId": spec["id"], "tagId": organizer.TAG_IDS[tag]}
+            {"workflowId": workflow_id, "tagId": organizer.TAG_IDS[tag]}
             for tag in ("finance", "setup-required", "inactive")
         )
     return {
@@ -75,6 +85,8 @@ class WorkflowOrganizationTests(unittest.TestCase):
         o = self.organizer
         self.assertEqual(len(o.WORKFLOW_MAP), 22)
         self.assertEqual(len({row["id"] for row in o.WORKFLOW_MAP}), 22)
+        self.assertIn(o.CANONICAL_REPLACEMENT_ID, {row["id"] for row in o.WORKFLOW_MAP})
+        self.assertNotIn(o.ORPHAN_WORKFLOW_ID, {row["id"] for row in o.WORKFLOW_MAP})
         self.assertEqual(len(o.FOLDER_SPECS), 6)
         self.assertEqual(sum(row["root"] for row in o.FOLDER_SPECS), 2)
         self.assertEqual(sum(not row["root"] for row in o.FOLDER_SPECS), 4)
@@ -83,20 +95,41 @@ class WorkflowOrganizationTests(unittest.TestCase):
             "f1000000-0000-4000-8000-000000000103",
         )
         self.assertEqual(
-            o.WORKFLOW_BY_ID["10000000-0000-4000-8000-000000000115"]["target_name"],
-            "Bounded MCP Facade",
+            o.WORKFLOW_BY_ID["10000000-0000-4000-8000-000000000024"]["target_name"],
+            "Shared Monthly Statement Cycle",
         )
         for row in o.WORKFLOW_MAP:
             lowered = row["target_name"].casefold()
             self.assertFalse(
                 any(marker in lowered for marker in o.STATUS_MARKERS), row["id"]
             )
+        canonical = o.WORKFLOW_BY_ID[o.CANONICAL_REPLACEMENT_ID]
+        self.assertEqual(
+            canonical["source"],
+            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+        )
+        self.assertEqual(canonical["code"], "SHARED_MONTHLY_STATEMENT_CYCLE")
+
+    def test_owned_contracts_use_canonical_ai_review_table_name(self):
+        root = N8N
+        owned = [
+            root / "organize-workflows.py",
+            root / "workflow-folder-placement.sql",
+            root / "workflow-folders.json",
+            root / "application-manifest.json",
+            root / "workflows" / "22-shared-monthly-statement-cycle.json",
+            *sorted((root / "generated").glob("*.json")),
+        ]
+        for path in owned:
+            self.assertNotIn("finance_ai_review_queue", path.read_text(encoding="utf-8"), path)
 
     def test_apply_preserves_opaque_rows_and_active_published_tuple(self):
         o = self.organizer
         before = fixture_state(o)
         after = o.apply_plan(before)
         self.assertEqual(len(after["workflows"]), 22)
+        self.assertNotIn(o.ORPHAN_WORKFLOW_ID, {row["id"] for row in after["workflows"]})
+        self.assertIn(o.CANONICAL_REPLACEMENT_ID, {row["id"] for row in after["workflows"]})
         self.assertEqual(sum(row["active"] for row in after["workflows"]), 1)
         w15 = next(row for row in after["workflows"] if row["id"] == o.W15_ID)
         self.assertEqual(w15["activeVersionId"], o.W15_ACTIVE_VERSION)
@@ -108,6 +141,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
                 for row in after["workflows"]
             )
         )
+        canonical = next(
+            row for row in after["workflows"] if row["id"] == o.CANONICAL_REPLACEMENT_ID
+        )
+        self.assertEqual(canonical["nodes"][0]["credentials"], {"opaque": "preserve"})
         self.assertEqual(
             {row["id"] for row in after["folders"]},
             {row["id"] for row in o.FOLDER_SPECS},
@@ -166,8 +203,19 @@ class WorkflowOrganizationTests(unittest.TestCase):
         plan = o.plan_organization(before)
         self.assertTrue(plan["changed"])
         self.assertTrue(plan["idempotent"])
+        self.assertEqual(plan["prestate_roster"], "orphaned")
+        self.assertTrue(plan["retirement"]["backup_captured"])
+        self.assertEqual(
+            plan["retirement"]["legacy_workflow_id"], o.ORPHAN_WORKFLOW_ID
+        )
+        self.assertEqual(
+            plan["retirement"]["replacement_workflow_id"], o.CANONICAL_REPLACEMENT_ID
+        )
+        self.assertTrue(plan["retirement"]["rollback_restores_exact_prestate"])
         second = o.plan_organization(plan["after_state"])
         self.assertFalse(second["changed"])
+        self.assertEqual(second["prestate_roster"], "canonical")
+        self.assertFalse(second["retirement"]["backup_captured"])
         self.assertEqual(second["before"], second["after"])
         restored = o.rollback_state(plan["after_state"], plan["rollback_state"])
         self.assertEqual(restored, before)
@@ -200,6 +248,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertIn("TAG_EDGE_READBACK_MISMATCH", sql)
         self.assertIn("VERSION_TUPLE_READBACK_MISMATCH", sql)
         self.assertIn("LEGACY_FOLDER_REMAINS", sql)
+        self.assertIn("000000000024", sql)
+        self.assertIn("000000000115", sql)
+        self.assertIn("ORPHAN_WORKFLOW_REMAINS", sql)
+        self.assertIn("RETIREMENT_BACKUP", sql)
         for row in self.organizer.WORKFLOW_MAP:
             self.assertIn(row["id"], sql)
             self.assertIn(row["target_name"], sql)
@@ -239,6 +291,11 @@ class WorkflowOrganizationTests(unittest.TestCase):
                 self.assertTrue(report["changed"])
                 self.assertTrue(report["idempotent"])
                 self.assertFalse(report["production_mutation"])
+                self.assertEqual(report["prestate_roster"], "orphaned")
+                self.assertEqual(
+                    report["retirement"]["replacement_workflow_id"],
+                    self.organizer.CANONICAL_REPLACEMENT_ID,
+                )
                 self.assertEqual(
                     state_path.read_text(encoding="utf-8"),
                     json.dumps(fixture_state(self.organizer), indent=None),
