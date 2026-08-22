@@ -63,7 +63,7 @@ IMPLEMENTATION_LINKS = {
         "N8N-001", "N8N-002", "N8N-003", "N8N-004", "N8N-005", "N8N-006",
         "N8N-007", "N8N-008", "N8N-009", "AUTO-001", "AUTO-002"
     ],
-    "orchestration.codex-agent-handoff": [
+    "orchestration.subscription-agent-handoff": [
         "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005"
     ],
     "ingestion.browser": [

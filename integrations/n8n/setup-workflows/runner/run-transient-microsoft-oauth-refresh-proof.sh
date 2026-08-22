@@ -12,8 +12,8 @@ readonly expected_project_id="gT5rxq26L0PoNUWX"
 readonly workflow_id="10000000-0000-4000-8000-000000000023"
 readonly companion_setup_id="10000000-0000-4000-8000-000000000022"
 readonly workflow_name="Finance · Microsoft OAuth Refresh Proof · Manual Read Only"
-readonly folder_id="f1000000-0000-4000-8000-000000000090"
-readonly folder_name="90 Platform & Admin"
+readonly folder_id="f1000000-0000-4000-8000-000000000191"
+readonly folder_name="Shared"
 # n8n 2.36.2 Execute.init() starts a task broker. The retained service already
 # owns 5679, so the transient internal runner uses one reviewed loopback port.
 readonly internal_runner_broker_port="15679"
@@ -214,7 +214,7 @@ metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata firs
 refresh_after_first="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_first}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "First execution did not refresh both expired Microsoft tokens" >&2; exit 1; }
 
 failure_stage="n8n_only_restart"
-services=(postgres task-runners codex-agent-runner pdf-utility)
+services=(postgres task-runners pdf-utility)
 declare -A service_ids_before service_started_before
 for service in "${services[@]}"; do
   service_ids_before["${service}"]="$(docker compose ps -q "${service}")"

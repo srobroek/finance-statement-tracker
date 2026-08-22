@@ -100,10 +100,10 @@ BROWSER_CAPTURE_SCHEMA = json.loads(
         encoding="utf-8"
     )
 )
+FOLDER_BY_ID = {folder["id"]: folder for folder in FOLDER_CONTRACT["folders"]}
 FOLDER_BY_CODE = {
-    code: folder
-    for folder in FOLDER_CONTRACT["folders"]
-    for code in folder["workflow_codes"]
+    workflow["code"]: workflow["folder_id"]
+    for workflow in FOLDER_CONTRACT["workflows"]
 }
 TAG_BY_NAME = {
     tag["name"]: tag["id"] for tag in FOLDER_CONTRACT["tag_definitions"]
@@ -173,6 +173,23 @@ def format_code_nodes(workflows: list[dict]) -> None:
         raise RuntimeError(completed.stderr.strip())
     for node, rendered in zip(nodes, json.loads(completed.stdout), strict=True):
         node["parameters"]["jsCode"] = rendered
+
+
+def normalize_subscription_provider_labels(workflows: list[dict]) -> None:
+    """Keep provider errors aligned with the direct subscription adapter."""
+    replacements = {
+        "Codex|Agent Runner": "Codex|Subscription Agent",
+        "CODEX_AGENT_RUNNER": "CODEX_SUBSCRIPTION",
+        "Agent runner auth or model policy mismatch": "Subscription provider auth or model policy mismatch",
+    }
+    for workflow in workflows:
+        for node in workflow.get("nodes", []):
+            code = node.get("parameters", {}).get("jsCode")
+            if not isinstance(code, str):
+                continue
+            for old, new in replacements.items():
+                code = code.replace(old, new)
+            node["parameters"]["jsCode"] = code
 
 
 def repair_mojibake(value: object) -> object:
@@ -2144,11 +2161,6 @@ return [{
     agent["name"] = "Finance · Subscription Agent Proposal"
     for old, new in (
         ("Trusted AI Proposal Input", "Trusted Agent Proposal Input"),
-        ("Invoke Fixed Codex Agent Runner", "Invoke Fixed Subscription Agent Runner"),
-        ("Read Codex Runner Circuit", "Read Agent Runner Circuit"),
-        ("Gate Codex Runner Circuit", "Gate Agent Runner Circuit"),
-        ("Persist Codex Runner Circuit Gate", "Persist Agent Runner Circuit Gate"),
-        ("Close Codex Runner Circuit", "Close Agent Runner Circuit"),
     ):
         if any(node["name"] == old for node in agent["nodes"]):
             rename_node(agent, old, new)
@@ -3309,7 +3321,7 @@ return [{ json: normalized }];
     invoke = next(
         node
         for node in agent["nodes"]
-        if node["name"] in {"Invoke Fixed Subscription Agent Runner", "Invoke Subscription Agent Adapter"}
+        if node["name"] == "Invoke Subscription Agent Adapter"
     )
     invoke["name"] = "Invoke Subscription Agent Adapter"
     invoke["type"] = "n8n-nodes-base.executeWorkflow"
@@ -3320,14 +3332,6 @@ return [{ json: normalized }];
         "options": {"waitForSubWorkflow": True},
     }
     invoke.pop("credentials", None)
-    if "Invoke Fixed Subscription Agent Runner" in agent["connections"]:
-        agent["connections"]["Invoke Subscription Agent Adapter"] = agent["connections"].pop("Invoke Fixed Subscription Agent Runner")
-    for channels in agent["connections"].values():
-        for branches in channels.values():
-            for branch in branches:
-                for edge in branch:
-                    if edge["node"] == "Invoke Fixed Subscription Agent Runner":
-                        edge["node"] = "Invoke Subscription Agent Adapter"
     agent["meta"]["providerAdapterWorkflow"] = "SUBSCRIPTION_AGENT_ADAPTER"
 
     # The current acquisition workflow receives an immutable message and
@@ -4317,7 +4321,7 @@ def layout(workflow: dict) -> None:
                 ),
             })
     workflow["nodeGroups"] = groups
-    folder = FOLDER_BY_CODE[workflow["meta"]["financeWorkflowCode"]]
+    folder = FOLDER_BY_ID[FOLDER_BY_CODE[workflow["meta"]["financeWorkflowCode"]]]
     workflow["meta"]["workflowFolder"] = {
         "id": folder["id"],
         "name": folder["name"],
@@ -4363,6 +4367,7 @@ def main() -> int:
         if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
     }
     workflows = [by_code[path_to_code[path]] for path in paths]
+    normalize_subscription_provider_labels(workflows)
     format_code_nodes(workflows)
     for workflow in workflows:
         # W03 is a reviewed migration canvas. Preserve its existing positions

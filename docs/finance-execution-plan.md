@@ -256,7 +256,6 @@ python -m unittest tests.test_n8n_workflows -v
 python -m unittest tests.test_project_backlog -v
 python -m unittest tests.test_cashback_events tests.test_cashback_server -v
 npm test --prefix packages/n8n-nodes-finance
-npm test --prefix services/codex-agent-runner
 python scripts/generate-project-backlog.py --check
 git diff --check
 ```

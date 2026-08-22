@@ -116,26 +116,14 @@
       "dependencies": ["mail-cursor-completeness", "actual-outbox-recovery", "n8n-secrets"], "evidence": [], "blockers": ["RAK_SC_STATEMENT_ADAPTERS_REQUIRED", "DISPOSABLE_N8N_REQUIRED"]
     },
     {
-      "id": "bounded-codex-agent-handoff",
-      "invariant": "n8n hands only redacted unresolved fields to an isolated ephemeral Codex runner, receives a schema-valid proposal, and never gives the runner ledger credentials or authority to mutate protected fields.",
-      "status": "TESTED_IN_DISPOSABLE",
+      "id": "bounded-subscription-agent-handoff",
+      "invariant": "n8n hands only redacted unresolved fields to the fixed subscription agent adapter, receives a schema-valid proposal, and never gives the adapter ledger credentials or authority to mutate protected fields.",
+      "status": "IMPLEMENTED_NOT_DEPLOYED",
       "production_gate": true,
-      "verifier": {"kind": "TEST", "command": "npm test --prefix services/codex-agent-runner && python -m unittest tests.test_n8n_workflows -v", "expected": "Three deterministic fixture runs produce idempotent schema-valid proposals through ChatGPT subscription auth; malicious output, protected-field writes, arbitrary commands, API-key fallback, and credential access are rejected."},
+      "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "Three deterministic fixture runs produce idempotent schema-valid proposals through the direct subscription adapter; malicious output, protected-field writes, arbitrary commands, API-key fallback, and credential access are rejected."},
       "dependencies": ["deterministic-n8n-orchestration", "n8n-secrets"],
-      "evidence": [
-        {
-          "artifact_uri": "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
-          "sha256": "4542ff4300c696ecdb436d58fbec2a263a0cd5c300eb6caf563c40f185ad6c9c",
-          "observed_at": "2026-08-19T15:00:00Z",
-          "expires_at": null,
-          "environment_id": "ci-disposable-codex-runner",
-          "actual_sync_id": null,
-          "git_commit": "af2c1b733755d603d7ecc6dbd19f289786892007",
-          "reviewer": "codex-root",
-          "non_empty": true
-        }
-      ],
-      "blockers": ["FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED", "PRODUCTION_RUNNER_PROMOTION_REQUIRED"]
+      "evidence": [],
+      "blockers": ["FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED", "PRODUCTION_SUBSCRIPTION_ADAPTER_PROMOTION_REQUIRED"]
     },
     {
       "id": "resilient-document-extraction",

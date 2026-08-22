@@ -1155,17 +1155,8 @@ try {{
         self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
-        contract = load_json(N8N / "codex-agent-handoff.json")
-        runner = contract["runner_contract"]
-        self.assertEqual(runner["credential"], "CHATGPT_CACHED_LOGIN")
-        self.assertEqual(runner["forced_login_method"], "chatgpt")
-        self.assertTrue(runner["api_key_fallback_forbidden"])
-        self.assertEqual(runner["server_model_policy"], {
-            "NORMAL": {"model": "gpt-5.6-luna", "reasoning_effort": "max"},
-            "EXCEPTION": {"model": "gpt-5.6-sol", "reasoning_effort": "medium"},
-        })
-        handoff = load_json(N8N / contract["request_schema"])
-        proposal = load_json(N8N / contract["output_schema"])
+        handoff = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")
+        proposal = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         try:
             import jsonschema
         except ImportError:
@@ -1281,7 +1272,7 @@ try {{
         target_contract = load_json(N8N / "ai-policy-targets.json")
         configured = {target for policy in policies for target in policy["target_fields"]}
         self.assertEqual(configured, set(target_contract["target_fields"]))
-        schema = load_json(N8N / "contracts" / "codex-agent-handoff-v1.schema.json")
+        schema = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")
         schema_targets = set(schema["$defs"]["unresolved"]["properties"]["allowed_fields"]["items"]["enum"])
         self.assertTrue(configured.issubset(schema_targets))
         self.assertEqual(schema_targets - configured, {"review_required"})
@@ -1615,6 +1606,14 @@ try {{
             }
             for target in matrix["targets"]
         ]
+        native_readback_rows = [
+            {
+                **row,
+                "columns": list(reversed(row["columns"])),
+            }
+            if row["name"] == "finance_ingestion_state" else row
+            for row in valid_rows
+        ]
 
         def run(rows: list[dict]) -> subprocess.CompletedProcess[str]:
             harness = f"""
@@ -1635,6 +1634,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(valid.returncode, 0, valid.stderr)
         self.assertIn("TARGET_SCHEMA_READBACK_VERIFIED", valid.stdout)
         self.assertEqual(run(valid_rows).stdout, valid.stdout, "second readback must be a deterministic no-op")
+        native = run(native_readback_rows)
+        self.assertEqual(native.returncode, 0, native.stderr)
+        self.assertEqual(native.stdout, valid.stdout, "native column order must be canonicalized")
 
         cases = [
             (valid_rows[:-1], "TARGET_TABLE_MISSING"),
@@ -1928,16 +1930,17 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         contract = load_json(N8N / "workflow-folders.json")
         self.assertEqual(contract["n8n_version"], "2.36.2")
         self.assertEqual(len(contract["folders"]), 6)
-        mapped = [code for folder in contract["folders"] for code in folder["workflow_codes"]]
-        self.assertEqual(len(mapped), len(set(mapped)))
-        self.assertEqual(set(mapped), {row["code"] for row in self.registry["workflows"]})
-        by_code = {
-            code: folder for folder in contract["folders"] for code in folder["workflow_codes"]
-        }
+        workflow_rows = contract["workflows"]
+        self.assertEqual(len(workflow_rows), len({row["code"] for row in workflow_rows}))
+        self.assertEqual(
+            {row["code"] for row in workflow_rows},
+            {row["code"] for row in self.registry["workflows"]},
+        )
+        by_code = {row["code"]: row["folder_id"] for row in workflow_rows}
         tag_by_name = {tag["name"]: tag["id"] for tag in contract["tag_definitions"]}
         for workflow in self.workflows.values():
             code = workflow["meta"]["financeWorkflowCode"]
-            self.assertEqual(workflow["meta"]["workflowFolder"]["id"], by_code[code]["id"])
+            self.assertEqual(workflow["meta"]["workflowFolder"]["id"], by_code[code])
             self.assertEqual(workflow["meta"]["workflowTags"], contract["workflow_tags"])
             self.assertEqual([tag["name"] for tag in workflow["tags"]], contract["workflow_tags"])
             self.assertEqual(

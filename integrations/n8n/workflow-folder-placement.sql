@@ -15,15 +15,15 @@
 
 BEGIN;
 
-CREATE TEMP TABLE finance_organization_context (project_id varchar(36) PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE finance_organization_context (project_id varchar(64) PRIMARY KEY) ON COMMIT DROP;
 INSERT INTO finance_organization_context VALUES (:'finance_project_id');
 
 DO $$
 DECLARE
-  expected_project_id varchar(36);
+  expected_project_id varchar(64);
 BEGIN
   SELECT project_id INTO expected_project_id FROM finance_organization_context;
-  IF expected_project_id !~ '^[0-9a-fA-F-]{36}$' THEN
+  IF expected_project_id !~ '^[A-Za-z0-9_-]{8,64}$' THEN
     RAISE EXCEPTION 'FINANCE_PROJECT_ID_INVALID';
   END IF;
   IF NOT EXISTS (
@@ -108,7 +108,7 @@ INSERT INTO finance_canonical_source_contract VALUES (
 CREATE TEMP TABLE finance_workflow_retirement (
   legacy_workflow_id varchar(36) PRIMARY KEY,
   replacement_workflow_id varchar(36) NOT NULL,
-  project_id varchar(36) NOT NULL,
+  project_id varchar(64) NOT NULL,
   workflow_row_json jsonb NOT NULL,
   shared_row_json jsonb,
   workflow_row_count integer NOT NULL,
@@ -119,7 +119,7 @@ CREATE TEMP TABLE finance_workflow_retirement (
 
 DO $$
 DECLARE
-  expected_project_id varchar(36);
+  expected_project_id varchar(64);
   orphan_workflow_present boolean;
   orphan_shared_present boolean;
   orphan_tag_present boolean;
@@ -460,7 +460,7 @@ WHERE f."projectId" = :'finance_project_id'
 
 DO $$
 DECLARE
-  expected_project_id varchar(36);
+  expected_project_id varchar(64);
 BEGIN
   SELECT project_id INTO expected_project_id FROM finance_organization_context;
   IF EXISTS (

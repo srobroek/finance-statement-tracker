@@ -118,7 +118,7 @@ the stable workflow ID and cached readable name.
 
 Manual provider setup exports live under `setup-workflows/` and are deliberately
 excluded from the regular 19-workflow registry and import. The OneDrive root
-setup export is an explicit single-file action for `90 Platform & Admin`: it
+setup export is an explicit single-file action for `Global/Shared`: it
 creates the top-level `Finance Evidence` folder only when absent, reads it back,
 rejects nested same-name duplication, emits a redacted receipt, and must remain
 inactive and unscheduled.

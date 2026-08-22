@@ -868,9 +868,11 @@ if (observed.size !== expected.length) {
 for (const target of expected) {
   const row = observed.get(target);
   const schemaColumns = contract.target_schemas?.[target]?.columns;
-  const expectedColumns = Array.isArray(schemaColumns) ? schemaColumns.map(column => ({ name: String(column.name || ''), type: String(column.type || '') })) : Object.entries(schemaColumns || {}).map(([name, spec]) => ({ name, type: spec.type }));
-  const columns = Array.isArray(row.columns) ? row.columns.map(column => ({ name: String(column.name || ''), type: String(column.type || '') })) : [];
+  const canonicalColumns = columns => columns.map(column => ({ name: String(column.name || ''), type: String(column.type || '').toLowerCase() })).sort((left, right) => left.name.localeCompare(right.name));
+  const expectedColumns = canonicalColumns(Array.isArray(schemaColumns) ? schemaColumns : Object.entries(schemaColumns || {}).map(([name, spec]) => ({ name, type: spec.type })));
+  const columns = canonicalColumns(Array.isArray(row.columns) ? row.columns : []);
   if (columns.length !== expectedColumns.length) throw new Error('TARGET_SCHEMA_MISMATCH:' + target);
+  if (new Set(columns.map(column => column.name)).size !== columns.length) throw new Error('TARGET_SCHEMA_DUPLICATE:' + target);
   for (let index = 0; index < columns.length; index += 1) {
     const wanted = expectedColumns[index];
     const actual = columns[index];

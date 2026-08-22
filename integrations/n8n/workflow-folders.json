@@ -8,65 +8,37 @@
       "id": "f1000000-0000-4000-8000-000000000100",
       "name": "Finance",
       "parentFolderId": null,
-      "root": true,
-      "workflow_codes": []
+      "root": true
     },
     {
       "id": "f1000000-0000-4000-8000-000000000190",
       "name": "Global",
       "parentFolderId": null,
-      "root": true,
-      "workflow_codes": []
+      "root": true
     },
     {
       "id": "f1000000-0000-4000-8000-000000000101",
       "name": "Account Reconciliation",
       "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-      "root": false,
-      "workflow_codes": [
-        "OUTLOOK_FINANCE_ACQUISITION",
-        "SHARED_STATEMENT_PIPELINE",
-        "EI_MONTHLY_STATEMENT",
-        "WIO_MONTHLY_STATEMENT",
-        "INTERACTIVE_ARTIFACT_HANDOFF",
-        "OUTLOOK_MESSAGE_SWEEP",
-        "DOCUMENT_EXTRACTION_REQUEST",
-        "LOCAL_PDF_EXTRACTION"
-      ]
+      "root": false
     },
     {
       "id": "f1000000-0000-4000-8000-000000000102",
       "name": "Cashback Sweep",
       "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-      "root": false,
-      "workflow_codes": [
-        "RAKBANK_LIVE_CASHBACK"
-      ]
+      "root": false
     },
     {
       "id": "f1000000-0000-4000-8000-000000000103",
       "name": "Shared",
       "parentFolderId": "f1000000-0000-4000-8000-000000000100",
-      "root": false,
-      "workflow_codes": [
-        "AI_PROPOSAL",
-        "FINANCE_OPERATIONS_STATUS",
-        "FINANCE_MCP_FACADE",
-        "OPERATIONS_ERROR_HANDLER",
-        "ACTUAL_OUTBOX_RECOVERY",
-        "FINANCE_WRITER_LEASE",
-        "PLATFORM_DATA_TABLE_BOOTSTRAP",
-        "ACTUAL_OUTBOX_APPLY",
-        "SUBSCRIPTION_AGENT_ADAPTER",
-        "SHARED_MONTHLY_STATEMENT_CYCLE"
-      ]
+      "root": false
     },
     {
       "id": "f1000000-0000-4000-8000-000000000191",
       "name": "Shared",
       "parentFolderId": "f1000000-0000-4000-8000-000000000190",
-      "root": false,
-      "workflow_codes": []
+      "root": false
     }
   ],
   "tags": [

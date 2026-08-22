@@ -25,7 +25,7 @@ Deliver a production-validated, Actual-first finance platform where:
 - deterministic source parsing, source direction/topic, normalization,
   reconciliation, and cashback arithmetic precede AI;
 - scoped AI proposes only unresolved classifications/evidence policies through
-  an isolated, ephemeral, schema-constrained Codex runner;
+  a fixed, schema-constrained subscription adapter;
 - user-assisted browser capture covers FAB, Sarwa, and Amazon;
 - FAB non-credit accounts, Sarwa wealth, ADCB at AED 0, net worth, notes,
   refunds/transfers/rewards, budgets, schedules, owners, evidence, and reports
@@ -137,7 +137,7 @@ statement finalizes/resets a cashback period.
 The existing external `Home-beachhead` tunnel has two active connector replicas
 for availability. Both n8n hostnames route through that one logical tunnel to the
 single exact LAN listener `172.20.10.20:5678`; the Compose stack does not run a
-cloudflared sidecar. Postgres, PDF utility, task runners, and the Codex runner do
+cloudflared sidecar. Postgres, PDF utility, and task runners do
 not publish host ports. Leave the origin Host-header override unset unless a
 tested origin requirement proves otherwise. Verify forwarded headers, no-cache,
 WebSockets, OAuth callback, Access policy order, positive and negative Service

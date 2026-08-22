@@ -76,12 +76,12 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             {
                 "source_tables": 15,
                 "source_columns": 215,
-                "node_references": 125,
-                "consumer_node_edges": 1237,
+                "node_references": 122,
+                "consumer_node_edges": 1227,
                 "filter_only_consumer_columns": 35,
-                "filter_only_consumer_edges": 117,
-                "write_reference_edges": 451,
-                "producer_node_edges": 451,
+                "filter_only_consumer_edges": 115,
+                "write_reference_edges": 435,
+                "producer_node_edges": 435,
             },
         )
         self.assertEqual(invariants["dispositions"], {"keep": 101, "transform": 58, "remove": 56})

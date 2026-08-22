@@ -26,16 +26,16 @@
   },
   "workflow_manifest": {
     "path": "integrations/n8n/pipeline-registry.json",
-    "sha256": "422503d6ea84560073f21ddbb0a9c2b6fd5409560732cd79bb786de6d5649ee9"
+    "sha256": "187896fb9bbabe0b6360c9a513fe25abf9ff7d5a2bcf0e549e7796bf98ee27b6"
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "622f314f3857349dcc918c1f6f12dba56b5451d9e9bd14fdb9210d2fdbfda277"
+    "sha256": "1a6aa42cf3d3abb310621a8486b979081d92c6d6a89293b54cb7978d3c873456"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-    "sha256": "9045552ec7a12193a4da0f06171e3b356e355574a4da7fc6c6b898b54b1f9da6",
+    "sha256": "9293ac9646900b216d0afbb2ea691ed4b97d1ff80b757907a193f0511b9fd8e4",
     "required_state": {
       "active": false,
       "published": false,
@@ -52,12 +52,11 @@
       {"name": "Issuer Statement Password", "binding": "BIND_CARD_PASSWORD", "type": "financeStatementPassword"},
       {"name": "Finance MCP Trigger Bearer", "binding": "BIND_FINANCE_MCP_FACADE", "type": "httpBearerAuth"},
       {"name": "Finance Operations Postgres", "binding": "BIND_FINANCE_OPS_DB", "type": "postgres"},
-      {"name": "Finance Actual", "binding": "BIND_ACTUAL", "type": "actualBudgetApi"},
-      {"name": "Finance Codex Agent Runner Bearer", "binding": "BIND_FINANCE_CODEX_RUNNER", "type": "httpBearerAuth"}
+      {"name": "Finance Actual", "binding": "BIND_ACTUAL", "type": "actualBudgetApi"}
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "aa76562b08c184fa9a6eb7a9d62c6c3357cf1d65850c59852e4f5780b309a9ec"
+      "sha256": "4d6c52599d78e7c8ab7701912e47948813adb8724ad631b2c2f15dee894a6353"
     },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]

@@ -6,7 +6,7 @@
   "source_snapshot": {
     "finance_commit": "fdcec6e774456b69d8a54dbdbece2653ef686eee",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "5f5bee12864279eb46b72be1745add704980ce88d3d2fb2392dd8b4a27a9b25e",
+    "node_scan_corpus_sha256": "c7588d566b8d8c0264d51d7ebe0ce49b2d48cc1038e76258a82259ea22b2ba1d",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -941,12 +941,12 @@
   "invariants": {
     "source_tables": 15,
     "source_columns": 215,
-    "node_references": 125,
-    "consumer_node_edges": 1237,
+    "node_references": 122,
+    "consumer_node_edges": 1227,
     "filter_only_consumer_columns": 35,
-    "filter_only_consumer_edges": 117,
-    "write_reference_edges": 451,
-    "producer_node_edges": 451,
+    "filter_only_consumer_edges": 115,
+    "write_reference_edges": 435,
+    "producer_node_edges": 435,
     "every_source_column_has_one_disposition": true,
     "node_operations": [
       "create",
@@ -6996,59 +6996,6 @@
         },
         {
           "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/09-ai-proposal.json",
-          "node": "Close Agent Runner Circuit",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "last_error_class",
-            "opened_at",
-            "provider_code",
-            "readback_verified",
-            "retry_after",
-            "state",
-            "transient_failure_count",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/09-ai-proposal.json",
-          "node": "Persist Agent Runner Circuit Gate",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "last_error_class",
-            "opened_at",
-            "provider_code",
-            "readback_verified",
-            "retry_after",
-            "state",
-            "transient_failure_count",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
-          "file": "integrations/n8n/workflows/09-ai-proposal.json",
-          "node": "Read Agent Runner Circuit",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "provider_code"
-          ]
-        },
-        {
-          "table": "finance_provider_circuits",
           "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
           "node": "Close Outlook Circuit",
           "operation": "upsert",
@@ -7167,8 +7114,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7180,9 +7125,6 @@
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
@@ -7209,8 +7151,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7219,7 +7159,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7243,8 +7182,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7253,7 +7190,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7277,8 +7213,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7287,7 +7221,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7311,8 +7244,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7321,7 +7252,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7345,8 +7275,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7355,7 +7283,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7379,8 +7306,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7389,7 +7314,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"
@@ -7413,8 +7337,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Upsert OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Close Outlook Circuit",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Persist Outlook Circuit Gate",
-            "integrations/n8n/workflows/09-ai-proposal.json#Close Agent Runner Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Persist Agent Runner Circuit Gate",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Close Outlook Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Persist Outlook Circuit Gate",
             "integrations/n8n/workflows/16-operations-error-handler.json#Upsert OPEN Provider Circuit"
@@ -7423,7 +7345,6 @@
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/disposable/generated/101-error-redaction.json#Read Provider Circuit after Failure",
             "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Outlook Circuit",
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Agent Runner Circuit",
             "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Outlook Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Back OPEN Provider Circuit",
             "integrations/n8n/workflows/16-operations-error-handler.json#Read Provider Circuit after Failure"

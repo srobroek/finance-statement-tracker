@@ -12,7 +12,7 @@ The finance tracker is **not ready for production promotion**.
 
 The deterministic core is materially implemented and the current local code
 suites are green. Actual note-v2 and transaction semantics have a strong
-read-only full-corpus result, the finance custom nodes and bounded Codex runner
+read-only full-corpus result, the finance custom nodes and bounded subscription adapter
 pass their local suites, and the n8n exports now form a coherent inactive
 19-workflow specification. Those facts do not prove the current bytes in the
 target runtime. The remaining blockers cross financial correctness, current
@@ -59,7 +59,7 @@ against later issuer evidence without a synthetic balancing row.
 | n8n workflow specification | **Implemented + verified (static)** | 21 JSON exports are inactive; registry/export bijection, cursor windows, one terminal cursor commit, durable outbox transitions, error redaction, and 17/17 `From list` subworkflow selectors pass tests | Registry correctly remains `SPEC_ONLY`; static graph tests do not prove importability or behavior in the current exact image |
 | n8n Data Tables | **Implemented-unverified for current bytes** | v4 contract declares 15 operational tables; every table is connected; generated bootstrap is current; older `fa8fd58` receipt reports 15 tables created | Current workflow 19 and policy seeds changed after that receipt; logical keys are not database uniqueness proof; current seed/readback, concurrency, retention approval, and restart/restore evidence are absent |
 | Microsoft OAuth | **Implemented-unverified (connection scope)** | Current n8n operator readback during this audit reports Outlook credential `NcQo00WO7GQ3qYyA` connected with delegated `Mail.Read` and Drive credential `eSnL069pIlzjFj4B` connected with delegated `Files.ReadWrite` | The live project still has a stale 19-workflow set. Exact-current import, durable binding/readback, token refresh, canonical Finance Evidence root readback, and real workflow execution receipts are still pending |
-| Subscription community agents | **Implemented-unverified** | Integrity-pinned ProDex 0.5.1 and Claude 0.8.0 register in an older local image; bounded Codex runner suite passes 16/16 | No current exact-image device/subscription login, no Claude no-session proof, no real workflow-09/21 proposal, no malicious negative runtime matrix, and no three consecutive schema-valid receipts |
+| Subscription community agents | **Implemented-unverified** | Integrity-pinned ProDex 0.5.1 and Claude 0.8.0 register in an older local image; subscription adapter contract coverage exists | No current exact-image device/subscription login, no Claude no-session proof, no real workflow-09/21 proposal, no malicious negative runtime matrix, and no three consecutive schema-valid receipts |
 | Bounded MCP facade | **Implemented-unverified** | Static tests prove fixed operation codes, durable request receipts, and no caller-selected URL/path/credential/write flag | No MCP Server Trigger execution from a real client and no Cloudflare Service Auth route/negative test |
 | Runtime images and task runners | **Implemented-unverified for current commit** | Source/integrity pins, immutable extension checks, runner closure, Cloudflared artifact contracts and local image scans exist; focused contract suite passes 64 tests with six Windows symlink skips | Latest local image/CLI receipt is commit `fa8fd58`; current head changes workflows 09/19/21 and AI schemas. Current image builds, scans, SBOMs, protocol smokes, and immutable digests are absent |
 | Cloudflare/network/secrets | **Implemented-unverified** | Hardened designs and source-locked Cloudflared artifact exist | Platform status explicitly says compose, restore, routes and MCP facade are unvalidated; dedicated vault rotation/injection, provider egress, Access/Service Auth, origin headers, and two-replica route proof are absent |
@@ -213,7 +213,7 @@ only planned Drive mutation if the canonical root is absent; no delete or
 broad/send permission is authorized.
 
 Community packages are pinned and registered in the older image, and the
-separate bounded Codex runner now passes its 16 tests. Neither provider is
+the bounded subscription adapter contract now passes its focused tests. Neither provider is
 runtime accepted: there is no ProDex device-login readback, no Claude
 subscription/no-session proof, no current workflow 09→21 execution, and no
 three consecutive schema-valid proposal receipts. The MCP facade likewise has
@@ -228,7 +228,7 @@ Local verification performed in this audit:
 | `python -m unittest discover -s tests -v` | **PASS** — 378 tests, 6 skipped |
 | `npm test` in `integrations/actual` | **PASS** — 48 tests |
 | `npm test` in `packages/n8n-nodes-finance` | **PASS** — 21 tests plus build |
-| `npm test` in `services/codex-agent-runner` | **PASS** — 16 tests |
+| Subscription adapter contract tests | **PASS** — repository contract coverage; provider execution remains unverified |
 | Focused n8n/image/runner/Cloudflared/deployment Python suite | **PASS** — 64 tests, 6 Windows symlink skips |
 | `python scripts/verify-project-acceptance.py` | **PASS only for ledger schema validity** — 26 requirements; it does not execute their verifiers |
 | `python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json` | **BLOCKED** — evidence bundle unavailable; no writes allowed |

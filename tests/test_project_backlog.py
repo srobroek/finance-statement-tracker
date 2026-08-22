@@ -46,7 +46,10 @@ class ProjectBacklogTests(unittest.TestCase):
         tasks = {row["id"]: row for row in self.payload["tasks"]}
         self.assertIn("finance_tracker/transaction_semantics.py", tasks["ACTUAL-010"]["evidence_paths"])
         self.assertIn("config/actual-note-contract.json", tasks["ACTUAL-011"]["evidence_paths"])
-        self.assertIn("services/codex-agent-runner", tasks["AGENT-003"]["evidence_paths"])
+        self.assertIn(
+            "integrations/n8n/workflows/21-subscription-agent-adapter.json",
+            tasks["AGENT-003"]["evidence_paths"],
+        )
         self.assertNotIn("CURRENT_TEST_FAILURES", tasks["AGENT-003"]["blockers"])
         self.assertIn("CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", tasks["AGENT-003"]["blockers"])
 

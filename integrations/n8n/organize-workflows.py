@@ -36,6 +36,7 @@ WORKFLOW_MAP = tuple(dict(row) for row in CONTRACT["workflows"])
 LEGACY_FOLDER_IDS = frozenset(CONTRACT["legacy_folder_ids"])
 
 WORKFLOW_BY_ID = {row["id"]: row for row in WORKFLOW_MAP}
+FOLDER_BY_CODE = {row["code"]: row["folder_id"] for row in WORKFLOW_MAP}
 TARGET_FOLDER_BY_ID = {row["id"]: row for row in FOLDER_SPECS}
 TARGET_IDS = frozenset(WORKFLOW_BY_ID)
 CANONICAL_REPLACEMENT_ID = "10000000-0000-4000-8000-000000000024"
@@ -269,12 +270,7 @@ def validate_contract() -> None:
             _fail("ROOT_PARENT_MISMATCH")
         if not row["root"] and row["parentFolderId"] not in folder_ids:
             _fail("CHILD_PARENT_MISMATCH")
-    manifest_workflow_codes = {
-        code
-        for folder in CONTRACT["folders"]
-        for code in folder.get("workflow_codes", [])
-    }
-    if manifest_workflow_codes != {row["code"] for row in WORKFLOW_MAP}:
+    if set(FOLDER_BY_CODE) != {row["code"] for row in WORKFLOW_MAP}:
         _fail("WORKFLOW_FOLDER_ASSIGNMENT_MISMATCH")
     for row in WORKFLOW_MAP:
         if row["folder_id"] not in folder_ids or not row["target_name"].strip():
@@ -419,7 +415,7 @@ def apply_plan(state: Mapping[str, Any]) -> dict[str, Any]:
     for workflow_id, spec in WORKFLOW_BY_ID.items():
         row = workflows[workflow_id]
         row["name"] = spec["target_name"]
-        row["parentFolderId"] = spec["folder_id"]
+        row["parentFolderId"] = FOLDER_BY_CODE[spec["code"]]
     # The old migration created these eight flat folders.  Remove only those
     # known IDs after the workflows have moved; unrelated project folders stay.
     referenced = {row.get("parentFolderId") for row in result["workflows"]}

@@ -14,7 +14,7 @@ if `Finance Evidence/Finance Evidence` exists.
 The final execution item is a redacted receipt: it confirms the exact root and
 whether the folder was created or reused, but omits the OneDrive item ID, drive
 metadata, URLs, credential values, and file contents. The workflow must remain
-inactive and unscheduled. Import it into `90 Platform & Admin`, bind only the
+inactive and unscheduled. Import it into the `Global/Shared` folder, bind only the
 existing `Finance OneDrive` credential, run it once manually, retain the
 redacted output, and remove the setup export from n8n if it is no longer
 needed.
@@ -65,7 +65,7 @@ performs this exact reviewed sequence:
 The runner requires explicit `FINANCE_MICROSOFT_OAUTH_PROOF_ACK`, exact finance
 and orchestrator commits, and the exact retained project. It starts only from
 the reviewed `19 workflows / 0 active / 0 published` state, imports exactly one
-inactive workflow, places it in `90 Platform & Admin`, and returns to the exact
+inactive workflow, places it in the `Global/Shared` folder, and returns to the exact
 19-workflow baseline. Raw n8n `IRun` objects and provider responses exist only
 inside the execution process long enough to validate the terminal node; only
 the redacted terminal result leaves that process. Execution persistence is

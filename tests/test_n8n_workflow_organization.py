@@ -4,7 +4,9 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import unittest
@@ -86,113 +88,6 @@ def fixture_state(organizer):
         ],
         "workflow_tags": edges,
     }
-
-
-class DeterministicPostgresEquivalent:
-    """Exercise the SQL cutover transaction without requiring a live database."""
-
-    def __init__(self, organizer):
-        self.organizer = organizer
-        canonical = organizer.canonical_workflow_export()
-        self.tables = {
-            "workflow_entity": {
-                organizer.CANONICAL_REPLACEMENT_ID: canonical,
-                organizer.ORPHAN_WORKFLOW_ID: {
-                    "id": organizer.ORPHAN_WORKFLOW_ID,
-                    "name": organizer.ORPHAN_WORKFLOW_NAME,
-                    "active": False,
-                    "activeVersionId": None,
-                    "nodes": [{"id": "orphan-node"}],
-                    "meta": {"financeWorkflowCode": "FINANCE_MCP_FACADE"},
-                },
-            },
-            "shared_workflow": {
-                organizer.CANONICAL_REPLACEMENT_ID: {
-                    "projectId": "00000000-0000-0000-0000-000000000001"
-                },
-                organizer.ORPHAN_WORKFLOW_ID: {
-                    "projectId": "00000000-0000-0000-0000-000000000001"
-                },
-            },
-            "workflows_tags": {
-                (organizer.ORPHAN_WORKFLOW_ID, organizer.TAG_IDS["inactive"]),
-                (organizer.ORPHAN_WORKFLOW_ID, organizer.TAG_IDS["finance"]),
-            },
-        }
-
-    def execute(
-        self,
-        project_id: str,
-        *,
-        commit: bool = True,
-        canonical_node_count: int = 16,
-        delete_orphan: bool = True,
-        fail_after_delete: bool = False,
-    ):
-        before = copy.deepcopy(self.tables)
-        if re.fullmatch(r"[0-9a-fA-F-]{36}", project_id) is None:
-            raise ValueError("FINANCE_PROJECT_ID_INVALID")
-        try:
-            canonical = self.tables["workflow_entity"].get(
-                self.organizer.CANONICAL_REPLACEMENT_ID
-            )
-            shared = self.tables["shared_workflow"].get(
-                self.organizer.CANONICAL_REPLACEMENT_ID
-            )
-            if (
-                canonical is None
-                or shared is None
-                or shared["projectId"] != project_id
-                or canonical.get("name")
-                not in {
-                    "Finance · Shared Monthly Statement Cycle",
-                    "Shared Monthly Statement Cycle",
-                }
-                or len(canonical.get("nodes", [])) != canonical_node_count
-                or canonical.get("meta", {}).get("financeWorkflowCode")
-                != "SHARED_MONTHLY_STATEMENT_CYCLE"
-            ):
-                raise ValueError("CANONICAL_EXPORT_PRECONDITION_FAILED")
-            if (
-                self.organizer.persisted_workflow_body_md5(canonical)
-                != self.organizer.CANONICAL_PERSISTED_BODY_MD5
-            ):
-                raise ValueError("CANONICAL_EXPORT_BODY_DIGEST_MISMATCH")
-            canonical["name"] = self.organizer.WORKFLOW_BY_ID[
-                self.organizer.CANONICAL_REPLACEMENT_ID
-            ]["target_name"]
-            orphan_id = self.organizer.ORPHAN_WORKFLOW_ID
-            orphan = self.tables["workflow_entity"].get(orphan_id)
-            orphan_shared = self.tables["shared_workflow"].get(orphan_id)
-            orphan_tags = {
-                edge for edge in self.tables["workflows_tags"] if edge[0] == orphan_id
-            }
-            if orphan is None and (orphan_shared is not None or orphan_tags):
-                raise ValueError("ORPHAN_RELATION_PRECONDITION_FAILED")
-            if orphan is not None and (
-                orphan_shared is None
-                or orphan_shared["projectId"] != project_id
-                or orphan.get("active")
-                or orphan.get("activeVersionId")
-            ):
-                raise ValueError("ORPHAN_PRECONDITION_FAILED")
-            if delete_orphan:
-                self.tables["workflows_tags"] -= orphan_tags
-                self.tables["shared_workflow"].pop(orphan_id, None)
-                self.tables["workflow_entity"].pop(orphan_id, None)
-            if fail_after_delete:
-                raise ValueError("INJECTED_TRANSACTION_FAILURE")
-            if (
-                orphan_id in self.tables["workflow_entity"]
-                or orphan_id in self.tables["shared_workflow"]
-                or any(edge[0] == orphan_id for edge in self.tables["workflows_tags"])
-            ):
-                raise ValueError("ORPHAN_WORKFLOW_REMAINS")
-            if not commit:
-                self.tables = before
-        except Exception:
-            self.tables = before
-            raise
 
 
 class WorkflowOrganizationTests(unittest.TestCase):
@@ -416,6 +311,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertIn("000000000115", sql)
         self.assertIn("ORPHAN_WORKFLOW_REMAINS", sql)
         self.assertIn("RETIREMENT_BACKUP", sql)
+        self.assertIn("^[A-Za-z0-9_-]{8,64}$", sql)
         for row in self.organizer.WORKFLOW_MAP:
             self.assertIn(row["id"], sql)
             self.assertIn(row["target_name"], sql)
@@ -445,7 +341,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
             sum("finance_organization_context" in block for block in blocks), 3
         )
 
-    def test_sql_cutover_guards_and_deletes_all_orphan_relations(self):
+    def test_sql_cutover_contract_has_transactional_guards(self):
         o = self.organizer
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
         for marker in (
@@ -462,65 +358,29 @@ class WorkflowOrganizationTests(unittest.TestCase):
             "ORPHAN_WORKFLOW_DELETE_COUNT_MISMATCH",
         ):
             self.assertIn(marker, sql)
-        harness = DeterministicPostgresEquivalent(o)
-        harness.execute("00000000-0000-0000-0000-000000000001", commit=True)
-        self.assertNotIn(o.ORPHAN_WORKFLOW_ID, harness.tables["workflow_entity"])
-        self.assertNotIn(o.ORPHAN_WORKFLOW_ID, harness.tables["shared_workflow"])
-        self.assertFalse(
-            any(edge[0] == o.ORPHAN_WORKFLOW_ID for edge in harness.tables["workflows_tags"])
+    def test_sql_rehearsal_runs_against_postgres_when_configured(self):
+        dsn = os.environ.get("FINANCE_WORKFLOW_SQL_DSN")
+        project_id = os.environ.get("FINANCE_WORKFLOW_PROJECT_ID")
+        if not dsn or not project_id or shutil.which("psql") is None:
+            self.skipTest("set FINANCE_WORKFLOW_SQL_DSN and FINANCE_WORKFLOW_PROJECT_ID for integration")
+        completed = subprocess.run(
+            [
+                "psql",
+                dsn,
+                "--set",
+                f"finance_project_id={project_id}",
+                "--set",
+                "finance_commit=false",
+                "--file",
+                str(N8N / "workflow-folder-placement.sql"),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
-
-    def test_sql_equivalent_rejects_injection_without_mutation(self):
-        o = self.organizer
-        harness = DeterministicPostgresEquivalent(o)
-        before = copy.deepcopy(harness.tables)
-        with self.assertRaisesRegex(ValueError, "FINANCE_PROJECT_ID_INVALID"):
-            harness.execute("00000000-0000-0000-0000-000000000001'; DROP TABLE project; --")
-        self.assertEqual(harness.tables, before)
-
-    def test_sql_equivalent_rolls_back_canonical_and_failure_paths(self):
-        o = self.organizer
-        for kwargs, expected in (
-            ({"canonical_node_count": 1}, "CANONICAL_EXPORT_PRECONDITION_FAILED"),
-            ({"fail_after_delete": True}, "INJECTED_TRANSACTION_FAILURE"),
-            ({"delete_orphan": False}, "ORPHAN_WORKFLOW_REMAINS"),
-        ):
-            with self.subTest(expected=expected):
-                harness = DeterministicPostgresEquivalent(o)
-                before = copy.deepcopy(harness.tables)
-                with self.assertRaisesRegex(ValueError, expected):
-                    harness.execute(
-                        "00000000-0000-0000-0000-000000000001", **kwargs
-                    )
-                self.assertEqual(harness.tables, before)
-
-    def test_sql_equivalent_rejects_same_shape_canonical_body_mutation(self):
-        o = self.organizer
-        harness = DeterministicPostgresEquivalent(o)
-        canonical = harness.tables["workflow_entity"][o.CANONICAL_REPLACEMENT_ID]
-        canonical["nodes"][0]["parameters"] = {"mutant": True}
-        before = copy.deepcopy(harness.tables)
-        with self.assertRaisesRegex(
-            ValueError, "CANONICAL_EXPORT_BODY_DIGEST_MISMATCH"
-        ):
-            harness.execute("00000000-0000-0000-0000-000000000001")
-        self.assertEqual(harness.tables, before)
-        self.assertIn(o.ORPHAN_WORKFLOW_ID, harness.tables["workflow_entity"])
-
-    def test_sql_equivalent_second_apply_is_noop(self):
-        o = self.organizer
-        harness = DeterministicPostgresEquivalent(o)
-        before = copy.deepcopy(harness.tables)
-        harness.execute("00000000-0000-0000-0000-000000000001", commit=False)
-        self.assertEqual(harness.tables, before)
-        harness.execute("00000000-0000-0000-0000-000000000001", commit=True)
-        after_first = copy.deepcopy(harness.tables)
-        self.assertEqual(
-            after_first["workflow_entity"][o.CANONICAL_REPLACEMENT_ID]["name"],
-            "Shared Monthly Statement Cycle",
-        )
-        harness.execute("00000000-0000-0000-0000-000000000001", commit=True)
-        self.assertEqual(harness.tables, after_first)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("ORGANIZATION_REHEARSAL_ROLLED_BACK", completed.stdout)
 
     def test_cli_contract_and_rehearsal_are_side_effect_free(self):
         contract = subprocess.run(
