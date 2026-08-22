@@ -292,7 +292,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "16-operations-error-handler.json": {
         "nodes": 13, "sticky": 0,
         "node_ids_sha256": "6d4bb1d21f537808601ee5ba2e7d266d1f2d940712b21bfbc92bd796175f1738",
-        "parameters_sha256": "8888e46e5579d9be4d627a36331d2c18fbcd9691df3ff3a2a65e22b27556d509",
+        "parameters_sha256": "685d537bd9984963f195617aa4b7cf679624e385c52289863f994c5a9815757e",
     },
     "17-actual-outbox-recovery.json": {
         "nodes": 3, "sticky": 0,
