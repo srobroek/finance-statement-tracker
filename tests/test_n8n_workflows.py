@@ -1655,19 +1655,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         matrix = load_json(N8N / "data-table-migration-matrix.json")
         contract = {
             "target_tables": matrix["targets"],
-            # The W19 guard emits the canonical n8n Data Table column-array
-            # shape; keep the executable fixture aligned with that runtime
-            # payload rather than only exercising the matrix's map shape.
-            "target_schemas": {
-                target: {
-                    **schema,
-                    "columns": [
-                        {"name": field, "type": definition["type"]}
-                        for field, definition in schema["columns"].items()
-                    ],
-                }
-                for target, schema in matrix["target_schemas"].items()
-            },
+            "target_schemas": matrix["target_schemas"],
             "target_schema_digest": workflow["meta"]["targetSchemaDigest"],
         }
         created = {
