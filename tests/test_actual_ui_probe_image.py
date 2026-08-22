@@ -112,7 +112,7 @@ class ActualUiProbeImageTests(unittest.TestCase):
         for required in (
             "schema_version: 2",
             "api: apiProof.result",
-            "ui: { accounts: expected.accounts, representative_transactions: uiTransactions }",
+            "ui: { accounts: canonicalizeAccounts(expected.accounts), representative_transactions: canonicalUiTransactions }",
             "expected_envelope: expectedEnvelopeEvidence",
             "ACTUAL_RESTORE_CHECKPOINT_PATH",
             "await writeFile(checkpointPath",

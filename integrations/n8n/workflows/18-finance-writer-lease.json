@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000018",
-  "name": "Finance · Fenced Actual Writer Lease · Setup Required",
+  "name": "Finance · Fenced Actual Writer Lease",
   "active": false,
   "nodes": [
     {
@@ -187,22 +187,6 @@
       "parameters": {
         "jsCode": "// Purpose: Validate Lease Result. Keep this deterministic and fail closed.\nconst req = $('Validate Fixed Lease Operation').first().json, row = $json;\nif (req.operation === 'ACQUIRE') {\n    if (!row.lease_id || Number(row.fencing_token) <= 0 || new Date(row.expires_at) <= new Date())\n        throw new Error('WRITER_LEASE_BUSY_OR_INVALID');\n    return [{ json: { operation: 'ACQUIRE', resource_key: String(row.resource_key), lease_id: String(row.lease_id), lease_owner: String(row.lease_owner), fencing_token: Number(row.fencing_token), expires_at: String(row.expires_at) } }];\n}\nif (req.operation === 'ASSERT' && row.valid !== true)\n    throw new Error('WRITER_LEASE_STALE');\nif (req.operation === 'RELEASE' && row.released !== true)\n    throw new Error('WRITER_LEASE_RELEASE_FAILED');\nreturn [{ json: { operation: req.operation, resource_key: req.resource_key, lease_id: req.lease_id, fencing_token: req.fencing_token, valid: row.valid === true, released: row.released === true } }];\n"
       }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000018-generated-note-1",
-      "name": "Stage 1 · Trusted Lease Request to Validate Lease Result",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Trusted Lease Request → Validate Lease Result\n**Input:** Trusted Lease Request  ·  **Output:** Validate Lease Result  ·  **Nodes:** 1–7\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
     }
   ],
   "connections": {
@@ -312,8 +296,8 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000007",
-      "name": "07 Operations & Recovery",
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [

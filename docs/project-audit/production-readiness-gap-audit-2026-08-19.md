@@ -12,9 +12,9 @@ The finance tracker is **not ready for production promotion**.
 
 The deterministic core is materially implemented and the current local code
 suites are green. Actual note-v2 and transaction semantics have a strong
-read-only full-corpus result, the finance custom nodes and bounded Codex runner
+read-only full-corpus result, the finance custom nodes and bounded subscription adapter
 pass their local suites, and the n8n exports now form a coherent inactive
-21-workflow specification. Those facts do not prove the current bytes in the
+19-workflow specification. Those facts do not prove the current bytes in the
 target runtime. The remaining blockers cross financial correctness, current
 Actual state, credentials, workflow execution, account completeness, recovery,
 and public/mobile acceptance.
@@ -43,7 +43,7 @@ against later issuer evidence without a synthetic balancing row.
 | Actual adapter/parser core for ADCB, EI and Wio | **Implemented + verified (code/fixtures)** | `config/statement-sources.json`; parser/projection tests; finance-node suite 21/21 | No current n8n execution through archive, extraction, outbox, writer, and Actual readback |
 | RAK and Standard Chartered statements | **Missing** | Both are explicit `PLACEHOLDER` sources | Capture real statement/email fixtures, implement adapters, tie balances, and pass replay/reconciliation |
 | Actual corpus note-v2 and transaction semantics | **Implemented + verified (read-only corpus)** | `config/evidence/actual-corpus-migration-dry-run-2026-08-19.json`: 45 manifests, 3,927 unique IDs, zero amount/sign mutations, zero note violations; two known EI Amazon credits are refunds | Review 877 semantic/note deltas, 28 manual-category conflicts, and 15 snapshot-missing identities; replay current plan twice in disposable Actual; separately authorize production delta and verify UI/API |
-| Actual full import and writer path | **Implemented-unverified** | Exact-state writer, cross-source suppression, manual-state checks, and offline Actual integration pass | No current full corpus replay through the 21-workflow n8n path; no writer-lease concurrency/kill/recovery receipt; no current production UI/API parity |
+| Actual full import and writer path | **Implemented-unverified** | Exact-state writer, cross-source suppression, manual-state checks, and offline Actual integration pass | No current full corpus replay through the 19-workflow n8n path; no writer-lease concurrency/kill/recovery receipt; no current production UI/API parity |
 | Classification/review queue | **Implemented-unverified** | Static/history/scoped-AI ownership and locked-field tests pass | No current full disposable and production exception report proving every unresolved row appears exactly once and every manual override survives |
 | Live cashback event store and arithmetic | **Implemented + verified (unit/retained fixture scope)** | Provisional events, dedupe, cursor heartbeat, refunds/reversals, reconciliation/finalization guards, alerts, routing, and push-store tests pass | Current deployed service health/state and n8n cutover were not read back in this audit; statement-only finalization still depends on missing RAK/SC statement sources |
 | Live notification sources | **Partial** | RAK is `ACTIVE`; historical cursor receipts show accepted RAK messages; unsupported formats fail closed | SC remains a placeholder; no current source-to-n8n-to-companion execution receipt; EI is intentionally statement-only and Wio is outside live cashback |
@@ -59,7 +59,7 @@ against later issuer evidence without a synthetic balancing row.
 | n8n workflow specification | **Implemented + verified (static)** | 21 JSON exports are inactive; registry/export bijection, cursor windows, one terminal cursor commit, durable outbox transitions, error redaction, and 17/17 `From list` subworkflow selectors pass tests | Registry correctly remains `SPEC_ONLY`; static graph tests do not prove importability or behavior in the current exact image |
 | n8n Data Tables | **Implemented-unverified for current bytes** | v4 contract declares 15 operational tables; every table is connected; generated bootstrap is current; older `fa8fd58` receipt reports 15 tables created | Current workflow 19 and policy seeds changed after that receipt; logical keys are not database uniqueness proof; current seed/readback, concurrency, retention approval, and restart/restore evidence are absent |
 | Microsoft OAuth | **Implemented-unverified (connection scope)** | Current n8n operator readback during this audit reports Outlook credential `NcQo00WO7GQ3qYyA` connected with delegated `Mail.Read` and Drive credential `eSnL069pIlzjFj4B` connected with delegated `Files.ReadWrite` | The live project still has a stale 19-workflow set. Exact-current import, durable binding/readback, token refresh, canonical Finance Evidence root readback, and real workflow execution receipts are still pending |
-| Subscription community agents | **Implemented-unverified** | Integrity-pinned ProDex 0.5.1 and Claude 0.8.0 register in an older local image; bounded Codex runner suite passes 16/16 | No current exact-image device/subscription login, no Claude no-session proof, no real workflow-09/21 proposal, no malicious negative runtime matrix, and no three consecutive schema-valid receipts |
+| Subscription community agents | **Implemented-unverified** | Integrity-pinned ProDex 0.5.1 and Claude 0.8.0 register in an older local image; subscription adapter contract coverage exists | No current exact-image device/subscription login, no Claude no-session proof, no real workflow-09/21 proposal, no malicious negative runtime matrix, and no three consecutive schema-valid receipts |
 | Bounded MCP facade | **Implemented-unverified** | Static tests prove fixed operation codes, durable request receipts, and no caller-selected URL/path/credential/write flag | No MCP Server Trigger execution from a real client and no Cloudflare Service Auth route/negative test |
 | Runtime images and task runners | **Implemented-unverified for current commit** | Source/integrity pins, immutable extension checks, runner closure, Cloudflared artifact contracts and local image scans exist; focused contract suite passes 64 tests with six Windows symlink skips | Latest local image/CLI receipt is commit `fa8fd58`; current head changes workflows 09/19/21 and AI schemas. Current image builds, scans, SBOMs, protocol smokes, and immutable digests are absent |
 | Cloudflare/network/secrets | **Implemented-unverified** | Hardened designs and source-locked Cloudflared artifact exist | Platform status explicitly says compose, restore, routes and MCP facade are unvalidated; dedicated vault rotation/injection, provider egress, Access/Service Auth, origin headers, and two-replica route proof are absent |
@@ -181,7 +181,7 @@ with hash-preserving catalogue updates before promotion.
 
 Static state is coherent and conservative:
 
-- 21 workflows, all inactive and tagged setup-required;
+- 19 workflows, all inactive and tagged setup-required;
 - 15 Data Tables with explicit retention/idempotency/concurrency contracts;
 - all declared tables are referenced by connected executable nodes;
 - all 17 Execute Sub-workflow nodes use n8n `From list` mode, stable workflow
@@ -194,7 +194,7 @@ Static state is coherent and conservative:
 The current registry intentionally records zero import, fixture, disposable and
 production validations. A retained local receipt at `fa8fd58` proves an exact
 n8n 2.36.2 image registered eight extension nodes/three credentials, imported
-21 inactive workflows, and created 15 tables with no production mounts or
+19 inactive workflows, and created 15 tables with no production mounts or
 writes. It is not current-byte proof: after `fa8fd58`, workflows 09, 19 and 21,
 the AI proposal schema, policy seed, platform bootstrap manifest and fixtures
 changed.
@@ -213,7 +213,7 @@ only planned Drive mutation if the canonical root is absent; no delete or
 broad/send permission is authorized.
 
 Community packages are pinned and registered in the older image, and the
-separate bounded Codex runner now passes its 16 tests. Neither provider is
+the bounded subscription adapter contract now passes its focused tests. Neither provider is
 runtime accepted: there is no ProDex device-login readback, no Claude
 subscription/no-session proof, no current workflow 09→21 execution, and no
 three consecutive schema-valid proposal receipts. The MCP facade likewise has
@@ -228,7 +228,7 @@ Local verification performed in this audit:
 | `python -m unittest discover -s tests -v` | **PASS** — 378 tests, 6 skipped |
 | `npm test` in `integrations/actual` | **PASS** — 48 tests |
 | `npm test` in `packages/n8n-nodes-finance` | **PASS** — 21 tests plus build |
-| `npm test` in `services/codex-agent-runner` | **PASS** — 16 tests |
+| Subscription adapter contract tests | **PASS** — repository contract coverage; provider execution remains unverified |
 | Focused n8n/image/runner/Cloudflared/deployment Python suite | **PASS** — 64 tests, 6 Windows symlink skips |
 | `python scripts/verify-project-acceptance.py` | **PASS only for ledger schema validity** — 26 requirements; it does not execute their verifiers |
 | `python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json` | **BLOCKED** — evidence bundle unavailable; no writes allowed |
@@ -283,7 +283,7 @@ These artifacts remain useful history but cannot prove the current end state:
    generate SBOMs, publish immutable digests, and generate a current lock.
 7. Complete least-privilege Outlook/OneDrive and statement/Actual credentials
    in disposable with the user present. Verify scopes without exposing secrets.
-8. Import all 21 workflows inactive, place folders, bootstrap all 15 current
+8. Import all 19 workflows inactive, place folders, bootstrap all 15 current
    tables/seeds, and read them back exactly. Execute the resilience/security
    fixture matrix, including zero/101-page/late-order/pagination failure,
    duplicate delivery, writer concurrency, kill-after-Actual, restart, backup,

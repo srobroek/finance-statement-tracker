@@ -4,16 +4,16 @@ set -euo pipefail
 [[ "${FINANCE_MICROSOFT_OAUTH_PROOF_ACK:-}" == "RUN_TRANSIENT_WF23_ONLY" ]] || { echo "Set FINANCE_MICROSOFT_OAUTH_PROOF_ACK=RUN_TRANSIENT_WF23_ONLY" >&2; exit 1; }
 [[ "$(id -u)" != "0" ]] || { echo "Run as the rootless stack owner, not root" >&2; exit 1; }
 
-readonly source_commit="f2f8d772bb3f397278d4aa5ded8c741a71d73466"
-readonly source_sha256="2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
+readonly source_commit="b3bce6e197c6603d3e8708156bed987f26ac8513"
+readonly source_sha256="879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 readonly prior_promoted_commit="00491aae2ab43c486f3a9b4a62ce3ba5e63032f6"
 readonly expected_project="finance-n8n-disposable-20260819155134"
 readonly expected_project_id="gT5rxq26L0PoNUWX"
 readonly workflow_id="10000000-0000-4000-8000-000000000023"
 readonly companion_setup_id="10000000-0000-4000-8000-000000000022"
 readonly workflow_name="Finance · Microsoft OAuth Refresh Proof · Manual Read Only"
-readonly folder_id="f1000000-0000-4000-8000-000000000090"
-readonly folder_name="90 Platform & Admin"
+readonly folder_id="f1000000-0000-4000-8000-000000000191"
+readonly folder_name="Shared"
 # n8n 2.36.2 Execute.init() starts a task broker. The retained service already
 # owns 5679, so the transient internal runner uses one reviewed loopback port.
 readonly internal_runner_broker_port="15679"
@@ -214,7 +214,7 @@ metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata firs
 refresh_after_first="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_first}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "First execution did not refresh both expired Microsoft tokens" >&2; exit 1; }
 
 failure_stage="n8n_only_restart"
-services=(postgres task-runners codex-agent-runner pdf-utility)
+services=(postgres task-runners pdf-utility)
 declare -A service_ids_before service_started_before
 for service in "${services[@]}"; do
   service_ids_before["${service}"]="$(docker compose ps -q "${service}")"

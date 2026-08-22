@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+import importlib.util
 import json
 import os
 import sqlite3
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -16,6 +19,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "deploy/actual-poc/restore-actual-disposable.py"
 SCHEMA = ROOT / "config/actual-restore-receipt.schema.json"
+READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
 
 
 def _sqlite(path: Path) -> None:
@@ -392,9 +396,14 @@ class ActualRestoreTests(unittest.TestCase):
             "ui_api_parity",
             "ACTUAL_RESTORE_READBACK_PATH",
             "ACTUAL_RESTORE_READBACK_CONTAINER_PATH",
+            "ACTUAL_RESTORE_CHECKPOINT_PATH",
+            "ACTUAL_RESTORE_CHECKPOINT_CONTAINER_PATH",
+            "failure_checkpoint_payload",
             "readback_probe_output_empty",
             "probe_failure_detail",
             "MAX_READBACK_DIAGNOSTIC",
+            "SAFE_DIAGNOSTIC_LABEL",
+            "stderr_sha256",
             '"production_mutated": False',
             '"secret_values_recorded": False',
             '"network_cleanup_verified": False',
@@ -681,6 +690,242 @@ print(json.dumps({{"api": payload, "ui": payload}}))
             self.assertFalse(list(root.glob("*.network")))
             self.assertFalse(list(root.glob("finance-actual-restore.*")))
 
+    def test_readback_failure_retains_sanitized_mode0600_phase_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            failing_probe = executable(
+                root,
+                "phase-failing-probe",
+                """
+import json
+import os
+import sys
+from pathlib import Path
+
+checkpoint = Path(os.environ["ACTUAL_RESTORE_CHECKPOINT_PATH"])
+checkpoint.parent.mkdir(parents=True, exist_ok=True)
+checkpoint.write_text(json.dumps({"label": "probe_failure", "secret": "checkpoint-secret-sentinel"}), encoding="utf-8")
+print("playwright failure token=stderr-secret-sentinel", file=sys.stderr)
+raise SystemExit(23)
+""",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=failing_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            retained = [Path(path) for path in receipt["cleanup"]["retained_paths"]]
+            checkpoint = root / "phase-checkpoint-1.json"
+            self.assertIn(checkpoint, retained)
+            self.assertTrue(checkpoint.is_file())
+            self.assertEqual(checkpoint.stat().st_mode & 0o777, 0o600)
+            phase = json.loads(checkpoint.read_text(encoding="utf-8"))
+            self.assertEqual(phase["schema_version"], 1)
+            self.assertEqual(phase["status"], "failed")
+            self.assertEqual(phase["run_index"], 1)
+            self.assertEqual(phase["phase"], "readback")
+            self.assertEqual(phase["code"], "readback_probe_failed")
+            self.assertEqual(phase["exit_code"], 23)
+            self.assertIn("playwright", phase["diagnostic"])
+            self.assertNotIn("checkpoint-secret-sentinel", checkpoint.read_text(encoding="utf-8"))
+            self.assertNotIn("stderr-secret-sentinel", checkpoint.read_text(encoding="utf-8"))
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertTrue(receipt["cleanup"]["outer_temp_root_removed"])
+
+    def test_readback_failure_retains_phase_checkpoint_when_cleanup_is_uncertain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            failing_probe = executable(
+                root,
+                "phase-failing-probe",
+                """
+import json
+import os
+import sys
+from pathlib import Path
+
+checkpoint = Path(os.environ["ACTUAL_RESTORE_CHECKPOINT_PATH"])
+checkpoint.parent.mkdir(parents=True, exist_ok=True)
+checkpoint.write_text(json.dumps({"secret": "cleanup-secret-sentinel"}), encoding="utf-8")
+print("playwright failure token=cleanup-stderr-secret-sentinel", file=sys.stderr)
+raise SystemExit(23)
+""",
+            )
+            result, receipt = self.run_drill(
+                root,
+                fake_runtime(root, cleanup_inspect_failure=True),
+                probe_path=failing_probe,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            checkpoint = root / "phase-checkpoint-1.json"
+            retained = [Path(path) for path in receipt["cleanup"]["retained_paths"]]
+            self.assertIn(checkpoint, retained)
+            self.assertEqual(checkpoint.stat().st_mode & 0o777, 0o600)
+            phase_text = checkpoint.read_text(encoding="utf-8")
+            phase = json.loads(phase_text)
+            self.assertEqual(phase["phase"], "readback")
+            self.assertEqual(phase["exit_code"], 23)
+            self.assertNotIn("cleanup-secret-sentinel", phase_text)
+            self.assertNotIn("cleanup-stderr-secret-sentinel", phase_text)
+            self.assertFalse(receipt["cleanup_verified"])
+            self.assertFalse(receipt["cleanup"]["outer_temp_root_removed"])
+            self.assertTrue(Path(receipt["cleanup"]["outer_temp_root"]).is_dir())
+            self.assertTrue(list(root.glob("*.container")))
+            self.assertTrue(list(root.glob("*.network")))
+
+    def test_readback_schema_accepts_expected_and_probe_payloads(self) -> None:
+        schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        expected = {
+            "schema_version": 1,
+            "accounts": [{"name": "Current", "balance_minor": 100, "closed": False, "offbudget": False}],
+            "representative_transactions": [{
+                "account_name": "Current",
+                "amount_minor": -10,
+                "date": "2026-08-01",
+                "imported_id": "statement:fixture:1",
+                "payee": None,
+            }],
+        }
+        self.assertEqual(list(validator.iter_errors(expected)), [])
+        probe_payload = {key: value for key, value in expected.items() if key != "schema_version"}
+        self.assertEqual(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})), [])
+        probe_payload["accounts"][0]["balance_minor"] = "100"
+        self.assertTrue(list(validator.iter_errors({"api": probe_payload, "ui": probe_payload})))
+
+    def test_readback_digests_use_one_order_for_permuted_and_grouped_transactions(self) -> None:
+        module_spec = importlib.util.spec_from_file_location("restore_actual_disposable_ordering", SCRIPT)
+        self.assertIsNotNone(module_spec)
+        self.assertIsNotNone(module_spec.loader)
+        restore_module = importlib.util.module_from_spec(module_spec)
+        sys.modules[module_spec.name] = restore_module
+        module_spec.loader.exec_module(restore_module)
+        accounts = [
+            {"name": "B", "balance_minor": 20, "closed": False, "offbudget": False},
+            {"name": "A", "balance_minor": 10, "closed": False, "offbudget": False},
+        ]
+        transactions = [
+            {"account_name": "B", "amount_minor": 10, "date": "2026-08-02", "imported_id": "b-2", "payee": None},
+            {"account_name": "A", "amount_minor": 20, "date": "2026-08-01", "imported_id": "a-1", "payee": "Alpha"},
+            {"account_name": "B", "amount_minor": -5, "date": "2026-08-01", "imported_id": "b-1", "payee": "Beta"},
+        ]
+        expected = {"schema_version": 1, "accounts": accounts, "representative_transactions": transactions}
+        probe = {
+            "api": {"accounts": [accounts[1], accounts[0]], "representative_transactions": [transactions[1], transactions[0], transactions[2]]},
+            "ui": {"accounts": [accounts[0], accounts[1]], "representative_transactions": [transactions[2], transactions[1], transactions[0]]},
+        }
+        first = restore_module.validate_readback(probe, expected)
+        probe["api"]["representative_transactions"] = [transactions[2], transactions[0], transactions[1]]
+        probe["ui"]["representative_transactions"] = [transactions[0], transactions[1], transactions[2]]
+        second = restore_module.validate_readback(probe, expected)
+        self.assertEqual(first["api_readback_sha256"], second["api_readback_sha256"])
+        self.assertEqual(first["ui_readback_sha256"], second["ui_readback_sha256"])
+        self.assertEqual(first["api_readback_sha256"], first["ui_readback_sha256"])
+
+    def test_readback_schema_and_runtime_reject_equivalent_malformed_payloads(self) -> None:
+        module_spec = importlib.util.spec_from_file_location("restore_actual_disposable", SCRIPT)
+        self.assertIsNotNone(module_spec)
+        self.assertIsNotNone(module_spec.loader)
+        restore_module = importlib.util.module_from_spec(module_spec)
+        sys.modules[module_spec.name] = restore_module
+        module_spec.loader.exec_module(restore_module)
+        expected_base = {
+            "schema_version": 1,
+            "accounts": [{"name": "Current", "balance_minor": 100, "closed": False, "offbudget": False}],
+            "representative_transactions": [{
+                "account_name": "Current",
+                "amount_minor": -10,
+                "date": "2026-08-01",
+                "imported_id": "statement:fixture:1",
+                "payee": None,
+            }],
+        }
+        probe_base = {
+            "api": copy.deepcopy({key: value for key, value in expected_base.items() if key != "schema_version"}),
+            "ui": copy.deepcopy({key: value for key, value in expected_base.items() if key != "schema_version"}),
+        }
+        schema = json.loads(READBACK_SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        self.assertEqual(list(validator.iter_errors(expected_base)), [])
+        self.assertEqual(list(validator.iter_errors(probe_base)), [])
+        self.assertIsInstance(restore_module.validate_readback(probe_base, expected_base), dict)
+        cases = (
+            ("expected missing", "expected", lambda payload: payload.pop("accounts")),
+            ("expected malformed", "expected", lambda payload: payload["accounts"][0].update(balance_minor="100")),
+            ("expected additional", "expected", lambda payload: payload.update(unexpected=True)),
+            ("api missing", "api", lambda payload: payload.pop("accounts")),
+            ("api malformed", "api", lambda payload: payload["accounts"][0].update(closed="false")),
+            ("api nullable non-payee", "api", lambda payload: payload["accounts"][0].update(name=None)),
+            ("api additional", "api", lambda payload: payload.update(unexpected=True)),
+            ("ui missing", "ui", lambda payload: payload.pop("accounts")),
+            ("ui malformed", "ui", lambda payload: payload["accounts"][0].update(offbudget="false")),
+            ("ui additional", "ui", lambda payload: payload.update(unexpected=True)),
+        )
+        for label, target, mutate in cases:
+            with self.subTest(label=label):
+                expected = copy.deepcopy(expected_base)
+                probe = copy.deepcopy(probe_base)
+                if target == "expected":
+                    mutate(expected)
+                    schema_payload = expected
+                else:
+                    mutate(probe[target])
+                    schema_payload = probe
+                self.assertTrue(list(validator.iter_errors(schema_payload)))
+                with self.assertRaises(restore_module.DrillError):
+                    if target == "expected":
+                        restore_module.validate_readback_contract(expected, label="expected", include_schema_version=True)
+                    else:
+                        restore_module.validate_readback(probe, expected)
+
+    def test_expected_readback_wrong_types_fail_before_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            expected = expected_fixture(root)
+            payload = json.loads(expected.read_text(encoding="utf-8"))
+            payload["accounts"][0]["balance_minor"] = "100"
+            expected.write_text(json.dumps(payload), encoding="utf-8")
+            result, receipt = self.run_drill(root, fake_runtime(root), expected=expected)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_contract_invalid")
+            self.assertEqual(receipt["error"]["stage"], "readback")
+            self.assertIn("expected.accounts.balance_minor has invalid type", receipt["error"]["detail"])
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_api_and_ui_readback_wrong_types_fail_before_normalization(self) -> None:
+        for interface in ("api", "ui"):
+            with self.subTest(interface=interface), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                backup_fixture(root)
+                malformed_probe = executable(
+                    root,
+                    f"malformed-{interface}-probe",
+                    f"""
+import copy
+import json
+payload = {{
+  'accounts': [{{'name': 'Current', 'balance_minor': 100, 'closed': False, 'offbudget': False}}],
+  'representative_transactions': [{{'account_name': 'Current', 'amount_minor': -10, 'date': '2026-08-01', 'imported_id': 'statement:fixture:1', 'payee': 'Merchant'}}]
+}}
+payloads = {{'api': copy.deepcopy(payload), 'ui': copy.deepcopy(payload)}}
+payloads['{interface}']['accounts'][0]['balance_minor'] = '100'
+print(json.dumps(payloads))
+""",
+                )
+                result, receipt = self.run_drill(root, fake_runtime(root), probe_path=malformed_probe)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(receipt["error"]["code"], "readback_contract_invalid")
+                self.assertEqual(receipt["error"]["stage"], "readback")
+                self.assertIn(f"{interface}.accounts.balance_minor has invalid type", receipt["error"]["detail"])
+                self.assertIn("exit_code=0", receipt["error"]["detail"])
+                self.assertTrue(receipt["cleanup_verified"])
+                self.assertFalse(list(root.glob("*.container")))
+                self.assertFalse(list(root.glob("*.network")))
+
     def test_readback_exit_and_stderr_are_persisted_without_secret_values(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -719,6 +964,33 @@ raise SystemExit(9)
             ):
                 self.assertNotIn(sentinel, receipt["error"]["detail"])
                 self.assertNotIn(sentinel, (root / "receipt.json").read_text(encoding="utf-8"))
+            self.assertFalse(receipt["secret_values_recorded"])
+            self.assertTrue(receipt["cleanup_verified"])
+            self.assertFalse(list(root.glob("*.container")))
+            self.assertFalse(list(root.glob("*.network")))
+
+    def test_unlabeled_diagnostic_is_hashed_without_secret_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup_fixture(root)
+            secret_values = (
+                "Current checking account 987654 AED OTP 731942 "
+                "statement-id stmt-20260821-opaque"
+            )
+            unlabeled_probe = executable(
+                root,
+                "unlabeled-secret-probe",
+                f"print({secret_values!r}, file=__import__('sys').stderr); raise SystemExit(17)",
+            )
+            result, receipt = self.run_drill(root, fake_runtime(root), probe_path=unlabeled_probe)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(receipt["error"]["code"], "readback_probe_failed")
+            detail = receipt["error"]["detail"]
+            self.assertIn("exit_code=17", detail)
+            self.assertRegex(detail, r"stderr=(?:<redacted> )?stderr_sha256=[0-9a-f]{64}")
+            for secret in secret_values.split():
+                self.assertNotIn(secret, detail)
+                self.assertNotIn(secret, (root / "receipt.json").read_text(encoding="utf-8"))
             self.assertFalse(receipt["secret_values_recorded"])
             self.assertTrue(receipt["cleanup_verified"])
             self.assertFalse(list(root.glob("*.container")))

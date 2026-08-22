@@ -178,9 +178,10 @@ error class.
 5. **Operations and recovery** — Error Trigger, missed-window sweeps, stale
    cursor detection, statement-not-received warnings, execution retention, and
    MCP-readable diagnostic workflows.
-6. **Interactive browser acquisition** — FAB, Sarwa, and Amazon remain
-   user-assisted. Their reviewed capture/export artifacts enter the same parse,
-   normalize, rule, validate, and Actual-write sub-workflows.
+6. **Interactive browser acquisition** — FAB and Sarwa remain user-assisted.
+   Their reviewed capture/export artifacts enter the same parse, normalize,
+   rule, validate, and Actual-write sub-workflows. Amazon and other merchant
+   order evidence uses the generic Outlook email-enrichment path.
 7. **Sweep Outlook messages** — separate attachment-free bounded mail reader for
    live transaction notifications. This prevents live card alerts from being
    coupled to statement/PDF acquisition.

@@ -3,15 +3,20 @@ import test from "node:test";
 
 import {
   assertCommitEnabled,
+  canonicalActualImportProjection,
+  compareActualImportProjections,
   doctor,
   enrichTransactions,
   exportDashboardDocument,
+  fetchActualTransferRows,
+  findUnexpectedActualImportRows,
   partitionCrossSourceStatementDuplicates,
   repairTransactions,
   resolveSplitChildren,
   resolvePortableReferences,
   selectRetiredRuleIds,
   selectStageMigrationRuleIds,
+  validateActualTransferCounterparts,
   validateTransactionRepairPlan,
   validateTransactionEnrichmentPlan,
 } from "./actualctl.mjs";
@@ -113,6 +118,258 @@ test("Actual commit requires the explicit production write gate", () => {
     () => assertCommitEnabled(true, {}),
     /Actual commits are disabled/,
   );
+});
+
+test("import readback compares the complete canonical economic projection", () => {
+  const source = {
+    imported_id: "statement:fixture:1",
+    date: "2026-08-16",
+    amount: -12345,
+    imported_payee: "MERCHANT RAW",
+    payee_name: "Merchant",
+    category: "category-shopping",
+    notes: "#shopping",
+    reconciled: true,
+    transfer_id: "transfer-peer",
+  };
+  const expected = canonicalActualImportProjection(source, {
+    account: "account-1",
+    defaultCleared: true,
+  });
+  const observed = canonicalActualImportProjection({
+    ...source,
+    account: "account-1",
+    payee_name: undefined,
+    payee: "payee-1",
+    cleared: true,
+  }, { account: "account-1", payeeName: "Merchant" });
+
+  const result = compareActualImportProjections([expected], [observed]);
+  assert.deepEqual(result.missing, []);
+  assert.deepEqual(result.duplicated, []);
+  assert.deepEqual(result.duplicate_expected, []);
+  assert.deepEqual(result.mismatches, []);
+});
+
+test("import readback resolves API payee_id and payee-driven transfer semantics", () => {
+  const payees = new Map([
+    ["payee-transfer", { id: "payee-transfer", name: "Savings transfer", transfer_acct: "account-2" }],
+  ]);
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    imported_payee: "SAVINGS TRANSFER",
+    payee: "payee-transfer",
+    category: null,
+    notes: "",
+    cleared: true,
+  }, { account: "account-1", payees, expectGeneratedTransfer: true });
+  const observed = canonicalActualImportProjection({
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    imported_payee: "SAVINGS TRANSFER",
+    payee_id: "payee-transfer",
+    category: null,
+    notes: null,
+    cleared: true,
+    transfer_id: "transaction-counterpart",
+  }, { payees });
+  assert.deepEqual(compareActualImportProjections([expected], [observed]).mismatches, []);
+  assert.deepEqual(
+    compareActualImportProjections([expected], [{ ...observed, transfer: { linked: false, account: "account-2" } }]).mismatches,
+    [{ imported_id: "statement:transfer:source", fields: ["transfer"] }],
+  );
+});
+
+test("batch readback allows rows expected by overlapping envelopes", () => {
+  const rows = [
+    { id: "row-a", imported_id: "a" },
+    { id: "row-b", imported_id: "b" },
+  ];
+  assert.deepEqual(
+    findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: new Set(["a", "b"]),
+      baselineRowIds: new Set(),
+    }),
+    [],
+  );
+  assert.deepEqual(
+    findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: new Set(["a"]),
+      baselineRowIds: new Set(),
+    }),
+    ["b"],
+  );
+});
+
+test("transfer readback requires reciprocal cross-account inverse rows", () => {
+  const payees = new Map([
+    ["payee-transfer", { name: "Savings transfer", transfer_acct: "account-2" }],
+  ]);
+  const source = {
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -500,
+    payee_id: "payee-transfer",
+    transfer_id: "transaction-counterpart",
+  };
+  const counterpart = {
+    id: "transaction-counterpart",
+    account: "account-2",
+    date: "2026-08-16",
+    amount: 500,
+    transfer_id: "transaction-source",
+  };
+  assert.deepEqual(validateActualTransferCounterparts([source], [source, counterpart], payees), []);
+  assert.deepEqual(
+    validateActualTransferCounterparts([source], [source, { ...counterpart, amount: 499 }], payees),
+    [{ imported_id: source.imported_id, fields: ["transfer.inverse_amount"] }],
+  );
+  assert.deepEqual(
+    validateActualTransferCounterparts([source], [source, { ...counterpart, account: "account-1" }], payees),
+    [{ imported_id: source.imported_id, fields: ["transfer.account", "transfer.payee_account"] }],
+  );
+});
+
+test("transfer readback refreshes a cached sibling account over the union range", async () => {
+  const source = {
+    id: "transaction-source",
+    imported_id: "statement:transfer:source",
+    account: "account-source",
+    date: "2026-08-16",
+    amount: -500,
+    transfer_id: "transaction-counterpart",
+  };
+  const counterpart = {
+    id: "transaction-counterpart",
+    account: "account-target",
+    date: "2026-08-16",
+    amount: 500,
+    transfer_id: "transaction-source",
+  };
+  const sibling = {
+    id: "transaction-sibling",
+    account: "account-target",
+    date: "2026-09-01",
+    amount: -25,
+    imported_id: "statement:target:sibling",
+  };
+  const calls = [];
+  const api = {
+    getTransactions: async (account, start, end) => {
+      calls.push([account, start, end]);
+      return account === "account-target" ? [counterpart, sibling] : [source];
+    },
+  };
+  const rowsByAccount = await fetchActualTransferRows(
+    api,
+    [{ id: "account-source" }, { id: "account-target" }],
+    "2026-08-16",
+    "2026-09-01",
+    new Map([
+      ["account-source", [source]],
+      ["account-target", [sibling]],
+    ]),
+  );
+
+  assert.deepEqual(calls, [
+    ["account-source", "2026-08-16", "2026-09-01"],
+    ["account-target", "2026-08-16", "2026-09-01"],
+  ]);
+  assert.deepEqual(
+    validateActualTransferCounterparts(
+      [source],
+      [...rowsByAccount.values()].flat(),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    rowsByAccount.get("account-target").map(row => row.id),
+    ["transaction-sibling", "transaction-counterpart"],
+  );
+});
+
+test("import readback detects drift in every economic field", () => {
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:fixture:1",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: -12345,
+    imported_payee: "MERCHANT RAW",
+    payee_name: "Merchant",
+    category: "category-shopping",
+    notes: "#shopping",
+    cleared: true,
+    reconciled: false,
+    transfer_id: null,
+  });
+  const observed = { ...expected };
+  const mutations = {
+    account: "account-2",
+    date: "2026-08-17",
+    amount: -12346,
+    imported_payee: "OTHER RAW",
+    payee: "Other Merchant",
+    category: "category-travel",
+    notes: "#travel",
+    cleared: false,
+    reconciled: true,
+    transfer: { linked: true, account: "account-2" },
+  };
+  for (const [field, value] of Object.entries(mutations)) {
+    const result = compareActualImportProjections(
+      [expected],
+      [{ ...observed, [field]: value }],
+    );
+    assert.equal(result.mismatches.length, 1, `expected ${field} drift to fail`);
+    assert.deepEqual(result.mismatches[0].fields, [field]);
+  }
+});
+
+test("import readback detects missing and duplicate imported rows deterministically", () => {
+  const expected = [
+    canonicalActualImportProjection({ imported_id: "b", account: "account-1", date: "2026-08-16", amount: -2 }),
+    canonicalActualImportProjection({ imported_id: "a", account: "account-1", date: "2026-08-15", amount: -1 }),
+  ];
+  const observed = [{ ...expected[1] }, { ...expected[1] }];
+  const result = compareActualImportProjections(expected, observed);
+  assert.deepEqual(result.missing, ["b"]);
+  assert.deepEqual(result.duplicated, ["a"]);
+  assert.deepEqual(result.expected.map(row => row.imported_id), ["a", "b"]);
+});
+
+test("import readback normalizes null optional fields and default clearing", () => {
+  const expected = canonicalActualImportProjection({
+    imported_id: "statement:fixture:nulls",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: 1,
+    imported_payee: null,
+    category: null,
+    notes: null,
+    reconciled: null,
+    transfer_id: null,
+  }, { account: "account-1", defaultCleared: true });
+  const observed = canonicalActualImportProjection({
+    imported_id: "statement:fixture:nulls",
+    account: "account-1",
+    date: "2026-08-16",
+    amount: 1,
+    imported_payee: undefined,
+    category: undefined,
+    notes: undefined,
+    reconciled: undefined,
+    transfer_id: "",
+    cleared: true,
+  });
+  assert.deepEqual(compareActualImportProjections([expected], [observed]).mismatches, []);
 });
 
 test("native classification rules migrate from pre to Actual default without touching unrelated rules", () => {

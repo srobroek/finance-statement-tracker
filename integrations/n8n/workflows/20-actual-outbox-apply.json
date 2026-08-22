@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000020",
-  "name": "Finance · Apply Prepared Actual Outbox · Setup Required",
+  "name": "Finance · Apply Prepared Actual Outbox",
   "active": false,
   "nodes": [
     {
@@ -205,7 +205,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -347,7 +347,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -694,7 +694,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000018",
           "mode": "list",
-          "cachedResultName": "Finance · Fenced Actual Writer Lease · Setup Required"
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -1039,70 +1039,6 @@
         },
         "includeOtherFields": false,
         "options": {}
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000020-generated-note-1",
-      "name": "Stage 1 · Prepared Outbox Input to Acquire Recovery Writer Fence",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Prepared Outbox Input → Acquire Recovery Writer Fence\n**Input:** Prepared Outbox Input  ·  **Output:** Acquire Recovery Writer Fence  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000020-generated-note-2",
-      "name": "Stage 2 · Build Fenced Recovery Envelope to Upsert ACTUAL OBSERVED Recovery",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Build Fenced Recovery Envelope → Upsert ACTUAL OBSERVED Recovery\n**Input:** Build Fenced Recovery Envelope  ·  **Output:** Upsert ACTUAL OBSERVED Recovery  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000020-generated-note-3",
-      "name": "Stage 3 · Read Back ACTUAL OBSERVED Recovery to Read Back VERIFIED Recovery",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        580
-      ],
-      "parameters": {
-        "content": "## Stage 3 · Read Back ACTUAL OBSERVED Recovery → Read Back VERIFIED Recovery\n**Input:** Read Back ACTUAL OBSERVED Recovery  ·  **Output:** Read Back VERIFIED Recovery  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000020-generated-note-4",
-      "name": "Stage 4 · Upsert COMMITTED Recovery to Return Verified Commit Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        960
-      ],
-      "parameters": {
-        "content": "## Stage 4 · Upsert COMMITTED Recovery → Return Verified Commit Receipt\n**Input:** Upsert COMMITTED Recovery  ·  **Output:** Return Verified Commit Receipt  ·  **Nodes:** 25–29\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
       }
     }
   ],
@@ -1539,8 +1475,8 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000005",
-      "name": "05 Actual Ledger",
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [

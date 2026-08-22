@@ -50,7 +50,8 @@ quarantined run never advances a cursor and never creates a balancing entry.
 n8n owns the twice-daily/live notification scans and issuer-specific monthly
 statement workflows. An overlap cursor catches missed runs. Statement periods
 close per card only after the expected statement arrives and reconciles.
-Interactive FAB, Sarwa, and Amazon acquisition remains user-assisted.
+Interactive FAB and Sarwa acquisition remains user-assisted. Amazon and other
+merchant order evidence uses generic Outlook email enrichment.
 
 ## Monitoring
 

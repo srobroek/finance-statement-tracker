@@ -79,7 +79,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 {"id": "finance-statement-tracker", "source_commit": "a" * 40},
             )
             self.assertEqual(manifest["workflows"]["directory"], "workflows")
-            self.assertEqual(len(manifest["workflows"]["files"]), 21)
+            self.assertEqual(len(manifest["workflows"]["files"]), 19)
             self.assertEqual(manifest["workflows"]["files"], sorted(manifest["workflows"]["files"]))
             self.assertTrue(manifest["workflows"]["inactive"])
             self.assertFalse(manifest["workflows"]["published"])
@@ -121,13 +121,15 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
 
     def test_workflow_count_and_folder_contract_are_exact(self) -> None:
         registry_rows = self.registry["workflows"]
-        self.assertEqual(len(registry_rows), 21)
+        self.assertEqual(len(registry_rows), 19)
         registry_codes = {row["code"] for row in registry_rows}
-        mapped_codes = [code for folder in self.folders["folders"] for code in folder["workflow_codes"]]
-        self.assertEqual(len(mapped_codes), 21)
+        folder_rows = self.folders["workflows"]
+        mapped_codes = [row["code"] for row in folder_rows]
+        self.assertEqual(len(mapped_codes), 19)
         self.assertEqual(len(mapped_codes), len(set(mapped_codes)))
         self.assertEqual(set(mapped_codes), registry_codes)
-        by_code = {code: folder for folder in self.folders["folders"] for code in folder["workflow_codes"]}
+        folders_by_id = {folder["id"]: folder for folder in self.folders["folders"]}
+        by_code = {row["code"]: folders_by_id[row["folder_id"]] for row in folder_rows}
         for row in registry_rows:
             workflow = load_json(WORKFLOWS / row["file"])
             code = workflow["meta"]["financeWorkflowCode"]
@@ -149,7 +151,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         self.assertEqual(manifest["application"], {"name": "finance-statement-tracker", "repository": "srobroek/finance-statement-tracker"})
         self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
         self.assertIsNone(manifest["finance_commit"])
-        self.assertEqual(manifest["inactive_corpus"]["file_count"], 21)
+        self.assertEqual(manifest["inactive_corpus"]["file_count"], 19)
         self.assertEqual(manifest["workflow_manifest"]["path"], "integrations/n8n/pipeline-registry.json")
         self.assertEqual(manifest["fixture_manifest"]["path"], "integrations/n8n/disposable/fixture-manifest.json")
         self.assertEqual(manifest["workflow_manifest"]["sha256"], sha256(N8N / "pipeline-registry.json"))

@@ -5,7 +5,7 @@ import json
 import re
 import sqlite3
 from contextlib import closing
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterable
@@ -26,6 +26,20 @@ ACTIVE_STATUSES = frozenset({"ACTIVE"})
 VALID_STATUSES = ACTIVE_STATUSES | {"IGNORED", "REVERSED"}
 VALID_EVENT_TYPES = CASHBACK_TOPICS
 VALID_RECONCILIATION_STATUSES = frozenset({"UNMATCHED", "MATCHED", "VARIANCE", "RECONCILED"})
+# An event's canonical economics are immutable observations from an upstream
+# source.  Enrichment and reconciliation metadata may change independently, so
+# they are intentionally excluded from replay identity.  A source replay must
+# never overwrite those fields either; intentional economic changes go through
+# ``correct_event`` and its audit row.
+EVENT_CANONICAL_FIELDS = (
+    "occurred_at",
+    "card_code",
+    "amount_aed_minor",
+    "currency",
+    "merchant",
+    "event_type",
+    "reversal_of",
+)
 CORRECTABLE_EVENT_FIELDS = frozenset(
     {
         "occurred_at",
@@ -441,7 +455,7 @@ def _iso_datetime(value: object) -> str:
         raise ValueError("occurred_at is required")
     parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed.isoformat()
 
 
@@ -851,10 +865,29 @@ class CashbackEventStore:
             raise ValueError("At least one event is required")
         inserted = 0
         updated = 0
+        unchanged = 0
         duplicates = 0
         with closing(self._connect()) as connection:
             with connection:
                 for event in normalized:
+                    existing = connection.execute(
+                        "SELECT * FROM cashback_events WHERE source_event_id = ?",
+                        (event["source_event_id"],),
+                    ).fetchone()
+                    if existing:
+                        differences = [
+                            field
+                            for field in EVENT_CANONICAL_FIELDS
+                            if existing[field] != event[field]
+                        ]
+                        if differences:
+                            raise ValueError(
+                                "source_event_id already exists with different event fields: "
+                                + ", ".join(differences)
+                                + "; use the corrections path for intentional changes"
+                            )
+                        unchanged += 1
+                        continue
                     identity_owner = connection.execute(
                         "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
                         (event["identity_key"],),
@@ -862,29 +895,25 @@ class CashbackEventStore:
                     if identity_owner and identity_owner["source_event_id"] != event["source_event_id"]:
                         duplicates += 1
                         continue
-                    exists = connection.execute(
-                        "SELECT 1 FROM cashback_events WHERE source_event_id = ?",
-                        (event["source_event_id"],),
-                    ).fetchone()
                     columns = tuple(event)
                     placeholders = ", ".join("?" for _ in columns)
-                    assignments = ", ".join(
-                        f"{column}=excluded.{column}" for column in columns if column != "source_event_id"
-                    )
                     connection.execute(
                         f"""
                         INSERT INTO cashback_events ({', '.join(columns)})
                         VALUES ({placeholders})
-                        ON CONFLICT(source_event_id) DO UPDATE SET
-                            {assignments}, updated_at=CURRENT_TIMESTAMP
                         """,
                         tuple(event[column] for column in columns),
                     )
-                    if exists:
-                        updated += 1
-                    else:
-                        inserted += 1
-        return {"inserted": inserted, "updated": updated, "duplicates": duplicates}
+                    inserted += 1
+        return {
+            "inserted": inserted,
+            # ``updated`` is retained as an explicit, backwards-compatible
+            # counter.  Source replays never update rows; callers can inspect
+            # ``unchanged`` for exact idempotent replays.
+            "updated": updated,
+            "unchanged": unchanged,
+            "duplicates": duplicates,
+        }
 
     def validate(self, events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         """Validate events without persisting them or exposing normalized payloads."""
@@ -1462,6 +1491,14 @@ class CashbackEventStore:
                     "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
                 }
                 normalized = _normalize_event({**source, **changes})
+                identity_owner = connection.execute(
+                    "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
+                    (normalized["identity_key"],),
+                ).fetchone()
+                if identity_owner and identity_owner["source_event_id"] != source_event_id:
+                    raise ValueError(
+                        "correction would collide with an existing source_event_id"
+                    )
                 assignments = ", ".join(
                     f"{column} = ?" for column in normalized if column != "source_event_id"
                 )
@@ -1522,7 +1559,7 @@ class CashbackEventStore:
         ):
             raise ValueError("actual_import_verified cannot replace an Actual import receipt digest")
         acknowledge_variances = _boolean(payload.get("acknowledge_variances"), default=False)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
                 run = connection.execute(
@@ -1830,8 +1867,8 @@ def build_live_dashboard(
     stale_after_minutes: int = 90,
     program_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    configuration = load_program_configuration(program_config_path)
-    programs = programs_from_config(configuration, as_of)
+    configuration = load_program_configuration(program_config_path, as_of=as_of)
+    programs = programs_from_config(configuration, as_of, as_of=as_of)
     periods = {
         program.card: statement_period(as_of, program.statement_close_day)
         for program in programs
@@ -1861,12 +1898,12 @@ def build_live_dashboard(
     if last_ingest:
         parsed = datetime.fromisoformat(str(last_ingest).replace("Z", "+00:00"))
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        age_seconds = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            parsed = parsed.replace(tzinfo=UTC)
+        age_seconds = (datetime.now(UTC) - parsed.astimezone(UTC)).total_seconds()
         stale = age_seconds > stale_after_minutes * 60
     result["data_status"] = {
         "mode": "LIVE_TRANSACTION_EVENTS",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "stale_after_minutes": stale_after_minutes,
         "is_stale": stale,
         **stats,

@@ -35,7 +35,7 @@ SOURCE_REF_PATHS = (
     "integrations/n8n/disposable/generated",
     "integrations/n8n/setup-workflows",
 )
-OPERATIONS = ("create", "get", "insert", "upsert", "update")
+OPERATIONS = ("create", "get", "insert", "upsert", "update", "list")
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -750,6 +750,13 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
             operation = _string(parameters.get("operation"), f"{relative}#{name} operation")
             if operation not in OPERATIONS:
                 raise MatrixError(f"{relative}#{name} uses unsupported operation {operation!r}")
+            if operation == "list":
+                if parameters.get("resource") != "table":
+                    raise MatrixError(f"{relative}#{name} list operation must use the table resource")
+                # W19's native table-list readback validates target schemas and
+                # IDs after creation. It is a target-side verifier, not a
+                # reference to one of the preserved legacy source tables.
+                continue
             if operation == "create":
                 table_name = _string(parameters.get("tableName"), f"{relative}#{name} tableName")
                 read_columns: list[str] = []
@@ -759,6 +766,21 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 if not isinstance(schema_columns, list):
                     raise MatrixError(f"{relative}#{name} create columns must be a list")
                 actual_schema = [(row.get("name"), row.get("type")) for row in schema_columns]
+                # W19 creates the four migration targets, while this matrix
+                # inventories the fifteen legacy source tables.  Target
+                # schema creation is validated here but is intentionally not
+                # added to source-table references: target tables are not
+                # migration inputs and must not masquerade as source writes.
+                if table_name in TARGET_SCHEMAS:
+                    expected_schema = [
+                        (column, definition["type"])
+                        for column, definition in TARGET_SCHEMAS[table_name]["columns"].items()
+                    ]
+                    if actual_schema != expected_schema:
+                        raise MatrixError(
+                            f"{relative}#{name} target create schema differs from migration contract"
+                        )
+                    continue
                 expected_schema = list(columns_by_table.get(table_name, {}).items())
                 if actual_schema != expected_schema:
                     raise MatrixError(f"{relative}#{name} create schema differs from data-tables.json")
@@ -801,10 +823,8 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                     "filter_keys": filter_keys,
                 }
             )
-    for table_name, table_references in references.items():
+    for table_references in references.values():
         table_references.sort(key=lambda row: (row["file"], row["node"]))
-        if not any(row["operation"] == "create" for row in table_references):
-            raise MatrixError(f"{table_name} has no create/schema reference")
     return references
 
 

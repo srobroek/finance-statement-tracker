@@ -45,7 +45,7 @@ workflow status can move beyond `SPEC_ONLY`, CI/disposable validation must:
 ## Durable operational state contract
 
 `data-tables.json` v4 assigns every declared Data Table an explicit retention,
-logical idempotency key, concurrency rule, and index/lookup contract. The 21
+logical idempotency key, concurrency rule, and index/lookup contract. The 19
 workflows reference all 15 tables through connected executable nodes, including
 the single fenced Actual writer and the subscription-agent adapter. Actual
 remains the posted ledger, the cashback service remains authoritative for its
@@ -105,19 +105,20 @@ values. The request hash includes those domains.
 
 ## Workflow organization
 
-`workflow-folders.json` assigns every workflow to one of eight numbered finance
-folders and applies the exact tags `finance`, `setup-required`, and `inactive`.
+`workflow-folders.json` assigns every workflow to one of six canonical folders
+and defines four tags. Regular inactive exports carry `finance`,
+`setup-required`, and `inactive`.
 Plain `import:workflow` supports a target project but cannot create/remap folders,
 so JSON exports deliberately omit `parentFolderId`. After inactive import, the
 reviewed placement reconciliation creates/reuses the folder identities and moves
-only the 21 inactive finance workflows, then performs direct durable readback.
+only the 19 inactive finance workflows, then performs direct durable readback.
 Each workflow also contains native `nodeGroups` plus finance-specific sticky
 notes. Execute Sub-workflow selectors use n8n's `From list` representation with
 the stable workflow ID and cached readable name.
 
 Manual provider setup exports live under `setup-workflows/` and are deliberately
-excluded from the regular 21-workflow registry and import. The OneDrive root
-setup export is an explicit single-file action for `90 Platform & Admin`: it
+excluded from the regular 19-workflow registry and import. The OneDrive root
+setup export is an explicit single-file action for `Global/Shared`: it
 creates the top-level `Finance Evidence` folder only when absent, reads it back,
 rejects nested same-name duplication, emits a redacted receipt, and must remain
 inactive and unscheduled.

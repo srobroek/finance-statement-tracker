@@ -94,7 +94,7 @@ Before creating a group, search the corpus for equivalent node sequences. Extrac
   2. prove the live boundary is unchanged after rehearsal;
   3. independently review the redacted rehearsal receipt;
   4. run the separately acknowledged commit path;
-  5. prove the retained corpus is restored to 21 inactive/unpublished workflows, 21 placements, and 63 tag edges with no setup workflow/history residue.
+  5. prove the retained corpus is restored to 19 inactive/unpublished workflows, 19 placements, and 57 inactive-export tag edges with no setup workflow/history residue.
 - Do not continue provider experiments while the transient runtime boundary is dirty.
 
 Acceptance:
@@ -256,7 +256,6 @@ python -m unittest tests.test_n8n_workflows -v
 python -m unittest tests.test_project_backlog -v
 python -m unittest tests.test_cashback_events tests.test_cashback_server -v
 npm test --prefix packages/n8n-nodes-finance
-npm test --prefix services/codex-agent-runner
 python scripts/generate-project-backlog.py --check
 git diff --check
 ```

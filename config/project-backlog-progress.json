@@ -14,7 +14,7 @@
   "snapshot_notes": [
     "The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.",
     "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
-    "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
+    "The internal runtime health check passed for n8n, the task broker, and task launcher. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
     "The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.",
     "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
     "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
@@ -52,7 +52,7 @@
       "id": "N8N-001", "status": "IMPLEMENTED_UNVERIFIED",
       "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "RUNTIME_INACTIVE_IMPORT_BINDING_SCHEMA_AND_HEALTH_VERIFIED",
       "evidence_paths": ["integrations/n8n/pipeline-registry.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/cli-runtime-receipt.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json", "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"],
-      "tests": ["n8n workflow, runner-closure, and task-runner-image focus: 50 run, 6 skipped", "codex-agent-runner npm: 16 of 16 pass", "full Python: 381 run, 6 skipped", "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: 21 workflows, 0 active, 0 published, 8 folders, 63 tag edges", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, task launcher, and Codex runner passed"],
+      "tests": ["n8n workflow and task-runner-image focus: 50 run, 6 skipped", "subscription adapter contract tests remain repository-scoped", "full Python: 381 run, 6 skipped", "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: 21 workflows, 0 active, 0 published, 8 folders, 63 tag edges", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, and task launcher passed"],
       "live_readback": "Internal n8n 2.36.2 at finance commit 00491aa and orchestrator commit c8d4f7c has 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, 13 OneDrive bindings, 15 exact Data Tables, seven AI policy rows, and nine config rows. Runtime health passed; no provider, Actual, or cashback call occurred.",
       "remaining_work": "Refresh and read back both Microsoft credentials, execute the fixture matrix twice, and prove issuer schedules before any activation.",
       "blockers_remove": [], "blockers_add": ["DISPOSABLE_DOUBLE_REPLAY_REQUIRED"],
@@ -111,10 +111,10 @@
     {
       "id": "AGENT-003", "status": "PARTIAL",
       "implementation_state": "PARTIAL", "verification_state": "HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED",
-      "evidence_paths": ["services/codex-agent-runner", "integrations/n8n/contracts/ai-proposal-v1.schema.json", "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"],
-      "tests": ["codex-agent-runner: 16 of 16 pass", "provider envelope and protected-field tests pass", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4 verified the bounded Codex runner without a provider call"],
-      "live_readback": "The bounded Codex runner is healthy on the internal host and runner contracts pass. The health check made no provider call; subscription authentication, a full n8n proposal, and credential-surface isolation receipts remain absent.",
-      "remaining_work": "Repair isolated Codex auth, prove process isolation and redaction, and execute malicious protected-field cases through n8n.",
+      "evidence_paths": ["integrations/n8n/workflows/21-subscription-agent-adapter.json", "integrations/n8n/contracts/ai-proposal-v1.schema.json", "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"],
+      "tests": ["subscription adapter contract and protected-field tests pass", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4 covered the n8n host without a provider call"],
+      "live_readback": "The direct subscription adapter is repository-defined and inactive. The health check made no provider call; subscription authentication, a full n8n proposal, and credential-surface isolation receipts remain absent.",
+      "remaining_work": "Prove subscription authentication and execute malicious protected-field cases through n8n.",
       "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"],
       "last_verified": "2026-08-20", "next_action": "Run one schema-bound proposal per provider after isolated authentication succeeds."
     },
@@ -221,7 +221,7 @@
     {
       "id": "PLATFORM-003", "status": "IMPLEMENTED_UNVERIFIED",
       "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "DEDICATED_VAULT_AND_ROTATION_VERIFIED_COLD_START_RESTORE_PENDING",
-      "evidence_paths": ["deploy/finance-runtime/render-env.sh", "deploy/finance-runtime/finance.env.tpl", "docs/bellwether-onepassword-runner-validation-2026-08-19.md", "/opt/disposable/finance-n8n/20260819155134/pg-password-rotation-20260819T193317Z/receipt.json", "/opt/disposable/finance-n8n/20260819155134/key-recovery-receipt.json"],
+      "evidence_paths": ["deploy/finance-runtime/render-env.sh", "deploy/finance-runtime/finance.env.tpl", "/opt/disposable/finance-n8n/20260819155134/pg-password-rotation-20260819T193317Z/receipt.json", "/opt/disposable/finance-n8n/20260819155134/key-recovery-receipt.json"],
       "tests": ["static secret and configuration tests pass", "retained Postgres password rotation and n8n encryption-key recovery completed with redacted receipts"],
       "live_readback": "The dedicated FinanceAutomation n8n-runtime item was updated once in a batch; retained Postgres password rotation and n8n encryption-key recovery completed without recording secret values. Cold-start injection, full persistence/log scans, and backup restore remain unproven.",
       "remaining_work": "Prove dedicated-vault cold start, zero secret persistence, backup restoration, and stable n8n encryption-key behavior in disposable runtime.",
@@ -233,7 +233,7 @@
       "implementation_state": "PARTIAL", "verification_state": "CI_HOST_N8N_RUNTIME_HEALTH_AND_INACTIVE_DEPLOYMENT_VERIFIED",
       "evidence_paths": ["runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json", "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"],
       "tests": ["nested platform tests: 30 of 30", "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d", "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4"],
-      "live_readback": "The internal host runs the retained Postgres, n8n, task-runner, Codex-agent-runner, and PDF-utility services healthy. The exact finance corpus remains inactive and unpublished. Full independent restart, protected-route, and restore evidence remain absent.",
+      "live_readback": "The internal host runs the retained Postgres, n8n, task-runner, and PDF-utility services healthy. The exact finance corpus remains inactive and unpublished. Full independent restart, protected-route, and restore evidence remain absent.",
       "remaining_work": "Prove immutable deployed digests, independent restarts, protected routes, and restore while preserving the inactive workflow boundary.",
       "blockers_remove": [], "blockers_add": [],
       "last_verified": "2026-08-20", "next_action": "Run the independent restart, protected-route, and restore acceptance matrix."

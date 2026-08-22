@@ -1,6 +1,6 @@
 {
   "$schema":"https://json-schema.org/draft/2020-12/schema",
-  "$id":"https://vxsan.com/schemas/codex-agent-handoff-v1.json",
+  "$id":"https://vxsan.com/schemas/subscription-agent-handoff-v1.json",
   "title":"Bounded subscription-agent finance proposal job",
   "type":"object",
   "additionalProperties":false,

@@ -7,7 +7,6 @@ on:
       - "packages/n8n-nodes-finance/**"
       - "tests/test_n8n_custom_image.py"
       - "services/pdf-utility/**"
-      - "services/codex-agent-runner/**"
       - "services/n8n-task-runners/**"
       - "tests/test_n8n_task_runners_image.py"
       - "services/cloudflared/**"
@@ -166,58 +165,6 @@ jobs:
         with:
           name: finance-pdf-utility-image-receipt-${{ github.sha }}
           path: finance-pdf-utility-image-receipt.json
-          if-no-files-found: error
-
-  codex-agent-runner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: services/codex-agent-runner/package-lock.json
-      - name: Install and test bounded runner
-        working-directory: services/codex-agent-runner
-        run: |
-          npm ci
-          npm test
-          npm audit --audit-level=high
-      - name: Build runner image
-        run: docker build --file services/codex-agent-runner/Dockerfile --tag finance-codex-agent-runner:${{ github.sha }} .
-      - name: Verify exact Codex CLI
-        run: |
-          test "$(docker run --rm --entrypoint codex finance-codex-agent-runner:${{ github.sha }} --version)" = "codex-cli 0.148.0"
-          test "$(docker run --rm --entrypoint node finance-codex-agent-runner:${{ github.sha }} --version)" = "v22.23.2"
-      - name: Scan runner image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: finance-codex-agent-runner:${{ github.sha }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          exit-code: "1"
-      - name: Generate runner SBOM
-        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
-        with:
-          image: finance-codex-agent-runner:${{ github.sha }}
-          artifact-name: finance-codex-agent-runner-${{ github.sha }}.spdx.json
-      - name: Publish immutable Codex runner candidate
-        if: github.event_name == 'push'
-        run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          image="ghcr.io/${{ github.repository_owner }}/finance-codex-agent-runner:${{ github.sha }}"
-          docker tag "finance-codex-agent-runner:${{ github.sha }}" "$image"
-          docker push "$image"
-          immutable_ref="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
-          test -n "$immutable_ref"
-          jq -n --arg image "$image" --arg immutable_ref "$immutable_ref" --arg source_sha "${{ github.sha }}" '{schema_version:1,image:$image,immutable_ref:$immutable_ref,source_sha:$source_sha}' > finance-codex-agent-runner-image-receipt.json
-      - name: Upload Codex runner digest receipt
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: finance-codex-agent-runner-image-receipt-${{ github.sha }}
-          path: finance-codex-agent-runner-image-receipt.json
           if-no-files-found: error
 
   n8n-task-runners:

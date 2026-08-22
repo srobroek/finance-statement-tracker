@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 APPLICATION_ID = "finance-statement-tracker"
-WORKFLOW_COUNT = 21
+WORKFLOW_COUNT = 19
 TABLE_COUNT = 15
 FIXTURE_WORKFLOW_COUNT = 18
 MCP_ROUTE = "/mcp/finance-operations-v1"

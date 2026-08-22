@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000015",
-  "name": "Finance · Bounded MCP Facade · Setup Required",
+  "name": "Finance · Bounded MCP Facade",
   "active": false,
   "nodes": [
     {
@@ -40,7 +40,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -69,7 +69,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -99,7 +99,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000010",
           "mode": "list",
-          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch · Setup Required"
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -199,15 +199,134 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000007",
-      "name": "07 Operations & Recovery",
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "activationBlocked": true,
+    "activationBlockers": [
+      "MCP_FACADE_CREDENTIAL_REQUIRED",
+      "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED"
+    ],
+    "blockerContract": {
+      "schemaVersion": 1,
+      "registryPath": "integrations/n8n/pipeline-registry.json",
+      "workflowCode": "FINANCE_MCP_FACADE",
+      "evaluation": "ALL_REQUIRED",
+      "activationBlocked": true,
+      "blockerCodes": [
+        "MCP_FACADE_CREDENTIAL_REQUIRED",
+        "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED"
+      ],
+      "required": [
+        {
+          "kind": "credential_binding",
+          "severity": "activation",
+          "objective": "The W15 bearer credential is created and owner-bound by the approved runtime binder.",
+          "evidence": {
+            "artifact": "n8n_credential_binding_receipt",
+            "required_fields": [
+              "credential_name",
+              "credential_owner",
+              "placeholder",
+              "workflow_id",
+              "secret_value_recorded"
+            ],
+            "assertions": [
+              {
+                "path": "binding.placeholder",
+                "operator": "equals",
+                "value": "BIND_FINANCE_MCP_FACADE"
+              },
+              {
+                "path": "binding.configured",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "path": "binding.owner_relation",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "path": "binding.secret_value_recorded",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          },
+          "operator_warning": "Keep the MCP facade inactive until its concealed bearer credential is bound and owner-read back.",
+          "code": "MCP_FACADE_CREDENTIAL_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        },
+        {
+          "kind": "disposable_runtime_proof",
+          "severity": "activation",
+          "objective": "Disposable W15 activation, authenticated tool discovery, bounded operation execution, and teardown are read back clean.",
+          "evidence": {
+            "artifact": "w15_disposable_proof_receipt",
+            "required_fields": [
+              "scope",
+              "status",
+              "tool_names",
+              "cleanup",
+              "production_writes"
+            ],
+            "assertions": [
+              {
+                "path": "receipt.scope",
+                "operator": "equals",
+                "value": "W15_DISPOSABLE_ONLY"
+              },
+              {
+                "path": "receipt.status",
+                "operator": "equals",
+                "value": "VERIFIED"
+              },
+              {
+                "path": "receipt.tool_names",
+                "operator": "equals",
+                "value": [
+                  "finance.document.request.v1",
+                  "finance.reviewed-artifact.handoff.v1",
+                  "finance.status.v1"
+                ]
+              },
+              {
+                "path": "receipt.cleanup.status",
+                "operator": "equals",
+                "value": "CLEAN"
+              },
+              {
+                "path": "receipt.production_writes",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          },
+          "operator_warning": "Do not expose the MCP facade until disposable initialize, tool-list, operation, and cleanup readbacks pass.",
+          "code": "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        }
+      ],
+      "operatorWarning": {
+        "required": true,
+        "retainUntil": "ALL_REQUIRED_PROVEN",
+        "stickyNoteNames": [
+          "Stage 1 · finance.status.v1 to Finance MCP Server Trigger"
+        ],
+        "guardNodeNames": [
+          "Finance MCP Server Trigger"
+        ]
+      }
+    }
   },
   "nodeGroups": [],
   "tags": [

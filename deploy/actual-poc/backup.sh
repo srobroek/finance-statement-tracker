@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 0077
+
+# Backups contain private financial data.  Keep every directory and persisted
+# artifact private even when the operator invokes this helper outside systemd
+# or the configured backup root already exists with a broader mode.
+PRIVATE_DIR_MODE=700
+PRIVATE_FILE_MODE=600
+PRIVATE_OWNER_UID="${EUID}"
 
 ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
@@ -14,6 +22,39 @@ SANITIZE_SCRIPT="${FINANCE_CASHBACK_BACKUP_SANITIZE_SCRIPT:-${ACTUAL_STACK_DIR}/
 fail() {
   printf '{"level":"error","event":"backup_refused","reason":"%s"}\n' "$1" >&2
   exit 1
+}
+
+ensure_private_dir() {
+  local path="$1"
+  local label="$2"
+  local owner
+  local mode
+
+  [[ ! -L "${path}" ]] || fail "${label}_symlink"
+  if [[ ! -e "${path}" ]]; then
+    mkdir -p -- "${path}"
+  fi
+  [[ ! -L "${path}" && -d "${path}" ]] || fail "${label}_not_directory"
+  owner="$(stat -c '%u' -- "${path}")" || fail "${label}_stat_failed"
+  [[ "${owner}" == "${PRIVATE_OWNER_UID}" ]] || fail "${label}_owner"
+  chmod "${PRIVATE_DIR_MODE}" -- "${path}" || fail "${label}_chmod_failed"
+  mode="$(stat -c '%a' -- "${path}")" || fail "${label}_stat_failed"
+  [[ "${mode}" == "${PRIVATE_DIR_MODE}" ]] || fail "${label}_mode"
+}
+
+ensure_private_file() {
+  local path="$1"
+  local label="$2"
+  local owner
+  local mode
+
+  [[ ! -L "${path}" ]] || fail "${label}_symlink"
+  [[ -f "${path}" ]] || fail "${label}_not_regular"
+  owner="$(stat -c '%u' -- "${path}")" || fail "${label}_stat_failed"
+  [[ "${owner}" == "${PRIVATE_OWNER_UID}" ]] || fail "${label}_owner"
+  chmod "${PRIVATE_FILE_MODE}" -- "${path}" || fail "${label}_chmod_failed"
+  mode="$(stat -c '%a' -- "${path}")" || fail "${label}_stat_failed"
+  [[ "${mode}" == "${PRIVATE_FILE_MODE}" ]] || fail "${label}_mode"
 }
 
 resolved() {
@@ -32,11 +73,18 @@ backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
 [[ -f "${VERIFY_SCRIPT}" ]] || fail "missing_verify_script"
 [[ -f "${SANITIZE_SCRIPT}" ]] || fail "missing_sanitize_script"
 for required_dir in "${ACTUAL_DATA_DIR}" "${CASHBACK_DATA_DIR}"; do
-  [[ -d "${required_dir}" ]] || fail "missing_data_directory"
+  [[ ! -L "${required_dir}" && -d "${required_dir}" ]] || fail "unsafe_data_directory"
 done
 
-mkdir -p "${BACKUP_ROOT}"
-exec 9>"${BACKUP_ROOT}/.backup.lock"
+ensure_private_dir "${BACKUP_ROOT}" "backup_root"
+lock_file="${BACKUP_ROOT}/.backup.lock"
+[[ ! -L "${lock_file}" ]] || fail "backup_lock_symlink"
+if [[ ! -e "${lock_file}" ]]; then
+  : >"${lock_file}"
+fi
+ensure_private_file "${lock_file}" "backup_lock"
+exec 9>"${lock_file}"
+ensure_private_file "${lock_file}" "backup_lock"
 flock -n 9 || {
   echo '{"level":"warning","event":"backup_skipped","reason":"already_running"}'
   exit 0
@@ -161,7 +209,13 @@ working="${BACKUP_ROOT}/.${stamp}.incomplete"
 destination="${BACKUP_ROOT}/${stamp}"
 payload="${working}/payload"
 [[ ! -e "${working}" && ! -e "${destination}" ]] || fail "backup_destination_exists"
-mkdir -p "${payload}/actual-data" "${payload}/cashback-data" "${payload}/configuration"
+mkdir -p \
+  "${payload}/actual-data" "${payload}/cashback-data" "${payload}/configuration"
+ensure_private_dir "${working}" "backup_working"
+ensure_private_dir "${payload}" "backup_payload"
+ensure_private_dir "${payload}/actual-data" "backup_actual_data"
+ensure_private_dir "${payload}/cashback-data" "backup_cashback_data"
+ensure_private_dir "${payload}/configuration" "backup_configuration"
 
 probe_cashback_health() {
   local output
@@ -232,27 +286,30 @@ while IFS= read -r -d '' database; do
   python3 "${SANITIZE_SCRIPT}" "${database}"
 done < <(find "${payload}" -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) -print0)
 
-install -m 0644 "${ACTUAL_STACK_DIR}/compose.yaml" "${payload}/configuration/actual-compose.yaml"
-install -m 0644 "${CASHBACK_STACK_DIR}/compose.yaml" "${payload}/configuration/cashback-compose.yaml"
+install -m "${PRIVATE_FILE_MODE}" "${ACTUAL_STACK_DIR}/compose.yaml" "${payload}/configuration/actual-compose.yaml"
+install -m "${PRIVATE_FILE_MODE}" "${CASHBACK_STACK_DIR}/compose.yaml" "${payload}/configuration/cashback-compose.yaml"
 if [[ -d "${ACTUAL_STACK_DIR}/nginx" ]]; then
   cp -a "${ACTUAL_STACK_DIR}/nginx" "${payload}/configuration/actual-nginx"
 fi
 for config_name in cashback-profile.json actual-bootstrap.json static-rules.json transaction-email-sources.json; do
   if [[ -f "${CASHBACK_STACK_DIR}/${config_name}" ]]; then
-    install -m 0644 "${CASHBACK_STACK_DIR}/${config_name}" "${payload}/configuration/${config_name}"
+    install -m "${PRIVATE_FILE_MODE}" "${CASHBACK_STACK_DIR}/${config_name}" "${payload}/configuration/${config_name}"
   fi
 done
 
 tar -C "${payload}" -czf "${working}/finance-data.tar.gz" .
+ensure_private_file "${working}/finance-data.tar.gz" "backup_archive"
 rm -rf -- "${payload}"
 (
   cd "${working}"
   sha256sum finance-data.tar.gz > SHA256SUMS
   sha256sum -c SHA256SUMS >/dev/null
 )
+ensure_private_file "${working}/SHA256SUMS" "backup_checksums"
 cat > "${working}/manifest.json" <<EOF
 {"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3*"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
+ensure_private_file "${working}/manifest.json" "backup_manifest"
 
 resume_services
 if [[ "${actual_state}" == "running" && "${proxy_state}" == "running" ]]; then
@@ -263,10 +320,17 @@ if [[ "${cashback_state}" == "running" ]]; then
 fi
 trap - EXIT
 mv -- "${working}" "${destination}"
+ensure_private_dir "${destination}" "backup_destination"
+ensure_private_file "${destination}/finance-data.tar.gz" "backup_archive"
+ensure_private_file "${destination}/SHA256SUMS" "backup_checksums"
+ensure_private_file "${destination}/manifest.json" "backup_manifest"
 python3 "${VERIFY_SCRIPT}" \
   --backup-root "${BACKUP_ROOT}" \
   --backup-path "${destination}" \
   --write-receipt
+if [[ -e "${destination}/verification.json" || -L "${destination}/verification.json" ]]; then
+  ensure_private_file "${destination}/verification.json" "backup_verification"
+fi
 
 if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && (( RETENTION_DAYS > 0 )); then
   find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +

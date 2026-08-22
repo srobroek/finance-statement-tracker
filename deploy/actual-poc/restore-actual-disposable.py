@@ -28,6 +28,8 @@ DEFAULT_IMAGE = (
     "actualbudget/actual-server:26.8.1@sha256:"
     "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
 )
+READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
+READBACK_SCHEMA_VERSION = 1
 RESTORE_OWNER_LABEL = "finance.restore.owner"
 RESTORE_RUN_LABEL = "finance.restore.run"
 RESTORE_OWNER_VALUE = "actual-restore"
@@ -38,6 +40,8 @@ SENSITIVE_DIAGNOSTIC_KEY = re.compile(
     r"secret|token|api[_-]?key|access[_-]?token|authorization|cookie|credential)\b)",
     re.IGNORECASE,
 )
+SAFE_DIAGNOSTIC_LABEL = re.compile(r"(?i)\b(?:browser|failure|playwright|wrong-path)\b")
+SAFE_DIAGNOSTIC_PHRASE = re.compile(r"(?i)\bcommand timed out\b")
 
 
 def is_absent_inspect_response(message: str, object_name: str, kind: str) -> bool:
@@ -97,42 +101,68 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def redact_diagnostic(value: str) -> str:
-    """Keep bounded child diagnostics while removing common secret assignments."""
+    """Keep only allowlisted labels, redacted assignments, and a diagnostic hash."""
     diagnostic = value.replace("\x00", "\\x00").strip()
     if not diagnostic:
         return ""
-    diagnostic = re.sub(r"(?i)\b(?:Basic|Bearer)\s+\S+", lambda match: f"{match.group(0).split()[0]} <redacted>", diagnostic)
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
-        rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
-        lambda match: (
-            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
-            f"{match.group('quote')}<redacted>{match.group('quote')}"
+    fragments: list[tuple[int, str]] = []
+
+    def collect(pattern: re.Pattern[str], render: Any) -> None:
+        for match in pattern.finditer(diagnostic):
+            fragments.append((match.start(), render(match)))
+
+    collect(
+        re.compile(r"(?i)\bAuthorization:\s+(?:Basic|Bearer)\s+\S+"),
+        lambda match: f"Authorization: {match.group(0).split()[1]} <redacted>",
+    )
+    collect(
+        re.compile(r"(?i)\b(?:Basic|Bearer)\s+\S+"),
+        lambda match: f"{match.group(0).split()[0]} <redacted>",
+    )
+    collect(SAFE_DIAGNOSTIC_PHRASE, lambda match: match.group(0))
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s*[:=]\s*)(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+            flags=re.IGNORECASE,
         ),
-        diagnostic,
-        flags=re.IGNORECASE,
-    )
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_quote>[\"']?)"
-        rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
         lambda match: (
-            f"{match.group('key')}{match.group('key_quote')}{match.group('separator')}"
-            f"{match.group('value') if match.group('value').casefold() in {'basic', 'bearer'} else '<redacted>'}"
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}{match.group('quote')}<redacted>{match.group('quote')}"
         ),
-        diagnostic,
-        flags=re.IGNORECASE,
     )
-    diagnostic = re.sub(
-        rf"(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<separator>\s+)"
-        rf"(?P<value>[^\s,;]+)",
-        lambda match: f"{match.group('key')}{match.group('separator')}<redacted>",
-        diagnostic,
-        flags=re.IGNORECASE,
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;\"'}}\]]+)",
+            flags=re.IGNORECASE,
+        ),
+        lambda match: (
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}<redacted>"
+        ),
     )
-    diagnostic = re.sub(r"(?i)(https?://[^\s/@:]+):[^\s/@]+@", r"\1:<redacted>@", diagnostic)
-    if len(diagnostic) > MAX_READBACK_DIAGNOSTIC:
-        diagnostic = diagnostic[:MAX_READBACK_DIAGNOSTIC] + "..."
-    return diagnostic
+    collect(
+        re.compile(
+            rf"(?P<key_prefix>[\"']?)(?P<key>{SENSITIVE_DIAGNOSTIC_KEY.pattern})(?P<key_suffix>[\"']?)"
+            rf"(?P<separator>\s+)(?P<value>[^\s,;]+)",
+            flags=re.IGNORECASE,
+        ),
+        lambda match: (
+            f"{match.group('key_prefix')}{match.group('key')}{match.group('key_suffix')}"
+            f"{match.group('separator')}<redacted>"
+        ),
+    )
+    collect(SAFE_DIAGNOSTIC_LABEL, lambda match: match.group(0))
+    ordered: list[str] = []
+    for _position, fragment in sorted(fragments):
+        if fragment not in ordered:
+            ordered.append(fragment)
+    ordered.append(f"stderr_sha256={hashlib.sha256(diagnostic.encode('utf-8')).hexdigest()}")
+    redacted = " ".join(ordered)
+    if len(redacted) > MAX_READBACK_DIAGNOSTIC:
+        redacted = redacted[:MAX_READBACK_DIAGNOSTIC] + "..."
+    return redacted
 
 
 def probe_failure_detail(result: subprocess.CompletedProcess[str], *, stdout_bytes: int | None = None) -> str:
@@ -140,7 +170,7 @@ def probe_failure_detail(result: subprocess.CompletedProcess[str], *, stdout_byt
     fields = [f"exit_code={result.returncode}"]
     if stdout_bytes is not None:
         fields.append(f"stdout_bytes={stdout_bytes}")
-    diagnostic = redact_diagnostic(result.stderr)
+    diagnostic = redact_diagnostic(result.stderr if isinstance(result.stderr, str) else "")
     if diagnostic:
         fields.append(f"stderr={diagnostic}")
     return "; ".join(fields)
@@ -485,38 +515,100 @@ def load_expected(path: Path) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise DrillError("readback_contract_invalid", "readback", "invalid expected readback JSON") from exc
-    if payload.get("schema_version") != 1:
-        raise DrillError("readback_contract_invalid", "readback", "unsupported readback schema")
-    for section in ("accounts", "representative_transactions"):
-        if not isinstance(payload.get(section), list):
-            raise DrillError("readback_contract_invalid", "readback", f"missing {section}")
+    validate_readback_contract(payload, label="expected", include_schema_version=True)
     return payload
 
 
-def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
+def _validate_readback_rows(payload: dict[str, Any], section: str, *, label: str) -> None:
     rows = payload.get(section)
-    if not isinstance(rows, list):
-        raise DrillError("readback_contract_invalid", "readback", f"{section} is not a list")
+    if type(rows) is not list:
+        raise DrillError("readback_contract_invalid", "readback", f"{label}.{section} must be an array")
+    fields: dict[str, type] = (
+        {
+            "name": str,
+            "balance_minor": int,
+            "closed": bool,
+            "offbudget": bool,
+        }
+        if section == "accounts"
+        else {
+            "account_name": str,
+            "amount_minor": int,
+            "date": str,
+            "imported_id": str,
+            "payee": str,
+        }
+    )
+    required_fields = set(fields)
+    for row in rows:
+        if type(row) is not dict or set(row) != required_fields:
+            raise DrillError("readback_contract_invalid", "readback", f"{label}.{section} has invalid fields")
+        for field, expected_type in fields.items():
+            value = row[field]
+            if field == "payee" and value is None:
+                continue
+            if type(value) is not expected_type:
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} has invalid type")
+            if expected_type is str and not value:
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} must not be empty")
+            if field == "date" and not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+                raise DrillError("readback_contract_invalid", "readback", f"{label}.{section}.{field} has invalid format")
+
+
+def validate_readback_contract(
+    payload: Any,
+    *,
+    label: str,
+    include_schema_version: bool,
+) -> None:
+    required_fields = {"accounts", "representative_transactions"}
+    if include_schema_version:
+        required_fields.add("schema_version")
+    if type(payload) is not dict or set(payload) != required_fields:
+        raise DrillError("readback_contract_invalid", "readback", f"{label} has invalid fields")
+    if include_schema_version and (
+        type(payload["schema_version"]) is not int or payload["schema_version"] != READBACK_SCHEMA_VERSION
+    ):
+        raise DrillError("readback_contract_invalid", "readback", f"{label} has unsupported schema")
+    _validate_readback_rows(payload, "accounts", label=label)
+    _validate_readback_rows(payload, "representative_transactions", label=label)
+
+
+def normalize_rows(payload: dict[str, Any], section: str) -> list[dict[str, Any]]:
+    _validate_readback_rows(payload, section, label="readback")
+    rows = payload[section]
     canonical: list[dict[str, Any]] = []
     seen: set[str] = set()
     for row in rows:
-        if not isinstance(row, dict):
-            raise DrillError("readback_contract_invalid", "readback", f"{section} contains a non-object")
-        identity = str(row.get("name" if section == "accounts" else "imported_id", ""))
+        identity = row["name" if section == "accounts" else "imported_id"]
         if not identity or identity in seen:
             raise DrillError("readback_contract_invalid", "readback", f"duplicate or missing {section} identity")
         seen.add(identity)
         canonical.append(dict(sorted(row.items())))
-    return sorted(canonical, key=lambda row: json.dumps(row, sort_keys=True))
+    if section == "accounts":
+        return sorted(canonical, key=lambda row: row["name"])
+    return sorted(
+        canonical,
+        key=lambda row: (
+            row["account_name"],
+            row["date"],
+            row["imported_id"],
+            row["amount_minor"],
+            "" if row["payee"] is None else row["payee"],
+        ),
+    )
 
 
 def validate_readback(actual_payload: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(actual_payload, dict) or not isinstance(actual_payload.get("api"), dict) or not isinstance(actual_payload.get("ui"), dict):
+    validate_readback_contract(expected, label="expected", include_schema_version=True)
+    if type(actual_payload) is not dict or set(actual_payload) != {"api", "ui"}:
         raise DrillError("readback_contract_invalid", "readback", "probe must return api and ui objects")
-    expected_accounts = normalize_rows(expected, "accounts")
-    expected_transactions = normalize_rows(expected, "representative_transactions")
     api = actual_payload["api"]
     ui = actual_payload["ui"]
+    validate_readback_contract(api, label="api", include_schema_version=False)
+    validate_readback_contract(ui, label="ui", include_schema_version=False)
+    expected_accounts = normalize_rows(expected, "accounts")
+    expected_transactions = normalize_rows(expected, "representative_transactions")
     api_accounts = normalize_rows(api, "accounts")
     ui_accounts = normalize_rows(ui, "accounts")
     api_transactions = normalize_rows(api, "representative_transactions")
@@ -547,6 +639,7 @@ def probe_readback(
     namespace: NetworkNamespace,
     timeout: float,
     readback_path: Path,
+    checkpoint_path: Path,
 ) -> dict[str, Any]:
     environment = os.environ.copy()
     environment.update({
@@ -557,6 +650,8 @@ def probe_readback(
         # artifact path and the path visible through the sidecar's data mount.
         "ACTUAL_RESTORE_READBACK_PATH": str(readback_path),
         "ACTUAL_RESTORE_READBACK_CONTAINER_PATH": f"/data/readback-{run_index}.json",
+        "ACTUAL_RESTORE_CHECKPOINT_PATH": str(checkpoint_path),
+        "ACTUAL_RESTORE_CHECKPOINT_CONTAINER_PATH": f"/data/{checkpoint_path.name}",
     })
     result = run_checked(namespace_command(namespace_tool, namespace, command), env=environment, timeout=timeout)
     if result.returncode != 0:
@@ -641,6 +736,21 @@ def error_payload(error: DrillError) -> dict[str, str]:
     return payload
 
 
+def failure_checkpoint_payload(error: DrillError, *, run_index: int | None) -> dict[str, Any]:
+    """Build a bounded, redacted phase receipt without child command output."""
+    detail = redact_diagnostic(error.detail)
+    exit_match = re.search(r"\bexit_code=(-?[0-9]+)\b", error.detail)
+    return {
+        "schema_version": 1,
+        "status": "failed",
+        "run_index": run_index,
+        "phase": error.stage,
+        "code": error.code,
+        "exit_code": int(exit_match.group(1)) if exit_match else None,
+        "diagnostic": detail,
+    }
+
+
 def main() -> int:
     args = parse_args()
     if args.repeat < 2:
@@ -680,6 +790,20 @@ def main() -> int:
     current_network_id: str | None = None
     current_data: Path | None = None
     temp_root_for_cleanup: Path | None = None
+    current_run_index: int | None = None
+    retained_failure_paths: list[str] = []
+
+    def retain_failure_checkpoint(error: DrillError) -> None:
+        if current_run_index is None:
+            return
+        checkpoint_path = readback_root / f"phase-checkpoint-{current_run_index}.json"
+        try:
+            write_json(checkpoint_path, failure_checkpoint_payload(error, run_index=current_run_index))
+        except OSError:
+            return
+        path = str(checkpoint_path)
+        if path not in retained_failure_paths:
+            retained_failure_paths.append(path)
 
     def cleanup() -> bool:
         nonlocal current_sidecar, current_sidecar_id, current_network, current_network_id, current_data
@@ -778,7 +902,7 @@ def main() -> int:
         cleanup_receipt["outer_temp_root"] = str(temp_root_for_cleanup)
         if not path_exists(temp_root_for_cleanup):
             cleanup_receipt["outer_temp_root_removed"] = True
-            cleanup_receipt["retained_paths"] = []
+            cleanup_receipt["retained_paths"] = list(retained_failure_paths)
             return True
         try:
             if temp_root_for_cleanup.is_symlink():
@@ -786,14 +910,14 @@ def main() -> int:
             shutil.rmtree(temp_root_for_cleanup)
         except OSError:
             cleanup_receipt["outer_temp_root_removed"] = False
-            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup), *retained_failure_paths]
             return False
         if path_exists(temp_root_for_cleanup):
             cleanup_receipt["outer_temp_root_removed"] = False
-            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup)]
+            cleanup_receipt["retained_paths"] = [str(temp_root_for_cleanup), *retained_failure_paths]
             return False
         cleanup_receipt["outer_temp_root_removed"] = True
-        cleanup_receipt["retained_paths"] = []
+        cleanup_receipt["retained_paths"] = list(retained_failure_paths)
         return True
 
     def handle_signal(signum: int, _frame: Any) -> None:
@@ -837,12 +961,17 @@ def main() -> int:
         if not namespace_tool or not (Path(namespace_tool[0]).is_file() or shutil.which(namespace_tool[0])):
             raise DrillError("runtime_namespace_tool_unavailable", "namespace")
         for run_index in range(1, args.repeat + 1):
+            current_run_index = None
             sidecar = f"finance-actual-restore-{run_index}-{os.getpid()}"
             data_dir = temp_root / f"data-{run_index}"
             network = f"finance-actual-restore-net-{run_index}-{os.getpid()}"
             readback_path = readback_root / f"readback-{run_index}.json"
+            checkpoint_path = readback_root / f"phase-checkpoint-{run_index}.json"
             if path_exists(readback_path):
                 raise DrillError("disposable_resource_collision", "preflight", str(readback_path))
+            if path_exists(checkpoint_path):
+                raise DrillError("disposable_resource_collision", "preflight", str(checkpoint_path))
+            current_run_index = run_index
             if inspect_state(current_runtime, sidecar) != "absent" or data_dir.exists():
                 raise DrillError("disposable_resource_collision", "preflight", sidecar)
             if inspect_network_state(current_runtime, network) != "absent":
@@ -906,6 +1035,7 @@ def main() -> int:
                 namespace=namespace,
                 timeout=args.readback_timeout,
                 readback_path=readback_path,
+                checkpoint_path=checkpoint_path,
             )
             restarted = runtime_call(current_runtime, "restart", current_sidecar_id)
             if restarted.returncode != 0:
@@ -930,6 +1060,7 @@ def main() -> int:
                 namespace=namespace,
                 timeout=args.readback_timeout,
                 readback_path=readback_path,
+                checkpoint_path=checkpoint_path,
             )
             repeat_match = first_readback == second_readback
             if not repeat_match:
@@ -953,12 +1084,17 @@ def main() -> int:
             run["cleanup_verified"] = True
             run["network_cleanup_verified"] = True
             run["status"] = "passed"
+            try:
+                checkpoint_path.unlink(missing_ok=True)
+            except OSError as error:
+                raise DrillError("checkpoint_cleanup_failed", "cleanup", str(error)) from error
             result["runs"].append(run)
         result["status"] = "passed"
         return_code = 0
     except DrillError as error:
         result["status"] = "blocked" if error.code in {"container_runtime_unavailable", "image_digest_unavailable"} else "failed"
         result["error"] = error_payload(error)
+        retain_failure_checkpoint(error)
         result["cleanup_verified"] = cleanup() and result["cleanup_verified"]
         return_code = 2 if result["status"] == "blocked" else 1
     except SystemExit as exit_error:
@@ -970,7 +1106,10 @@ def main() -> int:
             result["cleanup_verified"] = cleanup() and result["cleanup_verified"]
         if current_sidecar or current_network or current_data:
             result["cleanup"]["outer_temp_root_removed"] = False
-            result["cleanup"]["retained_paths"] = [str(temp_root_for_cleanup)] if temp_root_for_cleanup else []
+            result["cleanup"]["retained_paths"] = (
+                ([str(temp_root_for_cleanup)] if temp_root_for_cleanup else [])
+                + retained_failure_paths
+            )
             outer_cleanup_verified = False
         else:
             outer_cleanup_verified = cleanup_outer_root()

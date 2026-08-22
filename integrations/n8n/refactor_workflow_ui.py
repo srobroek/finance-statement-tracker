@@ -25,6 +25,72 @@ TYPESCRIPT = (
 )
 ACTUAL_APPLY_PATH = WORKFLOWS / "20-actual-outbox-apply.json"
 AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
+PIPELINE_REGISTRY_PATH = N8N / "pipeline-registry.json"
+MONTHLY_SHARED_PATH = WORKFLOWS / "22-shared-monthly-statement-cycle.json"
+MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000024"
+MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
+MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle"
+DATA_TABLE_MIGRATION_MATRIX_PATH = N8N / "data-table-migration-matrix.json"
+LEGACY_NAME_SUFFIXES = frozenset({"SPEC ONLY", "PAUSED", " ".join(("SETUP", "REQUIRED"))})
+MONTHLY_SHARED_INPUT_CONTRACT = {
+    "schema_version": 1,
+    "mapping_mode": "defineBelow",
+    "additionalProperties": False,
+    "required": ["cycle_context", "deadline_policy", "execution_id"],
+    "properties": {
+        "cycle_context": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "run_id",
+                "source_code",
+                "window_start",
+                "run_upper_bound",
+                "cycle_day",
+                "period_key",
+                "trigger_kind",
+            ],
+            "properties": {
+                "run_id": {"type": "string", "minLength": 1},
+                "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+                "window_start": {"type": "string", "minLength": 1},
+                "run_upper_bound": {"type": "string", "minLength": 1},
+                "cycle_day": {"type": "integer", "minimum": 1},
+                "period_key": {"type": "string", "minLength": 1},
+                "trigger_kind": {"type": "string", "minLength": 1},
+            },
+        },
+        "deadline_policy": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["deadline_at", "deadline_days"],
+            "properties": {
+                "deadline_at": {"type": "string", "minLength": 1},
+                "deadline_days": {"type": "integer", "minimum": 1},
+            },
+        },
+        "execution_id": {"type": "string", "minLength": 1},
+    },
+}
+MONTHLY_SHARED_TRIGGER_INPUTS = [
+    {"name": "cycle_context", "type": "object"},
+    {"name": "deadline_policy", "type": "object"},
+    {"name": "execution_id", "type": "string"},
+]
+MONTHLY_SHARED_CALLER_SCHEMA = [
+    {
+        "id": field["name"],
+        "displayName": field["name"],
+        "type": field["type"],
+        "display": True,
+    }
+    for field in MONTHLY_SHARED_TRIGGER_INPUTS
+]
+
+
+def monthly_shared_trigger_parameters() -> dict:
+    """Return the native Execute Workflow trigger input declaration."""
+    return {"workflowInputs": {"values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))}}
 FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
@@ -34,10 +100,32 @@ BROWSER_CAPTURE_SCHEMA = json.loads(
         encoding="utf-8"
     )
 )
+FOLDER_BY_ID = {folder["id"]: folder for folder in FOLDER_CONTRACT["folders"]}
 FOLDER_BY_CODE = {
-    code: folder
-    for folder in FOLDER_CONTRACT["folders"]
-    for code in folder["workflow_codes"]
+    workflow["code"]: workflow["folder_id"]
+    for workflow in FOLDER_CONTRACT["workflows"]
+}
+TAG_BY_NAME = {
+    tag["name"]: tag["id"] for tag in FOLDER_CONTRACT["tag_definitions"]
+}
+DEFAULT_WORKFLOW_TAGS = FOLDER_CONTRACT["workflow_tags"]
+
+def normalize_workflow_name(name: str) -> str:
+    """Keep imported workflow titles descriptive and free of legacy status labels."""
+    parts = re.split(r"\s*[·-]\s*", name.rstrip())
+    if parts and parts[-1].upper() in LEGACY_NAME_SUFFIXES:
+        return " · ".join(parts[:-1]).rstrip()
+    return name.rstrip()
+
+BLOCKER_WORKFLOW_CODES = {
+    "FINANCE_MCP_FACADE",
+}
+
+# This note is an operational stop-gate warning, not a generated stage
+# label.  Its blocker contract references the note by name, so retain the
+# exact export node (including its position/content) during layout rendering.
+OPERATOR_WARNING_NOTE_IDS = {
+    "10000000-0000-4000-8000-000000000015-generated-note-1",
 }
 
 FORMATTER = r"""
@@ -102,6 +190,90 @@ def node_by_name(workflow: dict, name: str) -> dict:
     return next(node for node in workflow["nodes"] if node["name"] == name)
 
 
+def assert_four_table_bootstrap(workflows: list[dict]) -> None:
+    """Keep W19 limited to the reviewed target-schema bootstrap contract.
+
+    The migration matrix inventories the preserved legacy tables separately;
+    W19 must never recreate that source layout or seed rows into it.  Target
+    create nodes are checked here as part of the deterministic UI render so a
+    stale hand-edited export cannot silently reintroduce the fifteen-table
+    bootstrap.
+    """
+    matrix = json.loads(DATA_TABLE_MIGRATION_MATRIX_PATH.read_text(encoding="utf-8"))
+    targets = list(matrix["targets"])
+    schemas = matrix["target_schemas"]
+    bootstrap = next(
+        workflow
+        for workflow in workflows
+        if workflow.get("meta", {}).get("financeWorkflowCode") == "PLATFORM_DATA_TABLE_BOOTSTRAP"
+    )
+    creates = [
+        node
+        for node in bootstrap["nodes"]
+        if node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "table"
+        and node.get("parameters", {}).get("operation") == "create"
+    ]
+    observed = [node["parameters"].get("tableName") for node in creates]
+    if observed != targets:
+        raise ValueError(f"W19 target table order differs from migration matrix: {observed!r}")
+    for node, target in zip(creates, targets, strict=True):
+        parameters = node["parameters"]
+        if parameters.get("options") != {"createIfNotExists": True}:
+            raise ValueError(f"W19 {target} must use idempotent createIfNotExists")
+        expected = [
+            {"name": field, "type": definition["type"]}
+            for field, definition in schemas[target]["columns"].items()
+        ]
+        if parameters.get("columns", {}).get("column") != expected:
+            raise ValueError(f"W19 {target} schema differs from migration matrix")
+    if any(
+        node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "row"
+        for node in bootstrap["nodes"]
+    ):
+        raise ValueError("W19 must not seed rows while creating the four migration targets")
+    lists = [
+        node
+        for node in bootstrap["nodes"]
+        if node.get("type") == "n8n-nodes-base.dataTable"
+        and node.get("parameters", {}).get("resource") == "table"
+        and node.get("parameters", {}).get("operation") == "list"
+    ]
+    if len(lists) != 1 or lists[0]["name"] != "List Four Target Tables":
+        raise ValueError("W19 must use one canonical native table-list readback")
+    list_parameters = lists[0]["parameters"]
+    if list_parameters.get("returnAll") is not True or list_parameters.get("options") != {}:
+        raise ValueError("W19 table-list readback must return all table schemas")
+    guard = node_by_name(bootstrap, "Verify Four-Table Target Contract")
+    readback = node_by_name(bootstrap, "Verify Four Target Table Readback")
+    receipt = node_by_name(bootstrap, "Emit Redacted Bootstrap Receipt")
+    guard_code = guard.get("parameters", {}).get("jsCode", "")
+    readback_code = readback.get("parameters", {}).get("jsCode", "")
+    receipt_code = receipt.get("parameters", {}).get("jsCode", "")
+    compact_receipt_code = re.sub(r"\s+", "", receipt_code)
+    for marker in ("TARGET_TABLE_SET_MISMATCH", "TARGET_SCHEMA_TYPE_UNSUPPORTED"):
+        if marker not in guard_code:
+            raise ValueError(f"W19 target guard omits {marker}")
+    for marker in (
+        "TARGET_TABLE_MISSING",
+        "TARGET_TABLE_EXTRA",
+        "TARGET_SCHEMA_MISMATCH",
+        "TARGET_TABLE_ID_MISMATCH",
+        "TARGET_SCHEMA_READBACK_VERIFIED",
+    ):
+        if marker not in readback_code:
+            raise ValueError(f"W19 readback verifier omits {marker}")
+    for marker in ("second_run_noop:true", "old_tables_preserved:true", "mode:'0600'"):
+        if marker not in compact_receipt_code:
+            raise ValueError(f"W19 receipt omits {marker}")
+    metadata = bootstrap.get("meta", {})
+    if metadata.get("targetTables") != targets:
+        raise ValueError("W19 metadata targetTables differs from migration matrix")
+    if metadata.get("legacyTableCreationForbidden") is not True:
+        raise ValueError("W19 must forbid legacy source-table creation")
+
+
 def rename_node(workflow: dict, old: str, new: str) -> None:
     node_by_name(workflow, old)["name"] = new
     if old in workflow.get("connections", {}):
@@ -119,50 +291,326 @@ def rename_node(workflow: dict, old: str, new: str) -> None:
 
 
 def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
-    """Keep each statement cycle's W03-to-W12 commit handoff explicit."""
+    """Keep the shared monthly cycle's W03-to-W12 handoff explicit."""
     by_code = {
         workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
     }
+    shared = by_code[MONTHLY_SHARED_WORKFLOW_CODE]
+    shared_nodes = {node["name"]: node for node in shared["nodes"]}
+    required_shared = {
+        "Run Shared Statement Pipeline",
+        "Read Source Cursor Before Commit",
+        "Build W12 COMMIT Request",
+        "Commit Source Cursor via W12",
+        "Verify W12 COMMIT Terminal Readback",
+    }
+    missing = sorted(required_shared - shared_nodes.keys())
+    if missing:
+        raise ValueError(
+            "shared monthly cycle missing explicit commit nodes: "
+            + ", ".join(missing)
+        )
+    shared_commit = shared_nodes["Commit Source Cursor via W12"]
+    if shared_commit["parameters"]["workflowId"].get("value") != "10000000-0000-4000-8000-000000000012":
+        raise ValueError("shared monthly cycle commit target is not W12")
+    shared_mapped = shared_commit["parameters"].get("workflowInputs", {}).get("value", {})
+    for field in (
+        "operation",
+        "downstream_receipt_sha256",
+        "expected_cursor_version",
+        "attachment_verification_barrier",
+        "email_evidence_receipt_barrier",
+        "receipt_readback_verified",
+    ):
+        if field not in shared_mapped:
+            raise ValueError(f"shared monthly cycle W12 COMMIT input omits {field}")
+    expected_edges = {
+        "Run Shared Statement Pipeline": "Read Source Cursor Before Commit",
+        "Read Source Cursor Before Commit": "Build W12 COMMIT Request",
+        "Build W12 COMMIT Request": "Commit Source Cursor via W12",
+        "Commit Source Cursor via W12": "Verify W12 COMMIT Terminal Readback",
+    }
+    for source, target in expected_edges.items():
+        edges = shared["connections"].get(source, {}).get("main", [[]])[0]
+        if not any(edge.get("node") == target for edge in edges):
+            raise ValueError(f"shared monthly cycle missing connection {source} -> {target}")
+
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
         workflow = by_code[code]
         nodes = {node["name"]: node for node in workflow["nodes"]}
-        required = {
-            "Run Shared Statement Pipeline",
-            "Read Source Cursor Before Commit",
-            "Build W12 COMMIT Request",
-            "Commit Source Cursor via W12",
-            "Verify W12 COMMIT Terminal Readback",
+        expected_names = {
+            "Daily 20:40 Cycle Poll",
+            "Open Configured Cycle Window",
+            "Run Shared Monthly Statement Cycle",
         }
-        missing = sorted(required - nodes.keys())
+        if set(nodes) != expected_names:
+            raise ValueError(f"{code} must retain exactly its three caller nodes")
+        execute = nodes["Run Shared Monthly Statement Cycle"]
+        workflow_id = execute["parameters"]["workflowId"]
+        if workflow_id.get("value") != MONTHLY_SHARED_WORKFLOW_ID:
+            raise ValueError(f"{code} shared cycle target is not W22")
+        mapped = execute["parameters"].get("workflowInputs", {}).get("value", {})
+        if set(mapped) != {"cycle_context", "deadline_policy", "execution_id"}:
+            raise ValueError(f"{code} caller interface is not allowlisted")
+        source_code = "EI_AMAZON" if code == "EI_MONTHLY_STATEMENT" else "WIO_CREDIT"
+        if source_code not in json.dumps(mapped["cycle_context"]):
+            raise ValueError(f"{code} source identity is not caller-bound")
+
+
+def assert_archive_readback_contract(workflows: list[dict]) -> None:
+    """Keep W12's returned archive item aligned with W22's commit guard."""
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
+    w12 = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    w22 = by_code[MONTHLY_SHARED_WORKFLOW_CODE]
+    w12_nodes = {node["name"]: node for node in w12["nodes"]}
+    required = {
+        "Verify ARCHIVED Acquisition Receipt",
+        "Mark ARCHIVED Receipt Readback Verified",
+        "Read Back Verified ARCHIVED Receipt",
+        "Return Verified ARCHIVED Receipt",
+    }
+    missing = sorted(required - w12_nodes.keys())
+    if missing:
+        raise ValueError("W12 archive readback nodes missing: " + ", ".join(missing))
+    expected_edges = {
+        "Verify ARCHIVED Acquisition Receipt": "Mark ARCHIVED Receipt Readback Verified",
+        "Mark ARCHIVED Receipt Readback Verified": "Read Back Verified ARCHIVED Receipt",
+        "Read Back Verified ARCHIVED Receipt": "Return Verified ARCHIVED Receipt",
+    }
+    for source, target in expected_edges.items():
+        edges = w12["connections"].get(source, {}).get("main", [[]])[0]
+        if not any(edge.get("node") == target for edge in edges):
+            raise ValueError(f"W12 archive readback missing connection {source} -> {target}")
+    verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"]
+    return_code = w12_nodes["Return Verified ARCHIVED Receipt"]["parameters"]["jsCode"]
+    if "receipt_readback_verified: false" not in verify_code:
+        raise ValueError("W12 pre-update archive verifier must expose a pending canonical receipt")
+    if "receipt_readback_verified: true" not in return_code:
+        raise ValueError("W12 terminal archive return must expose canonical receipt_readback_verified")
+    build_code = next(
+        node for node in w22["nodes"] if node["name"] == "Build W12 COMMIT Request"
+    )["parameters"]["jsCode"]
+    if "archive.receipt_readback_verified !== true" not in build_code:
+        raise ValueError("W22 commit guard must require W12 canonical archive readback")
+    if "receipt_readback_verified: archive.receipt_readback_verified" not in build_code:
+        raise ValueError("W22 commit request must propagate W12 canonical archive readback")
+
+
+def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
+    """Extract EI/Wio's immutable cycle core behind one source-aware boundary."""
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    shared = by_code.get(MONTHLY_SHARED_WORKFLOW_CODE)
+    core_names = (
+        "Load Trusted Source Contract",
+        "Assemble Trusted Acquisition Contract",
+        "Acquire Archive and Read Back",
+        "Initialize Source Cursor via W12",
+        "Restore Enumeration Request After Cursor Init",
+        "Statement Found",
+        "Download Archived Source",
+        "Assemble Immutable Pipeline Input",
+        "Run Shared Statement Pipeline",
+        "Read Source Cursor Before Commit",
+        "Build W12 COMMIT Request",
+        "Commit Source Cursor via W12",
+        "Verify W12 COMMIT Terminal Readback",
+        "Upsert Waiting or Deadline Receipt",
+        "Read Back Waiting or Deadline Receipt",
+    )
+    if shared is None:
+        source = by_code["EI_MONTHLY_STATEMENT"]
+        source_for_graph = source
+        source_nodes = {node["name"]: node for node in source["nodes"]}
+        missing = sorted(set(core_names) - source_nodes.keys())
         if missing:
-            raise ValueError(
-                f"{code} missing explicit commit nodes: {', '.join(missing)}"
-            )
-        commit = nodes["Commit Source Cursor via W12"]
-        workflow_id = commit["parameters"]["workflowId"]
-        if workflow_id.get("value") != "10000000-0000-4000-8000-000000000012":
-            raise ValueError(f"{code} commit target is not W12")
-        mapped = commit["parameters"].get("workflowInputs", {}).get("value", {})
-        for field in (
-            "operation",
-            "downstream_receipt_sha256",
-            "expected_cursor_version",
-            "attachment_verification_barrier",
-            "email_evidence_receipt_barrier",
-            "receipt_readback_verified",
-        ):
-            if field not in mapped:
-                raise ValueError(f"{code} W12 COMMIT input omits {field}")
-        expected_edges = {
-            "Run Shared Statement Pipeline": "Read Source Cursor Before Commit",
-            "Read Source Cursor Before Commit": "Build W12 COMMIT Request",
-            "Build W12 COMMIT Request": "Commit Source Cursor via W12",
-            "Commit Source Cursor via W12": "Verify W12 COMMIT Terminal Readback",
+            raise ValueError("cannot extract monthly cycle; source nodes missing: " + ", ".join(missing))
+        node_ids = {
+            name: f"220{index:02d}"
+            for index, name in enumerate(core_names, start=2)
         }
-        for source, target in expected_edges.items():
-            edges = workflow["connections"].get(source, {}).get("main", [[]])[0]
-            if not any(edge.get("node") == target for edge in edges):
-                raise ValueError(f"{code} missing connection {source} -> {target}")
+        trigger = {
+            "id": "22001",
+            "name": "Monthly Cycle Context",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1.1,
+            "position": [-1120, 0],
+            "parameters": monthly_shared_trigger_parameters(),
+        }
+        nodes = [trigger]
+        for name in core_names:
+            node = json.loads(json.dumps(source_nodes[name]))
+            node["id"] = node_ids[name]
+            nodes.append(node)
+        connections = {
+            "Monthly Cycle Context": {
+                "main": [[{"node": core_names[0], "type": "main", "index": 0}]]
+            }
+        }
+        for name, channels in source_for_graph.get("connections", {}).items():
+            if name not in core_names:
+                continue
+            copied = json.loads(json.dumps(channels))
+            connections[name] = copied
+        shared = {
+            "id": MONTHLY_SHARED_WORKFLOW_ID,
+            "name": MONTHLY_SHARED_WORKFLOW_NAME,
+            "active": False,
+            "nodes": nodes,
+            "connections": connections,
+            "settings": json.loads(json.dumps(source_for_graph["settings"])),
+            "pinData": {},
+            "meta": {
+                "financeWorkflowCode": MONTHLY_SHARED_WORKFLOW_CODE,
+                "migrationStatus": "SPEC_ONLY",
+                "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
+                "sourceIdentityOwnedBy": "trusted source contract",
+                "callerInputAllowlist": ["cycle_context", "deadline_policy", "execution_id"],
+                "workflowInputContract": json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT)),
+                "sourceCodes": ["EI_AMAZON", "WIO_CREDIT"],
+                "credentialBindings": json.loads(json.dumps(source_for_graph["meta"].get("credentialBindings", []))),
+                "setupRequired": True,
+                "importTested": False,
+                "workflowFolder": json.loads(json.dumps(source_for_graph["meta"].get("workflowFolder", {}))),
+                "workflowTags": json.loads(json.dumps(source_for_graph["meta"].get("workflowTags", DEFAULT_WORKFLOW_TAGS))),
+            },
+            "tags": json.loads(json.dumps(source_for_graph.get("tags", []))),
+        }
+        workflows.append(shared)
+    else:
+        # Existing exports are treated as the source of truth after the first render.
+        shared["id"] = MONTHLY_SHARED_WORKFLOW_ID
+        shared["name"] = MONTHLY_SHARED_WORKFLOW_NAME
+        shared["active"] = False
+        shared["meta"]["financeWorkflowCode"] = MONTHLY_SHARED_WORKFLOW_CODE
+        shared["meta"]["reusableBoundary"] = "SHARED_MONTHLY_SOURCE_CYCLE_V1"
+        shared["meta"]["sourceIdentityOwnedBy"] = "trusted source contract"
+        shared["meta"]["callerInputAllowlist"] = ["cycle_context", "deadline_policy", "execution_id"]
+        shared["meta"]["workflowInputContract"] = json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT))
+        shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
+        shared["meta"]["workflowTags"] = json.loads(json.dumps(DEFAULT_WORKFLOW_TAGS))
+        for node in shared["nodes"]:
+            if node.get("type") == "n8n-nodes-base.stickyNote" and str(node.get("id", "")).endswith("-generated-note-1"):
+                node["id"] = f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1"
+
+    if not any(node["type"] == "n8n-nodes-base.stickyNote" for node in shared["nodes"]):
+        shared["nodes"].append({
+            "id": f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1",
+            "name": "Stage 1 · Monthly Cycle Context to Read Back Waiting or Deadline Receipt",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [-1160, -180],
+            "parameters": {
+                "content": (
+                    "## Stage 1 · Shared monthly source cycle\n"
+                    "**Input:** Monthly Cycle Context  ·  **Output:** terminal pipeline or wait/deadline receipt\n"
+                    "Any rejected invariant stops this stage and routes only a redacted failure receipt."
+                ),
+                "height": 110,
+                "width": 2240,
+                "color": 7,
+            },
+        })
+
+    by_code[MONTHLY_SHARED_WORKFLOW_CODE] = shared
+    shared_nodes = {node["name"]: node for node in shared["nodes"]}
+    source_context = shared_nodes["Monthly Cycle Context"]
+    source_context["parameters"] = monthly_shared_trigger_parameters()
+    source_contract = shared_nodes["Load Trusted Source Contract"]
+    source_contract["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+        "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
+    )
+    assemble = shared_nodes["Assemble Trusted Acquisition Contract"]
+    assemble["parameters"]["jsCode"] = r"""
+const input = $('Monthly Cycle Context').first().json;
+const context = input.cycle_context;
+const deadline = input.deadline_policy;
+const sourceContract = $json;
+if (!context || !deadline || !input.execution_id) throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');
+for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {
+  if (context[field] === undefined || context[field] === null || context[field] === '') throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);
+}
+for (const field of ['deadline_at', 'deadline_days']) {
+  if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '') throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);
+}
+if (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code))) throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');
+if (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true) throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');
+return [{ json: {
+  ...context,
+  ...deadline,
+  execution_id: String(input.execution_id),
+  ...sourceContract,
+  source_code: sourceContract.source_code,
+  operation: 'ENUMERATE',
+  onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,
+  senders: JSON.parse(sourceContract.senders_json),
+  subjects: JSON.parse(sourceContract.subjects_json),
+} }];
+""".strip()
+    upsert = shared_nodes["Upsert Waiting or Deadline Receipt"]
+    upsert["parameters"]["columns"]["value"].update({
+        "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
+        "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
+        "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
+        "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
+        "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
+        "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
+    })
+    upsert["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    upsert["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    readback = shared_nodes["Read Back Waiting or Deadline Receipt"]
+    readback["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    readback["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    shared["meta"]["credentialBindings"] = json.loads(json.dumps(
+        shared["meta"].get("credentialBindings", [{"placeholder": "BIND_ONEDRIVE", "configured": False, "action_required": True}])
+    ))
+
+    for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        caller = by_code[code]
+        source_code = "EI_AMAZON" if code == "EI_MONTHLY_STATEMENT" else "WIO_CREDIT"
+        workflow_code = code
+        schedule = node_by_name(caller, "Daily 20:40 Cycle Poll")
+        open_window = node_by_name(caller, "Open Configured Cycle Window")
+        execute = {
+            "id": "4003" if code == "EI_MONTHLY_STATEMENT" else "5003",
+            "name": "Run Shared Monthly Statement Cycle",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.2,
+            "position": [80, 0],
+            "parameters": {
+                "workflowId": {
+                    "__rl": True,
+                    "value": MONTHLY_SHARED_WORKFLOW_ID,
+                    "mode": "list",
+                    "cachedResultName": MONTHLY_SHARED_WORKFLOW_NAME,
+                },
+                "options": {"waitForSubWorkflow": True},
+                "workflowInputs": {
+                    "mappingMode": "defineBelow",
+                    "matchingColumns": [],
+                    "schema": json.loads(json.dumps(MONTHLY_SHARED_CALLER_SCHEMA)),
+                    "value": {
+                        "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: '" + source_code + "', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
+                        "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: " + str(caller["meta"].get("deadlineDays", 5)) + " } }}",
+                        "execution_id": "={{ $execution.id }}",
+                    },
+                },
+            },
+        }
+        caller["nodes"] = [schedule, open_window, execute]
+        caller["connections"] = {
+            schedule["name"]: {"main": [[{"node": open_window["name"], "type": "main", "index": 0}]]},
+            open_window["name"]: {"main": [[{"node": execute["name"], "type": "main", "index": 0}]]},
+        }
+        caller["nodeGroups"] = []
+        caller_meta = caller["meta"]
+        caller_meta["sharedCycleWorkflow"] = MONTHLY_SHARED_WORKFLOW_CODE
+        caller_meta["sharedCycleWorkflowId"] = MONTHLY_SHARED_WORKFLOW_ID
+        caller_meta["sourceIdentity"] = source_code
+        caller_meta["credentialBindings"] = []
+        caller_meta["workflowCode"] = workflow_code
+        caller["tags"] = json.loads(json.dumps(shared.get("tags", caller.get("tags", []))))
 
 
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
@@ -179,8 +627,11 @@ if (sameRun && !sameWindow) throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMA
 if (sameRun && observedVersion < 1) throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');
 const expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;
 return [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: true, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];
-""".strip()
+    """.strip()
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
+        caller_nodes = {node["name"] for node in by_code[code]["nodes"]}
+        if "Assemble Trusted Acquisition Contract" not in caller_nodes:
+            continue
         assemble = node_by_name(by_code[code], "Assemble Trusted Acquisition Contract")
         assemble["parameters"]["jsCode"] = r"""
 const w = $('Open Configured Cycle Window').first().json, c = $json;
@@ -458,9 +909,103 @@ return [{
     scanned_count: scanned.length,
     matched_count: messages.length,
     heartbeat: messages.length === 0,
+    immutable_inventory: true,
     messages,
   },
 }];
+""".strip()
+
+    # The finite Graph result is the immutable enumeration boundary. Shape and
+    # archive aggregation run immediately after that result, before the
+    # persisted ENUMERATED receipt can be read back. Referencing the later
+    # receipt verifier here creates a runtime cycle and leaves the W12->W01
+    # handoff without an immutable inventory.
+    shape = node_by_name(sweep, "Shape Immutable Message Inventory")
+    shape["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+if (sweep.immutable_inventory !== true) {
+  throw new Error('IMMUTABLE_ENUMERATION_REQUIRED');
+}
+const rows = Array.isArray(sweep.messages) ? sweep.messages : [];
+const seen = new Set();
+if (!rows.length) {
+  return [{ json: { ...sweep, messages: [], empty_inventory: true, immutable_inventory: true } }];
+}
+return rows.map(row => {
+  const message = row?.message && typeof row.message === 'object' ? row.message : row;
+  const messageId = String(row?.message_id || message?.id || '').trim();
+  if (!messageId || seen.has(messageId)) {
+    throw new Error('IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE');
+  }
+  seen.add(messageId);
+  return { json: {
+    ...message,
+    id: messageId,
+    message_id: messageId,
+    source_code: sweep.source_code,
+    folder_id: sweep.folder_id,
+    senders: sweep.senders,
+    subjects: sweep.subjects,
+    window_start: sweep.window_start,
+    window_end: sweep.run_upper_bound,
+    run_upper_bound: sweep.run_upper_bound,
+    onedrive_parent_id: sweep.onedrive_parent_id,
+    attachment_inventory: Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [],
+  } };
+});
+""".strip()
+
+    archive_inventory = node_by_name(sweep, "Aggregate Immutable Archive Inventory")
+    archive_inventory["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+const parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory);
+const rows = $input.all().map(item => item.json);
+const grouped = new Map();
+for (const row of rows) {
+  const messageId = String(row.message_id || '').trim();
+  if (!messageId) continue;
+  const bucket = grouped.get(messageId) || [];
+  if (row.attachment?.id) bucket.push(row.attachment);
+  grouped.set(messageId, bucket);
+}
+const messages = parents.map(item => {
+  const message = item.json;
+  const attachments = grouped.get(message.message_id) || [];
+  const seen = new Set();
+  for (const attachment of attachments) {
+    const identity = message.message_id + ':' + attachment.id;
+    if (seen.has(identity)) throw new Error('DUPLICATE_MESSAGE_ATTACHMENT_ID');
+    seen.add(identity);
+  }
+  attachments.sort((left, right) => String(left.id).localeCompare(String(right.id)));
+  return {
+    message_id: message.message_id,
+    message,
+    attachment_inventory: attachments,
+    attachment_ids: attachments.map(attachment => attachment.id),
+    attachment_identity_keys: attachments.map(attachment => message.message_id + ':' + attachment.id),
+  };
+});
+return [{ json: {
+  ...sweep,
+  messages,
+  empty_inventory: messages.length === 0,
+  immutable_inventory: true,
+  attachment_ids_verified: true,
+  attachment_identity_keys: messages.flatMap(message => message.attachment_identity_keys),
+} }];
+""".strip()
+
+    empty_inventory = node_by_name(sweep, "Empty Immutable Archive Inventory")
+    empty_inventory["parameters"]["jsCode"] = r"""
+const sweep = $('Aggregate Exact Window Heartbeat').first().json;
+return [{ json: {
+  ...sweep,
+  messages: [],
+  immutable_inventory: true,
+  attachment_ids_verified: true,
+  empty_inventory: true,
+} }];
 """.strip()
 
     # Shared statement processing delegates the isolated PDF boundary to the
@@ -1596,14 +2141,9 @@ return [{
     }
 
     agent = by_code["AI_PROPOSAL"]
-    agent["name"] = "Finance · Subscription Agent Proposal · Setup Required"
+    agent["name"] = "Finance · Subscription Agent Proposal"
     for old, new in (
         ("Trusted AI Proposal Input", "Trusted Agent Proposal Input"),
-        ("Invoke Fixed Codex Agent Runner", "Invoke Fixed Subscription Agent Runner"),
-        ("Read Codex Runner Circuit", "Read Agent Runner Circuit"),
-        ("Gate Codex Runner Circuit", "Gate Agent Runner Circuit"),
-        ("Persist Codex Runner Circuit Gate", "Persist Agent Runner Circuit Gate"),
-        ("Close Codex Runner Circuit", "Close Agent Runner Circuit"),
     ):
         if any(node["name"] == old for node in agent["nodes"]):
             rename_node(agent, old, new)
@@ -1971,7 +2511,7 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         }
         existing = {
             "id": "10000000-0000-4000-8000-000000000020",
-            "name": "Finance · Apply Prepared Actual Outbox · SPEC ONLY",
+            "name": "Finance · Apply Prepared Actual Outbox",
             "active": False,
             "nodes": [trigger, *core_nodes],
             "connections": connections,
@@ -2427,7 +2967,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
     if adapter is None:
         adapter = {
             "id": "10000000-0000-4000-8000-000000000021",
-            "name": "Finance · Subscription Agent Adapter · Setup Required",
+            "name": "Finance · Subscription Agent Adapter",
             "active": False,
             "nodes": [],
             "connections": {},
@@ -2481,6 +3021,16 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                     {"id": "21002-caller-3", "name": "job_id", "type": "string", "value": "={{ $json.job_id }}"},
                     {"id": "21002-caller-4", "name": "idempotency_key", "type": "string", "value": "={{ $json.idempotency_key }}"},
                     {"id": "21002-caller-5", "name": "unresolved", "type": "array", "value": "={{ $json.unresolved }}"},
+                    {"id": "21002-caller-6", "name": "operation_code", "type": "string", "value": "={{ $json.operation_code }}"},
+                    {"id": "21002-policy-1", "name": "policy_id", "type": "string", "value": "={{ $json.policy_id }}"},
+                    {"id": "21002-policy-2", "name": "policy_sha256", "type": "string", "value": "={{ $json.policy_sha256 }}"},
+                    {"id": "21002-policy-3", "name": "config_sha256", "type": "string", "value": "={{ $json.config_sha256 }}"},
+                    {"id": "21002-policy-4", "name": "output_schema_sha256", "type": "string", "value": "={{ $json.output_schema_sha256 }}"},
+                    {"id": "21002-caller-7", "name": "email_evidence", "type": "boolean", "value": "={{ $json.email_evidence }}"},
+                    {"id": "21002-caller-8", "name": "archive_sha256", "type": "string", "value": "={{ $json.archive_sha256 }}"},
+                    {"id": "21002-caller-9", "name": "evidence_replay_keys", "type": "array", "value": "={{ $json.evidence_replay_keys }}"},
+                    {"id": "21002-caller-10", "name": "archive_identity_keys", "type": "array", "value": "={{ $json.archive_identity_keys }}"},
+                    {"id": "21002-caller-11", "name": "archive_item_ids", "type": "array", "value": "={{ $json.archive_item_ids }}"},
                     {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
                     {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
                     {"id": "21002-c", "name": "claude_package", "type": "string", "value": "@ggomez91npm/n8n-nodes-claude-code@0.8.0"},
@@ -2530,6 +3080,12 @@ if (forbidden.some(field => Object.hasOwn(job, field))) {
 if (!['NORMAL', 'EXCEPTION'].includes(job.policy_class)) {
   throw new Error('AGENT_POLICY_CLASS_INVALID');
 }
+if (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(job.policy_id || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.policy_sha256 || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.config_sha256 || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.output_schema_sha256 || ''))) {
+  throw new Error('AGENT_SERVER_POLICY_BINDING_REQUIRED');
+}
 const providerPolicy = {
   CODEX_SUBSCRIPTION: {
     NORMAL: {
@@ -2560,11 +3116,24 @@ const runnerPolicy = providerPolicy[job.agent_provider]?.[job.policy_class];
 if (!runnerPolicy) {
   throw new Error('AGENT_RUNNER_POLICY_MISSING');
 }
+if (job.email_evidence === true && !/^[a-f0-9]{64}$/.test(String(job.archive_sha256 || ''))) {
+  throw new Error('EMAIL_ENRICHMENT_ARCHIVE_HASH_REQUIRED');
+}
 const request = {
   agent_provider: job.agent_provider,
   policy_class: job.policy_class,
+  policy_id: job.policy_id,
+  policy_sha256: job.policy_sha256,
+  config_sha256: job.config_sha256,
+  output_schema_sha256: job.output_schema_sha256,
   job_id: job.job_id,
   idempotency_key: job.idempotency_key,
+  operation_code: job.operation_code,
+  email_evidence: job.email_evidence === true,
+  archive_sha256: job.archive_sha256,
+  evidence_replay_keys: job.evidence_replay_keys,
+  archive_identity_keys: job.archive_identity_keys,
+  archive_item_ids: job.archive_item_ids,
   unresolved: job.unresolved,
 };
 const prompt = [
@@ -2649,6 +3218,13 @@ return [{ json: {
             "parameters": {"jsCode": r"""
 const invocation = $('Validate and Build Fixed Provider Invocation').item.json;
 const provider = invocation.agent_provider;
+const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
+if (providerError) {
+  if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
+    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+  }
+  throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
+}
 const FINANCE_AI_SCHEMA_V1 = new Set([
   'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',
   'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',
@@ -2667,9 +3243,19 @@ if (provider === 'CODEX_SUBSCRIPTION') {
 if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
   throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
 }
+for (const field of ['policy_id', 'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256']) {
+  if (proposal[field] !== undefined && proposal[field] !== invocation.request[field]) {
+    throw new Error('AGENT_PROVIDER_POLICY_ENVELOPE_MISMATCH');
+  }
+}
 const normalized = {
   ...proposal,
   agent_provider: provider,
+  policy_id: invocation.request.policy_id,
+  policy_class: invocation.request.policy_class,
+  policy_sha256: invocation.request.policy_sha256,
+  config_sha256: invocation.request.config_sha256,
+  output_schema_sha256: invocation.request.output_schema_sha256,
   runner_model: invocation.provider_model,
   runner_reasoning_effort: invocation.provider_reasoning_effort,
   auth_mode: invocation.provider_auth_mode,
@@ -2718,24 +3304,17 @@ return [{ json: normalized }];
     invoke = next(
         node
         for node in agent["nodes"]
-        if node["name"] in {"Invoke Fixed Subscription Agent Runner", "Invoke Subscription Agent Adapter"}
+        if node["name"] == "Invoke Subscription Agent Adapter"
     )
     invoke["name"] = "Invoke Subscription Agent Adapter"
     invoke["type"] = "n8n-nodes-base.executeWorkflow"
     invoke["typeVersion"] = 1.2
+
     invoke["parameters"] = {
         "workflowId": {"__rl": True, "value": adapter["id"], "mode": "id"},
         "options": {"waitForSubWorkflow": True},
     }
     invoke.pop("credentials", None)
-    if "Invoke Fixed Subscription Agent Runner" in agent["connections"]:
-        agent["connections"]["Invoke Subscription Agent Adapter"] = agent["connections"].pop("Invoke Fixed Subscription Agent Runner")
-    for channels in agent["connections"].values():
-        for branches in channels.values():
-            for branch in branches:
-                for edge in branch:
-                    if edge["node"] == "Invoke Fixed Subscription Agent Runner":
-                        edge["node"] = "Invoke Subscription Agent Adapter"
     agent["meta"]["providerAdapterWorkflow"] = "SUBSCRIPTION_AGENT_ADAPTER"
 
     # The current acquisition workflow receives an immutable message and
@@ -2812,6 +3391,18 @@ if (
 ) {
   throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');
 }
+const emailArchiveProof = emailRows
+  .map(row => ({
+    source_message_id: String(row.source_message_id || ''),
+    email_evidence_sha256: String(row.email_evidence_sha256 || ''),
+    onedrive_item_id: String(row.onedrive_item_id || ''),
+    email_evidence_identity: String(
+      row.email_evidence_identity || row.source_message_id + ':INLINE_BODY',
+    ),
+  }))
+  .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));
+const archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();
+const archiveItemIds = [...new Set(emailArchiveProof.map(row => row.onedrive_item_id).filter(Boolean))].sort();
 const first = attachmentRows[0] || emailRows[0] || {};
 return [{
   json: {
@@ -2835,6 +3426,9 @@ return [{
     email_evidence_receipt_barrier: 'VERIFIED',
     email_evidence_receipts_verified: emailRows.length,
     email_evidence_identity_keys: observedEmail,
+    archive_identity_keys: archiveIdentityKeys,
+    archive_item_ids: archiveItemIds,
+    email_evidence_archive_proof: emailArchiveProof,
     archive_ready: true,
     cursor_commit_eligible: false,
   },
@@ -2842,14 +3436,7 @@ return [{
 """.strip()
         workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
         for workflow in workflows:
-            workflow["name"] = re.sub(
-                r"\s*[·-]?\s*(SPEC ONLY|Paused)\s*$",
-                " · Setup Required",
-                workflow["name"],
-                flags=re.IGNORECASE,
-            )
-            if not workflow["name"].endswith("Setup Required"):
-                workflow["name"] = workflow["name"].rstrip() + " · Setup Required"
+            workflow["name"] = normalize_workflow_name(workflow["name"])
         workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
         for workflow in workflows:
             for node in workflow["nodes"]:
@@ -3175,14 +3762,7 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
 
     # Binary uploads must explicitly select binary mode in n8n OneDrive v1.1.
     for workflow in workflows:
-        workflow["name"] = re.sub(
-            r"\s*[·-]?\s*(SPEC ONLY|Paused)\s*$",
-            " · Setup Required",
-            workflow["name"],
-            flags=re.IGNORECASE,
-        )
-        if not workflow["name"].endswith("Setup Required"):
-            workflow["name"] = workflow["name"].rstrip() + " · Setup Required"
+        workflow["name"] = normalize_workflow_name(workflow["name"])
 
     for workflow in workflows:
         for node in workflow["nodes"]:
@@ -3229,6 +3809,382 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
         workflow["meta"]["setupRequired"] = True
 
 
+def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
+    """Keep the generic W12-to-W21 handoff owned by the canonical renderer."""
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    adapter = by_code["SUBSCRIPTION_AGENT_ADAPTER"]
+    w09 = by_code["AI_PROPOSAL"]
+    sweep_names = {node["name"] for node in sweep["nodes"]}
+    required_sweep = {
+        "Evidence Request", "Validate Evidence Request", "Search Outlook Evidence",
+        "Match Outlook Evidence to Transactions", "Archive Matched Email Evidence in W01",
+        "Build Evidence Handoff", "SHA-256 Archive Proof", "SHA-256 Evidence Handoff",
+        "Prepare W21 Email Request", "Send Evidence to W21", "Validate Email Proposal Result",
+    }
+    missing = sorted(required_sweep - sweep_names)
+    if missing:
+        raise RuntimeError("generic email enrichment nodes missing: " + ", ".join(missing))
+    required_adapter = {
+        "Schema-Bound Proposal Job", "Subscription Provider Parameters",
+        "Validate and Build Fixed Provider Invocation", "Provider Route",
+        "Run Codex Subscription Provider", "Run Claude Subscription Provider",
+        "Validate Claude Proposal Schema and Normalize Provider Output",
+    }
+    missing = sorted(required_adapter - {node["name"] for node in adapter["nodes"]})
+    if missing:
+        raise RuntimeError("W21 provider contract missing: " + ", ".join(missing))
+    sweep["meta"].update({
+        "evidenceHandoffSchemaVersion": 1,
+        "evidenceJobIdPattern": "^finance-ai:[a-f0-9]{64}$",
+        "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
+        "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
+        "evidenceNoModelControlledWrites": True,
+        "evidencePolicyOwner": "W09_ACTIVE_SERVER_AI_POLICY_CONTRACT",
+    })
+    adapter["meta"].update({
+        "emailEvidenceInputContract": "FINANCE_AI_PROPOSAL",
+        "emailEvidenceArchiveProofRequired": True,
+        "emailEvidenceAuthFailure": "PRODEX_AUTH_REQUIRED",
+    })
+
+    # Keep the deterministic matcher and handoff rules in the canonical
+    # renderer.  The exported W12 JSON is a generated surface, so these
+    # narrow rewrites make the split ownership and archive proof contracts
+    # reproducible without introducing a second workflow implementation.
+    matcher = node_by_name(sweep, "Match Outlook Evidence to Transactions")
+    matcher_code = matcher["parameters"]["jsCode"]
+    if "splitMessage = new Map()" not in matcher_code and "messageOwners = new Map()" not in matcher_code:
+        raise RuntimeError("W12 matcher source drifted before canonical rewrite")
+    if "splitMessage = new Map()" in matcher_code:
+        matcher_code = matcher_code.replace(
+            "const matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), splitMessage = new Map();",
+            "const matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), messageOwners = new Map();",
+        )
+        matcher_code = matcher_code.replace(
+            "const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor);",
+            "const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor), ownership = transaction.split_group ? 'SPLIT:' + transaction.split_group : 'NON_SPLIT';",
+        )
+    matcher_code = matcher_code.replace(
+        ".filter(candidate => transaction.split_group ? (!splitMessage.has(transaction.split_group) || splitMessage.get(transaction.split_group) === candidate.id) : !usedIds.has(candidate.id))",
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || (transaction.split_group && owner === ownership); })",
+    )
+    matcher_code = matcher_code.replace(
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || owner === ownership; })",
+        ".filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || (transaction.split_group && owner === ownership); })",
+    )
+    matcher_code = matcher_code.replace(
+        "const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), status = !transaction.split_group && allEligible.some(candidate => usedIds.has(candidate.id)) ? 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP' : 'NO_MATCH';",
+        "const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), ownershipConflict = allEligible.some(candidate => { const owner = messageOwners.get(candidate.id); return owner && (!transaction.split_group || owner !== ownership); }), status = ownershipConflict ? (transaction.split_group ? 'SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT' : 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP') : 'NO_MATCH';",
+    )
+    matcher_code = matcher_code.replace(
+        "return owner && owner !== ownership; }), status = ownershipConflict",
+        "return owner && (!transaction.split_group || owner !== ownership); }), status = ownershipConflict",
+    )
+    matcher_code = matcher_code.replace(
+        "if (transaction.split_group)\n        splitMessage.set(transaction.split_group, sourceMessageId);\n    else\n        usedIds.add(sourceMessageId);",
+        "messageOwners.set(sourceMessageId, ownership);\n    if (!transaction.split_group)\n        usedIds.add(sourceMessageId);",
+    )
+    if "splitMessage" in matcher_code or "messageOwners" not in matcher_code:
+        raise RuntimeError("W12 matcher canonical ownership rewrite incomplete")
+    matcher["parameters"]["jsCode"] = matcher_code
+
+    # Email proposal policy selection is server-owned. Keep the caller's
+    # evidence request free of policy hashes and domains, then resolve the
+    # active W09 row before W21. The policy builder body is composed from W09
+    # so there is one implementation of the active-row and domain rules.
+    evidence_validate = node_by_name(sweep, "Validate Evidence Request")
+    evidence_validate_code = evidence_validate["parameters"]["jsCode"]
+    evidence_validate_code = evidence_validate_code.replace(
+        ": ['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription']",
+        ": ['vendor', 'category', 'subcategory', 'tags']",
+    )
+    evidence_validate["parameters"]["jsCode"] = evidence_validate_code
+
+    build_handoff = node_by_name(sweep, "Build Evidence Handoff")
+    handoff_code = build_handoff["parameters"]["jsCode"]
+    archive_marker = "            archive_proof: archiveProof,\n"
+    if archive_marker not in handoff_code and "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
+        raise RuntimeError("W12 handoff source drifted before canonical rewrite")
+    if "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
+        handoff_code = handoff_code.replace(
+            archive_marker,
+            "            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n" + archive_marker,
+        )
+    build_handoff["parameters"]["jsCode"] = handoff_code
+
+    prepare = node_by_name(sweep, "Prepare W21 Email Request")
+    prepare_code = prepare["parameters"]["jsCode"]
+    if "unresolved: [...proposalInputs, ...unresolved]" not in prepare_code and "unresolved: proposalInputs" not in prepare_code:
+        raise RuntimeError("W12 request source drifted before canonical rewrite")
+    prepare_code = prepare_code.replace(
+        "unresolved: [...proposalInputs, ...unresolved]",
+        "unresolved: proposalInputs, evidence_unresolved: unresolved",
+    )
+    # The evidence hash is intentionally not an agent identity.  W12 must
+    # wait for the authoritative W09 policy row before deriving job_id and
+    # idempotency_key from the complete policy-bound request.
+    prepare_code = prepare_code.replace(
+        "if (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');",
+        "if (!/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_HASH_PROOF_REQUIRED');",
+    )
+    prepare_code = prepare_code.replace(
+        "policy_id: 'classify-unresolved', job_id: 'finance-ai:' + handoff.idempotency_key, idempotency_key: handoff.idempotency_key, agent_provider: 'CODEX_SUBSCRIPTION', policy_class: 'NORMAL', archive_sha256:",
+        "policy_id: 'classify-unresolved', agent_provider: 'CODEX_SUBSCRIPTION', policy_class: 'NORMAL', archive_sha256:",
+    )
+    prepare_code = prepare_code.replace(
+        ", archive_item_ids: handoff.archive_item_ids, unresolved: proposalInputs, evidence_unresolved: unresolved, evidence_handoff_sha256: handoff.idempotency_key",
+        ", archive_item_ids: handoff.archive_item_ids, unresolved: proposalInputs, evidence_unresolved: unresolved",
+    )
+    prepare_code = prepare_code.replace(
+        "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true,",
+        "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true, policy_id: 'classify-unresolved',",
+    )
+    prepare_code = re.sub(
+        r"(?:policy_id: 'classify-unresolved',\s*)+",
+        "policy_id: 'classify-unresolved', ",
+        prepare_code,
+    )
+    proof_guard = "if (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))"
+    if proof_guard not in prepare_code:
+        prepare_code = prepare_code.replace(
+            "const handoff = $json;\nif (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');",
+            "const handoff = $json;\nif (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');\nif (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_REQUIRED');",
+        )
+    guard_block = "if (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_REQUIRED');"
+    prepare_code = re.sub(
+        rf"(?:{re.escape(guard_block)}\n?)+",
+        guard_block + "\n",
+        prepare_code,
+    )
+    prepare_code = prepare_code.replace(
+        "archive_identity_keys: handoff.archive_proof.identity_keys, archive_item_ids: handoff.archive_proof.item_ids,",
+        "archive_identity_keys: handoff.archive_identity_keys, archive_item_ids: handoff.archive_item_ids,",
+    )
+    prepare["parameters"]["jsCode"] = prepare_code
+
+    policy_read = json.loads(json.dumps(node_by_name(w09, "Read Active Server AI Policy Contract")))
+    policy_read["id"] = "12082"
+    policy_read["name"] = "Read Active W09 Email Policy Contract"
+    policy_read["position"] = [-240, 2860]
+    policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+
+    policy_builder = json.loads(json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job")))
+    policy_builder["id"] = "12083"
+    policy_builder["name"] = "Build Authoritative W09 Email Job"
+    policy_builder["position"] = [40, 2860]
+    policy_builder_code = policy_builder["parameters"]["jsCode"]
+    policy_builder_code = policy_builder_code.replace(
+        "const request = $('Validate Untrusted Proposal Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
+        "const request = $('Prepare W21 Email Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
+    )
+    policy_builder_code = policy_builder_code.replace("x.requested_fields", "x.allowed_fields")
+    policy_builder_code = policy_builder_code.replace(
+        "return [{ json: { ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
+        "return [{ json: { ...request, ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
+    )
+    policy_builder["parameters"]["jsCode"] = policy_builder_code
+    # W09 owns the request-hash and handoff semantics.  Keep W12's evidence
+    # metadata on the item while composing those two nodes so the final
+    # identity is derived only after the active policy has been resolved.
+    request_hash = json.loads(json.dumps(node_by_name(w09, "SHA-256 Agent Request")))
+    request_hash["id"] = "12084"
+    request_hash["name"] = "SHA-256 W09 Email Request"
+    request_hash["position"] = [320, 2860]
+    handoff = json.loads(json.dumps(node_by_name(w09, "Build Idempotent Agent Handoff")))
+    handoff["id"] = "12085"
+    handoff["name"] = "Build Idempotent W09 Email Handoff"
+    handoff["position"] = [600, 2860]
+    handoff_code = handoff["parameters"]["jsCode"]
+    handoff_code = handoff_code.replace(
+        "schema_version: 1,",
+        "...request,\n            schema_version: 1,",
+        1,
+    )
+    if "...request," not in handoff_code:
+        raise RuntimeError("W09 handoff source drifted before W12 composition")
+    handoff["parameters"]["jsCode"] = handoff_code
+    policy_names = {policy_read["name"], policy_builder["name"]}
+    sweep["nodes"] = [node for node in sweep["nodes"] if node["name"] not in policy_names]
+    sweep["nodes"] = [
+        node for node in sweep["nodes"]
+        if node["name"] not in {request_hash["name"], handoff["name"]}
+    ]
+    sweep["nodes"].extend([policy_read, policy_builder, request_hash, handoff])
+    sweep["connections"]["Prepare W21 Email Request"] = {
+        "main": [[{"node": policy_read["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][policy_read["name"]] = {
+        "main": [[{"node": policy_builder["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][policy_builder["name"]] = {
+        "main": [[{"node": request_hash["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][request_hash["name"]] = {
+        "main": [[{"node": handoff["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][handoff["name"]] = {
+        "main": [[{"node": "Send Evidence to W21", "type": "main", "index": 0}]],
+    }
+
+    # W12 reuses the authoritative W09 proposal validator.  Only the input
+    # adapter differs: W12 has provider output from W21 and its own evidence
+    # request, while W09 owns the validator body and policy rules.
+    w09 = by_code["AI_PROPOSAL"]
+    w09_validator = node_by_name(w09, "Validate Proposal Schema and Policy Boundary")
+    w09_code = w09_validator["parameters"]["jsCode"]
+    w09_header = "const request = $('Build Idempotent Agent Handoff').first().json;\nconst response = $json;"
+    if w09_header not in w09_code:
+        raise RuntimeError("W09 validator source drifted before W12 composition")
+    w12_prefix = r"""
+const input = $('Build Authoritative W09 Email Job').first().json;
+const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
+if (providerError) {
+  if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
+    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+  }
+  throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
+}
+let providerResult;
+try {
+  providerResult = typeof $json.output === 'string'
+    ? JSON.parse($json.output)
+    : ($json.output && typeof $json.output === 'object' ? $json.output : $json);
+} catch {
+  throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
+}
+if (!providerResult || typeof providerResult !== 'object' || Array.isArray(providerResult)) {
+  throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
+}
+for (const field of ['policy_id', 'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256']) {
+  if (providerResult[field] !== undefined && providerResult[field] !== input[field]) {
+    throw new Error('AGENT_PROVIDER_POLICY_ENVELOPE_MISMATCH');
+  }
+}
+const normalized = {
+  ...providerResult,
+  agent_provider: input.agent_provider,
+  policy_id: input.policy_id,
+  policy_class: input.policy_class,
+  policy_sha256: input.policy_sha256,
+  config_sha256: input.config_sha256,
+  output_schema_sha256: input.output_schema_sha256,
+  runner_model: providerResult.runner_model || input.provider_model,
+  runner_reasoning_effort: providerResult.runner_reasoning_effort || input.provider_reasoning_effort,
+  auth_mode: providerResult.auth_mode || input.provider_auth_mode,
+};
+const request = {
+  job_id: input.job_id,
+  idempotency_key: input.idempotency_key,
+  agent_provider: input.agent_provider,
+  policy_id: input.policy_id,
+  policy_class: input.policy_class,
+  policy_sha256: input.policy_sha256,
+  config_sha256: input.config_sha256,
+  output_schema_sha256: input.output_schema_sha256,
+  unresolved: Array.isArray(input.unresolved) ? input.unresolved : [],
+};
+const response = normalized;
+""".strip()
+    w12_validator_code = w09_code.replace(w09_header, w12_prefix)
+    w12_validator_code = w12_validator_code.replace(
+        "return [{ json: response }];",
+        "return [{ json: { ...response, evidence_archive_sha256: input.archive_sha256, evidence_replay_keys: input.evidence_replay_keys, archive_identity_keys: input.archive_identity_keys, archive_item_ids: input.archive_item_ids, evidence_unresolved: input.evidence_unresolved, archive_readback_verified: true, proposal_dispatch: 'SUBMITTED' } }];",
+    )
+    terminal = node_by_name(sweep, "Validate Email Proposal Result")
+    terminal["parameters"]["jsCode"] = w12_validator_code
+    terminal["parameters"]["jsCode"] = terminal["parameters"]["jsCode"].replace(
+        "const input = $('Build Authoritative W09 Email Job').first().json;",
+        "const input = $('Build Idempotent W09 Email Handoff').first().json;",
+    )
+
+def apply_blocker_metadata(workflows: list[dict]) -> None:
+    """Project objective blocker evidence from the registry into four exports.
+
+    The stop/error nodes and operator notes in the placeholder workflows are
+    intentional fail-closed behavior.  This projection makes their release
+    conditions machine-readable without adding a node, changing a connection,
+    or relying on the rendered sticky-note text as the source of truth.
+    """
+    registry = json.loads(PIPELINE_REGISTRY_PATH.read_text(encoding="utf-8"))
+    catalog = registry.get("blocker_registry")
+    if not isinstance(catalog, dict) or catalog.get("schema_version") != 1:
+        raise ValueError("BLOCKER_REGISTRY_SCHEMA_MISMATCH")
+    definitions = catalog.get("definitions")
+    if not isinstance(definitions, dict) or not definitions:
+        raise ValueError("BLOCKER_REGISTRY_DEFINITIONS_MISSING")
+    rows = {
+        row["code"]: row
+        for row in registry.get("workflows", [])
+        if row.get("code") in BLOCKER_WORKFLOW_CODES
+    }
+    if set(rows) != BLOCKER_WORKFLOW_CODES:
+        missing = sorted(BLOCKER_WORKFLOW_CODES - set(rows))
+        raise ValueError(f"BLOCKER_WORKFLOW_REGISTRY_MISSING: {','.join(missing)}")
+
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    for code in sorted(BLOCKER_WORKFLOW_CODES):
+        workflow = by_code.get(code)
+        row = rows[code]
+        if workflow is None:
+            raise ValueError(f"BLOCKER_WORKFLOW_EXPORT_MISSING: {code}")
+        policy = row.get("blocker_policy")
+        blocker_codes = row.get("blockers")
+        if not isinstance(policy, dict) or not isinstance(blocker_codes, list) or not blocker_codes:
+            raise ValueError(f"BLOCKER_WORKFLOW_POLICY_MISSING: {code}")
+        if policy.get("evaluation") != catalog.get("evaluation"):
+            raise ValueError(f"BLOCKER_EVALUATION_MISMATCH: {code}")
+        if policy.get("state") != "BLOCKED":
+            raise ValueError(f"BLOCKER_STATE_MISMATCH: {code}")
+
+        required = []
+        for blocker_code in blocker_codes:
+            definition = definitions.get(blocker_code)
+            if not isinstance(definition, dict):
+                raise TypeError(f"BLOCKER_DEFINITION_MISSING: {code}:{blocker_code}")
+            evidence = definition.get("evidence")
+            if not isinstance(evidence, dict) or not evidence.get("required_fields") or not evidence.get("assertions"):
+                raise ValueError(f"BLOCKER_EVIDENCE_CONTRACT_MISSING: {blocker_code}")
+            projected = json.loads(json.dumps(definition))
+            projected.update({"code": blocker_code, "required": True, "state": policy["state"]})
+            required.append(projected)
+
+        sticky_notes = [
+            node["name"]
+            for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.stickyNote"
+        ]
+        if not sticky_notes:
+            raise ValueError(f"BLOCKER_OPERATOR_WARNING_MISSING: {code}")
+        guard_nodes = [
+            node["name"]
+            for node in workflow["nodes"]
+            if node.get("type") in {
+                "n8n-nodes-base.stopAndError",
+                "@n8n/n8n-nodes-langchain.mcpTrigger",
+            }
+        ]
+        if not guard_nodes:
+            raise ValueError(f"BLOCKER_EXECUTABLE_GUARD_MISSING: {code}")
+        workflow["meta"]["activationBlocked"] = True
+        workflow["meta"]["activationBlockers"] = list(blocker_codes)
+        workflow["meta"]["blockerContract"] = {
+            "schemaVersion": catalog["schema_version"],
+            "registryPath": "integrations/n8n/pipeline-registry.json",
+            "workflowCode": code,
+            "evaluation": policy["evaluation"],
+            "activationBlocked": True,
+            "blockerCodes": list(blocker_codes),
+            "required": required,
+            "operatorWarning": {
+                "required": bool(policy.get("operator_warning_required")),
+                "retainUntil": "ALL_REQUIRED_PROVEN",
+                "stickyNoteNames": sticky_notes,
+                "guardNodeNames": guard_nodes,
+            },
+        }
+
+
 def connected_order(workflow: dict) -> list[dict]:
     """Return a stable dependency-first order, tolerating branch merges."""
     nodes = [n for n in workflow["nodes"] if n["type"] != "n8n-nodes-base.stickyNote"]
@@ -3264,6 +4220,21 @@ def connected_order(workflow: dict) -> list[dict]:
     return [by_name[name] for name in ordered]
 
 
+def remove_generated_stage_notes(workflow: dict) -> None:
+    """Drop presentation-only stage labels while retaining blocker warnings."""
+    retained_warning_notes = [
+        node
+        for node in workflow["nodes"]
+        if node.get("type") == "n8n-nodes-base.stickyNote"
+        and node.get("id") in OPERATOR_WARNING_NOTE_IDS
+    ]
+    workflow["nodes"] = [
+        node for node in workflow["nodes"]
+        if node.get("type") != "n8n-nodes-base.stickyNote"
+    ]
+    workflow["nodes"].extend(retained_warning_notes)
+
+
 def layout(workflow: dict) -> None:
     ordered = connected_order(workflow)
     columns = 8
@@ -3275,44 +4246,8 @@ def layout(workflow: dict) -> None:
         row, column = divmod(index, columns)
         node["position"] = [left + column * x_step, top + row * y_step]
 
-    workflow["nodes"] = [
-        node
-        for node in workflow["nodes"]
-        if not (
-            node["type"] == "n8n-nodes-base.stickyNote"
-            and (
-                str(node.get("id", "")).startswith(f"{workflow['id']}-generated-note-")
-                or str(node.get("id", "")).startswith(f"{workflow['id']}-note-")
-            )
-        )
-    ]
+    remove_generated_stage_notes(workflow)
     row_count = max(1, (len(ordered) + columns - 1) // columns)
-    for row in range(row_count):
-        start = row * columns + 1
-        end = min(len(ordered), (row + 1) * columns)
-        section = ordered[row * columns : min(len(ordered), (row + 1) * columns)]
-        first = section[0]["name"]
-        last = section[-1]["name"]
-        workflow["nodes"].append(
-            {
-                "id": f"{workflow['id']}-generated-note-{row + 1}",
-                "name": f"Stage {row + 1} · {first} to {last}",
-                "type": "n8n-nodes-base.stickyNote",
-                "typeVersion": 1,
-                "position": [left - 40, top + row * y_step - 180],
-                "parameters": {
-                    "content": (
-                        f"## Stage {row + 1} · {first} → {last}\n"
-                        f"**Input:** {first}  ·  **Output:** {last}  ·  **Nodes:** {start}–{end}\n"
-                        "Any rejected invariant stops this stage and routes only a redacted "
-                        "failure receipt to the shared error workflow."
-                    ),
-                    "height": 110,
-                    "width": 2240,
-                    "color": 7,
-                },
-            }
-        )
 
     # Canvas Groups are native n8n 2.36.2 metadata. Keep groups limited to
     # connected, non-trigger components inside each documented stage so the
@@ -3369,16 +4304,16 @@ def layout(workflow: dict) -> None:
                 ),
             })
     workflow["nodeGroups"] = groups
-    folder = FOLDER_BY_CODE[workflow["meta"]["financeWorkflowCode"]]
+    folder = FOLDER_BY_ID[FOLDER_BY_CODE[workflow["meta"]["financeWorkflowCode"]]]
     workflow["meta"]["workflowFolder"] = {
         "id": folder["id"],
         "name": folder["name"],
         "placement": "POST_IMPORT_REVIEWED_MIGRATION",
     }
-    workflow["meta"]["workflowTags"] = FOLDER_CONTRACT["tags"]
+    workflow["meta"]["workflowTags"] = DEFAULT_WORKFLOW_TAGS
     workflow["tags"] = [
-        {"id": f"fin{index:013d}", "name": name}
-        for index, name in enumerate(FOLDER_CONTRACT["tags"], start=1)
+        {"id": TAG_BY_NAME[name], "name": name}
+        for name in DEFAULT_WORKFLOW_TAGS
     ]
 
 
@@ -3389,11 +4324,16 @@ def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.json"))
     workflows = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     workflows = [repair_mojibake(workflow) for workflow in workflows]
+    ensure_shared_monthly_cycle(workflows)
     harden_exact_node_contracts(workflows)
+    apply_blocker_metadata(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
+    ensure_email_enrichment_contract(workflows)
     assert_monthly_cycle_commit_graph(workflows)
-    paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH})
+    assert_archive_readback_contract(workflows)
+    assert_four_table_bootstrap(workflows)
+    paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
     path_to_code = {
@@ -3402,18 +4342,29 @@ def main() -> int:
             if path == ACTUAL_APPLY_PATH
             else "SUBSCRIPTION_AGENT_ADAPTER"
             if path == AGENT_ADAPTER_PATH
+            else MONTHLY_SHARED_WORKFLOW_CODE
+            if path == MONTHLY_SHARED_PATH
             else json.loads(path.read_text(encoding="utf-8"))["meta"]["financeWorkflowCode"]
         )
         for path in paths
-        if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH}
+        if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
     }
     workflows = [by_code[path_to_code[path]] for path in paths]
     format_code_nodes(workflows)
     for workflow in workflows:
         # W03 is a reviewed migration canvas. Preserve its existing positions
         # and groups while adding runtime nodes; this task does not redesign UI.
-        if workflow["meta"]["financeWorkflowCode"] not in {"SHARED_STATEMENT_PIPELINE", "ACTUAL_OUTBOX_APPLY"}:
+        if workflow["meta"]["financeWorkflowCode"] not in {
+            "SHARED_STATEMENT_PIPELINE",
+            "SHARED_MONTHLY_STATEMENT_CYCLE",
+            "ACTUAL_OUTBOX_APPLY",
+        }:
             layout(workflow)
+        else:
+            # These reviewed migration canvases intentionally keep their
+            # existing positions/groups, but stage labels are still
+            # presentation-only and must obey the same cleanup policy.
+            remove_generated_stage_notes(workflow)
     rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
     if args.check:
         stale = [

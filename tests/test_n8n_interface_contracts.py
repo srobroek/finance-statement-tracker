@@ -28,6 +28,8 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "OUTLOOK_MESSAGE_SWEEP": (
         ("Archive Enumerated Messages in W01", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Archive Matched Email Evidence in W01", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Send Evidence to W21", "SUBSCRIPTION_AGENT_ADAPTER"),
     ),
     "SHARED_STATEMENT_PIPELINE": (
         ("Request Scoped AI Proposals", "AI_PROPOSAL"),
@@ -35,12 +37,12 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Apply Prepared Outbox Safely", "ACTUAL_OUTBOX_APPLY"),
     ),
     "EI_MONTHLY_STATEMENT": (
-        ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
-        ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
-        ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
-        ("Commit Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
+        ("Run Shared Monthly Statement Cycle", "SHARED_MONTHLY_STATEMENT_CYCLE"),
     ),
     "WIO_MONTHLY_STATEMENT": (
+        ("Run Shared Monthly Statement Cycle", "SHARED_MONTHLY_STATEMENT_CYCLE"),
+    ),
+    "SHARED_MONTHLY_STATEMENT_CYCLE": (
         ("Acquire Archive and Read Back", "OUTLOOK_MESSAGE_SWEEP"),
         ("Initialize Source Cursor via W12", "OUTLOOK_MESSAGE_SWEEP"),
         ("Run Shared Statement Pipeline", "SHARED_STATEMENT_PIPELINE"),
@@ -156,6 +158,34 @@ SWEEP_CONTEXT = (
     "heartbeat",
     "messages",
 )
+EMAIL_ARCHIVE_PRODUCER_CONTEXT = (
+    "run_id",
+    "source_code",
+    "folder_id",
+    "senders",
+    "subjects",
+    "window_start",
+    "run_upper_bound",
+    "onedrive_parent_id",
+    "messages",
+    "matched",
+    "unresolved",
+    "replay_keys",
+)
+EMAIL_ARCHIVE_CONTEXT = EMAIL_ARCHIVE_PRODUCER_CONTEXT[:9]
+EMAIL_PROPOSAL_CONTEXT = (
+    "operation_code",
+    "email_evidence",
+    "job_id",
+    "idempotency_key",
+    "agent_provider",
+    "policy_class",
+    "archive_sha256",
+    "evidence_replay_keys",
+    "archive_identity_keys",
+    "archive_item_ids",
+    "unresolved",
+)
 CURSOR_INITIALIZATION_CONTEXT = (
     "operation",
     "run_id",
@@ -186,36 +216,40 @@ CURSOR_COMMIT_CONTEXT = (
 # either caller from the observed topology check.
 BOUNDARY_FIXTURES: tuple[dict, ...] = (
     boundary_case(
+        "source-specific monthly caller",
+        ("EI_MONTHLY_STATEMENT", "Run Shared Monthly Statement Cycle"),
+        "SHARED_MONTHLY_STATEMENT_CYCLE",
+        ("cycle_context", "deadline_policy", "execution_id"),
+        ("cycle_context", "deadline_policy", "execution_id"),
+        (("WIO_MONTHLY_STATEMENT", "Run Shared Monthly Statement Cycle"),),
+    ),
+    boundary_case(
         "monthly acquisition request",
-        ("EI_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Acquire Archive and Read Back"),
         "OUTLOOK_MESSAGE_SWEEP",
         MONTHLY_SWEEP_REQUEST,
         MONTHLY_SWEEP_REQUEST,
-        (("WIO_MONTHLY_STATEMENT", "Acquire Archive and Read Back"),),
     ),
     boundary_case(
         "versioned source cursor initialization",
-        ("EI_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Initialize Source Cursor via W12"),
         "OUTLOOK_MESSAGE_SWEEP",
         CURSOR_INITIALIZATION_CONTEXT,
         CURSOR_INITIALIZATION_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Initialize Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline input",
-        ("EI_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Run Shared Statement Pipeline"),
         "SHARED_STATEMENT_PIPELINE",
         STATEMENT_CONTEXT,
         STATEMENT_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Run Shared Statement Pipeline"),),
     ),
     boundary_case(
         "durable source cursor commit",
-        ("EI_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),
+        ("SHARED_MONTHLY_STATEMENT_CYCLE", "Commit Source Cursor via W12"),
         "OUTLOOK_MESSAGE_SWEEP",
         CURSOR_COMMIT_CONTEXT,
         CURSOR_COMMIT_CONTEXT,
-        (("WIO_MONTHLY_STATEMENT", "Commit Source Cursor via W12"),),
     ),
     boundary_case(
         "statement pipeline to AI proposal",
@@ -387,6 +421,20 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         SWEEP_CONTEXT,
         tuple(field for field in ACQUISITION_CONTEXT if field != "onedrive_item_id"),
     ),
+    boundary_case(
+        "matched email evidence to acquisition archive",
+        ("OUTLOOK_MESSAGE_SWEEP", "Archive Matched Email Evidence in W01"),
+        "OUTLOOK_FINANCE_ACQUISITION",
+        EMAIL_ARCHIVE_PRODUCER_CONTEXT,
+        EMAIL_ARCHIVE_CONTEXT,
+    ),
+    boundary_case(
+        "matched email evidence to proposal adapter",
+        ("OUTLOOK_MESSAGE_SWEEP", "Send Evidence to W21"),
+        "SUBSCRIPTION_AGENT_ADAPTER",
+        EMAIL_PROPOSAL_CONTEXT,
+        EMAIL_PROPOSAL_CONTEXT,
+    ),
 )
 
 ERROR_INPUT_FIELDS = ("execution", "workflow")
@@ -491,7 +539,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
         registry_codes = set(self.registry_by_code)
         actual_codes = set(self.by_code)
         self.assertEqual(actual_codes, registry_codes)
-        self.assertEqual(len(actual_codes), 21)
+        self.assertEqual(len(actual_codes), 19)
 
         ids = {workflow["id"]: workflow for workflow in self.workflows.values()}
         for filename, workflow in self.workflows.items():

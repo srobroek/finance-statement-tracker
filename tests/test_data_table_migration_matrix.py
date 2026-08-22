@@ -76,12 +76,12 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             {
                 "source_tables": 15,
                 "source_columns": 215,
-                "node_references": 144,
-                "consumer_node_edges": 1229,
-                "filter_only_consumer_columns": 39,
-                "filter_only_consumer_edges": 121,
-                "write_reference_edges": 478,
-                "producer_node_edges": 693,
+                "node_references": 122,
+                "consumer_node_edges": 1227,
+                "filter_only_consumer_columns": 35,
+                "filter_only_consumer_edges": 115,
+                "write_reference_edges": 435,
+                "producer_node_edges": 435,
             },
         )
         self.assertEqual(invariants["dispositions"], {"keep": 101, "transform": 58, "remove": 56})
@@ -142,7 +142,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
             cursor["consumer_nodes"],
         )
-        self.assertIn(
+        self.assertNotIn(
             "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors",
             cursor["producer_nodes"],
         )
@@ -162,6 +162,32 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             )
             self.assertEqual(column["consumer_nodes"], expected_consumers, (table_name, source_column))
             self.assertEqual(column["producer_nodes"], expected_producers, (table_name, source_column))
+
+    def test_target_schema_creation_is_validated_but_not_a_legacy_source_reference(self) -> None:
+        workflow = load_json(N8N / "workflows" / "19-platform-data-table-bootstrap.json")
+        creates = [
+            node for node in workflow["nodes"]
+            if node.get("type") == "n8n-nodes-base.dataTable"
+            and node.get("parameters", {}).get("resource") == "table"
+            and node.get("parameters", {}).get("operation") == "create"
+        ]
+        self.assertEqual(
+            [node["parameters"]["tableName"] for node in creates],
+            self.matrix["targets"],
+        )
+        self.assertFalse(
+            any(
+                reference["file"].endswith("19-platform-data-table-bootstrap.json")
+                for table in self.matrix["tables"]
+                for reference in table["node_references"]
+            )
+        )
+        for node, target in zip(creates, self.matrix["targets"], strict=True):
+            expected = [
+                {"name": field, "type": spec["type"]}
+                for field, spec in self.matrix["target_schemas"][target]["columns"].items()
+            ]
+            self.assertEqual(node["parameters"]["columns"]["column"], expected)
 
     def test_generator_output_is_byte_identical_and_check_passes(self) -> None:
         first = self.generator.render(self.generator.build_matrix())

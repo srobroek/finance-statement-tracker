@@ -35,6 +35,30 @@ const stable = value => {
   return value;
 };
 const stableDigest = value => digest(JSON.stringify(stable(value)));
+const compareText = (left, right) => left === right ? 0 : (left < right ? -1 : 1);
+const compareRows = (left, right) => {
+  const leftKey = [left.name];
+  const rightKey = [right.name];
+  for (let index = 0; index < leftKey.length; index += 1) {
+    const comparison = compareText(leftKey[index], rightKey[index]);
+    if (comparison) return comparison;
+  }
+  return 0;
+};
+const transactionKey = row => [row.account_name, row.date, row.imported_id, Number(row.amount_minor), row.payee ?? ''];
+const compareTransactions = (left, right) => {
+  const leftKey = transactionKey(left);
+  const rightKey = transactionKey(right);
+  for (let index = 0; index < leftKey.length; index += 1) {
+    const comparison = typeof leftKey[index] === 'number'
+      ? leftKey[index] - rightKey[index]
+      : compareText(leftKey[index], rightKey[index]);
+    if (comparison) return comparison;
+  }
+  return 0;
+};
+const canonicalizeAccounts = rows => [...rows].sort(compareRows);
+const canonicalizeTransactions = rows => [...rows].sort(compareTransactions);
 const expectedBytes = await readFile(expectedPath);
 const expectedStat = await stat(expectedPath);
 const expectedMode = (expectedStat.mode & 0o777).toString(8).padStart(4, '0');
@@ -54,8 +78,8 @@ const expectedEnvelopeEvidence = {
 };
 const expectedEnvelope = JSON.parse(expectedBytes.toString('utf8'));
 const expected = {
-  accounts: expectedEnvelope.accounts,
-  representative_transactions: expectedEnvelope.representative_transactions,
+  accounts: canonicalizeAccounts(expectedEnvelope.accounts),
+  representative_transactions: canonicalizeTransactions(expectedEnvelope.representative_transactions),
 };
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
@@ -107,7 +131,8 @@ const indexedDbState = async () => page.evaluate(async () => {
   }
 }).catch(error => ({ available: false, error: String(error?.name ?? 'indexeddb_error') }));
 
-const registerState = async accountName => page.evaluate(({ accountName }) => {
+const registerStateInPage = ({ accountName }) => {
+  const normalize = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const body = document.body?.innerText ?? '';
   const visible = element => {
     if (!element) return false;
@@ -120,7 +145,7 @@ const registerState = async accountName => page.evaluate(({ accountName }) => {
   const wrappers = inner ? [...inner.querySelectorAll('[data-focus-key]')].filter(visible) : [];
   const rows = wrappers.map(wrapper => wrapper.querySelector('[data-testid="row"]')).filter(visible);
   const headings = [...document.querySelectorAll('h1,h2,h3,[role="heading"]')]
-    .filter(visible).map(element => clean(element.textContent));
+    .filter(visible).map(element => normalize(element.textContent));
   const searchCandidates = [
     ['[data-testid="transactions-search"]', document.querySelector('[data-testid="transactions-search"]')],
     ['input[placeholder*="Search" i]', document.querySelector('input[placeholder*="Search" i]')],
@@ -142,7 +167,9 @@ const registerState = async accountName => page.evaluate(({ accountName }) => {
     body_downloading: body.includes('Downloading'),
     body_has_files: body.includes('Files'),
   };
-}, { accountName }).catch(error => ({ route: page.url(), account_heading_visible: false, table_present: false, table_visible: false, table_inner_present: false, table_inner_visible: false, row_wrapper_count: 0, row_count: 0, search_present: false, search_selector: null, body_downloading: false, body_has_files: false, error: String(error?.name ?? 'register_state_error') }));
+};
+
+const registerState = async accountName => page.evaluate(registerStateInPage, { accountName }).catch(error => ({ route: page.url(), account_heading_visible: false, table_present: false, table_visible: false, table_inner_present: false, table_inner_visible: false, row_wrapper_count: 0, row_count: 0, search_present: false, search_selector: null, body_downloading: false, body_has_files: false, error: String(error?.name ?? 'register_state_error') }));
 
 const checkpoint = async (label, extra = {}) => {
   const body = await page.locator('body').innerText().catch(() => '');
@@ -214,7 +241,7 @@ const collectApiProof = async () => {
         apiTransactions.push({ account_name: accountName, amount_minor: Number(match.amount), date: match.date, imported_id: match.imported_id, payee: match.payee ?? null });
       }
     }
-    const result = { accounts: apiAccounts, representative_transactions: apiTransactions };
+    const result = { accounts: canonicalizeAccounts(apiAccounts), representative_transactions: canonicalizeTransactions(apiTransactions) };
     const expectedDigest = stableDigest(expected);
     const resultDigest = stableDigest(result);
     if (resultDigest !== expectedDigest) throw new Error('Actual API normalized contract differs from expected');
@@ -353,8 +380,9 @@ try {
   evidence.indexeddb = await indexedDbState();
   if (!evidence.indexeddb.databases?.some(entry => entry.name?.startsWith('documents-'))) throw new Error('Actual document IndexedDB database missing');
   if (uiTransactions.length !== expected.representative_transactions.length) throw new Error('representative transaction count mismatch');
+  const canonicalUiTransactions = canonicalizeTransactions(uiTransactions);
   await checkpoint('final_ui_parity', { account_count: evidence.account_surfaces.length, default_visible_account_count: 11, closed_account_count: 1, transaction_count: uiTransactions.length, list_proven: true, search_proven: true, rows_proven: true, account_heading_proven: true, api_pre_ui: evidence.api_pre_ui });
-  console.log(JSON.stringify({ schema_version: 2, source_commit: sourceCommit, expected_envelope: expectedEnvelopeEvidence, api: apiProof.result, ui: { accounts: expected.accounts, representative_transactions: uiTransactions }, evidence, browser_events: events, checkpoints }, null, 2));
+  console.log(JSON.stringify({ schema_version: 2, source_commit: sourceCommit, expected_envelope: expectedEnvelopeEvidence, api: apiProof.result, ui: { accounts: canonicalizeAccounts(expected.accounts), representative_transactions: canonicalUiTransactions }, evidence, browser_events: events, checkpoints }, null, 2));
 } catch (error) {
   await checkpoint('probe_failure', { failure_checkpoint: true, error: redact(error?.stack ?? error?.message ?? error), final_ui_booleans: { list_proven: false, search_proven: false, rows_proven: false, account_heading_proven: false } }).catch(() => {});
   throw error;

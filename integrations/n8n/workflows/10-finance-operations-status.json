@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000010",
-  "name": "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
+  "name": "Finance · Operations Status and Audited MCP Dispatch",
   "active": false,
   "nodes": [
     {
@@ -335,7 +335,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000011",
           "mode": "list",
-          "cachedResultName": "Finance · Interactive Artifact Handoff · Setup Required"
+          "cachedResultName": "Finance · Interactive Artifact Handoff"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -366,7 +366,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000013",
           "mode": "list",
-          "cachedResultName": "Finance · Request Document Extraction · Setup Required"
+          "cachedResultName": "Finance · Request Document Extraction"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -616,54 +616,6 @@
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Redacted MCP Result. Keep this deterministic and fail closed.\nconst r = $('SHA-256 MCP Result').first().json;\nif (r.state !== 'COMPLETED')\n    throw new Error(`MCP_DISPATCH_FAILED:${r.error_class}`);\nreturn [{ json: r.result }];\n"
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-1",
-      "name": "Stage 1 · 08:45 Daily Health Summary to Read Back ACCEPTED MCP Request",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · 08:45 Daily Health Summary → Read Back ACCEPTED MCP Request\n**Input:** 08:45 Daily Health Summary  ·  **Output:** Read Back ACCEPTED MCP Request  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-2",
-      "name": "Stage 2 · Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Compare ACCEPTED MCP Readback → SHA-256 MCP Result\n**Input:** Compare ACCEPTED MCP Readback  ·  **Output:** SHA-256 MCP Result  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-3",
-      "name": "Stage 3 · Upsert Terminal MCP Request to Return Redacted MCP Result",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        580
-      ],
-      "parameters": {
-        "content": "## Stage 3 · Upsert Terminal MCP Request → Return Redacted MCP Result\n**Input:** Upsert Terminal MCP Request  ·  **Output:** Return Redacted MCP Result  ·  **Nodes:** 17–22\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
       }
     }
   ],
@@ -928,8 +880,8 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000007",
-      "name": "07 Operations & Recovery",
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [

@@ -1027,11 +1027,11 @@
       ],
       "tests": [
         "Automation manifest/lifecycle tests pass in full-suite run",
-        "n8n workflow, runner-closure, and task-runner-image focus: 50 run, 6 skipped",
-        "codex-agent-runner npm: 16 of 16 pass",
+        "n8n workflow and task-runner-image focus: 50 run, 6 skipped",
+        "subscription adapter contract tests remain repository-scoped",
         "full Python: 381 run, 6 skipped",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: 21 workflows, 0 active, 0 published, 8 folders, 63 tag edges",
-        "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, task launcher, and Codex runner passed"
+        "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4: n8n, task broker, and task launcher passed"
       ],
       "live_readback": "Internal n8n 2.36.2 at finance commit 00491aa and orchestrator commit c8d4f7c has 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, 13 OneDrive bindings, 15 exact Data Tables, seven AI policy rows, and nine config rows. Runtime health passed; no provider, Actual, or cashback call occurred.",
       "remaining_work": "Refresh and read back both Microsoft credentials, execute the fixture matrix twice, and prove issuer schedules before any activation.",
@@ -1227,7 +1227,7 @@
       ],
       "tests": [
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed"
+        "Subscription adapter: 14 passed, 2 failed"
       ],
       "live_readback": "verification.full-corpus-and-production-promotion: Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
       "remaining_work": "Reach a clean tree and green suites, hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts/balances/notes/manual state, run restore/failure drills, then produce reviewed promotion evidence.",
@@ -1279,7 +1279,7 @@
       ],
       "tests": [
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Subscription adapter: 14 passed, 2 failed",
         "local receipt: 21 imported, 0 active, 0 published",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d: exact commits and 21/0/0 state"
       ],
@@ -1505,7 +1505,6 @@
         "tests/test_evidence.py",
         "deploy/finance-runtime/render-env.sh",
         "deploy/finance-runtime/finance.env.tpl",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
         "config/project-acceptance.json"
       ],
       "tests": [
@@ -1707,7 +1706,7 @@
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run",
         "Evidence tests pass; n8n structural extraction checks pass except unrelated bootstrap failure"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end. | ingestion.documents-and-evidence: No accepted live warranty/receipt acquisition fixture or Linux UDS encrypted-PDF runtime proof for current orchestration.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end. | ingestion.documents-and-evidence: No accepted live warranty/receipt acquisition fixture or Linux UDS encrypted-PDF runtime proof for current orchestration.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures. | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -1784,12 +1783,13 @@
       "implementation_state": "PARTIAL",
       "verification_state": "FAILING_WORKTREE",
       "evidence_paths": [
-        "services/codex-agent-runner",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
+        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
+      "tests": [
+        "subscription adapter contract and protected-field tests remain repository-scoped; provider execution is not claimed"
+      ],
+      "live_readback": "orchestration.subscription-agent-handoff: The direct subscription adapter is repository-defined and inactive; provider execution is not production promoted.",
       "remaining_work": "Collect current acceptance evidence for AGENT-001.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
@@ -1822,12 +1822,13 @@
       "implementation_state": "PARTIAL",
       "verification_state": "FAILING_WORKTREE",
       "evidence_paths": [
-        "services/codex-agent-runner",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
+        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
+      "tests": [
+        "subscription adapter contract and protected-field tests remain repository-scoped; provider execution is not claimed"
+      ],
+      "live_readback": "orchestration.subscription-agent-handoff: The direct subscription adapter is repository-defined and inactive; provider execution is not production promoted.",
       "remaining_work": "Collect current acceptance evidence for AGENT-002.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
@@ -1843,8 +1844,8 @@
     {
       "id": "AGENT-003",
       "domain": "AI providers and agent execution",
-      "title": "Ephemeral bounded Codex proposal runner",
-      "requirement": "Run one ChatGPT-subscription-authenticated Codex invocation per AI proposal in a read-only sandbox with fixed schema, fixed operation, no finance credentials, and no caller command/prompt/path/URL.",
+      "title": "Direct subscription proposal adapter",
+      "requirement": "Run one bounded ChatGPT-subscription proposal through the pinned Workflow 21 adapter with a fixed schema, fixed operation, and no caller command/prompt/path/URL.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "agent_runtime",
@@ -1857,13 +1858,12 @@
         "Three consecutive valid disposable receipts",
         "Malicious output and protected fields rejected",
         "ChatGPT login forced and API-key fallback forbidden",
-        "Container cannot reach Actual, OneDrive or cashback credentials"
+        "Provider parameters remain server-owned"
       ],
       "implementation_state": "PARTIAL",
       "verification_state": "HOST_RUNNER_HEALTH_VERIFIED_PROVIDER_AUTH_BLOCKED",
       "evidence_paths": [
-        "services/codex-agent-runner",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
+        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json",
         "deploy/finance-runtime/render-env.sh",
         "deploy/finance-runtime/finance.env.tpl",
@@ -1871,13 +1871,13 @@
         "/opt/disposable/finance-n8n/20260819155134/receipts/runtime-health.json"
       ],
       "tests": [
+        "subscription adapter contract and protected-field tests remain repository-scoped; provider execution is not claimed",
         "Static secret/config tests pass in full-suite run",
-        "codex-agent-runner: 16 of 16 pass",
-        "provider envelope and protected-field tests pass",
-        "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4 verified the bounded Codex runner without a provider call"
+        "subscription adapter contract and protected-field tests pass",
+        "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4 covered the n8n host without a provider call"
       ],
-      "live_readback": "The bounded Codex runner is healthy on the internal host and runner contracts pass. The health check made no provider call; subscription authentication, a full n8n proposal, and credential-surface isolation receipts remain absent.",
-      "remaining_work": "Repair isolated Codex auth, prove process isolation and redaction, and execute malicious protected-field cases through n8n.",
+      "live_readback": "The direct subscription adapter is repository-defined and inactive. The health check made no provider call; subscription authentication, a full n8n proposal, and credential-surface isolation receipts remain absent.",
+      "remaining_work": "Prove subscription authentication and execute malicious protected-field cases through n8n.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED",
         "DISPOSABLE_SECRET_AUDIT_REQUIRED",
@@ -1886,7 +1886,7 @@
       ],
       "source_status": "ASSISTANT_CLAIM_ONLY",
       "contradictions": [
-        "The user correctly noted AI enrichment cannot run inside the ordinary container because Codex is unavailable there; the target uses a dedicated runner with cached ChatGPT auth",
+        "The earlier dedicated-runner design is superseded by direct pinned Workflow 21 subscription nodes",
         "Scheduled-task subagents are superseded by workflow-level fixed AI calls"
       ],
       "last_verified": "2026-08-20",
@@ -1914,12 +1914,13 @@
       "implementation_state": "PARTIAL",
       "verification_state": "FAILING_WORKTREE",
       "evidence_paths": [
-        "services/codex-agent-runner",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
+        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json"
       ],
-      "tests": [],
-      "live_readback": "",
+      "tests": [
+        "subscription adapter contract and protected-field tests remain repository-scoped; provider execution is not claimed"
+      ],
+      "live_readback": "orchestration.subscription-agent-handoff: The direct subscription adapter is repository-defined and inactive; provider execution is not production promoted.",
       "remaining_work": "Collect current acceptance evidence for AGENT-004.",
       "blockers": [
         "FULL_N8N_AI_WORKFLOW_EXECUTION_REQUIRED"
@@ -1951,15 +1952,14 @@
       "implementation_state": "PARTIAL",
       "verification_state": "HOST_REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING",
       "evidence_paths": [
-        "services/codex-agent-runner",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
+        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "integrations/n8n/contracts/ai-proposal-v1.schema.json",
         "config/agent-providers.json",
         "integrations/n8n/community-node-lock.json",
-        "integrations/n8n/workflows/21-subscription-agent-adapter.json",
         "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"
       ],
       "tests": [
+        "subscription adapter contract and protected-field tests remain repository-scoped; provider execution is not claimed",
         "typed contract, server-owned model/reasoning/auth, and both provider branches pass repository tests"
       ],
       "live_readback": "Both branches are enabled behind one typed contract and both pinned packages register in the internal host runtime. The reviewed promotion made no provider call, so neither branch has subscription-authenticated structured execution evidence.",
@@ -2115,7 +2115,7 @@
         "tests/test_wealth_acceptance.py passing",
         "tests/test_account_completeness.py passing",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Subscription adapter: 14 passed, 2 failed",
         "full Python: 381 run, 6 skipped"
       ],
       "live_readback": "No current authenticated UI/API account-set, signed-balance, or net-worth parity; fresh Sarwa and FX are absent.",
@@ -2168,7 +2168,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -2880,7 +2880,7 @@
       ],
       "tests": [
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Subscription adapter: 14 passed, 2 failed",
         "b845ccf guarded dry-run tests and full Python suite pass"
       ],
       "live_readback": "Current plan is deterministic and amount-safe, but older receipts cannot certify current workflows, account scope, semantics, notes, or runtime bytes.",
@@ -3665,8 +3665,8 @@
     {
       "id": "BROWSER-001",
       "domain": "browser acquisition",
-      "title": "User-assisted browser acquisition pipeline",
-      "requirement": "Use authenticated browser sessions for FAB, Sarwa and Amazon; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer.",
+      "title": "User-assisted browser acquisition and email enrichment",
+      "requirement": "Use authenticated browser sessions for FAB and Sarwa; user performs login/MFA, agent downloads official export or captures explicit visible data, then archives and validates a browser-capture artifact before the single Actual writer. Enrich Amazon and other merchant transactions through generic order-email search.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "browser_acquisition",
@@ -3692,7 +3692,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -3740,7 +3740,7 @@
         "tests/test_account_completeness.py passing in full-suite run",
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "accounts.fab-non-credit: Receipt says guarded apply/readback passed for the planned FAB accounts, but UI readback remains PENDING_USER_CLOUDFLARE_AUTH and no current independent live query was possible. | ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "accounts.fab-non-credit: Receipt says guarded apply/readback passed for the planned FAB accounts, but UI readback remains PENDING_USER_CLOUDFLARE_AUTH and no current independent live query was possible. | ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Prove current Actual API and authenticated UI contain exactly the complete FAB non-credit inventory with source-matching signed balances. | Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "PRODUCTION_UI_READBACK_REQUIRED",
@@ -3794,7 +3794,7 @@
         "tests/test_account_completeness.py passing",
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "accounts.sarwa: No fresh authenticated Sarwa capture, FX snapshot, or current Actual UI/API account readback is bound to the proposed state. | ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "accounts.sarwa: No fresh authenticated Sarwa capture, FX snapshot, or current Actual UI/API account readback is bound to the proposed state. | ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Acquire fresh interactive holdings and FX, run disposable idempotent projection, then guardedly create/read back each included off-budget portfolio account. | Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED",
@@ -3814,8 +3814,8 @@
     {
       "id": "BROWSER-004",
       "domain": "browser acquisition",
-      "title": "Amazon authenticated order capture",
-      "requirement": "Capture order IDs, order totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata from the authenticated Amazon account.",
+      "title": "Merchant order-email enrichment",
+      "requirement": "Search generic order emails around each transaction date and capture order IDs, totals, item descriptions, dates, invoices/receipts, returns and warranty-relevant metadata for Amazon and other merchants.",
       "priority": "P1",
       "status": "PARTIAL",
       "owner_workstream": "browser_acquisition",
@@ -3841,7 +3841,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -3849,7 +3849,7 @@
       ],
       "source_status": "MIXED",
       "contradictions": [
-        "Browser login success is not proof that every historical order/invoice was captured"
+        "The earlier authenticated-browser order-capture design is superseded by generic order-email enrichment"
       ],
       "last_verified": "2026-08-19",
       "next_action": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures."
@@ -3990,7 +3990,7 @@
       "contradictions": [
         "Earlier prompts instructed tasks to self-archive; repeated runs hung",
         "Cloud tasks are not a substitute for local/private workflow access",
-        "The bounded Codex AI runner can use codex exec --ephemeral, but that is not the same as a recurring app scheduled task"
+        "The earlier Codex runner proposal is superseded by direct Workflow 21 subscription nodes; it was not a recurring scheduled-task design"
       ],
       "last_verified": "2026-08-19",
       "next_action": "Complete n8n schedule runtime proof, cut over atomically, disable legacy Codex schedules, and confirm successful runs create durable receipts without new chats."
@@ -3999,7 +3999,7 @@
       "id": "PLATFORM-001",
       "domain": "platform, security and deployment",
       "title": "Separate containerized services on the CI host",
-      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres, PDF utility and Codex runner as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
+      "requirement": "Run Actual, its reverse proxy, cashback, n8n, Postgres and PDF utility as appropriately separated services/stacks on ci@172.20.10.20; do not depend on Windows execution.",
       "priority": "P0",
       "status": "PARTIAL",
       "owner_workstream": "platform_operations",
@@ -4033,7 +4033,7 @@
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d",
         "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4"
       ],
-      "live_readback": "The internal host runs the retained Postgres, n8n, task-runner, Codex-agent-runner, and PDF-utility services healthy. The exact finance corpus remains inactive and unpublished. Full independent restart, protected-route, and restore evidence remain absent.",
+      "live_readback": "The internal host runs the retained Postgres, n8n, task-runner, and PDF-utility services healthy. The exact finance corpus remains inactive and unpublished. Full independent restart, protected-route, and restore evidence remain absent.",
       "remaining_work": "Prove immutable deployed digests, independent restarts, protected routes, and restore while preserving the inactive workflow boundary.",
       "blockers": [
         "DISPOSABLE_RESTORE_DRILL_REQUIRED",
@@ -4120,7 +4120,6 @@
       "evidence_paths": [
         "deploy/finance-runtime/render-env.sh",
         "deploy/finance-runtime/finance.env.tpl",
-        "docs/bellwether-onepassword-runner-validation-2026-08-19.md",
         "config/project-acceptance.json",
         "/opt/disposable/finance-n8n/20260819155134/pg-password-rotation-20260819T193317Z/receipt.json",
         "/opt/disposable/finance-n8n/20260819155134/key-recovery-receipt.json"
@@ -4278,7 +4277,7 @@
         "Actual Node suite 48/48 passing",
         "Deployment script tests pass in full-suite run",
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed",
+        "Subscription adapter: 14 passed, 2 failed",
         "local registration, import, bootstrap, health, scan, and SBOM receipts pass",
         "reviewed inactive promotion c77eaeb08d36aa82e978c1f3c4b8414d8604b0a2899a661d73a3b5dd4c6fb45d",
         "runtime health 3daf8d8acdc4a4032121d34219a82554114ef1853a17dadd66d5ebb6043c7ca4"
@@ -4397,7 +4396,7 @@
       ],
       "tests": [
         "Actual Node: 48 passed",
-        "Codex runner: 14 passed, 2 failed"
+        "Subscription adapter: 14 passed, 2 failed"
       ],
       "live_readback": "verification.full-corpus-and-production-promotion: Older replay/audit artifacts cannot certify the changed source, expanded account scope, note v2, semantic fixes, or current n8n workflows.",
       "remaining_work": "Reach a clean tree and green suites, hash all inputs, replay the complete corpus twice in disposable Actual through n8n, compare counts/balances/notes/manual state, run restore/failure drills, then produce reviewed promotion evidence.",
@@ -4496,7 +4495,7 @@
     "snapshot_notes": [
       "The reviewed inactive promotion at finance commit 00491aa and orchestrator commit c8d4f7c verified 21 workflows, zero active, zero published, eight folders, 63 tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.",
       "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
-      "The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
+      "The internal runtime health check passed for n8n, the task broker, and task launcher. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
       "The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.",
       "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
       "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",

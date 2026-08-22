@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000003",
-  "name": "Finance · Shared Deterministic Statement Pipeline · Setup Required",
+  "name": "Finance · Shared Deterministic Statement Pipeline",
   "active": false,
   "nodes": [
     {
@@ -124,7 +124,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000009",
           "mode": "list",
-          "cachedResultName": "Finance · Subscription Agent Proposal · Setup Required"
+          "cachedResultName": "Finance · Subscription Agent Proposal"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -732,7 +732,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000014",
           "mode": "list",
-          "cachedResultName": "Finance · Local PDF Extraction Ladder · Setup Required"
+          "cachedResultName": "Finance · Local PDF Extraction Ladder"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -753,7 +753,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000020",
           "mode": "list",
-          "cachedResultName": "Finance · Apply Prepared Actual Outbox · Setup Required"
+          "cachedResultName": "Finance · Apply Prepared Actual Outbox"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -1174,86 +1174,6 @@
         },
         "includeOtherFields": false,
         "options": {}
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000003-generated-note-1",
-      "name": "Stage 1 · Trusted Statement Input to Normalize Locked Source Semantics",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · Trusted Statement Input → Normalize Locked Source Semantics\n**Input:** Trusted Statement Input  ·  **Output:** Normalize Locked Source Semantics  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000003-generated-note-2",
-      "name": "Stage 2 · Apply N8N Only Rules to Browser Capture Write?",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Apply N8N Only Rules → Browser Capture Write?\n**Input:** Apply N8N Only Rules  ·  **Output:** Browser Capture Write?  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000003-generated-note-3",
-      "name": "Stage 3 · Project Actual Import Rows to Verify Durable Canonical Delta",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        580
-      ],
-      "parameters": {
-        "content": "## Stage 3 · Project Actual Import Rows → Verify Durable Canonical Delta\n**Input:** Project Actual Import Rows  ·  **Output:** Verify Durable Canonical Delta  ·  **Nodes:** 17–24\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000003-generated-note-4",
-      "name": "Stage 4 · Prepare Outbox Intent to Read Back Reconciliation Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        960
-      ],
-      "parameters": {
-        "content": "## Stage 4 · Prepare Outbox Intent → Read Back Reconciliation Receipt\n**Input:** Prepare Outbox Intent  ·  **Output:** Read Back Reconciliation Receipt  ·  **Nodes:** 25–32\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000003-generated-note-5",
-      "name": "Stage 5 · Upsert Terminal Pipeline Receipt to Read Back Verified Terminal Receipt",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        1340
-      ],
-      "parameters": {
-        "content": "## Stage 5 · Upsert Terminal Pipeline Receipt → Complete Browser Capture Headless Receipt\n**Input:** Upsert Terminal Pipeline Receipt  ·  **Output:** Complete Browser Capture Headless Receipt  ·  **Nodes:** 33–38\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
       }
     },
     {
@@ -1947,8 +1867,8 @@
     "delegatesActualWritesTo": "ACTUAL_OUTBOX_APPLY",
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000002",
-      "name": "02 Statements",
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "name": "Account Reconciliation",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [

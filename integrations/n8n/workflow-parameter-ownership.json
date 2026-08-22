@@ -33,17 +33,24 @@
     },
     {
       "path": "config/actual-note-contract.json",
-      "selectors": ["document_root"]
+      "selectors": [
+        "document_root"
+      ]
     },
     {
       "path": "config/document-processing.json",
-      "selectors": ["default_policy", "providers.*.code"]
+      "selectors": [
+        "default_policy",
+        "providers.*.code"
+      ]
     }
   ],
   "credential_identifier_sources": [
     {
       "path": "integrations/n8n/pipeline-registry.json",
-      "selectors": ["custom_nodes.credentials"]
+      "selectors": [
+        "custom_nodes.credentials"
+      ]
     }
   ],
   "forbidden": {
@@ -96,11 +103,31 @@
     "01-outlook-finance-acquisition.json": {
       "nodes": {
         "Acquisition Parameters": {
-          "caller_fields": {"run_id": "string", "source_code": "string", "folder_id": "string", "senders": "array", "subjects": "array", "window_start": "string", "run_upper_bound": "string", "onedrive_parent_id": "string", "max_messages": "number"},
+          "caller_fields": {
+            "run_id": "string",
+            "source_code": "string",
+            "folder_id": "string",
+            "senders": "array",
+            "subjects": "array",
+            "window_start": "string",
+            "run_upper_bound": "string",
+            "onedrive_parent_id": "string",
+            "max_messages": "number"
+          },
           "fields": {
-            "archive_readback_required": {"category": "workflow_local_constant", "type": "boolean"},
-            "max_messages": {"category": "workflow_local_input", "type": "number", "expression_allowed": true},
-            "subject_match": {"category": "workflow_local_constant", "type": "string"}
+            "archive_readback_required": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            },
+            "max_messages": {
+              "category": "workflow_local_input",
+              "type": "number",
+              "expression_allowed": true
+            },
+            "subject_match": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            }
           }
         }
       }
@@ -108,11 +135,36 @@
     "03-shared-statement-pipeline.json": {
       "nodes": {
         "Statement Pipeline Parameters": {
-          "caller_fields": {"run_id": "string", "source_code": "string", "message_id": "string", "document_sha256": "string", "onedrive_item_id": "string", "manifest_onedrive_parent_id": "string", "config_version": "string", "actual_file_id": "string", "account_id": "string", "card_code": "string", "cashback_close_required": "boolean", "period_key": "string", "trigger_kind": "string", "attachment_id": "string", "source_attachment_id": "string"},
+          "caller_fields": {
+            "run_id": "string",
+            "source_code": "string",
+            "message_id": "string",
+            "document_sha256": "string",
+            "onedrive_item_id": "string",
+            "manifest_onedrive_parent_id": "string",
+            "config_version": "string",
+            "actual_file_id": "string",
+            "account_id": "string",
+            "card_code": "string",
+            "cashback_close_required": "boolean",
+            "period_key": "string",
+            "trigger_kind": "string",
+            "attachment_id": "string",
+            "source_attachment_id": "string"
+          },
           "fields": {
-            "actual_writer_workflow": {"category": "workflow_local_constant", "type": "string"},
-            "pipeline_contract": {"category": "workflow_local_constant", "type": "string"},
-            "source_mutation_forbidden": {"category": "workflow_local_constant", "type": "boolean"}
+            "actual_writer_workflow": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "pipeline_contract": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "source_mutation_forbidden": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            }
           }
         }
       }
@@ -120,11 +172,23 @@
     "09-ai-proposal.json": {
       "nodes": {
         "Agent Proposal Parameters": {
-          "caller_fields": {"policy_id": "string", "unresolved": "array"},
+          "caller_fields": {
+            "policy_id": "string",
+            "unresolved": "array"
+          },
           "fields": {
-            "proposal_only": {"category": "workflow_local_constant", "type": "boolean"},
-            "provider_selection": {"category": "workflow_local_constant", "type": "string"},
-            "supported_providers": {"category": "workflow_local_constant", "type": "string"}
+            "proposal_only": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            },
+            "provider_selection": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "supported_providers": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            }
           }
         }
       }
@@ -132,21 +196,55 @@
     "14-local-pdf-extraction.json": {
       "nodes": {
         "PDF Extraction Parameters": {
-          "caller_fields": {"document_id": "string", "source_sha256": "string"},
+          "caller_fields": {
+            "document_id": "string",
+            "source_sha256": "string"
+          },
           "fields": {
-            "document_profile": {"category": "workflow_local_constant", "type": "string"},
-            "minimum_characters": {"category": "workflow_local_constant", "type": "number"},
-            "minimum_printable_ratio": {"category": "workflow_local_constant", "type": "number"}
+            "document_profile": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "minimum_characters": {
+              "category": "workflow_local_constant",
+              "type": "number"
+            },
+            "minimum_printable_ratio": {
+              "category": "workflow_local_constant",
+              "type": "number"
+            }
           }
         },
         "Ready for Deterministic Parser": {
-          "caller_fields": {"document_id": "string", "source_sha256": "string", "extracted_text": "string", "validation_status": "string"},
+          "caller_fields": {
+            "document_id": "string",
+            "source_sha256": "string",
+            "extracted_text": "string",
+            "validation_status": "string"
+          },
           "fields": {
-            "parser": {"category": "workflow_local_constant", "type": "string"},
-            "parser_version": {"category": "workflow_local_constant", "type": "string"},
-            "provenance": {"category": "derived_state", "type": "array", "expression_allowed": true},
-            "result_ref": {"category": "derived_state", "type": "string", "expression_allowed": true},
-            "validation_status": {"category": "derived_state", "type": "string"}
+            "parser": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "parser_version": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "provenance": {
+              "category": "derived_state",
+              "type": "array",
+              "expression_allowed": true
+            },
+            "result_ref": {
+              "category": "derived_state",
+              "type": "string",
+              "expression_allowed": true
+            },
+            "validation_status": {
+              "category": "derived_state",
+              "type": "string"
+            }
           }
         }
       }
@@ -154,11 +252,26 @@
     "20-actual-outbox-apply.json": {
       "nodes": {
         "Actual Writer Parameters": {
-          "caller_fields": {"outbox_row": "object", "manifest": "object", "verification": "object", "artifact_item_id": "string", "artifact_etag": "string"},
+          "caller_fields": {
+            "outbox_row": "object",
+            "manifest": "object",
+            "verification": "object",
+            "artifact_item_id": "string",
+            "artifact_etag": "string"
+          },
           "fields": {
-            "exact_readback_required": {"category": "workflow_local_constant", "type": "boolean"},
-            "lease_required": {"category": "workflow_local_constant", "type": "boolean"},
-            "writer_contract": {"category": "workflow_local_constant", "type": "string"}
+            "exact_readback_required": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            },
+            "lease_required": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            },
+            "writer_contract": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            }
           }
         }
       }
@@ -166,14 +279,39 @@
     "21-subscription-agent-adapter.json": {
       "nodes": {
         "Subscription Provider Parameters": {
-          "caller_fields": {"agent_provider": "string", "policy_class": "string", "job_id": "string", "idempotency_key": "string", "unresolved": "array"},
+          "caller_fields": {
+            "agent_provider": "string",
+            "policy_class": "string",
+            "job_id": "string",
+            "idempotency_key": "string",
+            "unresolved": "array",
+            "operation_code": "string",
+            "email_evidence": "boolean",
+            "archive_sha256": "string",
+            "evidence_replay_keys": "array",
+            "archive_identity_keys": "array",
+            "archive_item_ids": "array",
+            "policy_id": "string",
+            "policy_sha256": "string",
+            "config_sha256": "string",
+            "output_schema_sha256": "string"
+          },
           "fields": {
-            "adapter_contract": {"category": "workflow_local_constant", "type": "string"},
-            "claude_auth_mode": {"category": "workflow_local_constant", "type": "string"},
+            "adapter_contract": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "claude_auth_mode": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
             "claude_exception_model": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CLAUDE_SUBSCRIPTION.exception_model"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CLAUDE_SUBSCRIPTION.exception_model"
+              }
             },
             "claude_exception_reasoning_effort": {
               "category": "workflow_local_constant",
@@ -183,7 +321,10 @@
             "claude_normal_model": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CLAUDE_SUBSCRIPTION.normal_model"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CLAUDE_SUBSCRIPTION.normal_model"
+              }
             },
             "claude_normal_reasoning_effort": {
               "category": "workflow_local_constant",
@@ -193,33 +334,54 @@
             "claude_package": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CLAUDE_SUBSCRIPTION.adapter_package"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CLAUDE_SUBSCRIPTION.adapter_package"
+              }
             },
-            "codex_auth_mode": {"category": "workflow_local_constant", "type": "string"},
+            "codex_auth_mode": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
             "codex_exception_model": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.exception_model"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CODEX_SUBSCRIPTION.exception_model"
+              }
             },
             "codex_exception_reasoning_effort": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.exception_reasoning_effort"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CODEX_SUBSCRIPTION.exception_reasoning_effort"
+              }
             },
             "codex_normal_model": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.normal_model"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CODEX_SUBSCRIPTION.normal_model"
+              }
             },
             "codex_normal_reasoning_effort": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.normal_reasoning_effort"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CODEX_SUBSCRIPTION.normal_reasoning_effort"
+              }
             },
             "codex_package": {
               "category": "global_generated_contract",
               "type": "string",
-              "source": {"path": "config/agent-providers.json", "selector": "providers.CODEX_SUBSCRIPTION.adapter_package"}
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "providers.CODEX_SUBSCRIPTION.adapter_package"
+              }
             },
             "proposal_output_schema": {
               "category": "global_generated_contract",
@@ -236,13 +398,31 @@
     "22-onedrive-finance-evidence-root-setup.json": {
       "nodes": {
         "Setup Parameters": {
-          "caller_fields": {"root_folder_id": "string", "run_id": "string"},
+          "caller_fields": {
+            "root_folder_id": "string",
+            "run_id": "string"
+          },
           "fields": {
-            "contract_version": {"category": "workflow_local_constant", "type": "string"},
-            "create_if_absent": {"category": "workflow_local_constant", "type": "boolean"},
-            "expected_parent_scope": {"category": "workflow_local_constant", "type": "string"},
-            "receipt_mode": {"category": "workflow_local_constant", "type": "string"},
-            "root_folder_name": {"category": "workflow_local_constant", "type": "string"}
+            "contract_version": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "create_if_absent": {
+              "category": "workflow_local_constant",
+              "type": "boolean"
+            },
+            "expected_parent_scope": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "receipt_mode": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "root_folder_name": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            }
           }
         }
       }

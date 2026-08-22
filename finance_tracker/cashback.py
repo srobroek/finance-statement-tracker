@@ -4,7 +4,7 @@ import calendar
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
@@ -236,6 +236,23 @@ class PaceStatus:
     week_end: date
     weekly_spend_aed: Decimal
     weekly_target_aed: Decimal
+
+
+def _as_of_date(value: date | datetime | None) -> date:
+    """Resolve one explicit UTC boundary date for provenance validation.
+
+    Callers that evaluate a historical or boundary fixture can inject ``as_of``
+    directly.  The default is deliberately UTC rather than the host's local
+    timezone, so a Dubai process and a UTC process validate the same interval.
+    """
+    if value is None:
+        return datetime.now(UTC).date()
+    if isinstance(value, datetime):
+        normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return normalized.astimezone(UTC).date()
+    if isinstance(value, date):
+        return value
+    raise TypeError("as_of must be a date, datetime, or None")
 
 
 def _period_transactions(transactions: Iterable[Transaction], card: str) -> list[Transaction]:
@@ -694,6 +711,7 @@ def _validate_provenance_claims(
     source: dict[str, object],
     claims: object,
     references_by_id: dict[str, dict[str, object]],
+    as_of: date,
 ) -> None:
     if not isinstance(claims, list):
         raise ValueError(f"Cashback program {card} provenance claims must be a list")
@@ -714,7 +732,7 @@ def _validate_provenance_claims(
     # An open-ended current programme is only applicable through this validation
     # instant. Without this boundary, a current seed could attest to arbitrary
     # future rates or issuer evidence that has not been observed yet.
-    program_end = configured_program_end or date.today()
+    program_end = configured_program_end or as_of
     if program_start and program_end and program_end < program_start:
         raise ValueError(f"Cashback program {card} has an invalid effective interval")
     if authority == "AUTHORITATIVE" and program_start is None:
@@ -786,7 +804,12 @@ def _validate_profile_schema(source: dict[str, object], schema_version: int) -> 
         raise ValueError(f"Cashback profile schema error at {location}: {errors[0].message}")
 
 
-def validate_program_provenance(source: dict[str, object]) -> None:
+def validate_program_provenance(
+    source: dict[str, object],
+    *,
+    as_of: date | datetime | None = None,
+) -> None:
+    validation_date = _as_of_date(as_of)
     if int(source.get("schema_version", 1)) < 2:
         return
     programs = source.get("programs") or []
@@ -811,12 +834,17 @@ def validate_program_provenance(source: dict[str, object]) -> None:
             source=source,
             claims=claims,
             references_by_id=references_by_id,
+            as_of=validation_date,
         )
         _validate_provenance_fixture_digests(card, references, evidence_root)
 
 
-def validate_program_configuration(source: dict[str, object]) -> None:
-    validate_program_provenance(source)
+def validate_program_configuration(
+    source: dict[str, object],
+    *,
+    as_of: date | datetime | None = None,
+) -> None:
+    validate_program_provenance(source, as_of=as_of)
     programs = source.get("programs") or []
     if not isinstance(programs, list) or not programs:
         raise ValueError("Cashback configuration must define at least one program")
@@ -1022,8 +1050,10 @@ def configured_reward_bucket(
 def programs_from_config(
     source: dict[str, object],
     period_date: date | None = None,
+    *,
+    as_of: date | datetime | None = None,
 ) -> tuple[CardProgram, ...]:
-    validate_program_configuration(source)
+    validate_program_configuration(source, as_of=as_of)
     base_currency = str(source.get("currency") or "AED").upper()
     programs = []
     for item in source.get("programs", []):
@@ -1207,7 +1237,11 @@ def payment_intents_from_config(source: dict[str, object]) -> tuple[PaymentInten
     )
 
 
-def load_program_configuration(path: Path | None = None) -> dict[str, object]:
+def load_program_configuration(
+    path: Path | None = None,
+    *,
+    as_of: date | datetime | None = None,
+) -> dict[str, object]:
     resolved = path or Path(__file__).resolve().parent.parent / "config" / "cashback-programs.json"
     source = json.loads(resolved.read_text(encoding="utf-8"))
     try:
@@ -1217,10 +1251,14 @@ def load_program_configuration(path: Path | None = None) -> dict[str, object]:
     if schema_version not in {1, 2}:
         raise ValueError("Unsupported cashback program schema version")
     _validate_profile_schema(source, schema_version)
-    validate_program_configuration(source)
+    validate_program_configuration(source, as_of=as_of)
     return source
 
 
 def poc_programs(period_date: date | None = None) -> tuple[CardProgram, ...]:
     """Load the versioned POC programme assumptions; verify before production use."""
-    return programs_from_config(load_program_configuration(), period_date)
+    return programs_from_config(
+        load_program_configuration(as_of=period_date),
+        period_date,
+        as_of=period_date,
+    )

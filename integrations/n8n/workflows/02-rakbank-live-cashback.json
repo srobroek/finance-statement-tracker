@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000002",
-  "name": "Finance · RAKBANK Live Cashback · Setup Required",
+  "name": "Finance · RAKBANK Live Cashback",
   "active": false,
   "nodes": [
     {
@@ -128,7 +128,7 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000012",
           "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages · Setup Required"
+          "cachedResultName": "Finance · Sweep Outlook Messages"
         },
         "options": {
           "waitForSubWorkflow": true
@@ -256,38 +256,6 @@
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Exact Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Verify Service Receipt Before Cursor').first().json;\nconst observed = String($json.ingest_state?.cursor || '');\nif (observed !== expected.cursor)\n    throw new Error('Durable cursor readback mismatch');\nreturn [{ json: { status: 'SUCCESS_VERIFIED', cursor: observed, scanned_count: expected.scanned_count, accepted_count: expected.accepted_count } }];\n"
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000002-generated-note-1",
-      "name": "Stage 1 · 08:05 Dubai Daily to Parse and Upsert Cashback Events",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · 08:05 Dubai Daily → Parse and Upsert Cashback Events\n**Input:** 08:05 Dubai Daily  ·  **Output:** Parse and Upsert Cashback Events  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000002-generated-note-2",
-      "name": "Stage 2 · Verify Service Receipt Before Cursor to Verify Exact Cursor Readback",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Verify Service Receipt Before Cursor → Verify Exact Cursor Readback\n**Input:** Verify Service Receipt Before Cursor  ·  **Output:** Verify Exact Cursor Readback  ·  **Nodes:** 9–12\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
       }
     }
   ],
@@ -436,8 +404,8 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000006",
-      "name": "06 Cashback",
+      "id": "f1000000-0000-4000-8000-000000000102",
+      "name": "Cashback Sweep",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [
