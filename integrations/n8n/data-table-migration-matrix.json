@@ -6,7 +6,7 @@
   "source_snapshot": {
     "finance_commit": "a6604752002378ee5e73de65dc2619fc0050803a",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "4994c62267e4e5fb1d403ffa12ae34fd2a85c4746b2b160ac61eb105c8eef325",
+    "node_scan_corpus_sha256": "7244be946ed1f8b1ad0cfeb283ea639a77675d3b116eb188974437be9869bf38",
     "source_ref_selection": "Latest git commit touching data-tables.json and the scan-root directories; generator, schema, matrix output, and tests are excluded.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -941,8 +941,8 @@
   "invariants": {
     "source_tables": 15,
     "source_columns": 215,
-    "node_references": 123,
-    "consumer_node_edges": 1215,
+    "node_references": 125,
+    "consumer_node_edges": 1237,
     "filter_only_consumer_columns": 35,
     "filter_only_consumer_edges": 117,
     "write_reference_edges": 451,
@@ -8993,8 +8993,36 @@
       "node_references": [
         {
           "table": "finance_ai_policy_contracts",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Active W09 Email Policy Contract",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "policy_id",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_ai_policy_contracts",
           "file": "integrations/n8n/workflows/09-ai-proposal.json",
           "node": "Read Active Server AI Policy Contract",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "policy_id",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_ai_policy_contracts",
+          "file": "integrations/n8n/workflows/12-outlook-message-sweep.json",
+          "node": "Read Active W09 Email Policy Contract",
           "operation": "get",
           "read_columns": [
             "*"
@@ -9023,7 +9051,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9043,7 +9073,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9062,7 +9094,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9081,7 +9115,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9100,7 +9136,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9119,7 +9157,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9138,7 +9178,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9157,7 +9199,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9176,7 +9220,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9195,7 +9241,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         },
@@ -9214,7 +9262,9 @@
           "privacy": "internal policy metadata",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Active W09 Email Policy Contract",
+            "integrations/n8n/workflows/09-ai-proposal.json#Read Active Server AI Policy Contract",
+            "integrations/n8n/workflows/12-outlook-message-sweep.json#Read Active W09 Email Policy Contract"
           ],
           "rationale": "Generated repository resolver replaces runtime policy rows."
         }

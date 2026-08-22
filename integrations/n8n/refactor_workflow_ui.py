@@ -3027,6 +3027,10 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                     {"id": "21002-caller-4", "name": "idempotency_key", "type": "string", "value": "={{ $json.idempotency_key }}"},
                     {"id": "21002-caller-5", "name": "unresolved", "type": "array", "value": "={{ $json.unresolved }}"},
                     {"id": "21002-caller-6", "name": "operation_code", "type": "string", "value": "={{ $json.operation_code }}"},
+                    {"id": "21002-policy-1", "name": "policy_id", "type": "string", "value": "={{ $json.policy_id }}"},
+                    {"id": "21002-policy-2", "name": "policy_sha256", "type": "string", "value": "={{ $json.policy_sha256 }}"},
+                    {"id": "21002-policy-3", "name": "config_sha256", "type": "string", "value": "={{ $json.config_sha256 }}"},
+                    {"id": "21002-policy-4", "name": "output_schema_sha256", "type": "string", "value": "={{ $json.output_schema_sha256 }}"},
                     {"id": "21002-caller-7", "name": "email_evidence", "type": "boolean", "value": "={{ $json.email_evidence }}"},
                     {"id": "21002-caller-8", "name": "archive_sha256", "type": "string", "value": "={{ $json.archive_sha256 }}"},
                     {"id": "21002-caller-9", "name": "evidence_replay_keys", "type": "array", "value": "={{ $json.evidence_replay_keys }}"},
@@ -3081,6 +3085,12 @@ if (forbidden.some(field => Object.hasOwn(job, field))) {
 if (!['NORMAL', 'EXCEPTION'].includes(job.policy_class)) {
   throw new Error('AGENT_POLICY_CLASS_INVALID');
 }
+if (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(job.policy_id || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.policy_sha256 || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.config_sha256 || ''))
+    || !/^[a-f0-9]{64}$/.test(String(job.output_schema_sha256 || ''))) {
+  throw new Error('AGENT_SERVER_POLICY_BINDING_REQUIRED');
+}
 const providerPolicy = {
   CODEX_SUBSCRIPTION: {
     NORMAL: {
@@ -3117,6 +3127,10 @@ if (job.email_evidence === true && !/^[a-f0-9]{64}$/.test(String(job.archive_sha
 const request = {
   agent_provider: job.agent_provider,
   policy_class: job.policy_class,
+  policy_id: job.policy_id,
+  policy_sha256: job.policy_sha256,
+  config_sha256: job.config_sha256,
+  output_schema_sha256: job.output_schema_sha256,
   job_id: job.job_id,
   idempotency_key: job.idempotency_key,
   operation_code: job.operation_code,
@@ -3234,9 +3248,19 @@ if (provider === 'CODEX_SUBSCRIPTION') {
 if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
   throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
 }
+for (const field of ['policy_id', 'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256']) {
+  if (proposal[field] !== undefined && proposal[field] !== invocation.request[field]) {
+    throw new Error('AGENT_PROVIDER_POLICY_ENVELOPE_MISMATCH');
+  }
+}
 const normalized = {
   ...proposal,
   agent_provider: provider,
+  policy_id: invocation.request.policy_id,
+  policy_class: invocation.request.policy_class,
+  policy_sha256: invocation.request.policy_sha256,
+  config_sha256: invocation.request.config_sha256,
+  output_schema_sha256: invocation.request.output_schema_sha256,
   runner_model: invocation.provider_model,
   runner_reasoning_effort: invocation.provider_reasoning_effort,
   auth_mode: invocation.provider_auth_mode,
@@ -3803,6 +3827,7 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
     adapter = by_code["SUBSCRIPTION_AGENT_ADAPTER"]
+    w09 = by_code["AI_PROPOSAL"]
     sweep_names = {node["name"] for node in sweep["nodes"]}
     required_sweep = {
         "Evidence Request", "Validate Evidence Request", "Search Outlook Evidence",
@@ -3828,6 +3853,7 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
         "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
         "evidenceNoModelControlledWrites": True,
+        "evidencePolicyOwner": "W09_ACTIVE_SERVER_AI_POLICY_CONTRACT",
     })
     adapter["meta"].update({
         "emailEvidenceInputContract": "FINANCE_AI_PROPOSAL",
@@ -3876,6 +3902,18 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         raise RuntimeError("W12 matcher canonical ownership rewrite incomplete")
     matcher["parameters"]["jsCode"] = matcher_code
 
+    # Email proposal policy selection is server-owned. Keep the caller's
+    # evidence request free of policy hashes and domains, then resolve the
+    # active W09 row before W21. The policy builder body is composed from W09
+    # so there is one implementation of the active-row and domain rules.
+    evidence_validate = node_by_name(sweep, "Validate Evidence Request")
+    evidence_validate_code = evidence_validate["parameters"]["jsCode"]
+    evidence_validate_code = evidence_validate_code.replace(
+        ": ['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription']",
+        ": ['vendor', 'category', 'subcategory', 'tags']",
+    )
+    evidence_validate["parameters"]["jsCode"] = evidence_validate_code
+
     build_handoff = node_by_name(sweep, "Build Evidence Handoff")
     handoff_code = build_handoff["parameters"]["jsCode"]
     archive_marker = "            archive_proof: archiveProof,\n"
@@ -3896,6 +3934,15 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "unresolved: [...proposalInputs, ...unresolved]",
         "unresolved: proposalInputs, evidence_unresolved: unresolved",
     )
+    prepare_code = prepare_code.replace(
+        "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true,",
+        "operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true, policy_id: 'classify-unresolved',",
+    )
+    prepare_code = re.sub(
+        r"(?:policy_id: 'classify-unresolved',\s*)+",
+        "policy_id: 'classify-unresolved', ",
+        prepare_code,
+    )
     proof_guard = "if (!Array.isArray(handoff.archive_identity_keys) || !Array.isArray(handoff.archive_item_ids))"
     if proof_guard not in prepare_code:
         prepare_code = prepare_code.replace(
@@ -3914,6 +3961,40 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     )
     prepare["parameters"]["jsCode"] = prepare_code
 
+    policy_read = json.loads(json.dumps(node_by_name(w09, "Read Active Server AI Policy Contract")))
+    policy_read["id"] = "12082"
+    policy_read["name"] = "Read Active W09 Email Policy Contract"
+    policy_read["position"] = [-240, 2860]
+    policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+
+    policy_builder = json.loads(json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job")))
+    policy_builder["id"] = "12083"
+    policy_builder["name"] = "Build Authoritative W09 Email Job"
+    policy_builder["position"] = [40, 2860]
+    policy_builder_code = policy_builder["parameters"]["jsCode"]
+    policy_builder_code = policy_builder_code.replace(
+        "const request = $('Validate Untrusted Proposal Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
+        "const request = $('Prepare W21 Email Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
+    )
+    policy_builder_code = policy_builder_code.replace("x.requested_fields", "x.allowed_fields")
+    policy_builder_code = policy_builder_code.replace(
+        "return [{ json: { ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
+        "return [{ json: { ...request, ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
+    )
+    policy_builder["parameters"]["jsCode"] = policy_builder_code
+    policy_names = {policy_read["name"], policy_builder["name"]}
+    sweep["nodes"] = [node for node in sweep["nodes"] if node["name"] not in policy_names]
+    sweep["nodes"].extend([policy_read, policy_builder])
+    sweep["connections"]["Prepare W21 Email Request"] = {
+        "main": [[{"node": policy_read["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][policy_read["name"]] = {
+        "main": [[{"node": policy_builder["name"], "type": "main", "index": 0}]],
+    }
+    sweep["connections"][policy_builder["name"]] = {
+        "main": [[{"node": "Send Evidence to W21", "type": "main", "index": 0}]],
+    }
+
     # W12 reuses the authoritative W09 proposal validator.  Only the input
     # adapter differs: W12 has provider output from W21 and its own evidence
     # request, while W09 owns the validator body and policy rules.
@@ -3924,7 +4005,7 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     if w09_header not in w09_code:
         raise RuntimeError("W09 validator source drifted before W12 composition")
     w12_prefix = r"""
-const input = $('Prepare W21 Email Request').first().json;
+const input = $('Build Authoritative W09 Email Job').first().json;
 const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
 if (providerError) {
   if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
@@ -3943,9 +4024,19 @@ try {
 if (!providerResult || typeof providerResult !== 'object' || Array.isArray(providerResult)) {
   throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
 }
+for (const field of ['policy_id', 'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256']) {
+  if (providerResult[field] !== undefined && providerResult[field] !== input[field]) {
+    throw new Error('AGENT_PROVIDER_POLICY_ENVELOPE_MISMATCH');
+  }
+}
 const normalized = {
   ...providerResult,
-  agent_provider: providerResult.agent_provider || input.agent_provider,
+  agent_provider: input.agent_provider,
+  policy_id: input.policy_id,
+  policy_class: input.policy_class,
+  policy_sha256: input.policy_sha256,
+  config_sha256: input.config_sha256,
+  output_schema_sha256: input.output_schema_sha256,
   runner_model: providerResult.runner_model || input.provider_model,
   runner_reasoning_effort: providerResult.runner_reasoning_effort || input.provider_reasoning_effort,
   auth_mode: providerResult.auth_mode || input.provider_auth_mode,
@@ -3954,11 +4045,11 @@ const request = {
   job_id: input.job_id,
   idempotency_key: input.idempotency_key,
   agent_provider: input.agent_provider,
-  policy_id: input.policy_id || normalized.policy_id,
+  policy_id: input.policy_id,
   policy_class: input.policy_class,
-  policy_sha256: input.policy_sha256 || normalized.policy_sha256,
-  config_sha256: input.config_sha256 || normalized.config_sha256,
-  output_schema_sha256: input.output_schema_sha256 || normalized.output_schema_sha256,
+  policy_sha256: input.policy_sha256,
+  config_sha256: input.config_sha256,
+  output_schema_sha256: input.output_schema_sha256,
   unresolved: Array.isArray(input.unresolved) ? input.unresolved : [],
 };
 const response = normalized;

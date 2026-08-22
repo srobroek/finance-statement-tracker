@@ -3279,6 +3279,55 @@ try {
         self.assertEqual([row["transaction_id"] for row in evidence["matched"]], ["split:only"])
         self.assertEqual(evidence["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP")
 
+    def test_generic_split_conflict_handoff_executes_and_validates_against_schema(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        request = {
+            "operation": "EVIDENCE", "run_id": "email:split-handoff", "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"], "subjects": ["order"], "transactions": [
+                {"transaction_id": "split:g1", "transaction_date": "2026-08-20", "amount_minor": 10000,
+                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
+                {"transaction_id": "split:g2", "transaction_date": "2026-08-20", "amount_minor": 10000,
+                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g2"},
+            ],
+        }
+        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=request)
+        matched = self.execute_code_node(
+            workflow, "Match Outlook Evidence to Transactions", input_items=[{
+                "id": "split-handoff-message", "receivedDateTime": "2026-08-20T09:00:00Z",
+                "from": {"emailAddress": {"address": "orders@example.test"}},
+                "subject": "Amazon order", "body": "Order total AED 100.00",
+            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+        )
+        self.assertTrue(matched["ok"], matched)
+        evidence = matched["output"][0]["json"]
+        self.assertEqual(evidence["unresolved"][0]["status"], "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT")
+        archive = {
+            "status": "ARCHIVED", "attachment_verification_barrier": "VERIFIED",
+            "email_evidence_receipt_barrier": "VERIFIED", "archive_ready": True,
+            "email_evidence_receipts_verified": 1,
+            "archive_identity_keys": ["split-handoff-message:INLINE_BODY"], "archive_item_ids": ["drive-split-handoff"],
+            "email_evidence_archive_proof": [{
+                "source_message_id": "split-handoff-message", "email_evidence_sha256": "a" * 64,
+                "onedrive_item_id": "drive-split-handoff", "email_evidence_identity": "split-handoff-message:INLINE_BODY",
+            }],
+        }
+        handoff = self.execute_code_node(workflow, "Build Evidence Handoff", refs={
+            "Match Outlook Evidence to Transactions": evidence,
+            "Archive Matched Email Evidence in W01": archive,
+        })
+        self.assertTrue(handoff["ok"], handoff)
+        built = handoff["output"][0]["json"]
+        built["archive_sha256"] = hashlib.sha256(
+            json.dumps(built["archive_proof"], separators=(",", ":")).encode()
+        ).hexdigest()
+        built["idempotency_key"] = hashlib.sha256(
+            json.dumps(built, separators=(",", ":")).encode()
+        ).hexdigest()
+        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(built)), [])
+
     def test_generic_evidence_dispatches_finance_ai_job_through_existing_w21_contract(self):
         w12 = self.workflow("12-outlook-message-sweep.json")
         w21 = self.workflow("21-subscription-agent-adapter.json")
@@ -3343,8 +3392,23 @@ try {
             refs={"Match Outlook Evidence to Transactions": evidence},
         )
         self.assertTrue(request_to_w21["ok"], request_to_w21)
+        authoritative = self.execute_code_node(
+            w12,
+            "Build Authoritative W09 Email Job",
+            input_items=[{
+                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
+                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "d" * 64,
+                "config_sha256": "e" * 64, "output_schema_sha256": "f" * 64,
+                "allowed_fields_json": json.dumps(["vendor", "category", "subcategory", "tags"]),
+                "allowed_values_json": json.dumps({
+                    "category": ["Groceries"], "subcategory": ["Produce"], "tags": ["grocery"],
+                }),
+            }],
+            refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
+        )
+        self.assertTrue(authoritative["ok"], authoritative)
         job = {
-            **request_to_w21["output"][0]["json"],
+            **authoritative["output"][0]["json"],
             "codex_normal_model": "gpt-5.6-luna", "codex_normal_reasoning_effort": "max",
             "codex_exception_model": "gpt-5.6-sol", "codex_exception_reasoning_effort": "medium",
             "codex_auth_mode": "CHATGPT_SUBSCRIPTION", "claude_normal_model": "claude-sonnet-4-6",
@@ -3356,8 +3420,9 @@ try {
         self.assertTrue(invocation["ok"], invocation)
         proposal = {
             "schema_version": 1, "job_id": job["job_id"], "idempotency_key": job["idempotency_key"],
-            "agent_provider": "CODEX_SUBSCRIPTION", "policy_id": "policy", "policy_class": "NORMAL",
-            "policy_sha256": "d" * 64, "config_sha256": "e" * 64, "output_schema_sha256": "f" * 64,
+            "agent_provider": "CODEX_SUBSCRIPTION", "policy_id": job["policy_id"], "policy_class": job["policy_class"],
+            "policy_sha256": job["policy_sha256"], "config_sha256": job["config_sha256"],
+            "output_schema_sha256": job["output_schema_sha256"],
             "runner_receipt_id": "receipt", "runner_model": "gpt-5.6-luna", "runner_reasoning_effort": "max",
             "auth_mode": "CHATGPT_SUBSCRIPTION", "proposals": [],
         }
@@ -3368,11 +3433,19 @@ try {
         )
         self.assertTrue(normalized["ok"], normalized)
         self.assertEqual(normalized["output"][0]["json"]["job_id"], job["job_id"])
+        forged_policy = {**proposal, "policy_id": "attacker-policy"}
+        forged = self.execute_code_node(
+            w21, "Validate Claude Proposal Schema and Normalize Provider Output",
+            json_value={"output": json.dumps(forged_policy)},
+            refs={"Validate and Build Fixed Provider Invocation": invocation["output"][0]["json"]},
+        )
+        self.assertFalse(forged["ok"])
+        self.assertIn("POLICY_ENVELOPE_MISMATCH", forged["error"])
 
         w12_terminal = self.workflow("12-outlook-message-sweep.json")
         valid_terminal = self.execute_code_node(
             w12_terminal, "Validate Email Proposal Result", json_value=proposal,
-            refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
+            refs={"Build Authoritative W09 Email Job": authoritative["output"][0]["json"]},
         )
         self.assertTrue(valid_terminal["ok"], valid_terminal)
         protected = {**proposal, "proposals": [{
@@ -3381,7 +3454,7 @@ try {
         }]}
         rejected = self.execute_code_node(
             w12_terminal, "Validate Email Proposal Result", json_value=protected,
-            refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
+            refs={"Build Authoritative W09 Email Job": authoritative["output"][0]["json"]},
         )
         self.assertFalse(rejected["ok"])
         self.assertIn("Agent proposed forbidden field", rejected["error"])

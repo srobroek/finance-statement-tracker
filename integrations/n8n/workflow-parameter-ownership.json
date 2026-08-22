@@ -290,7 +290,11 @@
             "archive_sha256": "string",
             "evidence_replay_keys": "array",
             "archive_identity_keys": "array",
-            "archive_item_ids": "array"
+            "archive_item_ids": "array",
+            "policy_id": "string",
+            "policy_sha256": "string",
+            "config_sha256": "string",
+            "output_schema_sha256": "string"
           },
           "fields": {
             "adapter_contract": {

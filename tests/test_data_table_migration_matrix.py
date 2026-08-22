@@ -76,8 +76,8 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             {
                 "source_tables": 15,
                 "source_columns": 215,
-                "node_references": 123,
-                "consumer_node_edges": 1215,
+                "node_references": 125,
+                "consumer_node_edges": 1237,
                 "filter_only_consumer_columns": 35,
                 "filter_only_consumer_edges": 117,
                 "write_reference_edges": 451,

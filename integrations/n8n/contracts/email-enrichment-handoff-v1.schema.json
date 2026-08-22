@@ -111,7 +111,7 @@
       "required": ["transaction_id", "status", "candidate_count"],
       "properties": {
         "transaction_id": {"type": "string", "minLength": 1, "maxLength": 256},
-        "status": {"enum": ["NO_MATCH", "AMBIGUOUS", "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP"]},
+        "status": {"enum": ["NO_MATCH", "AMBIGUOUS", "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP", "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT"]},
         "candidate_count": {"type": "integer", "minimum": 0, "maximum": 100},
         "candidate_ids": {
           "type": "array", "maxItems": 100, "uniqueItems": true,
