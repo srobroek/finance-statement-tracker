@@ -79,6 +79,28 @@ INSERT INTO finance_workflow_contract VALUES
   ('10000000-0000-4000-8000-000000000021', 'Finance · Subscription Agent Adapter · Setup Required', 'Subscription Agent Adapter', 'f1000000-0000-4000-8000-000000000103'),
   ('10000000-0000-4000-8000-000000000024', 'Finance · Shared Monthly Statement Cycle', 'Shared Monthly Statement Cycle', 'f1000000-0000-4000-8000-000000000103');
 
+-- Bind the database precondition to the checked-in 024 export.  The Python
+-- rehearsal checks the source bytes; SQL checks the import identity and body
+-- shape before it can retire 115.
+CREATE TEMP TABLE finance_canonical_source_contract (
+  workflow_id varchar(36) PRIMARY KEY,
+  source_path text NOT NULL,
+  source_sha256 varchar(64) NOT NULL,
+  expected_name varchar(128) NOT NULL,
+  expected_target_name varchar(128) NOT NULL,
+  expected_code varchar(128) NOT NULL,
+  expected_node_count integer NOT NULL
+) ON COMMIT DROP;
+INSERT INTO finance_canonical_source_contract VALUES (
+  '10000000-0000-4000-8000-000000000024',
+  'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
+  '2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2',
+  'Finance · Shared Monthly Statement Cycle',
+  'Shared Monthly Statement Cycle',
+  'SHARED_MONTHLY_STATEMENT_CYCLE',
+  16
+);
+
 -- Capture the disposable duplicate as a redacted retirement receipt.  The
 -- complete JSON is held only in the transaction snapshot and is never emitted
 -- by this script; ROLLBACK restores it byte-for-byte during rehearsal/failure.
@@ -88,19 +110,83 @@ CREATE TEMP TABLE finance_workflow_retirement (
   project_id varchar(36) NOT NULL,
   workflow_row_json jsonb NOT NULL,
   shared_row_json jsonb,
+  workflow_row_count integer NOT NULL,
+  shared_row_count integer NOT NULL,
+  tag_row_count integer NOT NULL,
   backup_md5 varchar(32) NOT NULL
 ) ON COMMIT DROP;
+
+DO $$
+DECLARE
+  expected_project_id varchar(36);
+  orphan_workflow_present boolean;
+  orphan_shared_present boolean;
+  orphan_tag_present boolean;
+BEGIN
+  SELECT project_id INTO expected_project_id FROM finance_organization_context;
+  SELECT EXISTS (
+    SELECT 1 FROM workflow_entity WHERE id = '10000000-0000-4000-8000-000000000115'
+  ) INTO orphan_workflow_present;
+  SELECT EXISTS (
+    SELECT 1 FROM shared_workflow
+    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+  ) INTO orphan_shared_present;
+  SELECT EXISTS (
+    SELECT 1 FROM workflows_tags
+    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+  ) INTO orphan_tag_present;
+  IF NOT orphan_workflow_present AND (orphan_shared_present OR orphan_tag_present) THEN
+    RAISE EXCEPTION 'ORPHAN_RELATION_PRECONDITION_FAILED';
+  END IF;
+  IF orphan_workflow_present AND NOT orphan_shared_present THEN
+    RAISE EXCEPTION 'ORPHAN_SHARED_ROW_MISSING';
+  END IF;
+  IF orphan_shared_present AND NOT EXISTS (
+    SELECT 1 FROM shared_workflow
+    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+      AND "projectId" = expected_project_id
+  ) THEN
+    RAISE EXCEPTION 'ORPHAN_PROJECT_MISMATCH';
+  END IF;
+END $$;
+
+-- Lock the canonical and orphan rows, including all orphan tag edges, before
+-- taking the backup.  A concurrent writer cannot create a partial cutover.
+DO $$
+BEGIN
+  PERFORM 1
+  FROM workflow_entity w
+  JOIN shared_workflow s ON s."workflowId" = w.id
+  JOIN finance_canonical_source_contract c ON c.workflow_id = w.id
+  WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
+  FOR UPDATE OF w, s;
+  PERFORM 1 FROM workflow_entity
+  WHERE id = '10000000-0000-4000-8000-000000000115'
+  FOR UPDATE;
+  PERFORM 1 FROM shared_workflow
+  WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+  FOR UPDATE;
+  PERFORM 1 FROM workflows_tags
+  WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+  FOR UPDATE;
+END $$;
+
 INSERT INTO finance_workflow_retirement
 SELECT w.id,
        '10000000-0000-4000-8000-000000000024',
        s."projectId",
        to_jsonb(w),
        to_jsonb(s),
+       1,
+       1,
+       COUNT(wt."workflowId"),
        md5(to_jsonb(w)::text || E'\n' || to_jsonb(s)::text)
 FROM workflow_entity w
 JOIN shared_workflow s ON s."workflowId" = w.id
+LEFT JOIN workflows_tags wt ON wt."workflowId" = w.id
 WHERE w.id = '10000000-0000-4000-8000-000000000115'
-  AND s."projectId" = :'finance_project_id';
+  AND s."projectId" = :'finance_project_id'
+GROUP BY w.id, s."projectId", to_jsonb(w), to_jsonb(s);
 
 DO $$
 BEGIN
@@ -122,6 +208,19 @@ BEGIN
        OR NULLIF(workflow_row_json ->> 'activeVersionId', '') IS NOT NULL
   ) THEN
     RAISE EXCEPTION 'ORPHAN_WORKFLOW_ACTIVE_OR_PUBLISHED';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM finance_canonical_source_contract c
+    JOIN workflow_entity w ON w.id = c.workflow_id
+    JOIN shared_workflow s ON s."workflowId" = w.id
+    WHERE s."projectId" = (SELECT project_id FROM finance_organization_context)
+      AND w.name IN (c.expected_name, c.expected_target_name)
+      AND jsonb_typeof(w.nodes::jsonb) = 'array'
+      AND jsonb_array_length(w.nodes::jsonb) = c.expected_node_count
+      AND w.meta::jsonb ->> 'financeWorkflowCode' = c.expected_code
+  ) THEN
+    RAISE EXCEPTION 'CANONICAL_EXPORT_PRECONDITION_FAILED';
   END IF;
   IF EXISTS (
     SELECT 1 FROM finance_workflow_contract c
@@ -259,20 +358,51 @@ WHERE w.id = c.workflow_id
 -- Retire only the inactive disposable duplicate after the canonical source row
 -- is present and its opaque prestate is captured.  The transaction remains the
 -- rollback boundary; a rehearsal therefore leaves the old row untouched.
-DELETE FROM workflows_tags wt
-USING finance_workflow_retirement r
-WHERE wt."workflowId" = r.legacy_workflow_id;
+DO $$
+DECLARE
+  expected_workflow_rows integer := COALESCE((SELECT SUM(workflow_row_count) FROM finance_workflow_retirement), 0);
+  expected_shared_rows integer := COALESCE((SELECT SUM(shared_row_count) FROM finance_workflow_retirement), 0);
+  expected_tag_rows integer := COALESCE((SELECT SUM(tag_row_count) FROM finance_workflow_retirement), 0);
+  deleted_workflow_rows integer;
+  deleted_shared_rows integer;
+  deleted_tag_rows integer;
+BEGIN
+  WITH deleted AS (
+    DELETE FROM workflows_tags wt
+    USING finance_workflow_retirement r
+    WHERE wt."workflowId" = r.legacy_workflow_id
+    RETURNING wt."workflowId"
+  )
+  SELECT COUNT(*) INTO deleted_tag_rows FROM deleted;
+  IF deleted_tag_rows <> expected_tag_rows THEN
+    RAISE EXCEPTION 'ORPHAN_TAG_DELETE_COUNT_MISMATCH';
+  END IF;
 
-DELETE FROM shared_workflow s
-USING finance_workflow_retirement r
-WHERE s."workflowId" = r.legacy_workflow_id
-  AND s."projectId" = r.project_id;
+  WITH deleted AS (
+    DELETE FROM shared_workflow s
+    USING finance_workflow_retirement r
+    WHERE s."workflowId" = r.legacy_workflow_id
+      AND s."projectId" = r.project_id
+    RETURNING s."workflowId"
+  )
+  SELECT COUNT(*) INTO deleted_shared_rows FROM deleted;
+  IF deleted_shared_rows <> expected_shared_rows THEN
+    RAISE EXCEPTION 'ORPHAN_SHARED_DELETE_COUNT_MISMATCH';
+  END IF;
 
-DELETE FROM workflow_entity w
-USING finance_workflow_retirement r
-WHERE w.id = r.legacy_workflow_id
-  AND w.active = FALSE
-  AND w."activeVersionId" IS NULL;
+  WITH deleted AS (
+    DELETE FROM workflow_entity w
+    USING finance_workflow_retirement r
+    WHERE w.id = r.legacy_workflow_id
+      AND w.active = FALSE
+      AND w."activeVersionId" IS NULL
+    RETURNING w.id
+  )
+  SELECT COUNT(*) INTO deleted_workflow_rows FROM deleted;
+  IF deleted_workflow_rows <> expected_workflow_rows THEN
+    RAISE EXCEPTION 'ORPHAN_WORKFLOW_DELETE_COUNT_MISMATCH';
+  END IF;
+END $$;
 
 DELETE FROM workflows_tags wt
 USING finance_workflow_contract c
@@ -310,11 +440,14 @@ DECLARE
 BEGIN
   SELECT project_id INTO expected_project_id FROM finance_organization_context;
   IF EXISTS (
-    SELECT 1
-    FROM workflow_entity w
-    JOIN shared_workflow s ON s."workflowId" = w.id
-    WHERE w.id = '10000000-0000-4000-8000-000000000115'
-      AND s."projectId" = expected_project_id
+    SELECT 1 FROM workflow_entity
+    WHERE id = '10000000-0000-4000-8000-000000000115'
+  ) OR EXISTS (
+    SELECT 1 FROM shared_workflow
+    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
+  ) OR EXISTS (
+    SELECT 1 FROM workflows_tags
+    WHERE "workflowId" = '10000000-0000-4000-8000-000000000115'
   ) THEN
     RAISE EXCEPTION 'ORPHAN_WORKFLOW_REMAINS';
   END IF;
@@ -379,6 +512,8 @@ SELECT 'ORGANIZATION_POSTSTATE' AS receipt,
        COUNT(*) AS workflow_count,
        COUNT(*) FILTER (WHERE w.active) AS active_count,
        COUNT(*) FILTER (WHERE w."activeVersionId" IS NOT NULL) AS published_count,
+       (SELECT source_path FROM finance_canonical_source_contract) AS canonical_source_path,
+       (SELECT source_sha256 FROM finance_canonical_source_contract) AS canonical_source_sha256,
        (SELECT COUNT(*) FROM finance_workflow_retirement) AS retired_workflow_count,
        (SELECT MIN(backup_md5) FROM finance_workflow_retirement) AS retirement_backup_md5,
        md5(COALESCE(string_agg(to_jsonb(w)::text, E'\n' ORDER BY w.id), '')) AS full_row_md5,

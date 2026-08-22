@@ -283,6 +283,15 @@ TARGET_IDS = frozenset(WORKFLOW_BY_ID)
 CANONICAL_REPLACEMENT_ID = "10000000-0000-4000-8000-000000000024"
 ORPHAN_WORKFLOW_ID = "10000000-0000-4000-8000-000000000115"
 ORPHAN_WORKFLOW_NAME = "Finance · Bounded MCP Facade"
+CANONICAL_EXPORT_PATH = (
+    Path(__file__).resolve().parent / "workflows" / "22-shared-monthly-statement-cycle.json"
+)
+CANONICAL_EXPORT_RELATIVE_PATH = (
+    "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json"
+)
+CANONICAL_EXPORT_SHA256 = (
+    "2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2"
+)
 LEGACY_IDS = frozenset((TARGET_IDS - {CANONICAL_REPLACEMENT_ID}) | {ORPHAN_WORKFLOW_ID})
 STATUS_MARKERS = ("setup required", "spec_only", "spec only", "inactive", "blocked")
 W15_ID = "10000000-0000-4000-8000-000000000015"
@@ -387,6 +396,35 @@ def _fail(message: str) -> None:
     raise ValueError(message)
 
 
+def canonical_workflow_export() -> dict[str, Any]:
+    """Load the checked-in 024 export used for orphan replacement."""
+
+    try:
+        raw = CANONICAL_EXPORT_PATH.read_bytes()
+    except OSError as exc:
+        _fail(f"CANONICAL_EXPORT_UNREADABLE:{exc}")
+    source_sha256 = hashlib.sha256(raw).hexdigest()
+    if source_sha256 != CANONICAL_EXPORT_SHA256:
+        _fail("CANONICAL_EXPORT_HASH_MISMATCH")
+    try:
+        export = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        _fail(f"CANONICAL_EXPORT_JSON_INVALID:{exc.msg}")
+    if not isinstance(export, dict):
+        _fail("CANONICAL_EXPORT_NOT_OBJECT")
+    if export.get("id") != CANONICAL_REPLACEMENT_ID:
+        _fail("CANONICAL_EXPORT_ID_MISMATCH")
+    if export.get("name") != "Finance · Shared Monthly Statement Cycle":
+        _fail("CANONICAL_EXPORT_NAME_MISMATCH")
+    nodes = export.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) != 16:
+        _fail("CANONICAL_EXPORT_NODE_COUNT_MISMATCH")
+    meta = export.get("meta")
+    if not isinstance(meta, dict) or meta.get("financeWorkflowCode") != "SHARED_MONTHLY_STATEMENT_CYCLE":
+        _fail("CANONICAL_EXPORT_CODE_MISMATCH")
+    return copy.deepcopy(export)
+
+
 def validate_contract() -> None:
     """Validate the checked-in organization contract at import time and in tests."""
 
@@ -394,6 +432,14 @@ def validate_contract() -> None:
         _fail("WORKFLOW_MAP_COUNT_MISMATCH")
     if CANONICAL_REPLACEMENT_ID not in TARGET_IDS or ORPHAN_WORKFLOW_ID in TARGET_IDS:
         _fail("CANONICAL_REPLACEMENT_ROSTER_MISMATCH")
+    canonical_export = canonical_workflow_export()
+    canonical_spec = WORKFLOW_BY_ID[CANONICAL_REPLACEMENT_ID]
+    if canonical_spec["source"] != CANONICAL_EXPORT_RELATIVE_PATH:
+        _fail("CANONICAL_EXPORT_SOURCE_MISMATCH")
+    if canonical_export["id"] != canonical_spec["id"]:
+        _fail("CANONICAL_EXPORT_MAP_ID_MISMATCH")
+    if canonical_export["meta"]["financeWorkflowCode"] != canonical_spec["code"]:
+        _fail("CANONICAL_EXPORT_MAP_CODE_MISMATCH")
     if len(FOLDER_SPECS) != 6:
         _fail("FOLDER_SPEC_COUNT_MISMATCH")
     if sum(row["root"] for row in FOLDER_SPECS) != 2:
@@ -527,10 +573,25 @@ def apply_plan(state: Mapping[str, Any]) -> dict[str, Any]:
     workflows = {row["id"]: row for row in result["workflows"]}
     if roster_kind == "orphaned":
         # A live deployment can contain the old disposable duplicate while the
-        # canonical export is imported in the same bounded cutover.  Preserve
-        # the opaque row contents while replacing only its identity; the exact
-        # prestate remains available through plan_organization.rollback_state.
+        # canonical export is imported in the same bounded cutover.  Do not
+        # relabel the orphan: bind the checked-in export and retain only the
+        # runtime fields that are not part of its workflow body.
         orphan = workflows.pop(ORPHAN_WORKFLOW_ID)
+        runtime_fields = {
+            key: copy.deepcopy(orphan[key])
+            for key in (
+                "active",
+                "activeVersionId",
+                "projectId",
+                "createdAt",
+                "updatedAt",
+            )
+            if key in orphan
+        }
+        canonical = canonical_workflow_export()
+        orphan.clear()
+        orphan.update(canonical)
+        orphan.update(runtime_fields)
         orphan["id"] = CANONICAL_REPLACEMENT_ID
         workflows[CANONICAL_REPLACEMENT_ID] = orphan
     for workflow_id, spec in WORKFLOW_BY_ID.items():
@@ -604,6 +665,10 @@ def plan_organization(state: Mapping[str, Any]) -> dict[str, Any]:
         "mode": "backup_then_replace",
         "legacy_workflow_id": ORPHAN_WORKFLOW_ID,
         "replacement_workflow_id": CANONICAL_REPLACEMENT_ID,
+        "canonical_source_path": CANONICAL_EXPORT_RELATIVE_PATH,
+        "canonical_source_sha256": CANONICAL_EXPORT_SHA256,
+        "canonical_node_count": len(canonical_workflow_export()["nodes"]),
+        "canonical_source_bound": True,
         "legacy_present": orphan is not None,
         "backup_captured": orphan is not None,
         "backup_sha256": _sha256(orphan) if orphan is not None else None,
