@@ -293,12 +293,11 @@ CANONICAL_EXPORT_SHA256 = (
     "2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2"
 )
 # These are the workflow_entity fields that make up the imported workflow body.
-# Keep runtime/version/folder columns out of this digest; those are guarded
-# independently by the cutover contract.
-CANONICAL_PERSISTED_BODY_MD5 = "d62d4c804421e09161a892a180c1bca9"
+# Keep mutable name, runtime/version, and folder columns out of this digest;
+# those are normalized or guarded independently by the cutover contract.
+CANONICAL_PERSISTED_BODY_MD5 = "be22ef98b1a3a9aaea79a24673e85a57"
 PERSISTED_BODY_FIELDS = (
     "id",
-    "name",
     "nodes",
     "connections",
     "settings",

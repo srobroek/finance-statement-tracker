@@ -82,8 +82,8 @@ INSERT INTO finance_workflow_contract VALUES
 -- Bind the database precondition to the checked-in 024 export.  The Python
 -- rehearsal checks the source bytes; SQL checks the import identity, persisted
 -- body digest, and shape before it can retire 115.  expected_body_md5 follows
--- PostgreSQL jsonb text ordering over id/name/nodes/connections/settings/
--- pinData/meta.
+-- PostgreSQL jsonb text ordering over id/nodes/connections/settings/pinData/meta;
+-- the mutable display name is guarded separately.
 CREATE TEMP TABLE finance_canonical_source_contract (
   workflow_id varchar(36) PRIMARY KEY,
   source_path text NOT NULL,
@@ -98,7 +98,7 @@ INSERT INTO finance_canonical_source_contract VALUES (
   '10000000-0000-4000-8000-000000000024',
   'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
   '2fd8629d0396b2715ec2c4ac3c0b66264f980f51982ad67bc87fb020bdd5fdb2',
-  'd62d4c804421e09161a892a180c1bca9',
+  'be22ef98b1a3a9aaea79a24673e85a57',
   'Finance · Shared Monthly Statement Cycle',
   'Shared Monthly Statement Cycle',
   'SHARED_MONTHLY_STATEMENT_CYCLE',
@@ -254,7 +254,6 @@ BEGIN
       AND md5(
         jsonb_build_object(
           'id', w.id,
-          'name', w.name,
           'nodes', w.nodes::jsonb,
           'connections', w.connections::jsonb,
           'settings', w.settings::jsonb,

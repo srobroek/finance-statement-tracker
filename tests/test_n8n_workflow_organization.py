@@ -134,7 +134,10 @@ class DeterministicPostgresEquivalent:
                 or shared is None
                 or shared["projectId"] != project_id
                 or canonical.get("name")
-                != "Finance · Shared Monthly Statement Cycle"
+                not in {
+                    "Finance · Shared Monthly Statement Cycle",
+                    "Shared Monthly Statement Cycle",
+                }
                 or len(canonical.get("nodes", [])) != canonical_node_count
                 or canonical.get("meta", {}).get("financeWorkflowCode")
                 != "SHARED_MONTHLY_STATEMENT_CYCLE"
@@ -145,6 +148,9 @@ class DeterministicPostgresEquivalent:
                 != self.organizer.CANONICAL_PERSISTED_BODY_MD5
             ):
                 raise ValueError("CANONICAL_EXPORT_BODY_DIGEST_MISMATCH")
+            canonical["name"] = self.organizer.WORKFLOW_BY_ID[
+                self.organizer.CANONICAL_REPLACEMENT_ID
+            ]["target_name"]
             orphan_id = self.organizer.ORPHAN_WORKFLOW_ID
             orphan = self.tables["workflow_entity"].get(orphan_id)
             orphan_shared = self.tables["shared_workflow"].get(orphan_id)
@@ -274,6 +280,11 @@ class WorkflowOrganizationTests(unittest.TestCase):
         )
         self.assertEqual(
             o.persisted_workflow_body_md5(source), o.CANONICAL_PERSISTED_BODY_MD5
+        )
+        renamed = copy.deepcopy(source)
+        renamed["name"] = "Shared Monthly Statement Cycle"
+        self.assertEqual(
+            o.persisted_workflow_body_md5(renamed), o.CANONICAL_PERSISTED_BODY_MD5
         )
 
     def test_tag_transition_is_exactly_21_inactive_and_one_active(self):
@@ -477,6 +488,10 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertEqual(harness.tables, before)
         harness.execute("00000000-0000-0000-0000-000000000001", commit=True)
         after_first = copy.deepcopy(harness.tables)
+        self.assertEqual(
+            after_first["workflow_entity"][o.CANONICAL_REPLACEMENT_ID]["name"],
+            "Shared Monthly Statement Cycle",
+        )
         harness.execute("00000000-0000-0000-0000-000000000001", commit=True)
         self.assertEqual(harness.tables, after_first)
 
