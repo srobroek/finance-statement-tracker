@@ -12,7 +12,6 @@
     "source_commit",
     "base_image",
     "extension_image",
-    "support_images",
     "finance_package",
     "community_node_lock"
   ],
@@ -69,10 +68,11 @@
         }
       },
       "else": {
-        "required": ["source_commit"],
+        "required": ["source_commit", "support_images"],
         "properties": {
           "source_commit": {"$ref": "#/$defs/commit"},
-          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"}
+          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"},
+          "support_images": {"$ref": "#/$defs/verifiedSupportImages"}
         }
       }
     }
@@ -188,6 +188,16 @@
         "cashback": {"$ref": "#/$defs/supportImage"}
       }
     },
+    "verifiedSupportImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_utility", "task_runners", "cashback"],
+      "properties": {
+        "pdf_utility": {"$ref": "#/$defs/verifiedSupportImage"},
+        "task_runners": {"$ref": "#/$defs/verifiedSupportImage"},
+        "cashback": {"$ref": "#/$defs/verifiedSupportImage"}
+      }
+    },
     "supportImage": {
       "type": "object",
       "additionalProperties": false,
@@ -224,6 +234,33 @@
         },
         "receipt": {"$ref": "#/$defs/artifact"}
       }
+    },
+    "verifiedSupportImage": {
+      "allOf": [
+        {"$ref": "#/$defs/supportImage"},
+        {
+          "properties": {
+            "scan": {
+              "properties": {
+                "tool": {"type": "string", "minLength": 1},
+                "result": {"const": "PASS"},
+                "high": {"const": 0},
+                "critical": {"const": 0}
+              }
+            },
+            "attestation": {
+              "properties": {
+                "type": {"type": "string", "minLength": 1},
+                "predicate_type": {"type": "string", "minLength": 1},
+                "subject_digest": {"$ref": "#/$defs/digest"},
+                "source_commit": {"$ref": "#/$defs/commit"},
+                "sha256": {"$ref": "#/$defs/sha256"},
+                "status": {"const": "VERIFIED"}
+              }
+            }
+          }
+        }
+      ]
     },
     "artifact": {
       "type": "object",

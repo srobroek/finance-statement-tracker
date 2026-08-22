@@ -61,8 +61,8 @@ against later issuer evidence without a synthetic balancing row.
 | Microsoft OAuth | **Implemented-unverified (connection scope)** | Current n8n operator readback during this audit reports Outlook credential `NcQo00WO7GQ3qYyA` connected with delegated `Mail.Read` and Drive credential `eSnL069pIlzjFj4B` connected with delegated `Files.ReadWrite` | The live project still has a stale 19-workflow set. Exact-current import, durable binding/readback, token refresh, canonical Finance Evidence root readback, and real workflow execution receipts are still pending |
 | Subscription community agents | **Implemented-unverified** | Integrity-pinned ProDex 0.5.1 and Claude 0.8.0 register in an older local image; subscription adapter contract coverage exists | No current exact-image device/subscription login, no Claude no-session proof, no real workflow-09/21 proposal, no malicious negative runtime matrix, and no three consecutive schema-valid receipts |
 | Bounded MCP facade | **Implemented-unverified** | Static tests prove fixed operation codes, durable request receipts, and no caller-selected URL/path/credential/write flag | No MCP Server Trigger execution from a real client and no Cloudflare Service Auth route/negative test |
-| Runtime images and task runners | **Implemented-unverified for current commit** | Source/integrity pins, immutable extension checks, runner closure, and local image scans exist; focused contract suite passes with six Windows symlink skips | Latest local image/CLI receipt is commit `fa8fd58`; current head changes workflows 09/19/21 and AI schemas. Current image builds, scans, SBOMs, protocol smokes, and immutable digests are absent |
-| Cloudflare/network/secrets | **Implemented-unverified** | The route contract uses the existing external tunnel and protected origins | Platform status explicitly says compose, restore, routes and MCP facade are unvalidated; dedicated vault rotation/injection, provider egress, Access/Service Auth, origin headers, and two-replica route proof are absent |
+| Runtime images and task runners | **Implemented-unverified for current commit** | Source/integrity pins, immutable extension checks, runner closure, Cloudflared artifact contracts and local image scans exist; focused contract suite passes 64 tests with six Windows symlink skips | Latest local image/CLI receipt is commit `fa8fd58`; current head changes workflows 09/19/21 and AI schemas. Current image builds, scans, SBOMs, protocol smokes, and immutable digests are absent |
+| Cloudflare/network/secrets | **Implemented-unverified** | Hardened designs and source-locked Cloudflared artifact exist | Platform status explicitly says compose, restore, routes and MCP facade are unvalidated; dedicated vault rotation/injection, provider egress, Access/Service Auth, origin headers, and two-replica route proof are absent |
 | CI and deployment | **Implemented-unverified** | Three workflow definitions cover Python/Actual, cashback profiles/image, finance nodes, PDF utility, bounded runner, task runners and Cloudflared; local suites are green | Branch is two commits ahead of origin; GitHub token is invalid and Actions returned 404, so current remote checks are unknown. No current deployment digest/readback or restore drill exists |
 
 ## Detailed evidence and findings
@@ -229,7 +229,7 @@ Local verification performed in this audit:
 | `npm test` in `integrations/actual` | **PASS** — 48 tests |
 | `npm test` in `packages/n8n-nodes-finance` | **PASS** — 21 tests plus build |
 | Subscription adapter contract tests | **PASS** — repository contract coverage; provider execution remains unverified |
-| Focused n8n/image/runner/deployment Python suite | **PASS** — six Windows symlink skips |
+| Focused n8n/image/runner/Cloudflared/deployment Python suite | **PASS** — 64 tests, 6 Windows symlink skips |
 | `python scripts/verify-project-acceptance.py` | **PASS only for ledger schema validity** — 26 requirements; it does not execute their verifiers |
 | `python scripts/verify-wealth-acceptance.py --bundle runtime/audit/wealth-acceptance-evidence.json` | **BLOCKED** — evidence bundle unavailable; no writes allowed |
 | PDF utility standalone tests | **NOT RUNNABLE LOCALLY** — `pikepdf` absent in this Windows environment; Linux/container CI remains required |
@@ -279,9 +279,8 @@ These artifacts remain useful history but cannot prove the current end state:
 
 ### P0 — orchestration and security
 
-6. Build the exact current custom n8n/PDF/runner images; scan, generate SBOMs,
-   publish immutable digests, and generate a current lock. The external
-   Cloudflare tunnel remains outside this repository's image build graph.
+6. Build the exact current custom n8n/PDF/runner/Cloudflared images; scan,
+   generate SBOMs, publish immutable digests, and generate a current lock.
 7. Complete least-privilege Outlook/OneDrive and statement/Actual credentials
    in disposable with the user present. Verify scopes without exposing secrets.
 8. Import all 19 workflows inactive, place folders, bootstrap all 15 current
