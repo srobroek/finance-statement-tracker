@@ -135,7 +135,7 @@
       "verification_state": "ADAPTER_TESTED_NOT_END_TO_END",
       "evidence_paths": ["config/browser-sources.json", "finance_tracker/browser_ingestion.py", "runtime/browser-adapters-status.json", "docs/browser-ingestion.md"],
       "tests": ["Browser recipe/export/ingestion/CLI tests pass in full-suite run"],
-      "live_readback": "ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "last_verified": "2026-08-19",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "risk": "HIGH",

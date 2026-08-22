@@ -1706,7 +1706,7 @@
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run",
         "Evidence tests pass; n8n structural extraction checks pass except unrelated bootstrap failure"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end. | ingestion.documents-and-evidence: No accepted live warranty/receipt acquisition fixture or Linux UDS encrypted-PDF runtime proof for current orchestration.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end. | ingestion.documents-and-evidence: No accepted live warranty/receipt acquisition fixture or Linux UDS encrypted-PDF runtime proof for current orchestration.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures. | Exercise plain/encrypted live documents, verify ephemeral plaintext deletion, catalogue hashes, selective store/do-not-store policy, and transaction linkage.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -2168,7 +2168,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -3692,7 +3692,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
@@ -3740,7 +3740,7 @@
         "tests/test_account_completeness.py passing in full-suite run",
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "accounts.fab-non-credit: Receipt says guarded apply/readback passed for the planned FAB accounts, but UI readback remains PENDING_USER_CLOUDFLARE_AUTH and no current independent live query was possible. | ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "accounts.fab-non-credit: Receipt says guarded apply/readback passed for the planned FAB accounts, but UI readback remains PENDING_USER_CLOUDFLARE_AUTH and no current independent live query was possible. | ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Prove current Actual API and authenticated UI contain exactly the complete FAB non-credit inventory with source-matching signed balances. | Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "PRODUCTION_UI_READBACK_REQUIRED",
@@ -3794,7 +3794,7 @@
         "tests/test_account_completeness.py passing",
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "accounts.sarwa: No fresh authenticated Sarwa capture, FX snapshot, or current Actual UI/API account readback is bound to the proposed state. | ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "accounts.sarwa: No fresh authenticated Sarwa capture, FX snapshot, or current Actual UI/API account readback is bound to the proposed state. | ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Acquire fresh interactive holdings and FX, run disposable idempotent projection, then guardedly create/read back each included off-budget portfolio account. | Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "FRESH_INTERACTIVE_SARWA_CAPTURE_REQUIRED",
@@ -3841,7 +3841,7 @@
       "tests": [
         "Browser recipe/export/ingestion/CLI tests pass in full-suite run"
       ],
-      "live_readback": "ingestion.browser: ADCB, EI, FAB, Amazon, Wio, and Sarwa adapters report READY; RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
+      "live_readback": "ingestion.browser: ADCB, EI, FAB, Wio, and Sarwa adapters report READY; the dated Amazon browser adapter evidence is superseded by generic email/order-receipt enrichment. RAK and SC statement adapters remain ADAPTER_REQUIRED. Current captures do not prove the greenfield n8n archive-review-write flow end to end.",
       "remaining_work": "Run each in-scope provider through immutable archive, n8n validation, reviewed delta, fenced writer, and Actual readback; add representative RAK/SC statement fixtures.",
       "blockers": [
         "RAK_SC_STATEMENT_ADAPTERS_REQUIRED",
