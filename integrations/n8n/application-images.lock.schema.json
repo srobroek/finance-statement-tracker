@@ -12,6 +12,7 @@
     "source_commit",
     "base_image",
     "extension_image",
+    "support_images",
     "finance_package",
     "community_node_lock"
   ],
@@ -23,6 +24,7 @@
     "source_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
     "base_image": {"$ref": "#/$defs/baseImage"},
     "extension_image": {"$ref": "#/$defs/extensionImage"},
+    "support_images": {"$ref": "#/$defs/supportImages"},
     "finance_package": {"$ref": "#/$defs/packageLock"},
     "community_node_lock": {
       "allOf": [
@@ -175,6 +177,53 @@
           }
         }
       ]
+    },
+    "supportImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_utility", "task_runners", "cashback"],
+      "properties": {
+        "pdf_utility": {"$ref": "#/$defs/supportImage"},
+        "task_runners": {"$ref": "#/$defs/supportImage"},
+        "cashback": {"$ref": "#/$defs/supportImage"}
+      }
+    },
+    "supportImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "image_digest",
+        "source_commit",
+        "sbom_sha256",
+        "scan_sha256",
+        "scan",
+        "attestation",
+        "receipt"
+      ],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+        "image_digest": {"$ref": "#/$defs/digest"},
+        "source_commit": {"$ref": "#/$defs/commit"},
+        "promoted_with_finance_commit": {"$ref": "#/$defs/commit"},
+        "sbom_sha256": {"$ref": "#/$defs/sha256"},
+        "scan_sha256": {"$ref": "#/$defs/sha256"},
+        "scan": {"$ref": "#/$defs/scan"},
+        "attestation": {
+          "allOf": [
+            {"$ref": "#/$defs/attestation"},
+            {"properties": {
+              "type": {"type": "string", "minLength": 1},
+              "predicate_type": {"type": "string", "minLength": 1},
+              "subject_digest": {"$ref": "#/$defs/digest"},
+              "source_commit": {"$ref": "#/$defs/commit"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "status": {"const": "VERIFIED"}
+            }}
+          ]
+        },
+        "receipt": {"$ref": "#/$defs/artifact"}
+      }
     },
     "artifact": {
       "type": "object",

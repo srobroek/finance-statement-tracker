@@ -4,8 +4,8 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-GENERIC_BASE_DIGEST = "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9"
-GENERIC_SOURCE_COMMIT = "e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7"
+GENERIC_BASE_DIGEST = "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
+GENERIC_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 
 
 class N8nCustomImageTests(unittest.TestCase):
@@ -46,7 +46,7 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
 
-    def test_finance_image_builder_uses_only_immutable_base_and_writes_spec_receipt(self):
+    def test_finance_image_builder_uses_only_immutable_base_and_writes_external_receipt(self):
         builder = (ROOT / "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh").read_text(encoding="utf-8")
         receipt = json.loads(
             (ROOT / "packages/n8n-nodes-finance/finance-image-build-receipt.json").read_text(encoding="utf-8")
@@ -62,16 +62,18 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
         self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
-        self.assertEqual(receipt["status"], "SPEC_ONLY")
+        self.assertEqual(receipt["status"], "PUBLISHED_READBACK_VERIFIED")
+        self.assertEqual(
+            receipt["image"]["image_digest"],
+            "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+        )
         self.assertEqual(receipt["base_image"]["digest"], GENERIC_BASE_DIGEST)
         self.assertEqual(receipt["base_image"]["source_commit"], GENERIC_SOURCE_COMMIT)
         self.assertEqual(
             receipt["base_image"]["source_repository"],
             "https://github.com/srobroek/n8n",
         )
-        self.assertIsNone(receipt["image"]["image_digest"])
-        self.assertIsNone(receipt["attestation"]["subject_digest"])
-        self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
+        self.assertEqual(receipt["attestation"]["status"], "VERIFIED")
 
     def test_package_test_does_not_rebuild_production_output(self):
         package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))

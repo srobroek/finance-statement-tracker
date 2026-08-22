@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "reference": "localhost/n8n-platform-nodemailer@sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
-  "digest": "sha256:a631cd1dcb2b0c8fd609ca480f627193f99a769740c2355cd87dcda2fa9233c9",
+  "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+  "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
   "source_repository": "https://github.com/srobroek/n8n",
-  "source_commit": "e2579f63f5e16683a45a36b7a58a3b8e99b5a5c7",
-  "runtime_receipt": "generic-n8n-runtime-e2579f63-r2/receipt.json",
-  "runtime_receipt_sha256": "UNAVAILABLE_IN_SOURCE_TREE"
+  "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
+  "runtime_receipt": "final-images-platform-187-2/platform-image-receipt.json",
+  "runtime_receipt_sha256": "9e9bc4dadd079323638fffa473af7e88605661fabd53505ae24bc9ae1f93b02f"
 }

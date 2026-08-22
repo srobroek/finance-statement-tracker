@@ -107,13 +107,13 @@ class N8nApplicationManifestTests(unittest.TestCase):
             errors = schema_errors(document, schema)
             self.assertEqual(errors, [], "schema errors: " + "; ".join(error.message for error in errors))
 
-    def test_spec_only_schemas_reject_unverified_or_unexpected_fields(self) -> None:
+    def test_locked_schemas_reject_unverified_or_unexpected_fields(self) -> None:
         manifest_with_commit = deepcopy(self.manifest)
-        manifest_with_commit["finance_commit"] = "0" * 40
+        manifest_with_commit["finance_commit"] = None
         self.assertTrue(schema_errors(manifest_with_commit, self.manifest_schema))
 
         lock_with_scan = deepcopy(self.image_lock)
-        lock_with_scan["extension_image"]["scan"]["result"] = "PASS"
+        lock_with_scan["extension_image"]["scan"]["result"] = "NOT_RUN"
         self.assertTrue(schema_errors(lock_with_scan, self.image_lock_schema))
 
         lock_with_extra_field = deepcopy(self.image_lock)
@@ -183,9 +183,15 @@ class N8nApplicationManifestTests(unittest.TestCase):
         self.assertEqual(self.manifest["extension_image"]["base_digest"], self.manifest["base_image"]["digest"])
         receipt = self.manifest["extension_image"]["receipt"]
         self.assertEqual(receipt["sha256"], sha256(ROOT / receipt["path"]))
-        self.assertIsNone(self.manifest["finance_commit"])
-        self.assertIsNone(self.manifest["extension_image"]["digest"])
-        self.assertEqual(self.manifest["contract_status"], "SPEC_ONLY")
+        self.assertEqual(
+            self.manifest["finance_commit"],
+            "170328b7f6aefa068da9c9a864cd03ca91635c70",
+        )
+        self.assertEqual(
+            self.manifest["extension_image"]["digest"],
+            "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+        )
+        self.assertEqual(self.manifest["contract_status"], "DISPOSABLE_VERIFIED")
 
     def test_image_lock_binds_package_and_community_integrity(self) -> None:
         package = self.image_lock["finance_package"]
