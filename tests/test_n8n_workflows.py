@@ -2563,7 +2563,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             {"outputSchema", "streamProgress", "timeoutSeconds"},
         )
         self.assertTrue(codex["parameters"]["options"]["outputSchema"])
-        self.assertNotIn("Run Claude Subscription Provider", nodes)
+        self.assertIn("Run Claude Subscription Provider", nodes)
         proposal_schema = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         self.assertEqual(
             json.loads(codex["parameters"]["options"]["outputSchema"]),
@@ -2581,17 +2581,16 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "provider_auth_mode", "Output JSON Schema",
         ):
             self.assertIn(expected, build)
-        validator_name = "Validate Proposal Schema and Normalize Provider Output"
+        validator_name = "Validate Claude Proposal Schema and Normalize Provider Output"
         normalizer = nodes[validator_name]["parameters"]["jsCode"]
         self.assertIn("PRODEX_AUTH_REQUIRED", normalizer)
-        self.assertIn("invocation.archive_sha256", normalizer)
         adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
-        self.assertNotIn("Run Claude Subscription Provider", adapter_json)
+        self.assertIn("Run Claude Subscription Provider", adapter_json)
         self.assertEqual(
             self.workflow("21-subscription-agent-adapter.json")["meta"]["providerBranchesEnabled"],
-            ["CODEX_SUBSCRIPTION"],
+            ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
         )
-        self.assertNotIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
+        self.assertIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
         self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
 
     def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:

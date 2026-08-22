@@ -3026,6 +3026,12 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                     {"id": "21002-caller-3", "name": "job_id", "type": "string", "value": "={{ $json.job_id }}"},
                     {"id": "21002-caller-4", "name": "idempotency_key", "type": "string", "value": "={{ $json.idempotency_key }}"},
                     {"id": "21002-caller-5", "name": "unresolved", "type": "array", "value": "={{ $json.unresolved }}"},
+                    {"id": "21002-caller-6", "name": "operation_code", "type": "string", "value": "={{ $json.operation_code }}"},
+                    {"id": "21002-caller-7", "name": "email_evidence", "type": "boolean", "value": "={{ $json.email_evidence }}"},
+                    {"id": "21002-caller-8", "name": "archive_sha256", "type": "string", "value": "={{ $json.archive_sha256 }}"},
+                    {"id": "21002-caller-9", "name": "evidence_replay_keys", "type": "array", "value": "={{ $json.evidence_replay_keys }}"},
+                    {"id": "21002-caller-10", "name": "archive_identity_keys", "type": "array", "value": "={{ $json.archive_identity_keys }}"},
+                    {"id": "21002-caller-11", "name": "archive_item_ids", "type": "array", "value": "={{ $json.archive_item_ids }}"},
                     {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
                     {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
                     {"id": "21002-c", "name": "claude_package", "type": "string", "value": "@ggomez91npm/n8n-nodes-claude-code@0.8.0"},
@@ -3105,11 +3111,20 @@ const runnerPolicy = providerPolicy[job.agent_provider]?.[job.policy_class];
 if (!runnerPolicy) {
   throw new Error('AGENT_RUNNER_POLICY_MISSING');
 }
+if (job.email_evidence === true && !/^[a-f0-9]{64}$/.test(String(job.archive_sha256 || ''))) {
+  throw new Error('EMAIL_ENRICHMENT_ARCHIVE_HASH_REQUIRED');
+}
 const request = {
   agent_provider: job.agent_provider,
   policy_class: job.policy_class,
   job_id: job.job_id,
   idempotency_key: job.idempotency_key,
+  operation_code: job.operation_code,
+  email_evidence: job.email_evidence === true,
+  archive_sha256: job.archive_sha256,
+  evidence_replay_keys: job.evidence_replay_keys,
+  archive_identity_keys: job.archive_identity_keys,
+  archive_item_ids: job.archive_item_ids,
   unresolved: job.unresolved,
 };
 const prompt = [
@@ -3194,6 +3209,13 @@ return [{ json: {
             "parameters": {"jsCode": r"""
 const invocation = $('Validate and Build Fixed Provider Invocation').item.json;
 const provider = invocation.agent_provider;
+const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
+if (providerError) {
+  if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
+    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+  }
+  throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
+}
 const FINANCE_AI_SCHEMA_V1 = new Set([
   'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',
   'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',
@@ -3268,6 +3290,7 @@ return [{ json: normalized }];
     invoke["name"] = "Invoke Subscription Agent Adapter"
     invoke["type"] = "n8n-nodes-base.executeWorkflow"
     invoke["typeVersion"] = 1.2
+
     invoke["parameters"] = {
         "workflowId": {"__rl": True, "value": adapter["id"], "mode": "id"},
         "options": {"waitForSubWorkflow": True},
@@ -3357,6 +3380,18 @@ if (
 ) {
   throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');
 }
+const emailArchiveProof = emailRows
+  .map(row => ({
+    source_message_id: String(row.source_message_id || ''),
+    email_evidence_sha256: String(row.email_evidence_sha256 || ''),
+    onedrive_item_id: String(row.onedrive_item_id || ''),
+    email_evidence_identity: String(
+      row.email_evidence_identity || row.source_message_id + ':INLINE_BODY',
+    ),
+  }))
+  .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));
+const archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();
+const archiveItemIds = [...new Set(emailArchiveProof.map(row => row.onedrive_item_id).filter(Boolean))].sort();
 const first = attachmentRows[0] || emailRows[0] || {};
 return [{
   json: {
@@ -3380,6 +3415,9 @@ return [{
     email_evidence_receipt_barrier: 'VERIFIED',
     email_evidence_receipts_verified: emailRows.length,
     email_evidence_identity_keys: observedEmail,
+    archive_identity_keys: archiveIdentityKeys,
+    archive_item_ids: archiveItemIds,
+    email_evidence_archive_proof: emailArchiveProof,
     archive_ready: true,
     cursor_commit_eligible: false,
   },
@@ -3760,6 +3798,43 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
         workflow["meta"]["setupRequired"] = True
 
 
+def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
+    """Keep the generic W12-to-W21 handoff owned by the canonical renderer."""
+    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    adapter = by_code["SUBSCRIPTION_AGENT_ADAPTER"]
+    sweep_names = {node["name"] for node in sweep["nodes"]}
+    required_sweep = {
+        "Evidence Request", "Validate Evidence Request", "Search Outlook Evidence",
+        "Match Outlook Evidence to Transactions", "Archive Matched Email Evidence in W01",
+        "Build Evidence Handoff", "SHA-256 Archive Proof", "SHA-256 Evidence Handoff",
+        "Prepare W21 Email Request", "Send Evidence to W21", "Validate Email Proposal Result",
+    }
+    missing = sorted(required_sweep - sweep_names)
+    if missing:
+        raise RuntimeError("generic email enrichment nodes missing: " + ", ".join(missing))
+    required_adapter = {
+        "Schema-Bound Proposal Job", "Subscription Provider Parameters",
+        "Validate and Build Fixed Provider Invocation", "Provider Route",
+        "Run Codex Subscription Provider", "Run Claude Subscription Provider",
+        "Validate Claude Proposal Schema and Normalize Provider Output",
+    }
+    missing = sorted(required_adapter - {node["name"] for node in adapter["nodes"]})
+    if missing:
+        raise RuntimeError("W21 provider contract missing: " + ", ".join(missing))
+    sweep["meta"].update({
+        "evidenceHandoffSchemaVersion": 1,
+        "evidenceJobIdPattern": "^finance-ai:[a-f0-9]{64}$",
+        "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
+        "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
+        "evidenceNoModelControlledWrites": True,
+    })
+    adapter["meta"].update({
+        "emailEvidenceInputContract": "FINANCE_AI_PROPOSAL",
+        "emailEvidenceArchiveProofRequired": True,
+        "emailEvidenceAuthFailure": "PRODEX_AUTH_REQUIRED",
+    })
+
 def apply_blocker_metadata(workflows: list[dict]) -> None:
     """Project objective blocker evidence from the registry into four exports.
 
@@ -3991,6 +4066,7 @@ def main() -> int:
     apply_blocker_metadata(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
+    ensure_email_enrichment_contract(workflows)
     assert_monthly_cycle_commit_graph(workflows)
     assert_archive_readback_contract(workflows)
     assert_four_table_bootstrap(workflows)

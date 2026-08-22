@@ -237,7 +237,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "01-outlook-finance-acquisition.json": {
         "nodes": 42, "sticky": 0,
         "node_ids_sha256": "6a0ef6d52743499bac9c51b27a761b32dee24c0af24d7d69bd147a1458e94915",
-        "parameters_sha256": "09dfb7370b365752581517466e7a9bc247ba2f180890a5345b271d5d1c04c508",
+        "parameters_sha256": "714d462159ec5e2d45fcc6cde539b4c459cc08db07637b77ac4c0b15a643084b",
     },
     "02-rakbank-live-cashback.json": {
         "nodes": 12, "sticky": 0,
@@ -275,11 +275,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "c9bb56497d735ceeb7cd432e443d898795bae47697020713905cd8182ef6e6a4",
     },
     "12-outlook-message-sweep.json": {
-        "nodes": 75, "edges": 80, "sticky": 0, "groups": 11,
-        "node_ids_sha256": "861c87e5bc6272251be4863859ac61f12b8f6a08c2f13481f354c5d2f0ceeed7",
-        "connections_sha256": "28b04174b03bf2ddf924071ab0086efb958bdc334dc4cbec7e38d4a16ee3b3ba",
-        "parameters_sha256": "85fd6e0b7a49b6f582167624fd7539ae1e733f85304f1b2d78a2b3e19174b48e",
-        "groups_sha256": "98e3eb1715a75be466e3df87164c2a092331e8c5069f577401c2e64096321b40",
+        "nodes": 78, "edges": 83, "sticky": 0, "groups": 15,
+        "node_ids_sha256": "0d3106f0b14fbcc53ec31c7f9424a048727438f9f73c1a4c755231447ef8789f",
+        "connections_sha256": "eab93fc5367a39d46afeb429bed88431923f7e15f5bee950fdf03ca777e9972d",
+        "parameters_sha256": "f1b5318098b9d2e625f4864e7891485f26081becc0bea4e8caa627e0a8c40dc9",
+        "groups_sha256": "2dd7721ada4cda02b14f5bfda73f07ece4d06de20f61178befa852a2aacf6992",
     },
     "13-document-extraction-request.json": {
         "nodes": 8, "sticky": 0,
@@ -317,11 +317,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "8e77a08e6fc783ab868205c4e9bc242d5829bf66cbcc94163ee8a6cd031e2755",
     },
     "21-subscription-agent-adapter.json": {
-        "nodes": 5, "edges": 4, "sticky": 0, "groups": 1,
-        "node_ids_sha256": "8b8dc2558690c7d9a12ec6656bc6075716ac0bd1a232f3b96990aef087c7fd76",
-        "connections_sha256": "fb25781b3ee9e12e06e61f3ae7b02b9d1810c3f104f063466d18f3db63112142",
-        "parameters_sha256": "492ddfaa4e5287b4cc2da42f5c0c3fc4d25c32b1a25b820fccacfc522e6752e1",
-        "groups_sha256": "5737e3d167a78bf99cc8c472018cc36f9f18a979b3ad58a0b9a8cff08bb9e301",
+        "nodes": 8, "edges": 8, "sticky": 0, "groups": 1,
+        "node_ids_sha256": "b0e22a3275e99b1bf397cfc1b96a9ef6b9866af7ae71411edd3b4a7dc9c1f56a",
+        "connections_sha256": "dc9ef1e63829f6c2ef02d613ca6c9f4d15b7826ec808384e86612985655f646f",
+        "parameters_sha256": "6661203272e5108b6ef9431bdd6a2f9990d9b59c2eaec90892d2ac937d15d9e6",
+        "groups_sha256": "e1990b4608b5f524f88b0190f3c1be4a625c9297f9610ad76ec8a181ad5fbf90",
     },
     "22-shared-monthly-statement-cycle.json": {
         "nodes": 16, "sticky": 0,

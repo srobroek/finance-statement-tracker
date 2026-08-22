@@ -22,8 +22,8 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1120,
-        -520
+        -820,
+        0
       ],
       "parameters": {
         "inputSource": "passthrough"
@@ -35,7 +35,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         0
       ],
       "parameters": {
@@ -48,7 +48,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -520,
+        -220,
         0
       ],
       "parameters": {
@@ -124,7 +124,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         0
       ],
       "parameters": {
@@ -137,7 +137,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        680,
         380
       ],
       "alwaysOutputData": true,
@@ -170,7 +170,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         380
       ],
       "parameters": {
@@ -183,8 +183,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        380
+        -1120,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -232,7 +232,7 @@
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         760
       ],
       "alwaysOutputData": true,
@@ -270,7 +270,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         760
       ],
       "parameters": {
@@ -283,7 +283,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -820,
         1140
       ],
       "parameters": {
@@ -332,7 +332,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -520,
         1140
       ],
       "parameters": {
@@ -394,7 +394,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        -220,
         1140
       ],
       "parameters": {
@@ -436,7 +436,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         1140
       ],
       "parameters": {
@@ -449,7 +449,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        380,
         0
       ],
       "parameters": {
@@ -486,7 +486,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         0
       ],
       "parameters": {
@@ -499,7 +499,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         0
       ],
       "parameters": {
@@ -512,7 +512,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -820,
         380
       ],
       "parameters": {
@@ -544,7 +544,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         380
       ],
       "parameters": {
@@ -557,8 +557,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -1120,
-        2280
+        380,
+        2660
       ],
       "parameters": {
         "rules": {
@@ -676,7 +676,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -520,
+        -220,
         380
       ],
       "parameters": {
@@ -706,8 +706,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
-        2280
+        680,
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -767,8 +767,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
-        2280
+        980,
+        2660
       ],
       "parameters": {
         "resource": "row",
@@ -835,8 +835,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
-        2280
+        -1120,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -892,8 +892,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        2280
+        -820,
+        3040
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Source Cursor Readback. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, detected = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (observed.source_code !== proof.source_code || observed.committed_run_id !== proof.run_id || observed.cursor_value !== proof.run_upper_bound || observed.run_upper_bound !== proof.run_upper_bound || Number(observed.cursor_version) !== Number(proof.expected_cursor_version) + 1 || observed.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_READBACK_MISMATCH');\nreturn [{ json: { ...proof, ...detected, ...observed, cursor_readback_stage: true, cursor_readback_verified: true } }];\n"
@@ -905,8 +905,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        2280
+        -520,
+        3040
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, next_cursor_version: expected + 1 } }];\n"
@@ -918,8 +918,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        2280
+        -220,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -972,8 +972,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        2280
+        80,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -1014,8 +1014,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        2660
+        380,
+        3040
       ],
       "parameters": {
         "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
@@ -1027,8 +1027,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
-        2660
+        680,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -1088,8 +1088,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
-        2660
+        980,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -1135,8 +1135,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        2660
+        -1120,
+        3420
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, terminal = $('Verify Terminal Acquisition Receipt').first().json;\nif (terminal.readback_verified !== true || terminal.downstream_receipt_sha256 !== proof.downstream_receipt_sha256 || terminal.cursor_commit_eligible !== true)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nconst recovered = cursor.cursor_recovery === true, version = recovered ? Number(cursor.cursor_version) : Number(proof.expected_cursor_version) + 1, value = recovered ? cursor.cursor_value : proof.run_upper_bound;\nif (!Number.isInteger(version) || version < 1 || !value)\n    throw new Error('ACQUISITION_TERMINAL_CURSOR_MISSING');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: value, cursor_version: version, downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: recovered } }];\n"
@@ -1148,8 +1148,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        2660
+        -820,
+        3420
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.cursor_commit_eligible !== true || observed.readback_verified !== false)\n    throw new Error('ACQUISITION_TERMINAL_STATE_MISMATCH');\nreturn [{ json: { ...observed, readback_verified: true } }];\n"
@@ -1161,8 +1161,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        2660
+        -520,
+        3420
       ],
       "parameters": {
         "resource": "row",
@@ -1224,8 +1224,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        2660
+        -220,
+        3420
       ],
       "parameters": {
         "resource": "row",
@@ -1286,8 +1286,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        2660
+        80,
+        3420
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.cursor_commit_eligible !== true || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
@@ -1299,8 +1299,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        3040
+        380,
+        3420
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Replayed Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, replay = $('Verify Replayed Terminal Acquisition Receipt').first().json;\nif (replay.replay_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_NOT_VERIFIED');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: true, replayed: true } }];\n"
@@ -1312,7 +1312,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        -220,
         760
       ],
       "parameters": {
@@ -1325,7 +1325,7 @@
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
       "position": [
-        80,
+        380,
         760
       ],
       "alwaysOutputData": true,
@@ -1348,7 +1348,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         760
       ],
       "parameters": {
@@ -1361,8 +1361,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        760
+        -1120,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Aggregate Immutable Archive Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Aggregate Exact Window Heartbeat').first().json;\nconst parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory);\nconst rows = $input.all().map(item => item.json);\nconst grouped = new Map();\nfor (const row of rows) {\n    const messageId = String(row.message_id || '').trim();\n    if (!messageId)\n        continue;\n    const bucket = grouped.get(messageId) || [];\n    if (row.attachment?.id)\n        bucket.push(row.attachment);\n    grouped.set(messageId, bucket);\n}\nconst messages = parents.map(item => {\n    const message = item.json;\n    const attachments = grouped.get(message.message_id) || [];\n    const seen = new Set();\n    for (const attachment of attachments) {\n        const identity = message.message_id + ':' + attachment.id;\n        if (seen.has(identity))\n            throw new Error('DUPLICATE_MESSAGE_ATTACHMENT_ID');\n        seen.add(identity);\n    }\n    attachments.sort((left, right) => String(left.id).localeCompare(String(right.id)));\n    return {\n        message_id: message.message_id,\n        message,\n        attachment_inventory: attachments,\n        attachment_ids: attachments.map(attachment => attachment.id),\n        attachment_identity_keys: attachments.map(attachment => message.message_id + ':' + attachment.id),\n    };\n});\nreturn [{ json: {\n            ...sweep,\n            messages,\n            empty_inventory: messages.length === 0,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: messages.flatMap(message => message.attachment_identity_keys),\n        } }];\n"
@@ -1374,7 +1374,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        680,
+        980,
         1140
       ],
       "parameters": {
@@ -1395,8 +1395,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        1140
+        -1120,
+        1520
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Attachment Archive Barrier. Keep this deterministic and fail closed.\nconst result = $json, contract = $('Attach Immutable Inventory to Sweep').first().json;\nif (result.attachment_verification_barrier !== 'VERIFIED' || result.attachment_ids_verified !== true || result.email_evidence_receipt_barrier !== 'VERIFIED')\n    throw new Error('ATTACHMENT_AND_EMAIL_EVIDENCE_BARRIER_REQUIRED');\nconst expected = Array.isArray(contract.attachment_identity_keys) ? contract.attachment_identity_keys : [], observed = Array.isArray(result.attachment_identity_keys) ? result.attachment_identity_keys : [];\nif (new Set(observed).size !== expected.length || expected.some(identity => !observed.includes(identity)))\n    throw new Error('COMPOSITE_ATTACHMENT_IDENTITY_BARRIER_MISMATCH');\nif (Number(result.email_evidence_receipts_verified) !== Number(contract.matched_count))\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH');\nreturn [{ json: { ...contract, ...result, archive_ready: true, cursor_commit_eligible: false } }];\n"
@@ -1408,8 +1408,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Require Verified Attachment Barrier. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.attachment_verification_barrier !== 'VERIFIED' || row.email_evidence_receipt_barrier !== 'VERIFIED' || row.archive_ready !== true || Number(row.email_evidence_receipts_verified) !== Number(row.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nreturn [{ json: row }];\n"
@@ -1421,7 +1421,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -220,
+        80,
         760
       ],
       "parameters": {
@@ -1451,7 +1451,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         760
       ],
       "parameters": {
@@ -1464,7 +1464,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        380,
         1140
       ],
       "parameters": {
@@ -1477,7 +1477,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        80,
         380
       ],
       "alwaysOutputData": true,
@@ -1520,7 +1520,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        80,
+        380,
         380
       ],
       "parameters": {
@@ -1550,7 +1550,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         1140
       ],
       "parameters": {
@@ -1563,7 +1563,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         1520
       ],
       "parameters": {
@@ -1576,7 +1576,7 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        -820,
+        -520,
         1520
       ],
       "parameters": {
@@ -1592,7 +1592,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        -220,
         1520
       ],
       "parameters": {
@@ -1656,7 +1656,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        80,
         1520
       ],
       "parameters": {
@@ -1703,7 +1703,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        380,
         1520
       ],
       "parameters": {
@@ -1716,7 +1716,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        680,
         1520
       ],
       "parameters": {
@@ -1779,7 +1779,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
+        980,
         1520
       ],
       "parameters": {
@@ -1831,8 +1831,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        1520
+        -1120,
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Verified ARCHIVED Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.readback_verified !== true || observed.archive_ready !== true || observed.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVED_RECEIPT_TERMINAL_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...expected, ...observed, readback_verified: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
@@ -1844,7 +1844,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -820,
         1900
       ],
       "alwaysOutputData": true,
@@ -1876,7 +1876,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        -520,
         1900
       ],
       "parameters": {
@@ -1889,7 +1889,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -520,
+        -220,
         1900
       ],
       "parameters": {
@@ -1919,7 +1919,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        80,
         1900
       ],
       "parameters": {
@@ -1960,7 +1960,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        380,
         1900
       ],
       "alwaysOutputData": true,
@@ -1992,7 +1992,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         1900
       ],
       "parameters": {
@@ -2005,7 +2005,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         1900
       ],
       "parameters": {
@@ -2018,8 +2018,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        1900
+        -1120,
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Verified Cursor Initialization. Keep this deterministic and fail closed.\nconst row = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(row.status) || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { run_id: row.run_id, source_code: row.source_code, config_version: row.config_version, status: row.status, cursor_value: row.cursor_value, cursor_version: Number(row.cursor_version), initialized: row.initialized === true, readback_verified: true } }];\n"
@@ -2032,10 +2032,10 @@
       "typeVersion": 2,
       "position": [
         -820,
-        -520
+        2280
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Evidence Request. Keep this deterministic and fail closed.\nconst request = $json;\nif (String(request.operation || request.mode || '') !== 'EVIDENCE')\n    throw new Error('INVALID_EVIDENCE_OPERATION');\nfor (const field of ['run_id', 'source_code', 'folder_id', 'onedrive_parent_id', 'window_start', 'run_upper_bound', 'senders', 'subjects', 'transactions']) {\n    if (request[field] === undefined || request[field] === null || request[field] === '')\n        throw new Error(`Missing evidence field ${field}`);\n}\nconst start = new Date(request.window_start), upper = new Date(request.run_upper_bound);\nif (!Number.isFinite(start.valueOf()) || !Number.isFinite(upper.valueOf()) || !(start < upper) || upper > new Date())\n    throw new Error('INVALID_EVIDENCE_WINDOW');\nif (!Array.isArray(request.senders) || !request.senders.length || request.senders.length > 50)\n    throw new Error('EVIDENCE_SENDER_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.subjects) || !request.subjects.length || request.subjects.length > 50)\n    throw new Error('EVIDENCE_SUBJECT_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.transactions) || !request.transactions.length || request.transactions.length > 100)\n    throw new Error('EVIDENCE_TRANSACTION_BATCH_INVALID');\nconst senders = [...new Set(request.senders.map(value => String(value).trim().toLowerCase()).filter(Boolean))];\nconst subjects = [...new Set(request.subjects.map(value => String(value).trim()).filter(Boolean))];\nif (!senders.length || !subjects.length)\n    throw new Error('EVIDENCE_ALLOWLIST_EMPTY');\nconst seen = new Set();\nconst transactions = request.transactions.map(transaction => {\n    const transactionId = String(transaction?.transaction_id || '').trim();\n    if (!transactionId || transactionId.length > 256 || seen.has(transactionId))\n        throw new Error('EVIDENCE_TRANSACTION_ID_MISSING_OR_DUPLICATE');\n    seen.add(transactionId);\n    const date = String(transaction.transaction_date || '');\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isInteger(transaction.amount_minor) || !Number.isFinite(transaction.amount_minor))\n        throw new Error('EVIDENCE_TRANSACTION_FACTS_INVALID');\n    const currency = String(transaction.currency || '').trim().toUpperCase();\n    const merchant = String(transaction.merchant || '').trim();\n    if (!/^[A-Z]{3}$/.test(currency) || !merchant || merchant.length > 160)\n        throw new Error('EVIDENCE_TRANSACTION_FACTS_INVALID');\n    const allowedFields = Array.isArray(transaction.allowed_fields) && transaction.allowed_fields.length\n        ? [...new Set(transaction.allowed_fields.map(String))].sort()\n        : ['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription'];\n    const allowed = new Set(['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket']);\n    if (!allowedFields.length || allowedFields.some(field => !allowed.has(field)))\n        throw new Error('EVIDENCE_ALLOWED_FIELDS_INVALID');\n    return { transaction_id: transactionId, transaction_date: date, amount_minor: transaction.amount_minor, currency, merchant, kind: String(transaction.kind || 'ORDER').slice(0, 32), allowed_fields: allowedFields };\n});\nconst maxMessages = Number(request.max_messages ?? 250);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 1000)\n    throw new Error('EVIDENCE_MAX_MESSAGES_INVALID');\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders.map(value => `from/emailAddress/address eq ${quoteOData(value)}`).join(' or ');\nconst subjectFilter = subjects.map(value => `contains(subject,${quoteOData(value)})`).join(' or ');\nreturn [{ json: {\n    operation: 'EVIDENCE', run_id: String(request.run_id), source_code: String(request.source_code), folder_id: String(request.folder_id),\n    onedrive_parent_id: String(request.onedrive_parent_id), window_start: start.toISOString(), run_upper_bound: upper.toISOString(),\n    senders, subjects, transactions, max_messages: maxMessages, server_filter: `(${senderFilter}) and (${subjectFilter})`,\n} }];"
+        "jsCode": "// Purpose: Validate Evidence Request. Keep this deterministic and fail closed.\nconst request = $json;\nif (String(request.operation || request.mode || '') !== 'EVIDENCE')\n    throw new Error('INVALID_EVIDENCE_OPERATION');\nfor (const field of ['run_id', 'source_code', 'folder_id', 'onedrive_parent_id', 'window_start', 'run_upper_bound', 'senders', 'subjects', 'transactions'])\n    if (request[field] === undefined || request[field] === null || request[field] === '')\n        throw new Error('Missing evidence field ' + field);\nconst start = new Date(request.window_start), upper = new Date(request.run_upper_bound);\nif (!Number.isFinite(start.valueOf()) || !Number.isFinite(upper.valueOf()) || !(start < upper) || upper > new Date())\n    throw new Error('INVALID_EVIDENCE_WINDOW');\nif (!Array.isArray(request.senders) || !request.senders.length || request.senders.length > 50)\n    throw new Error('EVIDENCE_SENDER_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.subjects) || !request.subjects.length || request.subjects.length > 50)\n    throw new Error('EVIDENCE_SUBJECT_ALLOWLIST_REQUIRED');\nif (!Array.isArray(request.transactions) || !request.transactions.length || request.transactions.length > 100)\n    throw new Error('EVIDENCE_TRANSACTION_BATCH_INVALID');\nconst senders = [...new Set(request.senders.map(value => String(value).trim().toLowerCase()).filter(Boolean))], subjects = [...new Set(request.subjects.map(value => String(value).trim()).filter(Boolean))];\nif (!senders.length || !subjects.length)\n    throw new Error('EVIDENCE_ALLOWLIST_EMPTY');\nconst seen = new Set(), kinds = new Set(['ORDER', 'RECEIPT', 'REFUND', 'SUBSCRIPTION', 'TRAVEL', 'OTHER']), directions = new Set(['DEBIT', 'CREDIT']);\nconst transactions = request.transactions.map(transaction => {\n    const transactionId = String(transaction?.transaction_id || '').trim();\n    if (!transactionId || transactionId.length > 256 || seen.has(transactionId))\n        throw new Error('EVIDENCE_TRANSACTION_ID_MISSING_OR_DUPLICATE');\n    seen.add(transactionId);\n    const date = String(transaction.transaction_date || ''), currency = String(transaction.currency || '').trim().toUpperCase(), merchant = String(transaction.merchant || '').trim(), kind = String(transaction.kind || 'ORDER').trim().toUpperCase(), direction = String(transaction.direction || (kind === 'REFUND' ? 'CREDIT' : 'DEBIT')).trim().toUpperCase(), splitGroup = transaction.split_group == null ? null : String(transaction.split_group).trim();\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isInteger(transaction.amount_minor) || !/^[A-Z]{3}$/.test(currency) || !merchant || merchant.length > 160 || !kinds.has(kind) || !directions.has(direction) || (splitGroup !== null && (!splitGroup || splitGroup.length > 128)))\n        throw new Error('EVIDENCE_TRANSACTION_FACTS_INVALID');\n    const allowedFields = Array.isArray(transaction.allowed_fields) && transaction.allowed_fields.length ? [...new Set(transaction.allowed_fields.map(String))].sort() : ['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription'];\n    const allowed = new Set(['vendor', 'category', 'subcategory', 'tags', 'evidence_policy', 'review_required', 'is_subscription', 'property_code', 'rental_unit', 'channel', 'reward_bucket']);\n    if (!allowedFields.length || allowedFields.some(field => !allowed.has(field)))\n        throw new Error('EVIDENCE_ALLOWED_FIELDS_INVALID');\n    return { transaction_id: transactionId, transaction_date: date, amount_minor: transaction.amount_minor, currency, merchant, kind, direction, split_group: splitGroup, allowed_fields: allowedFields };\n});\nconst maxMessages = Number(request.max_messages ?? 250);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 1000)\n    throw new Error('EVIDENCE_MAX_MESSAGES_INVALID');\nconst quote = value => \"'\" + String(value).replaceAll(\"'\", \"''\") + \"'\", senderFilter = senders.map(value => 'from/emailAddress/address eq ' + quote(value)).join(' or '), subjectFilter = subjects.map(value => 'contains(subject,' + quote(value) + ')').join(' or ');\nreturn [{ json: { operation: 'EVIDENCE', run_id: String(request.run_id), source_code: String(request.source_code), folder_id: String(request.folder_id), onedrive_parent_id: String(request.onedrive_parent_id), window_start: start.toISOString(), run_upper_bound: upper.toISOString(), senders, subjects, transactions, max_messages: maxMessages, server_filter: '(' + senderFilter + ') and (' + subjectFilter + ')' } }];\n"
       }
     },
     {
@@ -2045,7 +2045,7 @@
       "typeVersion": 2,
       "position": [
         -520,
-        -520
+        2280
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -2083,10 +2083,10 @@
       "typeVersion": 2,
       "position": [
         -220,
-        -520
+        2280
       ],
       "parameters": {
-        "jsCode": "// Purpose: Match Outlook Evidence to transactions. Keep this deterministic and fail closed.\nconst request = $('Validate Evidence Request').first().json;\nconst rows = $input.all().map(item => item.json || {});\nif (rows.length > request.max_messages)\n    throw new Error('EVIDENCE_SEARCH_BOUND_EXCEEDED');\nconst normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst tokens = value => normalize(value).split(/\\s+/).filter(token => token.length >= 3);\nconst bodyText = message => typeof message.body === 'string' ? message.body : String(message.body?.content || message.bodyPreview || '');\nconst sender = message => String(message.from?.emailAddress?.address || message.sender?.emailAddress?.address || '').trim().toLowerCase();\nconst messageDate = message => String(message.receivedDateTime || message.order_date || '').slice(0, 10);\nconst dayDistance = (left, right) => Math.round(Math.abs(new Date(`${left}T00:00:00Z`) - new Date(`${right}T00:00:00Z`)) / 86400000);\nconst amountValues = message => {\n    const explicit = [message.amount_minor, message.total_amount_minor, message.totalAmountMinor, message.amountMinor].filter(value => Number.isInteger(value)).map(Math.abs);\n    const text = bodyText(message);\n    const parsed = [...text.matchAll(/(?:AED|USD|EUR|GBP|\\$|€|£)\\s*([0-9]+(?:[.,][0-9]{1,2})?)/gi)].map(match => Math.round(Number(match[1].replace(',', '.')) * 100));\n    return [...new Set([...explicit, ...parsed])];\n};\nconst candidateRows = rows.map(message => {\n    const id = String(message.id || message.message_id || '').trim();\n    if (!id)\n        throw new Error('EVIDENCE_SOURCE_MESSAGE_ID_MISSING');\n    return { message, id, sender: sender(message), date: messageDate(message), text: normalize(`${message.subject || ''} ${bodyText(message)}`) };\n});\nconst matched = [], unresolved = [], replayKeys = [];\nfor (const transaction of request.transactions) {\n    const merchantTokens = tokens(transaction.merchant);\n    const candidates = candidateRows.map(candidate => {\n        const merchantMatch = merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token));\n        const amountMatch = amountValues(candidate.message).includes(Math.abs(transaction.amount_minor));\n        const dateMatch = /^\\d{4}-\\d{2}-\\d{2}$/.test(candidate.date) && dayDistance(candidate.date, transaction.transaction_date) <= 3;\n        const referenceMatch = normalize(candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref || '').length > 0 && normalize(`${candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref}`).includes(normalize(transaction.transaction_id));\n        const score = (merchantMatch ? 3 : 0) + (amountMatch ? 3 : 0) + (dateMatch ? 1 : 0) + (referenceMatch ? 2 : 0);\n        return { ...candidate, score, merchantMatch, amountMatch, dateMatch };\n    }).filter(candidate => candidate.merchantMatch && candidate.amountMatch && candidate.dateMatch && candidate.score >= 7)\n        .sort((left, right) => right.score - left.score || left.date.localeCompare(right.date) || left.id.localeCompare(right.id));\n    if (!candidates.length) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'NO_MATCH', candidate_count: 0, candidate_ids: [] });\n        continue;\n    }\n    const best = candidates[0], tied = candidates.filter(candidate => candidate.score === best.score);\n    if (tied.length !== 1) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'AMBIGUOUS', candidate_count: candidates.length, candidate_ids: candidates.map(candidate => candidate.id) });\n        continue;\n    }\n    const sourceMessageId = best.id, replayKey = `${request.source_code}:${transaction.transaction_id}:${sourceMessageId}`;\n    replayKeys.push(replayKey);\n    matched.push({\n        transaction_id: transaction.transaction_id, replay_key: replayKey,\n        identity: { source_message_id: sourceMessageId, internet_message_id: best.message.internetMessageId || best.message.internet_message_id || null, received_at: best.message.receivedDateTime, sender: best.sender, subject: String(best.message.subject || '').slice(0, 500) },\n        facts: { merchant: transaction.merchant, amount_minor: transaction.amount_minor, currency: transaction.currency, transaction_date: transaction.transaction_date },\n        confidence: Math.min(1, best.score / 9), allowed_fields: transaction.allowed_fields,\n    });\n}\nconst selectedIds = new Set(matched.map(row => row.identity.source_message_id));\nconst messages = candidateRows.filter(candidate => selectedIds.has(candidate.id)).map(candidate => ({ ...candidate.message, id: candidate.id, message_id: candidate.id, attachment_inventory: [] }));\nreturn [{ json: { schema_version: 1, operation_code: 'EMAIL_ENRICHMENT_EVIDENCE', run_id: request.run_id, source_code: request.source_code, folder_id: request.folder_id, senders: request.senders, subjects: request.subjects, window_start: request.window_start, run_upper_bound: request.run_upper_bound, onedrive_parent_id: request.onedrive_parent_id, messages, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: [], empty_inventory: messages.length === 0, matched, unresolved, replay_keys: [...new Set(replayKeys)], matched_count: matched.length, unresolved_count: unresolved.length, evidence_status: matched.length ? 'MATCHED' : (unresolved.some(row => row.status === 'AMBIGUOUS') ? 'AMBIGUOUS' : 'NO_MATCH') } }];"
+        "jsCode": "// Purpose: Match Outlook Evidence to Transactions. Keep this deterministic and fail closed.\nconst request = $('Validate Evidence Request').first().json, rows = $input.all().map(item => item.json || {});\nif (rows.length > request.max_messages)\n    throw new Error('EVIDENCE_SEARCH_BOUND_EXCEEDED');\nconst normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst tokens = value => normalize(value).split(/\\s+/).filter(token => token.length >= 3);\nconst bodyText = message => typeof message.body === 'string' ? message.body : String(message.body?.content || message.bodyPreview || '');\nconst sender = message => String(message.from?.emailAddress?.address || message.sender?.emailAddress?.address || '').trim().toLowerCase();\nconst messageDate = message => String(message.receivedDateTime || message.order_date || '').slice(0, 10);\nconst dayDistance = (left, right) => Math.round(Math.abs(new Date(left + 'T00:00:00Z') - new Date(right + 'T00:00:00Z')) / 86400000);\nconst currencyCode = value => ({ '$': 'USD', '€': 'EUR', '£': 'GBP' }[value] || String(value || '').toUpperCase());\nconst amountRecords = message => {\n    const records = [];\n    for (const value of [message.amount_minor, message.total_amount_minor, message.totalAmountMinor, message.amountMinor])\n        if (Number.isInteger(value))\n            records.push({ minor: Math.abs(value), currency: currencyCode(message.currency || message.amount_currency || message.total_currency), signed: value < 0 });\n    const text = bodyText(message), before = /(-?)\\s*(AED|USD|EUR|GBP|\\$|€|£)\\s*([0-9]+(?:[.,][0-9]{1,2})?)/gi, after = /(-?)\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(AED|USD|EUR|GBP)/gi;\n    for (const match of text.matchAll(before))\n        records.push({ minor: Math.round(Number(match[3].replace(',', '.')) * 100), currency: currencyCode(match[2]), signed: match[1] === '-' });\n    for (const match of text.matchAll(after))\n        records.push({ minor: Math.round(Number(match[2].replace(',', '.')) * 100), currency: currencyCode(match[3]), signed: match[1] === '-' });\n    return records.filter(row => /^[A-Z]{3}$/.test(row.currency));\n};\nconst refundMarker = text => /\\b(refund(?:ed)?|reversal|credited|credit memo|money back|return processed)\\b/i.test(text), kindMarker = (kind, text) => {\n    if (kind === 'REFUND')\n        return refundMarker(text);\n    if (refundMarker(text))\n        return false;\n    if (kind === 'SUBSCRIPTION')\n        return /\\b(subscription|renewal|recurring|membership)\\b/i.test(text);\n    if (kind === 'TRAVEL')\n        return /\\b(booking|itinerary|flight|hotel|ticket|reservation)\\b/i.test(text);\n    if (kind === 'RECEIPT')\n        return /\\b(receipt|invoice|order|purchase)\\b/i.test(text);\n    if (kind === 'ORDER')\n        return /\\b(order|purchase|receipt|invoice|shipped|delivered)\\b/i.test(text);\n    return true;\n}, directionOf = (message, text, records) => {\n    const explicit = String(message.direction || message.transaction_type || '').toUpperCase();\n    if (explicit === 'DEBIT' || explicit === 'CREDIT')\n        return explicit;\n    if (records.some(row => row.signed))\n        return 'DEBIT';\n    if (refundMarker(text))\n        return 'CREDIT';\n    if (/\\b(charged|debit|paid|purchase)\\b/i.test(text))\n        return 'DEBIT';\n    return null;\n};\nconst candidateRows = rows.map(message => {\n    const id = String(message.id || message.message_id || '').trim();\n    if (!id)\n        throw new Error('EVIDENCE_SOURCE_MESSAGE_ID_MISSING');\n    const text = normalize(String(message.subject || '') + ' ' + bodyText(message)), amounts = amountRecords(message);\n    return { message, id, sender: sender(message), date: messageDate(message), text, amounts, direction: directionOf(message, text, amounts) };\n});\nconst splitTotals = new Map();\nfor (const transaction of request.transactions.filter(row => row.split_group))\n    splitTotals.set(transaction.split_group, (splitTotals.get(transaction.split_group) || 0) + Math.abs(transaction.amount_minor));\nconst matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), splitMessage = new Map();\nfor (const transaction of request.transactions) {\n    const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor);\n    const candidates = candidateRows.map(candidate => {\n        const merchantMatch = merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token));\n        const amountMatch = candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency);\n        const currencyMatch = candidate.amounts.some(row => row.currency === transaction.currency);\n        const dateMatch = /^\\d{4}-\\d{2}-\\d{2}$/.test(candidate.date) && dayDistance(candidate.date, transaction.transaction_date) <= 3;\n        const reference = candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref || '';\n        const referenceMatch = normalize(reference).length > 0 && normalize(reference).includes(normalize(transaction.transaction_id));\n        const kindMatch = kindMarker(transaction.kind, candidate.text);\n        const directionMatch = !candidate.direction || candidate.direction === transaction.direction;\n        const splitMatch = !transaction.split_group || candidate.amounts.some(row => row.minor === splitTotals.get(transaction.split_group) && row.currency === transaction.currency);\n        const score = (merchantMatch ? 3 : 0) + (amountMatch ? 3 : 0) + (dateMatch ? 1 : 0) + (referenceMatch ? 2 : 0) + (kindMatch ? 2 : 0) + (currencyMatch ? 1 : 0) + (directionMatch ? 1 : 0);\n        return { ...candidate, score, merchantMatch, amountMatch, currencyMatch, dateMatch, kindMatch, directionMatch, splitMatch };\n    })\n        .filter(candidate => candidate.merchantMatch && candidate.amountMatch && candidate.currencyMatch && candidate.dateMatch && candidate.kindMatch && candidate.directionMatch && candidate.splitMatch && candidate.score >= 10)\n        .filter(candidate => transaction.split_group ? (!splitMessage.has(transaction.split_group) || splitMessage.get(transaction.split_group) === candidate.id) : !usedIds.has(candidate.id))\n        .sort((left, right) => right.score - left.score || left.date.localeCompare(right.date) || left.id.localeCompare(right.id));\n    if (!candidates.length) {\n        const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), status = !transaction.split_group && allEligible.some(candidate => usedIds.has(candidate.id)) ? 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP' : 'NO_MATCH';\n        unresolved.push({ transaction_id: transaction.transaction_id, status, candidate_count: allEligible.length, candidate_ids: allEligible.map(candidate => candidate.id).sort() });\n        continue;\n    }\n    const best = candidates[0], tied = candidates.filter(candidate => candidate.score === best.score);\n    if (tied.length !== 1) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'AMBIGUOUS', candidate_count: candidates.length, candidate_ids: candidates.map(candidate => candidate.id) });\n        continue;\n    }\n    const sourceMessageId = best.id, replayKey = request.source_code + ':' + transaction.transaction_id + ':' + sourceMessageId;\n    if (transaction.split_group)\n        splitMessage.set(transaction.split_group, sourceMessageId);\n    else\n        usedIds.add(sourceMessageId);\n    replayKeys.push(replayKey);\n    matched.push({\n        transaction_id: transaction.transaction_id,\n        replay_key: replayKey,\n        identity: {\n            source_message_id: sourceMessageId,\n            internet_message_id: best.message.internetMessageId || best.message.internet_message_id || null,\n            received_at: best.message.receivedDateTime,\n            sender: best.sender,\n            subject: String(best.message.subject || '').slice(0, 500),\n        },\n        facts: {\n            merchant: transaction.merchant,\n            amount_minor: transaction.amount_minor,\n            currency: transaction.currency,\n            transaction_date: transaction.transaction_date,\n            kind: transaction.kind,\n            direction: transaction.direction,\n            split_group: transaction.split_group,\n        },\n        confidence: Math.min(1, best.score / 13),\n        allowed_fields: transaction.allowed_fields,\n    });\n}\nconst selectedIds = new Set(matched.map(row => row.identity.source_message_id)), messages = candidateRows.filter(candidate => selectedIds.has(candidate.id)).map(candidate => ({ ...candidate.message, id: candidate.id, message_id: candidate.id, attachment_inventory: [] }));\nreturn [{ json: {\n            schema_version: 1,\n            operation_code: 'EMAIL_ENRICHMENT_EVIDENCE',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            onedrive_parent_id: request.onedrive_parent_id,\n            messages,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: [],\n            empty_inventory: messages.length === 0,\n            matched,\n            unresolved,\n            replay_keys: [...new Set(replayKeys)],\n            matched_count: matched.length,\n            unresolved_count: unresolved.length,\n            evidence_status: matched.length ? 'MATCHED' : (unresolved.some(row => row.status === 'AMBIGUOUS') ? 'AMBIGUOUS' : 'NO_MATCH'),\n        } }];\n"
       }
     },
     {
@@ -2096,7 +2096,7 @@
       "typeVersion": 1.2,
       "position": [
         80,
-        -520
+        2280
       ],
       "parameters": {
         "workflowId": {
@@ -2117,10 +2117,10 @@
       "typeVersion": 2,
       "position": [
         380,
-        -520
+        2280
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build schema-bound W12 to W21 evidence handoff. Keep this deterministic and fail closed.\nconst evidence = $('Match Outlook Evidence to Transactions').first().json;\nconst archive = $('Archive Matched Email Evidence in W01').first().json;\nif (archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.archive_ready !== true)\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_BARRIER_REQUIRED');\nconst matched = Array.isArray(evidence.matched) ? evidence.matched : [];\nconst unresolved = Array.isArray(evidence.unresolved) ? evidence.unresolved : [];\nconst replayKeys = [...new Set(matched.map(row => String(row.replay_key || '')).filter(Boolean))];\nif (replayKeys.length !== matched.length)\n    throw new Error('EMAIL_ENRICHMENT_REPLAY_KEY_MISSING');\nreturn [{ json: {\n    schema_version: 1, operation_code: 'EMAIL_ENRICHMENT_EVIDENCE', run_id: evidence.run_id, source_code: evidence.source_code,\n    window_start: evidence.window_start, run_upper_bound: evidence.run_upper_bound, matched, unresolved, replay_keys: replayKeys,\n    archive_receipt: { status: archive.status, source_message_id: archive.source_message_id || null, archive_ready: archive.archive_ready === true, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified || 0) },\n    replay_protected: true, archive_readback_verified: true,\n} }];"
+        "jsCode": "// Purpose: Build Evidence Handoff. Keep this deterministic and fail closed.\nconst evidence = $('Match Outlook Evidence to Transactions').first().json, archive = $('Archive Matched Email Evidence in W01').first().json;\nif (archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.archive_ready !== true || archive.archive_readback_verified === false)\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_BARRIER_REQUIRED');\nconst matched = Array.isArray(evidence.matched) ? evidence.matched : [], unresolved = Array.isArray(evidence.unresolved) ? evidence.unresolved : [], replayKeys = [...new Set(matched.map(row => String(row.replay_key || '')).filter(Boolean))];\nif (replayKeys.length !== matched.length)\n    throw new Error('EMAIL_ENRICHMENT_REPLAY_KEY_MISSING');\nconst archiveIdentityKeys = [...new Set(Array.isArray(archive.archive_identity_keys) ? archive.archive_identity_keys.map(String) : [])].sort(), archiveItemIds = [...new Set(Array.isArray(archive.archive_item_ids) ? archive.archive_item_ids.map(String) : [])].sort(), archiveProofRows = Array.isArray(archive.email_evidence_archive_proof) ? archive.email_evidence_archive_proof : [];\nfor (const proof of archiveProofRows) {\n    if (!/^[a-f0-9]{64}$/.test(String(proof.email_evidence_sha256 || '')))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_INVALID');\n    if (!String(proof.onedrive_item_id || '') || !archiveItemIds.includes(String(proof.onedrive_item_id)))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_MESSAGE_PROOF_MISSING');\n}\nfor (const row of matched) {\n    const identity = String(row.identity?.source_message_id) + ':INLINE_BODY';\n    if (!archiveIdentityKeys.includes(identity) || !archiveProofRows.some(proof => proof.email_evidence_identity === identity && archiveItemIds.includes(proof.onedrive_item_id)))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_MESSAGE_PROOF_MISSING');\n}\nif (matched.length && (!archiveIdentityKeys.length || !archiveItemIds.length || archiveProofRows.length !== archive.email_evidence_receipts_verified))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_INCOMPLETE');\nconst archiveProof = { identity_keys: archiveIdentityKeys, item_ids: archiveItemIds, messages: archiveProofRows };\nreturn [{ json: {\n            schema_version: 1,\n            operation_code: 'EMAIL_ENRICHMENT_EVIDENCE',\n            run_id: evidence.run_id,\n            source_code: evidence.source_code,\n            window_start: evidence.window_start,\n            run_upper_bound: evidence.run_upper_bound,\n            matched,\n            unresolved,\n            replay_keys: replayKeys,\n            archive_proof: archiveProof,\n            archive_receipt: {\n                status: archive.status,\n                source_message_id: archive.source_message_id || null,\n                archive_ready: archive.archive_ready === true,\n                email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified || 0),\n                identity_keys: archiveIdentityKeys,\n                item_ids: archiveItemIds,\n            },\n            replay_protected: true,\n            archive_readback_verified: true,\n        } }];\n"
       }
     },
     {
@@ -2129,8 +2129,8 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        680,
-        -520
+        980,
+        2280
       ],
       "parameters": {
         "action": "hash",
@@ -2145,8 +2145,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        980,
-        -520
+        -1120,
+        2660
       ],
       "parameters": {
         "conditions": {
@@ -2177,11 +2177,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1280,
-        -320
+        -820,
+        2660
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Evidence No Match. Keep this deterministic and fail closed.\nif (Array.isArray($json.matched) && $json.matched.length)\n    throw new Error('EVIDENCE_MATCH_ROUTE_MISMATCH');\nreturn [{ json: { ...$json, status: 'NO_MATCH', proposal_dispatch: 'NOT_DISPATCHED', readback_verified: true } }];"
+        "jsCode": "// Purpose: Return Evidence No Match. Keep this deterministic and fail closed.\nif (Array.isArray($json.matched) && $json.matched.length)\n    throw new Error('EVIDENCE_MATCH_ROUTE_MISMATCH');\nreturn [{ json: { ...$json, status: 'NO_MATCH', proposal_dispatch: 'NOT_DISPATCHED', readback_verified: true } }];\n"
       }
     },
     {
@@ -2190,8 +2190,8 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        1280,
-        -520
+        -220,
+        2660
       ],
       "parameters": {
         "workflowId": {
@@ -2203,6 +2203,48 @@
         "options": {
           "waitForSubWorkflow": true
         }
+      }
+    },
+    {
+      "id": "12079",
+      "name": "SHA-256 Archive Proof",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        680,
+        2280
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ JSON.stringify($json.archive_proof) }}",
+        "dataPropertyName": "archive_sha256"
+      }
+    },
+    {
+      "id": "12080",
+      "name": "Prepare W21 Email Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        2660
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Prepare W21 Email Request. Keep this deterministic and fail closed.\nconst handoff = $json;\nif (!/^[a-f0-9]{64}$/.test(String(handoff.idempotency_key || '')) || !/^[a-f0-9]{64}$/.test(String(handoff.archive_sha256 || '')))\n    throw new Error('EMAIL_ENRICHMENT_HASH_PROOF_REQUIRED');\nconst evidence = $('Match Outlook Evidence to Transactions').first().json, matched = Array.isArray(evidence.matched) ? evidence.matched : [], unresolved = Array.isArray(evidence.unresolved) ? evidence.unresolved : [];\nconst proposalInputs = matched.map(row => ({ transaction_id: row.transaction_id, allowed_fields: row.allowed_fields, redacted_context: { source_message_id: row.identity.source_message_id, replay_key: row.replay_key, facts: row.facts, archive_sha256: handoff.archive_sha256 } }));\nreturn [{ json: { operation_code: 'FINANCE_AI_PROPOSAL', email_evidence: true, job_id: 'finance-ai:' + handoff.idempotency_key, idempotency_key: handoff.idempotency_key, agent_provider: 'CODEX_SUBSCRIPTION', policy_class: 'NORMAL', archive_sha256: handoff.archive_sha256, evidence_replay_keys: handoff.replay_keys, archive_identity_keys: handoff.archive_proof.identity_keys, archive_item_ids: handoff.archive_proof.item_ids, unresolved: [...proposalInputs, ...unresolved], evidence_handoff_sha256: handoff.idempotency_key } }];\n"
+      }
+    },
+    {
+      "id": "12081",
+      "name": "Validate Email Proposal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        2660
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Email Proposal Result. Keep this deterministic and fail closed.\nconst request = $('Prepare W21 Email Request').first().json, providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || '');\nif (providerError) {\n    if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError))\n        throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');\n    throw new Error('EMAIL_ENRICHMENT_PROVIDER_FAILED');\n}\nif (!/^finance-ai:[a-f0-9]{64}$/.test(String($json.job_id || '')) || String($json.job_id) !== request.job_id || String($json.idempotency_key) !== request.idempotency_key || !Array.isArray($json.proposals))\n    throw new Error('EMAIL_ENRICHMENT_PROPOSAL_CONTRACT_INVALID');\nreturn [{ json: { ...$json, evidence_archive_sha256: request.archive_sha256, evidence_replay_keys: request.evidence_replay_keys, archive_identity_keys: request.archive_identity_keys, archive_item_ids: request.archive_item_ids, archive_readback_verified: true, proposal_dispatch: 'SUBMITTED' } }];\n"
       }
     }
   ],
@@ -3007,7 +3049,7 @@
       "main": [
         [
           {
-            "node": "SHA-256 Evidence Handoff",
+            "node": "SHA-256 Archive Proof",
             "type": "main",
             "index": 0
           }
@@ -3029,7 +3071,7 @@
       "main": [
         [
           {
-            "node": "Send Evidence to W21",
+            "node": "Prepare W21 Email Request",
             "type": "main",
             "index": 0
           }
@@ -3037,6 +3079,39 @@
         [
           {
             "node": "Return Evidence No Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Archive Proof": {
+      "main": [
+        [
+          {
+            "node": "SHA-256 Evidence Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare W21 Email Request": {
+      "main": [
+        [
+          {
+            "node": "Send Evidence to W21",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Evidence to W21": {
+      "main": [
+        [
+          {
+            "node": "Validate Email Proposal Result",
             "type": "main",
             "index": 0
           }
@@ -3106,86 +3181,90 @@
     "evidenceArchiveReadback": "W01_REQUIRED",
     "evidenceProviderAuth": "NATIVE_N8N_OUTLOOK_ONEDRIVE_OAUTH",
     "evidenceArchiveOwner": "OUTLOOK_FINANCE_ACQUISITION",
-    "evidenceReplayProtection": "W01_CONTENT_ADDRESSED_ARCHIVE_AND_W21_IDEMPOTENCY_KEY"
+    "evidenceReplayProtection": "W01_CONTENT_ADDRESSED_ARCHIVE_AND_W21_IDEMPOTENCY_KEY",
+    "evidenceHandoffSchemaVersion": 1,
+    "evidenceJobIdPattern": "^finance-ai:[a-f0-9]{64}$",
+    "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
+    "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
+    "evidenceNoModelControlledWrites": true
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Validate Sweep or Commit to Require Verified Attachment Barrier",
+      "name": "Stage 1: Validate Sweep or Commit to Verify Downstream Persistence Proof",
       "nodeIds": [
         "12002",
         "12003",
         "12004",
         "12020",
         "12050",
-        "12021",
-        "12030"
+        "12021"
       ],
-      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Require Verified Attachment Barrier."
+      "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Verify Downstream Persistence Proof."
     },
     {
-      "name": "Stage 2: Read Authoritative Source Cursor to Source Cursor Recovery Readback Needed",
+      "name": "Stage 2: Require Verified Attachment Barrier to Source Cursor Recovery Readback Needed",
       "nodeIds": [
+        "12030",
         "12022",
         "12045",
         "12051"
       ],
-      "description": "Finance stage 2. Input starts at Read Authoritative Source Cursor; verified output leaves through Source Cursor Recovery Readback Needed."
+      "description": "Finance stage 2. Input starts at Require Verified Attachment Barrier; verified output leaves through Source Cursor Recovery Readback Needed."
     },
     {
-      "name": "Stage 2: Read Existing ENUMERATED Receipt to Persist Outlook Circuit Gate",
+      "name": "Stage 2: Read Existing ENUMERATED Receipt to Gate Outlook Circuit",
       "nodeIds": [
         "12036",
         "12037",
         "12005",
-        "12006",
-        "12007"
+        "12006"
       ],
-      "description": "Finance stage 2. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Persist Outlook Circuit Gate."
+      "description": "Finance stage 2. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Gate Outlook Circuit."
     },
     {
-      "name": "Stage 3: Exhaust Outlook Pagination to Aggregate Immutable Archive Inventory",
+      "name": "Stage 3: Persist Outlook Circuit Gate to Empty Immutable Archive Inventory",
       "nodeIds": [
+        "12007",
         "12008",
         "12009",
         "12014",
         "12033",
         "12015",
         "12016",
-        "12034",
-        "12017"
+        "12034"
       ],
-      "description": "Finance stage 3. Input starts at Exhaust Outlook Pagination; verified output leaves through Aggregate Immutable Archive Inventory."
+      "description": "Finance stage 3. Input starts at Persist Outlook Circuit Gate; verified output leaves through Empty Immutable Archive Inventory."
     },
     {
-      "name": "Stage 4: Close Outlook Circuit to Verify Attachment Archive Barrier",
+      "name": "Stage 4: Aggregate Immutable Archive Inventory to Archive Enumerated Messages in W01",
       "nodeIds": [
+        "12017",
         "12010",
         "12011",
         "12012",
         "12013",
         "12035",
         "12038",
-        "12018",
-        "12019"
+        "12018"
       ],
-      "description": "Finance stage 4. Input starts at Close Outlook Circuit; verified output leaves through Verify Attachment Archive Barrier."
+      "description": "Finance stage 4. Input starts at Aggregate Immutable Archive Inventory; verified output leaves through Archive Enumerated Messages in W01."
     },
     {
-      "name": "Stage 5: Build Durable Archive Barrier Receipt to Return Verified ARCHIVED Receipt",
+      "name": "Stage 5: Verify Attachment Archive Barrier to Read Back Verified ARCHIVED Receipt",
       "nodeIds": [
+        "12019",
         "12039",
         "12040",
         "12041",
         "12042",
         "12043",
         "12044",
-        "12068",
-        "12069"
+        "12068"
       ],
-      "description": "Finance stage 5. Input starts at Build Durable Archive Barrier Receipt; verified output leaves through Return Verified ARCHIVED Receipt."
+      "description": "Finance stage 5. Input starts at Verify Attachment Archive Barrier; verified output leaves through Read Back Verified ARCHIVED Receipt."
     },
     {
-      "name": "Stage 6: Read Source Cursor for Initialization to Return Verified Cursor Initialization",
+      "name": "Stage 6: Read Source Cursor for Initialization to Return Existing Cursor Initialization Readback",
       "nodeIds": [
         "12060",
         "12061",
@@ -3193,58 +3272,85 @@
         "12063",
         "12064",
         "12065",
-        "12066",
-        "12067"
+        "12066"
       ],
-      "description": "Finance stage 6. Input starts at Read Source Cursor for Initialization; verified output leaves through Return Verified Cursor Initialization."
+      "description": "Finance stage 6. Input starts at Read Source Cursor for Initialization; verified output leaves through Return Existing Cursor Initialization Readback."
     },
     {
-      "name": "Stage 7: Route Commit Resume State to Read Back CAS Cursor",
+      "name": "Stage 7: Validate Evidence Request to SHA-256 Evidence Handoff",
       "nodeIds": [
-        "12046",
-        "12047",
-        "12052",
-        "12053",
-        "12054",
-        "12023",
-        "12024",
-        "12025"
-      ],
-      "description": "Finance stage 7. Input starts at Route Commit Resume State; verified output leaves through Read Back CAS Cursor."
-    },
-    {
-      "name": "Stage 8: Mark Acquisition DOWNSTREAM_VERIFIED to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
-      "nodeIds": [
-        "12027",
-        "12028",
-        "12029",
-        "12048",
-        "12049"
-      ],
-      "description": "Finance stage 8. Input starts at Mark Acquisition DOWNSTREAM_VERIFIED; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
-    },
-    {
-      "name": "Stage 8: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Verify Replayed Terminal Acquisition Receipt",
-      "nodeIds": [
-        "12055",
-        "12056"
-      ],
-      "description": "Finance stage 8. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Verify Replayed Terminal Acquisition Receipt."
-    },
-    {
-      "name": "Stage E: Evidence Request to Send Evidence to W21",
-    "nodeIds": [
-      "12070",
+        "12070",
         "12071",
         "12072",
         "12073",
         "12074",
-        "12075",
+        "12079",
+        "12075"
+      ],
+      "description": "Finance stage 7. Input starts at Validate Evidence Request; verified output leaves through SHA-256 Evidence Handoff."
+    },
+    {
+      "name": "Stage 8: Evidence Has Matches? to Validate Email Proposal Result",
+      "nodeIds": [
         "12076",
         "12077",
-        "12078"
+        "12080",
+        "12078",
+        "12081"
       ],
-      "description": "Finance stage E. Bounded generic Outlook evidence search, W01-owned redacted OneDrive archive/readback, replay key, and schema-bound W21 proposal handoff."
+      "description": "Finance stage 8. Input starts at Evidence Has Matches?; verified output leaves through Validate Email Proposal Result."
+    },
+    {
+      "name": "Stage 8: Route Commit Resume State to Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+      "nodeIds": [
+        "12046",
+        "12047"
+      ],
+      "description": "Finance stage 8. Input starts at Route Commit Resume State; verified output leaves through Mark Recovered Acquisition DOWNSTREAM_VERIFIED."
+    },
+    {
+      "name": "Stage 9: Read Back Verified Source Cursor to Verify Source Cursor Readback",
+      "nodeIds": [
+        "12053",
+        "12054"
+      ],
+      "description": "Finance stage 9. Input starts at Read Back Verified Source Cursor; verified output leaves through Verify Source Cursor Readback."
+    },
+    {
+      "name": "Stage 9: Build Cursor CAS Update to Compare CAS Cursor Readback",
+      "nodeIds": [
+        "12023",
+        "12024",
+        "12025",
+        "12026"
+      ],
+      "description": "Finance stage 9. Input starts at Build Cursor CAS Update; verified output leaves through Compare CAS Cursor Readback."
+    },
+    {
+      "name": "Stage 9: Mark Acquisition DOWNSTREAM_VERIFIED to Read Back Terminal Acquisition Receipt",
+      "nodeIds": [
+        "12027",
+        "12028"
+      ],
+      "description": "Finance stage 9. Input starts at Mark Acquisition DOWNSTREAM_VERIFIED; verified output leaves through Read Back Terminal Acquisition Receipt."
+    },
+    {
+      "name": "Stage 10: Return Verified Cursor Commit to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+      "nodeIds": [
+        "12029",
+        "12048",
+        "12049"
+      ],
+      "description": "Finance stage 10. Input starts at Return Verified Cursor Commit; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
+    },
+    {
+      "name": "Stage 10: Read Back DOWNSTREAM_VERIFIED Receipt for Replay to Return Replayed Cursor Commit",
+      "nodeIds": [
+        "12055",
+        "12056",
+        "12057"
+      ],
+      "description": "Finance stage 10. Input starts at Read Back DOWNSTREAM_VERIFIED Receipt for Replay; verified output leaves through Return Replayed Cursor Commit."
     }
   ],
   "tags": [

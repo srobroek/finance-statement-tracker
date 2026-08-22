@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 
 from finance_tracker.browser_recipes import render_recipe, validate_registry
-from finance_tracker.browser_sources import load_browser_sources, validate_source_coverage
-
+from finance_tracker.browser_sources import (
+    load_browser_sources,
+    validate_source_coverage,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,11 +27,7 @@ class BrowserRecipeTests(unittest.TestCase):
         self.assertEqual("FINANCE_BROWSER_ARCHIVE_PARENT_ID", contract["archive_parent_binding"])
         self.assertEqual("finance_document_operations", contract["archive_receipt_table"])
         self.assertEqual("SHARED_STATEMENT_PIPELINE", contract["headless_workflow_code"])
-        for provider_id in ("fab", "sarwa", "amazon", "adcb"):
-            provider = next(
-                row for row in validate_registry(ROOT / "browser_adapters")["providers"]
-                if row["provider_id"] == provider_id
-            )
+        for provider_id in ("fab", "sarwa", "adcb"):
             metadata = json.loads(
                 (ROOT / "browser_adapters" / provider_id / "provider.json").read_text(encoding="utf-8")
             )
@@ -80,7 +78,7 @@ class BrowserRecipeTests(unittest.TestCase):
         result = validate_registry(ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
         self.assertEqual(
-            ["adcb", "amazon", "emirates-islamic", "fab", "generic-csv", "sarwa", "wio"],
+            ["adcb", "emirates-islamic", "fab", "generic-csv", "sarwa", "wio"],
             [row["provider_id"] for row in result["providers"]],
         )
         self.assertEqual([], result["violations"])
@@ -112,7 +110,7 @@ class BrowserRecipeTests(unittest.TestCase):
         result = validate_source_coverage(sources, ROOT / "browser_adapters")
         self.assertEqual("ok", result["status"])
         self.assertEqual(7, len(result["coverage"]))
-        self.assertEqual(3, len(result["supplemental"]))
+        self.assertEqual(2, len(result["supplemental"]))
         self.assertEqual("ADAPTER_REQUIRED", result["coverage"][-1]["status"])
 
     def test_sarwa_holdings_recipe_is_portfolio_and_as_of_bounded(self) -> None:
@@ -151,17 +149,13 @@ class BrowserRecipeTests(unittest.TestCase):
 
         self.assertIn('READ selector: "Balance", as: "balance"', rendered["data_recipe"])
 
-    def test_amazon_orders_are_a_supplemental_evidence_capture(self) -> None:
-        rendered = render_recipe(
-            "amazon",
-            "orders",
-            {"year": "2026"},
-            ROOT / "browser_adapters",
-        )
-
-        self.assertEqual("purchase-evidence", rendered["data"]["kind"])
-        self.assertIn('option: "2026"', rendered["data_recipe"])
-        self.assertIn("must not create a second ledger transaction", rendered["data_recipe"])
+    def test_amazon_browser_capture_is_removed_from_the_required_path(self) -> None:
+        sources = load_browser_sources(ROOT / "config" / "browser-sources.json")
+        provider_ids = [row["provider_id"] for row in validate_registry(ROOT / "browser_adapters")["providers"]]
+        self.assertNotIn("amazon", provider_ids)
+        self.assertNotIn("amazon-orders", json.dumps(sources))
+        amazon_path = ROOT / "browser_adapters" / "amazon"
+        self.assertFalse(amazon_path.exists() and any(path.is_file() for path in amazon_path.rglob("*")))
 
 
 if __name__ == "__main__":

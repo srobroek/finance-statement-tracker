@@ -28,6 +28,8 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "OUTLOOK_MESSAGE_SWEEP": (
         ("Archive Enumerated Messages in W01", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Archive Matched Email Evidence in W01", "OUTLOOK_FINANCE_ACQUISITION"),
+        ("Send Evidence to W21", "SUBSCRIPTION_AGENT_ADAPTER"),
     ),
     "SHARED_STATEMENT_PIPELINE": (
         ("Request Scoped AI Proposals", "AI_PROPOSAL"),
@@ -155,6 +157,34 @@ SWEEP_CONTEXT = (
     "pagination_exhausted",
     "heartbeat",
     "messages",
+)
+EMAIL_ARCHIVE_PRODUCER_CONTEXT = (
+    "run_id",
+    "source_code",
+    "folder_id",
+    "senders",
+    "subjects",
+    "window_start",
+    "run_upper_bound",
+    "onedrive_parent_id",
+    "messages",
+    "matched",
+    "unresolved",
+    "replay_keys",
+)
+EMAIL_ARCHIVE_CONTEXT = EMAIL_ARCHIVE_PRODUCER_CONTEXT[:9]
+EMAIL_PROPOSAL_CONTEXT = (
+    "operation_code",
+    "email_evidence",
+    "job_id",
+    "idempotency_key",
+    "agent_provider",
+    "policy_class",
+    "archive_sha256",
+    "evidence_replay_keys",
+    "archive_identity_keys",
+    "archive_item_ids",
+    "unresolved",
 )
 CURSOR_INITIALIZATION_CONTEXT = (
     "operation",
@@ -390,6 +420,20 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         "OUTLOOK_FINANCE_ACQUISITION",
         SWEEP_CONTEXT,
         tuple(field for field in ACQUISITION_CONTEXT if field != "onedrive_item_id"),
+    ),
+    boundary_case(
+        "matched email evidence to acquisition archive",
+        ("OUTLOOK_MESSAGE_SWEEP", "Archive Matched Email Evidence in W01"),
+        "OUTLOOK_FINANCE_ACQUISITION",
+        EMAIL_ARCHIVE_PRODUCER_CONTEXT,
+        EMAIL_ARCHIVE_CONTEXT,
+    ),
+    boundary_case(
+        "matched email evidence to proposal adapter",
+        ("OUTLOOK_MESSAGE_SWEEP", "Send Evidence to W21"),
+        "SUBSCRIPTION_AGENT_ADAPTER",
+        EMAIL_PROPOSAL_CONTEXT,
+        EMAIL_PROPOSAL_CONTEXT,
     ),
 )
 

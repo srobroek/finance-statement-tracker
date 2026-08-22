@@ -51,7 +51,7 @@
       "config_name": "browser-sources",
       "version": "1",
       "source_path": "config/browser-sources.json",
-      "content_sha256": "0fa7b28a4233845941de15cdbe40f0ac380df1b732f7df9fe565141f2096d271",
+      "content_sha256": "ab134b07a5e21db3b93986b722cd4b16d563471807a0022fdc59a6a3c39a32ac",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
