@@ -1188,11 +1188,15 @@ def _verify_cashback_readback(
     cashback: Mapping[str, Any], *, source_code: str, attachments: Sequence[Mapping[str, Any]]
 ) -> None:
     if cashback["status"] == "N/A":
+        if source_code != "WIO_CREDIT":
+            raise ContractError("CASHBACK_ROUTE_STATUS_MISMATCH")
         if cashback.get("reason") != "SOURCE_HAS_NO_CASHBACK_ROUTE_IN_SYNTHETIC_FIXTURE":
             raise ContractError("CASHBACK_NA_REASON_INVALID")
         if cashback["rows"] or cashback["write_count"] != 0 or cashback["readback_sha256"] != sha256_json([]):
             raise ContractError("CASHBACK_NA_READBACK_INVALID")
         return
+    if source_code != "EI_AMAZON":
+        raise ContractError("CASHBACK_ROUTE_STATUS_MISMATCH")
     expected_rows = _expected_cashback_rows(source_code, attachments)
     if cashback["rows"] != expected_rows:
         raise ContractError("CASHBACK_ROWS_MISMATCH")

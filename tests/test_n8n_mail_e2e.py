@@ -5,8 +5,11 @@ import copy
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -217,6 +220,7 @@ class N8nMailE2EContractTests(unittest.TestCase):
 
     def test_source_artifact_allowlist_rejects_path_mutations(self) -> None:
         mutations = {
+            "missing": lambda receipt: receipt["source_bindings"]["source_artifacts"][0].update({"path": "missing.json"}),
             "absolute": lambda receipt: receipt["source_bindings"]["source_artifacts"][0].update({"path": "/tmp/escape"}),
             "traversal": lambda receipt: receipt["source_bindings"]["source_artifacts"][0].update({"path": "../escape"}),
             "extra": lambda receipt: receipt["source_bindings"]["source_artifacts"].append({"path": "extra.json", "sha256": "0" * 64}),
@@ -230,6 +234,23 @@ class N8nMailE2EContractTests(unittest.TestCase):
                 with self.assertRaises(ContractError):
                     verify_receipt(_rehash(tampered))
 
+        with tempfile.TemporaryDirectory() as root_dir, tempfile.TemporaryDirectory() as outside_dir:
+            outside = Path(outside_dir) / "artifact"
+            outside.write_text("outside", encoding="utf-8")
+            escape = Path(root_dir) / "escape"
+            escape.symlink_to(outside)
+            tampered = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+            tampered["source_bindings"]["source_artifacts"][0]["path"] = "escape"
+            with self.assertRaisesRegex(ContractError, "SYMLINK_FORBIDDEN"):
+                verify_receipt(_rehash(tampered), root=Path(root_dir))
+
+    def test_source_artifact_order_is_bound(self) -> None:
+        tampered = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+        artifacts = tampered["source_bindings"]["source_artifacts"]
+        artifacts[0], artifacts[1] = artifacts[1], artifacts[0]
+        with self.assertRaisesRegex(ContractError, "SOURCE_ARTIFACT_ORDER_MISMATCH"):
+            verify_receipt(_rehash(tampered))
+
     def test_sensitive_plaintext_and_bundle_completeness_fail_closed(self) -> None:
         receipt = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
         receipt["enumeration"]["message_records"][0]["body"] = "password=plaintext"
@@ -237,6 +258,30 @@ class N8nMailE2EContractTests(unittest.TestCase):
             verify_receipt(_rehash(receipt))
 
         bundle = generate_bundle(count=1)
+        bundle_schema = json.loads(
+            (ROOT / "integrations" / "n8n" / "schemas" / "real-mail-e2e-fixture-bundle-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bundle_validator = Draft202012Validator(bundle_schema)
+        self.assertEqual(list(bundle_validator.iter_errors(bundle)), [])
+        minimal = {
+            "schema_version": "real-mail-e2e-fixture-bundle-v1",
+            "contract_status": "SYNTHETIC_OFFLINE",
+            "provider_proof": False,
+            "receipts": [
+                {
+                    "schema_version": "real-mail-e2e-receipt-v1",
+                    "proof_kind": "SYNTHETIC_OFFLINE",
+                    "provider_proof": False,
+                    "receipt_sha256": "0" * 64,
+                }
+            ] * 2,
+        }
+        self.assertTrue(list(bundle_validator.iter_errors(minimal)))
+        schema_forged = copy.deepcopy(bundle)
+        schema_forged["receipts"][0]["provider_evidence"] = {"provider_proof": True}
+        self.assertTrue(list(bundle_validator.iter_errors(schema_forged)))
         incomplete = copy.deepcopy(bundle)
         del incomplete["receipts"][0]["actual"]
         with self.assertRaises(ContractError):
@@ -249,6 +294,32 @@ class N8nMailE2EContractTests(unittest.TestCase):
         duplicate["receipts"] = [duplicate["receipts"][0], duplicate["receipts"][0]]
         with self.assertRaisesRegex(ContractError, "BUNDLE_SOURCE_SET_INVALID"):
             verify_bundle(duplicate)
+
+    def test_cashback_route_mode_is_bound_to_source(self) -> None:
+        ei = copy.deepcopy(run_synthetic_e2e(source_code="EI_AMAZON", count=1))
+        na = {
+            "status": "N/A",
+            "reason": "SOURCE_HAS_NO_CASHBACK_ROUTE_IN_SYNTHETIC_FIXTURE",
+            "rows": [],
+            "readback_sha256": sha256_json([]),
+            "write_count": 0,
+        }
+        ei["cashback"] = na
+        ei["pipeline"]["cashback_readback"] = copy.deepcopy(na)
+        with self.assertRaisesRegex(ContractError, "CASHBACK_ROUTE_STATUS_MISMATCH"):
+            verify_receipt(_rehash(ei))
+
+        wio = copy.deepcopy(run_synthetic_e2e(source_code="WIO_CREDIT", count=1))
+        verified_empty = {
+            "status": "VERIFIED",
+            "rows": [],
+            "readback_sha256": sha256_json([]),
+            "write_count": 0,
+        }
+        wio["cashback"] = verified_empty
+        wio["pipeline"]["cashback_readback"] = copy.deepcopy(verified_empty)
+        with self.assertRaises(ContractError):
+            verify_receipt(_rehash(wio))
 
     def test_count_102_remains_schema_bound_and_provider_free(self) -> None:
         self.assertGreaterEqual(MAX_SYNTHETIC_COUNT, 102)
