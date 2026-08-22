@@ -13,12 +13,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 N8N = ROOT / "integrations" / "n8n"
 SOURCE = N8N / "organize-workflows.py"
+SQL_GENERATOR_SOURCE = N8N / "generate_workflow_folder_sql.py"
 
 
 def load_organizer():
     spec = importlib.util.spec_from_file_location("finance_workflow_organizer", SOURCE)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load {SOURCE}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_sql_generator():
+    spec = importlib.util.spec_from_file_location("finance_workflow_sql_generator", SQL_GENERATOR_SOURCE)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load {SQL_GENERATOR_SOURCE}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -410,6 +420,20 @@ class WorkflowOrganizationTests(unittest.TestCase):
             self.assertIn(row["id"], sql)
             self.assertIn(row["target_name"], sql)
             self.assertIn(row["folder_id"], sql)
+
+    def test_sql_is_byte_identical_to_canonical_contract_renderer(self):
+        generator = load_sql_generator()
+        sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
+        self.assertEqual(generator.render(), sql)
+        completed = subprocess.run(
+            [sys.executable, str(SQL_GENERATOR_SOURCE), "--check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn("{{", sql)
 
     def test_sql_do_blocks_read_context_instead_of_using_psql_variables(self):
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")

@@ -22,7 +22,11 @@ Repository code, tests and historical user acceptance remain unverified until th
 Progress recorded: **2026-08-20** at `b07c410`.
 Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845ccf`, `fa8fd58`
 
-- The reviewed inactive promotion verifies 19 workflows, zero active, zero published, six folders, 57 inactive-export tag edges, four Outlook bindings, and 13 OneDrive bindings without changing credential ciphertext or calling providers.
+- The promotion snapshot covers 19 workflows and six folders.
+- It records no active workflows and no published workflows.
+- It records 57 edges for inactive workflows.
+- It lists four Outlook bindings and 13 OneDrive bindings.
+- It leaves credential ciphertext unchanged and calls no providers.
 - Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.
 - The internal runtime health check passed for n8n, the task broker, task launcher, and bounded Codex runner. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.
 - The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 19-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.
