@@ -154,6 +154,42 @@
     },
     "receipt_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "required": ["source_code"],
+            "properties": {"source_code": {"const": "EI_AMAZON"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cashback": {"$ref": "#/$defs/cashbackVerifiedRoute"},
+          "pipeline": {"properties": {"cashback_readback": {"$ref": "#/$defs/cashbackVerifiedRoute"}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "required": ["source_code"],
+            "properties": {"source_code": {"const": "WIO_CREDIT"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cashback": {"$ref": "#/$defs/cashbackNaRoute"},
+          "pipeline": {"properties": {"cashback_readback": {"$ref": "#/$defs/cashbackNaRoute"}}}
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "counts": {
@@ -267,6 +303,21 @@
         "currency": {"const": "AED"},
         "topic": {"const": "PURCHASE"},
         "readback_verified": {"const": true}
+      }
+    },
+    "cashbackVerifiedRoute": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {"status": {"const": "VERIFIED"}}
+    },
+    "cashbackNaRoute": {
+      "type": "object",
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"const": "N/A"},
+        "reason": {"const": "SOURCE_HAS_NO_CASHBACK_ROUTE_IN_SYNTHETIC_FIXTURE"},
+        "rows": {"maxItems": 0},
+        "write_count": {"const": 0}
       }
     },
     "cashback": {

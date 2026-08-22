@@ -5,23 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-try:
-    from .real_mail_e2e import (
-        MAX_SYNTHETIC_COUNT,
-        canonical_json,
-        run_synthetic_e2e,
-        verify_bundle,
-    )
-except ImportError:  # pragma: no cover - exercised by direct script invocation
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from real_mail_e2e import (
-        MAX_SYNTHETIC_COUNT,
-        canonical_json,
-        run_synthetic_e2e,
-        verify_bundle,
-    )
+from .real_mail_e2e import (
+    MAX_SYNTHETIC_COUNT,
+    canonical_json,
+    run_synthetic_e2e,
+    verify_bundle,
+)
 
 
 def generate_bundle(*, count: int = 1) -> dict:

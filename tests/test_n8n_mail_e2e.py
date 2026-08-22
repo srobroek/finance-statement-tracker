@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -263,7 +264,15 @@ class N8nMailE2EContractTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        bundle_validator = Draft202012Validator(bundle_schema)
+        receipt_schema = json.loads(
+            (ROOT / "integrations" / "n8n" / "schemas" / "real-mail-e2e-receipt-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        registry = Registry().with_resource(
+            receipt_schema["$id"], Resource.from_contents(receipt_schema)
+        )
+        bundle_validator = Draft202012Validator(bundle_schema, registry=registry)
         self.assertEqual(list(bundle_validator.iter_errors(bundle)), [])
         minimal = {
             "schema_version": "real-mail-e2e-fixture-bundle-v1",
@@ -306,7 +315,7 @@ class N8nMailE2EContractTests(unittest.TestCase):
         }
         ei["cashback"] = na
         ei["pipeline"]["cashback_readback"] = copy.deepcopy(na)
-        with self.assertRaisesRegex(ContractError, "CASHBACK_ROUTE_STATUS_MISMATCH"):
+        with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID"):
             verify_receipt(_rehash(ei))
 
         wio = copy.deepcopy(run_synthetic_e2e(source_code="WIO_CREDIT", count=1))
@@ -318,8 +327,14 @@ class N8nMailE2EContractTests(unittest.TestCase):
         }
         wio["cashback"] = verified_empty
         wio["pipeline"]["cashback_readback"] = copy.deepcopy(verified_empty)
-        with self.assertRaises(ContractError):
+        with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID"):
             verify_receipt(_rehash(wio))
+
+        arbitrary_reason = copy.deepcopy(run_synthetic_e2e(source_code="WIO_CREDIT", count=1))
+        arbitrary_reason["cashback"]["reason"] = "arbitrary"
+        arbitrary_reason["pipeline"]["cashback_readback"]["reason"] = "arbitrary"
+        with self.assertRaisesRegex(ContractError, "RECEIPT_SCHEMA_INVALID"):
+            verify_receipt(_rehash(arbitrary_reason))
 
     def test_count_102_remains_schema_bound_and_provider_free(self) -> None:
         self.assertGreaterEqual(MAX_SYNTHETIC_COUNT, 102)

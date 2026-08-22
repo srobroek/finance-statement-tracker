@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "real-mail-e2e-receipt-v1.schema.json"
@@ -1384,8 +1385,16 @@ def verify_bundle(bundle: Mapping[str, Any], *, root: Path | None = None) -> dic
     value = _clone(dict(bundle))
     _reject_sensitive_plaintext(value)
     schema = json.loads(BUNDLE_SCHEMA_PATH.read_text(encoding="utf-8"))
+    receipt_schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
-    errors = sorted(Draft202012Validator(schema).iter_errors(value), key=lambda error: list(error.path))
+    Draft202012Validator.check_schema(receipt_schema)
+    registry = Registry().with_resource(
+        receipt_schema["$id"], Resource.from_contents(receipt_schema)
+    )
+    errors = sorted(
+        Draft202012Validator(schema, registry=registry).iter_errors(value),
+        key=lambda error: list(error.path),
+    )
     if errors:
         raise ContractError("BUNDLE_SCHEMA_INVALID:" + ";".join(error.message for error in errors))
     receipts = value["receipts"]
