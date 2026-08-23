@@ -49,6 +49,16 @@ def load_bootstrap_generator():
         sys.path.pop(0)
 
 
+def load_fixture_generator():
+    generator_path = N8N / "disposable" / "generate_fixture_workflows.py"
+    spec = importlib.util.spec_from_file_location("finance_fixture_generator", generator_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load generator: {generator_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def validate_fixture_against_schema(schema: dict, value: object, path: str = "$") -> None:
     """Execute the JSON-schema subset used by the browser capture contract."""
     expected_type = schema.get("type")
@@ -1708,6 +1718,85 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             path = generated / row["file"]
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"])
+
+
+    def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(self) -> None:
+        generator = load_fixture_generator()
+        generated = N8N / "disposable" / "generated"
+        observed_edges = set()
+
+        def inspect(workflow: dict, ancestors: tuple[str, ...] = ()) -> None:
+            self.assertNotIn(workflow["id"], ancestors)
+            for node in workflow["nodes"]:
+                if node["type"] != "n8n-nodes-base.executeWorkflow":
+                    continue
+                parameters = node["parameters"]
+                self.assertEqual(parameters["source"], "parameter")
+                self.assertNotIn("workflowId", parameters)
+                child = json.loads(parameters["workflowJson"])
+                self.assertEqual(parameters["workflowJson"], generator.canonical(child))
+                observed_edges.add((workflow["id"], child["id"]))
+                inspect(child, (*ancestors, workflow["id"]))
+
+        for path in sorted(generated.glob("*.json")):
+            workflow = load_json(path)
+            generator.validate_inline_workflow(workflow)
+            inspect(workflow)
+
+        expected_edges = {
+            (parent_id, child_id)
+            for parent_id, child_ids in generator.ALLOWED_INLINE_EDGES.items()
+            for child_id in child_ids
+        }
+        self.assertEqual(observed_edges, expected_edges)
+
+    def test_disposable_inline_generator_rejects_invalid_graphs_and_payloads(self) -> None:
+        generator = load_fixture_generator()
+
+        def workflow(workflow_id: str, target_id: str | None = None) -> dict:
+            nodes = [] if target_id is None else [
+                generator.execute_node("call", "Call Child", target_id, [0, 0])
+            ]
+            return {
+                "id": workflow_id,
+                "name": workflow_id,
+                "active": False,
+                "nodes": nodes,
+                "connections": {},
+                "settings": {},
+            }
+
+        parent = workflow("parent", "child")
+        child = workflow("child")
+        with self.assertRaisesRegex(ValueError, "not allowlisted"):
+            generator.inline_execute_workflows(parent, {"parent": parent, "child": child}, {})
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            generator.inline_execute_workflows(
+                parent, {"parent": parent}, {"parent": frozenset({"child"})}
+            )
+
+        cyclic_child = workflow("child", "parent")
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            generator.inline_execute_workflows(
+                parent,
+                {"parent": parent, "child": cyclic_child},
+                {
+                    "parent": frozenset({"child"}),
+                    "child": frozenset({"parent"}),
+                },
+            )
+
+        with self.assertRaisesRegex(ValueError, "residual database-ID"):
+            generator.validate_inline_workflow(parent, {"parent": frozenset({"child"})})
+
+        inlined = generator.inline_execute_workflows(
+            parent,
+            {"parent": parent, "child": child},
+            {"parent": frozenset({"child"})},
+        )
+        inlined["nodes"][0]["parameters"]["workflowJson"] = "{"
+        with self.assertRaisesRegex(ValueError, "malformed"):
+            generator.validate_inline_workflow(inlined, {"parent": frozenset({"child"})})
 
     def test_r11_disposable_create_publish_payload_is_flat_and_named(self) -> None:
         payload = load_json(N8N / "disposable" / "create-publish-payload.json")

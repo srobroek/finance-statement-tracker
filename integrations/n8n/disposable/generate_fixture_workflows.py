@@ -18,6 +18,39 @@ AI_ID = "10000000-0000-4000-8000-000000000009"
 SWEEP_FIXTURE_ID = "90000000-0000-4000-8000-000000000012"
 RECOVERY_FIXTURE_ID = "90000000-0000-4000-8000-000000000017"
 
+INLINE_SOURCE_FILES = {
+    "10000000-0000-4000-8000-000000000001": "01-outlook-finance-acquisition.json",
+    AI_ID: "09-ai-proposal.json",
+    LEASE_ID: "18-finance-writer-lease.json",
+    "10000000-0000-4000-8000-000000000020": "20-actual-outbox-apply.json",
+    "10000000-0000-4000-8000-000000000021": "21-subscription-agent-adapter.json",
+}
+
+ALLOWED_INLINE_EDGES = {
+    "90000000-0000-4000-8000-000000000901": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000902": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000903": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000904": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000905": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000906": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000907": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000908": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000909": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000910": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000911": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000912": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000918": frozenset({RECOVERY_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000919": frozenset({RECOVERY_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000920": frozenset({RECOVERY_FIXTURE_ID}),
+    SWEEP_FIXTURE_ID: frozenset({
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000021",
+    }),
+    AI_ID: frozenset({"10000000-0000-4000-8000-000000000021"}),
+    RECOVERY_FIXTURE_ID: frozenset({"10000000-0000-4000-8000-000000000020"}),
+    "10000000-0000-4000-8000-000000000020": frozenset({LEASE_ID}),
+}
+
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -438,7 +471,108 @@ def build_all() -> dict[str, dict]:
         "104-recover-actual-observed.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"),
         "105-recover-verified.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000920", "VERIFIED"),
     }
-    return workflows
+    catalog = {workflow["id"]: workflow for workflow in workflows.values()}
+    for workflow_id, filename in INLINE_SOURCE_FILES.items():
+        workflow = read_json(PRODUCTION / filename)
+        if workflow.get("id") != workflow_id:
+            raise ValueError(f"inline workflow ID mismatch for {filename}")
+        catalog[workflow_id] = workflow
+    inlined = {
+        name: inline_execute_workflows(workflow, catalog)
+        for name, workflow in workflows.items()
+    }
+    for workflow in inlined.values():
+        validate_inline_workflow(workflow)
+    return inlined
+
+
+def database_target_id(node: dict) -> str:
+    parameters = node.get("parameters")
+    if not isinstance(parameters, dict) or parameters.get("source", "database") != "database":
+        raise ValueError(f"ExecuteWorkflow node {node.get('name')} is not a database-ID call")
+    selector = parameters.get("workflowId")
+    if not isinstance(selector, dict) or not isinstance(selector.get("value"), str):
+        raise TypeError(f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID")
+    target_id = selector["value"]
+    if not target_id:
+        raise ValueError(f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID")
+    return target_id
+
+
+def inline_execute_workflows(
+    workflow: dict,
+    catalog: dict[str, dict],
+    allowed_edges: dict[str, frozenset[str]] = ALLOWED_INLINE_EDGES,
+    ancestors: tuple[str, ...] = (),
+) -> dict:
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("id"), str):
+        raise TypeError("inline workflow must be an object with a string ID")
+    workflow_id = workflow["id"]
+    if workflow_id in ancestors:
+        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+    nodes = workflow.get("nodes")
+    if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
+        raise TypeError(f"inline workflow {workflow_id} is malformed")
+
+    result = copy.deepcopy(workflow)
+    path = (*ancestors, workflow_id)
+    for node in result["nodes"]:
+        if not isinstance(node, dict) or node.get("type") != "n8n-nodes-base.executeWorkflow":
+            continue
+        target_id = database_target_id(node)
+        if target_id not in allowed_edges.get(workflow_id, frozenset()):
+            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+        target = catalog.get(target_id)
+        if target is None:
+            raise ValueError(f"inline target {target_id} is unknown")
+        child = inline_execute_workflows(target, catalog, allowed_edges, path)
+        options = node["parameters"].get("options", {})
+        node["parameters"] = {
+            "source": "parameter",
+            "workflowJson": canonical(child),
+            "options": options,
+        }
+    return result
+
+
+def validate_inline_workflow(
+    workflow: dict,
+    allowed_edges: dict[str, frozenset[str]] = ALLOWED_INLINE_EDGES,
+    ancestors: tuple[str, ...] = (),
+) -> None:
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("id"), str):
+        raise TypeError("inline workflow must be an object with a string ID")
+    workflow_id = workflow["id"]
+    if workflow_id in ancestors:
+        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+    nodes = workflow.get("nodes")
+    if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
+        raise TypeError(f"inline workflow {workflow_id} is malformed")
+
+    path = (*ancestors, workflow_id)
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("type") != "n8n-nodes-base.executeWorkflow":
+            continue
+        parameters = node.get("parameters")
+        if not isinstance(parameters, dict) or parameters.get("source") != "parameter":
+            raise ValueError(f"residual database-ID ExecuteWorkflow in {workflow_id}")
+        if "workflowId" in parameters:
+            raise ValueError(f"residual workflow ID in {workflow_id}")
+        workflow_json = parameters.get("workflowJson")
+        if not isinstance(workflow_json, str):
+            raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
+        try:
+            child = json.loads(workflow_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"inline workflow JSON in {workflow_id} is malformed") from error
+        if not isinstance(child, dict) or not isinstance(child.get("id"), str):
+            raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
+        target_id = child["id"]
+        if target_id not in allowed_edges.get(workflow_id, frozenset()):
+            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+        if workflow_json != canonical(child):
+            raise ValueError(f"inline workflow JSON in {workflow_id} is not canonical")
+        validate_inline_workflow(child, allowed_edges, path)
 
 
 def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict:
