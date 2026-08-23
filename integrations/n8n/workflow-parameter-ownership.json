@@ -284,7 +284,6 @@
       "nodes": {
         "Subscription Provider Parameters": {
           "caller_fields": {
-            "agent_provider": "string",
             "policy_class": "string",
             "job_id": "string",
             "idempotency_key": "string",

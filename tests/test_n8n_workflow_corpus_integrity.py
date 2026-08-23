@@ -293,7 +293,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 5, "edges": 4, "sticky": 0, "groups": 1,
         "node_ids_sha256": "1a110c098db11f745871eed5f147f8d49fc769fc24942fb3147f80146c34c262",
         "connections_sha256": "2b1b9065d7e4ee46faf6c409e01f0ee1e4156d5b99c93861054c267922f939bd",
-        "parameters_sha256": "f26eabf1c370c50efdf63ae75431a9ee75778a2db80c08eaa730a741a658efe0",
+        "parameters_sha256": "944470ecde51761b37289a7c304049775202dc4c72e0ed704e4a5ebdefd418ba",
         "groups_sha256": "d591ac682902484fecae6ac68da4b601d353bc4a7dd9768cc92d7caaa514d814",
     },
     "22-shared-monthly-statement-cycle.json": {

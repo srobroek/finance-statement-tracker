@@ -3192,7 +3192,6 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                 "mode": "manual",
                 "includeOtherFields": False,
                 "assignments": {"assignments": [
-                    {"id": "21002-caller-1", "name": "agent_provider", "type": "string", "value": "={{ $json.agent_provider }}"},
                     {"id": "21002-caller-2", "name": "policy_class", "type": "string", "value": "={{ $json.policy_class }}"},
                     {"id": "21002-caller-3", "name": "job_id", "type": "string", "value": "={{ $json.job_id }}"},
                     {"id": "21002-caller-4", "name": "idempotency_key", "type": "string", "value": "={{ $json.idempotency_key }}"},
@@ -3236,9 +3235,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "position": [-400, 0],
             "parameters": {"jsCode": r"""
 const job = $json;
-if (job.agent_provider !== 'CODEX_SUBSCRIPTION') {
-  throw new Error('AGENT_PROVIDER_NOT_ALLOWLISTED');
-}
+const agent_provider = 'CODEX_SUBSCRIPTION';
 const forbidden = [
   'command', 'path', 'url', 'model', 'reasoning_effort', 'prompt',
   'credential', 'system_prompt', 'working_directory', 'sandbox',
@@ -3255,29 +3252,22 @@ if (!/^[a-z0-9][a-z0-9:_-]{0,127}$/.test(String(job.policy_id || ''))
     || !/^[a-f0-9]{64}$/.test(String(job.output_schema_sha256 || ''))) {
   throw new Error('AGENT_SERVER_POLICY_BINDING_REQUIRED');
 }
-const providerPolicy = {
-  CODEX_SUBSCRIPTION: {
-    NORMAL: {
+const runnerPolicy = job.policy_class === 'NORMAL'
+  ? {
       model: job.codex_normal_model,
       reasoning_effort: job.codex_normal_reasoning_effort,
       auth_mode: job.codex_auth_mode,
-    },
-    EXCEPTION: {
+    }
+  : {
       model: job.codex_exception_model,
       reasoning_effort: job.codex_exception_reasoning_effort,
       auth_mode: job.codex_auth_mode,
-    },
-  },
-};
-const runnerPolicy = providerPolicy[job.agent_provider]?.[job.policy_class];
-if (!runnerPolicy) {
-  throw new Error('AGENT_RUNNER_POLICY_MISSING');
-}
+    };
 if (job.email_evidence === true && !/^[a-f0-9]{64}$/.test(String(job.archive_sha256 || ''))) {
   throw new Error('EMAIL_ENRICHMENT_ARCHIVE_HASH_REQUIRED');
 }
 const request = {
-  agent_provider: job.agent_provider,
+  agent_provider,
   policy_class: job.policy_class,
   policy_id: job.policy_id,
   policy_sha256: job.policy_sha256,
@@ -3302,7 +3292,7 @@ const prompt = [
   JSON.stringify(request),
 ].join('\n\n');
 return [{ json: {
-  agent_provider: job.agent_provider,
+  agent_provider,
   request,
   provider_prompt: prompt,
   provider_model: runnerPolicy.model,
