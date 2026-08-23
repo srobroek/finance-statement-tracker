@@ -2275,7 +2275,7 @@ return [{
         )
         code = code.replace(
             "if (!policy_class)",
-            "if (!policy_class || !['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(agent_provider))",
+            "if (!policy_class || agent_provider !== 'CODEX_SUBSCRIPTION')",
         )
         code = code.replace(
             "const body = { schema_version: 1, operation_code: 'FINANCE_AI_PROPOSAL',",
@@ -2367,7 +2367,7 @@ const requestSha256 = String(request.request_sha256 || '');
 if (!/^[a-f0-9]{64}$/.test(requestSha256)) {
   throw new Error('Agent request hash missing');
 }
-if (!['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(request.agent_provider)) {
+if (request.agent_provider !== 'CODEX_SUBSCRIPTION') {
   throw new Error('Agent provider missing from authoritative handoff');
 }
 return [{ json: {
@@ -2385,13 +2385,11 @@ return [{ json: {
 } }];
 """.strip()
     agent["meta"].pop("activeProvider", None)
-    agent["meta"].pop("claudeProviderStatus", None)
     agent["meta"].update({
         "provider": "SUBSCRIPTION_AGENT_HANDOFF",
-        "supportedProviders": ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+        "supportedProviders": ["CODEX_SUBSCRIPTION"],
         "providerSelection": "SERVER_AI_POLICY_CONTRACT",
         "providerSelectionCallerControlled": False,
-        "providerBranchesEnabled": ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
         "protectedFieldPolicyIdenticalAcrossProviders": True,
     })
     validate_response = node_by_name(agent, "Validate Proposal Schema and Policy Boundary")
@@ -2436,10 +2434,6 @@ const providerPolicy = {
   CODEX_SUBSCRIPTION: {
     NORMAL: ['gpt-5.6-luna', 'max', 'CHATGPT_SUBSCRIPTION'],
     EXCEPTION: ['gpt-5.6-sol', 'medium', 'CHATGPT_SUBSCRIPTION'],
-  },
-  CLAUDE_SUBSCRIPTION: {
-    NORMAL: ['claude-sonnet-4-6', 'default', 'CLAUDE_SUBSCRIPTION'],
-    EXCEPTION: ['claude-sonnet-4-6', 'default', 'CLAUDE_SUBSCRIPTION'],
   },
 };
 const expectedRunner = providerPolicy[request.agent_provider]?.[request.policy_class];
@@ -3120,7 +3114,7 @@ return [{
         "Agent Proposal Parameters",
         [
             ("provider_selection", "string", "SERVER_AI_POLICY_CONTRACT"),
-            ("supported_providers", "string", "CODEX_SUBSCRIPTION|CLAUDE_SUBSCRIPTION"),
+            ("supported_providers", "string", "CODEX_SUBSCRIPTION"),
             ("proposal_only", "boolean", True),
         ],
         [("policy_id", "string"), ("unresolved", "array")],
@@ -3164,7 +3158,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                 "financeWorkflowCode": "SUBSCRIPTION_AGENT_ADAPTER",
                 "migrationStatus": "SPEC_ONLY",
                 "setupRequired": True,
-                "supportedProviders": ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+                "supportedProviders": ["CODEX_SUBSCRIPTION"],
                 "callerProviderSelectionForbidden": True,
                 "structuredOutputSchemaRequired": True,
                 "communityNodeRuntimeProofRequired": True,
@@ -3174,8 +3168,8 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
         workflows.append(adapter)
 
     # The provider boundary is intentionally isolated in this one workflow.
-    # Both community nodes are version-locked in community-node-lock.json and
-    # remain inactive until exact-image registration and subscription-login
+    # The community node is version-locked in community-node-lock.json and
+    # remains inactive until exact-image registration and subscription-login
     # receipts exist. No provider, model, prompt, command, or path comes from a
     # workflow caller.
     adapter["nodes"] = [
@@ -3214,17 +3208,11 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
                     {"id": "21002-caller-11", "name": "archive_item_ids", "type": "array", "value": "={{ $json.archive_item_ids }}"},
                     {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
                     {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
-                    {"id": "21002-c", "name": "claude_package", "type": "string", "value": "@ggomez91npm/n8n-nodes-claude-code@0.8.0"},
                     {"id": "21002-d", "name": "codex_normal_model", "type": "string", "value": "gpt-5.6-luna"},
                     {"id": "21002-e", "name": "codex_normal_reasoning_effort", "type": "string", "value": "max"},
                     {"id": "21002-f", "name": "codex_exception_model", "type": "string", "value": "gpt-5.6-sol"},
                     {"id": "21002-g", "name": "codex_exception_reasoning_effort", "type": "string", "value": "medium"},
                     {"id": "21002-h", "name": "codex_auth_mode", "type": "string", "value": "CHATGPT_SUBSCRIPTION"},
-                    {"id": "21002-i", "name": "claude_normal_model", "type": "string", "value": "claude-sonnet-4-6"},
-                    {"id": "21002-j", "name": "claude_normal_reasoning_effort", "type": "string", "value": "default"},
-                    {"id": "21002-k", "name": "claude_exception_model", "type": "string", "value": "claude-sonnet-4-6"},
-                    {"id": "21002-l", "name": "claude_exception_reasoning_effort", "type": "string", "value": "default"},
-                    {"id": "21002-m", "name": "claude_auth_mode", "type": "string", "value": "CLAUDE_SUBSCRIPTION"},
                     {
                         "id": "21002-n",
                         "name": "proposal_output_schema",
@@ -3247,8 +3235,7 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "position": [-400, 0],
             "parameters": {"jsCode": r"""
 const job = $json;
-const providers = new Set(['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION']);
-if (!providers.has(job.agent_provider)) {
+if (job.agent_provider !== 'CODEX_SUBSCRIPTION') {
   throw new Error('AGENT_PROVIDER_NOT_ALLOWLISTED');
 }
 const forbidden = [
@@ -3278,18 +3265,6 @@ const providerPolicy = {
       model: job.codex_exception_model,
       reasoning_effort: job.codex_exception_reasoning_effort,
       auth_mode: job.codex_auth_mode,
-    },
-  },
-  CLAUDE_SUBSCRIPTION: {
-    NORMAL: {
-      model: job.claude_normal_model,
-      reasoning_effort: job.claude_normal_reasoning_effort,
-      auth_mode: job.claude_auth_mode,
-    },
-    EXCEPTION: {
-      model: job.claude_exception_model,
-      reasoning_effort: job.claude_exception_reasoning_effort,
-      auth_mode: job.claude_auth_mode,
     },
   },
 };
@@ -3336,20 +3311,6 @@ return [{ json: {
 """.strip()},
         },
         {
-            "id": "21004",
-            "name": "Provider Route",
-            "type": "n8n-nodes-base.switch",
-            "typeVersion": 3.2,
-            "position": [-150, 0],
-            "parameters": {
-                "rules": {"values": [
-                    {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.agent_provider }}", "rightValue": "CODEX_SUBSCRIPTION", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}},
-                    {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.agent_provider }}", "rightValue": "CLAUDE_SUBSCRIPTION", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}},
-                ]},
-                "options": {"fallbackOutput": "extra"},
-            },
-        },
-        {
             "id": "21005",
             "name": "Run Codex Subscription Provider",
             "type": "n8n-nodes-prodex.prodex",
@@ -3375,24 +3336,8 @@ return [{ json: {
             },
         },
         {
-            "id": "21006",
-            "name": "Run Claude Subscription Provider",
-            "type": "@ggomez91npm/n8n-nodes-claude-code.claude",
-            "typeVersion": 1,
-            "position": [100, 80],
-            "parameters": {
-                "prompt": "={{ $json.provider_prompt }}",
-                "timeoutSeconds": 180,
-                "model": "={{ $json.provider_model }}",
-                "binaryProperties": "",
-                "systemPrompt": "Finance proposal only. Do not use tools, browse, read files, or mutate data. Return only JSON matching the requested proposal contract.",
-                "responseFormat": "json",
-                "options": {"useCache": False, "retries": 0},
-            },
-        },
-        {
             "id": "21007",
-            "name": "Validate Claude Proposal Schema and Normalize Provider Output",
+            "name": "Validate ProDex Proposal Schema and Normalize Provider Output",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [350, 0],
@@ -3412,15 +3357,10 @@ const FINANCE_AI_SCHEMA_V1 = new Set([
   'runner_receipt_id', 'runner_model', 'runner_reasoning_effort', 'auth_mode',
   'proposals',
 ]);
-let proposal;
-if (provider === 'CODEX_SUBSCRIPTION') {
-  proposal = typeof $json.output === 'string' ? JSON.parse($json.output) : $json.output;
-} else {
-  if ($json.success !== true || $json.json?.ok !== true) {
-    throw new Error('CLAUDE_PROVIDER_JSON_OUTPUT_INVALID');
-  }
-  proposal = $json.json.value;
+if (provider !== 'CODEX_SUBSCRIPTION') {
+  throw new Error('AGENT_PROVIDER_NOT_ALLOWLISTED');
 }
+const proposal = typeof $json.output === 'string' ? JSON.parse($json.output) : $json.output;
 if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
   throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');
 }
@@ -3450,26 +3390,12 @@ if (Object.keys(normalized).some(field => !FINANCE_AI_SCHEMA_V1.has(field))
 return [{ json: normalized }];
 """.strip()},
         },
-        {
-            "id": "21008",
-            "name": "Reject Unknown Provider Route",
-            "type": "n8n-nodes-base.stopAndError",
-            "typeVersion": 1,
-            "position": [100, 280],
-            "parameters": {"errorMessage": "AGENT_PROVIDER_ROUTE_UNREACHABLE"},
-        },
     ]
     adapter["connections"] = {
         "Schema-Bound Proposal Job": {"main": [[{"node": "Subscription Provider Parameters", "type": "main", "index": 0}]]},
         "Subscription Provider Parameters": {"main": [[{"node": "Validate and Build Fixed Provider Invocation", "type": "main", "index": 0}]]},
-        "Validate and Build Fixed Provider Invocation": {"main": [[{"node": "Provider Route", "type": "main", "index": 0}]]},
-        "Provider Route": {"main": [
-            [{"node": "Run Codex Subscription Provider", "type": "main", "index": 0}],
-            [{"node": "Run Claude Subscription Provider", "type": "main", "index": 0}],
-            [{"node": "Reject Unknown Provider Route", "type": "main", "index": 0}],
-        ]},
-        "Run Codex Subscription Provider": {"main": [[{"node": "Validate Claude Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
-        "Run Claude Subscription Provider": {"main": [[{"node": "Validate Claude Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
+        "Validate and Build Fixed Provider Invocation": {"main": [[{"node": "Run Codex Subscription Provider", "type": "main", "index": 0}]]},
+        "Run Codex Subscription Provider": {"main": [[{"node": "Validate ProDex Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
     }
     adapter["meta"].update({
         "communityNodeInstallationDeferred": False,
@@ -3477,7 +3403,6 @@ return [{ json: normalized }];
         "credentialBindings": [],
         "providerLockFile": "integrations/n8n/community-node-lock.json",
         "providerSelection": "SERVER_AI_POLICY_CONTRACT",
-        "providerBranchesEnabled": ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
         "providerRuntimePolicyCallerControlled": False,
         "outputSchemaSource": "contracts/ai-proposal-v1.schema.json",
     })
@@ -4008,9 +3933,9 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         raise RuntimeError("generic email enrichment nodes missing: " + ", ".join(missing))
     required_adapter = {
         "Schema-Bound Proposal Job", "Subscription Provider Parameters",
-        "Validate and Build Fixed Provider Invocation", "Provider Route",
-        "Run Codex Subscription Provider", "Run Claude Subscription Provider",
-        "Validate Claude Proposal Schema and Normalize Provider Output",
+        "Validate and Build Fixed Provider Invocation",
+        "Run Codex Subscription Provider",
+        "Validate ProDex Proposal Schema and Normalize Provider Output",
     }
     missing = sorted(required_adapter - {node["name"] for node in adapter["nodes"]})
     if missing:
