@@ -8,7 +8,7 @@
     "12-outlook-message-sweep.json": "ec6f3f61291adddc9b5d627018b1c8c914efa7fe3be9168558b4dc420541035f",
     "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
-    "18-finance-writer-lease.json": "863f034e5868a8eda8f882bf7427af6b61ac1ed3ff7c73e3b26f71c871afd0f8"
+    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
   },
   "workflows": [
     {
@@ -39,17 +39,17 @@
     {
       "file": "95-lease-acquire-a.json",
       "id": "90000000-0000-4000-8000-000000000905",
-      "sha256": "1e3b993e1e23679c3c28a7475caead30c24485714c10a6e0c8551be61f7d687f"
+      "sha256": "9d335da26056c667538f3d108f933182e3c59edaf1162047500172f1ac4fe116"
     },
     {
       "file": "96-lease-acquire-b.json",
       "id": "90000000-0000-4000-8000-000000000906",
-      "sha256": "a488b80d79c17ead1cba88d8cb45f4d64f142c0cd4b2653b90c4e424960cb32e"
+      "sha256": "f0338a34e776072525a0f58a7fce840278b56bd0c9f82f6bbd0b18012c87a15d"
     },
     {
       "file": "97-lease-stale-assert.json",
       "id": "90000000-0000-4000-8000-000000000907",
-      "sha256": "5f6b05a01db677796355a18f8646009ba8de0d27007971476060f0c3eae7d028"
+      "sha256": "faf87b6a025ada10b0831b7f804493e3b0c24b29de88236a5e4ab48ea9aa2f70"
     },
     {
       "file": "98-ai-caller-model-rejected.json",
@@ -84,22 +84,22 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "b6fd82c11dbf164b1dfef83ebb5b7e686b69f23191b65b8dcc553f86700a73fc"
+      "sha256": "a45cdb82c75ff12349afe588617b89790ff4b26fe7dd0cfe964da848da3ccbd6"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "4217f42af43fb069d727b99e40b0aca9e6737e05d3fee6e51cdde2665aab6fd9"
+      "sha256": "8ec59fd5f61aafbcaa713bf2103653e2e02204a233b70593d7517137dfcd5608"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "513e9acbf3015dd880daa9613b450df5583a6265c6f6dc86e8b59a3e6e9754e8"
+      "sha256": "08ce5e8be400fb95b72aea8ce2c346cc3cff03be3a16379b27de075295b7823e"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "9ff5c0a8ebc07a55468a6ecb9fde8780a248ec8d8c7836cb832622d39eb209a7"
+      "sha256": "9cc2ce7b7467b1cca71f7a87e673f891e0934b72154cd68bc84d4b3cbc720f23"
     }
   ],
   "scenario_contract": {

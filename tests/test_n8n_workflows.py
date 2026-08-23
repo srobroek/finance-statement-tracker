@@ -1516,11 +1516,16 @@ try {{
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
+        validator = next(node for node in workflow["nodes"] if node["name"] == "Validate Fixed Lease Operation")
+        self.assertNotIn("crypto.randomUUID", validator["parameters"]["jsCode"])
         postgres = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.postgres"]
         self.assertEqual(len(postgres), 3)
         queries = "\n".join(node["parameters"]["query"] for node in postgres)
         for function in ("finance_ops.acquire_writer_lease", "finance_ops.assert_writer_lease", "finance_ops.release_writer_lease"):
             self.assertIn(function, queries)
+        acquire = next(node for node in postgres if "acquire_writer_lease" in node["parameters"]["query"])
+        self.assertEqual(acquire["parameters"]["query"].count("$"), 3)
+        self.assertNotIn("$json.lease_id", acquire["parameters"]["options"]["queryReplacement"])
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(encoding="utf-8")
