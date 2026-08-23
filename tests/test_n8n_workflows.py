@@ -1798,6 +1798,36 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         with self.assertRaisesRegex(ValueError, "malformed"):
             generator.validate_inline_workflow(inlined, {"parent": frozenset({"child"})})
 
+        malformed_parent = workflow("malformed-parent")
+        malformed_parent["nodes"].append("not-a-node")
+        with self.assertRaisesRegex(TypeError, "malformed node"):
+            generator.inline_execute_workflows(malformed_parent, {"malformed-parent": malformed_parent})
+        with self.assertRaisesRegex(TypeError, "malformed node"):
+            generator.validate_inline_workflow(malformed_parent)
+
+        malformed_child = workflow("child")
+        malformed_child["nodes"].append(None)
+        with self.assertRaisesRegex(TypeError, "malformed node"):
+            generator.inline_execute_workflows(
+                parent,
+                {"parent": parent, "child": malformed_child},
+                {"parent": frozenset({"child"})},
+            )
+
+        nested_inlined = generator.inline_execute_workflows(
+            parent,
+            {"parent": parent, "child": child},
+            {"parent": frozenset({"child"})},
+        )
+        nested_child = json.loads(nested_inlined["nodes"][0]["parameters"]["workflowJson"])
+        nested_child["nodes"].append(None)
+        nested_inlined["nodes"][0]["parameters"]["workflowJson"] = generator.canonical(nested_child)
+        with self.assertRaisesRegex(TypeError, "malformed node"):
+            generator.validate_inline_workflow(
+                nested_inlined,
+                {"parent": frozenset({"child"})},
+            )
+
     def test_r11_disposable_create_publish_payload_is_flat_and_named(self) -> None:
         payload = load_json(N8N / "disposable" / "create-publish-payload.json")
         create = payload["create"]

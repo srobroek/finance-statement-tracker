@@ -517,7 +517,9 @@ def inline_execute_workflows(
     result = copy.deepcopy(workflow)
     path = (*ancestors, workflow_id)
     for node in result["nodes"]:
-        if not isinstance(node, dict) or node.get("type") != "n8n-nodes-base.executeWorkflow":
+        if not isinstance(node, dict):
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node")
+        if node.get("type") != "n8n-nodes-base.executeWorkflow":
             continue
         target_id = database_target_id(node)
         if target_id not in allowed_edges.get(workflow_id, frozenset()):
@@ -551,7 +553,9 @@ def validate_inline_workflow(
 
     path = (*ancestors, workflow_id)
     for node in nodes:
-        if not isinstance(node, dict) or node.get("type") != "n8n-nodes-base.executeWorkflow":
+        if not isinstance(node, dict):
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node")
+        if node.get("type") != "n8n-nodes-base.executeWorkflow":
             continue
         parameters = node.get("parameters")
         if not isinstance(parameters, dict) or parameters.get("source") != "parameter":
