@@ -57,6 +57,8 @@ def lock_cross_field_errors(document: dict) -> list[str]:
         for name, image in document.get("support_images", {}).items()
     )
     for name, image in images:
+        if "@sha256:" not in image["reference"] and image.get("image_digest") is None:
+            continue
         reference_digest = image["reference"].rsplit("@", 1)[-1]
         if image.get("image_digest", image.get("digest")) != reference_digest:
             errors.append(f"{name}: reference digest mismatch")
@@ -127,15 +129,15 @@ class N8nApplicationManifestTests(unittest.TestCase):
             self.assertEqual(errors, [], "schema errors: " + "; ".join(error.message for error in errors))
 
     def test_locked_schemas_reject_unverified_or_unexpected_fields(self) -> None:
-        manifest_with_commit = deepcopy(self.manifest)
+        manifest_with_commit = verified_manifest(self.manifest, "DISPOSABLE_VERIFIED")
         manifest_with_commit["finance_commit"] = None
         self.assertTrue(schema_errors(manifest_with_commit, self.manifest_schema))
 
-        lock_with_scan = deepcopy(self.image_lock)
+        lock_with_scan = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
         lock_with_scan["extension_image"]["scan"]["result"] = "NOT_RUN"
         self.assertTrue(schema_errors(lock_with_scan, self.image_lock_schema))
 
-        lock_with_extra_field = deepcopy(self.image_lock)
+        lock_with_extra_field = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
         lock_with_extra_field["unexpected"] = True
         self.assertTrue(schema_errors(lock_with_extra_field, self.image_lock_schema))
 
@@ -161,33 +163,34 @@ class N8nApplicationManifestTests(unittest.TestCase):
         )
         self.assertEqual(schema_errors(spec_only, self.image_lock_schema), [])
 
-        locked_without_support = deepcopy(self.image_lock)
+        locked_without_support = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
         locked_without_support.pop("support_images")
         self.assertTrue(schema_errors(locked_without_support, self.image_lock_schema))
 
     def test_locked_support_images_reject_failed_scans_and_attestations(self) -> None:
-        failed_scan = deepcopy(self.image_lock)
+        failed_scan = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
         failed_scan["support_images"]["pdf_utility"]["scan"].update(
             result="FAIL", high=99, critical=7
         )
         self.assertTrue(schema_errors(failed_scan, self.image_lock_schema))
 
-        unverified_attestation = deepcopy(self.image_lock)
+        unverified_attestation = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
         unverified_attestation["support_images"]["task_runners"]["attestation"]["status"] = "UNVERIFIED"
         self.assertTrue(schema_errors(unverified_attestation, self.image_lock_schema))
 
     def test_locked_image_digests_and_attestations_are_cross_field_bound(self) -> None:
-        self.assertEqual(lock_cross_field_errors(self.image_lock), [])
+        locked = verified_image_lock(self.image_lock, "LOCKED_DISPOSABLE")
+        self.assertEqual(lock_cross_field_errors(locked), [])
 
-        digest_mismatch = deepcopy(self.image_lock)
+        digest_mismatch = deepcopy(locked)
         digest_mismatch["support_images"]["cashback"]["image_digest"] = "sha256:" + "0" * 64
         self.assertIn("reference digest mismatch", " ".join(lock_cross_field_errors(digest_mismatch)))
 
-        attestation_mismatch = deepcopy(self.image_lock)
+        attestation_mismatch = deepcopy(locked)
         attestation_mismatch["support_images"]["cashback"]["attestation"]["subject_digest"] = "sha256:" + "0" * 64
         self.assertIn("attestation subject mismatch", " ".join(lock_cross_field_errors(attestation_mismatch)))
 
-        source_mismatch = deepcopy(self.image_lock)
+        source_mismatch = deepcopy(locked)
         source_mismatch["support_images"]["cashback"]["attestation"]["source_commit"] = "0" * 40
         self.assertIn("attestation source mismatch", " ".join(lock_cross_field_errors(source_mismatch)))
 
@@ -254,22 +257,19 @@ class N8nApplicationManifestTests(unittest.TestCase):
         self.assertEqual(self.manifest["extension_image"]["base_digest"], self.manifest["base_image"]["digest"])
         receipt = self.manifest["extension_image"]["receipt"]
         self.assertEqual(receipt["sha256"], sha256(ROOT / receipt["path"]))
-        self.assertEqual(
-            self.manifest["finance_commit"],
-            "170328b7f6aefa068da9c9a864cd03ca91635c70",
-        )
-        self.assertEqual(
-            self.manifest["extension_image"]["digest"],
-            "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-        )
-        self.assertEqual(self.manifest["contract_status"], "DISPOSABLE_VERIFIED")
+        self.assertIsNone(self.manifest["finance_commit"])
+        self.assertIsNone(self.manifest["extension_image"]["digest"])
+        self.assertEqual(self.manifest["contract_status"], "SPEC_ONLY")
 
     def test_image_lock_binds_package_and_community_integrity(self) -> None:
         package = self.image_lock["finance_package"]
         self.assertEqual(package["lockfile_sha256"], sha256(ROOT / package["lockfile"]))
         community = self.image_lock["community_node_lock"]
         self.assertEqual(community["sha256"], sha256(ROOT / community["path"]))
-        registration = load_json(ROOT / community["path"])["registration"]
+        community_lock = load_json(ROOT / community["path"])
+        lockfile = community_lock["lockfile"]
+        self.assertEqual(lockfile["sha256"], sha256(ROOT / lockfile["path"]))
+        registration = community_lock["registration"]
         self.assertEqual(registration["status"], "SPEC_ONLY")
         self.assertEqual(
             set(registration["nodes"]),
@@ -279,6 +279,22 @@ class N8nApplicationManifestTests(unittest.TestCase):
                 "n8n-nodes-prodex.prodexSetup",
             },
         )
+
+    def test_changed_community_closure_invalidates_image_proof(self) -> None:
+        self.assertEqual(self.manifest["contract_status"], "SPEC_ONLY")
+        self.assertIsNone(self.manifest["finance_commit"])
+        self.assertIsNone(self.manifest["extension_image"]["digest"])
+        self.assertEqual(self.image_lock["status"], "SPEC_ONLY")
+        self.assertIsNone(self.image_lock["source_commit"])
+        extension = self.image_lock["extension_image"]
+        self.assertIsNone(extension["image_digest"])
+        self.assertIsNone(extension["source_commit"])
+        self.assertIsNone(extension["sbom_sha256"])
+        self.assertIsNone(extension["scan_sha256"])
+        self.assertEqual(extension["scan"]["result"], "NOT_RUN")
+        self.assertEqual(extension["attestation"]["status"], "NOT_AVAILABLE")
+        self.assertIn("LIVE_FINANCE_IMAGE_BUILD_REQUIRED", self.manifest["blockers"])
+        self.assertIn("LIVE_REGISTRY_DIGEST_REQUIRED", self.manifest["blockers"])
 
     def test_support_image_receipts_are_bound_to_protected_artifacts(self) -> None:
         expected = {

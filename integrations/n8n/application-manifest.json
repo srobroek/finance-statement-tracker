@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "contract_status": "DISPOSABLE_VERIFIED",
+  "contract_status": "SPEC_ONLY",
   "application": {
     "name": "finance-statement-tracker",
     "repository": "srobroek/finance-statement-tracker"
   },
-  "finance_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
+  "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "59f4885b706eb3a3b2ec8ebcd15ff0d97c42c3518c389d4f4bc46800f2e222f2"
+    "sha256": "0bd94ae955e2c62b1e36c8f72b582c201b497d476da570f42f8d6bbeb6d7f1ea"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -16,8 +16,8 @@
     "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
   },
   "extension_image": {
-    "reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
+    "digest": null,
     "base_digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
@@ -88,6 +88,10 @@
     {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
   ],
   "blockers": [
+    "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",
+    "LIVE_REGISTRY_DIGEST_REQUIRED",
+    "SBOM_SCAN_ATTESTATION_REQUIRED",
+    "DISPOSABLE_IMAGE_IMPORT_REQUIRED",
     "DISPOSABLE_WORKFLOW_EXECUTION_REQUIRED"
   ]
 }
