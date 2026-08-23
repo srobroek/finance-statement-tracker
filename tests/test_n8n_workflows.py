@@ -731,6 +731,12 @@ try {{
             "source_code": "OUTLOOK_FINANCE_ACQUISITION",
             "receipt_run_id": "run-new",
             "receipt_run_upper_bound": "2026-08-31T00:00:00.000Z",
+            "last_window_start": "2026-08-01T00:00:00.000Z",
+            "last_pages_fetched": 2,
+            "last_pagination_exhausted": True,
+            "last_heartbeat": False,
+            "last_terminal_state": "ENUMERATED",
+            "last_receipt_created_at": "2026-08-31T00:01:00.000Z",
             "committed_run_id": "run-old",
             "cursor_value": "2026-07-31T00:00:00.000Z",
             "run_upper_bound": "2026-07-31T00:00:00.000Z",
@@ -746,6 +752,11 @@ try {{
         projected_row = projected["output"][0]["json"]
         self.assertEqual(projected_row["run_id"], "run-new")
         self.assertEqual(projected_row["run_upper_bound"], "2026-08-31T00:00:00.000Z")
+        self.assertEqual(projected_row["window_start"], "2026-08-01T00:00:00.000Z")
+        self.assertEqual(projected_row["pages_fetched"], 2)
+        self.assertTrue(projected_row["pagination_exhausted"])
+        self.assertFalse(projected_row["heartbeat"])
+        self.assertEqual(projected_row["terminal_state"], "ENUMERATED")
         proof = {
             "source_code": "OUTLOOK_FINANCE_ACQUISITION",
             "run_id": "run-new",
@@ -787,6 +798,89 @@ try {{
             {"Build Cursor CAS Update": {"json": built["output"][0]["json"]}},
         )
         self.assertTrue(compared["ok"], compared)
+
+    def test_outlook_raw_canonical_receipts_project_through_every_readback_route(self) -> None:
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        schema = {
+            column["name"]
+            for column in self.nodes("19-platform-data-table-bootstrap.json")[
+                "Create or Reuse finance_ingestion_state"
+            ]["parameters"]["columns"]["column"]
+        }
+        raw_row = {
+            "source_code": "OUTLOOK_FINANCE_ACQUISITION",
+            "receipt_run_id": "run-route",
+            "receipt_run_upper_bound": "2026-08-31T00:00:00.000Z",
+            "last_window_start": "2026-08-01T00:00:00.000Z",
+            "last_pages_fetched": 2,
+            "last_pagination_exhausted": True,
+            "last_heartbeat": False,
+            "last_terminal_state": "ENUMERATED",
+            "last_receipt_created_at": "2026-08-31T00:01:00.000Z",
+        }
+        self.assertTrue(set(raw_row).issubset(schema))
+        routes = {
+            "Project Enumeration Receipt Fields for Commit Resume": (
+                "Read Acquisition Receipt for Commit Resume",
+                "Validate Commit Resume State",
+            ),
+            "Project Enumeration Receipt Fields for Sweep": (
+                "Read Back ENUMERATED Receipt",
+                "Verify Receipt and Return Sweep",
+            ),
+            "Project Enumeration Receipt Fields for Terminal Commit": (
+                "Read Back Terminal Acquisition Receipt",
+                "Verify Terminal Acquisition Receipt",
+            ),
+            "Project Enumeration Receipt Fields for Replay": (
+                "Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
+                "Verify Replayed Terminal Acquisition Receipt",
+            ),
+            "Project Enumeration Receipt Fields for Existing Gate": (
+                "Read Existing ENUMERATED Receipt",
+                "Existing ENUMERATED Receipt Present",
+            ),
+            "Project Enumeration Receipt Fields for Archive": (
+                "Read Back ARCHIVED Acquisition Receipt",
+                "Verify ARCHIVED Acquisition Receipt",
+            ),
+            "Project Enumeration Receipt Fields for Verified Archive": (
+                "Read Back Verified ARCHIVED Receipt",
+                "Return Verified ARCHIVED Receipt",
+            ),
+        }
+        for projector, (readback, consumer) in routes.items():
+            with self.subTest(projector=projector):
+                self.assertEqual(
+                    workflow["connections"][readback]["main"][0][0]["node"],
+                    projector,
+                )
+                self.assertEqual(
+                    workflow["connections"][projector]["main"][0][0]["node"],
+                    consumer,
+                )
+                projected = self.run_exported_workflow_node(
+                    "12-outlook-message-sweep.json", projector, raw_row, {},
+                )
+                self.assertTrue(projected["ok"], projected)
+                output = projected["output"][0]["json"]
+                self.assertEqual(output["run_id"], raw_row["receipt_run_id"])
+                self.assertEqual(output["run_upper_bound"], raw_row["receipt_run_upper_bound"])
+                self.assertEqual(output["window_start"], raw_row["last_window_start"])
+                self.assertEqual(output["pages_fetched"], raw_row["last_pages_fetched"])
+                self.assertEqual(output["pagination_exhausted"], raw_row["last_pagination_exhausted"])
+                self.assertEqual(output["heartbeat"], raw_row["last_heartbeat"])
+                self.assertEqual(output["terminal_state"], raw_row["last_terminal_state"])
+                self.assertEqual(output["created_at"], raw_row["last_receipt_created_at"])
+
+        missing_state = self.run_exported_workflow_node(
+            "12-outlook-message-sweep.json",
+            "Project Enumeration Receipt Fields for Sweep",
+            {key: value for key, value in raw_row.items() if key != "last_terminal_state"},
+            {},
+        )
+        self.assertFalse(missing_state["ok"])
+        self.assertIn("ENUMERATION_RECEIPT_FIELD_MISSING:last_terminal_state", missing_state["error"])
 
     def test_email_identity_is_derived_after_authoritative_policy_binding(self) -> None:
         workflow = self.workflow("12-outlook-message-sweep.json")
@@ -1181,6 +1275,38 @@ try {{
             "concurrent-acquire", "expired-reacquire", "stale-token-before-import",
             "kill-after-prepared", "kill-after-actual-observed", "kill-after-verified",
         }.issubset(cases))
+
+    def test_actual_writer_routes_canonical_delta_artifact_fields_to_download(self) -> None:
+        workflow = self.workflow("20-actual-outbox-apply.json")
+        nodes = self.nodes("20-actual-outbox-apply.json")
+        self.assertEqual(
+            workflow["connections"]["Prepared Outbox Input"]["main"][0][0]["node"],
+            "Actual Writer Parameters",
+        )
+        self.assertEqual(
+            workflow["connections"]["Actual Writer Parameters"]["main"][0][0]["node"],
+            "Download Immutable Delta Artifact",
+        )
+        parameters = nodes["Actual Writer Parameters"]["parameters"]
+        self.assertFalse(parameters["includeOtherFields"])
+        assignments = {
+            row["name"]: row["value"]
+            for row in parameters["assignments"]["assignments"]
+        }
+        self.assertEqual(
+            assignments["delta_artifact_item_id"],
+            "={{ $json.delta_artifact_item_id }}",
+        )
+        self.assertEqual(
+            assignments["delta_artifact_etag"],
+            "={{ $json.delta_artifact_etag }}",
+        )
+        self.assertNotIn("artifact_item_id", assignments)
+        self.assertNotIn("artifact_etag", assignments)
+        self.assertEqual(
+            nodes["Download Immutable Delta Artifact"]["parameters"]["fileId"],
+            "={{ $json.delta_artifact_item_id }}",
+        )
 
     def test_committed_actual_replay_is_readback_only_and_rejects_stale_receipts(self) -> None:
         digest = "a" * 64

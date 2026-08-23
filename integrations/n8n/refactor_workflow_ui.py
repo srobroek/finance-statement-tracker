@@ -900,6 +900,28 @@ return candidates
             acquisition["connections"].pop(name, None)
 
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    receipt_projection = r"""
+const receipt = $json;
+for (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {
+  if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {
+    throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);
+  }
+}
+return [{ json: {
+  ...receipt,
+  run_id: receipt.receipt_run_id,
+  run_upper_bound: receipt.receipt_run_upper_bound,
+  window_start: receipt.last_window_start,
+  pages_fetched: receipt.last_pages_fetched,
+  pagination_exhausted: receipt.last_pagination_exhausted,
+  heartbeat: receipt.last_heartbeat,
+  terminal_state: receipt.last_terminal_state,
+  created_at: receipt.last_receipt_created_at,
+} }];
+""".strip()
+    for node in sweep["nodes"]:
+        if node["name"].startswith("Project Enumeration Receipt Fields"):
+            node["parameters"]["jsCode"] = receipt_projection
     freeze = node_by_name(sweep, "Freeze Trusted Cursor Window")
     freeze["parameters"]["jsCode"] = r"""
 const request = $json;
@@ -3113,7 +3135,7 @@ return [{
             ("lease_required", "boolean", True),
             ("exact_readback_required", "boolean", True),
         ],
-        [("outbox_row", "object"), ("manifest", "object"), ("verification", "object"), ("artifact_item_id", "string"), ("artifact_etag", "string")],
+        [("outbox_row", "object"), ("manifest", "object"), ("verification", "object"), ("delta_artifact_item_id", "string"), ("delta_artifact_etag", "string")],
     )
 
 

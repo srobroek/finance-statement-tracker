@@ -251,7 +251,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 89, "edges": 94, "sticky": 0, "groups": 15,
         "node_ids_sha256": "4bd78f583a8a7b9d6395be9a098a6f686fe3d0d18befa5b4d3b9a3c23d902170",
         "connections_sha256": "f669daf06dfafd9d68f3ac8ad9dd0b6d7adedce8eb6caa8d4e167323bb4f7afb",
-        "parameters_sha256": "a2b7be1dd94f0c50d8359248fd239715f7642d8851622d3ff69cf52dae9276e6",
+        "parameters_sha256": "c6596f746b20f0787318adf2fb2a9bb5df5a838818b167cf6c8103b895fc627c",
         "groups_sha256": "1f0bf9b095e69a55a7231219ea7a810cbb6794f0a9a8ad5160020314ff0e39ad",
     },
     "13-document-extraction-request.json": {
@@ -287,7 +287,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "20-actual-outbox-apply.json": {
         "nodes": 35, "sticky": 0,
         "node_ids_sha256": "5bb1af2a71279cdbed6cd8fc03f38ed402f686df3fca2df654a81dd598464c2a",
-        "parameters_sha256": "15c76c24204d15ac7c335419f89e13d5bf9711842e5dac50b934b9da533e4129",
+        "parameters_sha256": "177659990428667c1e8dc309f6454b1d12cdbb4bfb3ef711e6bcfca98b404e0c",
     },
     "21-subscription-agent-adapter.json": {
         "nodes": 8, "edges": 8, "sticky": 0, "groups": 1,

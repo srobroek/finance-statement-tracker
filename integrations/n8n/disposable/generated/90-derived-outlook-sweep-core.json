@@ -327,7 +327,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Commit Resume. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Commit Resume. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -340,7 +340,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -353,7 +353,7 @@
         3040
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Terminal Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Terminal Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -366,7 +366,7 @@
         3040
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Replay. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Replay. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -379,7 +379,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -392,7 +392,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -405,7 +405,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Verified Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nif (!receipt.receipt_run_id || !receipt.receipt_run_upper_bound)\n    throw new Error('ENUMERATION_RECEIPT_IDENTITY_MISSING');\nreturn [{ json: { ...receipt, run_id: receipt.receipt_run_id, run_upper_bound: receipt.receipt_run_upper_bound } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Verified Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {

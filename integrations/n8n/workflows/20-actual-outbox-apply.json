@@ -992,15 +992,15 @@
             },
             {
               "id": "config-4",
-              "name": "artifact_item_id",
+              "name": "delta_artifact_item_id",
               "type": "string",
-              "value": "={{ $json.artifact_item_id }}"
+              "value": "={{ $json.delta_artifact_item_id }}"
             },
             {
               "id": "config-5",
-              "name": "artifact_etag",
+              "name": "delta_artifact_etag",
               "type": "string",
-              "value": "={{ $json.artifact_etag }}"
+              "value": "={{ $json.delta_artifact_etag }}"
             },
             {
               "id": "config-6",

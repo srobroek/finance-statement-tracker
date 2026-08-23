@@ -256,8 +256,8 @@
             "outbox_row": "object",
             "manifest": "object",
             "verification": "object",
-            "artifact_item_id": "string",
-            "artifact_etag": "string"
+            "delta_artifact_item_id": "string",
+            "delta_artifact_etag": "string"
           },
           "fields": {
             "exact_readback_required": {
