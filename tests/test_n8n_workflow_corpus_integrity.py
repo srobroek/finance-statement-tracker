@@ -277,7 +277,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "18-finance-writer-lease.json": {
         "nodes": 7, "sticky": 0,
         "node_ids_sha256": "540ec1502e83accc5d6e45648b638799e80cc02cbede1f547087967ea9d158ab",
-        "parameters_sha256": "17b485660ae0b96cdcb2f198286640171c6f24bbec8dc95ec7a87a2e970b85da",
+        "parameters_sha256": "a79c5984c7e60c20059c46ad4509b1fbad1d11b47c531977a45d11755cc90b47",
     },
     "19-platform-data-table-bootstrap.json": {
         "nodes": 12, "sticky": 0,

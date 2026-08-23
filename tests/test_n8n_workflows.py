@@ -1516,15 +1516,26 @@ try {{
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
+        validator = next(node for node in workflow["nodes"] if node["name"] == "Validate Fixed Lease Operation")
+        self.assertNotIn("crypto.randomUUID", validator["parameters"]["jsCode"])
         postgres = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.postgres"]
         self.assertEqual(len(postgres), 3)
         queries = "\n".join(node["parameters"]["query"] for node in postgres)
         for function in ("finance_ops.acquire_writer_lease", "finance_ops.assert_writer_lease", "finance_ops.release_writer_lease"):
             self.assertIn(function, queries)
+        acquire = next(node for node in postgres if "acquire_writer_lease" in node["parameters"]["query"])
+        self.assertEqual(acquire["parameters"]["query"].count("$"), 3)
+        self.assertNotIn("$json.lease_id", acquire["parameters"]["options"]["queryReplacement"])
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(encoding="utf-8")
-        for term in ("ON CONFLICT (resource_key) DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
+        signature = migration[migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"):migration.index(") RETURNS TABLE", migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"))]
+        self.assertEqual(signature.count("text"), 2)
+        self.assertNotIn("p_lease_id", signature)
+        self.assertIn("gen_random_uuid()", migration)
+        self.assertIn("ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", migration)
+        self.assertIn("DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);", migration)
+        for term in ("ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
             self.assertIn(term, migration)
 
     def test_error_workflow_redacts_then_upserts_reads_compares_and_marks(self) -> None:

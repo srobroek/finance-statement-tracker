@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.\nconst r = $json, op = String(r.operation || '');\nif (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))\n    throw new Error('INVALID_LEASE_OPERATION');\nif (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))\n    throw new Error('INVALID_LEASE_RESOURCE');\nif (op === 'ACQUIRE') {\n    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))\n        throw new Error('INVALID_LEASE_OWNER');\n    const ttl = Number(r.ttl_seconds || 120);\n    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)\n        throw new Error('INVALID_LEASE_TTL');\n    return [{ json: { ...r, ttl_seconds: ttl, lease_id: crypto.randomUUID() } }];\n}\nif (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isInteger(Number(r.fencing_token)) || Number(r.fencing_token) <= 0)\n    throw new Error('INVALID_LEASE_TOKEN');\nreturn [{ json: { ...r, fencing_token: Number(r.fencing_token) } }];\n"
+        "jsCode": "// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.\nconst r = $json, op = String(r.operation || '');\nif (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))\n    throw new Error('INVALID_LEASE_OPERATION');\nif (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))\n    throw new Error('INVALID_LEASE_RESOURCE');\nif (op === 'ACQUIRE') {\n    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))\n        throw new Error('INVALID_LEASE_OWNER');\n    const ttl = Number(r.ttl_seconds || 120);\n    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)\n        throw new Error('INVALID_LEASE_TTL');\n    return [{ json: { ...r, ttl_seconds: ttl } }];\n}\nif (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isInteger(Number(r.fencing_token)) || Number(r.fencing_token) <= 0)\n    throw new Error('INVALID_LEASE_TOKEN');\nreturn [{ json: { ...r, fencing_token: Number(r.fencing_token) } }];\n"
       }
     },
     {
@@ -117,9 +117,9 @@
       "alwaysOutputData": true,
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM finance_ops.acquire_writer_lease($1::text, $2::uuid, $3::text, $4::integer);",
+        "query": "SELECT * FROM finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer);",
         "options": {
-          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.lease_owner, $json.ttl_seconds] }}"
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds] }}"
         }
       },
       "credentials": {
