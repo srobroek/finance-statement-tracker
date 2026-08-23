@@ -88,6 +88,49 @@ MONTHLY_SHARED_CALLER_SCHEMA = [
 ]
 
 
+def compact_policy_resolver(node: dict[str, object]) -> None:
+    """Keep the generated policy bundle readable to n8n's code-node linter.
+
+    The bundle is intentionally embedded in the workflow so the resolver does
+    not depend on a filesystem mount at runtime.  Escaping the JSON as short
+    JavaScript string chunks keeps each source line below the renderer's
+    maximum while preserving the exact bundle rows and filter logic.
+    """
+    parameters = node.get("parameters")
+    if not isinstance(parameters, dict):
+        raise RuntimeError("W09 policy resolver is missing parameters")
+    code = parameters.get("jsCode")
+    if not isinstance(code, str):
+        raise RuntimeError("W09 policy resolver is missing jsCode")
+    marker = "const rows = "
+    start = code.find(marker)
+    if start < 0:
+        raise RuntimeError("W09 policy resolver lost its rows declaration")
+    rows_start = start + len(marker)
+    if not code.startswith("[", rows_start):
+        # The renderer is deterministic and may run repeatedly.  A resolver
+        # already emitted as JSON.parse chunks is already in canonical form.
+        if code.startswith("JSON.parse(", rows_start):
+            return
+        raise RuntimeError("W09 policy resolver rows are not a JSON array")
+    rows_end = code.find("].filter", rows_start)
+    if rows_end < 0:
+        raise RuntimeError("W09 policy resolver lost its row filter")
+    rows_end += 1
+    try:
+        rows = json.loads(code[rows_start:rows_end])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("W09 policy resolver rows are not valid JSON") from exc
+    serialized = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+    chunks = [serialized[index : index + 220] for index in range(0, len(serialized), 220)]
+    literals = "\n".join(
+        ("    " if index == 0 else "    + ") + json.dumps(chunk, ensure_ascii=False)
+        for index, chunk in enumerate(chunks)
+    )
+    replacement = "const rows = JSON.parse(\n" + literals + "\n)"
+    parameters["jsCode"] = code[:start] + replacement + code[rows_end:]
+
+
 def monthly_shared_trigger_parameters() -> dict:
     """Return the native Execute Workflow trigger input declaration."""
     return {"workflowInputs": {"values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))}}
@@ -128,6 +171,33 @@ OPERATOR_WARNING_NOTE_IDS = {
     "10000000-0000-4000-8000-000000000015-generated-note-1",
 }
 
+# Legacy field aliases are incompatible with the canonical four-table runtime:
+# each workflow must consume and emit the target schema directly.  Strip stale
+# blocks left by an interrupted migration before formatting generated exports.
+STATE_ALIAS_BLOCK = """if ($json && typeof $json === 'object') {
+    const __stateAliases = {
+        run_id: 'committed_run_id',
+        window_start: 'last_window_start',
+        pages_fetched: 'last_pages_fetched',
+        pagination_exhausted: 'last_pagination_exhausted',
+        heartbeat: 'last_heartbeat',
+        terminal_state: 'last_terminal_state',
+        created_at: 'last_receipt_created_at',
+    };
+    for (const [__legacy, __canonical] of Object.entries(__stateAliases)) {
+        if ($json[__legacy] === undefined && $json[__canonical] !== undefined)
+            $json[__legacy] = $json[__canonical];
+    }
+}
+"""
+SHORT_STATE_ALIAS_BLOCK = """if ($json && typeof $json === 'object') {
+    const aliases = { run_id: 'committed_run_id', window_start: 'last_window_start', pagination_exhausted: 'last_pagination_exhausted', terminal_state: 'last_terminal_state' };
+    for (const [legacy, canonical] of Object.entries(aliases))
+        if ($json[legacy] === undefined && $json[canonical] !== undefined)
+            $json[legacy] = $json[canonical];
+}
+"""
+
 FORMATTER = r"""
 const fs = require('fs');
 const ts = require(process.argv[1]);
@@ -155,11 +225,23 @@ def format_code_nodes(workflows: list[dict]) -> None:
     payload = []
     for node in nodes:
         code = node["parameters"]["jsCode"]
+        code = code.replace(STATE_ALIAS_BLOCK, "").replace(SHORT_STATE_ALIAS_BLOCK, "")
+        # Purpose comments are renderer-owned.  Remove any stale copies even
+        # when a prior migration inserted code between two generated headers.
         code = re.sub(
-            r"^(?:// Purpose: .*? Keep this deterministic and fail closed\.\r?\n)+",
+            r"(?m)^// Purpose: .*? Keep this deterministic and fail closed\.\r?\n",
             "",
             code,
         )
+        purpose_seen = False
+        cleaned_lines = []
+        for line in code.splitlines():
+            if line.startswith("// Purpose:"):
+                if purpose_seen:
+                    continue
+                purpose_seen = True
+            cleaned_lines.append(line)
+        code = "\n".join(cleaned_lines) + ("\n" if code.endswith("\n") else "")
         payload.append({"name": node["name"], "code": code})
     completed = subprocess.run(
         ["node", "-e", FORMATTER, str(TYPESCRIPT)],
@@ -3963,11 +4045,23 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     )
     prepare["parameters"]["jsCode"] = prepare_code
 
-    policy_read = json.loads(json.dumps(node_by_name(w09, "Read Active Server AI Policy Contract")))
+    policy_source = node_by_name(w09, "Read Active Server AI Policy Contract")
+    compact_policy_resolver(policy_source)
+    policy_read = json.loads(json.dumps(policy_source))
     policy_read["id"] = "12082"
     policy_read["name"] = "Read Active W09 Email Policy Contract"
     policy_read["position"] = [-240, 2860]
-    policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+    if policy_read["type"] == "n8n-nodes-base.dataTable":
+        policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+    elif policy_read["type"] == "n8n-nodes-base.code":
+        policy_code = policy_read["parameters"].get("jsCode", "")
+        policy_code = policy_code.replace(
+            "$('Validate Untrusted Proposal Request').first().json",
+            "$('Prepare W21 Email Request').first().json",
+        )
+        policy_read["parameters"]["jsCode"] = policy_code
+    else:
+        raise RuntimeError("W09 policy resolver must be a Data Table or generated Code node")
 
     policy_builder = json.loads(json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job")))
     policy_builder["id"] = "12083"

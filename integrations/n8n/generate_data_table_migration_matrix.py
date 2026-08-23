@@ -678,9 +678,24 @@ def json_paths() -> list[Path]:
 
 
 def source_ref() -> str:
-    """Return the latest commit that changed the scanned source corpus."""
+    """Return the latest committed source ref before the current commit.
+
+    The matrix and its source changes are committed together. Excluding the
+    current commit prevents the generated provenance field from hashing its
+    own commit cycle while remaining stable after the branch is landed.
+    """
+    try:
+        base_ref = subprocess.run(
+            ["git", "rev-parse", "HEAD^"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        base_ref = "HEAD"
     commit = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", *SOURCE_REF_PATHS],
+        ["git", "log", "-1", "--format=%H", base_ref, "--", *SOURCE_REF_PATHS],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -702,8 +717,8 @@ def source_snapshot() -> dict[str, str]:
         "data_tables_sha256": sha256_bytes(normalized_bytes(DATA_TABLES)),
         "node_scan_corpus_sha256": corpus,
         "source_ref_selection": (
-            "Latest git commit touching data-tables.json and the scan-root directories; "
-            "generator, schema, matrix output, and tests are excluded."
+            "Latest parent git commit touching data-tables.json and the scan-root directories; "
+            "the current source-and-generator commit is excluded to avoid a provenance cycle."
         ),
         "node_scan_digest_method": (
             "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete "
@@ -733,6 +748,16 @@ def _string(value: Any, label: str) -> str:
 
 def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     columns_by_table = {table["name"]: table["columns"] for table in source_tables}
+    # Canonical target tables are executable runtime contracts, not legacy
+    # migration inputs. Validate their Data Table parameters here while
+    # keeping them out of the source-column coverage counts below.
+    target_columns_by_table = {
+        target: {
+            field: definition["type"]
+            for field, definition in schema["columns"].items()
+        }
+        for target, schema in TARGET_SCHEMAS.items()
+    }
     references: dict[str, list[dict[str, Any]]] = {name: [] for name in columns_by_table}
     for path in json_paths():
         payload = json.loads(normalized_bytes(path))
@@ -789,6 +814,30 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 if not isinstance(table_id, dict) or table_id.get("mode") != "name":
                     raise MatrixError(f"{relative}#{name} must use a named Data Table reference")
                 table_name = _string(table_id.get("value"), f"{relative}#{name} dataTableId")
+                if table_name in target_columns_by_table:
+                    target_columns = target_columns_by_table[table_name]
+                    columns_value = parameters.get("columns", {}).get("value", {})
+                    if operation in {"insert", "upsert", "update"} and not isinstance(columns_value, dict):
+                        raise MatrixError(f"{relative}#{name} target write columns must be an object")
+                    write_columns = (
+                        sorted(columns_value)
+                        if operation in {"insert", "upsert", "update"}
+                        else []
+                    )
+                    if any(column not in target_columns for column in write_columns):
+                        raise MatrixError(f"{relative}#{name} writes an undeclared canonical target column")
+                    conditions = parameters.get("filters", {}).get("conditions", [])
+                    if not isinstance(conditions, list):
+                        raise MatrixError(f"{relative}#{name} target filter conditions must be a list")
+                    for condition in conditions:
+                        if not isinstance(condition, dict):
+                            raise MatrixError(f"{relative}#{name} has a malformed target filter condition")
+                        key = _string(condition.get("keyName"), f"{relative}#{name} target filter key")
+                        if key not in target_columns:
+                            raise MatrixError(f"{relative}#{name} filters on an undeclared canonical target column")
+                    # Canonical runtime references are validated but are not
+                    # assigned to a preserved legacy source table.
+                    continue
                 if operation == "get":
                     read_columns = ["*"]
                 else:

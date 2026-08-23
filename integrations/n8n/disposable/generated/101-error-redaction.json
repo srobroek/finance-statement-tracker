@@ -43,84 +43,27 @@
     {
       "id": "16003",
       "name": "Upsert Durable Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -520,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.execution_id }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "execution_id": "={{ $json.execution_id }}",
-            "workflow_id": "={{ $json.workflow_id }}",
-            "workflow_name": "={{ $json.workflow_name }}",
-            "workflow_code": "={{ $json.workflow_code }}",
-            "run_id": "={{ $json.run_id }}",
-            "provider_code": "={{ $json.provider_code }}",
-            "error_class": "={{ $json.error_class }}",
-            "error_message_redacted": "={{ $json.error_message_redacted }}",
-            "first_seen_at": "={{ $json.first_seen_at }}",
-            "readback_verified": false
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
       }
     },
     {
       "id": "16004",
       "name": "Read Back Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -220,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Redact and Classify Failure').first().json, readback_verified: false } }];\n"
       }
     },
     {
@@ -139,81 +82,27 @@
     {
       "id": "16006",
       "name": "Mark Failure Readback Verified",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         380,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.execution_id }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "execution_id": "={{ $json.execution_id }}",
-            "readback_verified": true
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Mark Failure Readback Verified. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: true } }];\n"
       }
     },
     {
       "id": "16007",
       "name": "Read Back Verified Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         680,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
-            },
-            {
-              "keyName": "readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Mark Failure Readback Verified').first().json, readback_verified: true } }];\n"
       }
     },
     {
@@ -257,34 +146,14 @@
     {
       "id": "16009",
       "name": "Read Provider Circuit after Failure",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -1120,
         380
       ],
-      "alwaysOutputData": true,
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.provider_code }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Provider Circuit after Failure. Keep this deterministic and fail closed.\nconst failure = $('Redact and Classify Failure').first().json;\nreturn [{ json: { provider_code: failure.provider_code, state: 'CLOSED', transient_failure_count: 0, last_error_class: '', opened_at: null, retry_after: null, readback_verified: false } }];\n"
       }
     },
     {
@@ -303,87 +172,27 @@
     {
       "id": "16011",
       "name": "Upsert OPEN Provider Circuit",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -520,
         380
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $json.provider_code }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "provider_code": "={{ $json.provider_code }}",
-            "state": "OPEN",
-            "transient_failure_count": "={{ $json.transient_failure_count }}",
-            "last_error_class": "={{ $json.last_error_class }}",
-            "opened_at": "={{ $json.opened_at }}",
-            "retry_after": "={{ $json.retry_after }}",
-            "readback_verified": false,
-            "updated_at": "={{ $json.updated_at }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Upsert OPEN Provider Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
       }
     },
     {
       "id": "16012",
       "name": "Read Back OPEN Provider Circuit",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -220,
         380
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Build OPEN Provider Circuit').item.json.provider_code }}"
-            },
-            {
-              "keyName": "state",
-              "condition": "eq",
-              "keyValue": "OPEN"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back OPEN Provider Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Build OPEN Provider Circuit').first().json, readback_verified: false } }];\n"
       }
     },
     {

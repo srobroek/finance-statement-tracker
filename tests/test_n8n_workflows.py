@@ -581,10 +581,13 @@ try {{
                 value = node.get("parameters", {}).get("dataTableId", {}).get("value")
                 if value:
                     referenced.add(value)
-        declared = {row["name"] for row in self.tables["tables"]}
-        # W19 no longer creates or seeds the retired config table; preserved
-        # source tables may therefore have no connected runtime node.
-        self.assertEqual(referenced, declared - {"finance_config_versions"})
+        self.assertIn("finance_ingestion_state", referenced)
+        self.assertIn("finance_actual_batches", referenced)
+        self.assertIn("finance_ai_reviews", referenced)
+        self.assertNotIn("finance_acquisition_receipts", referenced)
+        self.assertNotIn("finance_actual_outbox", referenced)
+        self.assertNotIn("finance_execution_failures", referenced)
+        self.assertNotIn("finance_ai_policy_contracts", referenced)
 
     def test_outbox_holds_only_pointer_hash_and_state_metadata(self) -> None:
         table = next(row for row in self.tables["tables"] if row["name"] == "finance_actual_outbox")
@@ -615,7 +618,9 @@ try {{
         self.assertTrue(workflow["meta"]["aggregateOutputAlwaysOne"])
         self.assertTrue(workflow["meta"]["cursorCommitExactlyOnce"])
         self.assertTrue(workflow["meta"]["cursorAdvanceRequiresDownstreamReceipt"])
-        self.assertIn("finance_acquisition_receipts", json.dumps(nodes["Upsert ENUMERATED Receipt"]))
+        receipt_node = json.dumps(nodes["Upsert ENUMERATED Receipt"])
+        self.assertIn("finance_ingestion_state", receipt_node)
+        self.assertNotIn("finance_acquisition_receipts", receipt_node)
         self.assertEqual(nodes["CAS Update Source Cursor"]["parameters"]["operation"], "update")
         cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
@@ -867,8 +872,8 @@ try {{
         nodes = self.nodes("03-shared-statement-pipeline.json")
         connections = workflow["connections"]
         prepare_code = nodes["Prepare Outbox Intent"]["parameters"]["jsCode"]
-        self.assertIn("outbox_id: `statement:${source.document_sha256}`", prepare_code)
-        self.assertNotIn("outbox_id: `${source.run_id}:${source.document_sha256}`", prepare_code)
+        self.assertIn("idempotency_key = `statement:${source.document_sha256}`", prepare_code)
+        self.assertNotIn("idempotency_key = `${source.run_id}:${source.document_sha256}`", prepare_code)
         self.assertTrue(nodes["Read Back Existing Actual Outbox"]["alwaysOutputData"])
         self.assertEqual(
             connections["Prepare Outbox Intent"]["main"][0][0]["node"],
@@ -888,19 +893,19 @@ try {{
         )
         digest = "a" * 64
         draft = {
-            "outbox_id": "retry-run:new-outbox",
-            "imported_id": "statement:payload",
+            "batch_id": "retry-run:new-outbox",
+            "idempotency_key": "statement:payload",
             "actual_file_id": "actual-file:replay",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
-            "payload_sha256": digest,
+            "delta_sha256": digest,
             "start_date": "2026-08-01",
             "end_date": "2026-08-31",
             "state": "PREPARED",
         }
         existing = {
             **draft,
-            "outbox_id": "statement:stable-existing",
+            "batch_id": "statement:stable-existing",
             "state": "COMMITTED",
             "lease_owner": "n8n:recovery:statement:stable-existing",
             "lease_fence": 9,
@@ -915,7 +920,7 @@ try {{
         selected_row = selected["output"][0]["json"]
         self.assertTrue(selected_row["existing_outbox_replay"])
         self.assertEqual(selected_row["state"], "COMMITTED")
-        self.assertEqual(selected_row["outbox_id"], "statement:stable-existing")
+        self.assertEqual(selected_row["batch_id"], "statement:stable-existing")
         self.assertEqual(selected_row["lease_fence"], 9)
         fresh = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
@@ -928,13 +933,13 @@ try {{
         stale = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
             "Select Existing Outbox Or Prepare",
-            {**existing, "payload_sha256": "b" * 64},
+            {**existing, "delta_sha256": "b" * 64},
             {"Prepare Outbox Intent": {"json": draft}},
         )
         self.assertFalse(stale["ok"])
 
         receipt = {
-            "outbox_id": "statement:stable-existing",
+            "batch_id": "statement:stable-existing",
             "actual_file_id": "actual-file:replay",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
@@ -962,6 +967,11 @@ try {{
                 }},
                 "Read Back COMMITTED Recovery Replay": {"json": selected_row},
                 "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+                "Build Recovery Fence Release": {"json": {
+                    "resource_key": "actual:actual-file:replay",
+                    "lease_owner": "n8n:recovery:statement:stable-existing",
+                    "fencing_token": 9,
+                }},
                 "Read Back Released Recovery Writer Fence Replay": {"json": {
                     "resource_key": "actual:actual-file:replay",
                     "lease_owner": "n8n:recovery:statement:stable-existing",
@@ -996,14 +1006,15 @@ try {{
     def test_committed_actual_replay_is_readback_only_and_rejects_stale_receipts(self) -> None:
         digest = "a" * 64
         committed = {
-            "outbox_id": "outbox:replay-1",
+            "batch_id": "outbox:replay-1",
+            "idempotency_key": "outbox:replay-1",
             "actual_file_id": "actual-file:replay-1",
             "state": "COMMITTED",
             "lease_owner": "n8n:recovery:outbox:replay-1",
             "lease_fence": 7,
         }
         receipt = {
-            "outbox_id": "outbox:replay-1",
+            "batch_id": "outbox:replay-1",
             "actual_file_id": "actual-file:replay-1",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
@@ -1036,6 +1047,11 @@ try {{
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+            "Build Recovery Fence Release": {"json": {
+                "resource_key": "actual:actual-file:replay-1",
+                "lease_owner": "n8n:recovery:outbox:replay-1",
+                "fencing_token": 7,
+            }},
             "Read Back Released Recovery Writer Fence Replay": {"json": {
                 "resource_key": "actual:actual-file:replay-1",
                 "lease_owner": "n8n:recovery:outbox:replay-1",
@@ -1255,7 +1271,9 @@ try {{
         response = nodes["Validate Proposal Schema and Policy Boundary"]["parameters"]["jsCode"]
         for forbidden in ("agent_profile", "policy_sha256", "config_sha256", "output_schema_sha256"):
             self.assertIn(f"'{forbidden}'", untrusted)
-        self.assertIn("finance_ai_policy_contracts", json.dumps(nodes["Read Active Server AI Policy Contract"]))
+        policy_node = json.dumps(nodes["Read Active Server AI Policy Contract"])
+        self.assertIn("application-contract-bundle.json", policy_node)
+        self.assertNotIn("finance_ai_policy_contracts", policy_node)
         compact_validation = re.sub(r"\s+", "", validation)
         self.assertIn("LUNA_MAX:'NORMAL'", compact_validation)
         self.assertIn("SOL_MEDIUM:'EXCEPTION'", compact_validation)
@@ -1945,7 +1963,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(sol["default_execution_forbidden"])
         self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
         self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
-        self.assertEqual(scenarios["error_redaction"]["receipt_table"], "finance_execution_failures")
+        self.assertEqual(scenarios["error_redaction"]["receipt_sink"], "n8n_execution_history")
         self.assertEqual(
             set(manifest["blocked_runtime_scenarios"]),
             {
@@ -2528,7 +2546,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
         manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31", "card_code": "EI_AMAZON"}
         actual = {
-            "outbox_id": "outbox:ei-2026-08",
+            "batch_id": "outbox:ei-2026-08",
             "actual_file_id": "actual-file-1",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",

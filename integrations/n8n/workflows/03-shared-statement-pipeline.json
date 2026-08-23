@@ -290,7 +290,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Durable Canonical Delta. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Canonical Delta').first().json.canonical_delta_sha256, observed = $json.readback_sha256, upload = $('Archive Canonical Delta in OneDrive').first().json;\nif (!expected || expected !== observed || !upload.id)\n    throw new Error('CANONICAL_DELTA_ARCHIVE_READBACK_FAILED');\nreturn [{ json: { artifact_item_id: String(upload.id), artifact_etag: String(upload.eTag || upload.etag || ''), artifact_sha256: expected, artifact_schema_version: 'actual-delta-v1' } }];\n"
+        "jsCode": "// Purpose: Verify Durable Canonical Delta. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Canonical Delta').first().json.canonical_delta_sha256, observed = $json.readback_sha256, upload = $('Archive Canonical Delta in OneDrive').first().json;\nif (!expected || expected !== observed || !upload.id)\n    throw new Error('CANONICAL_DELTA_ARCHIVE_READBACK_FAILED');\nreturn [{ json: { delta_artifact_item_id: String(upload.id), delta_artifact_etag: String(upload.eTag || upload.etag || ''), artifact_sha256: expected, delta_schema_version: 'actual-delta-v1' } }];\n"
       }
     },
     {
@@ -303,7 +303,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nreturn [{ json: { outbox_id: `statement:${source.document_sha256}`, run_id: source.run_id, imported_id: `statement:${source.document_sha256}`, actual_file_id: source.actual_file_id, payload_sha256: a.artifact_sha256, artifact_item_id: a.artifact_item_id, artifact_etag: a.artifact_etag, artifact_schema_version: a.artifact_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, card_code: source.card_code, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
+        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nconst idempotency_key = `statement:${source.document_sha256}`;\nreturn [{ json: { batch_id: idempotency_key, run_id: source.run_id, idempotency_key, actual_file_id: source.actual_file_id, delta_sha256: a.artifact_sha256, delta_artifact_item_id: a.delta_artifact_item_id, delta_artifact_etag: a.delta_artifact_etag, delta_schema_version: a.delta_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, card_code: source.card_code, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
       }
     },
     {
@@ -320,37 +320,37 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_actual_outbox",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "imported_id",
+              "keyName": "idempotency_key",
               "condition": "eq",
-              "keyValue": "={{ $json.imported_id }}"
+              "keyValue": "={{ $json.idempotency_key }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "outbox_id": "={{ $json.outbox_id }}",
+            "batch_id": "={{ $json.batch_id }}",
             "run_id": "={{ $json.run_id }}",
-            "imported_id": "={{ $json.imported_id }}",
             "actual_file_id": "={{ $json.actual_file_id }}",
-            "payload_sha256": "={{ $json.payload_sha256 }}",
-            "artifact_item_id": "={{ $json.artifact_item_id }}",
-            "artifact_etag": "={{ $json.artifact_etag }}",
-            "artifact_schema_version": "={{ $json.artifact_schema_version }}",
+            "delta_sha256": "={{ $json.delta_sha256 }}",
+            "delta_artifact_item_id": "={{ $json.delta_artifact_item_id }}",
+            "delta_artifact_etag": "={{ $json.delta_artifact_etag }}",
+            "delta_schema_version": "={{ $json.delta_schema_version }}",
             "config_version": "={{ $json.config_version }}",
             "parser_version": "={{ $json.parser_version }}",
             "account_id": "={{ $json.account_id }}",
             "card_code": "={{ $json.card_code }}",
             "state": "PREPARED",
             "attempt_count": 0,
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "idempotency_key": "={{ $json.idempotency_key }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -377,7 +377,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_actual_outbox",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "returnAll": false,
@@ -386,9 +386,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "imported_id",
+              "keyName": "idempotency_key",
               "condition": "eq",
-              "keyValue": "={{ $('Prepare Outbox Intent').first().json.imported_id }}"
+              "keyValue": "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}"
             }
           ]
         },
@@ -418,7 +418,7 @@
         980
       ],
       "parameters": {
-        "jsCode": "// Purpose: Select Existing Outbox Or Prepare. Keep this deterministic and fail closed.\nconst draft = $('Prepare Outbox Intent').first().json;\nconst existing = $json || {};\nconst state = String(existing.state || '').trim().toUpperCase();\nconst states = new Set(['PREPARED', 'ACTUAL_OBSERVED', 'VERIFIED', 'COMMITTED']);\nif (!state)\n    return [{ json: { ...draft, existing_outbox_replay: false } }];\nif (!states.has(state))\n    throw new Error('ACTUAL_OUTBOX_STATE_INVALID');\nconst exact = ['imported_id', 'actual_file_id', 'account_id', 'card_code', 'payload_sha256'];\nfor (const field of exact) {\n    if (String(existing[field] ?? '').trim() !== String(draft[field] ?? '').trim())\n        throw new Error('ACTUAL_OUTBOX_IDENTITY_MISMATCH:' + field);\n}\nreturn [{ json: { ...draft, ...existing, existing_outbox_replay: true } }];\n"
+        "jsCode": "// Purpose: Select Existing Outbox Or Prepare. Keep this deterministic and fail closed.\nconst draft = $('Prepare Outbox Intent').first().json;\nconst existing = $json || {};\nconst state = String(existing.state || '').trim().toUpperCase();\nconst states = new Set(['PREPARED', 'ACTUAL_OBSERVED', 'VERIFIED', 'COMMITTED']);\nif (!state)\n    return [{ json: { ...draft, existing_outbox_replay: false } }];\nif (!states.has(state))\n    throw new Error('ACTUAL_OUTBOX_STATE_INVALID');\nconst exact = ['idempotency_key', 'actual_file_id', 'account_id', 'card_code', 'delta_sha256'];\nfor (const field of exact) {\n    if (String(existing[field] ?? '').trim() !== String(draft[field] ?? '').trim())\n        throw new Error('ACTUAL_OUTBOX_IDENTITY_MISMATCH:' + field);\n}\nreturn [{ json: { ...draft, ...existing, existing_outbox_replay: true } }];\n"
       }
     },
     {
@@ -492,7 +492,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_actual_outbox",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "returnAll": false,
@@ -501,9 +501,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "outbox_id",
+              "keyName": "batch_id",
               "condition": "eq",
-              "keyValue": "={{ $('Prepare Outbox Intent').item.json.outbox_id }}"
+              "keyValue": "={{ $('Prepare Outbox Intent').item.json.batch_id }}"
             },
             {
               "keyName": "state",
@@ -556,7 +556,7 @@
             "trigger_kind": "={{ $('Verify Archive and Execution Context').item.json.trigger_kind }}",
             "config_version": "={{ $('Verify Archive and Execution Context').item.json.config_version }}",
             "state": "SUCCEEDED",
-            "receipt_sha256": "={{ $('Validate Statement Reconciliation and IDs').item.json.payload_sha256 || $('Verify Archive and Execution Context').item.json.document_sha256 }}",
+            "receipt_sha256": "={{ $('Validate Statement Reconciliation and IDs').item.json.delta_sha256 || $('Verify Archive and Execution Context').item.json.document_sha256 }}",
             "terminal_readback_verified": false,
             "completed_at": "={{ $now.toISO() }}",
             "updated_at": "={{ $now.toISO() }}"
@@ -770,7 +770,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Trusted Cashback Finalization. Keep this deterministic and fail closed.\nconst source = $('Verify Archive and Execution Context').first().json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst actual = $json;\nconst text = value => String(value ?? '').trim();\nconst required = ['outbox_id', 'actual_file_id', 'account_id', 'card_code', 'state', 'verification_version', 'period_start', 'period_end', 'expected_payload_sha256', 'observed_payload_sha256', 'invariants_passed', 'verified_at'];\nfor (const field of required) {\n    if (actual[field] === undefined || actual[field] === null || actual[field] === '')\n        throw new Error(`ACTUAL_CLOSE_RECEIPT_MISSING:${field}`);\n}\nif (actual.state !== 'COMMITTED' || actual.writer_release_verified !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_STALE');\nif (text(actual.actual_file_id) !== text(source.actual_file_id) || text(actual.account_id).toUpperCase() !== text(source.account_id).toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_ACCOUNT_MISMATCH');\nconst cardCode = text(source.card_code);\nif (!cardCode || !text(actual.card_code) || text(actual.card_code).toUpperCase() !== cardCode.toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_CARD_MISMATCH');\nif (text(actual.period_start) !== text(manifest.period_start) || text(actual.period_end) !== text(manifest.period_end))\n    throw new Error('ACTUAL_CLOSE_RECEIPT_PERIOD_MISMATCH');\nif (!/^[a-f0-9]{64}$/i.test(text(actual.expected_payload_sha256)) || !/^[a-f0-9]{64}$/i.test(text(actual.observed_payload_sha256)) || text(actual.expected_payload_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_DIGEST_MISMATCH');\nif (actual.invariants_passed !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_INVARIANTS_FAILED');\nconst receipt = {\n    account_id: text(actual.account_id),\n    actual_file_id: text(actual.actual_file_id),\n    card_code: cardCode,\n    expected_account_balance: actual.expected_account_balance ?? null,\n    expected_amount_sum_minor: actual.expected_amount_sum_minor ?? null,\n    expected_count: actual.expected_count ?? null,\n    expected_payload_sha256: text(actual.expected_payload_sha256).toLowerCase(),\n    invariants_passed: true,\n    observed_account_balance: actual.observed_account_balance ?? null,\n    observed_amount_sum_minor: actual.observed_amount_sum_minor ?? null,\n    observed_count: actual.observed_count ?? null,\n    observed_payload_sha256: text(actual.observed_payload_sha256).toLowerCase(),\n    outbox_id: text(actual.outbox_id),\n    period_end: text(actual.period_end),\n    period_start: text(actual.period_start),\n    state: 'COMMITTED',\n    verification_version: Number(actual.verification_version),\n    verified_at: text(actual.verified_at),\n    writer_release_verified: true,\n};\n// The native Convert to File and Crypto nodes below calculate this digest. The draft never authenticates itself.\nconst actual_import_receipt_sha256 = undefined;\nconst statement_sha256 = text(statement.statement_sha256 || statement.document_sha256 || source.document_sha256);\nif (!/^[a-f0-9]{64}$/i.test(statement_sha256))\n    throw new Error('CASHBACK_CLOSE_STATEMENT_DIGEST_INVALID');\nconst statement_reference = text(statement.statement_reference || source.statement_reference) || `statement:${source.source_code}:${source.document_sha256}`;\nconst statement_evidence_reference = text(statement.statement_evidence_reference || source.statement_evidence_reference) || `onedrive:${source.onedrive_item_id}:${source.document_sha256}`;\nconst statement_document_url = text(statement.statement_document_url || source.statement_document_url) || `onedrive-item:${source.onedrive_item_id}`;\nconst cashback_finalization = { statement_reference, statement_sha256, statement_evidence_reference, statement_document_url, actual_import_receipt: receipt, actual_import_receipt_sha256 };\nreturn [{ json: { ...actual, cashback_finalization, actual_import_receipt: receipt, actual_import_receipt_sha256 } }];\n"
+        "jsCode": "// Purpose: Build Trusted Cashback Finalization. Keep this deterministic and fail closed.\nconst source = $('Verify Archive and Execution Context').first().json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst actual = $json;\nconst text = value => String(value ?? '').trim();\nconst required = ['batch_id', 'actual_file_id', 'account_id', 'card_code', 'state', 'verification_version', 'period_start', 'period_end', 'expected_payload_sha256', 'observed_payload_sha256', 'invariants_passed', 'verified_at'];\nfor (const field of required) {\n    if (actual[field] === undefined || actual[field] === null || actual[field] === '')\n        throw new Error(`ACTUAL_CLOSE_RECEIPT_MISSING:${field}`);\n}\nif (actual.state !== 'COMMITTED' || actual.writer_release_verified !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_STALE');\nif (text(actual.actual_file_id) !== text(source.actual_file_id) || text(actual.account_id).toUpperCase() !== text(source.account_id).toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_ACCOUNT_MISMATCH');\nconst cardCode = text(source.card_code);\nif (!cardCode || !text(actual.card_code) || text(actual.card_code).toUpperCase() !== cardCode.toUpperCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_CARD_MISMATCH');\nif (text(actual.period_start) !== text(manifest.period_start) || text(actual.period_end) !== text(manifest.period_end))\n    throw new Error('ACTUAL_CLOSE_RECEIPT_PERIOD_MISMATCH');\nif (!/^[a-f0-9]{64}$/i.test(text(actual.expected_payload_sha256)) || !/^[a-f0-9]{64}$/i.test(text(actual.observed_payload_sha256)) || text(actual.expected_payload_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('ACTUAL_CLOSE_RECEIPT_DIGEST_MISMATCH');\nif (actual.invariants_passed !== true)\n    throw new Error('ACTUAL_CLOSE_RECEIPT_INVARIANTS_FAILED');\nconst receipt = {\n    account_id: text(actual.account_id),\n    actual_file_id: text(actual.actual_file_id),\n    card_code: cardCode,\n    expected_account_balance: actual.expected_account_balance ?? null,\n    expected_amount_sum_minor: actual.expected_amount_sum_minor ?? null,\n    expected_count: actual.expected_count ?? null,\n    expected_payload_sha256: text(actual.expected_payload_sha256).toLowerCase(),\n    invariants_passed: true,\n    observed_account_balance: actual.observed_account_balance ?? null,\n    observed_amount_sum_minor: actual.observed_amount_sum_minor ?? null,\n    observed_count: actual.observed_count ?? null,\n    observed_payload_sha256: text(actual.observed_payload_sha256).toLowerCase(),\n    batch_id: text(actual.batch_id),\n    period_end: text(actual.period_end),\n    period_start: text(actual.period_start),\n    state: 'COMMITTED',\n    verification_version: Number(actual.verification_version),\n    verified_at: text(actual.verified_at),\n    writer_release_verified: true,\n};\n// The native Convert to File and Crypto nodes below calculate this digest. The draft never authenticates itself.\nconst actual_import_receipt_sha256 = undefined;\nconst statement_sha256 = text(statement.statement_sha256 || statement.document_sha256 || source.document_sha256);\nif (!/^[a-f0-9]{64}$/i.test(statement_sha256))\n    throw new Error('CASHBACK_CLOSE_STATEMENT_DIGEST_INVALID');\nconst statement_reference = text(statement.statement_reference || source.statement_reference) || `statement:${source.source_code}:${source.document_sha256}`;\nconst statement_evidence_reference = text(statement.statement_evidence_reference || source.statement_evidence_reference) || `onedrive:${source.onedrive_item_id}:${source.document_sha256}`;\nconst statement_document_url = text(statement.statement_document_url || source.statement_document_url) || `onedrive-item:${source.onedrive_item_id}`;\nconst cashback_finalization = { statement_reference, statement_sha256, statement_evidence_reference, statement_document_url, actual_import_receipt: receipt, actual_import_receipt_sha256 };\nreturn [{ json: { ...actual, cashback_finalization, actual_import_receipt: receipt, actual_import_receipt_sha256 } }];\n"
       }
     },
     {

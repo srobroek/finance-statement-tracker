@@ -129,6 +129,56 @@ def wrapper(workflow_id: str, name: str, input_js: str, target_id: str) -> dict:
     }
 
 
+def build_archive_fixture() -> dict:
+    """Synthetic W01 archive boundary; no mailbox, OneDrive, or legacy tables."""
+    trigger = {
+        "id": "fixture-w01-trigger",
+        "name": "Called by Trusted Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [-300, 0],
+        "parameters": {"inputSource": "passthrough"},
+    }
+    emit = code_node(
+        "fixture-w01-archive",
+        "Emit Synthetic Archive Barrier",
+        "const input=$json||{}; return [{json:{...input, status:'ARCHIVED', archive_ready:true, attachment_verification_barrier:'VERIFIED', attachment_ids_verified:true, attachments_verified:Number(input.attachments_verified||0), email_evidence_receipt_barrier:'VERIFIED', email_evidence_receipts_verified:Number(input.email_evidence_receipts_verified||input.matched_count||0), email_evidence_identity_keys:Array.isArray(input.email_evidence_identity_keys)?input.email_evidence_identity_keys:[], archive_identity_keys:Array.isArray(input.attachment_identity_keys)?input.attachment_identity_keys:[], archive_readback_verified:true}}];",
+        [0, 0],
+    )
+    return {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "DISPOSABLE ONLY · Synthetic Outlook archive boundary",
+        "active": False,
+        "nodes": [trigger, emit],
+        "connections": {trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}},
+        "settings": fixture_settings(),
+        "pinData": {},
+        "meta": {"disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacement": "Synthetic archive barrier"},
+    }
+
+
+def build_ai_fixture_source() -> dict:
+    workflow = copy.deepcopy(read_json(PRODUCTION / "09-ai-proposal.json"))
+    for node in workflow["nodes"]:
+        if node["name"] == "Load Trusted Proposal Archive Contract":
+            node.pop("alwaysOutputData", None)
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"}
+        elif node["name"] == "Archive Proposal Artifact in OneDrive":
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"}
+            node.pop("credentials", None)
+        elif node["name"] == "Read Back Proposal Artifact":
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{},binary:$binary}];"}
+            node.pop("credentials", None)
+    workflow["meta"] = {**workflow.get("meta", {}), "disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacements": ["OneDrive archive", "source contract resolver"]}
+    return workflow
+
+
 def build_sweep_core() -> dict:
     workflow = copy.deepcopy(read_json(PRODUCTION / "12-outlook-message-sweep.json"))
     workflow["id"] = SWEEP_FIXTURE_ID
@@ -155,6 +205,12 @@ def build_sweep_core() -> dict:
                         "});"
                     )
                 }
+            elif node["name"] == "Search Outlook Evidence":
+                node.pop("credentials", None)
+                node.pop("alwaysOutputData", None)
+                node["type"] = "n8n-nodes-base.code"
+                node["typeVersion"] = 2
+                node["parameters"] = {"jsCode": "return [{json:{}}];"}
             continue
         node.pop("credentials", None)
         node.pop("alwaysOutputData", None)
@@ -359,11 +415,11 @@ def build_recovery_core() -> dict:
         ),
         "SHA-256 Recovered Delta": (
             "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.payload_sha256}}));"},
+            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.delta_sha256}}));"},
         ),
         "Extract Recovered Delta JSON": (
             "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.artifact_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.imported_id,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
+            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
         ),
         "Recovery Actual Preflight": (
             "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
@@ -390,14 +446,14 @@ def build_recovery_core() -> dict:
 def outbox_upsert_node(state: str) -> dict:
     suffix = state.lower().replace("_", "-")
     value = {
-        "outbox_id": f"fixture-recovery-{suffix}",
+        "batch_id": f"fixture-recovery-{suffix}",
         "run_id": f"fixture-recovery-{suffix}",
-        "imported_id": f"fixture:recovery:{suffix}",
+        "idempotency_key": f"fixture:recovery:{suffix}",
         "actual_file_id": "fixture_actual",
-        "payload_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
-        "artifact_item_id": f"fixture-artifact-{suffix}",
-        "artifact_etag": "fixture-etag",
-        "artifact_schema_version": "statement-delta-v1",
+        "delta_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
+        "delta_artifact_item_id": f"fixture-artifact-{suffix}",
+        "delta_artifact_etag": "fixture-etag",
+        "delta_schema_version": "statement-delta-v1",
         "config_version": "fixture-v1",
         "parser_version": "fixture-v1",
         "state": state,
@@ -413,10 +469,10 @@ def outbox_upsert_node(state: str) -> dict:
         "parameters": {
             "resource": "row",
             "operation": "upsert",
-            "dataTableId": {"__rl": True, "value": "finance_actual_outbox", "mode": "name"},
+            "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
             "matchType": "allConditions",
             "filters": {"conditions": [{
-                "keyName": "outbox_id", "condition": "eq", "keyValue": value["outbox_id"]
+                "keyName": "batch_id", "condition": "eq", "keyValue": value["batch_id"]
             }]},
             "columns": {
                 "mappingMode": "defineBelow",
@@ -472,11 +528,14 @@ def build_all() -> dict[str, dict]:
         "105-recover-verified.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000920", "VERIFIED"),
     }
     catalog = {workflow["id"]: workflow for workflow in workflows.values()}
+    catalog["10000000-0000-4000-8000-000000000001"] = build_archive_fixture()
+    catalog[AI_ID] = build_ai_fixture_source()
     for workflow_id, filename in INLINE_SOURCE_FILES.items():
         workflow = read_json(PRODUCTION / filename)
         if workflow.get("id") != workflow_id:
             raise ValueError(f"inline workflow ID mismatch for {filename}")
-        catalog[workflow_id] = workflow
+        if workflow_id not in {"10000000-0000-4000-8000-000000000001", AI_ID}:
+            catalog[workflow_id] = workflow
     inlined = {
         name: inline_execute_workflows(workflow, catalog)
         for name, workflow in workflows.items()
@@ -607,7 +666,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
             "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
             "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
+            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "n8n_execution_history", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
             "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
         }
     fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}
