@@ -3186,7 +3186,7 @@ try {
         for auth_error in ("authentication token revoked", "codex login required"):
             with self.subTest(auth_error=auth_error):
                 invalid = self.execute_code_node(
-                    workflow, "Validate Claude Proposal Schema and Normalize Provider Output",
+                    workflow, "Validate ProDex Proposal Schema and Normalize Provider Output",
                     json_value={"errorMessage": auth_error},
                     refs={"Validate and Build Fixed Provider Invocation": invocation},
                 )
@@ -3450,9 +3450,7 @@ try {
             **authoritative_handoff["output"][0]["json"],
             "codex_normal_model": "gpt-5.6-luna", "codex_normal_reasoning_effort": "max",
             "codex_exception_model": "gpt-5.6-sol", "codex_exception_reasoning_effort": "medium",
-            "codex_auth_mode": "CHATGPT_SUBSCRIPTION", "claude_normal_model": "claude-sonnet-4-6",
-            "claude_normal_reasoning_effort": "default", "claude_exception_model": "claude-sonnet-4-6",
-            "claude_exception_reasoning_effort": "default", "claude_auth_mode": "CLAUDE_SUBSCRIPTION",
+            "codex_auth_mode": "CHATGPT_SUBSCRIPTION",
             "proposal_output_schema": "{}",
         }
         invocation = self.execute_code_node(w21, "Validate and Build Fixed Provider Invocation", json_value=job)
@@ -3466,7 +3464,7 @@ try {
             "auth_mode": "CHATGPT_SUBSCRIPTION", "proposals": [],
         }
         normalized = self.execute_code_node(
-            w21, "Validate Claude Proposal Schema and Normalize Provider Output",
+            w21, "Validate ProDex Proposal Schema and Normalize Provider Output",
             json_value={"output": json.dumps(proposal)},
             refs={"Validate and Build Fixed Provider Invocation": invocation["output"][0]["json"]},
         )
@@ -3474,7 +3472,7 @@ try {
         self.assertEqual(normalized["output"][0]["json"]["job_id"], job["job_id"])
         forged_policy = {**proposal, "policy_id": "attacker-policy"}
         forged = self.execute_code_node(
-            w21, "Validate Claude Proposal Schema and Normalize Provider Output",
+            w21, "Validate ProDex Proposal Schema and Normalize Provider Output",
             json_value={"output": json.dumps(forged_policy)},
             refs={"Validate and Build Fixed Provider Invocation": invocation["output"][0]["json"]},
         )

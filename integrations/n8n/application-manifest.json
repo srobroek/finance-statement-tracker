@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "contract_status": "DISPOSABLE_VERIFIED",
+  "contract_status": "SPEC_ONLY",
   "application": {
     "name": "finance-statement-tracker",
     "repository": "srobroek/finance-statement-tracker"
   },
-  "finance_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
+  "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "1525fd2a690e227f81a34c7954b7bb6f0684fb7b609ced00ade77c64c40163b0"
+    "sha256": "0bd94ae955e2c62b1e36c8f72b582c201b497d476da570f42f8d6bbeb6d7f1ea"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -16,8 +16,8 @@
     "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
   },
   "extension_image": {
-    "reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
+    "digest": null,
     "base_digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
@@ -26,16 +26,16 @@
   },
   "workflow_manifest": {
     "path": "integrations/n8n/pipeline-registry.json",
-    "sha256": "187896fb9bbabe0b6360c9a513fe25abf9ff7d5a2bcf0e549e7796bf98ee27b6"
+    "sha256": "3e5576cbb265174fc0b1e95b186b8cf9f56baa43a5094c4d4292f92f847d4221"
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "53d1468f2e426bd993826dc14a7b52db27e2936b0484a2ca54f8cfd4e2e6b16f"
+    "sha256": "7de9c33ae1c5e4c6b54f7671e5e5fd3193cb6ddba7b73cc353b939e6323e11ef"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-    "sha256": "8a6f6361952c7a4b671f36553404e255fdbb4832ff4fa4aac3933e867a597a40",
+    "sha256": "9b93930ced822f7a665690e95e586f0481a46ba0dfa8fc211d09c9ddb732ca76",
     "required_state": {
       "active": false,
       "published": false,
@@ -56,7 +56,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "6dd7482125c2885fa21ea436932cfb2f6b3d3b9b5941eb41623afedaff3926f4"
+      "sha256": "de2695074f33415e718fdde603bd19bbdd1118e5c0211e911946aada9eb75565"
     },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
@@ -88,6 +88,10 @@
     {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
   ],
   "blockers": [
+    "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",
+    "LIVE_REGISTRY_DIGEST_REQUIRED",
+    "SBOM_SCAN_ATTESTATION_REQUIRED",
+    "DISPOSABLE_IMAGE_IMPORT_REQUIRED",
     "DISPOSABLE_WORKFLOW_EXECUTION_REQUIRED"
   ]
 }

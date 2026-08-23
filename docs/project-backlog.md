@@ -26,9 +26,9 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 - Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.
 - The internal runtime health check passed for n8n, the task broker, and task launcher. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.
 - The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.
-- The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.
+- The checked-in source registers the pinned ProDex 0.5.1 community package with seven finance nodes and three credential types. Subscription authentication and schema-bound execution remain unproven.
 - Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.
-- Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.
+- Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.
 - b845ccf records a guarded 45-manifest, 3,927-identity Actual dry run with 400 proposed exact-state changes, zero amount mutations, 28 preserved manual-category conflicts, and 15 snapshot-absent identities. No disposable Actual replay or production write occurred.
 - The independent 3a6acc6 readiness audit still keeps the ADCB issuer-balance contradiction, duplicated Finance Evidence paths, missing warranty and property metadata, and missing fresh wealth and FX evidence open. Production activation and finance writes remain forbidden pending their separate acceptance gates.
 - One batched 1Password update to FinanceAutomation/n8n-runtime preserved existing fields, concealed the secret, and left Bellwether untouched. Retained Postgres rotation and n8n key recovery completed; cold-start injection, persistence/log scanning, and backup restore remain open.
@@ -37,17 +37,17 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 
 - Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.
 - Execute Sub-workflow selectors should use **From list** when the target is available.
-- Community agent candidates are pinned to `n8n-nodes-prodex@0.5.1` and `@ggomez91npm/n8n-nodes-claude-code@0.8.0`; neither is production-approved until disposable registration, isolation, authentication and structured-output proof passes.
+- The subscription-agent candidate is pinned to `n8n-nodes-prodex@0.5.1`; disposable registration, isolation, authentication and structured-output proof remain required.
 - The backlog intentionally has no automatically promoted `VERIFIED` tasks.
 
 ## Ordered executable queue
 
 | # | ID | Owner | Priority | Status | Next action |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | `AGENT-003` | `agent_runtime` | P0 | `PARTIAL` | Run one schema-bound proposal per provider after isolated authentication succeeds. |
+| 1 | `AGENT-003` | `agent_runtime` | P0 | `PARTIAL` | Run one schema-bound ProDex proposal after isolated authentication succeeds. |
 | 2 | `N8N-001` | `n8n_workflows` | P0 | `IMPLEMENTED_UNVERIFIED` | Run bounded Outlook and OneDrive refresh/readback acceptance while all workflows remain inactive. |
 | 3 | `N8N-002` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Complete the remaining issuer workflow semantics; use Tidy Workflow only when a human canvas cleanup is desired. |
-| 4 | `N8N-008` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Authenticate each isolated subscription and execute one schema-bound proposal per provider. |
+| 4 | `N8N-008` | `n8n_workflows` | P1 | `IMPLEMENTED_UNVERIFIED` | Authenticate the isolated ProDex subscription and execute one schema-bound proposal. |
 | 5 | `DOCS-002` | `documentation_acceptance` | P0 | `IMPLEMENTED_UNVERIFIED` | Review this generated backlog as the orchestration source, then require --check and focused tests on every backlog change. |
 | 6 | `PLATFORM-003` | `platform_operations` | P0 | `IMPLEMENTED_UNVERIFIED` | Run one disposable cold start and restore with persistence, execution, log, and backup scans. |
 | 7 | `PLATFORM-006` | `platform_operations` | P0 | `PARTIAL` | Complete current-byte disposable replay and restore evidence while production remains untouched. |
@@ -113,7 +113,7 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 | 67 | `PLATFORM-005` | `platform_operations` | P1 | `IMPLEMENTED_UNVERIFIED` | Record immutable image digests, verify independent restarts, execute restore drill, validate tunnel origin/headers and AD/Service Auth boundaries, and deploy reviewed n8n candidate. |
 | 68 | `ACTUAL-015` | `actual_finance` | P2 | `PARTIAL` | Populate only after account/UI parity; obtain approved budget values and verify every named report against authoritative source data. |
 | 69 | `AGENT-004` | `agent_runtime` | P2 | `PARTIAL` | Run protected-field and automatic-write attacks and prove every AI result remains a review-only proposal. |
-| 70 | `AGENT-005` | `agent_runtime` | P2 | `PARTIAL` | Prove identical provider boundaries in the disposable runtime. |
+| 70 | `AGENT-005` | `agent_runtime` | P2 | `PARTIAL` | Prove the direct ProDex route in the disposable runtime. |
 | 71 | `DOCS-003` | `documentation_acceptance` | P2 | `NOT_STARTED` | Implement and prove: Public-safe examples. |
 | 72 | `N8N-009` | `n8n_workflows` | P2 | `IMPLEMENTED_UNVERIFIED` | Run allowed and malicious MCP facade requests with instance MCP disabled and prove zero unauthorized writes. |
 | 73 | `PLATFORM-007` | `platform_operations` | P2 | `PARTIAL` | Implement and prove: Private repo visibility verified. |

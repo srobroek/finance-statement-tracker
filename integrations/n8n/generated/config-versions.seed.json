@@ -15,7 +15,7 @@
       "config_name": "agent-providers",
       "version": "1",
       "source_path": "config/agent-providers.json",
-      "content_sha256": "7eee0c7b517b03b922607bef9d747ae233da8a2af20323a165a8d48b89518bcb",
+      "content_sha256": "1ad9885f705311090990607c9c32ea38356f835ccedc9f0a0462f3e9a1291e77",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

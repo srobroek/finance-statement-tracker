@@ -16,9 +16,9 @@
     "Official n8n DataTableService readback verified all 15 exact operational Data Tables, seven AI policy rows, nine commit-bound configuration rows, and preservation of the existing source-cursor row; no direct SQL bootstrap or finance-system write was used.",
     "The internal runtime health check passed for n8n, the task broker, and task launcher. Both Microsoft access tokens were expired and both refresh tokens were present, but no refresh was performed; bounded Outlook and OneDrive reads plus restart persistence remain required.",
     "The setup-only b07c410 OneDrive workflow is inactive, manual-only, and outside the regular 21-workflow corpus. Its live create-or-reuse and exact root-folder readback have not run.",
-    "The host runtime registers pinned ProDex 0.5.1 and Claude 0.8.0 community packages, eight nodes, and three credential types. Subscription authentication and schema-bound execution remain unproven.",
+    "The checked-in source registers the pinned ProDex 0.5.1 community package with seven finance nodes and three credential types. Subscription authentication and schema-bound execution remain unproven.",
     "Outlook filtering, attachment preservation, and original-email JSON archival are repository-tested. Inline-email PDF rendering still needs a fixed local renderer and runtime proof.",
-    "Claude cache discovery succeeded; Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.",
+    "Codex startup failed because the pinned CLI cannot parse the shared newer agent-role configuration. ProDex needs an isolated compatible authentication home or device login before structured execution can be claimed.",
     "b845ccf records a guarded 45-manifest, 3,927-identity Actual dry run with 400 proposed exact-state changes, zero amount mutations, 28 preserved manual-category conflicts, and 15 snapshot-absent identities. No disposable Actual replay or production write occurred.",
     "The independent 3a6acc6 readiness audit still keeps the ADCB issuer-balance contradiction, duplicated Finance Evidence paths, missing warranty and property metadata, and missing fresh wealth and FX evidence open. Production activation and finance writes remain forbidden pending their separate acceptance gates.",
     "One batched 1Password update to FinanceAutomation/n8n-runtime preserved existing fields, concealed the secret, and left Bellwether untouched. Retained Postgres rotation and n8n key recovery completed; cold-start injection, persistence/log scanning, and backup restore remain open."
@@ -102,11 +102,11 @@
       "id": "N8N-008", "status": "IMPLEMENTED_UNVERIFIED",
       "implementation_state": "DEPLOYED_INACTIVE", "verification_state": "HOST_REGISTRATION_VERIFIED_AUTH_EXECUTION_PENDING",
       "evidence_paths": ["integrations/n8n/community-node-lock.json", "integrations/n8n/workflows/21-subscription-agent-adapter.json", "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
-      "tests": ["20 of 20 Execute Sub-workflow references use From list", "host registration passed for pinned ProDex 0.5.1 and Claude 0.8.0 packages, 8 nodes, and 3 credential types"],
-      "live_readback": "Pinned ProDex 0.5.1 and Claude 0.8.0 register in the internal host runtime with eight nodes and three credential types. The reviewed promotion made no provider call; subscription authentication and schema-bound execution remain unproven.",
-      "remaining_work": "Use an isolated compatible ProDex auth home, then prove both provider branches preserve identical typed output and protected-field policy.",
+      "tests": ["20 of 20 Execute Sub-workflow references use From list", "source registration contract covers pinned ProDex 0.5.1, seven nodes, and three credential types"],
+      "live_readback": "The checked-in ProDex 0.5.1 registration contract covers seven nodes and three credential types. The reviewed promotion made no provider call; subscription authentication and schema-bound execution remain unproven.",
+      "remaining_work": "Use an isolated compatible ProDex auth home, then prove the fixed proposal output and protected-field policy in disposable n8n.",
       "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Authenticate each isolated subscription and execute one schema-bound proposal per provider."
+      "last_verified": "2026-08-20", "next_action": "Authenticate the isolated ProDex subscription and execute one schema-bound proposal."
     },
     {
       "id": "AGENT-003", "status": "PARTIAL",
@@ -116,17 +116,17 @@
       "live_readback": "The direct subscription adapter is repository-defined and inactive. The health check made no provider call; subscription authentication, a full n8n proposal, and credential-surface isolation receipts remain absent.",
       "remaining_work": "Prove subscription authentication and execute malicious protected-field cases through n8n.",
       "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_SUBSCRIPTION_EXECUTION_PROOF_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Run one schema-bound proposal per provider after isolated authentication succeeds."
+      "last_verified": "2026-08-20", "next_action": "Run one schema-bound ProDex proposal after isolated authentication succeeds."
     },
     {
       "id": "AGENT-005", "status": "PARTIAL",
       "implementation_state": "PARTIAL", "verification_state": "HOST_REGISTRATION_VERIFIED_AUTH_STRUCTURED_EXECUTION_PENDING",
       "evidence_paths": ["config/agent-providers.json", "integrations/n8n/community-node-lock.json", "integrations/n8n/workflows/21-subscription-agent-adapter.json", "/opt/disposable/finance-n8n/20260819155134/receipts/inactive-00491aae2ab4-20260819T221734Z.json"],
-      "tests": ["typed contract, server-owned model/reasoning/auth, and both provider branches pass repository tests"],
-      "live_readback": "Both branches are enabled behind one typed contract and both pinned packages register in the internal host runtime. The reviewed promotion made no provider call, so neither branch has subscription-authenticated structured execution evidence.",
-      "remaining_work": "Resolve Codex auth compatibility and execute locked Codex and Claude branches with malicious caller fields.",
+      "tests": ["typed contract, server-owned model/reasoning/auth, and the ProDex route pass repository tests"],
+      "live_readback": "The ProDex route remains behind one typed contract and its package is pinned in the source lock. The reviewed promotion made no provider call, so subscription-authenticated structured execution evidence remains absent.",
+      "remaining_work": "Resolve Codex auth compatibility and execute the locked ProDex route with malicious caller fields.",
       "blockers_remove": [], "blockers_add": ["CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", "COMMUNITY_STRUCTURED_EXECUTION_PROOF_REQUIRED"],
-      "last_verified": "2026-08-20", "next_action": "Prove identical provider boundaries in the disposable runtime."
+      "last_verified": "2026-08-20", "next_action": "Prove the direct ProDex route in the disposable runtime."
     },
     {
       "id": "DOC-001", "status": "PARTIAL",

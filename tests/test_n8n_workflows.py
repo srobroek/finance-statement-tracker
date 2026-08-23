@@ -1658,17 +1658,6 @@ try {{
                         "reason_code": "TYPE_MISMATCH",
                     }],
                 }, proposal)
-            claude = {
-                **base,
-                "agent_provider": "CLAUDE_SUBSCRIPTION",
-                "runner_model": "claude-sonnet-4-6",
-                "runner_reasoning_effort": "default",
-                "auth_mode": "CLAUDE_SUBSCRIPTION",
-                "proposals": [],
-            }
-            jsonschema.validate(claude, proposal)
-            with self.assertRaises(jsonschema.ValidationError):
-                jsonschema.validate({**claude, "auth_mode": "CHATGPT_SUBSCRIPTION"}, proposal)
         proposal_item = proposal["properties"]["proposals"]["items"]
         self.assertIn("value", proposal_item["required"])
         self.assertNotIn("value_json", json.dumps(proposal_item))
@@ -1676,14 +1665,8 @@ try {{
         unresolved = handoff["$defs"]["unresolved"]
         self.assertIn("allowed_values", unresolved["required"])
         self.assertEqual(unresolved["properties"]["allowed_values"]["maxProperties"], 10)
-        self.assertEqual(
-            set(proposal["properties"]["auth_mode"]["enum"]),
-            {"CHATGPT_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
-        )
-        self.assertEqual(
-            set(handoff["properties"]["agent_provider"]["enum"]),
-            {"CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
-        )
+        self.assertEqual(proposal["properties"]["auth_mode"]["const"], "CHATGPT_SUBSCRIPTION")
+        self.assertEqual(handoff["properties"]["agent_provider"]["const"], "CODEX_SUBSCRIPTION")
 
     def test_ai_workflow_derives_profile_enforces_domains_and_omits_internal_hash(self) -> None:
         nodes = self.nodes("09-ai-proposal.json")
@@ -1704,9 +1687,8 @@ try {{
         self.assertIn("Proposal outside configured domain", response)
         self.assertIn("Duplicate proposal field", response)
         self.assertIn("Agent proposal envelope mismatch", response)
-        self.assertIn("CLAUDE_SUBSCRIPTION", response)
-        self.assertIn("claude-sonnet-4-6", response)
-        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", response)
+        self.assertNotIn("CLAUDE_SUBSCRIPTION", response)
+        self.assertNotIn("claude-sonnet-4-6", response)
         handoff_code = nodes["Build Idempotent Agent Handoff"]["parameters"]["jsCode"]
         self.assertIn("agent_provider: request.agent_provider", handoff_code)
         adapter = nodes["Invoke Subscription Agent Adapter"]
@@ -3198,7 +3180,6 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             {(row["package"], row["version"]) for row in lock["packages"]},
             {
                 ("n8n-nodes-prodex", "0.5.1"),
-                ("@ggomez91npm/n8n-nodes-claude-code", "0.8.0"),
             },
         )
         nodes = self.nodes("21-subscription-agent-adapter.json")
@@ -3220,7 +3201,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             {"outputSchema", "streamProgress", "timeoutSeconds"},
         )
         self.assertTrue(codex["parameters"]["options"]["outputSchema"])
-        self.assertIn("Run Claude Subscription Provider", nodes)
+        self.assertNotIn("Run Claude Subscription Provider", nodes)
         proposal_schema = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         self.assertEqual(
             json.loads(codex["parameters"]["options"]["outputSchema"]),
@@ -3238,17 +3219,23 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "provider_auth_mode", "Output JSON Schema",
         ):
             self.assertIn(expected, build)
-        validator_name = "Validate Claude Proposal Schema and Normalize Provider Output"
+        validator_name = "Validate ProDex Proposal Schema and Normalize Provider Output"
         normalizer = nodes[validator_name]["parameters"]["jsCode"]
         self.assertIn("PRODEX_AUTH_REQUIRED", normalizer)
         adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
-        self.assertIn("Run Claude Subscription Provider", adapter_json)
+        self.assertNotIn("Run Claude Subscription Provider", adapter_json)
         self.assertEqual(
-            self.workflow("21-subscription-agent-adapter.json")["meta"]["providerBranchesEnabled"],
-            ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+            self.workflow("21-subscription-agent-adapter.json")["meta"]["supportedProviders"],
+            ["CODEX_SUBSCRIPTION"],
         )
-        self.assertIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
+        self.assertNotIn("providerBranchesEnabled", self.workflow("21-subscription-agent-adapter.json")["meta"])
+        self.assertNotIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
         self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
+
+    def test_subscription_adapter_generator_is_direct_only(self) -> None:
+        generator = (N8N / "refactor_workflow_ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("CLAUDE_SUBSCRIPTION", generator)
+        self.assertNotIn("@ggomez91npm/n8n-nodes-claude-code", generator)
 
     def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:
         contract = self.registry["custom_nodes"]
@@ -3265,7 +3252,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         readme = (N8N / "README.md").read_text(encoding="utf-8")
         self.assertIn("SPEC_ONLY", readme)
         self.assertIn("have not yet passed exact-image import", readme)
-        self.assertIn("API-key fallback is forbidden", readme)
+        self.assertIn("The policy forbids API-key fallback", readme)
         self.assertIn("native n8n OpenAI credential is not used", readme)
 
 

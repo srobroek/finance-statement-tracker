@@ -19,11 +19,7 @@ COPY packages/n8n-nodes-finance/community-ai/package.json packages/n8n-nodes-fin
 RUN npm ci --omit=dev --ignore-scripts --legacy-peer-deps \
     && npm audit --omit=dev --audit-level=high \
     && test "$(node -p "require('./node_modules/n8n-nodes-prodex/package.json').version")" = "0.5.1" \
-    && test "$(node -p "require('./node_modules/@ggomez91npm/n8n-nodes-claude-code/package.json').version")" = "0.8.0" \
-    && test "$(node -p "require('./node_modules/@anthropic-ai/claude-code/package.json').version")" = "2.1.235" \
-    && test "$(node -p "require('./node_modules/@openai/codex/package.json').version")" = "0.142.1" \
-    && node node_modules/@anthropic-ai/claude-code/install.cjs \
-    && test "$(./node_modules/.bin/claude --version)" = "2.1.235 (Claude Code)"
+    && test "$(node -p "require('./node_modules/@openai/codex/package.json').version")" = "0.142.1"
 COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-community-ai.cjs
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
@@ -50,10 +46,8 @@ COPY --from=node-builder --chown=node:node /tmp/community-ai/node_modules /opt/f
 COPY --chown=node:node packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs /opt/finance-n8n/assert-runtime-registration.cjs
 COPY --chown=node:node packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs /opt/finance-n8n/verify-immutable-extension.cjs
 COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh /opt/finance-n8n/finance-entrypoint.sh
-COPY --chown=node:node packages/n8n-nodes-finance/scripts/claude-finance-wrapper.cjs /opt/finance-n8n/community-bin/claude-finance
 RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
     && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
-    && chmod 0555 /opt/finance-n8n/community-bin/claude-finance \
     && chmod 0444 /opt/finance-n8n/extension-tree.sha256
 USER node
 ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]

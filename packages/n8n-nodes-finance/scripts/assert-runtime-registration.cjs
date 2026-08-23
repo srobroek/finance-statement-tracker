@@ -13,7 +13,6 @@ const immutableCommunityRoot = '/opt/finance-n8n/community-extensions/node_modul
 const requiredPackageLinks = new Map([
   [mutableLink, immutablePackage],
   ['/home/node/.n8n/nodes/node_modules/n8n-nodes-prodex', `${immutableCommunityRoot}/n8n-nodes-prodex`],
-  ['/home/node/.n8n/nodes/node_modules/@ggomez91npm/n8n-nodes-claude-code', `${immutableCommunityRoot}/@ggomez91npm/n8n-nodes-claude-code`],
 ]);
 if (process.env.N8N_CUSTOM_EXTENSIONS !== undefined) throw new Error('FINANCE_CUSTOM_DIRECTORY_NAMESPACE_FORBIDDEN');
 for (const [link, target] of requiredPackageLinks) {
@@ -39,7 +38,6 @@ const expectedNodes = new Set([
   'n8n-nodes-prodex.prodex',
   'n8n-nodes-prodex.prodexChatModel',
   'n8n-nodes-prodex.prodexSetup',
-  '@ggomez91npm/n8n-nodes-claude-code.claude',
 ]);
 const expectedCredentials = new Set([
   'actualBudgetApi',
@@ -63,7 +61,7 @@ async function assertFinanceExtensionRegistration(...args) {
   for (const type of expectedCredentials) {
     if (!registeredCredentials.has(type)) throw new Error(`FINANCE_CREDENTIAL_NOT_REGISTERED:${type}`);
   }
-  process.stdout.write('finance extension registration verified: 8 nodes, 3 credentials\n');
+  process.stdout.write('finance extension registration verified: 7 nodes, 3 credentials\n');
 }
 assertFinanceExtensionRegistration.financeExtensionRegistrationWrapper = true;
 BaseCommand.prototype.init = assertFinanceExtensionRegistration;

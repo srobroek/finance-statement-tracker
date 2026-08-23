@@ -165,11 +165,8 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
     def test_finance_application_manifest_binds_the_generic_input_corpus(self) -> None:
         manifest = load_json(N8N / "application-manifest.json")
         self.assertEqual(manifest["application"], {"name": "finance-statement-tracker", "repository": "srobroek/finance-statement-tracker"})
-        self.assertEqual(manifest["contract_status"], "DISPOSABLE_VERIFIED")
-        self.assertEqual(
-            manifest["finance_commit"],
-            "170328b7f6aefa068da9c9a864cd03ca91635c70",
-        )
+        self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
+        self.assertIsNone(manifest["finance_commit"])
         self.assertEqual(manifest["inactive_corpus"]["file_count"], 19)
         self.assertEqual(manifest["workflow_manifest"]["path"], "integrations/n8n/pipeline-registry.json")
         self.assertEqual(manifest["fixture_manifest"]["path"], "integrations/n8n/disposable/fixture-manifest.json")

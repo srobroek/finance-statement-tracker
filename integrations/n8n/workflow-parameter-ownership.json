@@ -186,8 +186,12 @@
               "type": "string"
             },
             "supported_providers": {
-              "category": "workflow_local_constant",
-              "type": "string"
+              "category": "global_generated_contract",
+              "type": "string",
+              "source": {
+                "path": "config/agent-providers.json",
+                "selector": "profiles.*.agent_provider"
+              }
             }
           }
         }
@@ -280,7 +284,6 @@
       "nodes": {
         "Subscription Provider Parameters": {
           "caller_fields": {
-            "agent_provider": "string",
             "policy_class": "string",
             "job_id": "string",
             "idempotency_key": "string",
@@ -300,44 +303,6 @@
             "adapter_contract": {
               "category": "workflow_local_constant",
               "type": "string"
-            },
-            "claude_auth_mode": {
-              "category": "workflow_local_constant",
-              "type": "string"
-            },
-            "claude_exception_model": {
-              "category": "global_generated_contract",
-              "type": "string",
-              "source": {
-                "path": "config/agent-providers.json",
-                "selector": "providers.CLAUDE_SUBSCRIPTION.exception_model"
-              }
-            },
-            "claude_exception_reasoning_effort": {
-              "category": "workflow_local_constant",
-              "type": "string",
-              "duplicate_literal_allowed": true
-            },
-            "claude_normal_model": {
-              "category": "global_generated_contract",
-              "type": "string",
-              "source": {
-                "path": "config/agent-providers.json",
-                "selector": "providers.CLAUDE_SUBSCRIPTION.normal_model"
-              }
-            },
-            "claude_normal_reasoning_effort": {
-              "category": "workflow_local_constant",
-              "type": "string",
-              "duplicate_literal_allowed": true
-            },
-            "claude_package": {
-              "category": "global_generated_contract",
-              "type": "string",
-              "source": {
-                "path": "config/agent-providers.json",
-                "selector": "providers.CLAUDE_SUBSCRIPTION.adapter_package"
-              }
             },
             "codex_auth_mode": {
               "category": "workflow_local_constant",
