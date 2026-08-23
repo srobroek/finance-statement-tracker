@@ -335,7 +335,7 @@ try {
         self.assertIn("IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE", nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"])
         self.assertIn("DUPLICATE_MESSAGE_ATTACHMENT_ID", nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"])
         self.assertIn(
-            "immutable_inventory_json",
+            "attachment_identity_keys_json",
             nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"]["value"],
         )
         self.assertEqual(
@@ -694,9 +694,11 @@ try {
                     "terminal_state": "ENUMERATED",
                     "pagination_exhausted": True,
                     "cursor_commit_eligible": False,
-                    "immutable_inventory_json": json.dumps(
-                        replay_inventory, separators=(",", ":")
+                    "attachment_ids_verified": True,
+                    "attachment_identity_keys_json": json.dumps(
+                        replay_inventory["attachment_identity_keys"], separators=(",", ":")
                     ),
+                    "attachments_verified": len(replay_inventory["attachment_identity_keys"]),
                 }
                 replay = self.execute_code_node(
                     w12,
@@ -707,7 +709,7 @@ try {
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
                 self.assertTrue(replay_request["replay_noop"])
-                self.assertEqual(len(replay_request["messages"]), 101)
+                self.assertEqual(replay_request["messages"], [])
                 replay_validated = self.execute_code_node(
                     w01,
                     "Validate Bounded Source Request",
@@ -873,8 +875,13 @@ try {
                     )
                 },
                 "pagination_exhausted": True,
+                "terminal_state": "ENUMERATED",
                 "cursor_commit_eligible": False,
-                "immutable_inventory_json": json.dumps(persisted, separators=(",", ":")),
+                "attachment_ids_verified": True,
+                "attachment_identity_keys_json": json.dumps(
+                    persisted["attachment_identity_keys"], separators=(",", ":")
+                ),
+                "attachments_verified": len(persisted["attachment_identity_keys"]),
             }
             verified = self.execute_code_node(
                 w12,
@@ -1191,7 +1198,11 @@ try {
                     "terminal_state": "ENUMERATED",
                     "pagination_exhausted": True,
                     "cursor_commit_eligible": False,
-                    "immutable_inventory_json": json.dumps(persisted, separators=(",", ":")),
+                    "attachment_ids_verified": True,
+                    "attachment_identity_keys_json": json.dumps(
+                        persisted["attachment_identity_keys"], separators=(",", ":")
+                    ),
+                    "attachments_verified": len(persisted["attachment_identity_keys"]),
                 }
                 replay = self.execute_code_node(
                     w12,
@@ -1201,23 +1212,22 @@ try {
                 )
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
-                replay_validated = self.execute_code_node(
-                    w01,
-                    "Validate Bounded Source Request",
-                    json_value=replay_request,
-                )
-                self.assertTrue(replay_validated["ok"], replay_validated)
-                replay_barrier = self.execute_code_node(
-                    w01,
-                    "Attachment Verification Barrier",
-                    refs={
-                        "Validate Bounded Source Request": replay_validated["output"][0]["json"],
-                        "Verify Existing Enumerated Archive Receipt": archive_rows,
-                        "Verify Existing Email Evidence Receipt": email_rows,
-                    },
-                )
-                self.assertTrue(replay_barrier["ok"], replay_barrier)
-                replay_downstream = replay_barrier["output"][0]["json"]
+                # Replay reads canonical identity/barrier fields from the
+                # ingestion-state row; it does not reconstruct message bodies
+                # for a second W01 archive pass.
+                replay_downstream = {
+                    **replay_request,
+                    "attachment_verification_barrier": "VERIFIED",
+                    "attachments_verified": len(archive_rows),
+                    "attachment_identity_keys": persisted["attachment_identity_keys"],
+                    "email_evidence_receipt_barrier": "VERIFIED",
+                    "email_evidence_receipts_verified": len(email_rows),
+                    "email_evidence_identity_keys": [
+                        row["email_evidence_identity"] for row in email_rows
+                    ],
+                    "archive_ready": True,
+                    "receipt_readback_verified": True,
+                }
                 replay_downstream.update(
                     pagination_exhausted=True,
                     scanned_count=101,
@@ -1302,18 +1312,26 @@ try {
                 for node in w12["nodes"]
                 if (
                 node["type"] == "n8n-nodes-base.dataTable"
-                and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
+                and node["parameters"].get("dataTableId", {}).get("value") == "finance_ingestion_state"
                 and node["parameters"].get("operation") == "update"
                 )
             },
-            {"CAS Update Source Cursor", "Mark Source Cursor Readback Verified"},
+            {
+                "CAS Update Source Cursor",
+                "Mark Source Cursor Readback Verified",
+                "Mark Acquisition ARCHIVED",
+                "Mark ARCHIVED Receipt Readback Verified",
+                "Mark Acquisition DOWNSTREAM_VERIFIED",
+                "Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+                "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+            },
             "W12 owns CAS and its crash-recovery readback verification update",
         )
         for filename, *_ in cases:
             self.assertEqual(
                 sum(
                     node["type"] == "n8n-nodes-base.dataTable"
-                    and node["parameters"].get("dataTableId", {}).get("value") == "finance_source_cursors"
+                    and node["parameters"].get("dataTableId", {}).get("value") == "finance_ingestion_state"
                     and node["parameters"].get("operation") == "update"
                     for node in self.workflow(filename)["nodes"]
                 ),
@@ -1376,6 +1394,10 @@ try {
         )
         self.assertEqual(
             w12["connections"]["Read Acquisition Receipt for Commit Resume"]["main"][0][0]["node"],
+            "Project Enumeration Receipt Fields for Commit Resume",
+        )
+        self.assertEqual(
+            w12["connections"]["Project Enumeration Receipt Fields for Commit Resume"]["main"][0][0]["node"],
             "Validate Commit Resume State",
         )
         self.assertEqual(
@@ -1395,7 +1417,7 @@ try {
         commit_read_filters = w12_nodes["Read Acquisition Receipt for Commit Resume"]["parameters"]["filters"]["conditions"]
         self.assertEqual(
             [row["keyName"] for row in commit_read_filters],
-            ["run_id", "source_code"],
+            ["source_code"],
         )
         self.assertEqual(
             w12["connections"]["Route Operation"]["main"][1][0]["node"],
@@ -1460,6 +1482,10 @@ try {
         )
         self.assertEqual(
             workflow["connections"]["Read Back Verified ARCHIVED Receipt"]["main"][0][0]["node"],
+            "Project Enumeration Receipt Fields for Verified Archive",
+        )
+        self.assertEqual(
+            workflow["connections"]["Project Enumeration Receipt Fields for Verified Archive"]["main"][0][0]["node"],
             "Return Verified ARCHIVED Receipt",
         )
         self.assertIn(
@@ -1828,7 +1854,9 @@ try {
             "terminal_state": "ENUMERATED",
             "pagination_exhausted": True,
             "cursor_commit_eligible": False,
-            "immutable_inventory_json": persisted,
+            "attachment_ids_verified": True,
+            "attachment_identity_keys_json": json.dumps(identities, separators=(",", ":")),
+            "attachments_verified": len(identities),
         }
         trusted = {
             key: receipt[key]
@@ -1842,9 +1870,10 @@ try {
         )
         self.assertTrue(result["ok"], result)
         replay = result["output"][0]["json"]
-        self.assertEqual(replay["messages"], messages)
+        # The canonical ingestion-state row persists identity and archive
+        # pointers; replay deliberately returns no in-memory message payload.
+        self.assertEqual(replay["messages"], [])
         self.assertEqual(replay["attachment_identity_keys"], identities)
-        self.assertEqual(len(replay["messages"]), 101)
         self.assertTrue(replay["replay_noop"])
         self.assertFalse(replay["cursor_commit_eligible"])
         self.assertEqual(

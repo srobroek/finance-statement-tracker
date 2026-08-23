@@ -38,6 +38,14 @@
               "type": "string"
             },
             {
+              "name": "receipt_run_id",
+              "type": "string"
+            },
+            {
+              "name": "receipt_run_upper_bound",
+              "type": "date"
+            },
+            {
               "name": "cursor_value",
               "type": "date"
             },
@@ -340,6 +348,14 @@
               "type": "string"
             },
             {
+              "name": "lease_owner",
+              "type": "string"
+            },
+            {
+              "name": "lease_fence",
+              "type": "number"
+            },
+            {
               "name": "actual_transaction_id",
               "type": "string"
             },
@@ -397,6 +413,14 @@
             },
             {
               "name": "observed_amount_sum_minor",
+              "type": "number"
+            },
+            {
+              "name": "expected_account_balance",
+              "type": "number"
+            },
+            {
+              "name": "observed_account_balance",
               "type": "number"
             },
             {
@@ -581,7 +605,7 @@
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {
     "path": "integrations/n8n/data-table-migration-matrix.json",
-    "digest": "38fdcda241289e19117d3a23286d47d50165f604c1a88866242eb77cd1760e4e",
+    "digest": "b3a5881c911a742b21f1f3eea351f91078ee9b7b6dbe2b35d0012c70777ab5ea",
     "target_tables": [
       "finance_ingestion_state",
       "finance_documents",

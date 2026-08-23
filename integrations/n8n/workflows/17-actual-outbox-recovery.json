@@ -37,7 +37,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_actual_outbox",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "returnAll": true,
@@ -122,7 +122,7 @@
     "financeWorkflowCode": "ACTUAL_OUTBOX_RECOVERY",
     "migrationStatus": "SPEC_ONLY",
     "customNodePackage": "n8n-nodes-finance@0.1.0",
-    "terminalReceiptTable": "finance_actual_outbox",
+    "terminalReceiptTable": "finance_actual_batches",
     "terminalReceiptReadback": true,
     "financeRowsInPostgresForbidden": true,
     "importTested": false,
