@@ -1533,6 +1533,7 @@ try {{
         self.assertEqual(signature.count("text"), 2)
         self.assertNotIn("p_lease_id", signature)
         self.assertIn("gen_random_uuid()", migration)
+        self.assertIn("DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);", migration)
         for term in ("ON CONFLICT (resource_key) DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
             self.assertIn(term, migration)
 

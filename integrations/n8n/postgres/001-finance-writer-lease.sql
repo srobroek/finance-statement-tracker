@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS finance_ops.writer_leases (
 REVOKE ALL ON SCHEMA finance_ops FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA finance_ops FROM PUBLIC;
 
+DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);
+
 CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease(
     p_resource_key text,
     p_lease_owner text,
