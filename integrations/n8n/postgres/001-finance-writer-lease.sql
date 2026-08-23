@@ -17,7 +17,6 @@ REVOKE ALL ON ALL TABLES IN SCHEMA finance_ops FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease(
     p_resource_key text,
-    p_lease_id uuid,
     p_lease_owner text,
     p_ttl_seconds integer
 ) RETURNS TABLE (
@@ -43,7 +42,7 @@ BEGIN
         resource_key, lease_id, lease_owner, fencing_token, expires_at,
         released_at, updated_at
     ) VALUES (
-        p_resource_key, p_lease_id, p_lease_owner, 1,
+        p_resource_key, gen_random_uuid(), p_lease_owner, 1,
         clock_timestamp() + make_interval(secs => p_ttl_seconds),
         NULL, clock_timestamp()
     )

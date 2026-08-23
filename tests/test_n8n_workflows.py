@@ -1529,6 +1529,10 @@ try {{
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(encoding="utf-8")
+        signature = migration[migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"):migration.index(") RETURNS TABLE", migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"))]
+        self.assertEqual(signature.count("text"), 2)
+        self.assertNotIn("p_lease_id", signature)
+        self.assertIn("gen_random_uuid()", migration)
         for term in ("ON CONFLICT (resource_key) DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
             self.assertIn(term, migration)
 
