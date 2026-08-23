@@ -1972,7 +1972,7 @@
       "source_status": "FINAL_DECISION",
       "contradictions": [
         "Earlier the user considered OpenRouter budget models; current requirement favors ChatGPT subscription through a bounded runner but retains provider-neutral contracts",
-        "The current pinned community-agent candidates are n8n-nodes-prodex@0.5.1 and @ggomez91npm/n8n-nodes-claude-code@0.8.0; both remain unapproved for production until disposable proof."
+        "The subscription-agent candidate is pinned to n8n-nodes-prodex@0.5.1; disposable registration, isolation, authentication and structured-output proof remain required."
       ],
       "last_verified": "2026-08-20",
       "next_action": "Prove identical provider boundaries in the disposable runtime."
