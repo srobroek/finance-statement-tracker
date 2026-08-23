@@ -267,7 +267,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "16-operations-error-handler.json": {
         "nodes": 13, "sticky": 0,
         "node_ids_sha256": "6d4bb1d21f537808601ee5ba2e7d266d1f2d940712b21bfbc92bd796175f1738",
-        "parameters_sha256": "322abfcbad0fac1c2b172d4d25a41425f26ac2a076da08afc660eff13920ccc8",
+        "parameters_sha256": "4680613c5425bafd7aa9c480436b164a2e1c5ff1c371ad08eff37a99b6544a22",
     },
     "17-actual-outbox-recovery.json": {
         "nodes": 3, "sticky": 0,
@@ -287,7 +287,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "20-actual-outbox-apply.json": {
         "nodes": 35, "sticky": 0,
         "node_ids_sha256": "5bb1af2a71279cdbed6cd8fc03f38ed402f686df3fca2df654a81dd598464c2a",
-        "parameters_sha256": "466bc4e24dec1a3955c6147fa7892cffbd93911b853e579c4361dd614e22c2cc",
+        "parameters_sha256": "817b42212a37dbb49f79fbe62412487c68781e6b66ab694d884d49f186d55321",
     },
     "21-subscription-agent-adapter.json": {
         "nodes": 8, "edges": 8, "sticky": 0, "groups": 1,

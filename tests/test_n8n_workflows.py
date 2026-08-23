@@ -1024,6 +1024,12 @@ try {{
             "replay_readback_only",
             writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"],
         )
+        replay_code = writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"]
+        self.assertIn("Verify Recovery Contract", replay_code)
+        self.assertNotIn("Build Recovery Fence Release", replay_code)
+        replay_release_query = writer_nodes["Read Back Released Recovery Writer Fence Replay"]["parameters"]["options"]["queryReplacement"]
+        self.assertIn("Verify Recovery Contract", replay_release_query)
+        self.assertIn("outbox_row.lease_fence", replay_release_query)
         self.assertIn(
             "ACTUAL_WRITER_LEASE_RELEASE_NOT_READ_BACK",
             writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
@@ -1140,11 +1146,6 @@ try {{
                 }},
                 "Read Back COMMITTED Recovery Replay": {"json": selected_row},
                 "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
-                "Build Recovery Fence Release": {"json": {
-                    "resource_key": "actual:actual-file:replay",
-                    "lease_owner": "n8n:recovery:statement:stable-existing",
-                    "fencing_token": 9,
-                }},
                 "Read Back Released Recovery Writer Fence Replay": {"json": {
                     "resource_key": "actual:actual-file:replay",
                     "lease_owner": "n8n:recovery:statement:stable-existing",
@@ -1222,11 +1223,6 @@ try {{
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
-            "Build Recovery Fence Release": {"json": {
-                "resource_key": "actual:actual-file:replay-1",
-                "lease_owner": "n8n:recovery:outbox:replay-1",
-                "fencing_token": 7,
-            }},
             "Read Back Released Recovery Writer Fence Replay": {"json": {
                 "resource_key": "actual:actual-file:replay-1",
                 "lease_owner": "n8n:recovery:outbox:replay-1",
@@ -1234,6 +1230,31 @@ try {{
                 "released": True,
             }},
         }
+        connections = self.workflow("20-actual-outbox-apply.json")["connections"]
+        replay_route = ["Verify Recovery Contract", "Route Recovery State"]
+        next_node = connections["Route Recovery State"]["main"][3][0]["node"]
+        while next_node in connections:
+            replay_route.append(next_node)
+            outputs = connections[next_node]["main"]
+            self.assertEqual(len(outputs), 1)
+            self.assertEqual(len(outputs[0]), 1)
+            next_node = outputs[0][0]["node"]
+        replay_route.append(next_node)
+        self.assertEqual(
+            replay_route,
+            [
+                "Verify Recovery Contract",
+                "Route Recovery State",
+                "Read Back COMMITTED Recovery Replay",
+                "Read Back Exact Actual Verification Receipt Replay",
+                "Read Back Released Recovery Writer Fence Replay",
+                "Return Verified Commit Receipt Replay",
+            ],
+        )
+        self.assertEqual(
+            set(references),
+            set(replay_route) - {"Route Recovery State", "Return Verified Commit Receipt Replay"},
+        )
         replay = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
             "Return Verified Commit Receipt Replay",

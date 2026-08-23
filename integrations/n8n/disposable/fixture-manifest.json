@@ -6,7 +6,7 @@
   "source_workflow_sha256": {
     "09-ai-proposal.json": "35848cab4d6b6061e77b36b206fe4f01f774b47ef8c10825d4319c32602c83da",
     "12-outlook-message-sweep.json": "c8db33e13d3715f1460aadd9202351bbd439aa990fc0b71a411c7bbeb42074ad",
-    "16-operations-error-handler.json": "5e909c103ff3c5b5ef008fbe9d0daf4b265f8d0ebf5edb3b38f6f3d1f39669ed",
+    "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "863f034e5868a8eda8f882bf7427af6b61ac1ed3ff7c73e3b26f71c871afd0f8"
   },
@@ -79,27 +79,27 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "1f03d17e4555bde6efa2b109d8a3a7183dbe680a22d0b3af621f9547dca699f6"
+      "sha256": "fef6a536a8ded59ee177dc542c4be7b9cf062b9781c618859e9873091634c15d"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "4f3f0d8f8567fcdee981fdecd89efe093c0c2538957026242e089d8e6440d924"
+      "sha256": "9b0cda00222c7bb1ccb74a944a6713e63ba472e96372843db5750c859990a72b"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "3ac4d3955bd461d15a2247b33523a605740dab2571640d1742f1dabfe3eaa5db"
+      "sha256": "89a78bcae287b60ffda14d14b20c546a2c9259760aca9ee51c3ad40e0c013116"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "c55a11e2831c8fda13ca843bf07d18e4c9293b1330bcc5963e99fa3ba898845e"
+      "sha256": "6782c3cd1f21ea0d3aac9951c317c48afb190c4837087382841c59c19acc26f8"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "1655ee12e710b93cdcb0f513e0d314d032cc79706317ec61136424ea25af883c"
+      "sha256": "1fcdd0d07142d732c707ece08bd1d986737935942ef7167663ab1be17ebcd60a"
     }
   ],
   "scenario_contract": {
