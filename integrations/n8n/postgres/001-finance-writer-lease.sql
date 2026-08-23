@@ -48,7 +48,7 @@ BEGIN
         clock_timestamp() + make_interval(secs => p_ttl_seconds),
         NULL, clock_timestamp()
     )
-    ON CONFLICT (resource_key) DO UPDATE
+    ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE
     SET lease_id = EXCLUDED.lease_id,
         lease_owner = EXCLUDED.lease_owner,
         fencing_token = current.fencing_token + 1,
