@@ -248,11 +248,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "c9bb56497d735ceeb7cd432e443d898795bae47697020713905cd8182ef6e6a4",
     },
     "12-outlook-message-sweep.json": {
-        "nodes": 82, "edges": 87, "sticky": 0, "groups": 13,
-        "node_ids_sha256": "24db9f9fabf35d1feb5efb678e456fc57572838f242d9ebc5a3377117500c215",
-        "connections_sha256": "2f7bc74524595bc47ef8649276bcf80266e1e7f3fe9bbd761998be561a8fbf50",
-        "parameters_sha256": "6fc11b721dc020d9cbb503feef489a1bdb74d80946480d81f9f54853d6f89e01",
-        "groups_sha256": "5a71259f8961f17ca317c8173812daf8d381947c04e1206be97636c215a36af4",
+        "nodes": 89, "edges": 94, "sticky": 0, "groups": 15,
+        "node_ids_sha256": "4bd78f583a8a7b9d6395be9a098a6f686fe3d0d18befa5b4d3b9a3c23d902170",
+        "connections_sha256": "f669daf06dfafd9d68f3ac8ad9dd0b6d7adedce8eb6caa8d4e167323bb4f7afb",
+        "parameters_sha256": "a2b7be1dd94f0c50d8359248fd239715f7642d8851622d3ff69cf52dae9276e6",
+        "groups_sha256": "1f0bf9b095e69a55a7231219ea7a810cbb6794f0a9a8ad5160020314ff0e39ad",
     },
     "13-document-extraction-request.json": {
         "nodes": 8, "sticky": 0,
@@ -267,7 +267,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "16-operations-error-handler.json": {
         "nodes": 13, "sticky": 0,
         "node_ids_sha256": "6d4bb1d21f537808601ee5ba2e7d266d1f2d940712b21bfbc92bd796175f1738",
-        "parameters_sha256": "125427e29862d13dba4a9567c1f5fb95195a7a16a8d0020f360999cc0c4a8620",
+        "parameters_sha256": "322abfcbad0fac1c2b172d4d25a41425f26ac2a076da08afc660eff13920ccc8",
     },
     "17-actual-outbox-recovery.json": {
         "nodes": 3, "sticky": 0,
@@ -282,12 +282,12 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "19-platform-data-table-bootstrap.json": {
         "nodes": 12, "sticky": 0,
         "node_ids_sha256": "5be5f493de12fe7d6ad7f44f7bc7c3d13cdc653cabf149df14c128b0b0038a38",
-        "parameters_sha256": "ece9fcc3f55b2a93fbb58a6663b1fd864e77da5d21d9500cff59a9748dbf92bd",
+        "parameters_sha256": "2b15c59c3f4df68c138a58b7254fa5fa6df0d0166424ab7970b61c55b1ce4801",
     },
     "20-actual-outbox-apply.json": {
         "nodes": 35, "sticky": 0,
         "node_ids_sha256": "5bb1af2a71279cdbed6cd8fc03f38ed402f686df3fca2df654a81dd598464c2a",
-        "parameters_sha256": "b82bcd95ceaabfa3c5edec5938076fcdcfd2b2e993f80aabcdb6e37c01ff0794",
+        "parameters_sha256": "466bc4e24dec1a3955c6147fa7892cffbd93911b853e579c4361dd614e22c2cc",
     },
     "21-subscription-agent-adapter.json": {
         "nodes": 8, "edges": 8, "sticky": 0, "groups": 1,

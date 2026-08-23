@@ -209,6 +209,8 @@ try {{
         json_input: dict,
         *,
         drop_terminal_marker: bool = False,
+        key_prefix: str | None = None,
+        extra_field: bool = False,
     ) -> dict:
         nodes = self.nodes("16-operations-error-handler.json")
         codes = {
@@ -220,6 +222,16 @@ try {{
                 "Read Back Verified Failure Receipt",
             )
         }
+        if key_prefix is not None:
+            codes = {
+                name: code.replace("finance_failure_receipt_v1_", key_prefix)
+                for name, code in codes.items()
+            }
+        if extra_field:
+            codes["Upsert Durable Failure Receipt"] = codes["Upsert Durable Failure Receipt"].replace(
+                "'readback_verified'];",
+                "'readback_verified', 'extra'];",
+            )
         script = f"""
 const codes = {json.dumps(codes)};
 const jsonInput = {json.dumps(json_input)};
@@ -227,6 +239,10 @@ const values = new Map();
 const execution = {{
   customData: {{
     set: (key, value) => {{
+      if (typeof key !== 'string' || key.length > 50)
+        throw new Error('CUSTOM_DATA_KEY_LIMIT');
+      if (values.size >= 10 && !values.has(key))
+        throw new Error('CUSTOM_DATA_KEY_COUNT_LIMIT');
       if (typeof value !== 'string' || value.length > 255)
         throw new Error('CUSTOM_DATA_VALUE_LIMIT');
       values.set(key, value);
@@ -235,6 +251,7 @@ const execution = {{
   }},
 }};
 const refs = {{
+  'Redact and Classify Failure': {{ json: jsonInput }},
   'Mark Failure Readback Verified': {{ json: null }},
 }};
 const lookup = name => ({{ first: () => refs[name] }});
@@ -1376,6 +1393,8 @@ try {{
         self.assertIn("customData", sink)
         self.assertIn("customData", readback)
         self.assertIn("finance_failure_receipt_v1_", sink)
+        self.assertIn("KEY_COUNT_TOO_LARGE", sink)
+        self.assertIn("KEY_TOO_LARGE", sink)
         self.assertIn("length > 255", sink)
         self.assertIn("finance_failure_receipt_v1_readback_verified", self.nodes("16-operations-error-handler.json")["Mark Failure Readback Verified"]["parameters"]["jsCode"])
         self.assertIn("FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH", readback)
@@ -1395,12 +1414,22 @@ try {{
         self.assertTrue(lifecycle["ok"], lifecycle)
         self.assertTrue(lifecycle["terminal"]["readback_verified"])
         self.assertEqual(lifecycle["values"]["finance_failure_receipt_v1_readback_verified"], "true")
+        self.assertEqual(len(lifecycle["values"]), 10)
+        self.assertTrue(all(len(key) <= 50 for key in lifecycle["values"]))
         self.assertTrue(all(len(value) <= 255 for value in lifecycle["values"].values()))
+        at_value_boundary = self.run_failure_receipt_lifecycle({**receipt, "workflow_name": "x" * 255})
+        self.assertTrue(at_value_boundary["ok"], at_value_boundary)
         missing_marker = self.run_failure_receipt_lifecycle(receipt, drop_terminal_marker=True)
         self.assertFalse(missing_marker["ok"])
         oversized = self.run_failure_receipt_lifecycle({**receipt, "workflow_name": "x" * 256})
         self.assertFalse(oversized["ok"])
         self.assertIn("FIELD_TOO_LARGE:workflow_name", oversized["error"])
+        key_overflow = self.run_failure_receipt_lifecycle(receipt, key_prefix="k" * 51)
+        self.assertFalse(key_overflow["ok"])
+        self.assertIn("KEY_TOO_LARGE", key_overflow["error"])
+        key_count_overflow = self.run_failure_receipt_lifecycle(receipt, extra_field=True)
+        self.assertFalse(key_count_overflow["ok"])
+        self.assertIn("KEY_COUNT_TOO_LARGE", key_count_overflow["error"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
         handoff = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")

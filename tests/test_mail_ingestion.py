@@ -1394,6 +1394,10 @@ try {
         )
         self.assertEqual(
             w12["connections"]["Read Acquisition Receipt for Commit Resume"]["main"][0][0]["node"],
+            "Project Enumeration Receipt Fields for Commit Resume",
+        )
+        self.assertEqual(
+            w12["connections"]["Project Enumeration Receipt Fields for Commit Resume"]["main"][0][0]["node"],
             "Validate Commit Resume State",
         )
         self.assertEqual(
@@ -1413,7 +1417,7 @@ try {
         commit_read_filters = w12_nodes["Read Acquisition Receipt for Commit Resume"]["parameters"]["filters"]["conditions"]
         self.assertEqual(
             [row["keyName"] for row in commit_read_filters],
-            ["committed_run_id", "source_code"],
+            ["source_code"],
         )
         self.assertEqual(
             w12["connections"]["Route Operation"]["main"][1][0]["node"],
@@ -1478,6 +1482,10 @@ try {
         )
         self.assertEqual(
             workflow["connections"]["Read Back Verified ARCHIVED Receipt"]["main"][0][0]["node"],
+            "Project Enumeration Receipt Fields for Verified Archive",
+        )
+        self.assertEqual(
+            workflow["connections"]["Project Enumeration Receipt Fields for Verified Archive"]["main"][0][0]["node"],
             "Return Verified ARCHIVED Receipt",
         )
         self.assertIn(

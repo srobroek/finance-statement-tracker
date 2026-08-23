@@ -6,7 +6,7 @@
   "source_workflow_sha256": {
     "09-ai-proposal.json": "35848cab4d6b6061e77b36b206fe4f01f774b47ef8c10825d4319c32602c83da",
     "12-outlook-message-sweep.json": "c8db33e13d3715f1460aadd9202351bbd439aa990fc0b71a411c7bbeb42074ad",
-    "16-operations-error-handler.json": "ccab44ed8f60a7ce150761b3959a7a4d5bf018e84233d0e43ed0e86ed95d2108",
+    "16-operations-error-handler.json": "5e909c103ff3c5b5ef008fbe9d0daf4b265f8d0ebf5edb3b38f6f3d1f39669ed",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "863f034e5868a8eda8f882bf7427af6b61ac1ed3ff7c73e3b26f71c871afd0f8"
   },
@@ -79,7 +79,7 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "588b547c1078b5c18af20ab73bf704c6274658184af32e436446cad59a332de1"
+      "sha256": "1f03d17e4555bde6efa2b109d8a3a7183dbe680a22d0b3af621f9547dca699f6"
     },
     {
       "file": "102-derived-recovery-core.json",
