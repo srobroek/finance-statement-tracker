@@ -463,6 +463,21 @@ def assert_archive_readback_contract(workflows: list[dict]) -> None:
     }
     for source, target in expected_edges.items():
         edges = w12["connections"].get(source, {}).get("main", [[]])[0]
+        if any(edge.get("node") == target for edge in edges):
+            continue
+        projected = [
+            edge.get("node")
+            for edge in edges
+            if str(edge.get("node", "")).startswith("Project Enumeration Receipt Fields")
+        ]
+        if projected and any(
+            any(
+                edge.get("node") == target
+                for edge in w12["connections"].get(node, {}).get("main", [[]])[0]
+            )
+            for node in projected
+        ):
+            continue
         if not any(edge.get("node") == target for edge in edges):
             raise ValueError(f"W12 archive readback missing connection {source} -> {target}")
     verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"]
@@ -2639,6 +2654,7 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
                         "verification_version": 1,
                         "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
                         "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
+                        "card_code": "={{ $('Verify Recovery Contract').first().json.manifest.card_code }}",
                         "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
                         "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
                         "expected_payload_sha256": "={{ $json.expected_sha256 }}",
@@ -2689,13 +2705,14 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "position": [1200, 0],
             "parameters": {"jsCode": r"""
 const observed = $json;
-const result = $('Recovery Verify Actual').first().json;
+const result = $('Recovery Verify Actual').first().json.actual;
 if (
   observed.idempotency_key !== $('Verify Recovery Contract').first().json.outbox_row.idempotency_key
   || !observed.idempotency_key
   || observed.expected_payload_sha256 !== result.expected_sha256
   || observed.observed_payload_sha256 !== result.observed_sha256
   || observed.expected_payload_sha256 !== observed.observed_payload_sha256
+  || Number(observed.expected_account_balance) !== Number($('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor)
   || Number(observed.observed_account_balance) !== Number(result.account_balance)
   || observed.invariants_passed !== true
 ) {
@@ -2707,6 +2724,21 @@ return [{ json: observed }];
     ]
     existing_names = {node["name"] for node in existing["nodes"]}
     existing["nodes"].extend(node for node in verification_receipt_nodes if node["name"] not in existing_names)
+    by_name = {node["name"]: node for node in existing["nodes"]}
+    for template in verification_receipt_nodes:
+        current = by_name.get(template["name"])
+        if current is not None:
+            current["parameters"] = json.loads(json.dumps(template["parameters"]))
+    replay_receipt = by_name.get("Return Verified Commit Receipt Replay")
+    if replay_receipt is not None:
+        replay_code = replay_receipt["parameters"].get("jsCode", "")
+        balance_guard = "    || Number(receipt.expected_account_balance) !== Number(manifest.expected_statement_balance_minor)\n    || Number(receipt.observed_account_balance) !== Number(receipt.expected_account_balance)\n"
+        if balance_guard not in replay_code:
+            replay_code = replay_code.replace(
+                "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
+                balance_guard + "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
+            )
+        replay_receipt["parameters"]["jsCode"] = replay_code
     existing["connections"]["Recovery Verify Actual"] = {
         "main": [[{"node": "Upsert Exact Actual Verification Receipt", "type": "main", "index": 0}]]
     }

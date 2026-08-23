@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "934e5dc58aa45754f25b5b042275dd34a4f482e1",
+    "finance_commit": "195fe1fee0cf46ab02bf1d258a71408b6455fd2a",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "1ced5a8fcd60ff02e3be852c90492214207b84e83595b99c2feb2448133b51f0",
+    "node_scan_corpus_sha256": "2d64936c987240de238a6a0c37b9402ab893452b5b45731a7ee2f805fff0ad87",
     "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -56,6 +56,18 @@
             "finance_acquisition_receipts.source_code"
           ]
         },
+        "receipt_run_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_acquisition_receipts.run_id"
+          ]
+        },
+        "receipt_run_upper_bound": {
+          "type": "date",
+          "source_bindings": [
+            "finance_acquisition_receipts.run_upper_bound"
+          ]
+        },
         "cursor_value": {
           "type": "date",
           "source_bindings": [
@@ -65,15 +77,13 @@
         "committed_run_id": {
           "type": "string",
           "source_bindings": [
-            "finance_source_cursors.committed_run_id",
-            "finance_acquisition_receipts.run_id"
+            "finance_source_cursors.committed_run_id"
           ]
         },
         "run_upper_bound": {
           "type": "date",
           "source_bindings": [
-            "finance_source_cursors.run_upper_bound",
-            "finance_acquisition_receipts.run_upper_bound"
+            "finance_source_cursors.run_upper_bound"
           ]
         },
         "overlap_seconds": {
@@ -724,6 +734,18 @@
             "finance_actual_verifications.observed_amount_sum_minor"
           ]
         },
+        "expected_account_balance": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.expected_account_balance"
+          ]
+        },
+        "observed_account_balance": {
+          "type": "number",
+          "source_bindings": [
+            "finance_actual_verifications.observed_account_balance"
+          ]
+        },
         "invariants_passed": {
           "type": "boolean",
           "source_bindings": [
@@ -962,9 +984,9 @@
     "producer_nodes_equal_write_mapping_plus_schema_creation": true,
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
-      "keep": 101,
-      "transform": 58,
-      "remove": 56
+      "keep": 102,
+      "transform": 59,
+      "remove": 54
     }
   },
   "tables": [
@@ -1640,7 +1662,7 @@
           "disposition": "transform",
           "target_table": "finance_ingestion_state",
           "target_artifact": null,
-          "target_field": "committed_run_id",
+          "target_field": "receipt_run_id",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -1690,10 +1712,10 @@
         {
           "source_column": "run_upper_bound",
           "source_type": "date",
-          "disposition": "keep",
+          "disposition": "transform",
           "target_table": "finance_ingestion_state",
           "target_artifact": null,
-          "target_field": "run_upper_bound",
+          "target_field": "receipt_run_upper_bound",
           "constraints": [
             "type:date"
           ],
@@ -4218,10 +4240,10 @@
         {
           "source_column": "expected_account_balance",
           "source_type": "number",
-          "disposition": "remove",
-          "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
+          "target_artifact": "actual-verification-v2",
+          "target_field": "expected_account_balance",
           "constraints": [
             "type:number"
           ],
@@ -4235,10 +4257,10 @@
         {
           "source_column": "observed_account_balance",
           "source_type": "number",
-          "disposition": "remove",
-          "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "disposition": "keep",
+          "target_table": "finance_actual_batches",
+          "target_artifact": "actual-verification-v2",
+          "target_field": "observed_account_balance",
           "constraints": [
             "type:number"
           ],

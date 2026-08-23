@@ -75,16 +75,18 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_source_cursors.source_code",
                 "finance_acquisition_receipts.source_code",
             ),
+            "receipt_run_id": _target_column(
+                "string", "finance_acquisition_receipts.run_id"
+            ),
+            "receipt_run_upper_bound": _target_column(
+                "date", "finance_acquisition_receipts.run_upper_bound"
+            ),
             "cursor_value": _target_column("date", "finance_source_cursors.cursor_value"),
             "committed_run_id": _target_column(
-                "string",
-                "finance_source_cursors.committed_run_id",
-                "finance_acquisition_receipts.run_id",
+                "string", "finance_source_cursors.committed_run_id"
             ),
             "run_upper_bound": _target_column(
-                "date",
-                "finance_source_cursors.run_upper_bound",
-                "finance_acquisition_receipts.run_upper_bound",
+                "date", "finance_source_cursors.run_upper_bound"
             ),
             "overlap_seconds": _target_column("number", "finance_source_cursors.overlap_seconds"),
             "scanned_count": _target_column(
@@ -388,6 +390,12 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "observed_amount_sum_minor": _target_column(
                 "number", "finance_actual_verifications.observed_amount_sum_minor"
             ),
+            "expected_account_balance": _target_column(
+                "number", "finance_actual_verifications.expected_account_balance"
+            ),
+            "observed_account_balance": _target_column(
+                "number", "finance_actual_verifications.observed_account_balance"
+            ),
             "invariants_passed": _target_column(
                 "boolean", "finance_actual_verifications.invariants_passed"
             ),
@@ -609,7 +617,8 @@ ARTIFACT_PREFIXES = {
 }
 
 ACQUISITION_TARGET_FIELDS = {
-    "run_id": "committed_run_id",
+    "run_id": "receipt_run_id",
+    "run_upper_bound": "receipt_run_upper_bound",
     "window_start": "last_window_start",
     "pages_fetched": "last_pages_fetched",
     "pagination_exhausted": "last_pagination_exhausted",
@@ -893,8 +902,6 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         target_field = OUTBOX_TARGET_FIELDS.get(column, column)
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": target_field}
     if table_name == "finance_actual_verifications":
-        if column in {"expected_account_balance", "observed_account_balance"}:
-            return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         if column == "outbox_id":
             return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": "batch_id"}
         if column == "verification_version":

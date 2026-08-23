@@ -204,6 +204,76 @@ try {{
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
 
+    def run_failure_receipt_lifecycle(
+        self,
+        json_input: dict,
+        *,
+        drop_terminal_marker: bool = False,
+    ) -> dict:
+        nodes = self.nodes("16-operations-error-handler.json")
+        codes = {
+            name: nodes[name]["parameters"]["jsCode"]
+            for name in (
+                "Upsert Durable Failure Receipt",
+                "Read Back Failure Receipt",
+                "Mark Failure Readback Verified",
+                "Read Back Verified Failure Receipt",
+            )
+        }
+        script = f"""
+const codes = {json.dumps(codes)};
+const jsonInput = {json.dumps(json_input)};
+const values = new Map();
+const execution = {{
+  customData: {{
+    set: (key, value) => {{
+      if (typeof value !== 'string' || value.length > 255)
+        throw new Error('CUSTOM_DATA_VALUE_LIMIT');
+      values.set(key, value);
+    }},
+    get: key => values.get(key),
+  }},
+}};
+const refs = {{
+  'Mark Failure Readback Verified': {{ json: null }},
+}};
+const lookup = name => ({{ first: () => refs[name] }});
+const run = (name, input) => {{
+  const output = new Function('$json', '$execution', '$', 'require', codes[name])(
+    input,
+    execution,
+    lookup,
+    require,
+  );
+  return output[0].json;
+}};
+try {{
+  const persisted = run('Upsert Durable Failure Receipt', jsonInput);
+  const read = run('Read Back Failure Receipt', persisted);
+  const marked = run('Mark Failure Readback Verified', read);
+  refs['Mark Failure Readback Verified'] = {{ json: marked }};
+  if ({str(drop_terminal_marker).lower()})
+    values.delete('finance_failure_receipt_v1_readback_verified');
+  const terminal = run('Read Back Verified Failure Receipt', marked);
+  process.stdout.write(JSON.stringify({{ ok: true, terminal, values: Object.fromEntries(values) }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error), values: Object.fromEntries(values) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
+        result = subprocess.run(
+            [node, "-e", script],
+            cwd=ROOT,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
+
     def run_exported_workflow_node_with_items(
         self,
         workflow_filename: str,
@@ -621,6 +691,15 @@ try {{
         receipt_node = json.dumps(nodes["Upsert ENUMERATED Receipt"])
         self.assertIn("finance_ingestion_state", receipt_node)
         self.assertNotIn("finance_acquisition_receipts", receipt_node)
+        receipt_columns = nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"]["value"]
+        self.assertIn("receipt_run_id", receipt_columns)
+        self.assertIn("receipt_run_upper_bound", receipt_columns)
+        self.assertNotIn("committed_run_id", receipt_columns)
+        self.assertNotIn("run_upper_bound", receipt_columns)
+        self.assertIn(
+            "Project Enumeration Receipt Fields for Sweep",
+            nodes,
+        )
         self.assertEqual(
             [row["keyName"] for row in nodes["Upsert ENUMERATED Receipt"]["parameters"]["filters"]["conditions"]],
             ["source_code"],
@@ -629,6 +708,68 @@ try {{
         cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
         self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
+
+    def test_outlook_enumerate_receipt_projects_before_one_row_cursor_cas(self) -> None:
+        receipt = {
+            "source_code": "OUTLOOK_FINANCE_ACQUISITION",
+            "receipt_run_id": "run-new",
+            "receipt_run_upper_bound": "2026-08-31T00:00:00.000Z",
+            "committed_run_id": "run-old",
+            "cursor_value": "2026-07-31T00:00:00.000Z",
+            "run_upper_bound": "2026-07-31T00:00:00.000Z",
+            "cursor_version": 4,
+        }
+        projected = self.run_exported_workflow_node(
+            "12-outlook-message-sweep.json",
+            "Project Enumeration Receipt Fields for Sweep",
+            receipt,
+            {},
+        )
+        self.assertTrue(projected["ok"], projected)
+        projected_row = projected["output"][0]["json"]
+        self.assertEqual(projected_row["run_id"], "run-new")
+        self.assertEqual(projected_row["run_upper_bound"], "2026-08-31T00:00:00.000Z")
+        proof = {
+            "source_code": "OUTLOOK_FINANCE_ACQUISITION",
+            "run_id": "run-new",
+            "run_upper_bound": "2026-08-31T00:00:00.000Z",
+            "terminal_state": "ARCHIVED",
+            "readback_verified": True,
+            "expected_cursor_version": 4,
+        }
+        detected = self.run_exported_workflow_node(
+            "12-outlook-message-sweep.json",
+            "Determine Existing Cursor Commit",
+            receipt,
+            {"Verify Downstream Persistence Proof": {"json": proof}},
+        )
+        self.assertTrue(detected["ok"], detected)
+        detected_row = detected["output"][0]["json"]
+        self.assertFalse(detected_row["cursor_recovery"])
+        self.assertEqual(detected_row["resume_path"], "CAS")
+        built = self.run_exported_workflow_node(
+            "12-outlook-message-sweep.json",
+            "Build Cursor CAS Update",
+            detected_row,
+            {"Verify Downstream Persistence Proof": {"json": proof}},
+        )
+        self.assertTrue(built["ok"], built)
+        self.assertEqual(built["output"][0]["json"]["prior_cursor_version"], 4)
+        self.assertEqual(built["output"][0]["json"]["next_cursor_version"], 5)
+        cas_row = {
+            **receipt,
+            "committed_run_id": "run-new",
+            "cursor_value": "2026-08-31T00:00:00.000Z",
+            "run_upper_bound": "2026-08-31T00:00:00.000Z",
+            "cursor_version": 5,
+        }
+        compared = self.run_exported_workflow_node(
+            "12-outlook-message-sweep.json",
+            "Compare CAS Cursor Readback",
+            cas_row,
+            {"Build Cursor CAS Update": {"json": built["output"][0]["json"]}},
+        )
+        self.assertTrue(compared["ok"], compared)
 
     def test_email_identity_is_derived_after_authoritative_policy_binding(self) -> None:
         workflow = self.workflow("12-outlook-message-sweep.json")
@@ -960,6 +1101,8 @@ try {{
             "period_end": "2026-08-31",
             "expected_payload_sha256": digest,
             "observed_payload_sha256": digest,
+            "expected_account_balance": -100,
+            "observed_account_balance": -100,
             "invariants_passed": True,
         }
         replay = self.run_exported_workflow_node(
@@ -975,6 +1118,7 @@ try {{
                         "card_code": "EI_AMAZON",
                         "period_start": "2026-08-01",
                         "period_end": "2026-08-31",
+                        "expected_statement_balance_minor": -100,
                     },
                 }},
                 "Read Back COMMITTED Recovery Replay": {"json": selected_row},
@@ -1027,6 +1171,7 @@ try {{
         }
         receipt = {
             "batch_id": "outbox:replay-1",
+            "idempotency_key": "outbox:replay-1",
             "actual_file_id": "actual-file:replay-1",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
@@ -1054,6 +1199,7 @@ try {{
                         "card_code": "EI_AMAZON",
                         "period_start": "2026-08-01",
                         "period_end": "2026-08-31",
+                        "expected_statement_balance_minor": -100,
                     },
                 }
             },
@@ -1081,6 +1227,40 @@ try {{
         self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
         self.assertEqual(replay["output"][0]["json"]["state"], "COMMITTED")
         self.assertTrue(replay["output"][0]["json"]["writer_release_verified"])
+        fresh = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Compare Exact Actual Verification Receipt",
+            receipt,
+            {
+                "Verify Recovery Contract": {"json": {
+                    "outbox_row": committed,
+                    "manifest": {"expected_statement_balance_minor": -100},
+                }},
+                "Recovery Verify Actual": {"json": {"actual": {
+                    "expected_sha256": digest,
+                    "observed_sha256": digest,
+                    "account_balance": -100,
+                }}},
+            },
+        )
+        self.assertTrue(fresh["ok"], fresh)
+        bad_balance = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json",
+            "Compare Exact Actual Verification Receipt",
+            {**receipt, "observed_account_balance": -101},
+            {
+                "Verify Recovery Contract": {"json": {
+                    "outbox_row": committed,
+                    "manifest": {"expected_statement_balance_minor": -100},
+                }},
+                "Recovery Verify Actual": {"json": {"actual": {
+                    "expected_sha256": digest,
+                    "observed_sha256": digest,
+                    "account_balance": -100,
+                }}},
+            },
+        )
+        self.assertFalse(bad_balance["ok"])
         normal = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
             "Return Verified Commit Receipt",
@@ -1128,6 +1308,7 @@ try {{
             ({**committed, "state": "ACTUAL_OBSERVED"}, receipt),
             (committed, {**receipt, "card_code": "RAK_WORLD"}),
             (committed, {**receipt, "observed_payload_sha256": "b" * 64}),
+            (committed, {**receipt, "observed_account_balance": -101}),
         )
         for invalid_committed, invalid_receipt in invalid_cases:
             rejected = self.run_exported_workflow_node(
@@ -1194,8 +1375,32 @@ try {{
         readback = self.nodes("16-operations-error-handler.json")["Read Back Failure Receipt"]["parameters"]["jsCode"]
         self.assertIn("customData", sink)
         self.assertIn("customData", readback)
+        self.assertIn("finance_failure_receipt_v1_", sink)
+        self.assertIn("length > 255", sink)
+        self.assertIn("finance_failure_receipt_v1_readback_verified", self.nodes("16-operations-error-handler.json")["Mark Failure Readback Verified"]["parameters"]["jsCode"])
         self.assertIn("FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH", readback)
         self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
+        receipt = {
+            "execution_id": "exec-1",
+            "workflow_id": "workflow-1",
+            "workflow_name": "Finance Failure Handler",
+            "workflow_code": "OPERATIONS_ERROR_HANDLER",
+            "run_id": "exec-1",
+            "provider_code": "N8N_API",
+            "error_class": "TERMINAL",
+            "error_message_redacted": "safe failure [REDACTED]",
+            "first_seen_at": "2026-08-23T00:00:00.000Z",
+        }
+        lifecycle = self.run_failure_receipt_lifecycle(receipt)
+        self.assertTrue(lifecycle["ok"], lifecycle)
+        self.assertTrue(lifecycle["terminal"]["readback_verified"])
+        self.assertEqual(lifecycle["values"]["finance_failure_receipt_v1_readback_verified"], "true")
+        self.assertTrue(all(len(value) <= 255 for value in lifecycle["values"].values()))
+        missing_marker = self.run_failure_receipt_lifecycle(receipt, drop_terminal_marker=True)
+        self.assertFalse(missing_marker["ok"])
+        oversized = self.run_failure_receipt_lifecycle({**receipt, "workflow_name": "x" * 256})
+        self.assertFalse(oversized["ok"])
+        self.assertIn("FIELD_TOO_LARGE:workflow_name", oversized["error"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
         handoff = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")

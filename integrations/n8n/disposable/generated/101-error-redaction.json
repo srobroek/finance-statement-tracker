@@ -37,7 +37,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 500), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Subscription Agent/i.test(last) ? 'CODEX_SUBSCRIPTION' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 220), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Subscription Agent/i.test(last) ? 'CODEX_SUBSCRIPTION' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
       }
     },
     {
@@ -50,7 +50,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nconst receipt = { ...$json, terminal_receipt_sink: 'n8n_execution_history', readback_verified: false };\nsink.set('finance_failure_receipt_v1', JSON.stringify(receipt));\nreturn [{ json: receipt }];\n"
+        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'run_id', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink', 'readback_verified'];\nconst receipt = { ...$json, terminal_receipt_sink: 'n8n_execution_history', readback_verified: false };\nfor (const field of fields) {\n    const value = String(receipt[field] ?? '');\n    if (value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_FIELD_TOO_LARGE:' + field);\n    sink.set('finance_failure_receipt_v1_' + field, value);\n}\nreturn [{ json: receipt }];\n"
       }
     },
     {
@@ -63,7 +63,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData, serialized = sink && typeof sink.get === 'function' ? sink.get('finance_failure_receipt_v1') : '';\nif (typeof serialized !== 'string' || !serialized)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\nlet receipt;\ntry {\n    receipt = JSON.parse(serialized);\n}\ncatch {\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_INVALID');\n}\nif (!receipt || receipt.terminal_receipt_sink !== 'n8n_execution_history' || receipt.readback_verified !== false)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH');\nreturn [{ json: receipt }];\n"
+        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.get !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'run_id', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink'];\nconst receipt = {};\nfor (const field of fields) {\n    const value = sink.get('finance_failure_receipt_v1_' + field);\n    if (typeof value !== 'string' || value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\n    receipt[field] = value;\n}\nif (receipt.terminal_receipt_sink !== 'n8n_execution_history' || sink.get('finance_failure_receipt_v1_readback_verified') !== 'false')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: false } }];\n"
       }
     },
     {
@@ -89,7 +89,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Mark Failure Readback Verified. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Mark Failure Readback Verified. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nsink.set('finance_failure_receipt_v1_readback_verified', 'true');\nreturn [{ json: { ...$json, readback_verified: true } }];\n"
       }
     },
     {
@@ -102,7 +102,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData, serialized = sink && typeof sink.get === 'function' ? sink.get('finance_failure_receipt_v1') : '';\nif (typeof serialized !== 'string' || !serialized)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\nlet receipt;\ntry {\n    receipt = JSON.parse(serialized);\n}\ncatch {\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_INVALID');\n}\nconst verified = $('Mark Failure Readback Verified').first().json;\nif (!receipt || receipt.terminal_receipt_sink !== 'n8n_execution_history' || receipt.execution_id !== verified.execution_id || receipt.error_message_redacted !== verified.error_message_redacted)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.get !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'run_id', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink'];\nconst receipt = {};\nfor (const field of fields) {\n    const value = sink.get('finance_failure_receipt_v1_' + field);\n    if (typeof value !== 'string' || value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\n    receipt[field] = value;\n}\nif (receipt.terminal_receipt_sink !== 'n8n_execution_history' || sink.get('finance_failure_receipt_v1_readback_verified') !== 'true')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nconst verified = $('Mark Failure Readback Verified').first().json;\nfor (const field of fields)\n    if (String(receipt[field]) !== String(verified[field] ?? ''))\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: true } }];\n"
       }
     },
     {
