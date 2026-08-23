@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -25,15 +24,6 @@ SCAN_ROOTS = (
     "integrations/n8n/workflows/*.json",
     "integrations/n8n/disposable/generated/*.json",
     "integrations/n8n/setup-workflows/*.json",
-)
-# Provenance follows the last commit touching the scanned source tree.  The
-# generator, schema, output, and tests live outside these paths, so committing
-# the tooling cannot make its own --check stale.
-SOURCE_REF_PATHS = (
-    "integrations/n8n/data-tables.json",
-    "integrations/n8n/workflows",
-    "integrations/n8n/disposable/generated",
-    "integrations/n8n/setup-workflows",
 )
 OPERATIONS = ("create", "get", "insert", "upsert", "update", "list")
 TARGETS = (
@@ -678,32 +668,19 @@ def json_paths() -> list[Path]:
 
 
 def source_ref() -> str:
-    """Return the latest committed source ref before the current commit.
+    """Return a content-derived, Git-compatible identity for the source corpus.
 
-    The matrix and its source changes are committed together. Excluding the
-    current commit prevents the generated provenance field from hashing its
-    own commit cycle while remaining stable after the branch is landed.
+    A commit ref is inherently unstable while source files and this generated
+    matrix are committed together: the next source commit changes the value
+    that the previous matrix recorded.  Deriving the 40-character identity
+    from normalized source bytes keeps provenance stable across commits and
+    across checkouts while retaining the existing schema contract.
     """
-    try:
-        base_ref = subprocess.run(
-            ["git", "rev-parse", "HEAD^"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
-        base_ref = "HEAD"
-    commit = subprocess.run(
-        ["git", "log", "-1", "--format=%H", base_ref, "--", *SOURCE_REF_PATHS],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if not commit:
-        raise MatrixError("unable to resolve a commit for the scanned source corpus")
-    return commit
+    lines = []
+    for path in [DATA_TABLES, *json_paths()]:
+        relative = path.relative_to(ROOT).as_posix()
+        lines.append(f"{sha256_bytes(normalized_bytes(path))}  {relative}\n".encode())
+    return hashlib.sha1(b"".join(sorted(lines))).hexdigest()
 
 
 def source_snapshot() -> dict[str, str]:
@@ -717,8 +694,9 @@ def source_snapshot() -> dict[str, str]:
         "data_tables_sha256": sha256_bytes(normalized_bytes(DATA_TABLES)),
         "node_scan_corpus_sha256": corpus,
         "source_ref_selection": (
-            "Latest parent git commit touching data-tables.json and the scan-root directories; "
-            "the current source-and-generator commit is excluded to avoid a provenance cycle."
+            "Content-derived Git-compatible identity over normalized data-tables.json and the "
+            "scan-root directories; commit topology and generated outputs are excluded to keep "
+            "provenance stable across source commits."
         ),
         "node_scan_digest_method": (
             "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete "

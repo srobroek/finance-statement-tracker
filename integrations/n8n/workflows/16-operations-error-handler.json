@@ -37,7 +37,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nconst receipt = { ...$json, terminal_receipt_sink: 'n8n_execution_history', readback_verified: false };\nsink.set('finance_failure_receipt_v1', JSON.stringify(receipt));\nreturn [{ json: receipt }];\n"
       }
     },
     {
@@ -50,7 +50,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Redact and Classify Failure').first().json, readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData, serialized = sink && typeof sink.get === 'function' ? sink.get('finance_failure_receipt_v1') : '';\nif (typeof serialized !== 'string' || !serialized)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\nlet receipt;\ntry {\n    receipt = JSON.parse(serialized);\n}\ncatch {\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_INVALID');\n}\nif (!receipt || receipt.terminal_receipt_sink !== 'n8n_execution_history' || receipt.readback_verified !== false)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH');\nreturn [{ json: receipt }];\n"
       }
     },
     {
@@ -89,7 +89,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Mark Failure Readback Verified').first().json, readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData, serialized = sink && typeof sink.get === 'function' ? sink.get('finance_failure_receipt_v1') : '';\nif (typeof serialized !== 'string' || !serialized)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\nlet receipt;\ntry {\n    receipt = JSON.parse(serialized);\n}\ncatch {\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_INVALID');\n}\nconst verified = $('Mark Failure Readback Verified').first().json;\nif (!receipt || receipt.terminal_receipt_sink !== 'n8n_execution_history' || receipt.execution_id !== verified.execution_id || receipt.error_message_redacted !== verified.error_message_redacted)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: true } }];\n"
       }
     },
     {

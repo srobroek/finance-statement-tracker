@@ -2626,16 +2626,16 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "parameters": {
                 "resource": "row",
                 "operation": "upsert",
-                "dataTableId": {"__rl": True, "value": "finance_actual_verifications", "mode": "name"},
+                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
                 "matchType": "allConditions",
                 "filters": {"conditions": [
-                    {"keyName": "outbox_id", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"},
-                    {"keyName": "verification_version", "condition": "eq", "keyValue": 1},
+                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
                 ]},
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
-                        "outbox_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}",
+                        "idempotency_key": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                        "batch_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}",
                         "verification_version": 1,
                         "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
                         "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
@@ -2670,13 +2670,12 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "parameters": {
                 "resource": "row",
                 "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_actual_verifications", "mode": "name"},
+                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
                 "returnAll": False,
                 "limit": 1,
                 "matchType": "allConditions",
                 "filters": {"conditions": [
-                    {"keyName": "outbox_id", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"},
-                    {"keyName": "verification_version", "condition": "eq", "keyValue": 1},
+                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
                     {"keyName": "invariants_passed", "condition": "eq", "keyValue": True},
                 ]},
                 "options": {},
@@ -2692,7 +2691,9 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
 const observed = $json;
 const result = $('Recovery Verify Actual').first().json;
 if (
-  observed.expected_payload_sha256 !== result.expected_sha256
+  observed.idempotency_key !== $('Verify Recovery Contract').first().json.outbox_row.idempotency_key
+  || !observed.idempotency_key
+  || observed.expected_payload_sha256 !== result.expected_sha256
   || observed.observed_payload_sha256 !== result.observed_sha256
   || observed.expected_payload_sha256 !== observed.observed_payload_sha256
   || Number(observed.observed_account_balance) !== Number(result.account_balance)

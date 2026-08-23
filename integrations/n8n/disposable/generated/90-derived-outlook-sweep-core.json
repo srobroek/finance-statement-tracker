@@ -230,11 +230,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}"
@@ -295,11 +290,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}"
@@ -349,11 +339,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Validate Sweep or Commit').item.json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -605,11 +590,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Determine Existing Cursor Commit').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Determine Existing Cursor Commit').item.json.source_code }}"
@@ -675,11 +655,6 @@
               "keyValue": "={{ $json.cursor_recovery === true ? $json.cursor_version : $json.next_cursor_version }}"
             },
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.run_id }}"
-            },
-            {
               "keyName": "cursor_value",
               "condition": "eq",
               "keyValue": "={{ $json.run_upper_bound }}"
@@ -743,11 +718,6 @@
               "keyName": "cursor_version",
               "condition": "eq",
               "keyValue": "={{ $json.cursor_recovery === true ? $json.cursor_version : $json.next_cursor_version }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.run_id }}"
             },
             {
               "keyName": "cursor_value",
@@ -880,11 +850,6 @@
               "keyName": "cursor_version",
               "condition": "eq",
               "keyValue": "={{ $('Build Cursor CAS Update').item.json.next_cursor_version }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_id }}"
             }
           ]
         },
@@ -924,11 +889,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -986,11 +946,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1058,11 +1013,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
@@ -1122,11 +1072,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1363,11 +1308,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.source_code }}"
@@ -1475,11 +1415,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
@@ -1540,11 +1475,6 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
-            },
-            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
@@ -1597,11 +1527,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1662,11 +1587,6 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.run_id }}"
-            },
             {
               "keyName": "source_code",
               "condition": "eq",

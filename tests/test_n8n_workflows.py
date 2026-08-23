@@ -621,6 +621,10 @@ try {{
         receipt_node = json.dumps(nodes["Upsert ENUMERATED Receipt"])
         self.assertIn("finance_ingestion_state", receipt_node)
         self.assertNotIn("finance_acquisition_receipts", receipt_node)
+        self.assertEqual(
+            [row["keyName"] for row in nodes["Upsert ENUMERATED Receipt"]["parameters"]["filters"]["conditions"]],
+            ["source_code"],
+        )
         self.assertEqual(nodes["CAS Update Source Cursor"]["parameters"]["operation"], "update")
         cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
         self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
@@ -840,6 +844,14 @@ try {{
         writer_nodes = self.nodes("20-actual-outbox-apply.json")
         self.assertIn(
             "card_code",
+            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["columns"]["value"],
+        )
+        self.assertEqual(
+            [row["keyName"] for row in writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["filters"]["conditions"]],
+            ["idempotency_key"],
+        )
+        self.assertIn(
+            "idempotency_key",
             writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["columns"]["value"],
         )
         self.assertNotIn(
@@ -1178,6 +1190,11 @@ try {{
         code = self.nodes("16-operations-error-handler.json")["Redact and Classify Failure"]["parameters"]["jsCode"]
         self.assertIn("[REDACTED]", code)
         self.assertIn("provider_code", code)
+        sink = self.nodes("16-operations-error-handler.json")["Upsert Durable Failure Receipt"]["parameters"]["jsCode"]
+        readback = self.nodes("16-operations-error-handler.json")["Read Back Failure Receipt"]["parameters"]["jsCode"]
+        self.assertIn("customData", sink)
+        self.assertIn("customData", readback)
+        self.assertIn("FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH", readback)
         self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:

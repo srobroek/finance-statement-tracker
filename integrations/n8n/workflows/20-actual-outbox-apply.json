@@ -797,14 +797,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "batch_id",
+              "keyName": "idempotency_key",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}"
-            },
-            {
-              "keyName": "verification_version",
-              "condition": "eq",
-              "keyValue": 1
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"
             },
             {
               "keyName": "invariants_passed",
@@ -874,20 +869,16 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "batch_id",
+              "keyName": "idempotency_key",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}"
-            },
-            {
-              "keyName": "verification_version",
-              "condition": "eq",
-              "keyValue": 1
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
+            "idempotency_key": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
             "batch_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}",
             "verification_version": 1,
             "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
@@ -938,14 +929,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "batch_id",
+              "keyName": "idempotency_key",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}"
-            },
-            {
-              "keyName": "verification_version",
-              "condition": "eq",
-              "keyValue": 1
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"
             },
             {
               "keyName": "invariants_passed",
