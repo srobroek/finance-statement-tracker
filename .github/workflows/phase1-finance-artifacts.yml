@@ -42,31 +42,25 @@ jobs:
           npm ci --omit=dev --ignore-scripts --legacy-peer-deps
           npm audit --omit=dev --audit-level=high
           test "$(node -p "require('./node_modules/n8n-nodes-prodex/package.json').version")" = "0.5.1"
-          test "$(node -p "require('./node_modules/@ggomez91npm/n8n-nodes-claude-code/package.json').version")" = "0.8.0"
-          test "$(node -p "require('./node_modules/@anthropic-ai/claude-code/package.json').version")" = "2.1.235"
-          node node_modules/@anthropic-ai/claude-code/install.cjs
-          test "$(./node_modules/.bin/claude --version)" = "2.1.235 (Claude Code)"
       - name: Build exact custom n8n image
         run: docker build --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
       - name: Smoke custom node image
         run: |
           test "$(docker run --rm --entrypoint n8n finance-n8n:${{ github.sha }} --version)" = "2.36.2"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const root='/opt/finance-n8n/custom-extensions/n8n-nodes-finance'; const p=require(root+'/package.json'); if(p.version!=='0.1.0'||process.env.N8N_CUSTOM_EXTENSIONS!==undefined) process.exit(1); for(const f of ['ActualBudget/ActualBudget.node.js','FinancePdf/FinancePdf.node.js','FinanceRules/FinanceRules.node.js','FinanceStatement/FinanceStatement.node.js']) require(root+'/dist/nodes/'+f); for(const f of ['ActualBudgetApi.credentials.js','FinanceStatementPassword.credentials.js']) require(root+'/dist/credentials/'+f);"
-          test "$(docker run --rm --entrypoint /opt/finance-n8n/community-extensions/node_modules/.bin/claude finance-n8n:${{ github.sha }} --version)" = "2.1.235 (Claude Code)"
           state_dir="$(mktemp -d)"
           chmod 0777 "$state_dir"
           docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
           docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
           test "$(readlink "$state_dir/nodes/node_modules/n8n-nodes-finance")" = "/opt/finance-n8n/custom-extensions/n8n-nodes-finance"
           test "$(readlink "$state_dir/nodes/node_modules/n8n-nodes-prodex")" = "/opt/finance-n8n/community-extensions/node_modules/n8n-nodes-prodex"
-          test "$(readlink "$state_dir/nodes/node_modules/@ggomez91npm/n8n-nodes-claude-code")" = "/opt/finance-n8n/community-extensions/node_modules/@ggomez91npm/n8n-nodes-claude-code"
           docker run --rm \
             --entrypoint node \
             -v "$state_dir:/home/node/.n8n" \
             --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
             finance-n8n:${{ github.sha }} \
             /opt/finance-n8n/assert-runtime-registration.cjs export:nodes --output=/tmp/node-types.json | \
-            grep -Fx 'finance extension registration verified: 8 nodes, 3 credentials'
+            grep -Fx 'finance extension registration verified: 7 nodes, 3 credentials'
           if docker run --rm -e OPENAI_API_KEY=forbidden -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version; then
             echo "API-key-bearing community runtime unexpectedly passed" >&2
             exit 1

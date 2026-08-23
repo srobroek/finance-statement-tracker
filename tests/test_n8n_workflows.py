@@ -3180,7 +3180,6 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             {(row["package"], row["version"]) for row in lock["packages"]},
             {
                 ("n8n-nodes-prodex", "0.5.1"),
-                ("@ggomez91npm/n8n-nodes-claude-code", "0.8.0"),
             },
         )
         nodes = self.nodes("21-subscription-agent-adapter.json")
@@ -3233,6 +3232,11 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertNotIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
         self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
 
+    def test_subscription_adapter_generator_is_direct_only(self) -> None:
+        generator = (N8N / "refactor_workflow_ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("CLAUDE_SUBSCRIPTION", generator)
+        self.assertNotIn("@ggomez91npm/n8n-nodes-claude-code", generator)
+
     def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:
         contract = self.registry["custom_nodes"]
         used = {
@@ -3248,7 +3252,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         readme = (N8N / "README.md").read_text(encoding="utf-8")
         self.assertIn("SPEC_ONLY", readme)
         self.assertIn("have not yet passed exact-image import", readme)
-        self.assertIn("API-key fallback is forbidden", readme)
+        self.assertIn("The policy forbids API-key fallback", readme)
         self.assertIn("native n8n OpenAI credential is not used", readme)
 
 

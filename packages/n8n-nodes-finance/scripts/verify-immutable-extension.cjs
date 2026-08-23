@@ -35,8 +35,6 @@ if (manifest.name !== 'n8n-nodes-finance' || manifest.version !== '0.1.0') {
 }
 const communityManifest = JSON.parse(fs.readFileSync(path.join(communityRoot, 'package.json'), 'utf8'));
 const expectedCommunity = {
-  '@anthropic-ai/claude-code': '2.1.235',
-  '@ggomez91npm/n8n-nodes-claude-code': '0.8.0',
   'n8n-nodes-prodex': '0.5.1',
 };
 if (JSON.stringify(communityManifest.dependencies) !== JSON.stringify(expectedCommunity)) {
@@ -46,7 +44,7 @@ for (const [name, version] of Object.entries(expectedCommunity)) {
   const installed = JSON.parse(fs.readFileSync(path.join(communityRoot, 'node_modules', name, 'package.json'), 'utf8'));
   if (installed.version !== version) throw new Error(`COMMUNITY_AI_INSTALLED_VERSION_MISMATCH:${name}`);
 }
-for (const forbidden of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']) {
+for (const forbidden of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN']) {
   if (process.env[forbidden] !== undefined) throw new Error(`COMMUNITY_AI_API_KEY_FORBIDDEN:${forbidden}`);
 }
 const hash = crypto.createHash('sha256');

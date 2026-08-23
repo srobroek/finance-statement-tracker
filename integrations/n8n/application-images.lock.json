@@ -107,6 +107,6 @@
   },
   "community_node_lock": {
     "path": "integrations/n8n/community-node-lock.json",
-    "sha256": "1247f8929e3c7131d1e26cdda17cdbeb5311943fae1967be1e78fa2524c497e0"
+    "sha256": "aabfc5b0ff9c76d634014f15ac8d0c6adb9c3c344494b4d567baf39e3f8d3803"
   }
 }

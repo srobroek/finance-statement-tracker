@@ -2293,10 +2293,6 @@ return [{
         "agent_provider = String(p.agent_provider || '')",
     )
     code = code.replace(
-        "!['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(agent_provider)",
-        "agent_provider !== 'CODEX_SUBSCRIPTION'",
-    )
-    code = code.replace(
         "agent_provider = String(p.agent_provider || ''), agent_provider = String(p.agent_provider || ''),",
         "agent_provider = String(p.agent_provider || ''),",
     )

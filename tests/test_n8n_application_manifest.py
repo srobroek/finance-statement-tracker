@@ -277,7 +277,6 @@ class N8nApplicationManifestTests(unittest.TestCase):
                 "n8n-nodes-prodex.prodex",
                 "n8n-nodes-prodex.prodexChatModel",
                 "n8n-nodes-prodex.prodexSetup",
-                "@ggomez91npm/n8n-nodes-claude-code.claude",
             },
         )
 
