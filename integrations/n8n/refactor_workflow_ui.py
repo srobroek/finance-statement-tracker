@@ -2293,6 +2293,10 @@ return [{
         "agent_provider = String(p.agent_provider || '')",
     )
     code = code.replace(
+        "!['CODEX_SUBSCRIPTION', 'CLAUDE_SUBSCRIPTION'].includes(agent_provider)",
+        "agent_provider !== 'CODEX_SUBSCRIPTION'",
+    )
+    code = code.replace(
         "agent_provider = String(p.agent_provider || ''), agent_provider = String(p.agent_provider || ''),",
         "agent_provider = String(p.agent_provider || ''),",
     )
@@ -2385,6 +2389,7 @@ return [{ json: {
 } }];
 """.strip()
     agent["meta"].pop("activeProvider", None)
+    agent["meta"].pop("providerBranchesEnabled", None)
     agent["meta"].update({
         "provider": "SUBSCRIPTION_AGENT_HANDOFF",
         "supportedProviders": ["CODEX_SUBSCRIPTION"],
@@ -3398,6 +3403,7 @@ return [{ json: normalized }];
         "Run Codex Subscription Provider": {"main": [[{"node": "Validate ProDex Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
     }
     adapter["meta"].update({
+        "supportedProviders": ["CODEX_SUBSCRIPTION"],
         "communityNodeInstallationDeferred": False,
         "communityNodeRuntimeProofRequired": True,
         "credentialBindings": [],
@@ -3406,6 +3412,7 @@ return [{ json: normalized }];
         "providerRuntimePolicyCallerControlled": False,
         "outputSchemaSource": "contracts/ai-proposal-v1.schema.json",
     })
+    adapter["meta"].pop("providerBranchesEnabled", None)
 
     invoke = next(
         node

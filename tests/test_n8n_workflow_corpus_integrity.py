@@ -235,7 +235,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "09-ai-proposal.json": {
         "nodes": 27, "sticky": 0,
         "node_ids_sha256": "8400f4d566da50dc7f4ee9a7fb78004b777e8be1269217b893a52dfce610584e",
-        "parameters_sha256": "867ef8cb14e50c9b48433d5faf4205eaf6fbb348f859e8e1f32a8875e74651fc",
+        "parameters_sha256": "071cfe118eeb7b7bc8a97f02bbd756a76fba12c796db8fb9041fd7d0ca10b896",
     },
     "10-finance-operations-status.json": {
         "nodes": 22, "sticky": 0,
@@ -251,7 +251,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 89, "edges": 94, "sticky": 0, "groups": 15,
         "node_ids_sha256": "4bd78f583a8a7b9d6395be9a098a6f686fe3d0d18befa5b4d3b9a3c23d902170",
         "connections_sha256": "f669daf06dfafd9d68f3ac8ad9dd0b6d7adedce8eb6caa8d4e167323bb4f7afb",
-        "parameters_sha256": "c6596f746b20f0787318adf2fb2a9bb5df5a838818b167cf6c8103b895fc627c",
+        "parameters_sha256": "86f2e57c99d7269ab090eec051d2b865209923ae2d701ff27de43634ea092c32",
         "groups_sha256": "1f0bf9b095e69a55a7231219ea7a810cbb6794f0a9a8ad5160020314ff0e39ad",
     },
     "13-document-extraction-request.json": {
@@ -290,11 +290,11 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "parameters_sha256": "177659990428667c1e8dc309f6454b1d12cdbb4bfb3ef711e6bcfca98b404e0c",
     },
     "21-subscription-agent-adapter.json": {
-        "nodes": 8, "edges": 8, "sticky": 0, "groups": 1,
-        "node_ids_sha256": "b0e22a3275e99b1bf397cfc1b96a9ef6b9866af7ae71411edd3b4a7dc9c1f56a",
-        "connections_sha256": "dc9ef1e63829f6c2ef02d613ca6c9f4d15b7826ec808384e86612985655f646f",
-        "parameters_sha256": "2ce78d278f3fa20b345042534b5cf79923320f224e1e0aaffbffb3c5b131fdb4",
-        "groups_sha256": "e1990b4608b5f524f88b0190f3c1be4a625c9297f9610ad76ec8a181ad5fbf90",
+        "nodes": 5, "edges": 4, "sticky": 0, "groups": 1,
+        "node_ids_sha256": "1a110c098db11f745871eed5f147f8d49fc769fc24942fb3147f80146c34c262",
+        "connections_sha256": "2b1b9065d7e4ee46faf6c409e01f0ee1e4156d5b99c93861054c267922f939bd",
+        "parameters_sha256": "f26eabf1c370c50efdf63ae75431a9ee75778a2db80c08eaa730a741a658efe0",
+        "groups_sha256": "d591ac682902484fecae6ac68da4b601d353bc4a7dd9768cc92d7caaa514d814",
     },
     "22-shared-monthly-statement-cycle.json": {
         "nodes": 16, "sticky": 0,

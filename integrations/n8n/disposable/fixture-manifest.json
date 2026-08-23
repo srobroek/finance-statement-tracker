@@ -4,8 +4,8 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "35848cab4d6b6061e77b36b206fe4f01f774b47ef8c10825d4319c32602c83da",
-    "12-outlook-message-sweep.json": "ec6f3f61291adddc9b5d627018b1c8c914efa7fe3be9168558b4dc420541035f",
+    "09-ai-proposal.json": "8e10b8381f90488594f6ec6026fe577aaa7c800bec9aafd46d2be439701ba63e",
+    "12-outlook-message-sweep.json": "9fb52ca9e2364c169f861c6beab9af49e7d63a279d170cf58e161d8954ce698a",
     "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
@@ -14,27 +14,27 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "b31f53772ef288d331c24dd2e9adc3c38659a8e73c5c5dd05363d34ea2ffeb1b"
+      "sha256": "fd90f6f865b6598edf581a511bb15824691195f6010ba8c1636af2f39b578ec1"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "b677e89a30c442ebed8c49f6b311a24405e57e6412315e08fe33cf0ac668b1b3"
+      "sha256": "1c54e559ebd7d58d21c687033cbb119c7c4050fdfc57d2bcf3ea5bfee0732683"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "d55a7d117fc080fddbd7e72c8b6a1cc72a9a63c7b99747160419cdcef7973e0a"
+      "sha256": "fe689d51db8c35cca1f9d0736b251b9738fd1e4905b48b9c2430269a05c6d142"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "729e56038c1972348377a58b165c3836b4ee47eb1cddd49a0e19264076bb8ee6"
+      "sha256": "4a930bf7ff869700b4c5e38fff969b42620af06b7cb8615eb0ca34815fcb70ff"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "d7f9ab9d7f4df4fae011dc4578dcd28cb70e854051c5f526839fabaedd32c72b"
+      "sha256": "f940d5f966c41cf00437c6214db3a990c45384495f9f3894ba0c7abdeb1ada6e"
     },
     {
       "file": "95-lease-acquire-a.json",
@@ -54,27 +54,27 @@
     {
       "file": "98-ai-caller-model-rejected.json",
       "id": "90000000-0000-4000-8000-000000000908",
-      "sha256": "4918462a80e96203b5771645737d07d5b0fa1732c81d4702e156e57c82dbe735"
+      "sha256": "e280414290666dc3584bd543b2829cf9b7892dc7cb9713234f3390ff1f6e5a9f"
     },
     {
       "file": "99-ai-locked-field-rejected.json",
       "id": "90000000-0000-4000-8000-000000000909",
-      "sha256": "a84fe6ed449de87f58b2f411a778ae272390c1ab512290ec0c50dd72ef6f0720"
+      "sha256": "bb3f848fa5d2e82028357a850d3105ff67f5ba868ae7cfad44ce9b5a9b1eb8ed"
     },
     {
       "file": "100-ai-missing-policy-rejected.json",
       "id": "90000000-0000-4000-8000-000000000910",
-      "sha256": "deb4f4471e095524e4cc1bdd76547fd6f6e1b7dc4ba55238c6949dad09b2a075"
+      "sha256": "43d3e7d07679697ea6722d0f980506b297164fd4d511c33bcbaf40e73b737b68"
     },
     {
       "file": "106-ai-positive-luna.json",
       "id": "90000000-0000-4000-8000-000000000911",
-      "sha256": "9e44922db6713df25af7dc2f12d69fcb574f811f225a28a773784a724406c86c"
+      "sha256": "bab7d9353a0b92f1b489b2318263a95172897eca2f99144d75985e71d828ee4e"
     },
     {
       "file": "107-ai-positive-sol-gated.json",
       "id": "90000000-0000-4000-8000-000000000912",
-      "sha256": "6452bdab8def1eb9cb7de54f65b375d0fd1bbf89f52c56377201961597934910"
+      "sha256": "a26005e67d7b5c26b5daae5df598a7a52b9b195004c3dfc5aa9d43f7a3e3fca7"
     },
     {
       "file": "101-error-redaction.json",
