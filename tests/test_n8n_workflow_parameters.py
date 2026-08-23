@@ -150,7 +150,7 @@ class N8nWorkflowParameterTests(unittest.TestCase):
                 "20-actual-outbox-apply.json",
                 "Actual Writer Parameters",
                 "Download Immutable Delta Artifact",
-            ): ("artifact_item_id",),
+            ): ("delta_artifact_item_id",),
             (
                 "21-subscription-agent-adapter.json",
                 "Subscription Provider Parameters",

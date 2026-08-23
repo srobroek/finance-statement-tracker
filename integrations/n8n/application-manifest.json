@@ -30,12 +30,12 @@
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "00e0139f97816e0ba48e575a52a20c7550b05b130a2a20566a5f366237ab213e"
+    "sha256": "ef4a2fb541a7c6b6c6049707de06d4cd1d76df4735ac42731c61f6cc51f1093f"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-    "sha256": "8b9e7c86792fdd78eb8b1948f32597645ff739f59dd30117746475e8c97b95f3",
+    "sha256": "51692e1e709b2989432192b11c48b6c20cc34651ebb8ea29ba144f1aac9eadfb",
     "required_state": {
       "active": false,
       "published": false,
@@ -56,7 +56,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "c01ec76772b383900b5b470e0cb944e61f0bb71b65b728f8c39512040e131c78"
+      "sha256": "9757a92d823417ca5a5fc0566fe86ca7b6d901fb69e3fcfde83ae581208182b1"
     },
     "values_included": false,
     "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]

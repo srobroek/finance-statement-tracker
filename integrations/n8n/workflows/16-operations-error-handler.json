@@ -24,90 +24,33 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 500), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Subscription Agent/i.test(last) ? 'CODEX_SUBSCRIPTION' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Redact and Classify Failure. Keep this deterministic and fail closed.\nconst e = $json.execution || {}, w = $json.workflow || {}, last = String(e.lastNodeExecuted || '');\nconst raw = String(e.error?.message || $json.error?.message || 'Unknown workflow failure'), redacted = raw.replace(/(password|token|authorization|secret|cookie|account|card)\\s*[:=]\\s*[^\\s,;]+/gi, '$1:[REDACTED]').replace(/[A-Za-z0-9+/_=-]{32,}/g, '[REDACTED]').slice(0, 220), status = Number(e.error?.httpCode || e.error?.statusCode || 0), retryable = status === 429 || status >= 500 || /timeout|ECONNRESET|ENOTFOUND|temporar/i.test(raw);\nconst provider_code = /Outlook|OneDrive|Microsoft/i.test(last) ? 'MICROSOFT_GRAPH' : /Codex|Subscription Agent/i.test(last) ? 'CODEX_SUBSCRIPTION' : /Actual/i.test(last) ? 'ACTUAL_BUDGET' : /Cashback/i.test(last) ? 'CASHBACK_COMPANION' : /Finance Executions|n8n/i.test(last) ? 'N8N_API' : '';\nreturn [{ json: { execution_id: String(e.id || ''), workflow_id: String(w.id || ''), workflow_name: String(w.name || '').slice(0, 200), workflow_code: String(w.financeWorkflowCode || ''), run_id: String(e.id || ''), provider_code, error_class: retryable ? 'TRANSIENT' : 'TERMINAL', error_message_redacted: redacted, first_seen_at: new Date().toISOString(), readback_verified: false } }];\n"
       }
     },
     {
       "id": "16003",
       "name": "Upsert Durable Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -520,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.execution_id }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "execution_id": "={{ $json.execution_id }}",
-            "workflow_id": "={{ $json.workflow_id }}",
-            "workflow_name": "={{ $json.workflow_name }}",
-            "workflow_code": "={{ $json.workflow_code }}",
-            "run_id": "={{ $json.run_id }}",
-            "provider_code": "={{ $json.provider_code }}",
-            "error_class": "={{ $json.error_class }}",
-            "error_message_redacted": "={{ $json.error_message_redacted }}",
-            "first_seen_at": "={{ $json.first_seen_at }}",
-            "readback_verified": false
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Upsert Durable Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink', 'readback_verified'];\nif (fields.length > 10)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_COUNT_TOO_LARGE');\nconst customDataFieldFor = field => {\n    const customDataFieldName = 'finance_failure_receipt_v1_' + field;\n    if (customDataFieldName.length > 50)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_TOO_LARGE:' + field);\n    return customDataFieldName;\n};\nconst receipt = { ...$json, terminal_receipt_sink: 'n8n_execution_history', readback_verified: false };\nfor (const field of fields) {\n    const value = String(receipt[field] ?? '');\n    if (value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_FIELD_TOO_LARGE:' + field);\n    sink.set(customDataFieldFor(field), value);\n}\nreturn [{ json: receipt }];\n"
       }
     },
     {
       "id": "16004",
       "name": "Read Back Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -220,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.get !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink'];\nif (fields.length + 1 > 10)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_COUNT_TOO_LARGE');\nconst customDataFieldFor = field => {\n    const customDataFieldName = 'finance_failure_receipt_v1_' + field;\n    if (customDataFieldName.length > 50)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_TOO_LARGE:' + field);\n    return customDataFieldName;\n};\nconst receipt = {};\nfor (const field of fields) {\n    const value = sink.get(customDataFieldFor(field));\n    if (typeof value !== 'string' || value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\n    receipt[field] = value;\n}\nconst runId = $('Redact and Classify Failure').first().json.run_id;\nif (typeof runId !== 'string' || runId.length > 255)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_UNAVAILABLE');\nreceipt.run_id = runId;\nif (receipt.terminal_receipt_sink !== 'n8n_execution_history' || sink.get(customDataFieldFor('readback_verified')) !== 'false')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: false } }];\n"
       }
     },
     {
@@ -126,81 +69,27 @@
     {
       "id": "16006",
       "name": "Mark Failure Readback Verified",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         380,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $json.execution_id }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "execution_id": "={{ $json.execution_id }}",
-            "readback_verified": true
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Mark Failure Readback Verified. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.set !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_SINK_UNAVAILABLE');\nsink.set('finance_failure_receipt_v1_readback_verified', 'true');\nreturn [{ json: { ...$json, readback_verified: true } }];\n"
       }
     },
     {
       "id": "16007",
       "name": "Read Back Verified Failure Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         680,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_execution_failures",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "execution_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.execution_id }}"
-            },
-            {
-              "keyName": "readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back Verified Failure Receipt. Keep this deterministic and fail closed.\nconst sink = $execution?.customData;\nif (!sink || typeof sink.get !== 'function')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\nconst fields = ['execution_id', 'workflow_id', 'workflow_name', 'workflow_code', 'provider_code', 'error_class', 'error_message_redacted', 'first_seen_at', 'terminal_receipt_sink'];\nif (fields.length + 1 > 10)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_COUNT_TOO_LARGE');\nconst customDataFieldFor = field => {\n    const customDataFieldName = 'finance_failure_receipt_v1_' + field;\n    if (customDataFieldName.length > 50)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_KEY_TOO_LARGE:' + field);\n    return customDataFieldName;\n};\nconst receipt = {};\nfor (const field of fields) {\n    const value = sink.get(customDataFieldFor(field));\n    if (typeof value !== 'string' || value.length > 255)\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\n    receipt[field] = value;\n}\nconst runId = $('Redact and Classify Failure').first().json.run_id;\nif (typeof runId !== 'string' || runId.length > 255)\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_UNAVAILABLE');\nreceipt.run_id = runId;\nif (receipt.terminal_receipt_sink !== 'n8n_execution_history' || sink.get(customDataFieldFor('readback_verified')) !== 'true')\n    throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nconst verified = $('Mark Failure Readback Verified').first().json;\nfor (const field of [...fields, 'run_id'])\n    if (String(receipt[field]) !== String(verified[field] ?? ''))\n        throw new Error('FAILURE_RECEIPT_EXECUTION_LOG_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...receipt, readback_verified: true } }];\n"
       }
     },
     {
@@ -244,34 +133,14 @@
     {
       "id": "16009",
       "name": "Read Provider Circuit after Failure",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -1120,
         380
       ],
-      "alwaysOutputData": true,
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Redact and Classify Failure').item.json.provider_code }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Provider Circuit after Failure. Keep this deterministic and fail closed.\nconst failure = $('Redact and Classify Failure').first().json;\nreturn [{ json: { provider_code: failure.provider_code, state: 'CLOSED', transient_failure_count: 0, last_error_class: '', opened_at: null, retry_after: null, readback_verified: false } }];\n"
       }
     },
     {
@@ -290,87 +159,27 @@
     {
       "id": "16011",
       "name": "Upsert OPEN Provider Circuit",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -520,
         380
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $json.provider_code }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "provider_code": "={{ $json.provider_code }}",
-            "state": "OPEN",
-            "transient_failure_count": "={{ $json.transient_failure_count }}",
-            "last_error_class": "={{ $json.last_error_class }}",
-            "opened_at": "={{ $json.opened_at }}",
-            "retry_after": "={{ $json.retry_after }}",
-            "readback_verified": false,
-            "updated_at": "={{ $json.updated_at }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
+        "jsCode": "// Purpose: Upsert OPEN Provider Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
       }
     },
     {
       "id": "16012",
       "name": "Read Back OPEN Provider Circuit",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         -220,
         380
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_provider_circuits",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "provider_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Build OPEN Provider Circuit').item.json.provider_code }}"
-            },
-            {
-              "keyName": "state",
-              "condition": "eq",
-              "keyValue": "OPEN"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Purpose: Read Back OPEN Provider Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$('Build OPEN Provider Circuit').first().json, readback_verified: false } }];\n"
       }
     },
     {
@@ -533,7 +342,7 @@
     "mcpSafe": false,
     "migrationStatus": "SPEC_ONLY",
     "redactedOnly": true,
-    "terminalReceiptTable": "finance_execution_failures",
+    "terminalReceiptSink": "n8n_execution_history",
     "terminalReceiptReadback": true,
     "importTested": false,
     "credentialBindings": [],
@@ -547,7 +356,10 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "failureSink": "n8n execution history + external observability",
+    "failureReceiptTable": null,
+    "providerCircuitTable": null
   },
   "nodeGroups": [
     {

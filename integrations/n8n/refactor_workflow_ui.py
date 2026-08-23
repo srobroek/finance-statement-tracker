@@ -88,6 +88,49 @@ MONTHLY_SHARED_CALLER_SCHEMA = [
 ]
 
 
+def compact_policy_resolver(node: dict[str, object]) -> None:
+    """Keep the generated policy bundle readable to n8n's code-node linter.
+
+    The bundle is intentionally embedded in the workflow so the resolver does
+    not depend on a filesystem mount at runtime.  Escaping the JSON as short
+    JavaScript string chunks keeps each source line below the renderer's
+    maximum while preserving the exact bundle rows and filter logic.
+    """
+    parameters = node.get("parameters")
+    if not isinstance(parameters, dict):
+        raise RuntimeError("W09 policy resolver is missing parameters")
+    code = parameters.get("jsCode")
+    if not isinstance(code, str):
+        raise RuntimeError("W09 policy resolver is missing jsCode")
+    marker = "const rows = "
+    start = code.find(marker)
+    if start < 0:
+        raise RuntimeError("W09 policy resolver lost its rows declaration")
+    rows_start = start + len(marker)
+    if not code.startswith("[", rows_start):
+        # The renderer is deterministic and may run repeatedly.  A resolver
+        # already emitted as JSON.parse chunks is already in canonical form.
+        if code.startswith("JSON.parse(", rows_start):
+            return
+        raise RuntimeError("W09 policy resolver rows are not a JSON array")
+    rows_end = code.find("].filter", rows_start)
+    if rows_end < 0:
+        raise RuntimeError("W09 policy resolver lost its row filter")
+    rows_end += 1
+    try:
+        rows = json.loads(code[rows_start:rows_end])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("W09 policy resolver rows are not valid JSON") from exc
+    serialized = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+    chunks = [serialized[index : index + 220] for index in range(0, len(serialized), 220)]
+    literals = "\n".join(
+        ("    " if index == 0 else "    + ") + json.dumps(chunk, ensure_ascii=False)
+        for index, chunk in enumerate(chunks)
+    )
+    replacement = "const rows = JSON.parse(\n" + literals + "\n)"
+    parameters["jsCode"] = code[:start] + replacement + code[rows_end:]
+
+
 def monthly_shared_trigger_parameters() -> dict:
     """Return the native Execute Workflow trigger input declaration."""
     return {"workflowInputs": {"values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))}}
@@ -128,6 +171,33 @@ OPERATOR_WARNING_NOTE_IDS = {
     "10000000-0000-4000-8000-000000000015-generated-note-1",
 }
 
+# Legacy field aliases are incompatible with the canonical four-table runtime:
+# each workflow must consume and emit the target schema directly.  Strip stale
+# blocks left by an interrupted migration before formatting generated exports.
+STATE_ALIAS_BLOCK = """if ($json && typeof $json === 'object') {
+    const __stateAliases = {
+        run_id: 'committed_run_id',
+        window_start: 'last_window_start',
+        pages_fetched: 'last_pages_fetched',
+        pagination_exhausted: 'last_pagination_exhausted',
+        heartbeat: 'last_heartbeat',
+        terminal_state: 'last_terminal_state',
+        created_at: 'last_receipt_created_at',
+    };
+    for (const [__legacy, __canonical] of Object.entries(__stateAliases)) {
+        if ($json[__legacy] === undefined && $json[__canonical] !== undefined)
+            $json[__legacy] = $json[__canonical];
+    }
+}
+"""
+SHORT_STATE_ALIAS_BLOCK = """if ($json && typeof $json === 'object') {
+    const aliases = { run_id: 'committed_run_id', window_start: 'last_window_start', pagination_exhausted: 'last_pagination_exhausted', terminal_state: 'last_terminal_state' };
+    for (const [legacy, canonical] of Object.entries(aliases))
+        if ($json[legacy] === undefined && $json[canonical] !== undefined)
+            $json[legacy] = $json[canonical];
+}
+"""
+
 FORMATTER = r"""
 const fs = require('fs');
 const ts = require(process.argv[1]);
@@ -155,11 +225,23 @@ def format_code_nodes(workflows: list[dict]) -> None:
     payload = []
     for node in nodes:
         code = node["parameters"]["jsCode"]
+        code = code.replace(STATE_ALIAS_BLOCK, "").replace(SHORT_STATE_ALIAS_BLOCK, "")
+        # Purpose comments are renderer-owned.  Remove any stale copies even
+        # when a prior migration inserted code between two generated headers.
         code = re.sub(
-            r"^(?:// Purpose: .*? Keep this deterministic and fail closed\.\r?\n)+",
+            r"(?m)^// Purpose: .*? Keep this deterministic and fail closed\.\r?\n",
             "",
             code,
         )
+        purpose_seen = False
+        cleaned_lines = []
+        for line in code.splitlines():
+            if line.startswith("// Purpose:"):
+                if purpose_seen:
+                    continue
+                purpose_seen = True
+            cleaned_lines.append(line)
+        code = "\n".join(cleaned_lines) + ("\n" if code.endswith("\n") else "")
         payload.append({"name": node["name"], "code": code})
     completed = subprocess.run(
         ["node", "-e", FORMATTER, str(TYPESCRIPT)],
@@ -381,6 +463,21 @@ def assert_archive_readback_contract(workflows: list[dict]) -> None:
     }
     for source, target in expected_edges.items():
         edges = w12["connections"].get(source, {}).get("main", [[]])[0]
+        if any(edge.get("node") == target for edge in edges):
+            continue
+        projected = [
+            edge.get("node")
+            for edge in edges
+            if str(edge.get("node", "")).startswith("Project Enumeration Receipt Fields")
+        ]
+        if projected and any(
+            any(
+                edge.get("node") == target
+                for edge in w12["connections"].get(node, {}).get("main", [[]])[0]
+            )
+            for node in projected
+        ):
+            continue
         if not any(edge.get("node") == target for edge in edges):
             raise ValueError(f"W12 archive readback missing connection {source} -> {target}")
     verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"]
@@ -803,6 +900,28 @@ return candidates
             acquisition["connections"].pop(name, None)
 
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    receipt_projection = r"""
+const receipt = $json;
+for (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {
+  if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {
+    throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);
+  }
+}
+return [{ json: {
+  ...receipt,
+  run_id: receipt.receipt_run_id,
+  run_upper_bound: receipt.receipt_run_upper_bound,
+  window_start: receipt.last_window_start,
+  pages_fetched: receipt.last_pages_fetched,
+  pagination_exhausted: receipt.last_pagination_exhausted,
+  heartbeat: receipt.last_heartbeat,
+  terminal_state: receipt.last_terminal_state,
+  created_at: receipt.last_receipt_created_at,
+} }];
+""".strip()
+    for node in sweep["nodes"]:
+        if node["name"].startswith("Project Enumeration Receipt Fields"):
+            node["parameters"]["jsCode"] = receipt_projection
     freeze = node_by_name(sweep, "Freeze Trusted Cursor Window")
     freeze["parameters"]["jsCode"] = r"""
 const request = $json;
@@ -2544,19 +2663,20 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "parameters": {
                 "resource": "row",
                 "operation": "upsert",
-                "dataTableId": {"__rl": True, "value": "finance_actual_verifications", "mode": "name"},
+                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
                 "matchType": "allConditions",
                 "filters": {"conditions": [
-                    {"keyName": "outbox_id", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"},
-                    {"keyName": "verification_version", "condition": "eq", "keyValue": 1},
+                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
                 ]},
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
-                        "outbox_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}",
+                        "idempotency_key": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                        "batch_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}",
                         "verification_version": 1,
                         "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
                         "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
+                        "card_code": "={{ $('Verify Recovery Contract').first().json.manifest.card_code }}",
                         "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
                         "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
                         "expected_payload_sha256": "={{ $json.expected_sha256 }}",
@@ -2588,13 +2708,12 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "parameters": {
                 "resource": "row",
                 "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_actual_verifications", "mode": "name"},
+                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
                 "returnAll": False,
                 "limit": 1,
                 "matchType": "allConditions",
                 "filters": {"conditions": [
-                    {"keyName": "outbox_id", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.outbox_id }}"},
-                    {"keyName": "verification_version", "condition": "eq", "keyValue": 1},
+                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
                     {"keyName": "invariants_passed", "condition": "eq", "keyValue": True},
                 ]},
                 "options": {},
@@ -2608,11 +2727,14 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
             "position": [1200, 0],
             "parameters": {"jsCode": r"""
 const observed = $json;
-const result = $('Recovery Verify Actual').first().json;
+const result = $('Recovery Verify Actual').first().json.actual;
 if (
-  observed.expected_payload_sha256 !== result.expected_sha256
+  observed.idempotency_key !== $('Verify Recovery Contract').first().json.outbox_row.idempotency_key
+  || !observed.idempotency_key
+  || observed.expected_payload_sha256 !== result.expected_sha256
   || observed.observed_payload_sha256 !== result.observed_sha256
   || observed.expected_payload_sha256 !== observed.observed_payload_sha256
+  || Number(observed.expected_account_balance) !== Number($('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor)
   || Number(observed.observed_account_balance) !== Number(result.account_balance)
   || observed.invariants_passed !== true
 ) {
@@ -2624,6 +2746,65 @@ return [{ json: observed }];
     ]
     existing_names = {node["name"] for node in existing["nodes"]}
     existing["nodes"].extend(node for node in verification_receipt_nodes if node["name"] not in existing_names)
+    by_name = {node["name"]: node for node in existing["nodes"]}
+    for template in verification_receipt_nodes:
+        current = by_name.get(template["name"])
+        if current is not None:
+            current["parameters"] = json.loads(json.dumps(template["parameters"]))
+    committed_values = by_name["Upsert COMMITTED Recovery"]["parameters"]["columns"]["value"]
+    committed_values.update({
+        "lease_owner": "={{ $('Acquire Recovery Writer Fence').first().json.lease_owner }}",
+        "lease_fence": "={{ $('Acquire Recovery Writer Fence').first().json.fencing_token }}",
+    })
+    replay_release = by_name["Read Back Released Recovery Writer Fence Replay"]
+    replay_release["parameters"]["options"]["queryReplacement"] = (
+        "={{ [`actual:${$('Read Back COMMITTED Recovery Replay').first().json.actual_file_id}`, "
+        "$('Read Back COMMITTED Recovery Replay').first().json.lease_owner, "
+        "$('Read Back COMMITTED Recovery Replay').first().json.lease_fence] }}"
+    )
+
+    commit_receipt = by_name["Return Verified Commit Receipt"]
+    commit_code = commit_receipt["parameters"]["jsCode"]
+    if "ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK" not in commit_code:
+        correlation_guard = """if (String(committed.lease_owner) !== String(lease.lease_owner)
+  || Number(committed.lease_fence) !== Number(lease.fencing_token))
+  throw new Error('ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK');"""
+        commit_code = commit_code.replace(
+            "if (!release || release.released !== true",
+            correlation_guard + "\nif (!release || release.released !== true",
+        )
+        commit_code = commit_code.replace(
+            "    writer_release_verified: true,",
+            "    lease_owner: committed.lease_owner,\n"
+            "    lease_fence: Number(committed.lease_fence),\n"
+            "    writer_release_verified: true,",
+        )
+    commit_receipt["parameters"]["jsCode"] = commit_code
+
+    replay_receipt = by_name["Return Verified Commit Receipt Replay"]
+    replay_code = replay_receipt["parameters"]["jsCode"]
+    for old, new in (
+        ("const lease = $('Verify Recovery Contract').first().json.outbox_row;\n", ""),
+        ("`actual:${text(manifest.actual_file_id)}`", "`actual:${text(committed.actual_file_id)}`"),
+        ("text(lease.lease_owner)", "text(committed.lease_owner)"),
+        ("Number(lease.lease_fence)", "Number(committed.lease_fence)"),
+        ("lease_owner: text(committed.lease_owner)", "lease_owner: expectedOwner"),
+    ):
+        replay_code = replay_code.replace(old, new)
+    balance_guard = (
+        "    || Number(receipt.expected_account_balance) !== "
+        "Number(manifest.expected_statement_balance_minor)\n"
+        "    || Number(receipt.observed_account_balance) !== "
+        "Number(receipt.expected_account_balance)\n"
+    )
+    if balance_guard not in replay_code:
+        replay_code = replay_code.replace(
+            "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
+            balance_guard
+            + "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
+        )
+    replay_code = replay_code.replace(balance_guard + balance_guard, balance_guard)
+    replay_receipt["parameters"]["jsCode"] = replay_code
     existing["connections"]["Recovery Verify Actual"] = {
         "main": [[{"node": "Upsert Exact Actual Verification Receipt", "type": "main", "index": 0}]]
     }
@@ -2954,7 +3135,7 @@ return [{
             ("lease_required", "boolean", True),
             ("exact_readback_required", "boolean", True),
         ],
-        [("outbox_row", "object"), ("manifest", "object"), ("verification", "object"), ("artifact_item_id", "string"), ("artifact_etag", "string")],
+        [("outbox_row", "object"), ("manifest", "object"), ("verification", "object"), ("delta_artifact_item_id", "string"), ("delta_artifact_etag", "string")],
     )
 
 
@@ -3963,11 +4144,23 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     )
     prepare["parameters"]["jsCode"] = prepare_code
 
-    policy_read = json.loads(json.dumps(node_by_name(w09, "Read Active Server AI Policy Contract")))
+    policy_source = node_by_name(w09, "Read Active Server AI Policy Contract")
+    compact_policy_resolver(policy_source)
+    policy_read = json.loads(json.dumps(policy_source))
     policy_read["id"] = "12082"
     policy_read["name"] = "Read Active W09 Email Policy Contract"
     policy_read["position"] = [-240, 2860]
-    policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+    if policy_read["type"] == "n8n-nodes-base.dataTable":
+        policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+    elif policy_read["type"] == "n8n-nodes-base.code":
+        policy_code = policy_read["parameters"].get("jsCode", "")
+        policy_code = policy_code.replace(
+            "$('Validate Untrusted Proposal Request').first().json",
+            "$('Prepare W21 Email Request').first().json",
+        )
+        policy_read["parameters"]["jsCode"] = policy_code
+    else:
+        raise RuntimeError("W09 policy resolver must be a Data Table or generated Code node")
 
     policy_builder = json.loads(json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job")))
     policy_builder["id"] = "12083"

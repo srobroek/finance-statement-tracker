@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -25,15 +24,6 @@ SCAN_ROOTS = (
     "integrations/n8n/workflows/*.json",
     "integrations/n8n/disposable/generated/*.json",
     "integrations/n8n/setup-workflows/*.json",
-)
-# Provenance follows the last commit touching the scanned source tree.  The
-# generator, schema, output, and tests live outside these paths, so committing
-# the tooling cannot make its own --check stale.
-SOURCE_REF_PATHS = (
-    "integrations/n8n/data-tables.json",
-    "integrations/n8n/workflows",
-    "integrations/n8n/disposable/generated",
-    "integrations/n8n/setup-workflows",
 )
 OPERATIONS = ("create", "get", "insert", "upsert", "update", "list")
 TARGETS = (
@@ -85,16 +75,18 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_source_cursors.source_code",
                 "finance_acquisition_receipts.source_code",
             ),
+            "receipt_run_id": _target_column(
+                "string", "finance_acquisition_receipts.run_id"
+            ),
+            "receipt_run_upper_bound": _target_column(
+                "date", "finance_acquisition_receipts.run_upper_bound"
+            ),
             "cursor_value": _target_column("date", "finance_source_cursors.cursor_value"),
             "committed_run_id": _target_column(
-                "string",
-                "finance_source_cursors.committed_run_id",
-                "finance_acquisition_receipts.run_id",
+                "string", "finance_source_cursors.committed_run_id"
             ),
             "run_upper_bound": _target_column(
-                "date",
-                "finance_source_cursors.run_upper_bound",
-                "finance_acquisition_receipts.run_upper_bound",
+                "date", "finance_source_cursors.run_upper_bound"
             ),
             "overlap_seconds": _target_column("number", "finance_source_cursors.overlap_seconds"),
             "scanned_count": _target_column(
@@ -359,6 +351,8 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "config_version": _target_column("string", "finance_actual_outbox.config_version"),
             "parser_version": _target_column("string", "finance_actual_outbox.parser_version"),
             "state": _target_column("string", "finance_actual_outbox.state"),
+            "lease_owner": _target_column("string", "finance_actual_outbox.lease_owner"),
+            "lease_fence": _target_column("number", "finance_actual_outbox.lease_fence"),
             "actual_transaction_id": _target_column(
                 "string", "finance_actual_outbox.actual_transaction_id"
             ),
@@ -397,6 +391,12 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             ),
             "observed_amount_sum_minor": _target_column(
                 "number", "finance_actual_verifications.observed_amount_sum_minor"
+            ),
+            "expected_account_balance": _target_column(
+                "number", "finance_actual_verifications.expected_account_balance"
+            ),
+            "observed_account_balance": _target_column(
+                "number", "finance_actual_verifications.observed_account_balance"
             ),
             "invariants_passed": _target_column(
                 "boolean", "finance_actual_verifications.invariants_passed"
@@ -619,7 +619,8 @@ ARTIFACT_PREFIXES = {
 }
 
 ACQUISITION_TARGET_FIELDS = {
-    "run_id": "committed_run_id",
+    "run_id": "receipt_run_id",
+    "run_upper_bound": "receipt_run_upper_bound",
     "window_start": "last_window_start",
     "pages_fetched": "last_pages_fetched",
     "pagination_exhausted": "last_pagination_exhausted",
@@ -678,17 +679,19 @@ def json_paths() -> list[Path]:
 
 
 def source_ref() -> str:
-    """Return the latest commit that changed the scanned source corpus."""
-    commit = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", *SOURCE_REF_PATHS],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if not commit:
-        raise MatrixError("unable to resolve a commit for the scanned source corpus")
-    return commit
+    """Return a content-derived, Git-compatible identity for the source corpus.
+
+    A commit ref is inherently unstable while source files and this generated
+    matrix are committed together: the next source commit changes the value
+    that the previous matrix recorded.  Deriving the 40-character identity
+    from normalized source bytes keeps provenance stable across commits and
+    across checkouts while retaining the existing schema contract.
+    """
+    lines = []
+    for path in [DATA_TABLES, *json_paths()]:
+        relative = path.relative_to(ROOT).as_posix()
+        lines.append(f"{sha256_bytes(normalized_bytes(path))}  {relative}\n".encode())
+    return hashlib.sha1(b"".join(sorted(lines))).hexdigest()
 
 
 def source_snapshot() -> dict[str, str]:
@@ -702,8 +705,9 @@ def source_snapshot() -> dict[str, str]:
         "data_tables_sha256": sha256_bytes(normalized_bytes(DATA_TABLES)),
         "node_scan_corpus_sha256": corpus,
         "source_ref_selection": (
-            "Latest git commit touching data-tables.json and the scan-root directories; "
-            "generator, schema, matrix output, and tests are excluded."
+            "Content-derived Git-compatible identity over normalized data-tables.json and the "
+            "scan-root directories; commit topology and generated outputs are excluded to keep "
+            "provenance stable across source commits."
         ),
         "node_scan_digest_method": (
             "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete "
@@ -733,6 +737,16 @@ def _string(value: Any, label: str) -> str:
 
 def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     columns_by_table = {table["name"]: table["columns"] for table in source_tables}
+    # Canonical target tables are executable runtime contracts, not legacy
+    # migration inputs. Validate their Data Table parameters here while
+    # keeping them out of the source-column coverage counts below.
+    target_columns_by_table = {
+        target: {
+            field: definition["type"]
+            for field, definition in schema["columns"].items()
+        }
+        for target, schema in TARGET_SCHEMAS.items()
+    }
     references: dict[str, list[dict[str, Any]]] = {name: [] for name in columns_by_table}
     for path in json_paths():
         payload = json.loads(normalized_bytes(path))
@@ -789,6 +803,30 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 if not isinstance(table_id, dict) or table_id.get("mode") != "name":
                     raise MatrixError(f"{relative}#{name} must use a named Data Table reference")
                 table_name = _string(table_id.get("value"), f"{relative}#{name} dataTableId")
+                if table_name in target_columns_by_table:
+                    target_columns = target_columns_by_table[table_name]
+                    columns_value = parameters.get("columns", {}).get("value", {})
+                    if operation in {"insert", "upsert", "update"} and not isinstance(columns_value, dict):
+                        raise MatrixError(f"{relative}#{name} target write columns must be an object")
+                    write_columns = (
+                        sorted(columns_value)
+                        if operation in {"insert", "upsert", "update"}
+                        else []
+                    )
+                    if any(column not in target_columns for column in write_columns):
+                        raise MatrixError(f"{relative}#{name} writes an undeclared canonical target column")
+                    conditions = parameters.get("filters", {}).get("conditions", [])
+                    if not isinstance(conditions, list):
+                        raise MatrixError(f"{relative}#{name} target filter conditions must be a list")
+                    for condition in conditions:
+                        if not isinstance(condition, dict):
+                            raise MatrixError(f"{relative}#{name} has a malformed target filter condition")
+                        key = _string(condition.get("keyName"), f"{relative}#{name} target filter key")
+                        if key not in target_columns:
+                            raise MatrixError(f"{relative}#{name} filters on an undeclared canonical target column")
+                    # Canonical runtime references are validated but are not
+                    # assigned to a preserved legacy source table.
+                    continue
                 if operation == "get":
                     read_columns = ["*"]
                 else:
@@ -861,13 +899,11 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         target_field = "archive_verified_at" if column == "verified_at" else column
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_documents", "target_artifact": None, "target_field": target_field}
     if table_name == "finance_actual_outbox":
-        if column in {"lease_owner", "lease_fence", "lease_expires_at"}:
+        if column == "lease_expires_at":
             return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         target_field = OUTBOX_TARGET_FIELDS.get(column, column)
         return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": target_field}
     if table_name == "finance_actual_verifications":
-        if column in {"expected_account_balance", "observed_account_balance"}:
-            return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
         if column == "outbox_id":
             return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": "batch_id"}
         if column == "verification_version":

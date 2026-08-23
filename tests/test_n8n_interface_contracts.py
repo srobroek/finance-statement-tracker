@@ -132,10 +132,10 @@ DOCUMENT_REQUEST = (
 )
 EXTRACTION_DOCUMENT = ("document_id", "source_sha256", "document_profile")
 OUTBOX_CONTEXT = (
-    "outbox_id",
-    "payload_sha256",
-    "artifact_item_id",
-    "artifact_schema_version",
+    "batch_id",
+    "delta_sha256",
+    "delta_artifact_item_id",
+    "delta_schema_version",
     "actual_file_id",
     "config_version",
     "state",

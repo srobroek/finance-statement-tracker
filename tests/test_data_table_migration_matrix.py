@@ -76,15 +76,15 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             {
                 "source_tables": 15,
                 "source_columns": 215,
-                "node_references": 122,
-                "consumer_node_edges": 1227,
-                "filter_only_consumer_columns": 35,
-                "filter_only_consumer_edges": 115,
-                "write_reference_edges": 435,
-                "producer_node_edges": 435,
+                "node_references": 33,
+                "consumer_node_edges": 315,
+                "filter_only_consumer_columns": 17,
+                "filter_only_consumer_edges": 31,
+                "write_reference_edges": 121,
+                "producer_node_edges": 121,
             },
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 101, "transform": 58, "remove": 56})
+        self.assertEqual(invariants["dispositions"], {"keep": 104, "transform": 59, "remove": 52})
         tables = load_json(N8N / "data-tables.json")["tables"]
         self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
         self.assertEqual(
@@ -100,31 +100,37 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         }
         repeated = references[
             (
-                "integrations/n8n/disposable/generated/102-derived-recovery-core.json",
-                "Read Nonterminal Actual Outbox",
+                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+                "Read Existing Email Evidence Receipt",
             )
         ]
         self.assertEqual(repeated["operation"], "get")
         self.assertEqual(repeated["read_columns"], ["*"])
-        self.assertEqual(repeated["filter_keys"], ["state", "state", "state"])
+        self.assertEqual(
+            repeated["filter_keys"],
+            ["source_code", "source_message_id", "source_attachment_id", "source_sha256", "archive_state"],
+        )
         update = references[
             (
-                "integrations/n8n/workflows/12-outlook-message-sweep.json",
-                "CAS Update Source Cursor",
+                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+                "Upsert Durable Email Evidence Receipt",
             )
         ]
-        self.assertEqual(update["operation"], "update")
+        self.assertEqual(update["operation"], "upsert")
         self.assertEqual(update["write_columns"], sorted(update["write_columns"]))
-        self.assertEqual(update["filter_keys"], ["source_code", "cursor_version"])
+        self.assertEqual(
+            update["filter_keys"],
+            ["source_code", "source_message_id", "source_attachment_id", "source_sha256"],
+        )
         insert = references[
             (
-                "integrations/n8n/workflows/12-outlook-message-sweep.json",
-                "Insert Source Cursor v0",
+                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+                "Record Email PDF Render Requirement",
             )
         ]
-        self.assertEqual(insert["operation"], "insert")
+        self.assertEqual(insert["operation"], "upsert")
         self.assertEqual(insert["write_columns"], sorted(insert["write_columns"]))
-        self.assertEqual(insert["filter_keys"], [])
+        self.assertEqual(insert["filter_keys"], ["source_sha256", "document_profile", "requested_schema_version"])
 
     def test_consumer_and_producer_unions_are_explicit(self) -> None:
         columns = {
@@ -139,6 +145,10 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         }
         cursor = columns[("finance_source_cursors", "cursor_version")]
         self.assertIn(
+            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit",
+            cursor["consumer_nodes"],
+        )
+        self.assertNotIn(
             "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
             cursor["consumer_nodes"],
         )
