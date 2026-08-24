@@ -41,7 +41,7 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_PUSH_CONNECTION_FAILED', 'WF23_PUSH_EXECUTION_FAILED',
   'WF23_TERMINAL_RESULT_NOT_CAPTURED', 'WF23_RAW_OUTPUT_INVALID',
   'WF23_REDACTED_RECEIPT_NOT_CAPTURED', 'WF23_N8N_REQUESTED_EARLY_EXIT',
-  'WF23_TIMEOUT_COMMAND_RUN',
+  'WF23_TIMEOUT_COMMAND_RUN', 'WF23_EXECUTION_NOT_REMOVED',
 ]);
 const SUCCESS_PREFIX = 'transient WF23 execution verified:';
 const FAILURE_PREFIX = 'transient WF23 execution failed:';
@@ -273,41 +273,61 @@ async function fetchWithin(fetchImpl, url, options, timeoutMs) {
   }
 }
 
+async function pollExecution({ fetchImpl, executionUrl, headers, deadline, observe }) {
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithin(
+        fetchImpl,
+        executionUrl,
+        { method: 'GET', headers },
+        Math.max(1, deadline - Date.now()),
+      );
+      if (await observe(response, Math.max(1, deadline - Date.now()))) return true;
+    } catch {}
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
+  }
+  return false;
+}
+
 async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
   if (typeof fetchImpl !== 'function' || !executionId) return false;
   const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
   const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
   const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
   const deadline = Date.now() + timeoutMs;
-  const observeTerminal = async (requestTimeoutMs) => {
-    try {
-      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, requestTimeoutMs);
-      return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
-    } catch {
-      return false;
-    }
+  const observeTerminal = async (response, requestTimeoutMs) => {
+    return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
   };
   try {
     const stopResponse = await fetchWithin(fetchImpl, stopUrl, { method: 'POST', headers }, Math.max(1, deadline - Date.now()));
     if (stopResponse?.ok) {
-      while (Date.now() < deadline) {
-        if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) break;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
-      }
+      if (await pollExecution({ fetchImpl, executionUrl, headers, deadline, observe: observeTerminal })) return true;
     }
   } catch {}
-  while (Date.now() < deadline) {
-    if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
-  }
+  if (await pollExecution({ fetchImpl, executionUrl, headers, deadline, observe: observeTerminal })) return true;
   while (true) {
-    if (await observeTerminal(Math.max(1, timeoutMs))) return true;
+    try {
+      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, timeoutMs));
+      if (await observeTerminal(response, Math.max(1, timeoutMs))) return true;
+    } catch {}
     await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
   }
+}
+
+async function awaitExecutionRemoval({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
+  if (typeof fetchImpl !== 'function' || !executionId) return false;
+  const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
+  const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
+  const deadline = Date.now() + timeoutMs;
+  return pollExecution({
+    fetchImpl,
+    executionUrl,
+    headers,
+    deadline,
+    observe: async (response) => response?.status === 404,
+  });
 }
 
 async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch, random = crypto.randomBytes,
@@ -422,7 +442,12 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
   socket.on('error', onError);
   timer = setTimeout(() => failRun(Object.assign(new Error('WF23_TIMEOUT_COMMAND_RUN'), { code: 'WF23_TIMEOUT_COMMAND_RUN' })), timeoutMs);
   try {
-    return await resultPromise;
+    const receipt = await resultPromise;
+    if (!await awaitExecutionRemoval({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs })) {
+      failureError = Object.assign(new Error('WF23_EXECUTION_NOT_REMOVED'), { code: 'WF23_EXECUTION_NOT_REMOVED' });
+      throw failureError;
+    }
+    return receipt;
   } finally {
     clearTimeout(timer);
     try {
