@@ -21,6 +21,112 @@ SOURCE_SHA = "879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
 
 
+def synthetic_docker_log_rows(log_path: Path) -> list[list[str]]:
+    rows = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if not isinstance(row, list) or not all(isinstance(value, str) for value in row):
+            raise AssertionError(f"synthetic Docker log row is not argv JSON: {row!r}")
+        rows.append(row)
+    if not rows:
+        raise AssertionError("synthetic Docker log is empty")
+    return rows
+
+
+def assert_synthetic_docker_allowlist(log_path: Path) -> list[list[str]]:
+    rows = synthetic_docker_log_rows(log_path)
+    services = {"n8n", "task-runners"}
+    inspect_formats = {
+        '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}',
+        "{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}",
+        "{{.Id}}|{{.State.Running}}",
+        "{{.State.Running}}",
+        "{{range .Config.Env}}{{println .}}{{end}}",
+    }
+    for row in rows:
+        operation = row[0] if row else ""
+        if operation == "run":
+            raise AssertionError("direct docker run is forbidden")
+        if operation == "compose":
+            forbidden = next((value for value in row if value in {"run", "create", "up"}), None)
+            if forbidden is not None:
+                raise AssertionError(f"docker compose {forbidden} is forbidden")
+            if (
+                len(row) != 10
+                or row[1] != "--project-name"
+                or row[3] != "--file"
+                or row[5] != "--env-file"
+                or row[7:9] != ["ps", "-q"]
+                or row[9] not in services
+            ):
+                raise AssertionError(f"unexpected docker compose command: {row!r}")
+            continue
+        if operation == "inspect":
+            if len(row) != 4 or row[1] != "-f" or row[2] not in inspect_formats:
+                raise AssertionError(f"unexpected docker inspect command: {row!r}")
+            if len(row[3]) != 64 or any(value not in "0123456789abcdef" for value in row[3]):
+                raise AssertionError(f"docker inspect target is not a container ID: {row!r}")
+            continue
+        if operation == "exec":
+            container_index = next(
+                (index for index, value in enumerate(row[1:], start=1)
+                 if len(value) == 64 and all(char in "0123456789abcdef" for char in value)),
+                None,
+            )
+            if container_index is None:
+                raise AssertionError(f"docker exec has no container ID: {row!r}")
+            options = row[1:container_index]
+            environment = set()
+            index = 0
+            while index < len(options):
+                if options[index] == "-i":
+                    index += 1
+                elif options[index] == "-e" and index + 1 < len(options) and "=" in options[index + 1]:
+                    variable = options[index + 1]
+                    if not (
+                        variable in {
+                            "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
+                            "FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY",
+                            "FINANCE_MICROSOFT_OAUTH_METADATA_ACK=READ_ONLY_REDACTED",
+                        }
+                        or variable.startswith("N8N_FINANCE_PROJECT_ID=")
+                    ):
+                        raise AssertionError(f"unexpected docker exec environment: {row!r}")
+                    environment.add(variable)
+                    index += 2
+                else:
+                    raise AssertionError(f"unexpected docker exec option: {row!r}")
+            command = row[container_index + 1:]
+            if command[:1] == ["pg_isready"]:
+                if len(command) != 5 or command[1] != "-U" or command[3] != "-d":
+                    raise AssertionError(f"unexpected pg_isready command: {row!r}")
+            elif command[:1] == ["psql"]:
+                if len(command) != 10 or command[1:7] != ["-v", "ON_ERROR_STOP=1", "-At", "-U", "n8n", "-d"]:
+                    raise AssertionError(f"unexpected psql command: {row!r}")
+                if command[7] != "n8n" or command[8] != "-c" or not command[9].lstrip().lower().startswith("select "):
+                    raise AssertionError(f"unexpected psql query: {row!r}")
+            elif command[:2] == ["node", "-e"]:
+                if len(command) != 3 or "fetch(" not in command[2] or "healthz" not in command[2]:
+                    raise AssertionError(f"unexpected node control probe: {row!r}")
+            elif command == ["node", "-"]:
+                if environment != {"FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE"}:
+                    raise AssertionError(f"unexpected direct transport probe: {row!r}")
+            elif command == ["node", "-", "list:workflow"]:
+                acknowledgements = {
+                    "FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY",
+                    "FINANCE_MICROSOFT_OAUTH_METADATA_ACK=READ_ONLY_REDACTED",
+                }
+                if len(environment) != 2 or not environment & acknowledgements or not any(
+                    value.startswith("N8N_FINANCE_PROJECT_ID=") for value in environment
+                ):
+                    raise AssertionError(f"unexpected n8n readback command: {row!r}")
+            else:
+                raise AssertionError(f"unexpected docker exec command: {row!r}")
+            continue
+        raise AssertionError(f"unexpected docker operation: {row!r}")
+    return rows
+
+
 def load_module(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -318,6 +424,7 @@ sys.exit(0)
         try:
             completed = self.run_synthetic_preflight(environment)
             self.assertEqual(completed.returncode, 0, completed.stderr)
+            assert_synthetic_docker_allowlist(log_path)
             calls = log_path.read_text(encoding="utf-8")
             call_rows = [json.loads(line) for line in calls.splitlines()]
             self.assertTrue(any(
@@ -331,7 +438,6 @@ sys.exit(0)
             self.assertIn("http://127.0.0.1:5679/healthz", calls)
             self.assertIn("http://127.0.0.1:5680/healthz", calls)
             self.assertNotIn("import:workflow", calls)
-            self.assertNotIn("docker run", calls)
             self.assertNotIn("listen(", calls)
 
             for scenario, message in (
@@ -346,6 +452,7 @@ sys.exit(0)
                 failed = self.run_synthetic_preflight(environment)
                 self.assertNotEqual(failed.returncode, 0, scenario)
                 self.assertIn(message, failed.stderr, scenario)
+                assert_synthetic_docker_allowlist(log_path)
 
             receipt.write_text(json.dumps({
                 "schema_version": 1,
@@ -357,8 +464,23 @@ sys.exit(0)
             failed_receipt = self.run_synthetic_preflight(environment)
             self.assertNotEqual(failed_receipt.returncode, 0)
             self.assertIn("Deployed Postgres recovery identity unavailable", failed_receipt.stderr)
+            assert_synthetic_docker_allowlist(log_path)
         finally:
             temporary.cleanup()
+
+    def test_synthetic_docker_allowlist_rejects_mutating_commands(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wf23-docker-log-") as temporary:
+            log_path = Path(temporary) / "docker.log"
+            forbidden_rows = [
+                (["run", "--rm", "n8n"], "direct docker run is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "run", "n8n"], "docker compose run is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "create", "n8n"], "docker compose create is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "up", "n8n"], "docker compose up is forbidden"),
+            ]
+            for row, message in forbidden_rows:
+                with self.subTest(row=row), self.assertRaisesRegex(AssertionError, message):
+                    log_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+                    assert_synthetic_docker_allowlist(log_path)
 
     def test_runtime_binder_is_exact_and_never_records_identifiers(self) -> None:
         self.assertEqual(

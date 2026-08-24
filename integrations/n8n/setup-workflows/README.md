@@ -181,7 +181,7 @@ Runner actions:
 - Runs the proof again.
 - Removes WF23.
 - Disables execution persistence.
-- Before each execution, checks PostgreSQL.
+- During the initial preflight, the runner checks PostgreSQL for readiness and identity once.
 
 The cleanup gate restores these values:
 
