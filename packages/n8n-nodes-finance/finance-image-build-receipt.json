@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "status": "PUBLISHED_READBACK_VERIFIED",
+  "status": "SPEC_ONLY",
   "package": "n8n-nodes-finance@0.1.0",
   "image": {
-    "requested_reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "image_digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "local_image_id": "a4293646b8490017b06c222bb5145ac555356fbb1caaa13cf618bdfe8d155bef"
+    "requested_reference": "finance-n8n:orc-n2q-234-2-5296b802",
+    "image_digest": null,
+    "local_image_id": "sha256:4b44e25305c0ee39aada1993ca57dc24e4f3198245ef1347fb8d3e23ad084bb6"
   },
   "base_image": {
     "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
@@ -14,9 +14,9 @@
     "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
     "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json"
   },
-  "source_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
-  "sbom_sha256": "bc122f6386d9e71e7f18869a753341fcae04a8d68cfc38dc949606ac6c49db7a",
-  "scan_sha256": "ce885763462b74d65c8bff055be5be50b7e337477b0aa3673ad46f91f765cdf5",
+  "source_commit": "5296b80206d4cf8eead1804b88d9dcfe6448e123",
+  "sbom_sha256": "f6324a9136d54a8d6219239eb422a0c966e518d163c7d44100f63e7336e40bf2",
+  "scan_sha256": "a814cc00b0cc4c095c2646e4e76edf92fa34f7f1d2b008c994581ed465b41e85",
   "scan": {
     "tool": "trivy",
     "result": "PASS",
@@ -26,20 +26,13 @@
   "attestation": {
     "type": "local-build-provenance",
     "predicate_type": "https://slsa.dev/provenance/v1",
-    "subject_digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "source_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
-    "sha256": "6af4d78fade5957d179ac4cd4fa13e78865d615b8be99ab0d4a81e9d3a0dfab6",
+    "subject_digest": null,
+    "source_commit": "5296b80206d4cf8eead1804b88d9dcfe6448e123",
+    "sha256": "6ebbc82bc3fd260f52ed6a0e76a0145eb0160690981c3a9d069511d03df59ee2",
     "status": "VERIFIED"
   },
-  "registry": {
-    "target": "ghcr.io/srobroek/finance-n8n",
-    "tag": "ghcr.io/srobroek/finance-n8n:170328b7f6aefa068da9c9a864cd03ca91635c70",
-    "digest": "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "readback_reference": "ghcr.io/srobroek/finance-n8n@sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
-    "readback_sha256": "a92f463cb0ae6b6b76bcf3d3e119703b72da03fb3880e0e59f5cdc8257d00fe9",
-    "source_label_match": true,
-    "base_label_match": true,
-    "provenance_match": true
-  },
-  "blockers": []
+  "blockers": [
+    "LIVE_REGISTRY_DIGEST_REQUIRED",
+    "DISPOSABLE_IMAGE_IMPORT_REQUIRED"
+  ]
 }

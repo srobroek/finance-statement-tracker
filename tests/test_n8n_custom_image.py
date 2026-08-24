@@ -62,10 +62,11 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
         self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
-        self.assertEqual(receipt["status"], "PUBLISHED_READBACK_VERIFIED")
+        self.assertEqual(receipt["status"], "SPEC_ONLY")
+        self.assertIsNone(receipt["image"]["image_digest"])
         self.assertEqual(
-            receipt["image"]["image_digest"],
-            "sha256:5452c78e52ac7053bc6f1d21877ece89b5f26e85eeee63d1ecd33d4b5d26d696",
+            receipt["image"]["local_image_id"],
+            "sha256:4b44e25305c0ee39aada1993ca57dc24e4f3198245ef1347fb8d3e23ad084bb6",
         )
         self.assertEqual(receipt["base_image"]["digest"], GENERIC_BASE_DIGEST)
         self.assertEqual(receipt["base_image"]["source_commit"], GENERIC_SOURCE_COMMIT)
@@ -74,6 +75,10 @@ class N8nCustomImageTests(unittest.TestCase):
             "https://github.com/srobroek/n8n",
         )
         self.assertEqual(receipt["attestation"]["status"], "VERIFIED")
+        self.assertEqual(
+            receipt["blockers"],
+            ["LIVE_REGISTRY_DIGEST_REQUIRED", "DISPOSABLE_IMAGE_IMPORT_REQUIRED"],
+        )
 
     def test_package_test_does_not_rebuild_production_output(self):
         package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))

@@ -27,7 +27,7 @@
     },
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "3fa12683aeecdad7ecc40af0ce95869849921d00f5eb91209995bba3ffe5ff78"
+      "sha256": "603b38cc25145ffd33d845e1c5e04ad1f52dc14e709fcfa9e606b9376291f7d2"
     }
   },
   "support_images": {
