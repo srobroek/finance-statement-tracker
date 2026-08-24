@@ -1329,7 +1329,7 @@ sys.exit(0)
         self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
-    def test_outer_timeout_retains_wf23_when_terminality_is_unknown(self) -> None:
+    def test_outer_timeout_cleanup_tracks_terminality_at_caller_boundary(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
             f"const shim=require({json.dumps(str(shim))});let socket;"
@@ -1348,48 +1348,75 @@ sys.exit(0)
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
         cleanup = runner[runner.index("cleanup() {"):runner.index("\ntrap cleanup EXIT")]
+        first_probe_start = runner.index('failure_stage="first_execution"\n')
+        first_probe = runner[first_probe_start:runner.index('\n[[ "$(wf23_execution_count)', first_probe_start)]
+        self.assertIn('execute_probe >"${execution_first_file}"', first_probe)
+        self.assertNotIn('$(execute_probe)', first_probe)
         with tempfile.TemporaryDirectory(prefix="wf23-caller-boundary-") as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
             bin_dir.mkdir()
-            timeout_args = root / "timeout.args"
-            removed = root / "removed"
-            (bin_dir / "timeout").write_text(
-                f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {shlex.quote(str(timeout_args))}\nexit 124\n",
-                encoding="utf-8",
-            )
-            (bin_dir / "python3").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-            (bin_dir / "timeout").chmod(0o755)
-            (bin_dir / "python3").chmod(0o755)
-            driver = "\n".join([
-                "#!/usr/bin/env bash",
-                "set -euo pipefail",
-                "n8n_container=synthetic-n8n; runner_dir=" + shlex.quote(str(RUNNER)) + "; execution_timeout_seconds=0.05",
-                "container_work_file=/tmp/wf23.json; run_root=/tmp/wf23; run_id=synthetic-run",
-                "failure_receipt=/tmp/wf23-failure.json; failure_stage=first_execution",
-                "failure_stage=first_execution; import_started=true; cleanup_verified=false; success=false",
-                "execution_failure_code=; execution_terminality_observed=false",
-                "workflow_boundary_restored=false; execution_rows_zero_verified=false; data_table_digest_restored=false",
-                "remove_container_work_file() { :; }",
-                "remove_transient_wf23() { : > " + shlex.quote(str(removed)) + "; return 0; }",
-                "verify_clean_boundary() { return 0; }",
-                execute_probe,
-                cleanup,
-                "trap cleanup EXIT",
-                "execute_probe >/dev/null || true",
-                "exit 1",
-            ])
-            driver_path = root / "driver.sh"
-            driver_path.write_text(driver + "\n", encoding="utf-8")
-            driver_path.chmod(0o755)
-            environment = os.environ.copy()
-            environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
-            completed = subprocess.run(["bash", str(driver_path)], text=True, capture_output=True, env=environment)
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertFalse(removed.exists())
-            self.assertTrue(timeout_args.exists(), completed.stderr + completed.stdout)
-            self.assertIn("0.05s", timeout_args.read_text(encoding="utf-8"))
-            self.assertIn("WF23 execution terminality uncertain; retaining transient workflow", completed.stderr)
+
+            def run_caller_boundary(parser_mode: str) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+                timeout_args = root / f"timeout-{parser_mode}.args"
+                removed = root / f"removed-{parser_mode}"
+                (bin_dir / "timeout").write_text(
+                    f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {shlex.quote(str(timeout_args))}\nexit 124\n",
+                    encoding="utf-8",
+                )
+                (bin_dir / "python3").write_text(
+                    "#!/bin/sh\n"
+                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = terminal ]; then\n"
+                    "  printf '%s' WF23_TIMEOUT_COMMAND_RUN\n"
+                    "  exit 0\n"
+                    "fi\n"
+                    "if [ \"$2\" = timeout ]; then exit 1; fi\n"
+                    "exit 0\n",
+                    encoding="utf-8",
+                )
+                (bin_dir / "timeout").chmod(0o755)
+                (bin_dir / "python3").chmod(0o755)
+                run_root = root / f"run-{parser_mode}"
+                run_root.mkdir()
+                driver = "\n".join([
+                    "#!/usr/bin/env bash",
+                    "set -euo pipefail",
+                    "n8n_container=synthetic-n8n; runner_dir=" + shlex.quote(str(RUNNER)) + "; execution_timeout_seconds=0.05",
+                    "container_work_file=/tmp/wf23.json; run_root=" + shlex.quote(str(run_root)) + "; run_id=synthetic-run",
+                    "failure_receipt=" + shlex.quote(str(root / f"failure-{parser_mode}.json")) + "; failure_stage=first_execution",
+                    "failure_stage=first_execution; import_started=true; cleanup_verified=false; success=false",
+                    "execution_failure_code=; execution_terminality_observed=false",
+                    "workflow_boundary_restored=false; execution_rows_zero_verified=false; data_table_digest_restored=false",
+                    "remove_container_work_file() { :; }",
+                    "remove_transient_wf23() { : > " + shlex.quote(str(removed)) + "; return 0; }",
+                    "verify_clean_boundary() { return 0; }",
+                    execute_probe,
+                    cleanup,
+                    "trap cleanup EXIT",
+                    first_probe,
+                    "exit 1",
+                ])
+                driver_path = root / f"driver-{parser_mode}.sh"
+                driver_path.write_text(driver + "\n", encoding="utf-8")
+                driver_path.chmod(0o755)
+                environment = os.environ.copy()
+                environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
+                environment["WF23_PARSER_MODE"] = parser_mode
+                return subprocess.run(["bash", str(driver_path)], text=True, capture_output=True, env=environment), timeout_args, removed
+
+            terminal, terminal_timeout_args, terminal_removed = run_caller_boundary("terminal")
+            self.assertNotEqual(terminal.returncode, 0)
+            self.assertTrue(terminal_removed.exists(), terminal.stderr + terminal.stdout)
+            self.assertTrue(terminal_timeout_args.exists(), terminal.stderr + terminal.stdout)
+            self.assertIn("0.05s", terminal_timeout_args.read_text(encoding="utf-8"))
+            self.assertNotIn("WF23 execution terminality uncertain; retaining transient workflow", terminal.stderr)
+
+            unknown, unknown_timeout_args, unknown_removed = run_caller_boundary("unknown")
+            self.assertNotEqual(unknown.returncode, 0)
+            self.assertFalse(unknown_removed.exists())
+            self.assertTrue(unknown_timeout_args.exists(), unknown.stderr + unknown.stdout)
+            self.assertIn("0.05s", unknown_timeout_args.read_text(encoding="utf-8"))
+            self.assertIn("WF23 execution terminality uncertain; retaining transient workflow", unknown.stderr)
 
     def test_all_runner_sources_are_syntactically_valid(self) -> None:
         runner = RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh"
