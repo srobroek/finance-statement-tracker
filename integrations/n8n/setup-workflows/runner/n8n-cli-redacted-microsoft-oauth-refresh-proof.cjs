@@ -41,7 +41,7 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_PUSH_CONNECTION_FAILED', 'WF23_PUSH_EXECUTION_FAILED',
   'WF23_TERMINAL_RESULT_NOT_CAPTURED', 'WF23_RAW_OUTPUT_INVALID',
   'WF23_REDACTED_RECEIPT_NOT_CAPTURED', 'WF23_N8N_REQUESTED_EARLY_EXIT',
-  'WF23_TIMEOUT_COMMAND_RUN',
+  'WF23_TIMEOUT_COMMAND_RUN', 'WF23_EXECUTION_RECONCILIATION_FAILED',
 ]);
 const SUCCESS_PREFIX = 'transient WF23 execution verified:';
 const FAILURE_PREFIX = 'transient WF23 execution failed:';
@@ -410,11 +410,23 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     return await resultPromise;
   } finally {
     clearTimeout(timer);
-    if (failureError && runRequest) {
-      try { await awaitWithin(runRequest, reconcileTimeoutMs); } catch {}
-      if (executionId) await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
+    let reconciliationError;
+    try {
+      if (failureError && runRequest) {
+        try { await awaitWithin(runRequest, reconcileTimeoutMs); } catch {}
+        if (executionId) {
+          const reconciled = await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
+          if (!reconciled) {
+            reconciliationError = Object.assign(new Error('WF23_EXECUTION_RECONCILIATION_FAILED'), {
+              code: 'WF23_EXECUTION_RECONCILIATION_FAILED',
+            });
+          }
+        }
+      }
+    } finally {
+      if (typeof socket.close === 'function') socket.close();
     }
-    if (typeof socket.close === 'function') socket.close();
+    if (reconciliationError) throw reconciliationError;
   }
 }
 
