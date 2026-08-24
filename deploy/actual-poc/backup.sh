@@ -98,7 +98,7 @@ container_state() {
   local status
   local paused
 
-  if ! status="$(docker inspect -f '{{.State.Status}}' "${name}" 2>/dev/null)"; then
+  if ! status="$(docker inspect -f '{{.State.Status}}' "${name}" 2>/dev/null 9>&-)"; then
     printf 'inspect_error\n'
     return 0
   fi
@@ -107,7 +107,7 @@ container_state() {
       printf 'paused\n'
       ;;
     running)
-      if ! paused="$(docker inspect -f '{{.State.Paused}}' "${name}" 2>/dev/null)"; then
+      if ! paused="$(docker inspect -f '{{.State.Paused}}' "${name}" 2>/dev/null 9>&-)"; then
         printf 'inspect_error\n'
       elif [[ "${paused}" == "true" ]]; then
         printf 'paused\n'
@@ -144,7 +144,7 @@ resume_services() {
     state="$(container_state "${name}")"
     case "${state}" in
       paused)
-        if docker unpause "${name}" >/dev/null; then
+        if docker unpause "${name}" >/dev/null 9>&-; then
           unset "paused_services[${name}]"
         else
           retain_unknown_ownership "${name}" "unpause_failed"
@@ -180,7 +180,7 @@ pause_service() {
   local name="$1"
   # Record ownership before pause so a partial pause failure remains recoverable.
   paused_services["${name}"]=pending
-  if docker pause "${name}" >/dev/null; then
+  if docker pause "${name}" >/dev/null 9>&-; then
     paused_services["${name}"]=paused
   else
     retain_unknown_ownership "${name}" "pause_failed"
@@ -220,7 +220,7 @@ ensure_private_dir "${payload}/configuration" "backup_configuration"
 probe_cashback_health() {
   local output
   local lower_output
-  if output="$(docker exec finance-cashback-control python apps/cashback-control/probe_health.py 2>&1)"; then
+  if output="$(docker exec finance-cashback-control python apps/cashback-control/probe_health.py 2>&1 9>&-)"; then
     probe_failure_reason=""
     return 0
   fi
