@@ -690,7 +690,7 @@ sys.exit(0)
             f"const shim=require({json.dumps(str(shim))});let socket;"
             "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
             "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-            "const fetchImpl=async()=>({ok:true,json:async()=>{socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'}}));return {data:{executionId:'123'}}}});"
+            "const fetchImpl=async(url)=>({ok:true,json:async()=>url.endsWith('/123')?({status:'error',finished:true}):(socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'}})),{data:{executionId:'123'}})});"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,random:()=>Buffer.from('push-ref')}).then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code})))"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
@@ -755,7 +755,7 @@ sys.exit(0)
         code = (
             f"const shim=require({json.dumps(str(shim))});"
             "class FakeSocket{constructor(){this.handlers={}}on(name,handler){this.handlers[name]=handler}close(){}}"
-            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl:async()=>({ok:true,json:async()=>({data:{executionId:'123'}})}),timeoutMs:5}).then(()=>process.exit(1)).catch(error=>{process.stdout.write(shim.terminalLine(error,null));})"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl:async(url)=>({ok:true,json:async()=>url.endsWith('/123')?({status:'canceled',finished:true}):({data:{executionId:'123'}})}),timeoutMs:5}).then(()=>process.exit(1)).catch(error=>{process.stdout.write(shim.terminalLine(error,null));})"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         self.assertEqual(json.loads(completed.stdout.split(":", 1)[1])["error_code"], "WF23_TIMEOUT_COMMAND_RUN")
@@ -769,16 +769,19 @@ sys.exit(0)
             "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){socketClosed=true}}"
             "const fetchImpl=async(url,options)=>{calls.push({url,options});"
             "if(url.endsWith('/run'))return {ok:true,json:async()=>({data:{executionId:'123'}})};"
-            "if(url.endsWith('/stop'))return {ok:true};throw new Error('unexpected request')};"
+            "if(url.endsWith('/stop'))return {ok:true};"
+            "if(url.endsWith('/123'))return {ok:true,json:async()=>({status:'canceled',finished:true})};"
+            "throw new Error('unexpected request')};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:100})"
             ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls,socketClosed})))"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         observed = json.loads(completed.stdout)
         self.assertEqual(observed["code"], "WF23_TIMEOUT_COMMAND_RUN")
-        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST"])
+        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST", "GET"])
         self.assertTrue(observed["calls"][1]["url"].endswith("/rest/executions/123/stop"))
         self.assertEqual(observed["calls"][1]["options"]["headers"]["Cookie"], "n8n-auth=secret-token")
+        self.assertTrue(observed["calls"][2]["url"].endswith("/rest/executions/123"))
         self.assertNotIn("secret-token", completed.stderr)
 
     def test_local_transport_socket_failure_stops_known_execution_before_returning(self) -> None:
@@ -789,14 +792,16 @@ sys.exit(0)
             "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
             "const fetchImpl=async(url,options)=>{calls.push({url,options});"
             "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('close'));return {data:{executionId:'123'}}}};"
-            "if(url.endsWith('/stop'))return {ok:true};throw new Error('unexpected request')};"
+            "if(url.endsWith('/stop'))return {ok:true};"
+            "if(url.endsWith('/123'))return {ok:true,json:async()=>({status:'canceled',finished:true})};"
+            "throw new Error('unexpected request')};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:100})"
             ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls})))"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         observed = json.loads(completed.stdout)
         self.assertEqual(observed["code"], "WF23_PUSH_CONNECTION_FAILED")
-        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST"])
+        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST", "GET"])
         self.assertTrue(observed["calls"][1]["url"].endswith("/rest/executions/123/stop"))
         self.assertNotIn("secret-token", completed.stderr)
 

@@ -289,7 +289,14 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
   };
   try {
     const stopResponse = await fetchWithin(fetchImpl, stopUrl, { method: 'POST', headers }, Math.max(1, deadline - Date.now()));
-    if (stopResponse?.ok) return true;
+    if (stopResponse?.ok) {
+      while (Date.now() < deadline) {
+        if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
+      }
+    }
   } catch {}
   while (Date.now() < deadline) {
     if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
