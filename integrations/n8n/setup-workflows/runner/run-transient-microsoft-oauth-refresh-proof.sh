@@ -8,7 +8,7 @@ readonly source_commit="b3bce6e197c6603d3e8708156bed987f26ac8513"
 readonly source_sha256="879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 readonly prior_promoted_commit="00491aae2ab43c486f3a9b4a62ce3ba5e63032f6"
 readonly expected_project="finance-n8n-disposable-20260819155134"
-readonly expected_project_id="gT5rxq26L0PoNUWX"
+readonly expected_project_id="${N8N_FINANCE_PROJECT_ID:-}"
 readonly workflow_id="10000000-0000-4000-8000-000000000023"
 readonly companion_setup_id="10000000-0000-4000-8000-000000000022"
 readonly workflow_name="Finance · Microsoft OAuth Refresh Proof · Manual Read Only"
@@ -30,7 +30,8 @@ readonly expected_orchestrator_commit="${ORCHESTRATOR_REPOSITORY_COMMIT:-}"
 
 [[ "${expected_finance_commit}" =~ ^[0-9a-f]{40}$ ]] || { echo "Exact finance commit required" >&2; exit 1; }
 [[ "${expected_orchestrator_commit}" =~ ^[0-9a-f]{40}$ ]] || { echo "Exact orchestrator commit required" >&2; exit 1; }
-[[ "${N8N_FINANCE_PROJECT_ID:-${expected_project_id}}" == "${expected_project_id}" ]] || { echo "Exact Finance project required" >&2; exit 1; }
+[[ -n "${expected_project_id}" ]] || { echo "N8N_FINANCE_PROJECT_ID is required" >&2; exit 1; }
+[[ "${expected_project_id}" =~ ^[A-Za-z0-9_-]{8,64}$ ]] || { echo "N8N_FINANCE_PROJECT_ID is invalid" >&2; exit 1; }
 [[ "${preflight_mode}" == "true" || "${preflight_mode}" == "false" ]] || { echo "FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT must be true or false" >&2; exit 1; }
 [[ -d "${finance_repo}/.git" && -d "${stack_dir}/.git" ]] || { echo "Expected host repositories are missing" >&2; exit 1; }
 [[ -z "$(git -C "${finance_repo}" status --porcelain)" ]] || { echo "Finance repository must be completely clean" >&2; exit 1; }

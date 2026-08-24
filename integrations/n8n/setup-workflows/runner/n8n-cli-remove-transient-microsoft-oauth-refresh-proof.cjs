@@ -4,7 +4,12 @@ if (process.env.FINANCE_MICROSOFT_OAUTH_PROOF_CLEANUP_ACK !== 'REMOVE_TRANSIENT_
   throw new Error('FINANCE_MICROSOFT_OAUTH_PROOF_CLEANUP_ACK=REMOVE_TRANSIENT_WF23_ONLY is required');
 }
 const projectId = process.env.N8N_FINANCE_PROJECT_ID;
-if (projectId !== 'gT5rxq26L0PoNUWX') throw new Error('EXACT_FINANCE_PROJECT_ID_REQUIRED');
+if (typeof projectId !== 'string' || projectId.length === 0) {
+  throw new Error('N8N_FINANCE_PROJECT_ID_REQUIRED');
+}
+if (!/^[A-Za-z0-9_-]{8,64}$/.test(projectId)) {
+  throw new Error('N8N_FINANCE_PROJECT_ID_INVALID');
+}
 
 const path = require('node:path');
 const { createRequire } = require('node:module');

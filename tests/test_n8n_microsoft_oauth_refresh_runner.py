@@ -568,6 +568,50 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertNotIn("access_token:", source)
         self.assertNotIn("refresh_token:", source)
 
+    def test_project_id_gate_accepts_environment_binding_and_rejects_missing_or_malformed_values(self) -> None:
+        acknowledgements = {
+            "n8n-cli-microsoft-oauth-metadata-readback.cjs": "FINANCE_MICROSOFT_OAUTH_METADATA_ACK=READ_ONLY_REDACTED",
+            "n8n-cli-finance-data-table-digest.cjs": "FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY",
+            "n8n-cli-remove-transient-microsoft-oauth-refresh-proof.cjs": "FINANCE_MICROSOFT_OAUTH_PROOF_CLEANUP_ACK=REMOVE_TRANSIENT_WF23_ONLY",
+        }
+        for filename, acknowledgement in acknowledgements.items():
+            with self.subTest(filename=filename):
+                source = (RUNNER / filename).read_text(encoding="utf-8")
+                prelude = source.split("const path = require('node:path');", 1)[0]
+                code = prelude + "\nprocess.stdout.write(projectId);"
+
+                valid_env = os.environ.copy()
+                valid_env[acknowledgement.split("=", 1)[0]] = acknowledgement.split("=", 1)[1]
+                valid_env["N8N_FINANCE_PROJECT_ID"] = "finance-preproduction-20260824"
+                valid = subprocess.run(["node", "-e", code], env=valid_env, text=True, capture_output=True)
+                self.assertEqual(valid.returncode, 0, valid.stderr)
+                self.assertEqual(valid.stdout, "finance-preproduction-20260824")
+
+                missing_env = valid_env.copy()
+                missing_env.pop("N8N_FINANCE_PROJECT_ID")
+                missing = subprocess.run(["node", "-e", code], env=missing_env, text=True, capture_output=True)
+                self.assertNotEqual(missing.returncode, 0)
+                self.assertIn("N8N_FINANCE_PROJECT_ID_REQUIRED", missing.stderr)
+
+                malformed_env = valid_env.copy()
+                malformed_env["N8N_FINANCE_PROJECT_ID"] = "finance preproduction"
+                malformed = subprocess.run(["node", "-e", code], env=malformed_env, text=True, capture_output=True)
+                self.assertNotEqual(malformed.returncode, 0)
+                self.assertIn("N8N_FINANCE_PROJECT_ID_INVALID", malformed.stderr)
+
+    def test_runner_passes_only_the_validated_environment_project_binding(self) -> None:
+        runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
+        self.assertIn('readonly expected_project_id="${N8N_FINANCE_PROJECT_ID:-}"', runner)
+        self.assertIn("N8N_FINANCE_PROJECT_ID is required", runner)
+        self.assertIn("N8N_FINANCE_PROJECT_ID is invalid", runner)
+        for filename in (
+            "n8n-cli-microsoft-oauth-metadata-readback.cjs",
+            "n8n-cli-finance-data-table-digest.cjs",
+            "n8n-cli-remove-transient-microsoft-oauth-refresh-proof.cjs",
+        ):
+            source = (RUNNER / filename).read_text(encoding="utf-8")
+            self.assertIn("/^[A-Za-z0-9_-]{8,64}$/", source)
+
     def test_data_table_digest_is_read_only_in_memory_and_bounded(self) -> None:
         source = (RUNNER / "n8n-cli-finance-data-table-digest.cjs").read_text(encoding="utf-8")
         for marker in (
