@@ -174,10 +174,10 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "watchdog.arm('FINALIZE')",
             "async function terminateOnTimeout(code)",
             "writeTerminalOnce(fixedError(code), null)",
-            "WF23_DEDICATED_INTERNAL_TASK_RUNNER_BOUNDARY_REQUIRED",
-            "process.env.N8N_RUNNERS_MODE !== 'internal'",
-            "process.env.N8N_RUNNERS_BROKER_PORT !== '15679'",
-            "process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '127.0.0.1'",
+            "WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED",
+            "process.env.N8N_RUNNERS_MODE !== 'external'",
+            "process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '0.0.0.0'",
+            "!process.env.N8N_RUNNERS_AUTH_TOKEN",
         ):
             self.assertIn(marker, shim)
         self.assertNotIn("writeFile", shim)
@@ -232,7 +232,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         )
         self.assertEqual(imported.stdout, "inert")
 
-    def test_production_shim_rejects_inherited_runner_broker_before_loading_n8n(self) -> None:
+    def test_production_shim_rejects_non_deployed_runner_path_before_loading_n8n(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         env = os.environ.copy()
         env.update({
@@ -241,7 +241,6 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "EXECUTIONS_DATA_SAVE_ON_ERROR": "none",
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS": "false",
             "N8N_RUNNERS_MODE": "internal",
-            "N8N_RUNNERS_BROKER_PORT": "5679",
             "N8N_RUNNERS_BROKER_LISTEN_ADDRESS": "SECRET_PROVIDER_VALUE",
         })
         completed = subprocess.run(
@@ -252,7 +251,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("WF23_DEDICATED_INTERNAL_TASK_RUNNER_BOUNDARY_REQUIRED", completed.stderr)
+        self.assertIn("WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED", completed.stderr)
         self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
         self.assertNotIn("Cannot find module 'n8n/package.json'", completed.stderr)
 
@@ -800,12 +799,20 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
             "n8n-cli-wf23-direct-transport-probe.cjs",
             "WF23 direct execution transport probe failed before metadata/provider access",
-            'internal_runner_broker_port="15679"',
-            "internal_runner_port_preflight",
-            "WF23 dedicated internal task-runner broker port unavailable",
-            'N8N_RUNNERS_BROKER_PORT="${internal_runner_broker_port}"',
-            "N8N_RUNNERS_BROKER_LISTEN_ADDRESS=127.0.0.1",
-            'server.listen(port,"127.0.0.1"',
+            'readonly recovery_receipt="${FINANCE_N8N_RECOVERY_RECEIPT:-}"',
+            "postgres_container_from_recovery_receipt",
+            'receipt.get("postgres", {}).get("container_id")',
+            "Recovered Postgres readiness failed",
+            "pg_isready",
+            "current_database()",
+            "task_runner_control_preflight",
+            "N8N_RUNNERS_MODE !== \"external\"",
+            "N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== \"0.0.0.0\"",
+            "http://127.0.0.1:5679/healthz",
+            '"${task_runners_container}" node -e',
+            "http://127.0.0.1:5680/healthz",
+            "Canonical Global/Shared folder hierarchy required",
+            'global_folder_id="f1000000-0000-4000-8000-000000000190"',
             '"${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"',
             "/dev/shm/",
             'readonly expected_project="${FINANCE_N8N_COMPOSE_PROJECT:-}"',
@@ -830,6 +837,9 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "eSnL069pIlzjFj4B",
             "node - execute --id=",
             "N8N_RUNNERS_BROKER_PORT=5679",
+            "N8N_RUNNERS_BROKER_PORT=15679",
+            "N8N_RUNNERS_MODE=internal",
+            "15679",
             "compose.disposable.yaml",
             "/opt/disposable/",
             "verify-image-lock.sh",
@@ -839,11 +849,11 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, runner)
         transport_position = runner.index("direct_transport_probe ||")
-        runner_port_position = runner.index("internal_runner_port_preflight ||")
-        self.assertLess(transport_position, runner_port_position)
-        self.assertLess(runner_port_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
-        self.assertLess(runner_port_position, runner.index('metadata_before="$(read_metadata)"'))
-        self.assertLess(runner_port_position, runner.index('failure_stage="workflow_import"'))
+        runner_control_position = runner.index("task_runner_control_preflight ||")
+        self.assertLess(transport_position, runner_control_position)
+        self.assertLess(runner_control_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
+        self.assertLess(runner_control_position, runner.index('metadata_before="$(read_metadata)"'))
+        self.assertLess(runner_control_position, runner.index('failure_stage="workflow_import"'))
         self.assertLess(transport_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
         self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))

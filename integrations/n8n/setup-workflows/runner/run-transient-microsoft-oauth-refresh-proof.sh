@@ -14,14 +14,15 @@ readonly stack_dir="${FINANCE_N8N_STACK_DIR:-}"
 readonly compose_file_input="${FINANCE_N8N_COMPOSE_FILE:-}"
 readonly env_file="${FINANCE_N8N_DEPLOYMENT_ENV_FILE:-}"
 readonly receipt_root="${FINANCE_N8N_RECEIPT_DIR:-}"
+readonly recovery_receipt="${FINANCE_N8N_RECOVERY_RECEIPT:-}"
 readonly n8n_service="${FINANCE_N8N_N8N_SERVICE:-n8n}"
-readonly postgres_service="${FINANCE_N8N_POSTGRES_SERVICE:-postgres}"
+readonly task_runners_service="${FINANCE_N8N_TASK_RUNNERS_SERVICE:-task-runners}"
 readonly workflow_id="10000000-0000-4000-8000-000000000023"
 readonly companion_setup_id="10000000-0000-4000-8000-000000000022"
 readonly workflow_name="Finance · Microsoft OAuth Refresh Proof · Manual Read Only"
 readonly folder_id="f1000000-0000-4000-8000-000000000191"
 readonly folder_name="Shared"
-readonly internal_runner_broker_port="15679"
+readonly global_folder_id="f1000000-0000-4000-8000-000000000190"
 readonly preflight_mode="${FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT:-false}"
 readonly expected_finance_commit="${FINANCE_REPOSITORY_COMMIT:-}"
 readonly expected_orchestrator_commit="${ORCHESTRATOR_REPOSITORY_COMMIT:-}"
@@ -38,6 +39,8 @@ readonly source_file="${finance_repo}/integrations/n8n/setup-workflows/23-micros
 [[ -f "${env_file}" && ! -L "${env_file}" && "$(stat -c '%a' "${env_file}")" == "600" ]] || { echo "Mode-0600 deployed runtime environment required" >&2; exit 1; }
 [[ -f "${source_file}" && ! -L "${source_file}" ]] || { echo "Regular WF23 source required" >&2; exit 1; }
 [[ -n "${compose_file_input}" ]] || { echo "FINANCE_N8N_COMPOSE_FILE is required" >&2; exit 1; }
+[[ -n "${recovery_receipt}" && "${recovery_receipt}" = /* ]] || { echo "FINANCE_N8N_RECOVERY_RECEIPT must be an absolute path" >&2; exit 1; }
+[[ -f "${recovery_receipt}" && ! -L "${recovery_receipt}" && "$(stat -c '%a' "${recovery_receipt}")" == "600" ]] || { echo "Mode-0600 Postgres recovery receipt required" >&2; exit 1; }
 
 compose_file="${compose_file_input}"
 [[ "${compose_file}" = /* ]] || compose_file="${stack_dir}/${compose_file}"
@@ -70,15 +73,45 @@ container_for_service() {
   printf '%s' "${ids}"
 }
 
+postgres_container_from_recovery_receipt() {
+  python3 - "${recovery_receipt}" <<'PY'
+import json
+import re
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as stream:
+        receipt = json.load(stream)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit("Postgres recovery receipt is unreadable")
+
+if receipt.get("schema_version") != 1 or receipt.get("purpose") != "N8N_RECOVERY_PRESTATE_RECEIPT_V1":
+    raise SystemExit("Postgres recovery receipt schema mismatch")
+container_id = receipt.get("postgres", {}).get("container_id")
+if not isinstance(container_id, str) or not re.fullmatch(r"[0-9a-f]{64}", container_id):
+    raise SystemExit("Postgres recovery receipt identity is invalid")
+print(container_id)
+PY
+}
+
 health_check() {
   local container="$1"
   [[ "$(docker inspect -f '{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${container}")" == "true|healthy" ]]
 }
 
 n8n_container="$(container_for_service "${n8n_service}")" || { echo "Deployed n8n container resolution failed" >&2; exit 1; }
-postgres_container="$(container_for_service "${postgres_service}")" || { echo "Deployed Postgres container resolution failed" >&2; exit 1; }
+task_runners_container="$(container_for_service "${task_runners_service}")" || { echo "Deployed task-runners container resolution failed" >&2; exit 1; }
+postgres_container="$(postgres_container_from_recovery_receipt)" || { echo "Deployed Postgres recovery identity unavailable" >&2; exit 1; }
 health_check "${n8n_container}" || { echo "Deployed n8n health failed" >&2; exit 1; }
-health_check "${postgres_container}" || { echo "Deployed Postgres health failed" >&2; exit 1; }
+[[ "$(docker inspect -f '{{.Id}}|{{.State.Running}}' "${postgres_container}")" == "${postgres_container}|true" ]] || { echo "Recovered Postgres container identity or state mismatch" >&2; exit 1; }
+[[ "$(docker inspect -f '{{.State.Running}}' "${task_runners_container}")" == "true" ]] || { echo "Deployed task-runners container is not running" >&2; exit 1; }
+
+n8n_runtime_env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "${n8n_container}")"
+postgres_user="${N8N_POSTGRES_USER:-$(awk -F= '$1 == "DB_POSTGRESDB_USER" { print substr($0, index($0, "=") + 1); exit }' <<<"${n8n_runtime_env}")}"
+postgres_database="${N8N_POSTGRES_DATABASE:-$(awk -F= '$1 == "DB_POSTGRESDB_DATABASE" { print substr($0, index($0, "=") + 1); exit }' <<<"${n8n_runtime_env}")}"
+[[ "${postgres_user}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ && "${postgres_database}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]] || { echo "Deployed Postgres database identity is invalid" >&2; exit 1; }
+docker exec "${postgres_container}" pg_isready -U "${postgres_user}" -d "${postgres_database}" >/dev/null || { echo "Recovered Postgres readiness failed" >&2; exit 1; }
+[[ "$(docker exec -i "${postgres_container}" psql -v ON_ERROR_STOP=1 -At -U "${postgres_user}" -d "${postgres_database}" -c "select current_database()||'|'||current_user;")" == "${postgres_database}|${postgres_user}" ]] || { echo "Recovered Postgres database identity mismatch" >&2; exit 1; }
 
 direct_transport_probe() {
   local raw expected
@@ -89,20 +122,22 @@ direct_transport_probe() {
 
 direct_transport_probe || { echo "WF23 direct execution transport probe failed before metadata/provider access" >&2; exit 1; }
 
-internal_runner_port_preflight() {
-  timeout --foreground --signal=TERM --kill-after=5s 15s docker exec -i \
-    -e WF23_INTERNAL_BROKER_PORT="${internal_runner_broker_port}" \
-    "${n8n_container}" node -e \
-    'const net=require("node:net");const port=Number(process.env.WF23_INTERNAL_BROKER_PORT);if(!Number.isInteger(port)||port!==15679)process.exit(1);const server=net.createServer();server.once("error",()=>process.exit(1));server.listen(port,"127.0.0.1",()=>server.close((error)=>process.exit(error?1:0)));' \
+task_runner_control_preflight() {
+  timeout --foreground --signal=TERM --kill-after=5s 15s docker exec "${n8n_container}" node -e \
+    'if (process.env.N8N_RUNNERS_MODE !== "external" || process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== "0.0.0.0" || !process.env.N8N_RUNNERS_AUTH_TOKEN) process.exit(1); fetch("http://127.0.0.1:5679/healthz").then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));' \
+    >/dev/null 2>&1
+  timeout --foreground --signal=TERM --kill-after=5s 15s docker exec "${task_runners_container}" node -e \
+    'fetch("http://127.0.0.1:5680/healthz").then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));' \
     >/dev/null 2>&1
 }
 
-internal_runner_port_preflight || { echo "WF23 dedicated internal task-runner broker port unavailable" >&2; exit 1; }
+task_runner_control_preflight || { echo "Deployed n8n/task-runner control path unavailable" >&2; exit 1; }
 
-psql_scalar() { docker exec -i "${postgres_container}" psql -v ON_ERROR_STOP=1 -At -U "${N8N_POSTGRES_USER:-n8n}" -d "${N8N_POSTGRES_DATABASE:-n8n}" -c "$1"; }
+psql_scalar() { docker exec -i "${postgres_container}" psql -v ON_ERROR_STOP=1 -At -U "${postgres_user}" -d "${postgres_database}" -c "$1"; }
 project_state() { psql_scalar "select count(*)||'|'||count(*) filter (where w.active)||'|'||count(*) filter (where w.\"activeVersionId\" is not null) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id where s.\"projectId\"='${expected_project_id}';"; }
 mapped_count() { psql_scalar "select count(*) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id join folder f on f.id=w.\"parentFolderId\" where s.\"projectId\"='${expected_project_id}' and f.\"projectId\"='${expected_project_id}';"; }
 tag_edge_count() { psql_scalar "select count(*) from workflows_tags wt join shared_workflow s on s.\"workflowId\"=wt.\"workflowId\" join tag_entity t on t.id=wt.\"tagId\" where s.\"projectId\"='${expected_project_id}' and t.name in ('finance','setup-required','inactive');"; }
+folder_hierarchy() { psql_scalar "select count(*) from folder shared join folder global_folder on global_folder.id=shared.\"parentFolderId\" where shared.id='${folder_id}' and shared.name='${folder_name}' and shared.\"projectId\"='${expected_project_id}' and global_folder.id='${global_folder_id}' and global_folder.name='Global' and global_folder.\"parentFolderId\" is null and global_folder.\"projectId\"='${expected_project_id}';"; }
 setup_id_count() { psql_scalar "select count(*) from workflow_entity where id in ('${workflow_id}','${companion_setup_id}');"; }
 wf23_execution_count() { psql_scalar "select count(*) from execution_entity where \"workflowId\"='${workflow_id}';"; }
 wf23_history_count() { psql_scalar "select count(*) from workflow_history where \"workflowId\"='${workflow_id}';"; }
@@ -124,8 +159,7 @@ data_table_digest() {
 
 execute_probe() {
   local raw command_status=0 timeout_code
-  internal_runner_port_preflight || return 1
-  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false -e N8N_RUNNERS_MODE=internal -e N8N_RUNNERS_BROKER_PORT="${internal_runner_broker_port}" -e N8N_RUNNERS_BROKER_LISTEN_ADDRESS=127.0.0.1 "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
+  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
   if [[ "${command_status}" == "0" ]]; then
     printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" success
     return
@@ -144,7 +178,7 @@ retain_execution_timeout_code() {
 
 [[ "$(project_state)" == "21|0|0" && "$(mapped_count)" == "21" && "$(tag_edge_count)" == "63" ]] || { echo "Expected 21-workflow deployed boundary" >&2; exit 1; }
 [[ "$(setup_id_count)" == "0" && "$(wf23_execution_count)" == "0" && "$(wf23_history_count)" == "0" ]] || { echo "Transient setup state must start absent" >&2; exit 1; }
-[[ "$(psql_scalar "select count(*) from folder where id='${folder_id}' and name='${folder_name}' and \"projectId\"='${expected_project_id}';")" == "1" ]] || { echo "Exact Shared folder required" >&2; exit 1; }
+[[ "$(folder_hierarchy)" == "1" ]] || { echo "Canonical Global/Shared folder hierarchy required" >&2; exit 1; }
 baseline_digest_before="$(baseline_digest)"; [[ "${baseline_digest_before}" =~ ^[0-9a-f]{64}$ ]] || { echo "Baseline digest unavailable" >&2; exit 1; }
 data_table_digest_before="$(data_table_digest)" || { echo "Finance Data Table digest unavailable" >&2; exit 1; }
 metadata_before="$(read_metadata)" || { echo "Microsoft OAuth metadata pre-read failed" >&2; exit 1; }
@@ -237,7 +271,7 @@ metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata firs
 refresh_after_first="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_first}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "First execution did not refresh both expired Microsoft tokens" >&2; exit 1; }
 
 failure_stage="n8n_only_restart"
-services=("${postgres_service}" task-runners pdf-utility)
+services=("${task_runners_service}" pdf-utility)
 declare -A service_ids_before service_started_before
 for service in "${services[@]}"; do
   service_ids_before["${service}"]="$(container_for_service "${service}")" || { echo "Required deployed service missing" >&2; exit 1; }

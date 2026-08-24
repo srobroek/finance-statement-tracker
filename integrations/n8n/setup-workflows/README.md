@@ -1,126 +1,198 @@
 # setup workflows
 
-These exports live outside `integrations/n8n/workflows/`. The regular import contains
-19 workflows. Reviewers import setup workflows one at a time.
+These exports stay outside `integrations/n8n/workflows/`. The regular import
+contains 19 workflows. Operators import setup workflows one file at a time. Use
+This runbook covers deployed-stack validation, the mandatory acknowledgment, and
+the read-only WF23 proof with protected recovery inputs.
 
 ## onedrive setup
 
-`22-onedrive-finance-evidence-root-setup.json` is manual-only and inactive. It
-uses the `Finance OneDrive` OAuth credential.
+`22-onedrive-finance-evidence-root-setup.json` is inactive and manual-only. It
+uses the existing `Finance OneDrive` OAuth credential.
 
-The workflow:
+The workflow performs these steps:
 
-- lists the drive root.
-- reuses the exact `Finance Evidence` folder when present.
-- creates that folder at the drive root when absent.
-- reads the root again.
-- checks for one exact match.
-- rejects `Finance Evidence/Finance Evidence`.
+- Lists the drive root.
+- Reuses or creates one exact `Finance Evidence` folder.
+- Reads the drive root again.
+- Rejects a nested `Finance Evidence/Finance Evidence` folder.
 
-The final node emits a redacted receipt. It omits:
+The terminal receipt omits:
 
-- record IDs.
-- drive metadata.
+- Record IDs.
+- Drive metadata.
 - URLs.
-- credential values.
-- file contents.
+- Credential values.
+- File contents.
 
-Keep the workflow inactive and unscheduled. Before a manual run, import it into
-`Global/Shared` and bind the existing `Finance OneDrive` credential. After the
-review, remove the setup export.
+Import the workflow into `Global/Shared` for the manual run. Keep it inactive
+and unscheduled. After the manual run, remove the setup export.
 
 ## microsoft oauth proof
 
-`23-microsoft-oauth-refresh-proof.json` is manual-only, inactive, and read-only.
-Import it only for the reviewed proof.
+`23-microsoft-oauth-refresh-proof.json` is inactive, manual-only, and
+read-only. The proof performs these reads:
 
-The Outlook node:
+- Reads at most one Outlook message with `isDraft=false`.
+- Uses a frozen seven-day window.
+- Lists the OneDrive root once.
 
-- scans a frozen seven-day window.
-- applies the server-side `isDraft eq false` filter.
-- requests at most one message.
-- projects only the message `id`.
-- discards that identifier before the next node.
+The workflow downloads no provider content. The workflow contains no
+provider-write node.
 
-The OneDrive node lists the drive root once. The workflow has no provider-write
-node and downloads no content. The final node keeps:
+The terminal receipt retains:
 
-- result counts.
-- time bounds.
-- an execution ID.
-- safety flags.
-- a verification timestamp.
+- Result counts.
+- Time bounds.
+- An execution ID.
+- Safety flags.
+- Verification timestamp.
 
-## run the deployed proof
+The receipt omits:
 
-Run `runner/run-transient-microsoft-oauth-refresh-proof.sh` on the deployed
-host. Do not import or execute WF23 manually.
+- Message fields.
+- File fields.
+- Credential values.
+- Token values.
 
-Set these variables from the deployed recovery receipt. The receipt supplies
-the values below:
+## recovery receipt
 
-| Variable | Value |
-| --- | --- |
-| `FINANCE_N8N_COMPOSE_PROJECT` | Deployed Compose project name. |
-| `FINANCE_N8N_STACK_DIR` | Deployed stack checkout. |
-| `FINANCE_N8N_COMPOSE_FILE` | `compose.yaml` or an absolute path. |
-| `FINANCE_N8N_DEPLOYMENT_ENV_FILE` | Mode-`0600` runtime environment file. |
-| `FINANCE_N8N_RECEIPT_DIR` | Absolute mode-`0700` receipt directory. |
-| `FINANCE_REPOSITORY_DIR` | Clean finance source checkout. |
-| `FINANCE_REPOSITORY_COMMIT` | Exact 40-character finance commit. |
-| `ORCHESTRATOR_REPOSITORY_COMMIT` | Exact 40-character stack commit. |
-| `N8N_FINANCE_PROJECT_ID` | Explicit n8n project identifier. |
+Runner reads a recovered Postgres ID from a protected receipt. Set
+`FINANCE_N8N_RECOVERY_RECEIPT` to the absolute
+path of `prestate.json` from the deployed recovery directory. Include this
+contract in the receipt:
 
-Resolve one n8n and one Postgres container from the explicit Compose project.
-Check both containers for running and healthy state.
+```json
+{
+  "schema_version": 1,
+  "purpose": "N8N_RECOVERY_PRESTATE_RECEIPT_V1",
+  "postgres": {
+    "container_id": "<64 lowercase hexadecimal characters>"
+  }
+}
+```
 
-Before metadata reads, workflow import, or provider calls, run a transport
-probe. The probe loads the extensionless n8n 2.36.2 configuration, resolves the
-official `Execute` instance, and verifies its output hook.
+These checks use the live recovered stack. A failed boundary stops the preflight
+before workflow import:
 
-Start with the reviewed `21 workflows / 0 active / 0 published` boundary. Import
-one inactive workflow into `Global/Shared`. Restore the same 21-workflow
-boundary during cleanup.
+- Recovery receipt missing.
+- Container identity mismatch.
+- Task-runner endpoint unavailable.
+- Database readiness failure.
+- Folder parent mismatch.
+- After a successful preflight, run the full proof.
 
-Read these four canonical Data Tables:
+Runner checks:
 
-- `finance_ingestion_state`
-- `finance_documents`
-- `finance_actual_batches`
-- `finance_ai_reviews`
+- Compares the recorded container ID with `docker inspect`.
+- Checks that the container runs.
+- Runs `pg_isready`.
+- Verifies that `psql` reports the configured database and role.
+- Does not resolve Postgres through Compose.
 
-Read the tables with the official `DataTableService`. Write no rows or schemas.
-Credential readbacks omit:
+## required inputs
 
-- IDs and encrypted data.
-- access and refresh tokens.
-- client secrets.
-- provider response bodies.
+Read values from the receipt or its mode-`0600` configuration:
 
-The proof sequence is:
+- Reject missing values.
+- Reject symlinks.
+- Reject malformed commit IDs.
+- Reject unsafe file modes.
 
-- Use `docker exec` for the WF23 import.
-- Run `Execute` directly.
-- Remove WF23 from that container.
-- Disable execution persistence.
-- Before each call, confirm no PostgreSQL execution rows.
+Required inputs:
 
-Restart only the n8n container with `docker restart`. Check all other service
-containers and their start times. Use internal runner mode on `127.0.0.1:15679`.
-Before metadata reads, workflow import, or provider calls, verify that port.
+- `FINANCE_N8N_COMPOSE_PROJECT`: deployed project name.
+- `FINANCE_N8N_STACK_DIR`: n8n stack checkout.
+- `FINANCE_N8N_COMPOSE_FILE`: `compose.yaml` or its absolute path.
+- `FINANCE_N8N_DEPLOYMENT_ENV_FILE`: mode-`0600` runtime environment file.
+- `FINANCE_N8N_RECEIPT_DIR`: absolute mode-`0700` output directory.
+- `FINANCE_N8N_RECOVERY_RECEIPT`: absolute mode-`0600` Postgres receipt.
+- `FINANCE_REPOSITORY_DIR`: clean finance source checkout.
+- `FINANCE_REPOSITORY_COMMIT`: exact 40-character finance commit.
+- `ORCHESTRATOR_REPOSITORY_COMMIT`: exact 40-character stack commit.
+- `N8N_FINANCE_PROJECT_ID`: explicit n8n project identifier.
 
-Before the first execution, check that both token expiries are past. Produce a
-redacted `VERIFIED` receipt for each execution. Move both expiries into the
-future. Limit Outlook to one server-filtered message. On the second
-execution, preserve the first future expiry values.
+Source provenance binds this proof to one recovery event. The finance commit
+identifies the workflow and runner source. The orchestrator commit identifies
+the deployed n8n and task-runners stack. The project ID and service names
+identify the live control plane. The receipt identifies the recovered Postgres
+container, and the environment file supplies the database role and name. A
+successful run keeps these values together.
 
-Compare these digests with their baselines:
+Service names:
 
-- workflows.
-- execution history.
-- credential bindings.
-- Data Tables.
+- `FINANCE_N8N_N8N_SERVICE` defaults to `n8n`.
+- `FINANCE_N8N_TASK_RUNNERS_SERVICE` defaults to `task-runners`.
+- When a deployed service name differs, set the relevant variable.
 
-Emit a mode-`0600` success or failure receipt. A failure receipt uses
-three-state postconditions. `raw_irun_persisted: false` requires a zero-row
-readback. `finance_data_table_writes: false` requires an official digest match.
+## run the deployed preflight
+
+Run the commands from the finance checkout on the deployed host. Do not import
+or execute WF23 manually.
+
+```sh
+export FINANCE_N8N_COMPOSE_PROJECT='<project from recovery configuration>'
+export FINANCE_N8N_STACK_DIR='<deployed stack checkout>'
+export FINANCE_N8N_COMPOSE_FILE='compose.yaml'
+export FINANCE_N8N_DEPLOYMENT_ENV_FILE='<mode-0600 runtime environment file>'
+export FINANCE_N8N_RECEIPT_DIR='<absolute mode-0700 receipt directory>'
+export FINANCE_N8N_RECOVERY_RECEIPT='<absolute mode-0600 prestate.json>'
+export FINANCE_REPOSITORY_DIR='<clean finance checkout>'
+export FINANCE_REPOSITORY_COMMIT='<40-character finance commit>'
+export ORCHESTRATOR_REPOSITORY_COMMIT='<40-character stack commit>'
+export N8N_FINANCE_PROJECT_ID='<deployed n8n project ID>'
+
+FINANCE_MICROSOFT_OAUTH_PROOF_ACK=RUN_TRANSIENT_WF23_ONLY \
+FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT=true \
+  integrations/n8n/setup-workflows/runner/run-transient-microsoft-oauth-refresh-proof.sh
+```
+
+The preflight resolves these containers from the named Compose project:
+
+- One n8n container.
+- One task-runners container.
+
+The preflight checks that these boundaries hold:
+
+- n8n health.
+- The deployed n8n broker at `5679` and task-runner launcher at `5680`.
+- Recovered Postgres identity and readiness.
+- The `Global` root to `Shared` child hierarchy.
+- The 21-workflow boundary.
+- Four canonical Data Tables.
+- Redacted Microsoft credential metadata.
+
+## run the full proof
+
+After the preflight succeeds, run the full proof. Keep the same exports and
+change the two operator flags as follows:
+
+```sh
+FINANCE_MICROSOFT_OAUTH_PROOF_ACK=RUN_TRANSIENT_WF23_ONLY \
+FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT=false \
+  integrations/n8n/setup-workflows/runner/run-transient-microsoft-oauth-refresh-proof.sh
+```
+
+Runner actions:
+
+- Imports one inactive workflow into `Global/Shared`.
+- Executes the reviewed read-only proof through the deployed n8n/task-runners path.
+- Restarts only n8n.
+- Runs the proof again.
+- Removes WF23.
+- Disables execution persistence.
+- Before each execution, checks PostgreSQL.
+
+The cleanup gate restores these values:
+
+- 21 workflows.
+- Zero active workflows.
+- Zero published workflows.
+- 21 folder placements.
+- 63 tag edges.
+- Zero WF23 execution rows.
+- The workflow digest.
+- The four-table digest.
+
+Runner emits a mode-`0600` success or failure receipt. Failure fields
+remain `null` until a zero-row or digest readback proves their postconditions.
