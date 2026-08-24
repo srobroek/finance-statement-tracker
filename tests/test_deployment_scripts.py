@@ -183,12 +183,14 @@ class DeploymentScriptTests(unittest.TestCase):
                 "esac\n",
                 encoding="utf-8",
             )
+            fd_log = root / "docker-fd.log"
             (bin_dir / "docker").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 "state=\"${STUB_STATE}\"\n"
                 "log=\"${STUB_LOG}\"\n"
                 "name=\"${@: -1}\"\n"
+                "if [[ -e /proc/self/fd/9 ]]; then printf 'inherited\\n' >> \"${STUB_FD_LOG}\"; else printf 'closed\\n' >> \"${STUB_FD_LOG}\"; fi\n"
                 "case \"${1}\" in\n"
                 "  inspect)\n"
                 "    if [[ \"${DOCKER_MODE}\" == inspect_error && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual-poc ]]; then exit 1; fi\n"
@@ -234,6 +236,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "FINANCE_CASHBACK_BACKUP_SANITIZE_SCRIPT": str(sanitizer),
                     "STUB_STATE": str(state),
                     "STUB_LOG": str(log),
+                    "STUB_FD_LOG": str(fd_log),
                     "PROBE_MODE": probe_mode,
                     "DOCKER_MODE": docker_mode,
                 }
@@ -289,6 +292,9 @@ class DeploymentScriptTests(unittest.TestCase):
                     0 if probe_mode == "success" else 1,
                 )
                 self.assertEqual(log.read_text(encoding="utf-8").count("unpause:"), 3)
+            fd_observations = fd_log.read_text(encoding="utf-8")
+            self.assertIn("closed\n", fd_observations)
+            self.assertNotIn("inherited\n", fd_observations)
             return result
 
     def test_backup_stubbed_runtime_promotes_or_retains_redacted_failure(self) -> None:
@@ -483,6 +489,82 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertEqual(script.count('docker restart "${name}"'), 1)
         self.assertIn("backup_stale", script)
         self.assertIn("backup_unverified", script)
+
+    def test_health_monitor_docker_children_cannot_observe_backup_lock_fd(self) -> None:
+        script = Path("deploy/finance-monitor/finance-health-monitor.sh")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            actual_stack = root / "actual"
+            cashback_stack = root / "cashback"
+            backup_root = root / "backups"
+            actual_stack.mkdir()
+            cashback_stack.mkdir()
+            backup = backup_root / "20260824T000000Z"
+            backup.mkdir(parents=True)
+            (backup / "verification.json").write_text(
+                '{"status":"ok","backup":"20260824T000000Z"}\n',
+                encoding="utf-8",
+            )
+            fd_log = root / "docker-fd.log"
+            (bin_dir / "readlink").write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "path=\"${3}\"\n"
+                "case \"${path}\" in\n"
+                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
+                f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
+                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual-poc ;;\n"
+                "  *) printf '%s\\n' \"${path}\" ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "docker").write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "if [[ -e /proc/self/fd/9 ]]; then printf 'inherited\\n' >> \"${STUB_FD_LOG}\"; else printf 'closed\\n' >> \"${STUB_FD_LOG}\"; fi\n"
+                "case \"${1}\" in\n"
+                "  inspect) printf 'running\\n' ;;\n"
+                "  exec) printf '{\"status\":\"ok\"}\\n' ;;\n"
+                "  restart|compose) ;;\n"
+                "  *) exit 1 ;;\n"
+                "esac\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "curl").write_text(
+                "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8"
+            )
+            for executable in ("readlink", "docker", "curl"):
+                (bin_dir / executable).chmod(0o755)
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PATH": f"{bin_dir}:{environment['PATH']}",
+                    "FINANCE_ACTUAL_STACK_DIR": str(actual_stack),
+                    "FINANCE_CASHBACK_STACK_DIR": str(cashback_stack),
+                    "FINANCE_BACKUP_ROOT": str(backup_root),
+                    "STUB_FD_LOG": str(fd_log),
+                }
+            )
+            command = ["bash", str(script)] if os.geteuid() == 0 else [
+                "unshare",
+                "-Ur",
+                "bash",
+                str(script),
+            ]
+            result = subprocess.run(
+                command,
+                cwd=Path.cwd(),
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            fd_observations = fd_log.read_text(encoding="utf-8")
+            self.assertIn("closed\n", fd_observations)
+            self.assertNotIn("inherited\n", fd_observations)
 
     def test_cashback_deploy_fetches_exact_sha_without_checkout_action(self) -> None:
         workflow = Path(".github/workflows/cashback-image.yml").read_text(

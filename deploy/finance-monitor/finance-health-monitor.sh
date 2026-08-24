@@ -42,7 +42,7 @@ probe() {
   local container="${3:-}"
   local response
   if [[ -n "${container}" ]]; then
-    response="$(docker exec "${container}" python apps/cashback-control/probe_health.py 2>/dev/null)" || return 1
+    response="$(docker exec "${container}" python apps/cashback-control/probe_health.py 2>/dev/null 9>&-)" || return 1
   else
     response="$(curl --connect-timeout 3 --max-time 10 -fsS "${url}" 2>/dev/null)" || return 1
   fi
@@ -59,7 +59,7 @@ probe_twice() {
 }
 
 container_running() {
-  [[ "$(docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null || true)" == "running" ]]
+  [[ "$(docker inspect -f '{{.State.Status}}' "$1" 2>/dev/null 9>&- || true)" == "running" ]]
 }
 
 recover_container() {
@@ -67,10 +67,10 @@ recover_container() {
   local stack_dir="$2"
   local project="$3"
   local service="$4"
-  if docker inspect "${name}" >/dev/null 2>&1; then
-    docker restart "${name}" >/dev/null
+  if docker inspect "${name}" >/dev/null 2>&1 9>&-; then
+    docker restart "${name}" >/dev/null 9>&-
   else
-    docker compose -p "${project}" -f "${stack_dir}/compose.yaml" up -d --pull never "${service}" >/dev/null
+    docker compose -p "${project}" -f "${stack_dir}/compose.yaml" up -d --pull never "${service}" >/dev/null 9>&-
   fi
   log warning service_recovered "${name}"
 }
