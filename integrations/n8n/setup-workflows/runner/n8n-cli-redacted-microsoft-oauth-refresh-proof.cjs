@@ -9,6 +9,9 @@ const AUTH_COOKIE = 'n8n-auth';
 const LOCAL_ORIGIN = 'http://127.0.0.1:5678';
 const LOCAL_REST_ORIGIN = 'http://127.0.0.1:5678';
 const WATCHDOG_TIMEOUT_MS = 120_000;
+const EXECUTION_RECONCILIATION_TIMEOUT_MS = 5_000;
+const EXECUTION_POLL_INTERVAL_MS = 100;
+const TERMINAL_EXECUTION_STATUSES = new Set(['success', 'error', 'canceled', 'cancelled', 'crashed', 'failed']);
 const EXPECTED_KEYS = new Set([
   'schema_version', 'status', 'execution_id', 'outlook_read_succeeded',
   'outlook_items_observed', 'outlook_max_messages', 'outlook_server_filter_applied',
@@ -221,8 +224,80 @@ function terminalRunPayload(task) {
   };
 }
 
+function executionStatus(body) {
+  const candidates = [body, body?.data, body?.data?.execution];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate.status === 'string') return candidate.status.toLowerCase();
+  }
+  return null;
+}
+
+function executionIsTerminal(body) {
+  const status = executionStatus(body);
+  if (status && TERMINAL_EXECUTION_STATUSES.has(status)) return true;
+  return !status && Boolean(body?.finished === true || body?.data?.finished === true);
+}
+
+async function awaitWithin(promise, timeoutMs) {
+  if (timeoutMs <= 0) throw new Error('WF23_EXECUTION_RECONCILIATION_TIMEOUT');
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('WF23_EXECUTION_RECONCILIATION_TIMEOUT')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readResponseBody(response, timeoutMs) {
+  if (typeof response?.json !== 'function') return null;
+  try {
+    return await awaitWithin(Promise.resolve(response.json()), timeoutMs);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWithin(fetchImpl, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const request = Promise.resolve(fetchImpl(url, { ...options, signal: controller.signal }));
+  try {
+    return await awaitWithin(request, timeoutMs);
+  } catch (error) {
+    controller.abort();
+    throw error;
+  }
+}
+
+async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
+  if (typeof fetchImpl !== 'function' || !executionId) return false;
+  const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
+  const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
+  const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
+  const deadline = Date.now() + timeoutMs;
+  try {
+    const stopResponse = await fetchWithin(fetchImpl, stopUrl, { method: 'POST', headers }, Math.max(1, deadline - Date.now()));
+    if (stopResponse?.ok) return true;
+  } catch {}
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, deadline - Date.now()));
+      if (response?.ok && executionIsTerminal(await readResponseBody(response, Math.max(1, deadline - Date.now())))) return true;
+    } catch {}
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
+  }
+  return false;
+}
+
 async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch, random = crypto.randomBytes,
-  timeoutMs = WATCHDOG_TIMEOUT_MS, workflowId = WORKFLOW_ID, triggerNode = TRIGGER_NODE }) {
+  timeoutMs = WATCHDOG_TIMEOUT_MS, workflowId = WORKFLOW_ID, triggerNode = TRIGGER_NODE,
+  reconcileTimeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
   if (typeof fetchImpl !== 'function') fail('WF23_REST_RUN_FAILED');
   const pushRef = random(12).toString('hex');
   const WebSocket = wsModule.WebSocket || wsModule;
@@ -235,12 +310,20 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
   let executionId;
   let finishedStatus;
   let terminalTask;
+  let failureError;
+  let runRequest;
   const pendingFinished = new Map();
   const pendingTerminal = new Map();
   let resolveRun;
   let rejectRun;
   const resultPromise = new Promise((resolve, reject) => { resolveRun = resolve; rejectRun = reject; });
-  const failRun = (error) => { if (!settled) { settled = true; rejectRun(error); } };
+  const failRun = (error) => {
+    if (!settled) {
+      settled = true;
+      failureError = error;
+      rejectRun(error);
+    }
+  };
   const maybeFinish = () => {
     if (settled || !executionId || finishedStatus !== 'success' || !terminalTask) return;
     try {
@@ -289,27 +372,30 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     }
   };
   const onOpen = async () => {
-    try {
-      const response = await fetchImpl(`${LOCAL_REST_ORIGIN}/rest/workflows/${encodeURIComponent(workflowId)}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json', Origin: LOCAL_ORIGIN,
-          Cookie: `${AUTH_COOKIE}=${token}`, 'push-ref': pushRef,
-        },
-        body: JSON.stringify({ triggerToStartFrom: { name: triggerNode } }),
-      });
-      if (!response?.ok) fail('WF23_REST_RUN_FAILED');
-      executionId = wrappedExecutionId(await response.json());
-      terminalTask = pendingTerminal.get(executionId);
-      finishedStatus = pendingFinished.get(executionId);
-      if (finishedStatus && finishedStatus !== 'success') {
-        failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
-        return;
+    runRequest = (async () => {
+      try {
+        const response = await fetchImpl(`${LOCAL_REST_ORIGIN}/rest/workflows/${encodeURIComponent(workflowId)}/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', Origin: LOCAL_ORIGIN,
+            Cookie: `${AUTH_COOKIE}=${token}`, 'push-ref': pushRef,
+          },
+          body: JSON.stringify({ triggerToStartFrom: { name: triggerNode } }),
+        });
+        if (!response?.ok) fail('WF23_REST_RUN_FAILED');
+        executionId = wrappedExecutionId(await response.json());
+        terminalTask = pendingTerminal.get(executionId);
+        finishedStatus = pendingFinished.get(executionId);
+        if (finishedStatus && finishedStatus !== 'success') {
+          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          return;
+        }
+        maybeFinish();
+      } catch (error) {
+        failRun(error?.code ? error : Object.assign(new Error('WF23_REST_RUN_FAILED'), { code: 'WF23_REST_RUN_FAILED' }));
       }
-      maybeFinish();
-    } catch (error) {
-      failRun(error?.code ? error : Object.assign(new Error('WF23_REST_RUN_FAILED'), { code: 'WF23_REST_RUN_FAILED' }));
-    }
+    })();
+    await runRequest;
   };
   const onClose = () => {
     if (!settled) failRun(Object.assign(new Error('WF23_PUSH_CONNECTION_FAILED'), { code: 'WF23_PUSH_CONNECTION_FAILED' }));
@@ -324,6 +410,10 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     return await resultPromise;
   } finally {
     clearTimeout(timer);
+    if (failureError && runRequest) {
+      try { await awaitWithin(runRequest, reconcileTimeoutMs); } catch {}
+      if (executionId) await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
+    }
     if (typeof socket.close === 'function') socket.close();
   }
 }
