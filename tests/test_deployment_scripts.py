@@ -544,6 +544,14 @@ class DeploymentScriptTests(unittest.TestCase):
     def test_cashback_browser_access_uses_private_origin_contract(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
         self.assertIn('"127.0.0.1:5010:5010"', compose)
+        self.assertIn(
+            "    networks:\n"
+            "      finance-runtime:\n"
+            "        aliases:\n"
+            "          - cashback\n",
+            compose,
+        )
+        self.assertIn("networks:\n  finance-runtime:\n    external: true\n", compose)
         environment = Path("deploy/finance-runtime/finance.env.tpl").read_text(encoding="utf-8")
         for name in (
             "CASHBACK_ACCESS_ISSUER",
