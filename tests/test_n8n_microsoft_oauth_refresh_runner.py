@@ -1208,6 +1208,10 @@ sys.exit(0)
             "docker exec \"${n8n_container}\" n8n import:workflow",
             'docker restart "${n8n_container}"',
             'com.docker.compose.project',
+            'git -C "${finance_repo}" rev-parse HEAD',
+            'git -C "${stack_dir}" rev-parse HEAD',
+            'git -C "${finance_repo}" merge-base --is-ancestor "${prior_promoted_commit}" "${expected_finance_commit}"',
+            '"$(sha256sum "${source_file}" | awk \'{print $1}\')" == "${source_sha256}"',
         ):
             self.assertIn(marker, runner)
         for forbidden in (
@@ -1232,6 +1236,8 @@ sys.exit(0)
             "docker compose restart n8n",
         ):
             self.assertNotIn(forbidden, runner)
+        self.assertNotIn("b3bce6e197c6603d3e8708156bed987f26ac8513", runner)
+        self.assertNotIn('merge-base --is-ancestor "${source_commit}"', runner)
         transport_position = runner.index("direct_transport_probe ||")
         runner_control_position = runner.index("task_runner_control_preflight ||")
         self.assertLess(transport_position, runner_control_position)
