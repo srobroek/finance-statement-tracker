@@ -158,7 +158,7 @@ The preflight checks that these boundaries hold:
 - The deployed n8n broker at `5679` and task-runner launcher at `5680`.
 - Recovered Postgres identity and readiness.
 - The `Global` root to `Shared` child hierarchy.
-- The 21-workflow boundary.
+- The 19-workflow boundary.
 - Four canonical Data Tables.
 - Redacted Microsoft credential metadata.
 
@@ -185,11 +185,11 @@ Runner actions:
 
 The cleanup gate restores these values:
 
-- 21 workflows.
+- 19 workflows.
 - Zero active workflows.
 - Zero published workflows.
-- 21 folder placements.
-- 63 tag edges.
+- 19 folder placements.
+- 57 tag edges.
 - Zero WF23 execution rows.
 - The workflow digest.
 - The four-table digest.

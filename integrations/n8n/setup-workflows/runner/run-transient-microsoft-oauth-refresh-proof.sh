@@ -176,7 +176,7 @@ retain_execution_timeout_code() {
   esac
 }
 
-[[ "$(project_state)" == "21|0|0" && "$(mapped_count)" == "21" && "$(tag_edge_count)" == "63" ]] || { echo "Expected 21-workflow deployed boundary" >&2; exit 1; }
+[[ "$(project_state)" == "19|0|0" && "$(mapped_count)" == "19" && "$(tag_edge_count)" == "57" ]] || { echo "Expected 19-workflow deployed boundary" >&2; exit 1; }
 [[ "$(setup_id_count)" == "0" && "$(wf23_execution_count)" == "0" && "$(wf23_history_count)" == "0" ]] || { echo "Transient setup state must start absent" >&2; exit 1; }
 [[ "$(folder_hierarchy)" == "1" ]] || { echo "Canonical Global/Shared folder hierarchy required" >&2; exit 1; }
 baseline_digest_before="$(baseline_digest)"; [[ "${baseline_digest_before}" =~ ^[0-9a-f]{64}$ ]] || { echo "Baseline digest unavailable" >&2; exit 1; }
@@ -210,7 +210,7 @@ remove_container_work_file() {
 
 verify_clean_boundary() {
   local observed_data_table_digest
-  [[ "$(project_state)" == "21|0|0" && "$(mapped_count)" == "21" && "$(tag_edge_count)" == "63" && "$(setup_id_count)" == "0" ]] || return 1
+  [[ "$(project_state)" == "19|0|0" && "$(mapped_count)" == "19" && "$(tag_edge_count)" == "57" && "$(setup_id_count)" == "0" ]] || return 1
   [[ "$(wf23_execution_count)" == "0" ]] || return 1
   execution_rows_zero_verified=true
   [[ "$(wf23_history_count)" == "0" && "$(baseline_digest)" == "${baseline_digest_before}" ]] || return 1
@@ -255,11 +255,11 @@ failure_stage="workflow_import"; import_started=true
 docker exec -i "${n8n_container}" sh -c "cat > '${container_work_file}'" < "${bound_file}"
 docker exec "${n8n_container}" n8n import:workflow --input="${container_work_file}" --projectId="${expected_project_id}" --activeState=false >/dev/null
 remove_container_work_file
-[[ "$(project_state)" == "22|0|0" && "$(setup_id_count)" == "1" ]] || { echo "WF23 inactive import boundary mismatch" >&2; exit 1; }
+[[ "$(project_state)" == "20|0|0" && "$(setup_id_count)" == "1" ]] || { echo "WF23 inactive import boundary mismatch" >&2; exit 1; }
 
 failure_stage="folder_placement"
 [[ "$(psql_scalar "update workflow_entity w set \"parentFolderId\"='${folder_id}' where w.id='${workflow_id}' and w.active=false and w.\"activeVersionId\" is null and exists (select 1 from shared_workflow s where s.\"workflowId\"=w.id and s.\"projectId\"='${expected_project_id}' and s.role='workflow:owner');")" == "UPDATE 1" ]] || { echo "WF23 folder placement failed" >&2; exit 1; }
-[[ "$(mapped_count)" == "22" && "$(tag_edge_count)" == "66" ]] || { echo "WF23 aggregate placement mismatch" >&2; exit 1; }
+[[ "$(mapped_count)" == "20" && "$(tag_edge_count)" == "60" ]] || { echo "WF23 aggregate placement mismatch" >&2; exit 1; }
 [[ "$(psql_scalar "select count(*) from workflow_entity w join shared_workflow s on s.\"workflowId\"=w.id where w.id='${workflow_id}' and w.name='${workflow_name}' and w.\"parentFolderId\"='${folder_id}' and w.active=false and w.\"activeVersionId\" is null and s.\"projectId\"='${expected_project_id}' and s.role='workflow:owner';")" == "1" ]] || { echo "WF23 exact inactive placement mismatch" >&2; exit 1; }
 [[ "$(psql_scalar "select string_agg(t.name,',' order by t.name) from workflows_tags wt join tag_entity t on t.id=wt.\"tagId\" where wt.\"workflowId\"='${workflow_id}';")" == "finance,inactive,setup-required" ]] || { echo "WF23 exact tag set mismatch" >&2; exit 1; }
 [[ "$(psql_scalar "select count(*) from workflow_entity where id='${workflow_id}' and nodes::text like '%BIND_%';")" == "0" && "$(wf23_execution_count)" == "0" ]] || { echo "WF23 binding/execution precheck failed" >&2; exit 1; }
@@ -313,7 +313,7 @@ target,run_id,orchestrator,finance,source_sha=sys.argv[1:]
 snapshots=[json.loads(os.environ.pop(name)) for name in ("WF23_METADATA_BEFORE","WF23_METADATA_AFTER_FIRST","WF23_METADATA_AFTER_SECOND")]
 executions=[json.loads(os.environ.pop(name)) for name in ("WF23_EXECUTION_FIRST","WF23_EXECUTION_SECOND")]
 refresh=json.loads(os.environ.pop("WF23_REFRESH_SUMMARY"))
-payload={"schema_version":1,"status":"VERIFIED","scope":"TRANSIENT_MICROSOFT_OAUTH_REFRESH_PROOF","run_id":run_id,"recorded_at_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"commits":{"finance":finance,"orchestrator":orchestrator},"workflow_source_sha256":source_sha,"executions":executions,"credential_metadata":{"before":snapshots[0],"after_first_execution":snapshots[1],"after_restart_second_execution":snapshots[2],"owner_bindings_stable":True,"credential_ids_recorded":False,"refresh":refresh},"restart":{"only_n8n_restarted":True,"n8n_healthy_after_restart":True,"other_service_containers_unchanged":True},"boundary":{"before":{"workflows":21,"active":0,"published":0,"folder_placements":21,"tag_edges":63},"during":{"workflows":22,"active":0,"published":0,"folder_placements":22,"tag_edges":66},"after":{"workflows":21,"active":0,"published":0,"folder_placements":21,"tag_edges":63}},"transient_workflow_removed":True,"baseline_digest_restored":True,"execution_history_absent":True,"raw_irun_persisted":False,"provider_response_logged":False,"finance_data_table_digest_restored":True,"finance_data_table_writes":False,"production_workflows_activated":False,"actual_writes":False,"cashback_writes":False,"secret_values_recorded":False,"token_fingerprints_recorded":False}
+payload={"schema_version":1,"status":"VERIFIED","scope":"TRANSIENT_MICROSOFT_OAUTH_REFRESH_PROOF","run_id":run_id,"recorded_at_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"commits":{"finance":finance,"orchestrator":orchestrator},"workflow_source_sha256":source_sha,"executions":executions,"credential_metadata":{"before":snapshots[0],"after_first_execution":snapshots[1],"after_restart_second_execution":snapshots[2],"owner_bindings_stable":True,"credential_ids_recorded":False,"refresh":refresh},"restart":{"only_n8n_restarted":True,"n8n_healthy_after_restart":True,"other_service_containers_unchanged":True},"boundary":{"before":{"workflows":19,"active":0,"published":0,"folder_placements":19,"tag_edges":57},"during":{"workflows":20,"active":0,"published":0,"folder_placements":20,"tag_edges":60},"after":{"workflows":19,"active":0,"published":0,"folder_placements":19,"tag_edges":57}},"transient_workflow_removed":True,"baseline_digest_restored":True,"execution_history_absent":True,"raw_irun_persisted":False,"provider_response_logged":False,"finance_data_table_digest_restored":True,"finance_data_table_writes":False,"production_workflows_activated":False,"actual_writes":False,"cashback_writes":False,"secret_values_recorded":False,"token_fingerprints_recorded":False}
 p=pathlib.Path(target);p.write_text(json.dumps(payload,indent=2)+"\n",encoding="utf-8");p.chmod(0o600)
 PY
 unset WF23_METADATA_BEFORE WF23_METADATA_AFTER_FIRST WF23_METADATA_AFTER_SECOND WF23_EXECUTION_FIRST WF23_EXECUTION_SECOND WF23_REFRESH_SUMMARY

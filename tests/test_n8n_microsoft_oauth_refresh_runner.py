@@ -329,9 +329,9 @@ if "psql" in command:
     elif "credentials_entity" in query:
         print("outlook-id" if "microsoftOutlookOAuth2Api" in query else "onedrive-id")
     elif "count(*)||" in query:
-        print("21|0|0")
+        print("19|0|0")
     elif "workflows_tags" in query:
-        print("63")
+        print("57")
     elif "global_folder" in query:
         print("1")
     elif "workflow_entity where id in" in query or "execution_entity" in query or "workflow_history" in query:
@@ -339,7 +339,7 @@ if "psql" in command:
     elif "from (select" in query:
         print("synthetic-baseline")
     else:
-        print("21")
+        print("19")
     sys.exit(0)
 if "node" not in command:
     sys.exit(0)
@@ -1144,10 +1144,10 @@ sys.exit(0)
     def test_runner_enforces_transient_restart_and_restoration_contract(self) -> None:
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         for marker in (
-            '"21|0|0"',
-            '"22|0|0"',
-            '"$(tag_edge_count)" == "63"',
-            '"$(tag_edge_count)" == "66"',
+            '"19|0|0"',
+            '"20|0|0"',
+            '"$(tag_edge_count)" == "57"',
+            '"$(tag_edge_count)" == "60"',
             "baseline_digest_before",
             '"$(baseline_digest)" == "${baseline_digest_before}"',
             "data_table_digest_before",
