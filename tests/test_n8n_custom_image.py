@@ -44,6 +44,7 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("ARG N8N_BASE_IMAGE", dockerfile)
         self.assertIn(f"ARG N8N_BASE_IMAGE={base_image}", dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
+        self.assertIn("WORKDIR /opt/finance-n8n/community-extensions\nUSER node", dockerfile)
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
 
     def test_finance_image_builder_uses_only_immutable_base_and_writes_external_receipt(self):

@@ -49,5 +49,6 @@ COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh 
 RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
     && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
     && chmod 0444 /opt/finance-n8n/extension-tree.sha256
+WORKDIR /opt/finance-n8n/community-extensions
 USER node
 ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]
