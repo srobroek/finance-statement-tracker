@@ -529,35 +529,28 @@ sys.exit(0)
         self.assertEqual(json.loads(completed.stdout)["outlook_items_observed"], 1)
         shim = (RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs").read_text(encoding="utf-8")
         for marker in (
-            "captureRawIRunInMemory",
+            "createJWTHash",
+            "SELECT id, email, password",
+            "deployment_key",
+            "N8N_USER_MANAGEMENT_JWT_SECRET",
+            "WF23_AUTH_MFA_REQUIRED",
+            "jsonwebtoken",
+            "ws",
+            "ws://127.0.0.1:5678/rest/push?pushRef=",
+            "Origin: LOCAL_ORIGIN",
+            "Cookie: `${AUTH_COOKIE}=${token}`",
+            "triggerToStartFrom: { name: triggerNode }",
+            "wrappedExecutionId",
+            "executionFinished",
+            "nodeExecuteAfterData",
+            "terminalRunPayload",
+            "await resultPromise",
+            "setTimeout",
             "EXECUTIONS_DATA_SAVE_ON_SUCCESS",
             "EXECUTIONS_DATA_SAVE_ON_ERROR",
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS",
             "fs.writeSync(1",
-            "payload = null",
-            "Container.get(Execute)",
-            "n8nRequire('@n8n/backend-common')",
-            "await Container.get(ModuleRegistry).loadModules()",
-            "command.flags = { id: WORKFLOW_ID, rawOutput: true }",
-            "await command.init()",
-            "await command.run()",
-            "await command.finally(sanitizedError)",
-            "command.log = function captureRawIRunInMemory",
-            "command.logger = new Proxy",
             "if (isDirectEntrypoint(require.main, module))",
-            "const N8N_CONFIG_ENTRYPOINT = './dist/config';",
-            "const originalExit = process.exit.bind(process);",
-            "process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };",
-            "process.exit = originalExit;",
-            "const WATCHDOG_TIMEOUT_MS = 120_000;",
-            "watchdog.arm('CONFIG_LOAD')",
-            "watchdog.arm('MODULE_LOAD')",
-            "watchdog.arm('COMMAND_INIT')",
-            "watchdog.arm('COMMAND_RUN')",
-            "watchdog.arm('RAW_CAPTURE')",
-            "watchdog.arm('FINALIZE')",
-            "async function terminateOnTimeout(code)",
-            "writeTerminalOnce(fixedError(code), null)",
             "WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED",
             "process.env.N8N_RUNNERS_MODE !== 'external'",
             "process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '0.0.0.0'",
@@ -565,25 +558,12 @@ sys.exit(0)
         ):
             self.assertIn(marker, shim)
         self.assertNotIn("writeFile", shim)
-        self.assertNotIn("Execute.prototype", shim)
-        self.assertNotIn("BaseCommand.prototype", shim)
-        self.assertNotIn("bin', 'n8n", shim)
-        self.assertNotIn("./dist/config.js", shim)
-        self.assertNotIn("process.once('exit'", shim)
-        lifecycle_markers = (
-            "n8nRequire(N8N_CONFIG_ENTRYPOINT)",
-            "n8nRequire('./dist/commands/execute.js')",
-            "n8nRequire('@n8n/backend-common')",
-            "await Container.get(ModuleRegistry).loadModules()",
-            "command = Container.get(Execute)",
-            "await command.init()",
-            "command.log = function captureRawIRunInMemory",
-            "await command.run()",
-            "await command.finally(sanitizedError)",
-        )
-        positions = [shim.index(marker) for marker in lifecycle_markers]
-        self.assertEqual(positions, sorted(positions))
-        self.assertLess(shim.rindex("watchdog.cancel()"), shim.rindex("writeTerminalOnce(terminalError, receipt)"))
+        for forbidden in (
+            "Container.get", "command.init(", "command.run(", "n8nRequire(",
+            "ModuleRegistry", "N8N_CONFIG_ENTRYPOINT", "DIRECT_LIFECYCLE_ORDER",
+            "WATCHDOG_STAGES", "listen(", "docker run", "N8N_PUBLIC_URL",
+        ):
+            self.assertNotIn(forbidden, shim)
 
     def test_production_shim_stdin_entrypoint_is_exact_and_require_import_is_inert(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
@@ -639,7 +619,84 @@ sys.exit(0)
         self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
         self.assertNotIn("Cannot find module 'n8n/package.json'", completed.stderr)
 
-    def test_stdin_entrypoint_gate_and_direct_lifecycle_reject_adversarial_orders(self) -> None:
+    def test_local_auth_query_hash_and_token_are_bounded_and_mfa_safe(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});"
+            "const queries=[];let captured;"
+            "class Pool{constructor(options){this.options=options}async query(sql,args){queries.push([sql,args]);"
+            "return queries.length===1?{rows:[{id:'owner-id',email:'owner@example.test',password:'password-hash',mfaEnabled:false,mfaSecret:null}]}:{rows:[{value:'db-secret'}]}}"
+            "async end(){}};"
+            "(async()=>{const auth=await shim.readAuthContext({pgModule:{Pool},env:{DB_POSTGRESDB_HOST:'postgres',DB_POSTGRESDB_PORT:'5432',DB_POSTGRESDB_DATABASE:'n8n',DB_POSTGRESDB_USER:'n8n',DB_POSTGRESDB_PASSWORD:'db-password',N8N_USER_MANAGEMENT_JWT_SECRET:'env-secret'}});"
+            "const jwt={sign:(payload,secret,options)=>{captured={payload,secret,options};return 'token'}};"
+            "shim.signAuthToken(auth,jwt);"
+            "process.stdout.write(JSON.stringify({queryCount:queries.length,ownerQuery:queries[0][0],secretOverride:captured.secret==='env-secret',payload:captured.payload,algorithm:captured.options.algorithm,expiresIn:captured.options.expiresIn}));})().catch(error=>{process.stdout.write(JSON.stringify({error:error.code||'FAILED'}));process.exit(1)})"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["queryCount"], 1)
+        self.assertIn('"roleSlug"', result["ownerQuery"])
+        self.assertTrue(result["secretOverride"])
+        self.assertNotIn("browserId", result["payload"])
+        self.assertFalse(result["payload"]["usedMfa"])
+        self.assertEqual(result["algorithm"], "HS256")
+        self.assertLessEqual(result["expiresIn"], 300)
+
+        db_code = (
+            f"const shim=require({json.dumps(str(shim))});let captured;"
+            "class Pool{async query(sql){return sql.includes('FROM \\\"user\\\"')?{rows:[{id:'owner-id',email:'owner@example.test',password:'password-hash',mfaEnabled:false,mfaSecret:null}]}:{rows:[{value:'db-secret'}]}}async end(){}};"
+            "(async()=>{const auth=await shim.readAuthContext({pgModule:{Pool},env:{DB_POSTGRESDB_HOST:'postgres',DB_POSTGRESDB_DATABASE:'n8n',DB_POSTGRESDB_USER:'n8n'}});shim.signAuthToken(auth,{sign:(payload,secret)=>{captured=secret;return 'token'}});if(captured!=='db-secret')process.exit(1)})().catch(()=>process.exit(1))"
+        )
+        subprocess.run(["node", "-e", db_code], check=True)
+
+        mfa_code = (
+            f"const shim=require({json.dumps(str(shim))});"
+            "class Pool{async query(sql){return sql.includes('FROM \\\"user\\\"')?{rows:[{id:'owner-id',email:'owner@example.test',password:'password-hash',mfaEnabled:true,mfaSecret:'abc'}]}:{rows:[{value:'db-secret'}]}}async end(){}};"
+            "shim.readAuthContext({pgModule:{Pool},env:{DB_POSTGRESDB_HOST:'postgres',DB_POSTGRESDB_DATABASE:'n8n',DB_POSTGRESDB_USER:'n8n'}}).then(()=>process.exit(1)).catch(error=>{if(error.code!=='WF23_AUTH_MFA_REQUIRED')process.exit(1)})"
+        )
+        subprocess.run(["node", "-e", mfa_code], check=True)
+
+    def test_local_transport_connects_before_rest_and_accepts_only_matching_events(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        result = terminal_result()
+        terminal_task = {"executionStatus": "success", "data": {"main": [[{"json": result}]]}}
+        node = (
+            "const events=[];let socket;let request;"
+            "class FakeSocket{constructor(url,options){socket=this;this.url=url;this.options=options;this.handlers={};events.push('ws-constructor');setImmediate(()=>{events.push('ws-open');this.emit('open')})}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){this.closed=true}}"
+        )
+        code = (
+            f"const shim=require({json.dumps(str(shim))});{node}"
+            f"const terminalTask={json.dumps(terminal_task,separators=(',',':'))};"
+            "const fetchImpl=async(url,options)=>{request={url,options};events.push('rest-post');return {ok:true,json:async()=>{socket.emit('message',JSON.stringify({type:'executionStarted',data:{executionId:'provider-secret'}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:'Other',data:{json:{provider:'secret'}}}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:shim.TERMINAL_NODE,data:terminalTask}}));socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'success'}}));return {data:{executionId:'123'}}}}};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,random:()=>Buffer.from('push-ref')}).then(receipt=>process.stdout.write(JSON.stringify({receipt,events,url:socket.url,origin:socket.options.headers.Origin,cookie:socket.options.headers.Cookie,requestUrl:request.url,method:request.options.method,pushRef:request.options.headers['push-ref'],body:JSON.parse(request.options.body)}))).catch(error=>{process.stdout.write(JSON.stringify({error:error.code||'FAILED'}));process.exit(1)})"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["receipt"]["execution_id"], "123")
+        self.assertEqual(observed["events"], ["ws-constructor", "ws-open", "rest-post"])
+        self.assertTrue(observed["url"].startswith("ws://127.0.0.1:5678/rest/push?pushRef="))
+        self.assertEqual(observed["origin"], "http://127.0.0.1:5678")
+        self.assertEqual(observed["cookie"], "n8n-auth=secret-token")
+        self.assertIn("http://127.0.0.1:5678/rest/workflows/", observed["requestUrl"])
+        self.assertEqual(observed["method"], "POST")
+        self.assertEqual(observed["pushRef"], observed["url"].split("pushRef=", 1)[1])
+        self.assertEqual(observed["body"], {"triggerToStartFrom": {"name": "Run Reviewed OAuth Proof"}})
+
+    def test_local_transport_rejects_pre_rest_non_success_finished_frame(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            "const fetchImpl=async()=>({ok:true,json:async()=>{socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'}}));return {data:{executionId:'123'}}}});"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,random:()=>Buffer.from('push-ref')}).then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(completed.stdout), {"code": "WF23_EXECUTION_NOT_FINISHED_SUCCESS"})
+        self.assertNotIn("secret-token", completed.stdout + completed.stderr)
+
+    def test_stdin_entrypoint_gate_and_local_client_is_inert_when_imported(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
         code = (
@@ -655,19 +712,15 @@ sys.exit(0)
             "!shim.isDirectEntrypoint(undefined,imported,['node','-']),"
             "probe.isDirectEntrypoint(undefined,stdin,['node','-']),"
             "!probe.isDirectEntrypoint(undefined,stdin,['node','-','extra'])];"
-            "const valid=shim.directLifecycleGate();"
-            "for(const stage of shim.DIRECT_LIFECYCLE_ORDER)valid(stage);"
-            "let rejected=false;try{const invalid=shim.directLifecycleGate();invalid('command-loaded')}"
-            "catch(error){rejected=error.code==='WF23_DIRECT_LIFECYCLE_ORDER_INVALID'}"
-            "if(!checks.every(Boolean)||!rejected)process.exit(1);"
-            "process.stdout.write(JSON.stringify(shim.DIRECT_LIFECYCLE_ORDER));"
+            "if(!checks.every(Boolean)||typeof shim.runLocalWorkflow!=='function')process.exit(1);"
+            "process.stdout.write(JSON.stringify(checks));"
         )
         completed = subprocess.run(
             ["node", "-"], input=code, text=True, capture_output=True, check=True
         )
         self.assertEqual(
             json.loads(completed.stdout),
-            ["config-loaded", "command-loaded", "modules-loaded", "execute-resolved", "execute-initialized"],
+            [True, True, True, True, True, True],
         )
 
     def test_terminal_line_serializes_only_validated_redacted_receipt_and_safe_failure(self) -> None:
@@ -696,49 +749,16 @@ sys.exit(0)
         self.assertNotIn("fake-token", completed.stdout + completed.stderr)
         self.assertNotIn("fake-subject", completed.stdout + completed.stderr)
 
-    def test_internal_watchdog_uses_fixed_stages_once_and_cancels_on_success(self) -> None:
+    def test_local_transport_timeout_is_safe_and_redacted(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
             f"const shim=require({json.dumps(str(shim))});"
-            "let nextId=0;const timers=new Map();const cleared=[];"
-            "const setTimer=(callback,ms)=>{const id=++nextId;timers.set(id,{callback,ms});return id};"
-            "const clearTimer=(id)=>{cleared.push(id);timers.delete(id)};"
-            "const stageLines=[];"
-            "for(const stage of shim.WATCHDOG_STAGES){"
-            "const watchdog=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>{"
-            "stageLines.push(shim.terminalLine({code:timeoutCode,access_token:'must-not-emit'},null))}});"
-            "watchdog.arm(stage);const entry=timers.get(nextId);"
-            "if(entry.ms!==shim.WATCHDOG_TIMEOUT_MS)process.exit(1);entry.callback();entry.callback();}"
-            "const raceLines=[];const race=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>{"
-            "raceLines.push(shim.terminalLine({code:timeoutCode},null))}});"
-            "race.arm('COMMAND_RUN');const stale=timers.get(nextId).callback;"
-            "race.arm('RAW_CAPTURE');const current=timers.get(nextId).callback;stale();current();current();"
-            "const successLines=[];const success=shim.createStageWatchdog({setTimer,clearTimer,onTimeout:(timeoutCode)=>successLines.push(timeoutCode)});"
-            "success.arm('FINALIZE');const afterSuccess=timers.get(nextId).callback;"
-            "if(!success.cancel())process.exit(1);afterSuccess();"
-            "let invalid='';try{race.arm('access_token=secret')}catch(error){invalid=error.code}"
-            "process.stdout.write(JSON.stringify({stageLines,raceLines,successLines,invalid,cleared,stages:shim.WATCHDOG_STAGES}));"
+            "class FakeSocket{constructor(){this.handlers={}}on(name,handler){this.handlers[name]=handler}close(){}}"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl:async()=>({ok:true,json:async()=>({data:{executionId:'123'}})}),timeoutMs:5}).then(()=>process.exit(1)).catch(error=>{process.stdout.write(shim.terminalLine(error,null));})"
         )
-        completed = subprocess.run(["node", "-"], input=code, text=True, capture_output=True, check=True)
-        self.assertNotIn("must-not-emit", completed.stdout + completed.stderr)
-        self.assertNotIn("access_token=secret", completed.stdout + completed.stderr)
-        result = json.loads(completed.stdout)
-        self.assertEqual(result["invalid"], "WF23_WATCHDOG_STAGE_INVALID")
-        self.assertEqual(len(result["stageLines"]), len(result["stages"]))
-        self.assertEqual(len(result["raceLines"]), 1)
-        self.assertEqual(result["successLines"], [])
-        self.assertGreater(len(result["cleared"]), 0)
-        for stage, line in zip(result["stages"], result["stageLines"], strict=True):
-            payload = json.loads(line.split(":", 1)[1])
-            self.assertEqual(payload["error_code"], f"WF23_TIMEOUT_{stage}")
-            self.assertEqual(
-                set(payload),
-                {"schema_version", "status", "error_code", "provider_response_logged", "secret_values_recorded"},
-            )
-        self.assertEqual(
-            json.loads(result["raceLines"][0].split(":", 1)[1])["error_code"],
-            "WF23_TIMEOUT_RAW_CAPTURE",
-        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(completed.stdout.split(":", 1)[1])["error_code"], "WF23_TIMEOUT_COMMAND_RUN")
+        self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
     def test_execution_output_parser_accepts_only_exact_success_and_allowlisted_timeouts(self) -> None:
         parser_path = RUNNER / "parse_wf23_execution_output.py"
@@ -878,32 +898,6 @@ sys.exit(0)
             "workflow_loaded", "workflow_executed", "provider_calls", "database_initialized",
             "raw_irun_persisted", "provider_response_logged", "secret_values_recorded",
         )))
-
-    def test_n8n_config_entrypoint_is_extensionless_and_resolves_directory_index(self) -> None:
-        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
-        probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
-        with tempfile.TemporaryDirectory() as tmp:
-            package_root = Path(tmp) / "n8n"
-            config_root = package_root / "dist" / "config"
-            config_root.mkdir(parents=True)
-            (package_root / "package.json").write_text('{"name":"n8n","version":"2.36.2"}\n', encoding="utf-8")
-            (config_root / "index.js").write_text("module.exports={};\n", encoding="utf-8")
-            code = (
-                "const {createRequire}=require('node:module');"
-                f"const shim=require({json.dumps(str(shim))});"
-                f"const probe=require({json.dumps(str(probe))});"
-                f"const req=createRequire({json.dumps(str(package_root / 'package.json'))});"
-                "const values=[shim.N8N_CONFIG_ENTRYPOINT,probe.N8N_CONFIG_ENTRYPOINT,"
-                "req.resolve(shim.N8N_CONFIG_ENTRYPOINT),req.resolve(probe.N8N_CONFIG_ENTRYPOINT)];"
-                "process.stdout.write(JSON.stringify(values));"
-            )
-            completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
-            values = json.loads(completed.stdout)
-            self.assertEqual(values[:2], ["./dist/config", "./dist/config"])
-            self.assertEqual(
-                [Path(value).resolve() for value in values[2:]],
-                [(config_root / "index.js").resolve(), (config_root / "index.js").resolve()],
-            )
 
     def test_transport_probe_stdin_entrypoint_runs_and_requires_ack(self) -> None:
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
