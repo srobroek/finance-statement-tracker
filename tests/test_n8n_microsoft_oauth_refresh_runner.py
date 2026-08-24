@@ -1383,7 +1383,7 @@ sys.exit(0)
         self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
-    def test_outer_timeout_cleanup_tracks_terminality_at_caller_boundary(self) -> None:
+    def test_non_timeout_execution_failure_tracks_terminality_at_caller_boundary(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
             f"const shim=require({json.dumps(str(shim))});let socket;"
@@ -1415,7 +1415,7 @@ sys.exit(0)
                 timeout_args = root / f"timeout-{parser_mode}.args"
                 removed = root / f"removed-{parser_mode}"
                 (bin_dir / "timeout").write_text(
-                    f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {shlex.quote(str(timeout_args))}\nexit 124\n",
+                    f"#!/bin/sh\nprintf '%s\\n' \"$@\" > {shlex.quote(str(timeout_args))}\nexit 125\n",
                     encoding="utf-8",
                 )
                 (bin_dir / "python3").write_text(
@@ -1471,6 +1471,45 @@ sys.exit(0)
             self.assertTrue(unknown_timeout_args.exists(), unknown.stderr + unknown.stdout)
             self.assertIn("0.05s", unknown_timeout_args.read_text(encoding="utf-8"))
             self.assertIn("WF23 execution terminality uncertain; retaining transient workflow", unknown.stderr)
+
+    def test_bounded_execution_timeout_is_not_reparsed_as_redacted_output(self) -> None:
+        runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
+        execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
+        with tempfile.TemporaryDirectory(prefix="wf23-timeout-classification-") as temporary:
+            root = Path(temporary)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            parser_marker = root / "parser-invoked"
+            (bin_dir / "timeout").write_text("#!/bin/sh\nexit 124\n", encoding="utf-8")
+            (bin_dir / "python3").write_text(
+                f"#!/bin/sh\nprintf '%s' parser-invoked > {shlex.quote(str(parser_marker))}\nexit 1\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "timeout").chmod(0o755)
+            (bin_dir / "python3").chmod(0o755)
+            output = root / "execution-output"
+            status = root / "execute-status"
+            driver = root / "driver.sh"
+            driver.write_text(
+                "\n".join([
+                    "#!/usr/bin/env bash",
+                    "set -euo pipefail",
+                    "n8n_container=synthetic-n8n; runner_dir=" + shlex.quote(str(RUNNER)) + "; execution_timeout_seconds=0.05",
+                    execute_probe,
+                    "execute_status=0",
+                    f'execute_probe > {shlex.quote(str(output))} || execute_status=$?',
+                    f'printf \'%s\' "$execute_status" > {shlex.quote(str(status))}',
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            driver.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
+            completed = subprocess.run(["bash", str(driver)], text=True, capture_output=True, env=environment)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(status.read_text(encoding="utf-8"), "124")
+            self.assertEqual(output.read_text(encoding="utf-8"), "WF23_TIMEOUT_COMMAND_RUN")
+            self.assertFalse(parser_marker.exists())
 
     def test_all_runner_sources_are_syntactically_valid(self) -> None:
         runner = RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh"

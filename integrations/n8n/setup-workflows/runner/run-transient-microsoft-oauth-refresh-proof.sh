@@ -168,6 +168,10 @@ execute_probe() {
     printf '%s' "${parsed_success}"
     return
   fi
+  if [[ "${command_status}" == "124" ]]; then
+    printf '%s' WF23_TIMEOUT_COMMAND_RUN
+    return 124
+  fi
   timeout_code="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" timeout)" || return 1
   execution_terminality_observed=true
   printf '%s' "${timeout_code}"
