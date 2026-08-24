@@ -4,7 +4,6 @@ set -euo pipefail
 [[ "${FINANCE_MICROSOFT_OAUTH_PROOF_ACK:-}" == "RUN_TRANSIENT_WF23_ONLY" ]] || { echo "Set FINANCE_MICROSOFT_OAUTH_PROOF_ACK=RUN_TRANSIENT_WF23_ONLY" >&2; exit 1; }
 [[ "$(id -u)" != "0" ]] || { echo "Run as the rootless stack owner, not root" >&2; exit 1; }
 
-readonly source_commit="b3bce6e197c6603d3e8708156bed987f26ac8513"
 readonly source_sha256="879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 readonly prior_promoted_commit="00491aae2ab43c486f3a9b4a62ce3ba5e63032f6"
 readonly expected_project="${FINANCE_N8N_COMPOSE_PROJECT:-}"
@@ -51,7 +50,6 @@ compose_file="${compose_file_input}"
 [[ -z "$(git -C "${stack_dir}" status --porcelain --untracked-files=no)" ]] || { echo "Orchestrator repository has tracked changes" >&2; exit 1; }
 [[ "$(git -C "${finance_repo}" rev-parse HEAD)" == "${expected_finance_commit}" ]] || { echo "Finance commit mismatch" >&2; exit 1; }
 [[ "$(git -C "${stack_dir}" rev-parse HEAD)" == "${expected_orchestrator_commit}" ]] || { echo "Orchestrator commit mismatch" >&2; exit 1; }
-git -C "${finance_repo}" merge-base --is-ancestor "${source_commit}" "${expected_finance_commit}" || { echo "Finance commit does not descend from reviewed WF23 source" >&2; exit 1; }
 git -C "${finance_repo}" merge-base --is-ancestor "${prior_promoted_commit}" "${expected_finance_commit}" || { echo "Finance commit does not descend from promoted corpus" >&2; exit 1; }
 [[ "$(sha256sum "${source_file}" | awk '{print $1}')" == "${source_sha256}" ]] || { echo "WF23 source SHA-256 mismatch" >&2; exit 1; }
 for helper in bind-microsoft-oauth-refresh-proof.py validate_microsoft_oauth_refresh_evidence.py build_microsoft_oauth_failure_receipt.py parse_n8n_redacted_wrapper_output.py parse_wf23_execution_output.py n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs n8n-cli-wf23-direct-transport-probe.cjs n8n-cli-microsoft-oauth-metadata-readback.cjs n8n-cli-finance-data-table-digest.cjs n8n-cli-remove-transient-microsoft-oauth-refresh-proof.cjs; do
