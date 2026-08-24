@@ -1,8 +1,8 @@
 # setup workflows
 
 These exports stay outside `integrations/n8n/workflows/`. The regular import
-contains 19 workflows. Operators import setup workflows one file at a time. Use
-This runbook covers deployed-stack validation, the mandatory acknowledgment, and
+contains 19 workflows. Operators import setup workflows one file at a time. This
+runbook covers deployed-stack validation, the mandatory acknowledgment, and
 the read-only WF23 proof with protected recovery inputs.
 
 ## onedrive setup

@@ -125,10 +125,10 @@ direct_transport_probe || { echo "WF23 direct execution transport probe failed b
 task_runner_control_preflight() {
   timeout --foreground --signal=TERM --kill-after=5s 15s docker exec "${n8n_container}" node -e \
     'if (process.env.N8N_RUNNERS_MODE !== "external" || process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== "0.0.0.0" || !process.env.N8N_RUNNERS_AUTH_TOKEN) process.exit(1); fetch("http://127.0.0.1:5679/healthz").then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));' \
-    >/dev/null 2>&1
+    >/dev/null 2>&1 || return 1
   timeout --foreground --signal=TERM --kill-after=5s 15s docker exec "${task_runners_container}" node -e \
     'fetch("http://127.0.0.1:5680/healthz").then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));' \
-    >/dev/null 2>&1
+    >/dev/null 2>&1 || return 1
 }
 
 task_runner_control_preflight || { echo "Deployed n8n/task-runner control path unavailable" >&2; exit 1; }

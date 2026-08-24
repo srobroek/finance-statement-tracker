@@ -4,6 +4,7 @@ import hashlib
 import json
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -98,6 +99,267 @@ def irun(result: dict) -> dict:
 
 
 class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
+    def make_synthetic_preflight_runtime(self):
+        temporary = tempfile.TemporaryDirectory(prefix="wf23-preflight-")
+        root = Path(temporary.name)
+        finance_repo = root / "finance"
+        subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(finance_repo)], check=True)
+        subprocess.run(["git", "fetch", "--quiet", str(ROOT), SOURCE_COMMIT], cwd=finance_repo, check=True)
+        subprocess.run(["git", "checkout", "--quiet", SOURCE_COMMIT], cwd=finance_repo, check=True)
+        shutil.copytree(
+            RUNNER,
+            finance_repo / "integrations" / "n8n" / "setup-workflows" / "runner",
+            dirs_exist_ok=True,
+        )
+        subprocess.run(
+            ["git", "add", "integrations/n8n/setup-workflows/runner"],
+            cwd=finance_repo,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "--quiet", "-m", "synthetic deployed runner"],
+            cwd=finance_repo,
+            check=True,
+        )
+        stack = root / "stack"
+        stack.mkdir()
+        compose_file = stack / "compose.yaml"
+        compose_file.write_text("services: {}\n", encoding="utf-8")
+        subprocess.run(["git", "init", "--quiet"], cwd=stack, check=True)
+        subprocess.run(["git", "config", "user.email", "synthetic@example.test"], cwd=stack, check=True)
+        subprocess.run(["git", "config", "user.name", "Synthetic Preflight"], cwd=stack, check=True)
+        subprocess.run(["git", "add", "compose.yaml"], cwd=stack, check=True)
+        subprocess.run(["git", "commit", "--quiet", "-m", "synthetic preflight"], cwd=stack, check=True)
+        stack_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=stack, text=True).strip()
+
+        env_file = root / "runtime.env"
+        env_file.write_text("DB_POSTGRESDB_USER=n8n\nDB_POSTGRESDB_DATABASE=n8n\n", encoding="utf-8")
+        env_file.chmod(0o600)
+        receipt = root / "prestate.json"
+        receipt.write_text(json.dumps({
+            "schema_version": 1,
+            "purpose": "N8N_RECOVERY_PRESTATE_RECEIPT_V1",
+            "postgres": {"container_id": "3" * 64},
+        }) + "\n", encoding="utf-8")
+        receipt.chmod(0o600)
+        receipt_dir = root / "receipts"
+        receipt_dir.mkdir(mode=0o700)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        docker = bin_dir / "docker"
+        docker.write_text(r'''#!/usr/bin/env python3
+import json
+import os
+import sys
+
+PROJECT = "synthetic-project"
+N8N = "1" * 64
+TASK_RUNNERS = "2" * 64
+POSTGRES = "3" * 64
+IDS = {N8N, TASK_RUNNERS, POSTGRES}
+SERVICES = {N8N: "n8n", TASK_RUNNERS: "task-runners"}
+scenario = os.environ.get("FAKE_DOCKER_SCENARIO", "ok")
+log_path = os.environ["FAKE_DOCKER_LOG"]
+args = sys.argv[1:]
+with open(log_path, "a", encoding="utf-8") as log:
+    print(json.dumps(args), file=log)
+
+if args[:1] == ["compose"]:
+    service = args[-1]
+    if service == "n8n":
+        print(N8N)
+    elif service == "task-runners":
+        print(TASK_RUNNERS)
+    else:
+        sys.exit(1)
+    sys.exit(0)
+
+if args[:1] == ["inspect"]:
+    fmt = args[2]
+    container = args[-1]
+    if "Config.Labels" in fmt:
+        if container not in SERVICES:
+            sys.exit(1)
+        print(f"{PROJECT}|{SERVICES[container]}")
+    elif "Config.Env" in fmt:
+        print("DB_POSTGRESDB_USER=n8n")
+        print("DB_POSTGRESDB_DATABASE=n8n")
+        print("N8N_RUNNERS_MODE=external")
+        print("N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0")
+        print("N8N_RUNNERS_AUTH_TOKEN=synthetic-token")
+    elif ".State.Health" in fmt:
+        print("true|healthy")
+    elif ".Id" in fmt and container == POSTGRES:
+        print(f"{'4' * 64 if scenario == 'postgres-identity-fail' else POSTGRES}|true")
+    elif ".State.Running" in fmt:
+        print("true")
+    else:
+        sys.exit(1)
+    sys.exit(0)
+
+if args[:1] != ["exec"]:
+    sys.exit(1)
+try:
+    container_index = next(index for index, value in enumerate(args) if value in IDS)
+except StopIteration:
+    sys.exit(1)
+container = args[container_index]
+exec_env = {}
+index = 1
+while index < container_index:
+    if args[index] == "-e":
+        key, value = args[index + 1].split("=", 1)
+        exec_env[key] = value
+        index += 2
+    else:
+        index += 1
+command = args[container_index + 1:]
+if "pg_isready" in command:
+    sys.exit(1 if scenario == "postgres-readiness-fail" else 0)
+if "psql" in command:
+    query = command[command.index("-c") + 1]
+    if "current_database()" in query:
+        print("wrong|wrong" if scenario == "postgres-identity-query-fail" else "n8n|n8n")
+    elif "credentials_entity" in query:
+        print("outlook-id" if "microsoftOutlookOAuth2Api" in query else "onedrive-id")
+    elif "count(*)||" in query:
+        print("21|0|0")
+    elif "workflows_tags" in query:
+        print("63")
+    elif "global_folder" in query:
+        print("1")
+    elif "workflow_entity where id in" in query or "execution_entity" in query or "workflow_history" in query:
+        print("0")
+    elif "from (select" in query:
+        print("synthetic-baseline")
+    else:
+        print("21")
+    sys.exit(0)
+if "node" not in command:
+    sys.exit(0)
+if "-e" in command:
+    if container == N8N and scenario == "broker-fail":
+        sys.exit(1)
+    if container == TASK_RUNNERS and scenario == "task-runner-fail":
+        sys.exit(1)
+    sys.exit(0)
+ack = exec_env.get("FINANCE_WF23_TRANSPORT_PROBE_ACK")
+if ack == "READ_ONLY_DIRECT_EXECUTE_INSTANCE":
+    print('WF23 direct transport probe verified:{"schema_version":1,"status":"VERIFIED","scope":"DIRECT_EXECUTE_INSTANCE_TRANSPORT","execute_instance_resolved":true,"instance_log_override_invoked":true,"workflow_loaded":false,"workflow_executed":false,"provider_calls":false,"database_initialized":false,"raw_irun_persisted":false,"provider_response_logged":false,"secret_values_recorded":false}')
+elif exec_env.get("FINANCE_DATA_TABLE_DIGEST_ACK") == "READ_ONLY_IN_MEMORY":
+    print("finance data table digest verified:" + json.dumps({
+        "schema_version": 1, "status": "VERIFIED",
+        "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
+        "finance_tables": 4, "total_rows": 0, "digest_sha256": "a" * 64,
+        "writes_performed": False, "provider_calls": False,
+        "row_values_recorded": False, "secret_values_recorded": False,
+    }, separators=(",", ":")))
+elif exec_env.get("FINANCE_MICROSOFT_OAUTH_METADATA_ACK") == "READ_ONLY_REDACTED":
+    credential = lambda kind: {
+        "credential_type": kind, "credential_updated_at_utc": "2026-08-20T00:00:00Z",
+        "access_token_present": True, "refresh_token_present": True,
+        "expiration_observed": True, "expires_at_utc": "2020-01-01T00:00:00Z",
+        "expired_at_readback": True,
+    }
+    print("microsoft oauth metadata readback verified:" + json.dumps({
+        "schema_version": 1, "status": "VERIFIED",
+        "scope": "READ_ONLY_MICROSOFT_OAUTH_METADATA",
+        "observed_at_utc": "2026-08-24T00:00:00Z",
+        "credentials": {
+            "outlook": credential("microsoftOutlookOAuth2Api"),
+            "onedrive": credential("microsoftOneDriveOAuth2Api"),
+        },
+        "provider_calls": False, "database_writes": False,
+        "credential_ids_recorded": False, "secret_values_recorded": False,
+        "token_fingerprints_recorded": False,
+    }, separators=(",", ":")))
+sys.exit(0)
+''', encoding="utf-8")
+        docker.chmod(0o755)
+        fake_id = bin_dir / "id"
+        fake_id.write_text("#!/bin/sh\nif [ \"$1\" = \"-u\" ]; then printf '1000\\n'; else exec /usr/bin/id \"$@\"; fi\n", encoding="utf-8")
+        fake_id.chmod(0o755)
+
+        log_path = root / "docker.log"
+        finance_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=finance_repo, text=True).strip()
+        environment = os.environ.copy()
+        environment.update({
+            "PATH": f"{bin_dir}:{environment['PATH']}",
+            "FAKE_DOCKER_LOG": str(log_path),
+            "FAKE_DOCKER_SCENARIO": "ok",
+            "FINANCE_MICROSOFT_OAUTH_PROOF_ACK": "RUN_TRANSIENT_WF23_ONLY",
+            "FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT": "true",
+            "FINANCE_N8N_COMPOSE_PROJECT": "synthetic-project",
+            "FINANCE_N8N_STACK_DIR": str(stack),
+            "FINANCE_N8N_COMPOSE_FILE": str(compose_file),
+            "FINANCE_N8N_DEPLOYMENT_ENV_FILE": str(env_file),
+            "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
+            "FINANCE_N8N_RECOVERY_RECEIPT": str(receipt),
+            "FINANCE_REPOSITORY_DIR": str(finance_repo),
+            "FINANCE_REPOSITORY_COMMIT": finance_commit,
+            "ORCHESTRATOR_REPOSITORY_COMMIT": stack_commit,
+            "N8N_FINANCE_PROJECT_ID": "synthetic-project-id",
+        })
+        environment.pop("N8N_POSTGRES_USER", None)
+        environment.pop("N8N_POSTGRES_DATABASE", None)
+        return temporary, environment, log_path, receipt
+
+    def run_synthetic_preflight(self, environment):
+        return subprocess.run(
+            ["bash", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+        )
+
+    def test_command_level_synthetic_preflight_uses_recovered_postgres_and_fails_closed(self) -> None:
+        temporary, environment, log_path, receipt = self.make_synthetic_preflight_runtime()
+        try:
+            completed = self.run_synthetic_preflight(environment)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            calls = log_path.read_text(encoding="utf-8")
+            call_rows = [json.loads(line) for line in calls.splitlines()]
+            self.assertTrue(any(
+                row[0] == "inspect" and ".Id" in row[2] and row[-1] == "3" * 64
+                for row in call_rows
+            ))
+            self.assertIn('"pg_isready", "-U", "n8n", "-d", "n8n"', calls)
+            self.assertIn("current_database()", calls)
+            self.assertIn("N8N_RUNNERS_MODE !== \\\"external\\\"", calls)
+            self.assertIn("N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== \\\"0.0.0.0\\\"", calls)
+            self.assertIn("http://127.0.0.1:5679/healthz", calls)
+            self.assertIn("http://127.0.0.1:5680/healthz", calls)
+            self.assertNotIn("import:workflow", calls)
+            self.assertNotIn("docker run", calls)
+            self.assertNotIn("listen(", calls)
+
+            for scenario, message in (
+                ("postgres-identity-fail", "Recovered Postgres container identity or state mismatch"),
+                ("postgres-readiness-fail", "Recovered Postgres readiness failed"),
+                ("postgres-identity-query-fail", "Recovered Postgres database identity mismatch"),
+                ("broker-fail", "Deployed n8n/task-runner control path unavailable"),
+                ("task-runner-fail", "Deployed n8n/task-runner control path unavailable"),
+            ):
+                environment["FAKE_DOCKER_SCENARIO"] = scenario
+                log_path.write_text("", encoding="utf-8")
+                failed = self.run_synthetic_preflight(environment)
+                self.assertNotEqual(failed.returncode, 0, scenario)
+                self.assertIn(message, failed.stderr, scenario)
+
+            receipt.write_text(json.dumps({
+                "schema_version": 1,
+                "purpose": "N8N_RECOVERY_PRESTATE_RECEIPT_V1",
+                "postgres": {"container_id": "not-a-container"},
+            }) + "\n", encoding="utf-8")
+            receipt.chmod(0o600)
+            environment["FAKE_DOCKER_SCENARIO"] = "ok"
+            failed_receipt = self.run_synthetic_preflight(environment)
+            self.assertNotEqual(failed_receipt.returncode, 0)
+            self.assertIn("Deployed Postgres recovery identity unavailable", failed_receipt.stderr)
+        finally:
+            temporary.cleanup()
+
     def test_runtime_binder_is_exact_and_never_records_identifiers(self) -> None:
         self.assertEqual(
             subprocess.check_output(["git", "show", f"{SOURCE_COMMIT}:integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json"], cwd=ROOT),
