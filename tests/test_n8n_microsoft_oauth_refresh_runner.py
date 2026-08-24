@@ -620,6 +620,12 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "getColumns",
             "getManyRowsAndCount",
             "createHash('sha256')",
+            "listed.count !== CANONICAL_TABLES.size",
+            "listed.data.length !== CANONICAL_TABLES.size",
+            "'finance_ingestion_state'",
+            "'finance_documents'",
+            "'finance_actual_batches'",
+            "'finance_ai_reviews'",
             "page.count > 100000",
             "row_values_recorded: false",
             "writes_performed: false",
@@ -628,7 +634,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         for forbidden in ("insertRows", "updateRows", "deleteRows", "createDataTable", "drop"):
             self.assertNotIn(forbidden, source)
 
-    def test_transport_parser_accepts_exact_retained_n8n_2362_framing(self) -> None:
+    def test_transport_parser_accepts_exact_n8n_2362_framing(self) -> None:
         parser = load_module("wf23_transport_parser", RUNNER / "parse_n8n_redacted_wrapper_output.py")
         fixture = json.loads(DATA_TABLE_OUTPUT_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
         self.assertEqual(parser.parse_data_table(fixture), "0" * 64)
@@ -639,7 +645,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "EXACT_ONE_REDACTED_RECEIPT_REQUIRED"):
             parser.parse_data_table(fixture + receipt + "\n")
         with self.assertRaisesRegex(ValueError, "DATA_TABLE_DIGEST_RECEIPT_CONTRACT_MISMATCH"):
-            parser.parse_data_table(fixture.replace('"finance_tables":15', '"finance_tables":14'))
+            parser.parse_data_table(fixture.replace('"finance_tables":4', '"finance_tables":3'))
 
         adversarial = {
             "boolean schema version": fixture.replace('"schema_version":1', '"schema_version":true'),
@@ -771,7 +777,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "wf23_execution_count",
             "wf23_history_count",
             '[[ "$(wf23_execution_count)" == "0" ]] || return 1',
-            "docker compose restart n8n",
+            'docker restart "${n8n_container}"',
             "Non-n8n service changed during restart",
             "metadata_before",
             "metadata_after_first",
@@ -802,6 +808,15 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             'server.listen(port,"127.0.0.1"',
             '"${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"',
             "/dev/shm/",
+            'readonly expected_project="${FINANCE_N8N_COMPOSE_PROJECT:-}"',
+            'readonly compose_file_input="${FINANCE_N8N_COMPOSE_FILE:-}"',
+            'readonly env_file="${FINANCE_N8N_DEPLOYMENT_ENV_FILE:-}"',
+            'readonly receipt_root="${FINANCE_N8N_RECEIPT_DIR:-}"',
+            "Mode-0600 deployed runtime environment required",
+            "docker exec -i \"${n8n_container}\" sh -c",
+            "docker exec \"${n8n_container}\" n8n import:workflow",
+            'docker restart "${n8n_container}"',
+            'com.docker.compose.project',
         ):
             self.assertIn(marker, runner)
         for forbidden in (
@@ -815,6 +830,12 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "eSnL069pIlzjFj4B",
             "node - execute --id=",
             "N8N_RUNNERS_BROKER_PORT=5679",
+            "compose.disposable.yaml",
+            "/opt/disposable/",
+            "verify-image-lock.sh",
+            "FINANCE_N8N_IMAGE_LOCK",
+            "docker compose run",
+            "docker compose restart n8n",
         ):
             self.assertNotIn(forbidden, runner)
         transport_position = runner.index("direct_transport_probe ||")

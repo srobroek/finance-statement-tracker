@@ -23,6 +23,13 @@ const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
 const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
 const { DataTableService } = n8nRequire('./dist/modules/data-table/data-table.service.js');
 
+const CANONICAL_TABLES = new Set([
+  'finance_ingestion_state',
+  'finance_documents',
+  'finance_actual_batches',
+  'finance_ai_reviews',
+]);
+
 function canonical(value) {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(canonical);
@@ -41,8 +48,11 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
     const service = Container.get(DataTableService);
     stage = 'table-list';
     const listed = await service.getManyAndCount({ filter: { projectId }, take: 100 });
-    const tables = listed.data.filter((table) => String(table.name).startsWith('finance_')).sort((a, b) => a.name.localeCompare(b.name));
-    if (tables.length !== 15) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
+    if (listed.count !== CANONICAL_TABLES.size || listed.data.length !== CANONICAL_TABLES.size) {
+      throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${listed.count}`);
+    }
+    const tables = listed.data.filter((table) => CANONICAL_TABLES.has(String(table.name))).sort((a, b) => a.name.localeCompare(b.name));
+    if (tables.length !== CANONICAL_TABLES.size) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
     const digest = crypto.createHash('sha256');
     let totalRows = 0;
     for (const table of tables) {

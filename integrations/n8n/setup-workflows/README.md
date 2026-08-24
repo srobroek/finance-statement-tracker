@@ -1,112 +1,126 @@
-# Explicit n8n setup workflows
+# setup workflows
 
-These exports are deliberately outside `integrations/n8n/workflows/`. They are
-not part of the regular 19-workflow import or activation set and must be
-imported one file at a time only for a reviewed setup action.
+These exports live outside `integrations/n8n/workflows/`. The regular import contains
+19 workflows. Reviewers import setup workflows one at a time.
+
+## onedrive setup
 
 `22-onedrive-finance-evidence-root-setup.json` is manual-only and inactive. It
-uses the bound `Finance OneDrive` OAuth credential to list the drive root,
-reuse the exact top-level `Finance Evidence` folder when present, or create
-that single folder at the drive root when absent. It then reads the root back,
-checks that there is exactly one exact match, inspects its children, and fails
-if `Finance Evidence/Finance Evidence` exists.
+uses the `Finance OneDrive` OAuth credential.
 
-The final execution item is a redacted receipt: it confirms the exact root and
-whether the folder was created or reused, but omits the OneDrive item ID, drive
-metadata, URLs, credential values, and file contents. The workflow must remain
-inactive and unscheduled. Import it into the `Global/Shared` folder, bind only the
-existing `Finance OneDrive` credential, run it once manually, retain the
-redacted output, and remove the setup export from n8n if it is no longer
-needed.
+The workflow:
 
-`23-microsoft-oauth-refresh-proof.json` is a separate manual-only, inactive,
-read-only proof for the two Microsoft OAuth credentials. Its Outlook operation
-uses a frozen seven-day window, the server-side `isDraft eq false` filter, and
-a maximum of one result. The Graph projection requests only the message `id`,
-which is discarded before the next node. Its OneDrive operation lists the drive
-root once. It does not download content and contains no provider-write node.
-The final item retains only result counts, the bounded time window, execution
-ID, safety booleans, and verification timestamp; it discards message fields,
-file fields, credential values, and token values.
+- lists the drive root.
+- reuses the exact `Finance Evidence` folder when present.
+- creates that folder at the drive root when absent.
+- reads the root again.
+- checks for one exact match.
+- rejects `Finance Evidence/Finance Evidence`.
 
-For the restart proof, use the guarded
-`runner/run-transient-microsoft-oauth-refresh-proof.sh` contract. Do not import
-or execute WF23 manually. The runner resolves the existing project-owner
-credentials, compares their identities before and after only in memory without
-printing or recording their IDs, creates a bound copy under `/dev/shm`, and
-performs this exact reviewed sequence:
+The final node emits a redacted receipt. It omits:
 
-1. Before any workflow import, OAuth metadata read, or provider call, run a
-   no-workflow/no-provider/no-database-initialization transport probe. It loads
-   the extensionless n8n 2.36.2 config entry point, resolves the official
-   `Execute` instance, and proves that its instance-owned output hook works.
-2. Capture the workflow and Finance Data Table baselines, then a metadata-only
-   readback for both bound credentials containing only
-   credential type, `updatedAt`, token expiry time, and presence booleans. The
-   readback deliberately omits credential IDs. Never print or persist encrypted
-   credential data, access tokens, refresh tokens, client secrets, or response
-   bodies.
-3. Import the bound workflow inactive, run it through a directly initialized
-   n8n `Execute` instance, and retain only its redacted terminal receipt.
-4. Repeat the metadata-only readback and require both expired token expiries to
-   have advanced to future, unexpired values.
-5. Restart only the n8n service and wait for its health check to pass.
-6. Run the same inactive workflow again and repeat the metadata-only readback.
-7. Remove WF23 and accept the proof only when both
-   executions are `VERIFIED`, both provider reads succeeded, each Outlook count
-   is at most one, and the credential types remain stable. Before the first
-   execution, both access-token expiries must already be in the past. The first
-   execution must move each expiry strictly forward to a future, unexpired
-   value. After restart, the second execution must succeed with each expiry
-   still future and no earlier than after the first execution. `updatedAt` is
-   retained only as supplemental non-regression metadata and never counts as
-   refresh proof by itself.
+- record IDs.
+- drive metadata.
+- URLs.
+- credential values.
+- file contents.
 
-The runner requires explicit `FINANCE_MICROSOFT_OAUTH_PROOF_ACK`, exact finance
-and orchestrator commits, and the exact retained project. It starts only from
-the reviewed `19 workflows / 0 active / 0 published` state, imports exactly one
-inactive workflow, places it in the `Global/Shared` folder, and returns to the exact
-19-workflow baseline. Raw n8n `IRun` objects and provider responses exist only
-inside the execution process long enough to validate the terminal node; only
-the redacted terminal result leaves that process. Execution persistence is
-disabled and independently checked in PostgreSQL after both calls.
+Keep the workflow inactive and unscheduled. Before a manual run, import it into
+`Global/Shared` and bind the existing `Finance OneDrive` credential. After the
+review, remove the setup export.
 
-The direct WF23 process has its own 120-second, re-armed watchdog for the fixed
-stages `CONFIG_LOAD`, `MODULE_LOAD`, `COMMAND_INIT`, `COMMAND_RUN`,
-`RAW_CAPTURE`, and `FINALIZE`. A timeout emits exactly one fixed-schema line
-whose only diagnostic is the allowlisted `WF23_TIMEOUT_<STAGE>` code, invokes
-only sanitized command finalization, and exits. Provider responses, exception
-text, raw execution data, and secrets are never copied into that line. The host
-runner rejects every other failure payload and retains an allowlisted timeout
-code only in the redacted failure receipt before performing the same exact
-cleanup and digest readback.
+## microsoft oauth proof
 
-n8n 2.36.2's `Execute` command declares `needsTaskRunner = true`, and
-`BaseCommand.init()` therefore starts a task broker before `Execute.run()`.
-The retained n8n service already owns its external-runner broker on
-`0.0.0.0:5679`. A second CLI process using internal-runner mode on the inherited
-port reaches `EADDRINUSE`; n8n calls `process.exit(1)` from the broker error
-handler while its `listen()` promise remains unresolved. Because the guarded
-WF23 process intercepts early exits, that condition previously appeared as
-`WF23_TIMEOUT_COMMAND_INIT`. The runner now reserves `127.0.0.1:15679` only for
-the transient internal runner, verifies that port is bindable before any
-metadata read, workflow import, or provider call, and requires the direct shim
-to reject every other runner mode/address/port boundary. The workflow's Code
-nodes still execute in n8n's official isolated task runner; no Code-node
-execution is moved into the main process.
+`23-microsoft-oauth-refresh-proof.json` is manual-only, inactive, and read-only.
+Import it only for the reviewed proof.
 
-The runner restarts only the n8n container and verifies that every other
-service container and start time remains unchanged. Exact baseline and Finance
-Data Table digests must match after cleanup. The final mode-600 receipt contains
-the two redacted workflow results and three metadata-only snapshots (before,
-after the first call, and after the post-restart call). Failure cleanup removes
-only an exact inactive WF23 instance and emits a redacted failure receipt; any
-cleanup or digest mismatch fails closed for review.
+The Outlook node:
 
-A failure receipt uses three-state postconditions. It reports
-`raw_irun_persisted: false` only after a zero-row execution readback, and
-`finance_data_table_writes: false` only after a fresh official
-`DataTableService` digest matches the baseline. Otherwise those fields are
-`null`, not optimistic assertions. `FAILED_CLEAN_BOUNDARY_RESTORED` is allowed
-only when workflow restoration, zero execution rows, and the official Data
-Table digest recheck all succeeded.
+- scans a frozen seven-day window.
+- applies the server-side `isDraft eq false` filter.
+- requests at most one message.
+- projects only the message `id`.
+- discards that identifier before the next node.
+
+The OneDrive node lists the drive root once. The workflow has no provider-write
+node and downloads no content. The final node keeps:
+
+- result counts.
+- time bounds.
+- an execution ID.
+- safety flags.
+- a verification timestamp.
+
+## run the deployed proof
+
+Run `runner/run-transient-microsoft-oauth-refresh-proof.sh` on the deployed
+host. Do not import or execute WF23 manually.
+
+Set these variables from the deployed recovery receipt. The receipt supplies
+the values below:
+
+| Variable | Value |
+| --- | --- |
+| `FINANCE_N8N_COMPOSE_PROJECT` | Deployed Compose project name. |
+| `FINANCE_N8N_STACK_DIR` | Deployed stack checkout. |
+| `FINANCE_N8N_COMPOSE_FILE` | `compose.yaml` or an absolute path. |
+| `FINANCE_N8N_DEPLOYMENT_ENV_FILE` | Mode-`0600` runtime environment file. |
+| `FINANCE_N8N_RECEIPT_DIR` | Absolute mode-`0700` receipt directory. |
+| `FINANCE_REPOSITORY_DIR` | Clean finance source checkout. |
+| `FINANCE_REPOSITORY_COMMIT` | Exact 40-character finance commit. |
+| `ORCHESTRATOR_REPOSITORY_COMMIT` | Exact 40-character stack commit. |
+| `N8N_FINANCE_PROJECT_ID` | Explicit n8n project identifier. |
+
+Resolve one n8n and one Postgres container from the explicit Compose project.
+Check both containers for running and healthy state.
+
+Before metadata reads, workflow import, or provider calls, run a transport
+probe. The probe loads the extensionless n8n 2.36.2 configuration, resolves the
+official `Execute` instance, and verifies its output hook.
+
+Start with the reviewed `21 workflows / 0 active / 0 published` boundary. Import
+one inactive workflow into `Global/Shared`. Restore the same 21-workflow
+boundary during cleanup.
+
+Read these four canonical Data Tables:
+
+- `finance_ingestion_state`
+- `finance_documents`
+- `finance_actual_batches`
+- `finance_ai_reviews`
+
+Read the tables with the official `DataTableService`. Write no rows or schemas.
+Credential readbacks omit:
+
+- IDs and encrypted data.
+- access and refresh tokens.
+- client secrets.
+- provider response bodies.
+
+The proof sequence is:
+
+- Use `docker exec` for the WF23 import.
+- Run `Execute` directly.
+- Remove WF23 from that container.
+- Disable execution persistence.
+- Before each call, confirm no PostgreSQL execution rows.
+
+Restart only the n8n container with `docker restart`. Check all other service
+containers and their start times. Use internal runner mode on `127.0.0.1:15679`.
+Before metadata reads, workflow import, or provider calls, verify that port.
+
+Before the first execution, check that both token expiries are past. Produce a
+redacted `VERIFIED` receipt for each execution. Move both expiries into the
+future. Limit Outlook to one server-filtered message. On the second
+execution, preserve the first future expiry values.
+
+Compare these digests with their baselines:
+
+- workflows.
+- execution history.
+- credential bindings.
+- Data Tables.
+
+Emit a mode-`0600` success or failure receipt. A failure receipt uses
+three-state postconditions. `raw_irun_persisted: false` requires a zero-row
+readback. `finance_data_table_writes: false` requires an official digest match.
