@@ -760,6 +760,67 @@ sys.exit(0)
         self.assertEqual(json.loads(completed.stdout.split(":", 1)[1])["error_code"], "WF23_TIMEOUT_COMMAND_RUN")
         self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
+    def test_local_transport_timeout_stops_known_execution_before_returning(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            "const fetchImpl=async(url,options)=>{calls.push({url,options});"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>({data:{executionId:'123'}})};"
+            "if(url.endsWith('/stop'))return {ok:true};throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:100})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["code"], "WF23_TIMEOUT_COMMAND_RUN")
+        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST"])
+        self.assertTrue(observed["calls"][1]["url"].endswith("/rest/executions/123/stop"))
+        self.assertEqual(observed["calls"][1]["options"]["headers"]["Cookie"], "n8n-auth=secret-token")
+        self.assertNotIn("secret-token", completed.stderr)
+
+    def test_local_transport_socket_failure_stops_known_execution_before_returning(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            "const fetchImpl=async(url,options)=>{calls.push({url,options});"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('close'));return {data:{executionId:'123'}}}};"
+            "if(url.endsWith('/stop'))return {ok:true};throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:100})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["code"], "WF23_PUSH_CONNECTION_FAILED")
+        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST"])
+        self.assertTrue(observed["calls"][1]["url"].endswith("/rest/executions/123/stop"))
+        self.assertNotIn("secret-token", completed.stderr)
+
+    def test_local_transport_stop_failure_waits_for_terminal_execution(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            "const fetchImpl=async(url,options)=>{calls.push({url,options});"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>({data:{executionId:'123'}})};"
+            "if(url.endsWith('/stop'))return {ok:false};"
+            "if(url.endsWith('/123'))return {ok:true,json:async()=>({status:'canceled',finished:true})};"
+            "throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:100})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["code"], "WF23_TIMEOUT_COMMAND_RUN")
+        self.assertEqual([call["options"]["method"] for call in observed["calls"]], ["POST", "POST", "GET"])
+        self.assertTrue(observed["calls"][2]["url"].endswith("/rest/executions/123"))
+        self.assertEqual(observed["calls"][2]["options"]["headers"]["Cookie"], "n8n-auth=secret-token")
+        self.assertNotIn("secret-token", completed.stderr)
+
     def test_execution_output_parser_accepts_only_exact_success_and_allowlisted_timeouts(self) -> None:
         parser_path = RUNNER / "parse_wf23_execution_output.py"
         parser = load_module("wf23_execution_output", parser_path)
