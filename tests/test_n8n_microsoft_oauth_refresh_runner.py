@@ -1488,6 +1488,7 @@ sys.exit(0)
             (bin_dir / "timeout").chmod(0o755)
             (bin_dir / "python3").chmod(0o755)
             output = root / "execution-output"
+            status = root / "execute-status"
             driver = root / "driver.sh"
             driver.write_text(
                 "\n".join([
@@ -1495,7 +1496,9 @@ sys.exit(0)
                     "set -euo pipefail",
                     "n8n_container=synthetic-n8n; runner_dir=" + shlex.quote(str(RUNNER)) + "; execution_timeout_seconds=0.05",
                     execute_probe,
-                    f'execute_probe > {shlex.quote(str(output))} || true',
+                    "execute_status=0",
+                    f'execute_probe > {shlex.quote(str(output))} || execute_status=$?',
+                    f'printf \'%s\' "$execute_status" > {shlex.quote(str(status))}',
                 ]) + "\n",
                 encoding="utf-8",
             )
@@ -1504,6 +1507,7 @@ sys.exit(0)
             environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
             completed = subprocess.run(["bash", str(driver)], text=True, capture_output=True, env=environment)
             self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(status.read_text(encoding="utf-8"), "124")
             self.assertEqual(output.read_text(encoding="utf-8"), "WF23_TIMEOUT_COMMAND_RUN")
             self.assertFalse(parser_marker.exists())
 
