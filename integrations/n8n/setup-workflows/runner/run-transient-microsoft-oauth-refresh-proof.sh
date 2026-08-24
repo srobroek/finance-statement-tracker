@@ -280,7 +280,9 @@ failure_stage="folder_placement"
 [[ "$(psql_scalar "select count(*) from workflow_entity where id='${workflow_id}' and nodes::text like '%BIND_%';")" == "0" && "$(wf23_execution_count)" == "0" ]] || { echo "WF23 binding/execution precheck failed" >&2; exit 1; }
 
 failure_stage="first_execution"
-execution_first="$(execute_probe)" || { retain_execution_timeout_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
+execution_first_file="${run_root}/first-execution-output"
+execute_probe >"${execution_first_file}" || { execution_first="$(<"${execution_first_file}")"; retain_execution_timeout_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
+execution_first="$(<"${execution_first_file}")"
 [[ "$(wf23_execution_count)" == "0" ]] || { echo "WF23 first IRun was persisted" >&2; exit 1; }
 metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata first post-read failed" >&2; exit 1; }
 refresh_after_first="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_first}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "First execution did not refresh both expired Microsoft tokens" >&2; exit 1; }
@@ -305,7 +307,9 @@ for service in "${services[@]}"; do
 done
 
 failure_stage="second_execution"
-execution_second="$(execute_probe)" || { retain_execution_timeout_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
+execution_second_file="${run_root}/second-execution-output"
+execute_probe >"${execution_second_file}" || { execution_second="$(<"${execution_second_file}")"; retain_execution_timeout_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
+execution_second="$(<"${execution_second_file}")"
 [[ "$(wf23_execution_count)" == "0" ]] || { echo "WF23 second IRun was persisted" >&2; exit 1; }
 metadata_after_second="$(read_metadata)" || { echo "Microsoft OAuth metadata second post-read failed" >&2; exit 1; }
 refresh_summary="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_second}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "Post-restart Microsoft token expiry validation failed" >&2; exit 1; }
