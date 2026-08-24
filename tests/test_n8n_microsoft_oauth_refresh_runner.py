@@ -1243,7 +1243,9 @@ sys.exit(0)
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
     def test_all_runner_sources_are_syntactically_valid(self) -> None:
-        subprocess.run(["bash", "-n", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")], check=True)
+        runner = RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh"
+        self.assertTrue(os.access(runner, os.X_OK))
+        subprocess.run(["bash", "-n", str(runner)], check=True)
         for source in RUNNER.glob("*.py"):
             subprocess.run([sys.executable, "-m", "py_compile", str(source)], check=True)
         for source in RUNNER.glob("*.cjs"):
