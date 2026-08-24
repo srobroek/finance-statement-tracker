@@ -5,6 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -77,7 +78,16 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             path, manifest = self.stage(temporary)
             self.assertEqual(
                 set(manifest),
-                {"schema_version", "application", "workflows", "folders", "bootstrap", "fixtures", "route"},
+                {
+                    "schema_version",
+                    "application",
+                    "workflows",
+                    "folders",
+                    "bootstrap",
+                    "fixtures",
+                    "credentials",
+                    "route",
+                },
             )
             self.assertEqual(manifest["schema_version"], 1)
             self.assertEqual(
@@ -96,6 +106,21 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 TARGET_TABLE_NAMES,
             )
             self.assertEqual(manifest["fixtures"], {"directory": "fixtures", "manifest": "fixtures/fixture-manifest.json"})
+            self.assertEqual(
+                manifest["credentials"]["binding_contract"],
+                {
+                    "path": "credential-bindings.json",
+                    "sha256": sha256(N8N / "credential-bindings.json"),
+                },
+            )
+            self.assertFalse(manifest["credentials"]["values_included"])
+            self.assertEqual(
+                {row["binding"] for row in manifest["credentials"]["placeholders"]},
+                {row["placeholder"] for row in load_json(N8N / "credential-bindings.json")["bindings"]},
+            )
+            bindings = load_json(N8N / "credential-bindings.json")["bindings"]
+            self.assertEqual(len(bindings), 8)
+            self.assertEqual(sum(len(row["nodes"]) for row in bindings), 36)
             self.assertEqual(
                 manifest["route"],
                 {
@@ -118,6 +143,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 Path(manifest["bootstrap"]["directory"]),
                 Path(manifest["bootstrap"]["directory"]) / manifest["bootstrap"]["sql"],
                 Path(manifest["fixtures"]["manifest"]),
+                Path(manifest["credentials"]["binding_contract"]["path"]),
             ]
             for relative in relative_files:
                 resolved = (root / relative).resolve()
@@ -132,6 +158,67 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             self.assertFalse((root / "workflow-organization-cutover.sql").exists())
             self.assertNotIn("finance_commit", manifest)
             self.assertNotIn("extension_image", manifest)
+
+    def test_staged_credential_contract_is_exact_and_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            _, first_manifest = self.stage(first)
+            _, second_manifest = self.stage(second)
+            first_root = Path(first) / "application"
+            second_root = Path(second) / "application"
+            self.assertEqual(
+                (first_root / "credential-bindings.json").read_bytes(),
+                (N8N / "credential-bindings.json").read_bytes(),
+            )
+            first_files = sorted(path.relative_to(first_root) for path in first_root.rglob("*") if path.is_file())
+            second_files = sorted(path.relative_to(second_root) for path in second_root.rglob("*") if path.is_file())
+            self.assertEqual(first_files, second_files)
+            self.assertEqual(
+                [path.read_bytes() for path in sorted((first_root / "workflows").glob("*.json"))],
+                [path.read_bytes() for path in sorted((second_root / "workflows").glob("*.json"))],
+            )
+            self.assertEqual(first_manifest, second_manifest)
+
+    def test_adapter_rejects_stale_credential_contract_declaration(self) -> None:
+        original_sha256 = self.adapter._sha256
+
+        def stale_contract(path: Path) -> str:
+            if path.name == "credential-bindings.json":
+                return "0" * 64
+            return original_sha256(path)
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(self.adapter, "_sha256", side_effect=stale_contract):
+            with self.assertRaisesRegex(ValueError, "credential binding declaration is stale"):
+                self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
+
+    def test_adapter_rejects_secret_bearing_credential_placeholder_extra(self) -> None:
+        original_load = self.adapter._load
+
+        def load(path: Path) -> dict:
+            value = original_load(path)
+            if path.name == "application-manifest.json":
+                value = deepcopy(value)
+                value["credentials"]["placeholders"][0]["secret"] = "must-not-stage"
+            return value
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(self.adapter, "_load", side_effect=load):
+            with self.assertRaisesRegex(ValueError, "credential placeholder is invalid"):
+                self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
+
+    def test_adapter_rejects_duplicate_credential_placeholder_binding(self) -> None:
+        original_load = self.adapter._load
+
+        def load(path: Path) -> dict:
+            value = original_load(path)
+            if path.name == "application-manifest.json":
+                value = deepcopy(value)
+                value["credentials"]["placeholders"].append(
+                    deepcopy(value["credentials"]["placeholders"][0])
+                )
+            return value
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(self.adapter, "_load", side_effect=load):
+            with self.assertRaisesRegex(ValueError, "credential bindings are duplicated"):
+                self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
 
     def test_workflow_count_and_folder_contract_are_exact(self) -> None:
         registry_rows = self.registry["workflows"]
