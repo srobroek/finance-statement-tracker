@@ -669,7 +669,7 @@ sys.exit(0)
         code = (
             f"const shim=require({json.dumps(str(shim))});{node}"
             f"const terminalTask={json.dumps(terminal_task,separators=(',',':'))};"
-            "const fetchImpl=async(url,options)=>{request={url,options};events.push('rest-post');return {ok:true,json:async()=>{socket.emit('message',JSON.stringify({type:'executionStarted',data:{executionId:'provider-secret'}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:'Other',data:{json:{provider:'secret'}}}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:shim.TERMINAL_NODE,data:terminalTask}}));socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'success'}}));return {data:{executionId:'123'}}}}};"
+            "const fetchImpl=async(url,options)=>{if(url.endsWith('/123'))return {ok:false,status:404};request={url,options};events.push('rest-post');return {ok:true,json:async()=>{socket.emit('message',JSON.stringify({type:'executionStarted',data:{executionId:'provider-secret'}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:'Other',data:{json:{provider:'secret'}}}}));socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:shim.TERMINAL_NODE,data:terminalTask}}));socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'success'}}));return {data:{executionId:'123'}}}}};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,random:()=>Buffer.from('push-ref')}).then(receipt=>process.stdout.write(JSON.stringify({receipt,events,url:socket.url,origin:socket.options.headers.Origin,cookie:socket.options.headers.Cookie,requestUrl:request.url,method:request.options.method,pushRef:request.options.headers['push-ref'],body:JSON.parse(request.options.body)}))).catch(error=>{process.stdout.write(JSON.stringify({error:error.code||'FAILED'}));process.exit(1)})"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
@@ -683,6 +683,55 @@ sys.exit(0)
         self.assertEqual(observed["method"], "POST")
         self.assertEqual(observed["pushRef"], observed["url"].split("pushRef=", 1)[1])
         self.assertEqual(observed["body"], {"triggerToStartFrom": {"name": "Run Reviewed OAuth Proof"}})
+
+    def test_local_transport_waits_for_async_terminal_execution_removal(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        terminal_task = {"executionStatus": "success", "data": {"main": [[{"json": terminal_result()}] ]}}
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;let statusReads=0;"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            f"const terminalTask={json.dumps(terminal_task,separators=(',',':'))};"
+            "const fetchImpl=async(url)=>{"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>{"
+            "socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:shim.TERMINAL_NODE,data:terminalTask}}));"
+            "socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'success'}}));"
+            "});return {data:{executionId:'123'}}}};"
+            "if(url.endsWith('/123')){statusReads+=1;"
+            "return statusReads===1?{ok:true,status:200,json:async()=>({status:'success',finished:true})}:{ok:false,status:404};}"
+            "throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:250})"
+            ".then(receipt=>process.stdout.write(JSON.stringify({receipt,statusReads})))"
+            ".catch(error=>{process.stdout.write(JSON.stringify({code:error.code||'FAILED'}));process.exit(1)})"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(observed["receipt"]["execution_id"], "123")
+        self.assertEqual(observed["statusReads"], 2)
+
+    def test_local_transport_fails_closed_when_terminal_execution_remains(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        terminal_task = {"executionStatus": "success", "data": {"main": [[{"json": terminal_result()}] ]}}
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            f"const terminalTask={json.dumps(terminal_task,separators=(',',':'))};"
+            "const fetchImpl=async(url)=>{"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>{"
+            "socket.emit('message',JSON.stringify({type:'nodeExecuteAfterData',data:{executionId:'123',nodeName:shim.TERMINAL_NODE,data:terminalTask}}));"
+            "socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'success'}}));"
+            "});return {data:{executionId:'123'}}}};"
+            "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>({status:'success',finished:true})};"
+            "throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:30})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code||'FAILED'})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(completed.stdout), {"code": "WF23_EXECUTION_NOT_REMOVED"})
+        self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
     def test_local_transport_rejects_pre_rest_non_success_finished_frame(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
