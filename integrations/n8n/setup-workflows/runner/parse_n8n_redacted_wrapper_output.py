@@ -81,7 +81,7 @@ def parse_data_table(raw: str) -> str:
         or value["status"] != "VERIFIED"
         or value["scope"] != "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
         or not strict_int(value["finance_tables"])
-        or value["finance_tables"] != 15
+        or value["finance_tables"] != 4
         or not strict_int(value["total_rows"])
         or not 0 <= value["total_rows"] <= 100000
         or not isinstance(value["digest_sha256"], str)

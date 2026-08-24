@@ -210,10 +210,10 @@ if (isDirectEntrypoint(require.main, module)) {
       process.env.EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS !== 'false') {
     throw new Error('EXECUTION_DATA_SAVING_MUST_BE_DISABLED');
   }
-  if (process.env.N8N_RUNNERS_MODE !== 'internal' ||
-      process.env.N8N_RUNNERS_BROKER_PORT !== '15679' ||
-      process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '127.0.0.1') {
-    throw new Error('WF23_DEDICATED_INTERNAL_TASK_RUNNER_BOUNDARY_REQUIRED');
+  if (process.env.N8N_RUNNERS_MODE !== 'external' ||
+      process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '0.0.0.0' ||
+      !process.env.N8N_RUNNERS_AUTH_TOKEN) {
+    throw new Error('WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED');
   }
   const fs = require('node:fs');
   process.stdout.write = () => true;

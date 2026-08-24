@@ -4,6 +4,7 @@ import hashlib
 import json
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,112 @@ SOURCE = SETUP / "23-microsoft-oauth-refresh-proof.json"
 SOURCE_COMMIT = "b3bce6e197c6603d3e8708156bed987f26ac8513"
 SOURCE_SHA = "879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
+
+
+def synthetic_docker_log_rows(log_path: Path) -> list[list[str]]:
+    rows = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if not isinstance(row, list) or not all(isinstance(value, str) for value in row):
+            raise AssertionError(f"synthetic Docker log row is not argv JSON: {row!r}")
+        rows.append(row)
+    if not rows:
+        raise AssertionError("synthetic Docker log is empty")
+    return rows
+
+
+def assert_synthetic_docker_allowlist(log_path: Path) -> list[list[str]]:
+    rows = synthetic_docker_log_rows(log_path)
+    services = {"n8n", "task-runners"}
+    inspect_formats = {
+        '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}',
+        "{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}",
+        "{{.Id}}|{{.State.Running}}",
+        "{{.State.Running}}",
+        "{{range .Config.Env}}{{println .}}{{end}}",
+    }
+    for row in rows:
+        operation = row[0] if row else ""
+        if operation == "run":
+            raise AssertionError("direct docker run is forbidden")
+        if operation == "compose":
+            forbidden = next((value for value in row if value in {"run", "create", "up"}), None)
+            if forbidden is not None:
+                raise AssertionError(f"docker compose {forbidden} is forbidden")
+            if (
+                len(row) != 10
+                or row[1] != "--project-name"
+                or row[3] != "--file"
+                or row[5] != "--env-file"
+                or row[7:9] != ["ps", "-q"]
+                or row[9] not in services
+            ):
+                raise AssertionError(f"unexpected docker compose command: {row!r}")
+            continue
+        if operation == "inspect":
+            if len(row) != 4 or row[1] != "-f" or row[2] not in inspect_formats:
+                raise AssertionError(f"unexpected docker inspect command: {row!r}")
+            if len(row[3]) != 64 or any(value not in "0123456789abcdef" for value in row[3]):
+                raise AssertionError(f"docker inspect target is not a container ID: {row!r}")
+            continue
+        if operation == "exec":
+            container_index = next(
+                (index for index, value in enumerate(row[1:], start=1)
+                 if len(value) == 64 and all(char in "0123456789abcdef" for char in value)),
+                None,
+            )
+            if container_index is None:
+                raise AssertionError(f"docker exec has no container ID: {row!r}")
+            options = row[1:container_index]
+            environment = set()
+            index = 0
+            while index < len(options):
+                if options[index] == "-i":
+                    index += 1
+                elif options[index] == "-e" and index + 1 < len(options) and "=" in options[index + 1]:
+                    variable = options[index + 1]
+                    if not (
+                        variable in {
+                            "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
+                            "FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY",
+                            "FINANCE_MICROSOFT_OAUTH_METADATA_ACK=READ_ONLY_REDACTED",
+                        }
+                        or variable.startswith("N8N_FINANCE_PROJECT_ID=")
+                    ):
+                        raise AssertionError(f"unexpected docker exec environment: {row!r}")
+                    environment.add(variable)
+                    index += 2
+                else:
+                    raise AssertionError(f"unexpected docker exec option: {row!r}")
+            command = row[container_index + 1:]
+            if command[:1] == ["pg_isready"]:
+                if len(command) != 5 or command[1] != "-U" or command[3] != "-d":
+                    raise AssertionError(f"unexpected pg_isready command: {row!r}")
+            elif command[:1] == ["psql"]:
+                if len(command) != 10 or command[1:7] != ["-v", "ON_ERROR_STOP=1", "-At", "-U", "n8n", "-d"]:
+                    raise AssertionError(f"unexpected psql command: {row!r}")
+                if command[7] != "n8n" or command[8] != "-c" or not command[9].lstrip().lower().startswith("select "):
+                    raise AssertionError(f"unexpected psql query: {row!r}")
+            elif command[:2] == ["node", "-e"]:
+                if len(command) != 3 or "fetch(" not in command[2] or "healthz" not in command[2]:
+                    raise AssertionError(f"unexpected node control probe: {row!r}")
+            elif command == ["node", "-"]:
+                if environment != {"FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE"}:
+                    raise AssertionError(f"unexpected direct transport probe: {row!r}")
+            elif command == ["node", "-", "list:workflow"]:
+                acknowledgements = {
+                    "FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY",
+                    "FINANCE_MICROSOFT_OAUTH_METADATA_ACK=READ_ONLY_REDACTED",
+                }
+                if len(environment) != 2 or not environment & acknowledgements or not any(
+                    value.startswith("N8N_FINANCE_PROJECT_ID=") for value in environment
+                ):
+                    raise AssertionError(f"unexpected n8n readback command: {row!r}")
+            else:
+                raise AssertionError(f"unexpected docker exec command: {row!r}")
+            continue
+        raise AssertionError(f"unexpected docker operation: {row!r}")
+    return rows
 
 
 def load_module(name: str, path: Path):
@@ -98,6 +205,283 @@ def irun(result: dict) -> dict:
 
 
 class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
+    def make_synthetic_preflight_runtime(self):
+        temporary = tempfile.TemporaryDirectory(prefix="wf23-preflight-")
+        root = Path(temporary.name)
+        finance_repo = root / "finance"
+        subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(finance_repo)], check=True)
+        subprocess.run(["git", "fetch", "--quiet", str(ROOT), SOURCE_COMMIT], cwd=finance_repo, check=True)
+        subprocess.run(["git", "checkout", "--quiet", SOURCE_COMMIT], cwd=finance_repo, check=True)
+        shutil.copytree(
+            RUNNER,
+            finance_repo / "integrations" / "n8n" / "setup-workflows" / "runner",
+            dirs_exist_ok=True,
+        )
+        subprocess.run(
+            ["git", "add", "integrations/n8n/setup-workflows/runner"],
+            cwd=finance_repo,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "--quiet", "-m", "synthetic deployed runner"],
+            cwd=finance_repo,
+            check=True,
+        )
+        stack = root / "stack"
+        stack.mkdir()
+        compose_file = stack / "compose.yaml"
+        compose_file.write_text("services: {}\n", encoding="utf-8")
+        subprocess.run(["git", "init", "--quiet"], cwd=stack, check=True)
+        subprocess.run(["git", "config", "user.email", "synthetic@example.test"], cwd=stack, check=True)
+        subprocess.run(["git", "config", "user.name", "Synthetic Preflight"], cwd=stack, check=True)
+        subprocess.run(["git", "add", "compose.yaml"], cwd=stack, check=True)
+        subprocess.run(["git", "commit", "--quiet", "-m", "synthetic preflight"], cwd=stack, check=True)
+        stack_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=stack, text=True).strip()
+
+        env_file = root / "runtime.env"
+        env_file.write_text("DB_POSTGRESDB_USER=n8n\nDB_POSTGRESDB_DATABASE=n8n\n", encoding="utf-8")
+        env_file.chmod(0o600)
+        receipt = root / "prestate.json"
+        receipt.write_text(json.dumps({
+            "schema_version": 1,
+            "purpose": "N8N_RECOVERY_PRESTATE_RECEIPT_V1",
+            "postgres": {"container_id": "3" * 64},
+        }) + "\n", encoding="utf-8")
+        receipt.chmod(0o600)
+        receipt_dir = root / "receipts"
+        receipt_dir.mkdir(mode=0o700)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        docker = bin_dir / "docker"
+        docker.write_text(r'''#!/usr/bin/env python3
+import json
+import os
+import sys
+
+PROJECT = "synthetic-project"
+N8N = "1" * 64
+TASK_RUNNERS = "2" * 64
+POSTGRES = "3" * 64
+IDS = {N8N, TASK_RUNNERS, POSTGRES}
+SERVICES = {N8N: "n8n", TASK_RUNNERS: "task-runners"}
+scenario = os.environ.get("FAKE_DOCKER_SCENARIO", "ok")
+log_path = os.environ["FAKE_DOCKER_LOG"]
+args = sys.argv[1:]
+with open(log_path, "a", encoding="utf-8") as log:
+    print(json.dumps(args), file=log)
+
+if args[:1] == ["compose"]:
+    service = args[-1]
+    if service == "n8n":
+        print(N8N)
+    elif service == "task-runners":
+        print(TASK_RUNNERS)
+    else:
+        sys.exit(1)
+    sys.exit(0)
+
+if args[:1] == ["inspect"]:
+    fmt = args[2]
+    container = args[-1]
+    if "Config.Labels" in fmt:
+        if container not in SERVICES:
+            sys.exit(1)
+        print(f"{PROJECT}|{SERVICES[container]}")
+    elif "Config.Env" in fmt:
+        print("DB_POSTGRESDB_USER=n8n")
+        print("DB_POSTGRESDB_DATABASE=n8n")
+        print("N8N_RUNNERS_MODE=external")
+        print("N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0")
+        print("N8N_RUNNERS_AUTH_TOKEN=synthetic-token")
+    elif ".State.Health" in fmt:
+        print("true|healthy")
+    elif ".Id" in fmt and container == POSTGRES:
+        print(f"{'4' * 64 if scenario == 'postgres-identity-fail' else POSTGRES}|true")
+    elif ".State.Running" in fmt:
+        print("true")
+    else:
+        sys.exit(1)
+    sys.exit(0)
+
+if args[:1] != ["exec"]:
+    sys.exit(1)
+try:
+    container_index = next(index for index, value in enumerate(args) if value in IDS)
+except StopIteration:
+    sys.exit(1)
+container = args[container_index]
+exec_env = {}
+index = 1
+while index < container_index:
+    if args[index] == "-e":
+        key, value = args[index + 1].split("=", 1)
+        exec_env[key] = value
+        index += 2
+    else:
+        index += 1
+command = args[container_index + 1:]
+if "pg_isready" in command:
+    sys.exit(1 if scenario == "postgres-readiness-fail" else 0)
+if "psql" in command:
+    query = command[command.index("-c") + 1]
+    if "current_database()" in query:
+        print("wrong|wrong" if scenario == "postgres-identity-query-fail" else "n8n|n8n")
+    elif "credentials_entity" in query:
+        print("outlook-id" if "microsoftOutlookOAuth2Api" in query else "onedrive-id")
+    elif "count(*)||" in query:
+        print("21|0|0")
+    elif "workflows_tags" in query:
+        print("63")
+    elif "global_folder" in query:
+        print("1")
+    elif "workflow_entity where id in" in query or "execution_entity" in query or "workflow_history" in query:
+        print("0")
+    elif "from (select" in query:
+        print("synthetic-baseline")
+    else:
+        print("21")
+    sys.exit(0)
+if "node" not in command:
+    sys.exit(0)
+if "-e" in command:
+    if container == N8N and scenario == "broker-fail":
+        sys.exit(1)
+    if container == TASK_RUNNERS and scenario == "task-runner-fail":
+        sys.exit(1)
+    sys.exit(0)
+ack = exec_env.get("FINANCE_WF23_TRANSPORT_PROBE_ACK")
+if ack == "READ_ONLY_DIRECT_EXECUTE_INSTANCE":
+    print('WF23 direct transport probe verified:{"schema_version":1,"status":"VERIFIED","scope":"DIRECT_EXECUTE_INSTANCE_TRANSPORT","execute_instance_resolved":true,"instance_log_override_invoked":true,"workflow_loaded":false,"workflow_executed":false,"provider_calls":false,"database_initialized":false,"raw_irun_persisted":false,"provider_response_logged":false,"secret_values_recorded":false}')
+elif exec_env.get("FINANCE_DATA_TABLE_DIGEST_ACK") == "READ_ONLY_IN_MEMORY":
+    print("finance data table digest verified:" + json.dumps({
+        "schema_version": 1, "status": "VERIFIED",
+        "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
+        "finance_tables": 4, "total_rows": 0, "digest_sha256": "a" * 64,
+        "writes_performed": False, "provider_calls": False,
+        "row_values_recorded": False, "secret_values_recorded": False,
+    }, separators=(",", ":")))
+elif exec_env.get("FINANCE_MICROSOFT_OAUTH_METADATA_ACK") == "READ_ONLY_REDACTED":
+    credential = lambda kind: {
+        "credential_type": kind, "credential_updated_at_utc": "2026-08-20T00:00:00Z",
+        "access_token_present": True, "refresh_token_present": True,
+        "expiration_observed": True, "expires_at_utc": "2020-01-01T00:00:00Z",
+        "expired_at_readback": True,
+    }
+    print("microsoft oauth metadata readback verified:" + json.dumps({
+        "schema_version": 1, "status": "VERIFIED",
+        "scope": "READ_ONLY_MICROSOFT_OAUTH_METADATA",
+        "observed_at_utc": "2026-08-24T00:00:00Z",
+        "credentials": {
+            "outlook": credential("microsoftOutlookOAuth2Api"),
+            "onedrive": credential("microsoftOneDriveOAuth2Api"),
+        },
+        "provider_calls": False, "database_writes": False,
+        "credential_ids_recorded": False, "secret_values_recorded": False,
+        "token_fingerprints_recorded": False,
+    }, separators=(",", ":")))
+sys.exit(0)
+''', encoding="utf-8")
+        docker.chmod(0o755)
+        fake_id = bin_dir / "id"
+        fake_id.write_text("#!/bin/sh\nif [ \"$1\" = \"-u\" ]; then printf '1000\\n'; else exec /usr/bin/id \"$@\"; fi\n", encoding="utf-8")
+        fake_id.chmod(0o755)
+
+        log_path = root / "docker.log"
+        finance_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=finance_repo, text=True).strip()
+        environment = os.environ.copy()
+        environment.update({
+            "PATH": f"{bin_dir}:{environment['PATH']}",
+            "FAKE_DOCKER_LOG": str(log_path),
+            "FAKE_DOCKER_SCENARIO": "ok",
+            "FINANCE_MICROSOFT_OAUTH_PROOF_ACK": "RUN_TRANSIENT_WF23_ONLY",
+            "FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT": "true",
+            "FINANCE_N8N_COMPOSE_PROJECT": "synthetic-project",
+            "FINANCE_N8N_STACK_DIR": str(stack),
+            "FINANCE_N8N_COMPOSE_FILE": str(compose_file),
+            "FINANCE_N8N_DEPLOYMENT_ENV_FILE": str(env_file),
+            "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
+            "FINANCE_N8N_RECOVERY_RECEIPT": str(receipt),
+            "FINANCE_REPOSITORY_DIR": str(finance_repo),
+            "FINANCE_REPOSITORY_COMMIT": finance_commit,
+            "ORCHESTRATOR_REPOSITORY_COMMIT": stack_commit,
+            "N8N_FINANCE_PROJECT_ID": "synthetic-project-id",
+        })
+        environment.pop("N8N_POSTGRES_USER", None)
+        environment.pop("N8N_POSTGRES_DATABASE", None)
+        return temporary, environment, log_path, receipt
+
+    def run_synthetic_preflight(self, environment):
+        return subprocess.run(
+            ["bash", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+        )
+
+    def test_command_level_synthetic_preflight_uses_recovered_postgres_and_fails_closed(self) -> None:
+        temporary, environment, log_path, receipt = self.make_synthetic_preflight_runtime()
+        try:
+            completed = self.run_synthetic_preflight(environment)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            assert_synthetic_docker_allowlist(log_path)
+            calls = log_path.read_text(encoding="utf-8")
+            call_rows = [json.loads(line) for line in calls.splitlines()]
+            self.assertTrue(any(
+                row[0] == "inspect" and ".Id" in row[2] and row[-1] == "3" * 64
+                for row in call_rows
+            ))
+            self.assertIn('"pg_isready", "-U", "n8n", "-d", "n8n"', calls)
+            self.assertIn("current_database()", calls)
+            self.assertIn("N8N_RUNNERS_MODE !== \\\"external\\\"", calls)
+            self.assertIn("N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== \\\"0.0.0.0\\\"", calls)
+            self.assertIn("http://127.0.0.1:5679/healthz", calls)
+            self.assertIn("http://127.0.0.1:5680/healthz", calls)
+            self.assertNotIn("import:workflow", calls)
+            self.assertNotIn("listen(", calls)
+
+            for scenario, message in (
+                ("postgres-identity-fail", "Recovered Postgres container identity or state mismatch"),
+                ("postgres-readiness-fail", "Recovered Postgres readiness failed"),
+                ("postgres-identity-query-fail", "Recovered Postgres database identity mismatch"),
+                ("broker-fail", "Deployed n8n/task-runner control path unavailable"),
+                ("task-runner-fail", "Deployed n8n/task-runner control path unavailable"),
+            ):
+                environment["FAKE_DOCKER_SCENARIO"] = scenario
+                log_path.write_text("", encoding="utf-8")
+                failed = self.run_synthetic_preflight(environment)
+                self.assertNotEqual(failed.returncode, 0, scenario)
+                self.assertIn(message, failed.stderr, scenario)
+                assert_synthetic_docker_allowlist(log_path)
+
+            receipt.write_text(json.dumps({
+                "schema_version": 1,
+                "purpose": "N8N_RECOVERY_PRESTATE_RECEIPT_V1",
+                "postgres": {"container_id": "not-a-container"},
+            }) + "\n", encoding="utf-8")
+            receipt.chmod(0o600)
+            environment["FAKE_DOCKER_SCENARIO"] = "ok"
+            failed_receipt = self.run_synthetic_preflight(environment)
+            self.assertNotEqual(failed_receipt.returncode, 0)
+            self.assertIn("Deployed Postgres recovery identity unavailable", failed_receipt.stderr)
+            assert_synthetic_docker_allowlist(log_path)
+        finally:
+            temporary.cleanup()
+
+    def test_synthetic_docker_allowlist_rejects_mutating_commands(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wf23-docker-log-") as temporary:
+            log_path = Path(temporary) / "docker.log"
+            forbidden_rows = [
+                (["run", "--rm", "n8n"], "direct docker run is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "run", "n8n"], "docker compose run is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "create", "n8n"], "docker compose create is forbidden"),
+                (["compose", "--project-name", "synthetic-project", "--file", "compose.yaml", "--env-file", "runtime.env", "up", "n8n"], "docker compose up is forbidden"),
+            ]
+            for row, message in forbidden_rows:
+                with self.subTest(row=row), self.assertRaisesRegex(AssertionError, message):
+                    log_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+                    assert_synthetic_docker_allowlist(log_path)
+
     def test_runtime_binder_is_exact_and_never_records_identifiers(self) -> None:
         self.assertEqual(
             subprocess.check_output(["git", "show", f"{SOURCE_COMMIT}:integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json"], cwd=ROOT),
@@ -174,10 +558,10 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "watchdog.arm('FINALIZE')",
             "async function terminateOnTimeout(code)",
             "writeTerminalOnce(fixedError(code), null)",
-            "WF23_DEDICATED_INTERNAL_TASK_RUNNER_BOUNDARY_REQUIRED",
-            "process.env.N8N_RUNNERS_MODE !== 'internal'",
-            "process.env.N8N_RUNNERS_BROKER_PORT !== '15679'",
-            "process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '127.0.0.1'",
+            "WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED",
+            "process.env.N8N_RUNNERS_MODE !== 'external'",
+            "process.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== '0.0.0.0'",
+            "!process.env.N8N_RUNNERS_AUTH_TOKEN",
         ):
             self.assertIn(marker, shim)
         self.assertNotIn("writeFile", shim)
@@ -232,7 +616,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         )
         self.assertEqual(imported.stdout, "inert")
 
-    def test_production_shim_rejects_inherited_runner_broker_before_loading_n8n(self) -> None:
+    def test_production_shim_rejects_non_deployed_runner_path_before_loading_n8n(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         env = os.environ.copy()
         env.update({
@@ -241,7 +625,6 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "EXECUTIONS_DATA_SAVE_ON_ERROR": "none",
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS": "false",
             "N8N_RUNNERS_MODE": "internal",
-            "N8N_RUNNERS_BROKER_PORT": "5679",
             "N8N_RUNNERS_BROKER_LISTEN_ADDRESS": "SECRET_PROVIDER_VALUE",
         })
         completed = subprocess.run(
@@ -252,7 +635,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("WF23_DEDICATED_INTERNAL_TASK_RUNNER_BOUNDARY_REQUIRED", completed.stderr)
+        self.assertIn("WF23_DEPLOYED_TASK_RUNNER_CONTROL_PATH_REQUIRED", completed.stderr)
         self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
         self.assertNotIn("Cannot find module 'n8n/package.json'", completed.stderr)
 
@@ -620,6 +1003,12 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "getColumns",
             "getManyRowsAndCount",
             "createHash('sha256')",
+            "listed.count !== CANONICAL_TABLES.size",
+            "listed.data.length !== CANONICAL_TABLES.size",
+            "'finance_ingestion_state'",
+            "'finance_documents'",
+            "'finance_actual_batches'",
+            "'finance_ai_reviews'",
             "page.count > 100000",
             "row_values_recorded: false",
             "writes_performed: false",
@@ -628,7 +1017,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         for forbidden in ("insertRows", "updateRows", "deleteRows", "createDataTable", "drop"):
             self.assertNotIn(forbidden, source)
 
-    def test_transport_parser_accepts_exact_retained_n8n_2362_framing(self) -> None:
+    def test_transport_parser_accepts_exact_n8n_2362_framing(self) -> None:
         parser = load_module("wf23_transport_parser", RUNNER / "parse_n8n_redacted_wrapper_output.py")
         fixture = json.loads(DATA_TABLE_OUTPUT_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
         self.assertEqual(parser.parse_data_table(fixture), "0" * 64)
@@ -639,7 +1028,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "EXACT_ONE_REDACTED_RECEIPT_REQUIRED"):
             parser.parse_data_table(fixture + receipt + "\n")
         with self.assertRaisesRegex(ValueError, "DATA_TABLE_DIGEST_RECEIPT_CONTRACT_MISMATCH"):
-            parser.parse_data_table(fixture.replace('"finance_tables":15', '"finance_tables":14'))
+            parser.parse_data_table(fixture.replace('"finance_tables":4', '"finance_tables":3'))
 
         adversarial = {
             "boolean schema version": fixture.replace('"schema_version":1', '"schema_version":true'),
@@ -771,7 +1160,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "wf23_execution_count",
             "wf23_history_count",
             '[[ "$(wf23_execution_count)" == "0" ]] || return 1',
-            "docker compose restart n8n",
+            'docker restart "${n8n_container}"',
             "Non-n8n service changed during restart",
             "metadata_before",
             "metadata_after_first",
@@ -794,14 +1183,31 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "FINANCE_WF23_TRANSPORT_PROBE_ACK=READ_ONLY_DIRECT_EXECUTE_INSTANCE",
             "n8n-cli-wf23-direct-transport-probe.cjs",
             "WF23 direct execution transport probe failed before metadata/provider access",
-            'internal_runner_broker_port="15679"',
-            "internal_runner_port_preflight",
-            "WF23 dedicated internal task-runner broker port unavailable",
-            'N8N_RUNNERS_BROKER_PORT="${internal_runner_broker_port}"',
-            "N8N_RUNNERS_BROKER_LISTEN_ADDRESS=127.0.0.1",
-            'server.listen(port,"127.0.0.1"',
+            'readonly recovery_receipt="${FINANCE_N8N_RECOVERY_RECEIPT:-}"',
+            "postgres_container_from_recovery_receipt",
+            'receipt.get("postgres", {}).get("container_id")',
+            "Recovered Postgres readiness failed",
+            "pg_isready",
+            "current_database()",
+            "task_runner_control_preflight",
+            "N8N_RUNNERS_MODE !== \"external\"",
+            "N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== \"0.0.0.0\"",
+            "http://127.0.0.1:5679/healthz",
+            '"${task_runners_container}" node -e',
+            "http://127.0.0.1:5680/healthz",
+            "Canonical Global/Shared folder hierarchy required",
+            'global_folder_id="f1000000-0000-4000-8000-000000000190"',
             '"${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"',
             "/dev/shm/",
+            'readonly expected_project="${FINANCE_N8N_COMPOSE_PROJECT:-}"',
+            'readonly compose_file_input="${FINANCE_N8N_COMPOSE_FILE:-}"',
+            'readonly env_file="${FINANCE_N8N_DEPLOYMENT_ENV_FILE:-}"',
+            'readonly receipt_root="${FINANCE_N8N_RECEIPT_DIR:-}"',
+            "Mode-0600 deployed runtime environment required",
+            "docker exec -i \"${n8n_container}\" sh -c",
+            "docker exec \"${n8n_container}\" n8n import:workflow",
+            'docker restart "${n8n_container}"',
+            'com.docker.compose.project',
         ):
             self.assertIn(marker, runner)
         for forbidden in (
@@ -815,20 +1221,31 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "eSnL069pIlzjFj4B",
             "node - execute --id=",
             "N8N_RUNNERS_BROKER_PORT=5679",
+            "N8N_RUNNERS_BROKER_PORT=15679",
+            "N8N_RUNNERS_MODE=internal",
+            "15679",
+            "compose.disposable.yaml",
+            "/opt/disposable/",
+            "verify-image-lock.sh",
+            "FINANCE_N8N_IMAGE_LOCK",
+            "docker compose run",
+            "docker compose restart n8n",
         ):
             self.assertNotIn(forbidden, runner)
         transport_position = runner.index("direct_transport_probe ||")
-        runner_port_position = runner.index("internal_runner_port_preflight ||")
-        self.assertLess(transport_position, runner_port_position)
-        self.assertLess(runner_port_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
-        self.assertLess(runner_port_position, runner.index('metadata_before="$(read_metadata)"'))
-        self.assertLess(runner_port_position, runner.index('failure_stage="workflow_import"'))
+        runner_control_position = runner.index("task_runner_control_preflight ||")
+        self.assertLess(transport_position, runner_control_position)
+        self.assertLess(runner_control_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
+        self.assertLess(runner_control_position, runner.index('metadata_before="$(read_metadata)"'))
+        self.assertLess(runner_control_position, runner.index('failure_stage="workflow_import"'))
         self.assertLess(transport_position, runner.index('data_table_digest_before="$(data_table_digest)"'))
         self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
     def test_all_runner_sources_are_syntactically_valid(self) -> None:
-        subprocess.run(["bash", "-n", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")], check=True)
+        runner = RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh"
+        self.assertTrue(os.access(runner, os.X_OK))
+        subprocess.run(["bash", "-n", str(runner)], check=True)
         for source in RUNNER.glob("*.py"):
             subprocess.run([sys.executable, "-m", "py_compile", str(source)], check=True)
         for source in RUNNER.glob("*.cjs"):
