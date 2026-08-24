@@ -4,7 +4,12 @@ if (process.env.FINANCE_DATA_TABLE_DIGEST_ACK !== 'READ_ONLY_IN_MEMORY') {
   throw new Error('FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY is required');
 }
 const projectId = process.env.N8N_FINANCE_PROJECT_ID;
-if (projectId !== 'gT5rxq26L0PoNUWX') throw new Error('EXACT_FINANCE_PROJECT_ID_REQUIRED');
+if (typeof projectId !== 'string' || projectId.length === 0) {
+  throw new Error('N8N_FINANCE_PROJECT_ID_REQUIRED');
+}
+if (!/^[A-Za-z0-9_-]{8,64}$/.test(projectId)) {
+  throw new Error('N8N_FINANCE_PROJECT_ID_INVALID');
+}
 
 const crypto = require('node:crypto');
 const path = require('node:path');
