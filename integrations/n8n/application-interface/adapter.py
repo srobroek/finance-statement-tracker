@@ -26,6 +26,7 @@ SOURCE_FILES = {
     "onedrive_setup": Path(
         "integrations/n8n/setup-workflows/22-onedrive-finance-evidence-root-setup.json"
     ),
+    "credential_bindings": Path("integrations/n8n/credential-bindings.json"),
 }
 
 
@@ -83,6 +84,53 @@ def _target_tables(finance_root: Path) -> list[dict[str, str]]:
     return [{"name": name} for name in targets]
 
 
+def _credential_manifest(finance_root: Path) -> dict[str, object]:
+    """Project the checked-in credential identities into the staged manifest."""
+
+    source_manifest = _load(finance_root / "application-manifest.json")
+    credentials = source_manifest.get("credentials")
+    contract_path = finance_root / "credential-bindings.json"
+    if not isinstance(credentials, dict):
+        raise ValueError("finance credential manifest is invalid")
+    if set(credentials) != {"placeholders", "binding_contract", "values_included", "forbidden_fields"}:
+        raise ValueError("finance credential manifest is invalid")
+    binding_contract = credentials.get("binding_contract")
+    if not isinstance(binding_contract, dict) or set(binding_contract) != {"path", "sha256"}:
+        raise ValueError("finance credential binding declaration is invalid")
+    if binding_contract["path"] != "integrations/n8n/credential-bindings.json":
+        raise ValueError("finance credential binding declaration path changed")
+    if binding_contract["sha256"] != _sha256(contract_path):
+        raise ValueError("finance credential binding declaration is stale")
+    contract = _load(contract_path)
+    contract_bindings = contract.get("bindings") if isinstance(contract, dict) else None
+    placeholders = credentials.get("placeholders")
+    if not isinstance(contract_bindings, list) or not isinstance(placeholders, list):
+        raise ValueError("finance credential binding identities are invalid")
+    expected_types = {
+        row.get("placeholder"): row.get("credential_type")
+        for row in contract_bindings
+        if isinstance(row, dict)
+    }
+    declared_types = {
+        row.get("binding"): row.get("type")
+        for row in placeholders
+        if isinstance(row, dict)
+    }
+    if expected_types != declared_types or len(expected_types) != len(contract_bindings):
+        raise ValueError("finance credential binding identities are out of sync")
+    if credentials.get("values_included") is not False:
+        raise ValueError("finance credential values are forbidden")
+    return {
+        "placeholders": placeholders,
+        "binding_contract": {
+            "path": "credential-bindings.json",
+            "sha256": _sha256(contract_path),
+        },
+        "values_included": False,
+        "forbidden_fields": credentials["forbidden_fields"],
+    }
+
+
 def stage_application(source_root: Path, destination: Path, source_commit: str) -> Path:
     """Copy finance inputs and emit a generic n8n manifest at ``destination``.
 
@@ -130,6 +178,8 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
         if not source.is_file() or source.is_symlink() or _sha256(source) != expected_hash:
             raise ValueError(f"finance source workflow hash mismatch: {filename}")
 
+    credentials = _credential_manifest(finance_root)
+
     for workflow in workflows:
         _copy_regular(workflow, destination / "workflows" / workflow.name)
     for key, relative_path in SOURCE_FILES.items():
@@ -139,6 +189,7 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
             "tables": "bootstrap/data-tables.json",
             "fixtures": "fixtures/fixture-manifest.json",
             "onedrive_setup": "fixtures/onedrive-root-setup.json",
+            "credential_bindings": "credential-bindings.json",
         }[key])
 
     (destination / "bootstrap" / "seed.sql").write_text(
@@ -168,6 +219,7 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
             "tables": [{"name": row["name"]} for row in tables],
         },
         "fixtures": {"directory": "fixtures", "manifest": "fixtures/fixture-manifest.json"},
+        "credentials": credentials,
         "route": {
             "path": MCP_ROUTE,
             "edge_auth": "CLOUDFLARE_ACCESS_SERVICE_AUTH",
