@@ -41,7 +41,7 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_PUSH_CONNECTION_FAILED', 'WF23_PUSH_EXECUTION_FAILED',
   'WF23_TERMINAL_RESULT_NOT_CAPTURED', 'WF23_RAW_OUTPUT_INVALID',
   'WF23_REDACTED_RECEIPT_NOT_CAPTURED', 'WF23_N8N_REQUESTED_EARLY_EXIT',
-  'WF23_TIMEOUT_COMMAND_RUN', 'WF23_EXECUTION_RECONCILIATION_FAILED',
+  'WF23_TIMEOUT_COMMAND_RUN',
 ]);
 const SUCCESS_PREFIX = 'transient WF23 execution verified:';
 const FAILURE_PREFIX = 'transient WF23 execution failed:';
@@ -279,20 +279,28 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
   const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
   const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
   const deadline = Date.now() + timeoutMs;
+  const observeTerminal = async (requestTimeoutMs) => {
+    try {
+      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, requestTimeoutMs);
+      return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
+    } catch {
+      return false;
+    }
+  };
   try {
     const stopResponse = await fetchWithin(fetchImpl, stopUrl, { method: 'POST', headers }, Math.max(1, deadline - Date.now()));
     if (stopResponse?.ok) return true;
   } catch {}
   while (Date.now() < deadline) {
-    try {
-      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, deadline - Date.now()));
-      if (response?.ok && executionIsTerminal(await readResponseBody(response, Math.max(1, deadline - Date.now())))) return true;
-    } catch {}
+    if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
     await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
   }
-  return false;
+  while (true) {
+    if (await observeTerminal(Math.max(1, timeoutMs))) return true;
+    await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
+  }
 }
 
 async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch, random = crypto.randomBytes,
@@ -410,23 +418,14 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     return await resultPromise;
   } finally {
     clearTimeout(timer);
-    let reconciliationError;
     try {
       if (failureError && runRequest) {
         try { await awaitWithin(runRequest, reconcileTimeoutMs); } catch {}
-        if (executionId) {
-          const reconciled = await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
-          if (!reconciled) {
-            reconciliationError = Object.assign(new Error('WF23_EXECUTION_RECONCILIATION_FAILED'), {
-              code: 'WF23_EXECUTION_RECONCILIATION_FAILED',
-            });
-          }
-        }
+        if (executionId) await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
       }
     } finally {
       if (typeof socket.close === 'function') socket.close();
     }
-    if (reconciliationError) throw reconciliationError;
   }
 }
 

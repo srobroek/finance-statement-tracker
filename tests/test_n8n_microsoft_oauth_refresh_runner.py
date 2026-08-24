@@ -821,26 +821,27 @@ sys.exit(0)
         self.assertEqual(observed["calls"][2]["options"]["headers"]["Cookie"], "n8n-auth=secret-token")
         self.assertNotIn("secret-token", completed.stderr)
 
-    def test_local_transport_reconciliation_failure_is_not_ignored(self) -> None:
+    def test_local_transport_reconciliation_waits_for_terminal_after_stop_failure(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
-            f"const shim=require({json.dumps(str(shim))});let socket;let socketClosed=false;const calls=[];"
+            f"const shim=require({json.dumps(str(shim))});let socket;let socketClosed=false;let statusReads=0;const calls=[];"
             "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
             "on(name,handler){(this.handlers[name]??=[]).push(handler)}emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){socketClosed=true}}"
             "const fetchImpl=async(url,options)=>{calls.push({url,options});"
             "if(url.endsWith('/run'))return {ok:true,json:async()=>({data:{executionId:'123'}})};"
             "if(url.endsWith('/stop'))return {ok:false};"
-            "if(url.endsWith('/123'))return {ok:true,json:async()=>({status:'running',finished:false})};"
+            "if(url.endsWith('/123'))return {ok:true,json:async()=>statusReads++===0?({status:'running',finished:false}):({status:'canceled',finished:true})};"
             "throw new Error('unexpected request')};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:30})"
-            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls,socketClosed})))"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({code:error.code,calls,socketClosed,statusReads})))"
         )
         completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         observed = json.loads(completed.stdout)
-        self.assertEqual(observed["code"], "WF23_EXECUTION_RECONCILIATION_FAILED")
+        self.assertEqual(observed["code"], "WF23_TIMEOUT_COMMAND_RUN")
         self.assertEqual(observed["calls"][1]["options"]["method"], "POST")
         self.assertTrue(observed["calls"][1]["url"].endswith("/rest/executions/123/stop"))
-        self.assertGreaterEqual(len(observed["calls"]), 3)
+        self.assertGreaterEqual(observed["statusReads"], 2)
+        self.assertGreaterEqual(len(observed["calls"]), 4)
         self.assertTrue(all(call["options"]["method"] == "GET" for call in observed["calls"][2:]))
         self.assertTrue(observed["socketClosed"])
         self.assertNotIn("secret-token", completed.stderr)
