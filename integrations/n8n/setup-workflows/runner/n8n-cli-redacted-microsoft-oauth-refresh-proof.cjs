@@ -1,7 +1,17 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 const WORKFLOW_ID = '10000000-0000-4000-8000-000000000023';
+const TRIGGER_NODE = 'Run Reviewed OAuth Proof';
 const TERMINAL_NODE = 'Emit Redacted OAuth Proof Receipt';
+const AUTH_COOKIE = 'n8n-auth';
+const LOCAL_ORIGIN = 'http://127.0.0.1:5678';
+const LOCAL_REST_ORIGIN = 'http://127.0.0.1:5678';
+const WATCHDOG_TIMEOUT_MS = 120_000;
+const EXECUTION_RECONCILIATION_TIMEOUT_MS = 5_000;
+const EXECUTION_POLL_INTERVAL_MS = 100;
+const TERMINAL_EXECUTION_STATUSES = new Set(['success', 'error', 'canceled', 'cancelled', 'crashed', 'failed']);
 const EXPECTED_KEYS = new Set([
   'schema_version', 'status', 'execution_id', 'outlook_read_succeeded',
   'outlook_items_observed', 'outlook_max_messages', 'outlook_server_filter_applied',
@@ -10,27 +20,12 @@ const EXPECTED_KEYS = new Set([
   'file_fields_recorded', 'credential_values_recorded', 'token_values_recorded',
   'production_workflows_activated', 'actual_writes', 'cashback_writes', 'verified_at',
 ]);
-const WATCHDOG_TIMEOUT_MS = 120_000;
-const WATCHDOG_FINALIZE_GRACE_MS = 10_000;
-const WATCHDOG_STAGES = Object.freeze([
-  'CONFIG_LOAD',
-  'MODULE_LOAD',
-  'COMMAND_INIT',
-  'COMMAND_RUN',
-  'RAW_CAPTURE',
-  'FINALIZE',
-]);
-const TIMEOUT_FAILURE_CODES = new Set(WATCHDOG_STAGES.map((stage) => `WF23_TIMEOUT_${stage}`));
 const SAFE_FAILURE_CODES = new Set([
-  'WF23_EXECUTION_NOT_FINISHED_SUCCESS',
-  'WF23_LAST_NODE_MISMATCH',
-  'WF23_TERMINAL_RUN_INVALID',
-  'WF23_EXPECTED_ONE_TERMINAL_ITEM',
-  'WF23_TERMINAL_RESULT_INVALID',
-  'WF23_TERMINAL_RESULT_KEYS_MISMATCH',
-  'WF23_TERMINAL_STATUS_MISMATCH',
-  'WF23_EXECUTION_ID_INVALID',
-  'WF23_PROVIDER_READ_CONTRACT_MISMATCH',
+  'WF23_EXECUTION_NOT_FINISHED_SUCCESS', 'WF23_LAST_NODE_MISMATCH',
+  'WF23_TERMINAL_RUN_INVALID', 'WF23_EXPECTED_ONE_TERMINAL_ITEM',
+  'WF23_TERMINAL_RESULT_INVALID', 'WF23_TERMINAL_RESULT_KEYS_MISMATCH',
+  'WF23_TERMINAL_STATUS_MISMATCH', 'WF23_EXECUTION_ID_INVALID',
+  'WF23_EXECUTION_ID_MISMATCH', 'WF23_PROVIDER_READ_CONTRACT_MISMATCH',
   'WF23_TERMINAL_RESULT_MISMATCH_PROVIDER_WRITES',
   'WF23_TERMINAL_RESULT_MISMATCH_MESSAGE_FIELDS_RECORDED',
   'WF23_TERMINAL_RESULT_MISMATCH_FILE_FIELDS_RECORDED',
@@ -39,25 +34,17 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_TERMINAL_RESULT_MISMATCH_PRODUCTION_WORKFLOWS_ACTIVATED',
   'WF23_TERMINAL_RESULT_MISMATCH_ACTUAL_WRITES',
   'WF23_TERMINAL_RESULT_MISMATCH_CASHBACK_WRITES',
-  'WF23_TIMESTAMP_CONTRACT_MISMATCH',
-  'WF23_RAW_OUTPUT_INVALID',
-  'WF23_MULTIPLE_RAW_OUTPUTS',
-  'WF23_REDACTED_RECEIPT_NOT_CAPTURED',
-  'WF23_N8N_REQUESTED_EARLY_EXIT',
-  'WF23_DIRECT_LIFECYCLE_ORDER_INVALID',
-  'WF23_WATCHDOG_STAGE_INVALID',
-  ...TIMEOUT_FAILURE_CODES,
+  'WF23_TIMESTAMP_CONTRACT_MISMATCH', 'WF23_AUTH_OWNER_COUNT', 'WF23_AUTH_OWNER_INVALID',
+  'WF23_AUTH_SECRET_COUNT', 'WF23_AUTH_MFA_REQUIRED',
+  'WF23_AUTH_SECRET_INVALID', 'WF23_AUTH_READ_FAILED',
+  'WF23_REST_RUN_FAILED', 'WF23_REST_RESPONSE_INVALID',
+  'WF23_PUSH_CONNECTION_FAILED', 'WF23_PUSH_EXECUTION_FAILED',
+  'WF23_TERMINAL_RESULT_NOT_CAPTURED', 'WF23_RAW_OUTPUT_INVALID',
+  'WF23_REDACTED_RECEIPT_NOT_CAPTURED', 'WF23_N8N_REQUESTED_EARLY_EXIT',
+  'WF23_TIMEOUT_COMMAND_RUN',
 ]);
 const SUCCESS_PREFIX = 'transient WF23 execution verified:';
 const FAILURE_PREFIX = 'transient WF23 execution failed:';
-const N8N_CONFIG_ENTRYPOINT = './dist/config';
-const DIRECT_LIFECYCLE_ORDER = Object.freeze([
-  'config-loaded',
-  'command-loaded',
-  'modules-loaded',
-  'execute-resolved',
-  'execute-initialized',
-]);
 
 function fail(code) {
   const error = new Error(code);
@@ -134,71 +121,332 @@ function terminalLine(error, receipt) {
   })}\n`;
 }
 
-function directLifecycleGate() {
-  let index = 0;
-  return function advance(stage) {
-    if (stage !== DIRECT_LIFECYCLE_ORDER[index]) fail('WF23_DIRECT_LIFECYCLE_ORDER_INVALID');
-    index += 1;
-    return index;
-  };
-}
-
-function createStageWatchdog({
-  timeoutMs = WATCHDOG_TIMEOUT_MS,
-  setTimer = setTimeout,
-  clearTimer = clearTimeout,
-  onTimeout,
-} = {}) {
-  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || typeof setTimer !== 'function' ||
-      typeof clearTimer !== 'function' || typeof onTimeout !== 'function') {
-    fail('WF23_WATCHDOG_STAGE_INVALID');
-  }
-  let active = true;
-  let generation = 0;
-  let timer = null;
-
-  function arm(stage) {
-    if (!WATCHDOG_STAGES.includes(stage) || !active) fail('WF23_WATCHDOG_STAGE_INVALID');
-    generation += 1;
-    const armedGeneration = generation;
-    if (timer !== null) clearTimer(timer);
-    timer = setTimer(() => {
-      if (!active || armedGeneration !== generation) return;
-      active = false;
-      timer = null;
-      onTimeout(`WF23_TIMEOUT_${stage}`);
-    }, timeoutMs);
-    return stage;
-  }
-
-  function cancel() {
-    if (!active) return false;
-    active = false;
-    generation += 1;
-    if (timer !== null) clearTimer(timer);
-    timer = null;
-    return true;
-  }
-
-  return { arm, cancel };
-}
-
 function isDirectEntrypoint(mainModule, currentModule, argv = process.argv) {
   if (mainModule != null && currentModule != null && mainModule === currentModule) return true;
   const filename = typeof currentModule?.filename === 'string'
     ? currentModule.filename.replaceAll('\\', '/')
     : '';
-  return mainModule == null
-    && Array.isArray(argv)
-    && argv.length === 2
-    && argv[1] === '-'
-    && filename.endsWith('/[stdin]');
+  return mainModule == null && Array.isArray(argv) && argv.length === 2 && argv[1] === '-' && filename.endsWith('/[stdin]');
+}
+
+function createJWTHash({ email, password, mfaEnabled, mfaSecret }) {
+  const payload = [email, password];
+  if (mfaEnabled && mfaSecret) payload.push(mfaSecret.substring(0, 3));
+  return crypto.createHash('sha256').update(payload.join(':')).digest('base64').substring(0, 10);
+}
+
+function installedModule(name) {
+  const { createRequire } = require('node:module');
+  const packageJson = require.resolve('n8n/package.json', { paths: ['/usr/local/lib/node_modules'] });
+  return createRequire(packageJson)(name);
+}
+
+function databaseOptions(env) {
+  return {
+    host: env.DB_POSTGRESDB_HOST,
+    port: Number(env.DB_POSTGRESDB_PORT || 5432),
+    database: env.DB_POSTGRESDB_DATABASE,
+    user: env.DB_POSTGRESDB_USER,
+    password: env.DB_POSTGRESDB_PASSWORD,
+    max: 1,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 1_000,
+  };
+}
+
+async function readAuthContext({ pgModule, env = process.env }) {
+  const pool = new pgModule.Pool(databaseOptions(env));
+  try {
+    const ownerResult = await pool.query(
+      'SELECT id, email, password, "mfaEnabled", "mfaSecret" FROM "user" WHERE "roleSlug" = $1 AND disabled = false',
+      ['global:owner'],
+    );
+    if (!Array.isArray(ownerResult.rows) || ownerResult.rows.length !== 1) fail('WF23_AUTH_OWNER_COUNT');
+    const owner = ownerResult.rows[0];
+    if (typeof owner.id !== 'string' || typeof owner.email !== 'string' || typeof owner.password !== 'string') {
+      fail('WF23_AUTH_OWNER_INVALID');
+    }
+    if (owner.mfaEnabled === true) fail('WF23_AUTH_MFA_REQUIRED');
+    let jwtSecret = env.N8N_USER_MANAGEMENT_JWT_SECRET;
+    if (!jwtSecret) {
+      const secretResult = await pool.query(
+        'SELECT value FROM deployment_key WHERE type = $1 AND status = $2',
+        ['signing.jwt', 'active'],
+      );
+      if (!Array.isArray(secretResult.rows) || secretResult.rows.length !== 1) fail('WF23_AUTH_SECRET_COUNT');
+      jwtSecret = secretResult.rows[0]?.value;
+    }
+    if (typeof jwtSecret !== 'string' || jwtSecret.length === 0) fail('WF23_AUTH_SECRET_INVALID');
+    return { id: owner.id, hash: createJWTHash(owner), jwtSecret };
+  } catch (error) {
+    if (error?.code && SAFE_FAILURE_CODES.has(error.code)) throw error;
+    fail('WF23_AUTH_READ_FAILED');
+  } finally {
+    await pool.end().catch(() => {});
+  }
+}
+
+function signAuthToken({ id, hash, jwtSecret }, jwtModule) {
+  return jwtModule.sign({ id, hash, usedMfa: false }, jwtSecret, { algorithm: 'HS256', expiresIn: 300 });
+}
+
+function wrappedExecutionId(body) {
+  if (!body || typeof body !== 'object' || !body.data || typeof body.data !== 'object') fail('WF23_REST_RESPONSE_INVALID');
+  const value = body.data.executionId;
+  if ((typeof value !== 'string' && typeof value !== 'number') || !/^[0-9]+$/.test(String(value))) fail('WF23_REST_RESPONSE_INVALID');
+  return String(value);
+}
+
+function frameText(value) {
+  const data = value?.data ?? value;
+  if (typeof data === 'string') return data;
+  if (Buffer.isBuffer(data)) return data.toString('utf8');
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
+  return null;
+}
+
+function framePayload(value) {
+  const text = frameText(value);
+  if (text === null) return null;
+  try {
+    const payload = JSON.parse(text);
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function terminalRunPayload(task) {
+  return {
+    finished: true,
+    status: 'success',
+    data: { resultData: { lastNodeExecuted: TERMINAL_NODE, runData: { [TERMINAL_NODE]: [task] } } },
+  };
+}
+
+function executionStatus(body) {
+  const candidates = [body, body?.data, body?.data?.execution];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate.status === 'string') return candidate.status.toLowerCase();
+  }
+  return null;
+}
+
+function executionIsTerminal(body) {
+  const status = executionStatus(body);
+  if (status && TERMINAL_EXECUTION_STATUSES.has(status)) return true;
+  return !status && Boolean(body?.finished === true || body?.data?.finished === true);
+}
+
+async function awaitWithin(promise, timeoutMs) {
+  if (timeoutMs <= 0) throw new Error('WF23_EXECUTION_RECONCILIATION_TIMEOUT');
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('WF23_EXECUTION_RECONCILIATION_TIMEOUT')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readResponseBody(response, timeoutMs) {
+  if (typeof response?.json !== 'function') return null;
+  try {
+    return await awaitWithin(Promise.resolve(response.json()), timeoutMs);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWithin(fetchImpl, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const request = Promise.resolve(fetchImpl(url, { ...options, signal: controller.signal }));
+  try {
+    return await awaitWithin(request, timeoutMs);
+  } catch (error) {
+    controller.abort();
+    throw error;
+  }
+}
+
+async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
+  if (typeof fetchImpl !== 'function' || !executionId) return false;
+  const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
+  const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
+  const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
+  const deadline = Date.now() + timeoutMs;
+  const observeTerminal = async (requestTimeoutMs) => {
+    try {
+      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, requestTimeoutMs);
+      return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
+    } catch {
+      return false;
+    }
+  };
+  try {
+    const stopResponse = await fetchWithin(fetchImpl, stopUrl, { method: 'POST', headers }, Math.max(1, deadline - Date.now()));
+    if (stopResponse?.ok) return true;
+  } catch {}
+  while (Date.now() < deadline) {
+    if (await observeTerminal(Math.max(1, deadline - Date.now()))) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(EXECUTION_POLL_INTERVAL_MS, remaining)));
+  }
+  while (true) {
+    if (await observeTerminal(Math.max(1, timeoutMs))) return true;
+    await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
+  }
+}
+
+async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch, random = crypto.randomBytes,
+  timeoutMs = WATCHDOG_TIMEOUT_MS, workflowId = WORKFLOW_ID, triggerNode = TRIGGER_NODE,
+  reconcileTimeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
+  if (typeof fetchImpl !== 'function') fail('WF23_REST_RUN_FAILED');
+  const pushRef = random(12).toString('hex');
+  const WebSocket = wsModule.WebSocket || wsModule;
+  const socket = new WebSocket(
+    `ws://127.0.0.1:5678/rest/push?pushRef=${encodeURIComponent(pushRef)}`,
+    { headers: { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` } },
+  );
+  let timer;
+  let settled = false;
+  let executionId;
+  let finishedStatus;
+  let terminalTask;
+  let failureError;
+  let runRequest;
+  const pendingFinished = new Map();
+  const pendingTerminal = new Map();
+  let resolveRun;
+  let rejectRun;
+  const resultPromise = new Promise((resolve, reject) => { resolveRun = resolve; rejectRun = reject; });
+  const failRun = (error) => {
+    if (!settled) {
+      settled = true;
+      failureError = error;
+      rejectRun(error);
+    }
+  };
+  const maybeFinish = () => {
+    if (settled || !executionId || finishedStatus !== 'success' || !terminalTask) return;
+    try {
+      const receipt = validateIRun(terminalRunPayload(terminalTask));
+      if (receipt.execution_id !== executionId) fail('WF23_EXECUTION_ID_MISMATCH');
+      settled = true;
+      resolveRun(receipt);
+    } catch (error) {
+      failRun(error);
+    }
+  };
+  const onMessage = (message) => {
+    const frame = framePayload(message);
+    if (!frame || settled) return;
+    const data = frame.data;
+    if (!data || typeof data !== 'object') return;
+    const frameExecutionId = typeof data.executionId === 'string' || typeof data.executionId === 'number'
+      ? String(data.executionId)
+      : null;
+    if (!frameExecutionId) return;
+    if (frame.type === 'nodeExecuteAfterData' && data.nodeName === TERMINAL_NODE &&
+        data.data && typeof data.data === 'object') {
+      if (executionId && frameExecutionId === executionId) {
+        terminalTask = data.data;
+        maybeFinish();
+      } else if (!executionId) {
+        pendingTerminal.set(frameExecutionId, data.data);
+      }
+      return;
+    }
+    if (frame.type === 'executionFinished' && (!data.workflowId || data.workflowId === workflowId)) {
+      if (data.status !== 'success') {
+        if (executionId && frameExecutionId === executionId) {
+          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+        } else if (!executionId) {
+          pendingFinished.set(frameExecutionId, data.status);
+        }
+        return;
+      }
+      if (executionId && frameExecutionId === executionId) {
+        finishedStatus = data.status;
+        maybeFinish();
+      } else if (!executionId) {
+        pendingFinished.set(frameExecutionId, data.status);
+      }
+    }
+  };
+  const onOpen = async () => {
+    runRequest = (async () => {
+      try {
+        const response = await fetchImpl(`${LOCAL_REST_ORIGIN}/rest/workflows/${encodeURIComponent(workflowId)}/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', Origin: LOCAL_ORIGIN,
+            Cookie: `${AUTH_COOKIE}=${token}`, 'push-ref': pushRef,
+          },
+          body: JSON.stringify({ triggerToStartFrom: { name: triggerNode } }),
+        });
+        if (!response?.ok) fail('WF23_REST_RUN_FAILED');
+        executionId = wrappedExecutionId(await response.json());
+        terminalTask = pendingTerminal.get(executionId);
+        finishedStatus = pendingFinished.get(executionId);
+        if (finishedStatus && finishedStatus !== 'success') {
+          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          return;
+        }
+        maybeFinish();
+      } catch (error) {
+        failRun(error?.code ? error : Object.assign(new Error('WF23_REST_RUN_FAILED'), { code: 'WF23_REST_RUN_FAILED' }));
+      }
+    })();
+    await runRequest;
+  };
+  const onClose = () => {
+    if (!settled) failRun(Object.assign(new Error('WF23_PUSH_CONNECTION_FAILED'), { code: 'WF23_PUSH_CONNECTION_FAILED' }));
+  };
+  const onError = () => failRun(Object.assign(new Error('WF23_PUSH_CONNECTION_FAILED'), { code: 'WF23_PUSH_CONNECTION_FAILED' }));
+  socket.on('message', onMessage);
+  socket.on('open', onOpen);
+  socket.on('close', onClose);
+  socket.on('error', onError);
+  timer = setTimeout(() => failRun(Object.assign(new Error('WF23_TIMEOUT_COMMAND_RUN'), { code: 'WF23_TIMEOUT_COMMAND_RUN' })), timeoutMs);
+  try {
+    return await resultPromise;
+  } finally {
+    clearTimeout(timer);
+    try {
+      if (failureError && runRequest) {
+        try { await awaitWithin(runRequest, reconcileTimeoutMs); } catch {}
+        if (executionId) await reconcileExecution({ token, executionId, fetchImpl, timeoutMs: reconcileTimeoutMs });
+      }
+    } finally {
+      if (typeof socket.close === 'function') socket.close();
+    }
+  }
+}
+
+async function executeLocalProof() {
+  const pgModule = installedModule('pg');
+  const jwtModule = installedModule('jsonwebtoken');
+  const wsModule = installedModule('ws');
+  const auth = await readAuthContext({ pgModule });
+  let token = signAuthToken(auth, jwtModule);
+  try {
+    return await runLocalWorkflow({ token, wsModule });
+  } finally {
+    token = null;
+  }
 }
 
 module.exports = {
-  validateIRun, safeFailureCode, terminalLine, directLifecycleGate, createStageWatchdog,
-  isDirectEntrypoint, DIRECT_LIFECYCLE_ORDER, N8N_CONFIG_ENTRYPOINT, WATCHDOG_STAGES,
-  WATCHDOG_TIMEOUT_MS, WORKFLOW_ID, TERMINAL_NODE,
+  validateIRun, safeFailureCode, terminalLine, isDirectEntrypoint,
+  createJWTHash, databaseOptions, readAuthContext, signAuthToken,
+  wrappedExecutionId, framePayload, terminalRunPayload, runLocalWorkflow,
+  WATCHDOG_TIMEOUT_MS, WORKFLOW_ID, TRIGGER_NODE, TERMINAL_NODE,
 };
 
 if (isDirectEntrypoint(require.main, module)) {
@@ -220,124 +468,11 @@ if (isDirectEntrypoint(require.main, module)) {
   process.stderr.write = () => true;
   console.log = () => {};
   console.error = () => {};
-
-  let emitted = false;
-  const path = require('node:path');
-  const { createRequire } = require('node:module');
-  const n8nPackageJson = require.resolve('n8n/package.json', { paths: ['/usr/local/lib/node_modules'] });
-  const n8nRoot = path.dirname(n8nPackageJson);
-  process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
-  const n8nRequire = createRequire(n8nPackageJson);
-  const originalExit = process.exit.bind(process);
-
-  function fixedError(code) {
-    return Object.assign(new Error(code), { code });
-  }
-
-  async function executeDirectly() {
-    let command = null;
-    let receipt = null;
-    let terminalError = null;
-    let terminating = false;
-    let watchdog = null;
-    const advanceLifecycle = directLifecycleGate();
-
-    function writeTerminalOnce(error, validatedReceipt) {
-      if (emitted) return false;
-      emitted = true;
-      fs.writeSync(1, terminalLine(error, validatedReceipt));
-      return true;
-    }
-
-    async function terminateOnTimeout(code) {
-      if (terminating || emitted || !TIMEOUT_FAILURE_CODES.has(code)) return;
-      terminating = true;
-      receipt = null;
-      watchdog.cancel();
-      writeTerminalOnce(fixedError(code), null);
-
-      if (code !== 'WF23_TIMEOUT_FINALIZE' && command && typeof command.finally === 'function') {
-        const forcedExit = setTimeout(() => {
-          process.exit = originalExit;
-          originalExit(1);
-        }, WATCHDOG_FINALIZE_GRACE_MS);
-        try { await command.finally(fixedError(code)); } catch { /* fixed failure already emitted */ }
-        clearTimeout(forcedExit);
-      }
-      process.exit = originalExit;
-      originalExit(1);
-    }
-
-    watchdog = createStageWatchdog({
-      onTimeout: (code) => { void terminateOnTimeout(code); },
-    });
-    process.exit = () => { throw fixedError('WF23_N8N_REQUESTED_EARLY_EXIT'); };
-    watchdog.arm('CONFIG_LOAD');
-    try {
-      n8nRequire('source-map-support').install();
-      n8nRequire('reflect-metadata');
-      if (process.env.E2E_TESTS !== 'true') n8nRequire('dotenv').config({ quiet: true });
-      n8nRequire(N8N_CONFIG_ENTRYPOINT);
-      advanceLifecycle('config-loaded');
-      const { Container } = n8nRequire('@n8n/di');
-      const { Execute } = n8nRequire('./dist/commands/execute.js');
-      advanceLifecycle('command-loaded');
-      const { ModuleRegistry } = n8nRequire('@n8n/backend-common');
-      watchdog.arm('MODULE_LOAD');
-      await Container.get(ModuleRegistry).loadModules();
-      advanceLifecycle('modules-loaded');
-      command = Container.get(Execute);
-      advanceLifecycle('execute-resolved');
-      command.flags = { id: WORKFLOW_ID, rawOutput: true };
-      watchdog.arm('COMMAND_INIT');
-      await command.init();
-      advanceLifecycle('execute-initialized');
-
-      // Install instance-owned sinks only after normal initialization. This
-      // prevents provider/error text from reaching n8n's logger and avoids
-      // relying on dynamic-import command constructor identity.
-      command.logger = new Proxy({}, { get: () => () => undefined });
-      command.log = function captureRawIRunInMemory(message) {
-        watchdog.arm('RAW_CAPTURE');
-        if (receipt !== null) fail('WF23_MULTIPLE_RAW_OUTPUTS');
-        if (typeof message !== 'string' || Buffer.byteLength(message, 'utf8') > 16 * 1024 * 1024) {
-          fail('WF23_RAW_OUTPUT_INVALID');
-        }
-        let payload;
-        try { payload = JSON.parse(message); } catch { fail('WF23_RAW_OUTPUT_INVALID'); }
-        receipt = validateIRun(payload);
-        payload = null;
-        watchdog.arm('COMMAND_RUN');
-      };
-      watchdog.arm('COMMAND_RUN');
-      await command.run();
-      if (receipt === null) throw fixedError('WF23_REDACTED_RECEIPT_NOT_CAPTURED');
-    } catch (error) {
-      terminalError = error;
-    }
-
-    if (terminating) return;
-
-    if (command && typeof command.finally === 'function') {
-      const sanitizedError = terminalError ? fixedError(safeFailureCode(terminalError)) : undefined;
-      watchdog.arm('FINALIZE');
-      try {
-        await command.finally(sanitizedError);
-      } catch (error) {
-        if (!terminalError) terminalError = fixedError(safeFailureCode(error));
-      }
-    }
-    if (terminating) return;
-    watchdog.cancel();
-    process.exit = originalExit;
-    writeTerminalOnce(terminalError, receipt);
-    receipt = null;
-    originalExit(terminalError ? 1 : 0);
-  }
-
-  executeDirectly().catch(() => {
-    process.exit = originalExit;
-    if (!emitted) fs.writeSync(1, terminalLine(fixedError('WF23_REDACTED_EXECUTION_FAILED'), null));
-    originalExit(1);
+  executeLocalProof().then((receipt) => {
+    fs.writeSync(1, terminalLine(null, receipt));
+    process.exit(0);
+  }).catch((error) => {
+    fs.writeSync(1, terminalLine(error, null));
+    process.exit(1);
   });
 }

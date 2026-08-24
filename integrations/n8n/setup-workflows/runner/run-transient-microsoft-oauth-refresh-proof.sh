@@ -23,6 +23,7 @@ readonly folder_id="f1000000-0000-4000-8000-000000000191"
 readonly folder_name="Shared"
 readonly global_folder_id="f1000000-0000-4000-8000-000000000190"
 readonly preflight_mode="${FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT:-false}"
+readonly execution_timeout_seconds="${FINANCE_WF23_EXECUTION_TIMEOUT_SECONDS:-360}"
 readonly expected_finance_commit="${FINANCE_REPOSITORY_COMMIT:-}"
 readonly expected_orchestrator_commit="${ORCHESTRATOR_REPOSITORY_COMMIT:-}"
 readonly runner_dir="${finance_repo}/integrations/n8n/setup-workflows/runner"
@@ -34,6 +35,7 @@ readonly source_file="${finance_repo}/integrations/n8n/setup-workflows/23-micros
 [[ "${expected_finance_commit}" =~ ^[0-9a-f]{40}$ ]] || { echo "Exact finance commit required" >&2; exit 1; }
 [[ "${expected_orchestrator_commit}" =~ ^[0-9a-f]{40}$ ]] || { echo "Exact orchestrator commit required" >&2; exit 1; }
 [[ "${preflight_mode}" == "true" || "${preflight_mode}" == "false" ]] || { echo "FINANCE_MICROSOFT_OAUTH_PROOF_PREFLIGHT must be true or false" >&2; exit 1; }
+[[ "${execution_timeout_seconds}" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "FINANCE_WF23_EXECUTION_TIMEOUT_SECONDS must be numeric" >&2; exit 1; }
 [[ -d "${finance_repo}/.git" && -d "${stack_dir}/.git" ]] || { echo "Required source repositories are missing" >&2; exit 1; }
 [[ -f "${env_file}" && ! -L "${env_file}" && "$(stat -c '%a' "${env_file}")" == "600" ]] || { echo "Mode-0600 deployed runtime environment required" >&2; exit 1; }
 [[ -f "${source_file}" && ! -L "${source_file}" ]] || { echo "Regular WF23 source required" >&2; exit 1; }
@@ -157,12 +159,17 @@ data_table_digest() {
 
 execute_probe() {
   local raw command_status=0 timeout_code
-  raw="$(timeout --foreground --signal=TERM --kill-after=30s 360s docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
+  execution_terminality_observed=false
+  raw="$(timeout --foreground --signal=TERM --kill-after=30s "${execution_timeout_seconds}s" docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
   if [[ "${command_status}" == "0" ]]; then
-    printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" success
+    local parsed_success
+    parsed_success="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" success)" || return 1
+    execution_terminality_observed=true
+    printf '%s' "${parsed_success}"
     return
   fi
   timeout_code="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" timeout)" || return 1
+  execution_terminality_observed=true
   printf '%s' "${timeout_code}"
   return 124
 }
@@ -200,6 +207,7 @@ final_receipt="${receipt_root}/${run_id}.json"
 failure_receipt="${receipt_root}/${run_id}-failure.json"
 failure_stage="binding"; import_started=false; cleanup_verified=false; success=false
 execution_failure_code=""
+execution_terminality_observed=false
 workflow_boundary_restored=false; execution_rows_zero_verified=false; data_table_digest_restored=false
 
 remove_container_work_file() {
@@ -233,14 +241,23 @@ cleanup() {
   local status=$?; trap - EXIT; set +e
   remove_container_work_file
   if [[ "${success}" != "true" ]]; then
-    if [[ "${import_started}" == "true" ]]; then remove_transient_wf23 || status=1; else verify_clean_boundary || status=1; fi
+    if [[ "${import_started}" == "true" ]]; then
+      if [[ "${execution_terminality_observed}" == "true" ]]; then
+        remove_transient_wf23 || status=1
+      else
+        echo "WF23 execution terminality uncertain; retaining transient workflow" >&2
+        status=1
+      fi
+    else
+      verify_clean_boundary || status=1
+    fi
   fi
   if [[ "${success}" != "true" || "${status}" != "0" ]]; then
     python3 "${runner_dir}/build_microsoft_oauth_failure_receipt.py" "${failure_receipt}" "${run_id}" "${failure_stage}" "${cleanup_verified}" "${workflow_boundary_restored}" "${execution_rows_zero_verified}" "${data_table_digest_restored}" "${execution_failure_code}" || true
     echo "Transient WF23 proof failed; redacted failure receipt: ${failure_receipt}" >&2
   fi
   [[ "${run_root}" == /dev/shm/microsoft-oauth-* ]] && rm -rf -- "${run_root}"
-  unset outlook_credential_id onedrive_credential_id metadata_before metadata_after_first metadata_after_second execution_first execution_second execution_failure_code refresh_after_first refresh_summary
+  unset outlook_credential_id onedrive_credential_id metadata_before metadata_after_first metadata_after_second execution_first execution_second execution_failure_code execution_terminality_observed refresh_after_first refresh_summary
   exit "${status}"
 }
 trap cleanup EXIT
@@ -263,7 +280,9 @@ failure_stage="folder_placement"
 [[ "$(psql_scalar "select count(*) from workflow_entity where id='${workflow_id}' and nodes::text like '%BIND_%';")" == "0" && "$(wf23_execution_count)" == "0" ]] || { echo "WF23 binding/execution precheck failed" >&2; exit 1; }
 
 failure_stage="first_execution"
-execution_first="$(execute_probe)" || { retain_execution_timeout_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
+execution_first_file="${run_root}/first-execution-output"
+execute_probe >"${execution_first_file}" || { execution_first="$(<"${execution_first_file}")"; retain_execution_timeout_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
+execution_first="$(<"${execution_first_file}")"
 [[ "$(wf23_execution_count)" == "0" ]] || { echo "WF23 first IRun was persisted" >&2; exit 1; }
 metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata first post-read failed" >&2; exit 1; }
 refresh_after_first="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_first}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "First execution did not refresh both expired Microsoft tokens" >&2; exit 1; }
@@ -288,7 +307,9 @@ for service in "${services[@]}"; do
 done
 
 failure_stage="second_execution"
-execution_second="$(execute_probe)" || { retain_execution_timeout_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
+execution_second_file="${run_root}/second-execution-output"
+execute_probe >"${execution_second_file}" || { execution_second="$(<"${execution_second_file}")"; retain_execution_timeout_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
+execution_second="$(<"${execution_second_file}")"
 [[ "$(wf23_execution_count)" == "0" ]] || { echo "WF23 second IRun was persisted" >&2; exit 1; }
 metadata_after_second="$(read_metadata)" || { echo "Microsoft OAuth metadata second post-read failed" >&2; exit 1; }
 refresh_summary="$(printf '[%s,%s,%s]' "${metadata_before}" "${metadata_after_first}" "${metadata_after_second}" | python3 "${runner_dir}/validate_microsoft_oauth_refresh_evidence.py")" || { echo "Post-restart Microsoft token expiry validation failed" >&2; exit 1; }
