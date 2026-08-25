@@ -18,6 +18,11 @@ TIMEOUT_CODES = {
     "WF23_TIMEOUT_RAW_CAPTURE",
     "WF23_TIMEOUT_FINALIZE",
 }
+AUTH_FAILURE_CODES = {
+    "OUTLOOK_AUTH_REQUIRED",
+    "ONEDRIVE_AUTH_REQUIRED",
+}
+TERMINAL_FAILURE_CODES = TIMEOUT_CODES | AUTH_FAILURE_CODES
 
 
 def flag(value: str) -> bool:
@@ -38,7 +43,7 @@ def build_receipt(
     all_clean = workflow_boundary_restored and execution_rows_zero and data_table_digest_restored
     if cleanup_verified and not all_clean:
         raise ValueError("INVALID_CLEAN_BOUNDARY_ASSERTION")
-    if failure_code and failure_code not in TIMEOUT_CODES:
+    if failure_code and failure_code not in TERMINAL_FAILURE_CODES:
         raise ValueError("INVALID_FAILURE_CODE")
     return {
         "schema_version": 1,

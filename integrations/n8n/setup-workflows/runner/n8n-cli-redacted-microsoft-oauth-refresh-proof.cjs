@@ -12,6 +12,7 @@ const WATCHDOG_TIMEOUT_MS = 120_000;
 const EXECUTION_RECONCILIATION_TIMEOUT_MS = 5_000;
 const EXECUTION_POLL_INTERVAL_MS = 100;
 const TERMINAL_EXECUTION_STATUSES = new Set(['success', 'error', 'canceled', 'cancelled', 'crashed', 'failed']);
+const AUTH_FAILURE_CODES = new Set(['OUTLOOK_AUTH_REQUIRED', 'ONEDRIVE_AUTH_REQUIRED']);
 const EXPECTED_KEYS = new Set([
   'schema_version', 'status', 'execution_id', 'outlook_read_succeeded',
   'outlook_items_observed', 'outlook_max_messages', 'outlook_server_filter_applied',
@@ -37,6 +38,7 @@ const SAFE_FAILURE_CODES = new Set([
   'WF23_TIMESTAMP_CONTRACT_MISMATCH', 'WF23_AUTH_OWNER_COUNT', 'WF23_AUTH_OWNER_INVALID',
   'WF23_AUTH_SECRET_COUNT', 'WF23_AUTH_MFA_REQUIRED',
   'WF23_AUTH_SECRET_INVALID', 'WF23_AUTH_READ_FAILED',
+  'OUTLOOK_AUTH_REQUIRED', 'ONEDRIVE_AUTH_REQUIRED',
   'WF23_REST_RUN_FAILED', 'WF23_REST_RESPONSE_INVALID',
   'WF23_PUSH_CONNECTION_FAILED', 'WF23_PUSH_EXECUTION_FAILED',
   'WF23_TERMINAL_RESULT_NOT_CAPTURED', 'WF23_RAW_OUTPUT_INVALID',
@@ -108,6 +110,65 @@ function safeFailureCode(error) {
   return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
     ? code
     : 'WF23_REDACTED_EXECUTION_FAILED';
+}
+
+function resolveFlattedReference(table, value, seen = new Set(), depth = 0) {
+  if (!Array.isArray(table) || typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value) || depth > 32) {
+    return value;
+  }
+  const index = Number(value);
+  if (!Number.isSafeInteger(index) || index >= table.length || seen.has(index)) return value;
+  const nextSeen = new Set(seen);
+  nextSeen.add(index);
+  return resolveFlattedReference(table, table[index], nextSeen, depth + 1);
+}
+
+function redactedExecutionFailureCode(body) {
+  try {
+    const rawData = body?.data;
+    const table = typeof rawData === 'string' ? JSON.parse(rawData) : null;
+    const root = Array.isArray(table)
+      ? resolveFlattedReference(table, table[0])
+      : table ?? rawData;
+    const resolve = (value) => resolveFlattedReference(table, value);
+    const resultData = resolve(root?.resultData);
+    const topError = resolve(resultData?.error);
+    const topCode = resolve(topError?.code);
+    if (AUTH_FAILURE_CODES.has(topCode)) return topCode;
+    const runData = resolve(resultData?.runData);
+    if (runData && typeof runData === 'object' && !Array.isArray(runData)) {
+      for (const key of Object.keys(runData)) {
+        const runs = resolve(runData[key]);
+        if (!Array.isArray(runs)) continue;
+        for (const run of runs) {
+          const runError = resolve(resolve(run)?.error);
+          const code = resolve(runError?.code);
+          if (AUTH_FAILURE_CODES.has(code)) return code;
+        }
+      }
+    }
+  } catch {}
+  return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+}
+
+async function readRedactedExecutionFailureCode({ token, executionId, fetchImpl, timeoutMs }) {
+  if (typeof fetchImpl !== 'function' || !executionId) return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  try {
+    const response = await fetchWithin(
+      fetchImpl,
+      `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`,
+      { method: 'GET', headers: { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` } },
+      timeoutMs,
+    );
+    if (!response?.ok) return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+    return redactedExecutionFailureCode(await readResponseBody(response, timeoutMs));
+  } catch {
+    return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  }
+}
+
+function executionFailure(code) {
+  return Object.assign(new Error(code), { code });
 }
 
 function terminalLine(error, receipt) {
@@ -296,7 +357,10 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
   const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
   const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
   const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
-  const deadline = Date.now() + timeoutMs;
+  const operationTimeoutMs = Number.isFinite(timeoutMs)
+    ? Math.max(0, timeoutMs)
+    : EXECUTION_RECONCILIATION_TIMEOUT_MS;
+  const deadline = Date.now() + operationTimeoutMs;
   const observeTerminal = async (response, requestTimeoutMs) => {
     return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
   };
@@ -307,13 +371,8 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
     }
   } catch {}
   if (await pollExecution({ fetchImpl, executionUrl, headers, deadline, observe: observeTerminal })) return true;
-  while (true) {
-    try {
-      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, timeoutMs));
-      if (await observeTerminal(response, Math.max(1, timeoutMs))) return true;
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
-  }
+  const graceDeadline = Date.now() + Math.max(EXECUTION_POLL_INTERVAL_MS, operationTimeoutMs);
+  return pollExecution({ fetchImpl, executionUrl, headers, deadline: graceDeadline, observe: observeTerminal });
 }
 
 async function awaitExecutionRemoval({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {
@@ -348,6 +407,7 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
   let failureError;
   let runRequest;
   const pendingFinished = new Map();
+  const failureTasks = new Map();
   const pendingTerminal = new Map();
   let resolveRun;
   let rejectRun;
@@ -358,6 +418,16 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
       failureError = error;
       rejectRun(error);
     }
+  };
+  const failFromExecutionDetail = async (id) => {
+    let task = failureTasks.get(id);
+    if (!task) {
+      task = readRedactedExecutionFailureCode({
+        token, executionId: id, fetchImpl, timeoutMs: reconcileTimeoutMs,
+      }).then((code) => failRun(executionFailure(code)));
+      failureTasks.set(id, task);
+    }
+    await task;
   };
   const maybeFinish = () => {
     if (settled || !executionId || finishedStatus !== 'success' || !terminalTask) return;
@@ -392,9 +462,9 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     if (frame.type === 'executionFinished' && (!data.workflowId || data.workflowId === workflowId)) {
       if (data.status !== 'success') {
         if (executionId && frameExecutionId === executionId) {
-          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          void failFromExecutionDetail(executionId);
         } else if (!executionId) {
-          pendingFinished.set(frameExecutionId, data.status);
+          pendingFinished.set(frameExecutionId, { status: data.status });
         }
         return;
       }
@@ -402,7 +472,7 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
         finishedStatus = data.status;
         maybeFinish();
       } else if (!executionId) {
-        pendingFinished.set(frameExecutionId, data.status);
+        pendingFinished.set(frameExecutionId, { status: data.status, failureCode: null });
       }
     }
   };
@@ -420,9 +490,10 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
         if (!response?.ok) fail('WF23_REST_RUN_FAILED');
         executionId = wrappedExecutionId(await response.json());
         terminalTask = pendingTerminal.get(executionId);
-        finishedStatus = pendingFinished.get(executionId);
+        const pendingFinishedEvent = pendingFinished.get(executionId);
+        finishedStatus = pendingFinishedEvent?.status;
         if (finishedStatus && finishedStatus !== 'success') {
-          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          await failFromExecutionDetail(executionId);
           return;
         }
         maybeFinish();

@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("destination", type=pathlib.Path)
     parser.add_argument("--finance-commit", required=True)
+    parser.add_argument("--temporary-error-persistence", action="store_true")
     return parser.parse_args()
 
 
@@ -84,6 +85,9 @@ def main() -> int:
         or settings.get("saveDataSuccessExecution") != "none"
     ):
         raise SystemExit("SETUP_WORKFLOW_EXECUTION_PERSISTENCE_FORBIDDEN")
+
+    if args.temporary_error_persistence:
+        settings["saveDataErrorExecution"] = "all"
 
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list):
@@ -139,6 +143,7 @@ def main() -> int:
         "credential_ids_recorded": False,
         "secret_values_recorded": False,
         "portable_source_modified": False,
+        "temporary_error_persistence": args.temporary_error_persistence,
     }
     receipt_path = args.destination.parent / "binding-receipt.json"
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

@@ -18,7 +18,7 @@ const n8nRoot = path.dirname(n8nPackageJson);
 process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
 const n8nRequire = createRequire(n8nPackageJson);
 const { Container } = n8nRequire('@n8n/di');
-const { WorkflowRepository, SharedWorkflowRepository } = n8nRequire('@n8n/db');
+const { ExecutionRepository, WorkflowRepository, SharedWorkflowRepository } = n8nRequire('@n8n/db');
 const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
 const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
 
@@ -52,7 +52,7 @@ BaseCommand.prototype.init = async function removeTransientProof(...args) {
       throw new Error('TRANSIENT_WF23_CONTRACT_MISMATCH');
     }
     if (Object.prototype.hasOwnProperty.call(workflow.settings || {}, 'errorWorkflow') ||
-        workflow.settings?.saveDataErrorExecution !== 'none' || workflow.settings?.saveDataSuccessExecution !== 'none') {
+        workflow.settings?.saveDataErrorExecution !== 'all' || workflow.settings?.saveDataSuccessExecution !== 'none') {
       throw new Error('TRANSIENT_WF23_EXECUTION_PERSISTENCE_MISMATCH');
     }
     const outlook = (workflow.nodes || []).filter((node) => node.type === 'n8n-nodes-base.microsoftOutlook');
@@ -69,6 +69,23 @@ BaseCommand.prototype.init = async function removeTransientProof(...args) {
     const shares = await sharedWorkflowRepository.find({ where: { workflowId } });
     if (shares.length !== 1 || shares[0].projectId !== projectId || shares[0].role !== 'workflow:owner') {
       throw new Error('TRANSIENT_WF23_PROJECT_OWNERSHIP_MISMATCH');
+    }
+    stage = 'execution-delete';
+    const executionRepository = Container.get(ExecutionRepository);
+    await executionRepository.delete({ workflowId });
+    if (await executionRepository.count({ where: { workflowId }, withDeleted: true })) {
+      throw new Error('TRANSIENT_WF23_EXECUTION_DELETE_READBACK_MISMATCH');
+    }
+    stage = 'workflow-restore';
+    await workflowRepository.update(workflowId, {
+      settings: { ...workflow.settings, saveDataErrorExecution: 'none' },
+    });
+    const restored = await workflowRepository.findOne({
+      where: { id: workflowId },
+      select: ['settings'],
+    });
+    if (restored?.settings?.saveDataErrorExecution !== 'none') {
+      throw new Error('TRANSIENT_WF23_EXECUTION_PERSISTENCE_RESTORE_MISMATCH');
     }
     stage = 'workflow-delete';
     const deleted = await workflowRepository.delete(workflowId);

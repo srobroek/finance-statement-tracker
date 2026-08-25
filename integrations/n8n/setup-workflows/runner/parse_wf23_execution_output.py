@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Accept only exact redacted WF23 success or internal-timeout terminal lines."""
+"""Accept only exact redacted WF23 success or terminal failure lines."""
 
 from __future__ import annotations
 
@@ -19,6 +19,12 @@ TIMEOUT_CODES = {
     "WF23_TIMEOUT_RAW_CAPTURE",
     "WF23_TIMEOUT_FINALIZE",
 }
+AUTH_FAILURE_CODES = {
+    "OUTLOOK_AUTH_REQUIRED",
+    "ONEDRIVE_AUTH_REQUIRED",
+}
+TERMINAL_FAILURE_CODES = TIMEOUT_CODES | AUTH_FAILURE_CODES
+TERMINALITY_CODE = "WF23_EXECUTION_NOT_FINISHED_SUCCESS"
 SUCCESS_KEYS = {
     "schema_version",
     "status",
@@ -132,7 +138,7 @@ def parse_timeout(raw: str) -> str:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
-    if value["status"] != "FAILED" or type(value["error_code"]) is not str or value["error_code"] not in TIMEOUT_CODES:
+    if value["status"] != "FAILED" or type(value["error_code"]) is not str or value["error_code"] not in TERMINAL_FAILURE_CODES:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
     if type(value["provider_response_logged"]) is not bool or value["provider_response_logged"] is not False:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
@@ -141,16 +147,33 @@ def parse_timeout(raw: str) -> str:
     return value["error_code"]
 
 
+def parse_terminality(raw: str) -> str:
+    value = decode_line(raw, FAILURE_PREFIX)
+    if set(value) != FAILURE_KEYS:
+        raise ValueError("WF23_TERMINALITY_RECEIPT_CONTRACT_MISMATCH")
+    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
+        raise ValueError("WF23_TERMINALITY_RECEIPT_CONTRACT_MISMATCH")
+    if value["status"] != "FAILED" or value["error_code"] != TERMINALITY_CODE:
+        raise ValueError("WF23_TERMINALITY_RECEIPT_CONTRACT_MISMATCH")
+    if type(value["provider_response_logged"]) is not bool or value["provider_response_logged"] is not False:
+        raise ValueError("WF23_TERMINALITY_RECEIPT_CONTRACT_MISMATCH")
+    if type(value["secret_values_recorded"]) is not bool or value["secret_values_recorded"] is not False:
+        raise ValueError("WF23_TERMINALITY_RECEIPT_CONTRACT_MISMATCH")
+    return value["error_code"]
+
+
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in {"success", "timeout"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in {"success", "timeout", "terminality"}:
         print(REJECTED_DIAGNOSTIC, file=sys.stderr)
         return 2
     try:
         raw = sys.stdin.read(MAX_BYTES + 1)
         if sys.argv[1] == "success":
             print(json.dumps(parse_success(raw), separators=(",", ":")))
-        else:
+        elif sys.argv[1] == "timeout":
             print(parse_timeout(raw))
+        else:
+            print(parse_terminality(raw))
         return 0
     except Exception:
         # The parser processes an untrusted transport boundary. Never let a
