@@ -834,6 +834,20 @@ sys.exit(0)
         self.assertNotIn("fake-token", completed.stdout + completed.stderr)
         self.assertNotIn("fake-subject", completed.stdout + completed.stderr)
 
+        for code_name in ("OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"):
+            auth_code = (
+                f"const shim=require({json.dumps(str(shim))});"
+                f"process.stdout.write(shim.terminalLine({{code:{json.dumps(code_name)},message:'token=secret'}},null));"
+            )
+            auth_completed = subprocess.run(
+                ["node", "-e", auth_code], text=True, capture_output=True, check=True
+            )
+            auth_payload = json.loads(auth_completed.stdout.split(":", 1)[1])
+            self.assertEqual(auth_payload["error_code"], code_name)
+            self.assertFalse(auth_payload["provider_response_logged"])
+            self.assertFalse(auth_payload["secret_values_recorded"])
+            self.assertNotIn("token=secret", auth_completed.stdout + auth_completed.stderr)
+
     def test_local_transport_timeout_is_safe_and_redacted(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
@@ -954,9 +968,14 @@ sys.exit(0)
             "wf23_failure_timeout_allowlist", RUNNER / "build_microsoft_oauth_failure_receipt.py"
         )
         self.assertEqual(parser.TIMEOUT_CODES, timeout_codes)
+        auth_codes = {"OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"}
+        self.assertEqual(parser.AUTH_FAILURE_CODES, auth_codes)
         self.assertEqual(failure_builder.TIMEOUT_CODES, timeout_codes)
+        self.assertEqual(failure_builder.AUTH_FAILURE_CODES, auth_codes)
         runner_source = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         for code in timeout_codes:
+            self.assertIn(code, runner_source)
+        for code in auth_codes:
             self.assertIn(code, runner_source)
         for code in timeout_codes:
             with self.subTest(code=code):
@@ -970,6 +989,22 @@ sys.exit(0)
                 raw = "transient WF23 execution failed:" + json.dumps(payload, separators=(",", ":")) + "\n"
                 self.assertEqual(parser.parse_timeout(raw), code)
 
+        for code in auth_codes:
+            with self.subTest(code=code):
+                payload = {
+                    "schema_version": 1,
+                    "status": "FAILED",
+                    "error_code": code,
+                    "provider_response_logged": False,
+                    "secret_values_recorded": False,
+                }
+                raw = "transient WF23 execution failed:" + json.dumps(payload, separators=(",", ":")) + "\n"
+                self.assertEqual(parser.parse_timeout(raw), code)
+                receipt = failure_builder.build_receipt(
+                    "run", "first_execution", True, True, True, True, code
+                )
+                self.assertEqual(receipt["failure_code"], code)
+
         valid = (
             'transient WF23 execution failed:{"schema_version":1,"status":"FAILED",'
             '"error_code":"WF23_TIMEOUT_COMMAND_RUN","provider_response_logged":false,'
@@ -982,6 +1017,14 @@ sys.exit(0)
             ),
             "boolean schema": valid.replace('"schema_version":1', '"schema_version":true'),
             "unknown code": valid.replace("WF23_TIMEOUT_COMMAND_RUN", "WF23_TIMEOUT_PROVIDER_SECRET"),
+            "auth code with provider response": valid.replace(
+                '"error_code":"WF23_TIMEOUT_COMMAND_RUN","provider_response_logged":false',
+                '"error_code":"OUTLOOK_AUTH_REQUIRED","provider_response_logged":true',
+            ),
+            "auth code with secret recording": valid.replace(
+                '"error_code":"WF23_TIMEOUT_COMMAND_RUN","provider_response_logged":false,"secret_values_recorded":false',
+                '"error_code":"ONEDRIVE_AUTH_REQUIRED","provider_response_logged":false,"secret_values_recorded":true',
+            ),
             "extra provider value": valid[:-1] + ',"access_token":"secret"}',
             "integer false flag": valid.replace('"provider_response_logged":false', '"provider_response_logged":0'),
             "multiple output": valid + "\n" + valid,
@@ -1485,7 +1528,7 @@ try {{
             bin_dir = root / "bin"
             bin_dir.mkdir()
 
-            def run_caller_boundary(parser_mode: str) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+            def run_caller_boundary(parser_mode: str) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
                 timeout_args = root / f"timeout-{parser_mode}.args"
                 removed = root / f"removed-{parser_mode}"
                 (bin_dir / "timeout").write_text(
@@ -1498,6 +1541,14 @@ try {{
                     "  printf '%s' WF23_TIMEOUT_COMMAND_RUN\n"
                     "  exit 0\n"
                     "fi\n"
+                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = outlook ]; then\n"
+                    "  printf '%s' OUTLOOK_AUTH_REQUIRED\n"
+                    "  exit 0\n"
+                    "fi\n"
+                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = onedrive ]; then\n"
+                    "  printf '%s' ONEDRIVE_AUTH_REQUIRED\n"
+                    "  exit 0\n"
+                    "fi\n"
                     "if [ \"$2\" = timeout ]; then exit 1; fi\n"
                     "exit 0\n",
                     encoding="utf-8",
@@ -1506,6 +1557,7 @@ try {{
                 (bin_dir / "python3").chmod(0o755)
                 run_root = root / f"run-{parser_mode}"
                 run_root.mkdir()
+                downstream_marker = root / f"downstream-{parser_mode}"
                 driver = "\n".join([
                     "#!/usr/bin/env bash",
                     "set -euo pipefail",
@@ -1518,6 +1570,7 @@ try {{
                     "remove_container_work_file() { :; }",
                     "remove_transient_wf23() { : > " + shlex.quote(str(removed)) + "; return 0; }",
                     "verify_clean_boundary() { return 0; }",
+                    "wf23_execution_count() { : > " + shlex.quote(str(downstream_marker)) + "; printf '%s' 0; }",
                     execute_probe,
                     cleanup,
                     "trap cleanup EXIT",
@@ -1530,18 +1583,35 @@ try {{
                 environment = os.environ.copy()
                 environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
                 environment["WF23_PARSER_MODE"] = parser_mode
-                return subprocess.run(["bash", str(driver_path)], text=True, capture_output=True, env=environment), timeout_args, removed
+                return (
+                    subprocess.run(["bash", str(driver_path)], text=True, capture_output=True, env=environment),
+                    timeout_args,
+                    removed,
+                    downstream_marker,
+                )
 
-            terminal, terminal_timeout_args, terminal_removed = run_caller_boundary("terminal")
+            terminal, terminal_timeout_args, terminal_removed, terminal_downstream = run_caller_boundary("terminal")
             self.assertNotEqual(terminal.returncode, 0)
             self.assertTrue(terminal_removed.exists(), terminal.stderr + terminal.stdout)
+            self.assertFalse(terminal_downstream.exists())
             self.assertTrue(terminal_timeout_args.exists(), terminal.stderr + terminal.stdout)
             self.assertIn("0.05s", terminal_timeout_args.read_text(encoding="utf-8"))
             self.assertNotIn("WF23 execution terminality uncertain; retaining transient workflow", terminal.stderr)
 
-            unknown, unknown_timeout_args, unknown_removed = run_caller_boundary("unknown")
+            for parser_mode in ("outlook", "onedrive"):
+                with self.subTest(parser_mode=parser_mode):
+                    auth, auth_timeout_args, auth_removed, auth_downstream = run_caller_boundary(parser_mode)
+                    self.assertNotEqual(auth.returncode, 0)
+                    self.assertTrue(auth_removed.exists(), auth.stderr + auth.stdout)
+                    self.assertFalse(auth_downstream.exists())
+                    self.assertTrue(auth_timeout_args.exists(), auth.stderr + auth.stdout)
+                    self.assertIn("0.05s", auth_timeout_args.read_text(encoding="utf-8"))
+                    self.assertNotIn("WF23 execution terminality uncertain; retaining transient workflow", auth.stderr)
+
+            unknown, unknown_timeout_args, unknown_removed, unknown_downstream = run_caller_boundary("unknown")
             self.assertNotEqual(unknown.returncode, 0)
             self.assertFalse(unknown_removed.exists())
+            self.assertFalse(unknown_downstream.exists())
             self.assertTrue(unknown_timeout_args.exists(), unknown.stderr + unknown.stdout)
             self.assertIn("0.05s", unknown_timeout_args.read_text(encoding="utf-8"))
             self.assertIn("WF23 execution terminality uncertain; retaining transient workflow", unknown.stderr)

@@ -19,6 +19,11 @@ TIMEOUT_CODES = {
     "WF23_TIMEOUT_RAW_CAPTURE",
     "WF23_TIMEOUT_FINALIZE",
 }
+AUTH_FAILURE_CODES = {
+    "OUTLOOK_AUTH_REQUIRED",
+    "ONEDRIVE_AUTH_REQUIRED",
+}
+TERMINAL_FAILURE_CODES = TIMEOUT_CODES | AUTH_FAILURE_CODES
 SUCCESS_KEYS = {
     "schema_version",
     "status",
@@ -132,7 +137,7 @@ def parse_timeout(raw: str) -> str:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
-    if value["status"] != "FAILED" or type(value["error_code"]) is not str or value["error_code"] not in TIMEOUT_CODES:
+    if value["status"] != "FAILED" or type(value["error_code"]) is not str or value["error_code"] not in TERMINAL_FAILURE_CODES:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
     if type(value["provider_response_logged"]) is not bool or value["provider_response_logged"] is not False:
         raise ValueError("WF23_TIMEOUT_RECEIPT_CONTRACT_MISMATCH")
