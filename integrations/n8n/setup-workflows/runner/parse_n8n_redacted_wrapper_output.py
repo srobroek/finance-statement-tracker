@@ -79,7 +79,7 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         "forward_gate", "rollback_gate", "writes_performed", "provider_calls",
         "row_values_recorded", "secret_values_recorded",
     }
-    if set(value) not in {expected_keys, expected_keys | {"phase"}}:
+    if set(value) != expected_keys and set(value) != expected_keys | {"phase"}:
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_KEYS_MISMATCH")
     expected_table_names = [
         "finance_actual_batches",
