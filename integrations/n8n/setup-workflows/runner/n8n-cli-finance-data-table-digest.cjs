@@ -35,6 +35,14 @@ if (migrationReceiptSha256 !== null && !/^[0-9a-f]{64}$/.test(migrationReceiptSh
   throw new Error('FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256_INVALID');
 }
 
+function assertCanonicalTableNames(tables) {
+  const observed = tables.map((table) => String(table.name || '')).sort((left, right) => left.localeCompare(right));
+  const expected = [...CANONICAL_TABLE_NAMES].sort((left, right) => left.localeCompare(right));
+  if (observed.length !== expected.length || observed.some((name, index) => name !== expected[index])) {
+    throw new Error('EXACT_FINANCE_DATA_TABLE_NAMES_REQUIRED');
+  }
+}
+
 function canonical(value) {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(canonical);
@@ -72,6 +80,7 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
     }
     const tables = listed.data.filter((table) => CANONICAL_TABLES.has(String(table.name))).sort((a, b) => a.name.localeCompare(b.name));
     if (tables.length !== CANONICAL_TABLES.size) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
+    assertCanonicalTableNames(tables);
     const tableReceipts = [];
     let totalRows = 0;
     for (const table of tables) {

@@ -1195,6 +1195,25 @@ sys.exit(0)
         for forbidden in ("insertRows", "updateRows", "deleteRows", "createDataTable", "drop"):
             self.assertNotIn(forbidden, source)
 
+    def test_data_table_digest_rejects_duplicate_canonical_name_with_missing_peer(self) -> None:
+        source = (RUNNER / "n8n-cli-finance-data-table-digest.cjs").read_text(encoding="utf-8")
+        contract = source[source.index("const CANONICAL_TABLE_NAMES"):source.index("\n\nfunction canonical")]
+        harness = f"""
+{contract}
+const valid = CANONICAL_TABLE_NAMES.map(name => ({{ name }}));
+assertCanonicalTableNames(valid);
+const duplicateMissing = valid.map(table => ({{ ...table }}));
+duplicateMissing[3].name = 'finance_documents';
+try {{
+  assertCanonicalTableNames(duplicateMissing);
+  process.exit(2);
+}} catch (error) {{
+  if (error.message !== 'EXACT_FINANCE_DATA_TABLE_NAMES_REQUIRED') throw error;
+}}
+"""
+        result = subprocess.run(["node", "-e", harness], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_transport_parser_accepts_exact_n8n_2362_framing(self) -> None:
         parser = load_module("wf23_transport_parser", RUNNER / "parse_n8n_redacted_wrapper_output.py")
         fixture = json.loads(DATA_TABLE_OUTPUT_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
