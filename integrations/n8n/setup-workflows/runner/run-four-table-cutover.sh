@@ -46,9 +46,36 @@ test -f "$accepted_identity"
 test -f "$adapter"
 test -f "$readback_parser"
 test -d "$workflow_root"
+test "$(stat -c '%a' "$source_backup")" = 600
 
-migration_sha="$(sha256sum "$migration_receipt" | awk '{print $1}')"
+approved_digests="$(python3 - "$accepted_identity" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    identity = json.load(handle)
+print(identity["migration_receipt_sha256"])
+print(identity["source_backup_sha256"])
+PY
+)"
+migration_sha="${approved_digests%%$'\n'*}"
+source_backup_sha="${approved_digests#*$'\n'}"
+test -n "$migration_sha"
+test -n "$source_backup_sha"
 test "$(stat -c '%a' "$migration_receipt")" = 600
+
+validate_inputs() {
+  python3 "$runner_dir/four_table_cutover.py" validate-inputs \
+    --source-backup "$source_backup" \
+    --migration-receipt "$migration_receipt" \
+    --migration-receipt-sha256 "$migration_sha" \
+    --source-backup-sha256 "$source_backup_sha" \
+    --repository-root "$repo_dir" \
+    --accepted-identity "$accepted_identity" \
+    --operator-ack "$1" \
+    --runtime-action "$2" \
+    --workflow-root "$workflow_root" > /dev/null
+}
 
 run_readback() {
   local destination="$1"
@@ -68,6 +95,7 @@ case "$operation" in
     operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
     run_readback "$pre_readback" FORWARD_PRE
+    validate_inputs "$operator_ack" "$runtime_action"
     docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
     run_readback "$post_readback" FORWARD_POST
     docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
@@ -83,6 +111,7 @@ case "$operation" in
       --source-backup "$source_backup" \
       --migration-receipt "$migration_receipt" \
       --migration-receipt-sha256 "$migration_sha" \
+      --source-backup-sha256 "$source_backup_sha" \
       --repository-root "$repo_dir" \
       --accepted-identity "$accepted_identity" \
       --operator-ack "$operator_ack" \
@@ -99,6 +128,7 @@ args=(
   --source-backup "$source_backup"
   --migration-receipt "$migration_receipt"
   --migration-receipt-sha256 "$migration_sha"
+  --source-backup-sha256 "$source_backup_sha"
   --repository-root "$repo_dir"
   --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"

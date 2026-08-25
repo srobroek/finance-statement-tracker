@@ -88,13 +88,13 @@ def _read_json(path: Path) -> tuple[dict[str, Any], bytes]:
     return value, raw
 
 
-def _require_protected(path: Path) -> None:
+def _require_protected(path: Path, label: str = "PROTECTED_RECEIPT") -> None:
     try:
-        mode = stat.S_IMODE(path.stat().st_mode)
+        metadata = path.lstat()
     except OSError as error:
-        raise CutoverError(f"PROTECTED_RECEIPT_UNAVAILABLE:{path.name}") from error
-    if mode & 0o077:
-        raise CutoverError(f"PROTECTED_RECEIPT_MODE_REQUIRED:{path.name}")
+        raise CutoverError(f"{label}_UNAVAILABLE:{path.name}") from error
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise CutoverError(f"{label}_MODE_REQUIRED:{path.name}")
 
 
 def _require_digest(value: Any, label: str) -> str:
@@ -160,20 +160,34 @@ def _source_and_receipt(
     source_path: Path,
     migration_receipt_path: Path,
     migration_receipt_sha256: str,
-) -> tuple[dict[str, Any], dict[str, Any], str]:
+    source_backup_sha256: str,
+) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+    _require_protected(source_path, "PROTECTED_SOURCE_BACKUP")
     _require_protected(migration_receipt_path)
+    try:
+        source_bytes = source_path.read_bytes()
+    except OSError as error:
+        raise CutoverError(f"SOURCE_BACKUP_UNAVAILABLE:{source_path.name}") from error
+    observed_source_sha = hashlib.sha256(source_bytes).hexdigest()
+    if observed_source_sha != source_backup_sha256:
+        raise CutoverError("SOURCE_BACKUP_SHA256_MISMATCH")
     migration_receipt, receipt_bytes = _read_json(migration_receipt_path)
     observed_sha = hashlib.sha256(receipt_bytes).hexdigest()
     if observed_sha != migration_receipt_sha256:
         raise CutoverError("MIGRATION_RECEIPT_SHA256_MISMATCH")
     if migration_receipt.get("schema_version") != "data-table-migration-receipt-v1":
         raise CutoverError("MIGRATION_RECEIPT_SCHEMA_INVALID")
-    source, _ = _read_json(source_path)
+    try:
+        source = json.loads(source_bytes, object_pairs_hook=_reject_duplicate_keys)
+    except (json.JSONDecodeError, CutoverError) as error:
+        raise CutoverError(f"INPUT_JSON_INVALID:{source_path.name}") from error
+    if not isinstance(source, dict):
+        raise CutoverError(f"INPUT_OBJECT_REQUIRED:{source_path.name}")
     if source.get("schema_version") != "finance-data-table-backup-v1":
         raise CutoverError("SOURCE_BACKUP_SCHEMA_INVALID")
     if not isinstance(source.get("tables"), dict):
         raise CutoverError("SOURCE_BACKUP_TABLES_INVALID")
-    return source, migration_receipt, observed_sha
+    return source, migration_receipt, observed_sha, observed_source_sha
 
 
 def _source_rows(source: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -285,6 +299,7 @@ def _validate_runtime_state(
     generator_head: str,
     identity_digest: str,
     source_digest: str,
+    source_backup_sha256: str,
 ) -> None:
     if (
         state.get("schema_version") != RUNTIME_STATE_SCHEMA
@@ -294,6 +309,7 @@ def _validate_runtime_state(
         or state.get("generator_head") != generator_head
         or state.get("accepted_identity_sha256") != identity_digest
         or state.get("source_digest") != source_digest
+        or state.get("source_backup_sha256") != source_backup_sha256
         or state.get("old_tables_preserved") is not True
         or state.get("runtime_cutover") is not False
         or state.get("deletion_authorized") is not False
@@ -475,7 +491,9 @@ def _compare_forward_readbacks(
     return first
 
 
-def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) -> tuple[str, str, str, str]:
+def _heads(
+    args: argparse.Namespace, expected_ack: str, expected_action: str
+) -> tuple[str, str, str, str, str]:
     try:
         repository_root = args.repository_root.resolve(strict=True)
     except OSError as error:
@@ -534,17 +552,24 @@ def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) ->
     if hashlib.sha256(_canonical_bytes(unsigned_identity)).hexdigest() != identity_digest:
         raise CutoverError("ACCEPTED_CHECKOUT_IDENTITY_INTEGRITY_MISMATCH")
     receipt_sha = _require_digest(args.migration_receipt_sha256, "MIGRATION_RECEIPT_SHA256")
+    source_backup_sha = _require_digest(
+        args.source_backup_sha256, "SOURCE_BACKUP_SHA256"
+    )
+    if identity.get("migration_receipt_sha256") != receipt_sha:
+        raise CutoverError("ACCEPTED_MIGRATION_RECEIPT_SHA256_MISMATCH")
+    if identity.get("source_backup_sha256") != source_backup_sha:
+        raise CutoverError("ACCEPTED_SOURCE_BACKUP_SHA256_MISMATCH")
     if args.operator_ack != expected_ack or args.runtime_action != expected_action:
         raise CutoverError("NAMED_OPERATOR_ACK_REQUIRED")
-    return source_head, generator_head, receipt_sha, identity_digest
+    return source_head, generator_head, receipt_sha, source_backup_sha, identity_digest
 
 
 def run_forward(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, identity_digest = _heads(
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION
     )
-    source, expected_receipt, _ = _source_and_receipt(
-        args.source_backup, args.migration_receipt, receipt_sha
+    source, expected_receipt, _, observed_source_backup_sha = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
     module = _load_migration_module()
     runner = module.MigrationRunner(_source_rows(source))
@@ -574,6 +599,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
             "source_head": source_head,
             "generator_head": generator_head,
             "accepted_identity_sha256": identity_digest,
+            "source_backup_sha256": observed_source_backup_sha,
             "source_digest": first["source_digest"],
             "target_digest": first["target_digest"],
             "target_tables_created": True,
@@ -593,6 +619,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
         "source_head": source_head,
         "generator_head": generator_head,
         "accepted_identity_sha256": identity_digest,
+        "source_backup_sha256": observed_source_backup_sha,
         "source_digest": first["source_digest"],
         "target_digest": first["target_digest"],
         "target_schema_sha256": schema_sha,
@@ -619,11 +646,11 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, identity_digest = _heads(
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
-    source, migration_receipt, _ = _source_and_receipt(
-        args.source_backup, args.migration_receipt, receipt_sha
+    source, migration_receipt, _, observed_source_backup_sha = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
     if migration_receipt.get("old_tables_preserved") is not True or migration_receipt.get(
         "deletion_authorized"
@@ -637,6 +664,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         or forward.get("migration_receipt_sha256") != receipt_sha
         or forward.get("source_head") != source_head
         or forward.get("generator_head") != generator_head
+        or forward.get("source_backup_sha256") != observed_source_backup_sha
         or forward.get("old_tables_preserved") is not True
         or forward.get("runtime_cutover") is not False
         or forward.get("deletion_authorized") is not False
@@ -677,6 +705,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         generator_head=generator_head,
         identity_digest=identity_digest,
         source_digest=migration_receipt["source_digest"],
+        source_backup_sha256=observed_source_backup_sha,
     )
     if (
         runtime_state.get("status") != "RESTORED"
@@ -692,8 +721,16 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         generator_head,
         identity_digest,
         source,
+        observed_source_backup_sha,
         runtime_state_sha,
     )
+    _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
+    try:
+        current_source_backup_sha = hashlib.sha256(args.source_backup.read_bytes()).hexdigest()
+    except OSError as error:
+        raise CutoverError("SOURCE_BACKUP_UNAVAILABLE_AFTER_ROLLBACK") from error
+    if current_source_backup_sha != observed_source_backup_sha:
+        raise CutoverError("SOURCE_BACKUP_CHANGED_DURING_ROLLBACK")
     source_digest = migration_receipt.get("source_digest")
     if (
         runtime_state.get("restore_roundtrip") is not True
@@ -709,6 +746,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         "source_head": source_head,
         "generator_head": generator_head,
         "accepted_identity_sha256": identity_digest,
+        "source_backup_sha256": observed_source_backup_sha,
         "source_digest": source_digest,
         "restored_source_digest": runtime_state["restored_source_digest"],
         "restore_roundtrip": runtime_state["restore_roundtrip"],
@@ -736,6 +774,7 @@ def _verify_runtime_proof(
     generator_head: str,
     identity_digest: str,
     source: Mapping[str, Any],
+    source_backup_sha256: str,
     runtime_state_sha: str,
 ) -> None:
     _require_protected(path)
@@ -746,6 +785,7 @@ def _verify_runtime_proof(
         or proof.get("source_head") != source_head
         or proof.get("generator_head") != generator_head
         or proof.get("accepted_identity_sha256") != identity_digest
+        or proof.get("source_backup_sha256") != source_backup_sha256
         or proof.get("operator_ack") != REQUIRED_ROLLBACK_ACK
         or proof.get("runtime_action") != ROLLBACK_RUNTIME_ACTION
         or proof.get("runtime_command") != "rollback-runtime"
@@ -766,11 +806,11 @@ def _verify_runtime_proof(
 
 
 def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, identity_digest = _heads(
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
-    source, migration_receipt, _ = _source_and_receipt(
-        args.source_backup, args.migration_receipt, receipt_sha
+    source, migration_receipt, _, observed_source_backup_sha = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
     if migration_receipt.get("old_tables_preserved") is not True or migration_receipt.get(
         "deletion_authorized"
@@ -790,6 +830,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         generator_head=generator_head,
         identity_digest=identity_digest,
         source_digest=source_digest,
+        source_backup_sha256=observed_source_backup_sha,
     )
     if (
         runtime_state.get("status") != "MIGRATED"
@@ -805,6 +846,13 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         or restored.get("source_digest") != source_digest
     ):
         raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
+    _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
+    try:
+        current_source_backup_sha = hashlib.sha256(args.source_backup.read_bytes()).hexdigest()
+    except OSError as error:
+        raise CutoverError("SOURCE_BACKUP_UNAVAILABLE_AFTER_ROLLBACK") from error
+    if current_source_backup_sha != observed_source_backup_sha:
+        raise CutoverError("SOURCE_BACKUP_CHANGED_DURING_ROLLBACK")
     restored_state_sha = _write_runtime_state(
         args.runtime_state,
         {
@@ -815,6 +863,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "source_head": source_head,
             "generator_head": generator_head,
             "accepted_identity_sha256": identity_digest,
+            "source_backup_sha256": observed_source_backup_sha,
             "source_digest": source_digest,
             "target_digest": migration_receipt["target_digest"],
             "target_tables_created": True,
@@ -836,6 +885,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "source_head": source_head,
             "generator_head": generator_head,
             "accepted_identity_sha256": identity_digest,
+            "source_backup_sha256": observed_source_backup_sha,
             "source_digest": source_digest,
             "restored_source_digest": restored["source_digest"],
             "restore_roundtrip": restored["restore_roundtrip"],
@@ -855,20 +905,43 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
+        args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION
+    )
+    source, migration_receipt, observed_receipt_sha, observed_source_backup_sha = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
+    )
+    module = _load_migration_module()
+    if module.MigrationRunner(_source_rows(source)).run() != migration_receipt:
+        raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
+    return {
+        "schema_version": "finance-four-table-cutover-inputs-v1",
+        "source_head": source_head,
+        "generator_head": generator_head,
+        "accepted_identity_sha256": identity_digest,
+        "migration_receipt_sha256": observed_receipt_sha,
+        "source_backup_sha256": observed_source_backup_sha,
+        "source_digest": migration_receipt["source_digest"],
+        "inputs_verified": True,
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    for operation in ("forward", "rollback", "rollback-runtime"):
+    for operation in ("forward", "rollback", "rollback-runtime", "validate-inputs"):
         command = subparsers.add_parser(operation)
         command.add_argument("--source-backup", type=Path, required=True)
         command.add_argument("--migration-receipt", type=Path, required=True)
         command.add_argument("--migration-receipt-sha256", required=True)
+        command.add_argument("--source-backup-sha256", required=True)
         command.add_argument("--repository-root", type=Path, required=True)
         command.add_argument("--accepted-identity", type=Path)
         command.add_argument("--operator-ack", required=True)
         command.add_argument("--runtime-action", required=True)
         command.add_argument("--workflow-root", type=Path, required=True)
-        command.add_argument("--output", type=Path, required=True)
+        command.add_argument("--output", type=Path, required=operation != "validate-inputs")
         if operation in {"forward", "rollback"}:
             command.add_argument("--pre-readback-raw", type=Path, required=True)
             command.add_argument("--post-readback-raw", type=Path, required=True)
@@ -889,6 +962,8 @@ def main(argv: list[str] | None = None) -> int:
             result = run_forward(args)
         elif args.operation == "rollback":
             result = run_rollback(args)
+        elif args.operation == "validate-inputs":
+            result = validate_inputs(args)
         else:
             result = run_rollback_runtime(args)
     except (CutoverError, OSError, KeyError, TypeError) as error:
