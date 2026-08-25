@@ -83,6 +83,9 @@
     "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
     "source_backup_sha256": {"$ref": "#/$defs/digest"},
     "source_digest": {"$ref": "#/$defs/digest"},
+    "workflow_export_sha256": {"$ref": "#/$defs/digest"},
+    "reference_action_plan": {"$ref": "#/$defs/reference_action_plan"},
+    "exclusive_writer_precondition": {"$ref": "#/$defs/exclusive_writer_precondition"},
     "runtime_state_sha256": {"$ref": "#/$defs/digest"},
     "restored_source_digest": {"$ref": "#/$defs/digest"},
     "target_digest": {"$ref": "#/$defs/digest"},
@@ -146,7 +149,47 @@
   },
   "$defs": {
     "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "head": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+    "head": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "reference_action_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference_count", "actions", "unresolved", "replay_noop"],
+      "properties": {
+        "reference_count": {"const": 33},
+        "actions": {
+          "type": "array",
+          "minItems": 33,
+          "maxItems": 33,
+          "items": {
+            "type": "object",
+            "required": ["reference_id", "action", "source_table", "canonical_table_name", "workflow_id", "revision_id", "node_id", "old_table_id"],
+            "properties": {
+              "reference_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+              "action": {"type": "string", "minLength": 1},
+              "source_table": {"type": "string", "minLength": 1},
+              "canonical_table_name": {"type": ["string", "null"]},
+              "workflow_id": {"type": "string", "minLength": 1},
+              "revision_id": {"type": "string", "minLength": 1},
+              "node_id": {"type": "string", "minLength": 1},
+              "old_table_id": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "unresolved": {"const": []},
+        "replay_noop": {"const": true}
+      }
+    },
+    "exclusive_writer_precondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_name", "lock_receipt_sha256", "held", "in_flight"],
+      "properties": {
+        "lock_name": {"const": "finance_four_table_cutover"},
+        "lock_receipt_sha256": {"$ref": "#/$defs/digest"},
+        "held": {"const": true},
+        "in_flight": {"const": 0}
+      }
+    }
     ,"readback": {
       "type": "object",
       "additionalProperties": false,

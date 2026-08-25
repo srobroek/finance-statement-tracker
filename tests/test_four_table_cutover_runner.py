@@ -691,6 +691,79 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             identity_path = receipt_dir / "finance-four-table-accepted-identity.json"
             identity_path.write_bytes(self.runner._canonical_bytes(identity))
             os.chmod(identity_path, 0o600)
+            matrix = json.loads(
+                (ROOT / "integrations/n8n/data-table-migration-matrix.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            inventory = self.runner._reference_inventory(matrix)
+            schema_digests = self.runner._target_schema_digests(matrix)
+            targets = [
+                {
+                    "name": name,
+                    "table_id": f"live-{index}",
+                    "schema_sha256": schema_digests[name],
+                }
+                for index, name in enumerate(sorted(self.runner.TARGETS))
+            ]
+            references = []
+            for index, item in enumerate(inventory):
+                target = next(
+                    (
+                        target["table_id"]
+                        for target in targets
+                        if target["name"] == item["canonical_table_name"]
+                    ),
+                    None,
+                )
+                references.append(
+                    {
+                        "reference_id": item["reference_id"],
+                        "workflow_id": "live-workflow-0",
+                        "revision_id": "live-revision-0",
+                        "node_id": f"live-node-{index}",
+                        "workflow_path": item["workflow_path"],
+                        "node_name": item["node_name"],
+                        "operation": item["operation"],
+                        "old_table_name": item["source_table"],
+                        "old_table_id": f"old-{index}",
+                        "canonical_table_name": item["canonical_table_name"],
+                        "canonical_table_id": target,
+                        "active": False,
+                        "published": False,
+                        "in_flight": 0,
+                    }
+                )
+            live_export = {
+                "schema_version": self.runner.LIVE_EXPORT_SCHEMA,
+                "repository_root": str(checkout),
+                "source_head": checkout_head,
+                "generator_head": self.generator_head,
+                "migration_receipt_sha256": identity["migration_receipt_sha256"],
+                "source_backup_sha256": identity["source_backup_sha256"],
+                "accepted_identity_sha256": identity["identity_sha256"],
+                "redacted": True,
+                "workflow_count": 19,
+                "in_flight": 0,
+                "workflows": [
+                    {
+                        "workflow_id": f"live-workflow-{index}",
+                        "revision_id": f"live-revision-{index}",
+                        "active": False,
+                        "published": False,
+                        "in_flight": 0,
+                    }
+                    for index in range(19)
+                ],
+                "targets": targets,
+                "references": references,
+            }
+            live_export["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(live_export)
+            ).hexdigest()
+            live_export_path = receipt_dir / "finance-four-table-live-export.json"
+            live_export_path.write_bytes(self.runner._canonical_bytes(live_export))
+            os.chmod(live_export_path, 0o600)
             (receipt_dir / "forward.raw").write_text(raw_readback.read_text(encoding="utf-8"), encoding="utf-8")
             (receipt_dir / "pre.raw").write_text(raw_pre.read_text(encoding="utf-8"), encoding="utf-8")
             (receipt_dir / "rollback-pre.raw").write_text(raw_rollback_pre.read_text(encoding="utf-8"), encoding="utf-8")
@@ -737,6 +810,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
                 "N8N_FINANCE_PROJECT_ID": "finance-test-project",
                 "FINANCE_N8N_RUNTIME_MODE": "DISPOSABLE_ONLY",
+                "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FINANCE_TEST_PRE": str(receipt_dir / "pre.raw"),
                 "FINANCE_TEST_POST": str(receipt_dir / "forward.raw"),
