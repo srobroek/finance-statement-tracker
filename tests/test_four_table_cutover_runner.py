@@ -158,25 +158,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        rollback_pre = {
-            "status": "ROLLBACK_PRE_READBACK",
-            "phase": "ROLLBACK_PRE",
-            "finance_tables": 0,
-            "tables": [],
-            "total_rows": 0,
-            "digest_sha256": self.runner._digest_json_without_newline([]),
-            "migration_receipt": {
-                "schema_version": "data-table-migration-receipt-v1",
-                "required": True,
-                "bound": True,
-                "sha256": receipt_sha,
-            },
-        }
-        for key in (
-            "schema_version", "receipt_contract", "scope", "forward_gate", "rollback_gate",
-            "writes_performed", "provider_calls", "row_values_recorded", "secret_values_recorded",
-        ):
-            rollback_pre[key] = readback[key]
+        rollback_pre = dict(readback)
+        rollback_pre["phase"] = "ROLLBACK_PRE"
         rollback_pre_path = temp / "readback-rollback-pre.raw"
         rollback_pre_path.write_text(
             "finance data table digest verified:" + json.dumps(rollback_pre) + "\n",
