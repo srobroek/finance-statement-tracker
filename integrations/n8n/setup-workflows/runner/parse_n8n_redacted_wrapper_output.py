@@ -10,7 +10,6 @@ import re
 import sys
 from typing import Any
 
-
 MAX_BYTES = 65536
 ANSI_CSI_PREFIX = re.compile(r"^(?:\x1b\[[0-9;]{0,32}[A-Za-z])+")
 ANSI_CSI_SUFFIX = re.compile(r"(?:\x1b\[[0-9;]{0,32}[A-Za-z])+$")
@@ -63,7 +62,7 @@ def extract_payload(raw: str, prefix: str) -> dict[str, Any]:
         raise ValueError("EXACT_ONE_REDACTED_RECEIPT_REQUIRED")
     payload = json.loads(receipt_lines[0], object_pairs_hook=reject_duplicate_keys)
     if not isinstance(payload, dict):
-        raise ValueError("REDACTED_RECEIPT_OBJECT_REQUIRED")
+        raise TypeError("REDACTED_RECEIPT_OBJECT_REQUIRED")
     return payload
 
 
@@ -80,7 +79,7 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         "forward_gate", "rollback_gate", "writes_performed", "provider_calls",
         "row_values_recorded", "secret_values_recorded",
     }
-    if set(value) != expected_keys:
+    if set(value) not in {expected_keys, expected_keys | {"phase"}}:
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_KEYS_MISMATCH")
     expected_table_names = [
         "finance_actual_batches",
@@ -141,6 +140,8 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         or (not migration_bound and migration_sha256 is not None)
     ):
         raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
+    if migration_bound and value.get("phase") not in {"FORWARD_POST", "ROLLBACK"}:
+        raise ValueError("DATA_TABLE_DIGEST_PHASE_MISMATCH")
     gate_keys = {"gate", "status", "required_ack", "migration_receipt_required", "command_executed"}
     for key, gate, required_ack in (
         ("forward_gate", "FORWARD", "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"),
@@ -160,6 +161,7 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         or value["schema_version"] != 1
         or value["receipt_contract"] != "finance-data-table-readback-receipt-v1"
         or value["status"] != "VERIFIED"
+        or ("phase" in value and value["phase"] not in {"FORWARD_POST", "ROLLBACK"})
         or value["scope"] != "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
         or not strict_int(value["finance_tables"])
         or value["finance_tables"] != 4

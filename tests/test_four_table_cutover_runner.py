@@ -44,6 +44,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
 
     def _fixture(self, temp: Path):
         source = {name: [] for name in self.runner._legacy_names()}
+        source["finance_source_cursors"] = [{"source_code": "disposable-test-source"}]
         migration = self.migration.MigrationRunner(source)
         source_path = temp / "finance-data-table-backup-v1.json"
         migration_path = temp / "data-table-migration-receipt.json"
@@ -64,13 +65,18 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 {"name": field, "type": spec["type"]}
                 for field, spec in sorted(matrix["target_schemas"][name]["columns"].items())
             ]
+            rows = migration.target_tables[name]
+            row_strings = sorted(
+                json.dumps(self.runner._canonical(row), ensure_ascii=False, separators=(",", ":"))
+                for row in rows
+            )
             table = {
                 "name": name,
                 "table_id_sha256": self.runner._digest_json_without_newline(name),
                 "schema": schema,
                 "schema_sha256": self.runner._digest_json_without_newline(schema),
-                "row_count": 0,
-                "rows_sha256": self.runner._digest_json_without_newline([]),
+                "row_count": len(rows),
+                "rows_sha256": self.runner._digest_json_without_newline(row_strings),
             }
             table["digest_sha256"] = self.runner._digest_json_without_newline(table)
             tables.append(table)
@@ -78,10 +84,11 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_contract": "finance-data-table-readback-receipt-v1",
             "status": "VERIFIED",
+            "phase": "FORWARD_POST",
             "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
             "finance_tables": 4,
             "tables": tables,
-            "total_rows": 0,
+            "total_rows": sum(table["row_count"] for table in tables),
             "digest_sha256": self.runner._digest_json_without_newline(tables),
             "migration_receipt": {
                 "schema_version": "data-table-migration-receipt-v1",
@@ -113,12 +120,20 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "finance data table digest verified:" + json.dumps(readback) + "\n",
             encoding="utf-8",
         )
+        rollback_readback = dict(readback)
+        rollback_readback["phase"] = "ROLLBACK"
+        raw_rollback = temp / "readback-rollback.raw"
+        raw_rollback.write_text(
+            "finance data table digest verified:" + json.dumps(rollback_readback) + "\n",
+            encoding="utf-8",
+        )
         raw_pre = temp / "readback-pre.raw"
         raw_pre.write_text(
             "finance data table digest verified:"
             + json.dumps(
                 {
                     "status": "FORWARD_PRE_READBACK",
+                    "phase": "FORWARD_PRE",
                     "finance_tables": 0,
                     "tables": [],
                     "total_rows": 0,
@@ -137,12 +152,27 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         # The unit fixture is a disposable checkout; production code still
         # binds the workflow root to the real checkout path.
         self.runner.WORKFLOW_ROOT = workflow_root
-        return source_path, migration_path, receipt_sha, workflow_root, raw_readback, raw_pre
+        identity = {
+            "schema_version": "finance-four-table-accepted-identity-v1",
+            "repository_root": str(ROOT),
+            "workflow_root": str(workflow_root),
+            "source_head": self.source_head,
+            "generator_head": self.generator_head,
+            "clean_checkout": True,
+            "legacy_references": [],
+        }
+        identity["identity_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(identity)
+        ).hexdigest()
+        identity_path = migration_path.with_name("finance-four-table-accepted-identity.json")
+        identity_path.write_bytes(self.runner._canonical_bytes(identity))
+        os.chmod(identity_path, 0o600)
+        return source_path, migration_path, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback
 
     def test_forward_binds_receipt_heads_and_proves_noop(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _raw_rollback = self._fixture(temp)
             output = temp / "forward.json"
             args = [
                 "forward",
@@ -190,7 +220,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_forward_rejects_legacy_references(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _raw_rollback = self._fixture(temp)
             (workflow_root / "old.json").write_text(
                 '{"table":"finance_source_cursors"}\n', encoding="utf-8"
             )
@@ -224,7 +254,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_rollback_requires_forward_receipt_and_restores_exact_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback = self._fixture(temp)
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -261,7 +291,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             ] = self.runner.ROLLBACK_RUNTIME_ACTION
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
-            rollback_common[rollback_common.index(str(raw_pre))] = str(raw_readback)
+            rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback)
             rollback_common[-1] = str(rollback)
             runtime_proof = temp / "runtime-proof.json"
             rollback_args = [
@@ -294,7 +324,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_receipt_must_be_mode_six_hundred(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _raw_rollback = self._fixture(temp)
             os.chmod(migration, 0o644)
             args = [
                 "forward",
@@ -326,7 +356,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_rollback_rejects_tampered_forward_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback = self._fixture(temp)
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -360,6 +390,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             rollback_common = common.copy()
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
+            rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback)
             rollback_common[-1] = str(temp / "rollback.json")
             rollback_args = [
                 "rollback",
@@ -389,23 +420,62 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "--second-post-readback-raw",
             "rollback-rehearsal",
             "--runtime-proof",
+            "finance-four-table-accepted-identity.json",
             "FINANCE_DATA_TABLE_READBACK_PHASE",
             "FINANCE_N8N_RUNTIME_MODE",
         ):
             self.assertIn(command, script)
 
     def test_shell_disposable_forward_call_order(self):
-        """The dual CLI reaches runtime twice before sealing its receipt."""
+        """The dual CLI reaches runtime twice, then rolls back successfully."""
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, _receipt_sha, _workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            source, migration, _receipt_sha, _workflow_root, raw_readback, raw_pre, raw_rollback = self._fixture(temp)
+            checkout = temp / "checkout"
+            for relative in (
+                "integrations/n8n/generate_data_table_migration.py",
+                "integrations/n8n/data-table-migration-matrix.json",
+                "integrations/n8n/data-tables.json",
+                "integrations/n8n/setup-workflows/runner/four_table_cutover.py",
+                "integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs",
+                "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py",
+                "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh",
+            ):
+                destination = checkout / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            (checkout / "integrations/n8n/workflows").mkdir(parents=True)
+            subprocess.run(["git", "-C", str(checkout), "init", "-q"], check=True)
+            subprocess.run(["git", "-C", str(checkout), "config", "user.email", "test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(checkout), "config", "user.name", "Disposable Test"], check=True)
+            subprocess.run(["git", "-C", str(checkout), "add", "integrations"], check=True)
+            subprocess.run(["git", "-C", str(checkout), "commit", "-qm", "disposable checkout"], check=True)
+            checkout_head = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
             receipt_dir = temp / "receipts"
             receipt_dir.mkdir()
             shutil.copy2(source, receipt_dir / "finance-data-table-backup-v1.json")
             shutil.copy2(migration, receipt_dir / "data-table-migration-receipt.json")
             os.chmod(receipt_dir / "data-table-migration-receipt.json", 0o600)
+            identity = {
+                "schema_version": "finance-four-table-accepted-identity-v1",
+                "repository_root": str(checkout),
+                "workflow_root": str(checkout / "integrations/n8n/workflows"),
+                "source_head": checkout_head,
+                "generator_head": self.generator_head,
+                "clean_checkout": True,
+                "legacy_references": [],
+            }
+            identity["identity_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(identity)
+            ).hexdigest()
+            identity_path = receipt_dir / "finance-four-table-accepted-identity.json"
+            identity_path.write_bytes(self.runner._canonical_bytes(identity))
+            os.chmod(identity_path, 0o600)
             (receipt_dir / "forward.raw").write_text(raw_readback.read_text(encoding="utf-8"), encoding="utf-8")
             (receipt_dir / "pre.raw").write_text(raw_pre.read_text(encoding="utf-8"), encoding="utf-8")
+            (receipt_dir / "rollback.raw").write_text(raw_rollback.read_text(encoding="utf-8"), encoding="utf-8")
             log = temp / "docker.log"
             fake_bin = temp / "bin"
             fake_bin.mkdir()
@@ -417,14 +487,15 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "if [[ \"$*\" == *'n8n execute'* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
                 "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
                 "echo READ >> \"$log\"\n"
-                "if [[ \"$count\" = 0 ]]; then cat \"$FINANCE_TEST_PRE\"; else cat \"$FINANCE_TEST_POST\"; fi\n",
+                "if [[ \"$*\" == *'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK'* ]]; then cat \"$FINANCE_TEST_ROLLBACK\"; "
+                "elif [[ \"$count\" = 0 ]]; then cat \"$FINANCE_TEST_PRE\"; else cat \"$FINANCE_TEST_POST\"; fi\n",
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
             environment = {
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
-                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
                 "N8N_FINANCE_PROJECT_ID": "finance-test-project",
@@ -432,21 +503,34 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FINANCE_TEST_PRE": str(receipt_dir / "pre.raw"),
                 "FINANCE_TEST_POST": str(receipt_dir / "forward.raw"),
+                "FINANCE_TEST_ROLLBACK": str(receipt_dir / "rollback.raw"),
             }
             completed = subprocess.run(
-                ["bash", str(SHELL_RUNNER_PATH), "forward"],
-                cwd=ROOT,
+                ["bash", str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"), "forward"],
+                cwd=checkout,
                 env=environment,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            self.assertNotEqual(completed.returncode, 0)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(
                 log.read_text(encoding="utf-8").splitlines(),
                 ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
             )
-            self.assertIn("LEGACY_TABLE_REFERENCES_REMAIN", completed.stderr)
+            environment["FOUR_TABLE_FORWARD_ACK"] = ""
+            environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
+            rollback_completed = subprocess.run(
+                ["bash", str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"), "rollback"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(rollback_completed.returncode, 0, rollback_completed.stderr)
+            self.assertTrue((receipt_dir / "finance-data-table-rollback-runtime-proof.json").exists())
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["READ", "EXECUTE", "READ", "EXECUTE", "READ", "READ", "READ"])
 
 
 if __name__ == "__main__":

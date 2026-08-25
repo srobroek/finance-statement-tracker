@@ -29,6 +29,7 @@ test -d "$receipt_dir"
 
 source_backup="$receipt_dir/finance-data-table-backup-v1.json"
 migration_receipt="$receipt_dir/data-table-migration-receipt.json"
+accepted_identity="$receipt_dir/finance-four-table-accepted-identity.json"
 cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
 forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
 pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
@@ -39,6 +40,7 @@ adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-
 workflow_root="$repo_dir/integrations/n8n/workflows"
 test -f "$source_backup"
 test -f "$migration_receipt"
+test -f "$accepted_identity"
 test -f "$adapter"
 test -d "$workflow_root"
 
@@ -48,12 +50,12 @@ test "$(stat -c '%a' "$migration_receipt")" = 600
 run_readback() {
   local destination="$1"
   local phase="$2"
-  cat "$adapter" | docker exec -i \
+  docker exec -i \
     -e FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY \
     -e FINANCE_DATA_TABLE_READBACK_PHASE="$phase" \
     -e N8N_FINANCE_PROJECT_ID="$N8N_FINANCE_PROJECT_ID" \
     -e FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256="$migration_sha" \
-    "$FINANCE_N8N_CONTAINER" node - list:workflow > "$destination"
+    "$FINANCE_N8N_CONTAINER" node - list:workflow < "$adapter" > "$destination"
 }
 
 case "$operation" in
@@ -78,6 +80,7 @@ case "$operation" in
       --migration-receipt "$migration_receipt" \
       --migration-receipt-sha256 "$migration_sha" \
       --repository-root "$repo_dir" \
+      --accepted-identity "$accepted_identity" \
       --operator-ack "$operator_ack" \
       --runtime-action "$runtime_action" \
       --workflow-root "$workflow_root" \
@@ -92,6 +95,7 @@ args=(
   --migration-receipt "$migration_receipt"
   --migration-receipt-sha256 "$migration_sha"
   --repository-root "$repo_dir"
+  --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"
   --runtime-action "$runtime_action"
   --workflow-root "$workflow_root"

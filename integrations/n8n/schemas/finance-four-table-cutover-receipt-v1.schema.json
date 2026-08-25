@@ -11,6 +11,7 @@
     "migration_receipt_sha256",
     "source_head",
     "generator_head",
+    "accepted_identity_sha256",
     "source_digest",
     "old_tables_preserved",
     "runtime_cutover",
@@ -26,7 +27,10 @@
         "reference_rewrite": {
           "properties": {"verified": {"const": true}}
         },
-        "pre_readback": {"$ref": "#/$defs/forward_pre_readback"}
+        "pre_readback": {"$ref": "#/$defs/forward_pre_readback"},
+        "readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
+        "post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
+        "second_post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}}
       },
       "required": [
         "target_digest",
@@ -49,7 +53,10 @@
       "properties": {
         "operation": {"const": "ROLLBACK"},
         "operator_ack": {"const": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"},
-        "runtime_action": {"const": "FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"}
+        "runtime_action": {"const": "FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"},
+        "readback": {"properties": {"phase": {"const": "ROLLBACK"}}},
+        "pre_readback": {"properties": {"phase": {"const": "ROLLBACK"}}},
+        "post_readback": {"properties": {"phase": {"const": "ROLLBACK"}}}
       },
       "required": [
         "restored_source_digest",
@@ -71,6 +78,7 @@
     "migration_receipt_sha256": {"$ref": "#/$defs/digest"},
     "source_head": {"$ref": "#/$defs/head"},
     "generator_head": {"$ref": "#/$defs/head"},
+    "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
     "source_digest": {"$ref": "#/$defs/digest"},
     "restored_source_digest": {"$ref": "#/$defs/digest"},
     "target_digest": {"$ref": "#/$defs/digest"},
@@ -137,9 +145,10 @@
     ,"readback": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["verified", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
       "properties": {
         "verified": {"const": true},
+        "phase": {"enum": ["FORWARD_POST", "ROLLBACK"]},
         "digest_sha256": {"$ref": "#/$defs/digest"},
         "finance_tables": {"const": 4},
         "total_rows": {"type": "integer", "minimum": 0},

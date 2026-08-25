@@ -246,7 +246,7 @@ def _seal(value: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _parse_readback(path: Path, migration_sha256: str) -> dict[str, Any]:
+def _parse_readback(path: Path, migration_sha256: str, expected_phase: str) -> dict[str, Any]:
     parser_spec = importlib.util.spec_from_file_location("finance_readback_parser", READBACK_PARSER_PATH)
     if parser_spec is None or parser_spec.loader is None:
         raise CutoverError("READBACK_PARSER_UNAVAILABLE")
@@ -265,7 +265,11 @@ def _parse_readback(path: Path, migration_sha256: str) -> dict[str, Any]:
     migration = raw_payload.get("migration_receipt", {})
     if migration.get("bound") is not True or migration.get("sha256") != migration_sha256:
         raise CutoverError("READBACK_MIGRATION_RECEIPT_MISMATCH")
+    if raw_payload.get("phase") != expected_phase:
+        raise CutoverError("READBACK_PHASE_MISMATCH")
     if raw_payload.get("status") == "FORWARD_PRE_READBACK":
+        if expected_phase != "FORWARD_PRE":
+            raise CutoverError("READBACK_OPERATION_MISMATCH")
         if raw_payload.get("finance_tables") != 0 or raw_payload.get("total_rows") != 0:
             raise CutoverError("FORWARD_PRE_READBACK_MUST_BE_EMPTY")
         if raw_payload.get("tables") != []:
@@ -286,8 +290,11 @@ def _parse_readback(path: Path, migration_sha256: str) -> dict[str, Any]:
         payload = parser.parse_data_table_receipt(raw)
     except (ValueError, json.JSONDecodeError) as error:
         raise CutoverError("READBACK_RECEIPT_INVALID") from error
+    if raw_payload.get("status") != "VERIFIED":
+        raise CutoverError("READBACK_STATUS_INVALID")
     return {
         "verified": True,
+        "phase": expected_phase,
         "digest_sha256": payload["digest_sha256"],
         "finance_tables": payload["finance_tables"],
         "total_rows": payload["total_rows"],
@@ -398,6 +405,7 @@ def _compare_forward_readbacks(
     first_after: Mapping[str, Any],
     second_after: Mapping[str, Any],
     matrix: Mapping[str, Any],
+    expected_tables: list[Mapping[str, Any]],
 ) -> dict[str, Any]:
     if before.get("phase") != "FORWARD_PRE" or before.get("finance_tables") != 0:
         raise CutoverError("FORWARD_FIRST_RUN_PRE_READBACK_REQUIRED")
@@ -405,10 +413,18 @@ def _compare_forward_readbacks(
     second = _validate_target_readback(second_after, matrix, label="SECOND_POST")
     if first != second:
         raise CutoverError("SECOND_RUNTIME_RUN_NOT_NOOP")
+    expected = {table["name"]: table for table in expected_tables}
+    for table in first["tables"]:
+        wanted = expected.get(table["name"])
+        if wanted is None or any(
+            table[field] != wanted[field]
+            for field in ("schema_sha256", "row_count", "rows_sha256")
+        ):
+            raise CutoverError(f"RUNTIME_PROJECTION_DIGEST_MISMATCH:{table['name']}")
     return first
 
 
-def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) -> tuple[str, str, str]:
+def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) -> tuple[str, str, str, str]:
     try:
         repository_root = args.repository_root.resolve(strict=True)
     except OSError as error:
@@ -422,6 +438,14 @@ def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) ->
     if workflow_root != WORKFLOW_ROOT:
         raise CutoverError("WORKFLOW_ROOT_MISMATCH")
     try:
+        clean = subprocess.run(
+            ["git", "-C", str(repository_root), "status", "--porcelain", "--untracked-files=no"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if clean:
+            raise CutoverError("CLEAN_CHECKOUT_REQUIRED")
         source_head = subprocess.run(
             ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
             check=True,
@@ -438,14 +462,34 @@ def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) ->
         raise CutoverError("SOURCE_GENERATOR_HEAD_UNAVAILABLE") from error
     source_head = _require_head(source_head, "SOURCE_HEAD")
     generator_head = _require_head(generator_head, "GENERATOR_HEAD")
+    identity_path = args.accepted_identity or args.migration_receipt.with_name(
+        "finance-four-table-accepted-identity.json"
+    )
+    _require_protected(identity_path)
+    identity, _ = _read_json(identity_path)
+    if (
+        identity.get("schema_version") != "finance-four-table-accepted-identity-v1"
+        or identity.get("repository_root") != str(repository_root)
+        or identity.get("workflow_root") != str(workflow_root)
+        or identity.get("source_head") != source_head
+        or identity.get("generator_head") != generator_head
+        or identity.get("clean_checkout") is not True
+        or identity.get("legacy_references") != []
+    ):
+        raise CutoverError("ACCEPTED_CHECKOUT_IDENTITY_MISMATCH")
+    identity_digest = _require_digest(identity.get("identity_sha256"), "IDENTITY_SHA256")
+    unsigned_identity = dict(identity)
+    unsigned_identity.pop("identity_sha256", None)
+    if hashlib.sha256(_canonical_bytes(unsigned_identity)).hexdigest() != identity_digest:
+        raise CutoverError("ACCEPTED_CHECKOUT_IDENTITY_INTEGRITY_MISMATCH")
     receipt_sha = _require_digest(args.migration_receipt_sha256, "MIGRATION_RECEIPT_SHA256")
     if args.operator_ack != expected_ack or args.runtime_action != expected_action:
         raise CutoverError("NAMED_OPERATOR_ACK_REQUIRED")
-    return source_head, generator_head, receipt_sha
+    return source_head, generator_head, receipt_sha, identity_digest
 
 
 def run_forward(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha = _heads(
+    source_head, generator_head, receipt_sha, identity_digest = _heads(
         args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION
     )
     source, expected_receipt, _ = _source_and_receipt(
@@ -464,17 +508,18 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
     if first.get("target_schema_sha256") != schema_sha:
         raise CutoverError("TARGET_SCHEMA_DIGEST_MISMATCH")
     references = _check_reference_rewrite(args.workflow_root)
-    before = _parse_readback(args.pre_readback_raw, receipt_sha)
-    after = _parse_readback(args.post_readback_raw, receipt_sha)
-    second_after = _parse_readback(args.second_post_readback_raw, receipt_sha)
-    readback = _compare_forward_readbacks(before, after, second_after, matrix)
+    before = _parse_readback(args.pre_readback_raw, receipt_sha, "FORWARD_PRE")
+    after = _parse_readback(args.post_readback_raw, receipt_sha, "FORWARD_POST")
+    second_after = _parse_readback(args.second_post_readback_raw, receipt_sha, "FORWARD_POST")
     table_receipts = _target_table_receipts(runner, matrix)
+    readback = _compare_forward_readbacks(before, after, second_after, matrix, table_receipts)
     result = _seal({
         "schema_version": "finance-four-table-cutover-receipt-v1",
         "operation": "FORWARD",
         "migration_receipt_sha256": receipt_sha,
         "source_head": source_head,
         "generator_head": generator_head,
+        "accepted_identity_sha256": identity_digest,
         "source_digest": first["source_digest"],
         "target_digest": first["target_digest"],
         "target_schema_sha256": schema_sha,
@@ -500,7 +545,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha = _heads(
+    source_head, generator_head, receipt_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
     source, migration_receipt, _ = _source_and_receipt(
@@ -532,11 +577,22 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         raise CutoverError("FORWARD_RECEIPT_INTEGRITY_MISMATCH")
     module = _load_migration_module()
     matrix = _load_matrix()
-    before = _parse_readback(args.pre_readback_raw, receipt_sha)
-    after = _parse_readback(args.post_readback_raw, receipt_sha)
-    readback = _compare_readbacks(before, after, matrix)
-    _verify_runtime_proof(args.runtime_proof, receipt_sha, source_head, generator_head, source)
     runner = module.MigrationRunner(_source_rows(source))
+    expected_tables = _target_table_receipts(runner, matrix)
+    before = _parse_readback(args.pre_readback_raw, receipt_sha, "ROLLBACK")
+    after = _parse_readback(args.post_readback_raw, receipt_sha, "ROLLBACK")
+    readback = _compare_readbacks(before, after, matrix)
+    expected = {table["name"]: table for table in expected_tables}
+    for table in readback["tables"]:
+        wanted = expected.get(table["name"])
+        if wanted is None or any(
+            table[field] != wanted[field]
+            for field in ("schema_sha256", "row_count", "rows_sha256")
+        ):
+            raise CutoverError(f"RUNTIME_PROJECTION_DIGEST_MISMATCH:{table['name']}")
+    _verify_runtime_proof(
+        args.runtime_proof, receipt_sha, source_head, generator_head, identity_digest, source
+    )
     rehearsal = runner.reverse_rehearsal()
     source_digest = migration_receipt.get("source_digest")
     if (
@@ -552,6 +608,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         "migration_receipt_sha256": receipt_sha,
         "source_head": source_head,
         "generator_head": generator_head,
+        "accepted_identity_sha256": identity_digest,
         "source_digest": source_digest,
         "restored_source_digest": rehearsal["restored_source_digest"],
         "restore_roundtrip": True,
@@ -572,7 +629,12 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _verify_runtime_proof(
-    path: Path, receipt_sha: str, source_head: str, generator_head: str, source: Mapping[str, Any]
+    path: Path,
+    receipt_sha: str,
+    source_head: str,
+    generator_head: str,
+    identity_digest: str,
+    source: Mapping[str, Any],
 ) -> None:
     _require_protected(path)
     proof, _ = _read_json(path)
@@ -581,6 +643,7 @@ def _verify_runtime_proof(
         or proof.get("migration_receipt_sha256") != receipt_sha
         or proof.get("source_head") != source_head
         or proof.get("generator_head") != generator_head
+        or proof.get("accepted_identity_sha256") != identity_digest
         or proof.get("operator_ack") != REQUIRED_ROLLBACK_ACK
         or proof.get("runtime_action") != ROLLBACK_RUNTIME_ACTION
         or proof.get("pre_delete") is not True
@@ -599,7 +662,7 @@ def _verify_runtime_proof(
 
 
 def run_rollback_rehearsal(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha = _heads(
+    source_head, generator_head, receipt_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
     source, migration_receipt, _ = _source_and_receipt(
@@ -625,6 +688,7 @@ def run_rollback_rehearsal(args: argparse.Namespace) -> dict[str, Any]:
             "migration_receipt_sha256": receipt_sha,
             "source_head": source_head,
             "generator_head": generator_head,
+            "accepted_identity_sha256": identity_digest,
             "source_digest": source_digest,
             "restored_source_digest": rehearsal["restored_source_digest"],
             "restore_roundtrip": True,
@@ -650,6 +714,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--migration-receipt", type=Path, required=True)
         command.add_argument("--migration-receipt-sha256", required=True)
         command.add_argument("--repository-root", type=Path, required=True)
+        command.add_argument("--accepted-identity", type=Path)
         command.add_argument("--operator-ack", required=True)
         command.add_argument("--runtime-action", required=True)
         command.add_argument("--workflow-root", type=Path, required=True)
