@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-four-table-cutover-receipt-v1.json",
+  "title": "Finance four-table cutover proof receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "cutover_receipt_sha256",
+    "migration_receipt_sha256",
+    "source_head",
+    "generator_head",
+    "source_digest",
+    "old_tables_preserved",
+    "runtime_cutover",
+    "deletion_authorized",
+    "operator_ack"
+  ],
+  "properties": {
+    "schema_version": {"const": "finance-four-table-cutover-receipt-v1"},
+    "operation": {"enum": ["FORWARD", "ROLLBACK"]},
+    "cutover_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "migration_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "source_head": {"$ref": "#/$defs/head"},
+    "generator_head": {"$ref": "#/$defs/head"},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "restored_source_digest": {"$ref": "#/$defs/digest"},
+    "target_digest": {"$ref": "#/$defs/digest"},
+    "target_schema_sha256": {"$ref": "#/$defs/digest"},
+    "side_by_side_created": {"const": true},
+    "target_tables": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "schema_sha256", "row_count", "rows_sha256", "digest_sha256"],
+        "properties": {
+          "name": {"type": "string"},
+          "schema_sha256": {"$ref": "#/$defs/digest"},
+          "row_count": {"type": "integer", "minimum": 0},
+          "rows_sha256": {"$ref": "#/$defs/digest"},
+          "digest_sha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "exact_target_names": {"const": true},
+    "reference_rewrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "verified", "legacy_references"],
+      "properties": {
+        "checked": {"type": "boolean"},
+        "verified": {"type": "boolean"},
+        "legacy_references": {"type": "array", "maxItems": 0}
+      }
+    },
+    "second_run_noop": {"const": true},
+    "readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "digest_sha256", "finance_tables", "total_rows"],
+      "properties": {
+        "verified": {"type": "boolean"},
+        "digest_sha256": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "finance_tables": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "total_rows": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]}
+      }
+    },
+    "restore_roundtrip": {"const": true},
+    "pre_delete": {"const": true},
+    "target_tables_untouched": {"const": true},
+    "old_tables_preserved": {"const": true},
+    "runtime_cutover": {"const": false},
+    "deletion_authorized": {"const": false},
+    "operator_ack": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "head": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+  }
+}
