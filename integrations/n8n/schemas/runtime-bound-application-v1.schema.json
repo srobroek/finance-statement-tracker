@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/runtime-bound-application-v1.json",
+  "title": "Finance Microsoft OAuth runtime-bound application",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "application",
+    "source_manifest_sha256",
+    "finance_commit",
+    "workflow",
+    "provider_bindings",
+    "binding_receipt",
+    "redaction",
+    "retained_state_replaced",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {"const": "runtime-bound-application-v1"},
+    "status": {"const": "RUNTIME_BOUND"},
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository"],
+      "properties": {
+        "name": {"const": "finance-statement-tracker"},
+        "repository": {"const": "srobroek/finance-statement-tracker"}
+      }
+    },
+    "source_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "finance_commit": {"$ref": "#/$defs/commit"},
+    "workflow": {"$ref": "#/$defs/workflow"},
+    "provider_bindings": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/providerBinding"},
+      "allOf": [
+        {"contains": {"properties": {"node_type": {"const": "n8n-nodes-base.microsoftOutlook"}}, "required": ["node_type"]}},
+        {"contains": {"properties": {"node_type": {"const": "n8n-nodes-base.microsoftOneDrive"}}, "required": ["node_type"]}}
+      ]
+    },
+    "binding_receipt": {"$ref": "#/$defs/artifact"},
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credential_ids_recorded", "secret_values_recorded", "token_values_recorded"],
+      "properties": {
+        "credential_ids_recorded": {"const": false},
+        "secret_values_recorded": {"const": false},
+        "token_values_recorded": {"const": false}
+      }
+    },
+    "retained_state_replaced": {"const": false},
+    "production_mutation": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[^/].*"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "code", "source_sha256", "bound_sha256", "path", "active", "published"],
+      "properties": {
+        "id": {"const": "10000000-0000-4000-8000-000000000023"},
+        "code": {"const": "MICROSOFT_OAUTH_REFRESH_PROOF"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "bound_sha256": {"$ref": "#/$defs/sha256"},
+        "path": {"type": "string", "pattern": "^[^/].*23-microsoft-oauth-refresh-proof\\.json$"},
+        "active": {"const": false},
+        "published": {"const": false}
+      }
+    },
+    "providerBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_type", "credential_type", "placeholder", "name"],
+      "oneOf": [
+        {
+          "properties": {
+            "node_type": {"const": "n8n-nodes-base.microsoftOutlook"},
+            "credential_type": {"const": "microsoftOutlookOAuth2Api"},
+            "placeholder": {"const": "BIND_OUTLOOK"},
+            "name": {"const": "Finance Outlook"}
+          }
+        },
+        {
+          "properties": {
+            "node_type": {"const": "n8n-nodes-base.microsoftOneDrive"},
+            "credential_type": {"const": "microsoftOneDriveOAuth2Api"},
+            "placeholder": {"const": "BIND_ONEDRIVE"},
+            "name": {"const": "Finance OneDrive"}
+          }
+        }
+      ],
+      "properties": {
+        "node_type": {"enum": ["n8n-nodes-base.microsoftOutlook", "n8n-nodes-base.microsoftOneDrive"]},
+        "credential_type": {"enum": ["microsoftOutlookOAuth2Api", "microsoftOneDriveOAuth2Api"]},
+        "placeholder": {"enum": ["BIND_OUTLOOK", "BIND_ONEDRIVE"]},
+        "name": {"enum": ["Finance Outlook", "Finance OneDrive"]}
+      }
+    }
+  }
+}
