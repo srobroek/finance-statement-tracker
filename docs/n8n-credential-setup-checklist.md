@@ -23,6 +23,31 @@ step.
 - [ ] Keep the >4 MiB upload-session path and HTML/MIME-to-PDF renderer blocked
   until exact implementations pass disposable tests.
 
+## Microsoft refresh and failure handling
+
+- [ ] Run the read-only WF23 proof after an access token expires while a refresh
+  token remains available.
+- [ ] Record result counts and time bounds.
+- [ ] Record the execution ID and safety flags.
+- [ ] Record the verification time without token or provider-content values.
+- [ ] Restart n8n only, rerun WF23, and compare the redacted receipt fields with
+  the pre-restart run. Do not restart task runners, Postgres, or the host for
+  this check.
+- [ ] Revoke each Microsoft consent grant, rerun the negative-auth proof, and
+  confirm that Outlook and OneDrive reads fail before cursor or evidence writes.
+- [ ] Classify `invalid_grant` as an authentication failure.
+- [ ] Classify a missing refresh token as an authentication failure.
+- [ ] Classify a scope denial as an authentication failure.
+- [ ] Classify a missing credential as an authentication failure.
+- [ ] Stop acquisition after an authentication failure.
+- [ ] Preserve the last cursor.
+- [ ] Emit a redacted failure receipt.
+- [ ] Request user-present consent before retrying.
+- [ ] Keep bounded reads pending until the receipt proves refresh behavior.
+- [ ] Keep bounded reads pending until the receipt proves restart persistence.
+- [ ] Keep bounded reads pending until the receipt proves revocation handling.
+- [ ] Keep bounded reads pending until the receipt proves negative-auth behavior.
+
 ## Statement and Actual
 
 - [ ] Bind `BIND_CARD_PASSWORD` to `financeStatementPassword`; do not place
@@ -63,16 +88,41 @@ step.
 
 - [ ] Install exact integrity-pinned packages from
   `integrations/n8n/community-node-lock.json` into the immutable custom image.
-- [ ] Assert the four finance custom node types plus ProDex and Claude node types
-  register without `?` placeholders.
-- [ ] Complete ProDex device login with the user and verify ChatGPT subscription
-  auth; do not enable API-key fallback.
-- [ ] Complete Claude CLI subscription login with the user.
-- [ ] Prove ProDex read-only/new-thread/schema-bound Luna and gated Sol receipts.
-- [ ] Prove Claude emits a schema-valid proposal and does not persist a session,
-  or use a reviewed fork that enforces no-session persistence.
+- [ ] Assert the four finance custom node types register without `?` placeholders.
+- [ ] Assert the ProDex node types register without `?` placeholders.
+- [ ] Complete the direct ProDex device login with the user through the pinned
+  platform [`login-community-subscriptions.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/login-community-subscriptions.sh)
+  procedure. Do not enable API-key fallback.
+- [ ] Keep ProDex account state in the runtime-owned host path
+  `/home/ci/.codex-n8n-community/auth.json`, mounted at
+  `/home/node/.n8n/codex/auth.json`. Keep the directory mode `0700`, the file
+  mode `0600`, and the bind mount persistent across n8n restarts.
+- [ ] Exclude `auth.json` from ordinary platform backups.
+- [ ] Use the platform's separate encrypted recovery path or repeat device login.
+- [ ] Keep `auth.json` contents out of Git, images, workflow data, logs, receipts,
+  and backups.
+- [ ] Run `codex login status` with `CODEX_HOME=/home/node/.n8n/codex` inside
+  the n8n container and retain only a redacted receipt with
+  `auth_file_present`, `auth_file_mode`, `login_status`,
+  `auth_contents_read=false`, and the verification timestamp.
+- [ ] Emit a redacted `AUTH_REQUIRED` or `AUTH_REVOKED` receipt when
+  `auth.json` is missing or rejected. Stop subscription work until the user
+  completes device login again.
+- [ ] Prove ProDex read-only receipts.
+- [ ] Prove ProDex new-thread receipts.
+- [ ] Prove schema-bound Luna receipts.
+- [ ] Prove gated Sol receipts.
+- [ ] Keep these claims `SPEC_ONLY` until three schema-valid receipts exist.
 - [ ] Confirm provider/model/prompt/command/path/sandbox/credential controls are
   absent from every caller and supplied only by workflow 21.
+
+## Later 1Password reconciliation
+
+The runtime owns the ProDex `auth.json` file. n8n owns Microsoft refresh state in
+its encrypted credentials. A later 1Password reconciliation may add references
+for these two state owners through the platform's existing `FinanceAutomation`
+item and restore procedure. It must not create a second credential store or put
+secret values in this repository. This reconciliation remains pending.
 
 ## Promotion readback
 
@@ -83,3 +133,33 @@ step.
   the public workflow GET omits write-only `parentFolderId`.
 - [ ] Verify exact workflow tags and all `From list` subworkflow references.
 - [ ] Confirm no workflow is published or active after credential binding.
+
+## Production identity receipt
+
+Record one mode-`0600` redacted receipt for each promotion or recovery proof. It
+must contain these identities and statuses:
+
+- finance source commit;
+- platform source commit;
+- immutable image digest;
+- registry digest;
+- Compose project;
+- service names;
+- n8n project ID;
+- workflow IDs;
+- Data Table digest;
+- listener origin;
+- Cloudflare connector identity;
+- route status;
+- Outlook and OneDrive credential types;
+- credential owner relations;
+- scope results;
+- authentication results;
+- ProDex auth result and `auth_file_mode`, without `auth.json` contents;
+- receipt status;
+- verification timestamp;
+- `secret_values_recorded=false`;
+- exact rollback or recovery receipt reference.
+
+Keep bearer material, token values, mailbox content, document content, and
+financial plaintext out of the receipt. Treat every missing field as pending.

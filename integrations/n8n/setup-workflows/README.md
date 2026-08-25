@@ -55,6 +55,23 @@ The receipt omits:
 - Credential values.
 - Token values.
 
+## OAuth lifecycle
+
+Keep all workflows inactive during each proof. Run the proof for each row:
+
+| Condition | Required readback | Failure action |
+|---|---|---|
+| The access token expired and a refresh token remains present | Run bounded Outlook and OneDrive reads. Record result counts and a redacted receipt. | If refresh fails, keep the cursor unchanged. |
+| n8n restarted | Repeat the bounded reads after restarting n8n only. | If the credential is unavailable, stop before cursor or evidence writes. |
+| Consent revoked | Record provider denial without message or file content. | Mark authentication revoked and request user-present consent. |
+| Credential or refresh token missing | Record negative-auth denial before provider access. | Emit a redacted failure receipt and stop acquisition. |
+
+Classify `invalid_grant` as an authentication failure. Classify scope denial as
+an authentication failure. Classify missing credentials as an authentication
+failure. Classify a missing refresh token as an authentication failure. Do not
+retry authentication failures as transient provider errors. Keep each OAuth
+claim pending until a current mode-`0600` receipt proves it.
+
 ## recovery receipt
 
 Runner reads a recovered Postgres ID from a protected receipt. Set
@@ -162,6 +179,13 @@ The preflight checks that these boundaries hold:
 - Four canonical Data Tables.
 - Redacted Microsoft credential metadata.
 
+The four-table check is a migration-target check. The legacy input contract still
+declares 15 `SPEC_ONLY` tables in [`../data-tables.json`](../data-tables.json).
+The generated [`../data-table-migration-matrix.json`](../data-table-migration-matrix.json)
+and [`tests/test_data_table_migration_matrix.py`](../../../tests/test_data_table_migration_matrix.py)
+prove the source dispositions, four target names, and bootstrap exclusion. A
+successful preflight does not promote the target to live runtime evidence.
+
 ## run the full proof
 
 After the preflight succeeds, run the full proof. Keep the same exports and
@@ -196,3 +220,14 @@ The cleanup gate restores these values:
 
 Runner emits a mode-`0600` success or failure receipt. Failure fields
 remain `null` until a zero-row or digest readback proves their postconditions.
+
+## Promotion identity receipt
+
+Keep the mode-`0600` receipt redacted. Include the finance and platform commits.
+Include image and registry digests. Include the Compose project and service
+names. Include the n8n project ID, workflow IDs, and Data Table digest. Include
+the listener origin, Cloudflare connector identity, credential owner and scope
+results, authentication result, receipt status, and verification timestamp.
+Include `secret_values_recorded=false` and the rollback or recovery receipt
+reference. Exclude tokens, bearer material, mailbox content, document content,
+and financial plaintext. Missing identity fields keep the promotion pending.
