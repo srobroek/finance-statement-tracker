@@ -86,12 +86,10 @@ Source code implements these fixed-purpose paths:
 - statement parsing
 - the Actual custom node
 
-Source code implements the Cashback companion. These implementations remain
-unpromoted. Current production remains blocked until each path passes these gates
-from `config/project-acceptance.json`:
+The deployed Cashback runtime is `READY`. Workflow integration status:
 
-- fixture tests
-- disposable execution
-- shadow run
-- semantic readback
-- promotion acceptance
+| Workflow | Status |
+|---|---|
+| `W20` | `DEFERRED` |
+| `W02` | `DEFERRED` |
+| `W03` | `DEFERRED` |
