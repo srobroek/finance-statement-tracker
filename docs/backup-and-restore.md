@@ -37,12 +37,12 @@ pre-restore copies until UI/API balances and cashback event counts agree.
 ## n8n Postgres
 
 The pinned n8n platform commit
-[`2c3286ae3c63a80b86ade945f19d419bf562874b`](https://github.com/srobroek/n8n/tree/2c3286ae3c63a80b86ade945f19d419bf562874b)
-owns [`scripts/backup.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/backup.sh),
-[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh),
-and [`scripts/restore-disposable.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/restore-disposable.sh).
+[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867)
+owns [`scripts/backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh),
+[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh),
+and [`scripts/restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh).
 The backup creates a PostgreSQL custom-format dump under
-`/opt/backups/finance-n8n`, writes a SHA-256 sidecar, and retains 30 days by
+`/opt/backups/n8n`, writes a SHA-256 sidecar, and retains 30 days by
 default. Schedule it independently of the Actual backup.
 
 Before restoring n8n:
@@ -59,7 +59,7 @@ Before restoring n8n:
 10. verify MCP status before deleting the old database.
 
 The rootless stack owner performs key recovery with the pinned platform
-[`scripts/recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/recover-retained-n8n-key.sh)
+[`scripts/recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
 procedure. The finance checkout does not recreate, rotate, or print the n8n
 encryption key. A failed restore retains the pre-restore database and safety
 dump until the owner records a redacted recovery receipt.

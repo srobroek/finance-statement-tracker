@@ -49,9 +49,9 @@ quarantined run never advances a cursor and never creates a balancing entry.
 |---|---|
 | Local connector | The finance checkout does not run `cloudflared`. Keep the service stopped and disabled. |
 | Tunnel owner | The `Home-beachhead` tunnel owns connector replicas and route identity. |
-| Provider contract | [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md) |
+| Provider contract | [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md) |
 | Provider routes | After Service Auth checks pass, activate routes. |
-| Route script | [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh) |
+| Route script | [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh) |
 | Route verification | Run the script for positive and negative results. |
 | MCP route | `cloudflare-route-security` remains `IMPLEMENTED_NOT_DEPLOYED` in `config/project-acceptance.json`. Keep the route disabled until the connector receipt exists. |
 
@@ -66,11 +66,10 @@ merchant order evidence uses generic Outlook email enrichment.
 ## Monitoring
 
 The existing host monitor owns only Actual, its proxy, and cashback. The n8n
-stack health-gates n8n on Postgres and uses the pinned platform
-[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
-for deployment checks. After its separate acceptance gate passes, n8n MCP
-exposes execution state. Failed runs remain visible; successful run history is
-pruned by n8n retention settings.
+stack health-gates n8n on Postgres and checks both services with
+[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh).
+Execution state is queryable through n8n MCP. Failed runs remain visible;
+successful run history is pruned by n8n retention settings.
 
 Current production remains blocked until the fixed-purpose PDF/parser/Actual
 custom nodes are implemented, fixture-tested, shadow-run, and promoted through

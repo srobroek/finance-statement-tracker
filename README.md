@@ -128,14 +128,14 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pen
 
 ### platform-owned procedures
 
-The finance checkout does not own the n8n platform scripts. Use pinned commit [`2c3286ae3c63a80b86ade945f19d419bf562874b`](https://github.com/srobroek/n8n/tree/2c3286ae3c63a80b86ade945f19d419bf562874b).
+The finance checkout does not own the n8n platform scripts. Use pinned commit [`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
 
-- [`backup.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/backup.sh)
-- [`doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
-- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/restore-disposable.sh)
-- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/recover-retained-n8n-key.sh)
-- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md)
-- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh)
+- [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
+- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md)
+- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh)
 
 ## Recreate locally
 
