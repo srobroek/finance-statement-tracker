@@ -787,18 +787,28 @@ sys.exit(0)
         for failure_code in ("OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"):
             with self.subTest(failure_code=failure_code):
                 event = {
-                    "error": {"code": failure_code, "access_token": "SECRET_PROVIDER_VALUE"},
+                    "source": "workflow",
+                }
+                execution_detail = {
+                    "status": "error",
+                    "finished": True,
+                    "data": {"resultData": {"runData": {
+                        "Microsoft OAuth": [{"error": {
+                            "code": failure_code,
+                            "access_token": "SECRET_PROVIDER_VALUE",
+                        }}],
+                    }}},
                 }
                 code = (
                     f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
                     "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
                     "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
                     "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-                    f"const event={json.dumps(event,separators=(',',':'))};"
+                    f"const event={json.dumps(event,separators=(',',':'))};const executionDetail={json.dumps(execution_detail,separators=(',',':'))};"
                     "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
                     "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
                     "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
-                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>executionDetail};"
                     "throw new Error('unexpected request')};"
                     "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
                     ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls})))"
@@ -806,28 +816,36 @@ sys.exit(0)
                 completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
                 observed = json.loads(completed.stdout)
                 self.assertEqual(parser.parse_timeout(observed["line"]), failure_code)
-                self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "POST", "GET"])
+                self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "GET", "POST", "GET"])
                 self.assertTrue(observed["calls"][0]["url"].endswith("/run"))
-                self.assertTrue(observed["calls"][1]["url"].endswith("/stop"))
-                self.assertTrue(observed["calls"][2]["url"].endswith("/123"))
+                self.assertTrue(observed["calls"][1]["url"].endswith("/123"))
+                self.assertTrue(observed["calls"][2]["url"].endswith("/stop"))
+                self.assertTrue(observed["calls"][3]["url"].endswith("/123"))
                 self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
                 self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
         for malformed_event in (
-            {"error": {"code": "UNKNOWN_PROVIDER_FAILURE", "message": "SECRET_PROVIDER_VALUE"}},
-            {"error": {"code": {"nested": "SECRET_PROVIDER_VALUE"}}},
+            {"code": "UNKNOWN_PROVIDER_FAILURE", "message": "SECRET_PROVIDER_VALUE"},
+            {"code": {"nested": "SECRET_PROVIDER_VALUE"}},
         ):
             with self.subTest(malformed_event=malformed_event):
+                malformed_detail = {
+                    "status": "error",
+                    "finished": True,
+                    "data": {"resultData": {"runData": {
+                        "Microsoft OAuth": [{"error": malformed_event}],
+                    }}},
+                }
                 code = (
                     f"const shim=require({json.dumps(str(shim))});let socket;"
                     "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
                     "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
                     "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-                    f"const event={json.dumps(malformed_event,separators=(',',':'))};"
+                    f"const event={{source:'workflow'}};const executionDetail={json.dumps(malformed_detail,separators=(',',':'))};"
                     "const fetchImpl=async(url)=>{"
                     "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
                     "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
-                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>executionDetail};"
                     "throw new Error('unexpected request')};"
                     "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
                     ".then(()=>process.exit(1)).catch(error=>process.stdout.write(shim.terminalLine(error,null)))"

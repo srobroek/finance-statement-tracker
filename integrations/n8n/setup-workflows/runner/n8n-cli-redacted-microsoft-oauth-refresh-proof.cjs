@@ -111,14 +111,47 @@ function safeFailureCode(error) {
     : 'WF23_REDACTED_EXECUTION_FAILED';
 }
 
-function executionFinishedFailureCode(data) {
+function redactedExecutionFailureCode(body) {
   let code;
-  try { code = data?.error?.code ?? data?.errorCode; } catch {
+  try {
+    const resultData = body?.data?.resultData;
+    code = resultData?.error?.code;
+    if (typeof code !== 'string') {
+      const runData = resultData?.runData;
+      if (runData && typeof runData === 'object' && !Array.isArray(runData)) {
+        for (const runs of Object.values(runData)) {
+          if (!Array.isArray(runs)) continue;
+          for (const run of runs) {
+            if (typeof run?.error?.code === 'string') {
+              code = run.error.code;
+              if (SAFE_FAILURE_CODES.has(code)) return code;
+            }
+          }
+        }
+      }
+    }
+  } catch {
     return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
   }
   return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
     ? code
     : 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+}
+
+async function readRedactedExecutionFailureCode({ token, executionId, fetchImpl, timeoutMs }) {
+  if (typeof fetchImpl !== 'function' || !executionId) return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  try {
+    const response = await fetchWithin(
+      fetchImpl,
+      `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`,
+      { method: 'GET', headers: { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` } },
+      timeoutMs,
+    );
+    if (!response?.ok) return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+    return redactedExecutionFailureCode(await readResponseBody(response, timeoutMs));
+  } catch {
+    return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  }
 }
 
 function executionFailure(code) {
@@ -359,11 +392,11 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
   let settled = false;
   let executionId;
   let finishedStatus;
-  let finishedFailureCode;
   let terminalTask;
   let failureError;
   let runRequest;
   const pendingFinished = new Map();
+  const failureTasks = new Map();
   const pendingTerminal = new Map();
   let resolveRun;
   let rejectRun;
@@ -374,6 +407,16 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
       failureError = error;
       rejectRun(error);
     }
+  };
+  const failFromExecutionDetail = async (id) => {
+    let task = failureTasks.get(id);
+    if (!task) {
+      task = readRedactedExecutionFailureCode({
+        token, executionId: id, fetchImpl, timeoutMs: reconcileTimeoutMs,
+      }).then((code) => failRun(executionFailure(code)));
+      failureTasks.set(id, task);
+    }
+    await task;
   };
   const maybeFinish = () => {
     if (settled || !executionId || finishedStatus !== 'success' || !terminalTask) return;
@@ -407,11 +450,10 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     }
     if (frame.type === 'executionFinished' && (!data.workflowId || data.workflowId === workflowId)) {
       if (data.status !== 'success') {
-        const failureCode = executionFinishedFailureCode(data);
         if (executionId && frameExecutionId === executionId) {
-          failRun(executionFailure(failureCode));
+          void failFromExecutionDetail(executionId);
         } else if (!executionId) {
-          pendingFinished.set(frameExecutionId, { status: data.status, failureCode });
+          pendingFinished.set(frameExecutionId, { status: data.status });
         }
         return;
       }
@@ -439,9 +481,8 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
         terminalTask = pendingTerminal.get(executionId);
         const pendingFinishedEvent = pendingFinished.get(executionId);
         finishedStatus = pendingFinishedEvent?.status;
-        finishedFailureCode = pendingFinishedEvent?.failureCode;
         if (finishedStatus && finishedStatus !== 'success') {
-          failRun(executionFailure(finishedFailureCode));
+          await failFromExecutionDetail(executionId);
           return;
         }
         maybeFinish();
