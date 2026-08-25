@@ -1771,6 +1771,35 @@ try {{
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_platform_bootstrap_reuses_migration_generator_schema_digest(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(N8N / "generate_data_table_migration.py"), "--schema-digest"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        canonical_digest = result.stdout.strip()
+        self.assertRegex(canonical_digest, r"^[0-9a-f]{64}$")
+
+        manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
+        workflow = self.workflow("19-platform-data-table-bootstrap.json")
+        nodes = self.nodes("19-platform-data-table-bootstrap.json")
+        self.assertEqual(manifest["target_schema_contract"]["digest"], canonical_digest)
+        self.assertEqual(workflow["meta"]["targetSchemaDigest"], canonical_digest)
+        self.assertIn(canonical_digest, nodes["Verify Four-Table Target Contract"]["parameters"]["jsCode"])
+        self.assertIn(canonical_digest, nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"])
+
+    def test_retained_four_table_readback_receipt_schema_accepts_redacted_fixture(self) -> None:
+        schema = load_json(N8N / "schemas" / "finance-data-table-readback-receipt-v1.schema.json")
+        Draft202012Validator.check_schema(schema)
+        raw = load_json(ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json")["raw_stdout"]
+        prefix = "finance data table digest verified:"
+        payload = json.loads(next(line[len(prefix):] for line in raw.splitlines() if line.startswith(prefix)))
+        Draft202012Validator(schema).validate(payload)
+        self.assertEqual([table["row_count"] for table in payload["tables"]], [4, 3, 5, 5])
+        self.assertFalse(payload["migration_receipt"]["bound"])
+        self.assertFalse(payload["forward_gate"]["command_executed"])
+        self.assertFalse(payload["rollback_gate"]["command_executed"])
+
     def test_platform_bootstrap_check_detects_stale_artifact(self) -> None:
         generator = load_bootstrap_generator()
         with tempfile.TemporaryDirectory() as temporary:

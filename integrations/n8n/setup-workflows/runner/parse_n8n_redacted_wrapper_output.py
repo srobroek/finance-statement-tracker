@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -66,26 +67,108 @@ def extract_payload(raw: str, prefix: str) -> dict[str, Any]:
     return payload
 
 
-def parse_data_table(raw: str) -> str:
+def canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def parse_data_table_receipt(raw: str) -> dict[str, Any]:
     value = extract_payload(raw, "finance data table digest verified:")
     expected_keys = {
-        "schema_version", "status", "scope", "finance_tables", "total_rows",
-        "digest_sha256", "writes_performed", "provider_calls",
+        "schema_version", "receipt_contract", "status", "scope", "finance_tables",
+        "tables", "total_rows", "digest_sha256", "migration_receipt",
+        "forward_gate", "rollback_gate", "writes_performed", "provider_calls",
         "row_values_recorded", "secret_values_recorded",
     }
     if set(value) != expected_keys:
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_KEYS_MISMATCH")
+    expected_table_names = [
+        "finance_actual_batches",
+        "finance_ai_reviews",
+        "finance_documents",
+        "finance_ingestion_state",
+    ]
+    table_keys = {
+        "name", "table_id_sha256", "schema", "schema_sha256", "row_count",
+        "rows_sha256", "digest_sha256",
+    }
+    tables = value.get("tables")
+    if (
+        not isinstance(tables, list)
+        or len(tables) != 4
+        or any(not isinstance(table, dict) or set(table) != table_keys for table in tables)
+        or [table["name"] for table in tables] != expected_table_names
+    ):
+        raise ValueError("DATA_TABLE_DIGEST_TABLES_MISMATCH")
+    sha256_pattern = re.compile(r"[0-9a-f]{64}")
+    for table in tables:
+        schema = table["schema"]
+        if (
+            not isinstance(schema, list)
+            or not schema
+            or any(
+                not isinstance(column, dict)
+                or set(column) != {"name", "type"}
+                or not isinstance(column["name"], str)
+                or not column["name"]
+                or column["type"] not in {"string", "number", "boolean", "date"}
+                for column in schema
+            )
+            or [column["name"] for column in schema] != sorted(column["name"] for column in schema)
+            or len({column["name"] for column in schema}) != len(schema)
+            or not strict_int(table["row_count"])
+            or not 0 <= table["row_count"] <= 100000
+            or any(
+                not isinstance(table[key], str) or sha256_pattern.fullmatch(table[key]) is None
+                for key in ("table_id_sha256", "schema_sha256", "rows_sha256", "digest_sha256")
+            )
+            or table["schema_sha256"] != canonical_sha256(schema)
+            or table["digest_sha256"] != canonical_sha256({key: item for key, item in table.items() if key != "digest_sha256"})
+        ):
+            raise ValueError("DATA_TABLE_DIGEST_TABLE_CONTRACT_MISMATCH")
+    if len({table["table_id_sha256"] for table in tables}) != 4:
+        raise ValueError("DATA_TABLE_DIGEST_TABLE_IDENTITY_MISMATCH")
+    migration_receipt = value.get("migration_receipt")
+    if not isinstance(migration_receipt, dict) or set(migration_receipt) != {"schema_version", "required", "bound", "sha256"}:
+        raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
+    migration_bound = migration_receipt.get("bound")
+    migration_sha256 = migration_receipt.get("sha256")
+    if (
+        migration_receipt.get("schema_version") != "data-table-migration-receipt-v1"
+        or migration_receipt.get("required") is not True
+        or not strict_bool(migration_bound)
+        or (migration_bound and (not isinstance(migration_sha256, str) or sha256_pattern.fullmatch(migration_sha256) is None))
+        or (not migration_bound and migration_sha256 is not None)
+    ):
+        raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
+    gate_keys = {"gate", "status", "required_ack", "migration_receipt_required", "command_executed"}
+    for key, gate, required_ack in (
+        ("forward_gate", "FORWARD", "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"),
+        ("rollback_gate", "ROLLBACK", "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"),
+    ):
+        observed = value.get(key)
+        if not isinstance(observed, dict) or observed != {
+            "gate": gate,
+            "status": "BLOCKED",
+            "required_ack": required_ack,
+            "migration_receipt_required": True,
+            "command_executed": False,
+        } or set(observed) != gate_keys:
+            raise ValueError("DATA_TABLE_DIGEST_GATE_MISMATCH")
     if (
         not strict_int(value["schema_version"])
         or value["schema_version"] != 1
+        or value["receipt_contract"] != "finance-data-table-readback-receipt-v1"
         or value["status"] != "VERIFIED"
         or value["scope"] != "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
         or not strict_int(value["finance_tables"])
         or value["finance_tables"] != 4
         or not strict_int(value["total_rows"])
-        or not 0 <= value["total_rows"] <= 100000
+        or not 0 <= value["total_rows"] <= 400000
+        or value["total_rows"] != sum(table["row_count"] for table in tables)
         or not isinstance(value["digest_sha256"], str)
-        or re.fullmatch(r"[0-9a-f]{64}", value["digest_sha256"]) is None
+        or sha256_pattern.fullmatch(value["digest_sha256"]) is None
+        or value["digest_sha256"] != canonical_sha256(tables)
         or not strict_bool(value["writes_performed"])
         or value["writes_performed"] is not False
         or not strict_bool(value["provider_calls"])
@@ -96,7 +179,11 @@ def parse_data_table(raw: str) -> str:
         or value["secret_values_recorded"] is not False
     ):
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_CONTRACT_MISMATCH")
-    return value["digest_sha256"]
+    return value
+
+
+def parse_data_table(raw: str) -> str:
+    return parse_data_table_receipt(raw)["digest_sha256"]
 
 
 def parse_oauth_metadata(raw: str) -> dict[str, Any]:
@@ -156,12 +243,14 @@ def parse_oauth_metadata(raw: str) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=("data-table", "oauth-metadata"))
+    parser.add_argument("kind", choices=("data-table", "data-table-receipt", "oauth-metadata"))
     args = parser.parse_args()
     raw = sys.stdin.read(MAX_BYTES + 1)
     try:
         if args.kind == "data-table":
             print(parse_data_table(raw))
+        elif args.kind == "data-table-receipt":
+            print(json.dumps(parse_data_table_receipt(raw), separators=(",", ":"), sort_keys=True))
         else:
             print(json.dumps(parse_oauth_metadata(raw), separators=(",", ":")))
         return 0

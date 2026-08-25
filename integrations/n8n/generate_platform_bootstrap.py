@@ -8,6 +8,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from generate_data_table_migration import target_schema_digest
 from refactor_workflow_ui import format_code_nodes, layout
 
 
@@ -440,11 +441,7 @@ def target_schema_contract(matrix: dict) -> tuple[list[str], dict[str, dict[str,
         }
         for target in targets
     }
-    digest_payload = {
-        "targets": targets,
-        "target_schemas": matrix["target_schemas"],
-    }
-    digest = hashlib.sha256(canonical_json(digest_payload).encode("utf-8")).hexdigest()
+    digest = target_schema_digest(matrix["target_schemas"])
     return targets, schemas, digest
 
 
