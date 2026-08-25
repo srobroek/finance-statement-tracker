@@ -520,6 +520,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             self.assertEqual(
                 log.read_text(encoding="utf-8").splitlines(),
                 ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
+                log.read_text(encoding="utf-8"),
             )
             environment["FOUR_TABLE_FORWARD_ACK"] = ""
             environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
