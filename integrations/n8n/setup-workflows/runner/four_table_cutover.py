@@ -580,6 +580,8 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     module = _load_migration_module()
     matrix = _load_matrix()
     runner = module.MigrationRunner(_source_rows(source))
+    if runner.run() != migration_receipt:
+        raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
     expected_tables = _target_table_receipts(runner, matrix)
     before = _parse_readback(args.pre_readback_raw, receipt_sha, "ROLLBACK")
     after = _parse_readback(args.post_readback_raw, receipt_sha, "ROLLBACK")

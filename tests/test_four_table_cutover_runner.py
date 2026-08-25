@@ -479,6 +479,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             (receipt_dir / "pre.raw").write_text(raw_pre.read_text(encoding="utf-8"), encoding="utf-8")
             (receipt_dir / "rollback.raw").write_text(raw_rollback.read_text(encoding="utf-8"), encoding="utf-8")
             log = temp / "docker.log"
+            log.touch()
             fake_bin = temp / "bin"
             fake_bin.mkdir()
             fake_docker = fake_bin / "docker"
