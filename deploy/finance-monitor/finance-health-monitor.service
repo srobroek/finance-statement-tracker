@@ -1,6 +1,6 @@
 [Unit]
 Description=Monitor and narrowly recover Finance Tracker services
-After=docker.service network-online.target
+After=podman-restart.service network-online.target
 Wants=network-online.target
 
 [Service]
