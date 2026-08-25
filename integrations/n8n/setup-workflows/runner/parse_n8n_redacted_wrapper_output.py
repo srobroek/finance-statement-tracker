@@ -71,7 +71,78 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def parse_data_table_receipt(raw: str) -> dict[str, Any]:
+def _validate_readback_gates(value: dict[str, Any]) -> None:
+    gate_keys = {"gate", "status", "required_ack", "migration_receipt_required", "command_executed"}
+    for key, gate, required_ack in (
+        ("forward_gate", "FORWARD", "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"),
+        ("rollback_gate", "ROLLBACK", "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"),
+    ):
+        observed = value.get(key)
+        if not isinstance(observed, dict) or observed != {
+            "gate": gate,
+            "status": "BLOCKED",
+            "required_ack": required_ack,
+            "migration_receipt_required": True,
+            "command_executed": False,
+        } or set(observed) != gate_keys:
+            raise ValueError("DATA_TABLE_DIGEST_GATE_MISMATCH")
+
+
+def _validate_readback_common(value: dict[str, Any], expected_phase: str | None) -> None:
+    if expected_phase is not None and value.get("phase") != expected_phase:
+        raise ValueError("DATA_TABLE_DIGEST_PHASE_MISMATCH")
+    migration_receipt = value.get("migration_receipt")
+    migration_bound = migration_receipt.get("bound") if isinstance(migration_receipt, dict) else None
+    migration_sha256 = migration_receipt.get("sha256") if isinstance(migration_receipt, dict) else None
+    sha256_pattern = re.compile(r"[0-9a-f]{64}")
+    if (
+        not isinstance(migration_receipt, dict)
+        or set(migration_receipt) != {"schema_version", "required", "bound", "sha256"}
+        or migration_receipt.get("schema_version") != "data-table-migration-receipt-v1"
+        or migration_receipt.get("required") is not True
+        or not strict_bool(migration_bound)
+        or (migration_bound and (not isinstance(migration_sha256, str) or sha256_pattern.fullmatch(migration_sha256) is None))
+        or (not migration_bound and migration_sha256 is not None)
+    ):
+        raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
+    _validate_readback_gates(value)
+    if (
+        not strict_int(value.get("schema_version"))
+        or value.get("schema_version") != 1
+        or value.get("receipt_contract") != "finance-data-table-readback-receipt-v1"
+        or value.get("scope") != "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
+        or not strict_bool(value.get("writes_performed"))
+        or value.get("writes_performed") is not False
+        or not strict_bool(value.get("provider_calls"))
+        or value.get("provider_calls") is not False
+        or not strict_bool(value.get("row_values_recorded"))
+        or value.get("row_values_recorded") is not False
+        or not strict_bool(value.get("secret_values_recorded"))
+        or value.get("secret_values_recorded") is not False
+    ):
+        raise ValueError("DATA_TABLE_DIGEST_RECEIPT_CONTRACT_MISMATCH")
+
+
+def _parse_pre_readback(value: dict[str, Any], expected_phase: str | None) -> dict[str, Any]:
+    _validate_readback_common(value, expected_phase)
+    expected_status = {
+        "FORWARD_PRE": "FORWARD_PRE_READBACK",
+        "ROLLBACK_PRE": "ROLLBACK_PRE_READBACK",
+    }.get(expected_phase or value.get("phase"))
+    if (
+        expected_status is None
+        or value.get("status") != expected_status
+        or value.get("finance_tables") != 0
+        or value.get("tables") != []
+        or value.get("total_rows") != 0
+        or not isinstance(value.get("digest_sha256"), str)
+        or re.fullmatch(r"[0-9a-f]{64}", value["digest_sha256"]) is None
+    ):
+        raise ValueError("DATA_TABLE_DIGEST_PRE_READBACK_CONTRACT_MISMATCH")
+    return value
+
+
+def parse_data_table_receipt(raw: str, expected_phase: str | None = None) -> dict[str, Any]:
     value = extract_payload(raw, "finance data table digest verified:")
     expected_keys = {
         "schema_version", "receipt_contract", "status", "scope", "finance_tables",
@@ -81,6 +152,8 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
     }
     if set(value) != expected_keys and set(value) != expected_keys | {"phase"}:
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_KEYS_MISMATCH")
+    if value.get("status") in {"FORWARD_PRE_READBACK", "ROLLBACK_PRE_READBACK"}:
+        return _parse_pre_readback(value, expected_phase)
     expected_table_names = [
         "finance_actual_batches",
         "finance_ai_reviews",
@@ -127,41 +200,16 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
             raise ValueError("DATA_TABLE_DIGEST_TABLE_CONTRACT_MISMATCH")
     if len({table["table_id_sha256"] for table in tables}) != 4:
         raise ValueError("DATA_TABLE_DIGEST_TABLE_IDENTITY_MISMATCH")
-    migration_receipt = value.get("migration_receipt")
-    if not isinstance(migration_receipt, dict) or set(migration_receipt) != {"schema_version", "required", "bound", "sha256"}:
-        raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
-    migration_bound = migration_receipt.get("bound")
-    migration_sha256 = migration_receipt.get("sha256")
-    if (
-        migration_receipt.get("schema_version") != "data-table-migration-receipt-v1"
-        or migration_receipt.get("required") is not True
-        or not strict_bool(migration_bound)
-        or (migration_bound and (not isinstance(migration_sha256, str) or sha256_pattern.fullmatch(migration_sha256) is None))
-        or (not migration_bound and migration_sha256 is not None)
-    ):
-        raise ValueError("DATA_TABLE_DIGEST_MIGRATION_RECEIPT_MISMATCH")
-    if migration_bound and value.get("phase") not in {"FORWARD_POST", "ROLLBACK"}:
+    _validate_readback_common(value, expected_phase)
+    migration_bound = value["migration_receipt"]["bound"]
+    if migration_bound and value.get("phase") not in {"FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"}:
         raise ValueError("DATA_TABLE_DIGEST_PHASE_MISMATCH")
-    gate_keys = {"gate", "status", "required_ack", "migration_receipt_required", "command_executed"}
-    for key, gate, required_ack in (
-        ("forward_gate", "FORWARD", "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"),
-        ("rollback_gate", "ROLLBACK", "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"),
-    ):
-        observed = value.get(key)
-        if not isinstance(observed, dict) or observed != {
-            "gate": gate,
-            "status": "BLOCKED",
-            "required_ack": required_ack,
-            "migration_receipt_required": True,
-            "command_executed": False,
-        } or set(observed) != gate_keys:
-            raise ValueError("DATA_TABLE_DIGEST_GATE_MISMATCH")
     if (
         not strict_int(value["schema_version"])
         or value["schema_version"] != 1
         or value["receipt_contract"] != "finance-data-table-readback-receipt-v1"
         or value["status"] != "VERIFIED"
-        or ("phase" in value and value["phase"] not in {"FORWARD_POST", "ROLLBACK"})
+        or ("phase" in value and value["phase"] not in {"FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"})
         or value["scope"] != "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
         or not strict_int(value["finance_tables"])
         or value["finance_tables"] != 4

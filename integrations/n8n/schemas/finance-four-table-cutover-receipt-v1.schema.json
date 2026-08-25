@@ -13,6 +13,7 @@
     "generator_head",
     "accepted_identity_sha256",
     "source_digest",
+    "runtime_state_sha256",
     "old_tables_preserved",
     "runtime_cutover",
     "deletion_authorized",
@@ -54,9 +55,9 @@
         "operation": {"const": "ROLLBACK"},
         "operator_ack": {"const": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"},
         "runtime_action": {"const": "FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"},
-        "readback": {"properties": {"phase": {"const": "ROLLBACK"}}},
-        "pre_readback": {"properties": {"phase": {"const": "ROLLBACK"}}},
-        "post_readback": {"properties": {"phase": {"const": "ROLLBACK"}}}
+        "readback": {"properties": {"phase": {"const": "ROLLBACK_POST"}}},
+        "pre_readback": {"properties": {"phase": {"const": "ROLLBACK_PRE"}}},
+        "post_readback": {"properties": {"phase": {"const": "ROLLBACK_POST"}}}
       },
       "required": [
         "restored_source_digest",
@@ -80,6 +81,7 @@
     "generator_head": {"$ref": "#/$defs/head"},
     "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
     "source_digest": {"$ref": "#/$defs/digest"},
+    "runtime_state_sha256": {"$ref": "#/$defs/digest"},
     "restored_source_digest": {"$ref": "#/$defs/digest"},
     "target_digest": {"$ref": "#/$defs/digest"},
     "target_schema_sha256": {"$ref": "#/$defs/digest"},
@@ -124,6 +126,7 @@
     "pre_readback": {
       "oneOf": [
         {"$ref": "#/$defs/forward_pre_readback"},
+        {"$ref": "#/$defs/rollback_pre_readback"},
         {"$ref": "#/$defs/readback"}
       ]
     },
@@ -148,7 +151,7 @@
       "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
       "properties": {
         "verified": {"const": true},
-        "phase": {"enum": ["FORWARD_POST", "ROLLBACK"]},
+        "phase": {"enum": ["FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"]},
         "digest_sha256": {"$ref": "#/$defs/digest"},
         "finance_tables": {"const": 4},
         "total_rows": {"type": "integer", "minimum": 0},
@@ -184,6 +187,19 @@
       "properties": {
         "verified": {"const": true},
         "phase": {"const": "FORWARD_PRE"},
+        "digest_sha256": {"$ref": "#/$defs/digest"},
+        "finance_tables": {"const": 0},
+        "total_rows": {"const": 0},
+        "tables": {"const": []}
+      }
+    },
+    "rollback_pre_readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "properties": {
+        "verified": {"const": true},
+        "phase": {"const": "ROLLBACK_PRE"},
         "digest_sha256": {"$ref": "#/$defs/digest"},
         "finance_tables": {"const": 0},
         "total_rows": {"const": 0},

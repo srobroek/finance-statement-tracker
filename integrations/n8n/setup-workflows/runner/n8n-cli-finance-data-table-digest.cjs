@@ -31,7 +31,7 @@ const CANONICAL_TABLE_NAMES = [
 ];
 const CANONICAL_TABLES = new Set(CANONICAL_TABLE_NAMES);
 const readbackPhase = process.env.FINANCE_DATA_TABLE_READBACK_PHASE || 'FORWARD_POST';
-if (!['FORWARD_PRE', 'FORWARD_POST', 'ROLLBACK'].includes(readbackPhase)) {
+if (!['FORWARD_PRE', 'FORWARD_POST', 'ROLLBACK_PRE', 'ROLLBACK_POST'].includes(readbackPhase)) {
   throw new Error('FINANCE_DATA_TABLE_READBACK_PHASE_INVALID');
 }
 const migrationReceiptSha256 = process.env.FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256 || null;
