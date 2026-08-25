@@ -292,6 +292,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
             rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback)
+            rollback_common[rollback_common.index(str(raw_readback))] = str(raw_rollback)
             rollback_common[-1] = str(rollback)
             runtime_proof = temp / "runtime-proof.json"
             rollback_args = [
@@ -391,6 +392,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
             rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback)
+            rollback_common[rollback_common.index(str(raw_readback))] = str(raw_rollback)
             rollback_common[-1] = str(temp / "rollback.json")
             rollback_args = [
                 "rollback",
@@ -513,7 +515,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.returncode, 0, completed.stderr + " log=" + log.read_text(encoding="utf-8"))
             self.assertEqual(
                 log.read_text(encoding="utf-8").splitlines(),
                 ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
