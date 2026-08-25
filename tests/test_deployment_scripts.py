@@ -469,6 +469,23 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn("KillMode=process", service)
 
+    def test_finance_services_follow_podman_boot_restart(self) -> None:
+        expected_ordering = {
+            Path("deploy/actual-poc/finance-backup.service"):
+                "After=podman-restart.service",
+            Path("deploy/finance-monitor/finance-health-monitor.service"):
+                "After=podman-restart.service network-online.target",
+        }
+
+        for path, expected_after in expected_ordering.items():
+            with self.subTest(path=path):
+                service = path.read_text(encoding="utf-8")
+                after_lines = [
+                    line for line in service.splitlines() if line.startswith("After=")
+                ]
+                self.assertEqual(after_lines, [expected_after])
+                self.assertNotIn("docker.service", service)
+
     def test_health_monitor_repairs_only_owned_services(self) -> None:
         script = Path("deploy/finance-monitor/finance-health-monitor.sh").read_text(
             encoding="utf-8"
