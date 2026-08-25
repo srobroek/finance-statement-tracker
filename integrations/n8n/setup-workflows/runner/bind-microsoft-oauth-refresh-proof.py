@@ -48,6 +48,18 @@ def require_identifier(environment_name: str) -> str:
     return value
 
 
+def validate_credential_ids(credential_ids: Mapping[str, str]) -> None:
+    if (
+        set(credential_ids) != set(PROVIDERS)
+        or any(
+            not isinstance(value, str) or not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", value)
+            for value in credential_ids.values()
+        )
+        or len(set(credential_ids.values())) != len(credential_ids)
+    ):
+        raise SystemExit("EXACT_MICROSOFT_CREDENTIAL_IDS_REQUIRED")
+
+
 def bind_workflow(
     source: pathlib.Path,
     destination: pathlib.Path,
@@ -59,11 +71,7 @@ def bind_workflow(
 
     if not re.fullmatch(r"[0-9a-f]{40}", finance_commit):
         raise SystemExit("EXACT_FINANCE_COMMIT_REQUIRED")
-    if set(credential_ids) != set(PROVIDERS) or any(
-        not isinstance(value, str) or not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", value)
-        for value in credential_ids.values()
-    ):
-        raise SystemExit("EXACT_MICROSOFT_CREDENTIAL_IDS_REQUIRED")
+    validate_credential_ids(credential_ids)
     if not source.is_file() or source.is_symlink():
         raise SystemExit("REGULAR_SETUP_WORKFLOW_SOURCE_REQUIRED")
     raw = source.read_bytes()

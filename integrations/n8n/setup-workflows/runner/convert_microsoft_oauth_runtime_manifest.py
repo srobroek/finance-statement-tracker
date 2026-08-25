@@ -194,12 +194,10 @@ def _validate_commit(finance_commit: str) -> None:
 
 
 def _validate_ids(binder: object, credential_ids: Mapping[str, str]) -> None:
-    providers = getattr(binder, "PROVIDERS", {})
-    if set(credential_ids) != set(providers) or any(
-        not isinstance(value, str) or not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", value)
-        for value in credential_ids.values()
-    ):
-        raise SystemExit("EXACT_MICROSOFT_CREDENTIAL_IDS_REQUIRED")
+    validator = getattr(binder, "validate_credential_ids", None)
+    if not callable(validator):
+        raise SystemExit("MICROSOFT_OAUTH_CREDENTIAL_VALIDATOR_UNAVAILABLE")
+    validator(credential_ids)
 
 
 def convert_manifest(
@@ -209,7 +207,7 @@ def convert_manifest(
     credential_ids: Mapping[str, str],
     *,
     source_root: Path | None = None,
-    expected_source_manifest_sha256: str | None = None,
+    expected_source_manifest_sha256: str | None,
 ) -> Path:
     """Create one redacted runtime manifest and one bound WF23 copy."""
 
@@ -226,11 +224,12 @@ def convert_manifest(
     if destination == source_manifest:
         raise SystemExit("RUNTIME_MANIFEST_SOURCE_REPLACEMENT_FORBIDDEN")
     manifest, source_manifest_sha256, binder = _validate_source_manifest(source_manifest, root)
-    if expected_source_manifest_sha256 is not None:
-        if not re.fullmatch(r"[0-9a-f]{64}", expected_source_manifest_sha256):
-            raise SystemExit("EXPECTED_SOURCE_MANIFEST_SHA256_INVALID")
-        if source_manifest_sha256 != expected_source_manifest_sha256:
-            raise SystemExit("SOURCE_MANIFEST_SHA256_MISMATCH")
+    if expected_source_manifest_sha256 is None:
+        raise SystemExit("EXPECTED_SOURCE_MANIFEST_SHA256_REQUIRED")
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_source_manifest_sha256):
+        raise SystemExit("EXPECTED_SOURCE_MANIFEST_SHA256_INVALID")
+    if source_manifest_sha256 != expected_source_manifest_sha256:
+        raise SystemExit("SOURCE_MANIFEST_SHA256_MISMATCH")
     _validate_ids(binder, credential_ids)
 
     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -307,7 +306,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("destination", type=Path)
     parser.add_argument("--finance-commit", required=True)
     parser.add_argument("--source-root", type=Path)
-    parser.add_argument("--source-manifest-sha256")
+    parser.add_argument("--source-manifest-sha256", required=True)
     return parser.parse_args()
 
 
