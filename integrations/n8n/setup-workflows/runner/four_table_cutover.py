@@ -2,8 +2,8 @@
 """Run receipt-bound four-table migration proofs.
 
 The runner composes ``generate_data_table_migration.py`` and the redacted
-readback parser.  It writes proof receipts only; target creation, workflow
-execution, and legacy-table deletion remain separate named-operator actions.
+readback parser. Runtime actions are deliberately limited to the disposable
+bootstrap workflow and the local pre-delete reverse rehearsal.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ MIGRATION_PATH = N8N / "generate_data_table_migration.py"
 MATRIX_PATH = N8N / "data-table-migration-matrix.json"
 DATA_TABLES_PATH = N8N / "data-tables.json"
 READBACK_PARSER_PATH = Path(__file__).with_name("parse_n8n_redacted_wrapper_output.py")
+WORKFLOW_ROOT = N8N / "workflows"
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -252,13 +253,39 @@ def _parse_readback(path: Path, migration_sha256: str) -> dict[str, Any]:
     parser = importlib.util.module_from_spec(parser_spec)
     parser_spec.loader.exec_module(parser)
     raw = path.read_text(encoding="utf-8")
+    prefix = "finance data table digest verified:"
+    if not raw.startswith(prefix):
+        raise CutoverError("READBACK_RECEIPT_INVALID")
+    try:
+        raw_payload = json.loads(raw[len(prefix) :].strip(), object_pairs_hook=_reject_duplicate_keys)
+    except (json.JSONDecodeError, CutoverError) as error:
+        raise CutoverError("READBACK_RECEIPT_INVALID") from error
+    if not isinstance(raw_payload, dict):
+        raise CutoverError("READBACK_RECEIPT_INVALID")
+    migration = raw_payload.get("migration_receipt", {})
+    if migration.get("bound") is not True or migration.get("sha256") != migration_sha256:
+        raise CutoverError("READBACK_MIGRATION_RECEIPT_MISMATCH")
+    if raw_payload.get("status") == "FORWARD_PRE_READBACK":
+        if raw_payload.get("finance_tables") != 0 or raw_payload.get("total_rows") != 0:
+            raise CutoverError("FORWARD_PRE_READBACK_MUST_BE_EMPTY")
+        if raw_payload.get("tables") != []:
+            raise CutoverError("FORWARD_PRE_READBACK_MUST_BE_EMPTY")
+        if not isinstance(raw_payload.get("digest_sha256"), str) or not HEX_DIGEST.fullmatch(
+            raw_payload["digest_sha256"]
+        ):
+            raise CutoverError("READBACK_DIGEST_INVALID")
+        return {
+            "verified": True,
+            "phase": "FORWARD_PRE",
+            "digest_sha256": raw_payload["digest_sha256"],
+            "finance_tables": 0,
+            "total_rows": 0,
+            "tables": [],
+        }
     try:
         payload = parser.parse_data_table_receipt(raw)
     except (ValueError, json.JSONDecodeError) as error:
         raise CutoverError("READBACK_RECEIPT_INVALID") from error
-    migration = payload.get("migration_receipt", {})
-    if migration.get("bound") is not True or migration.get("sha256") != migration_sha256:
-        raise CutoverError("READBACK_MIGRATION_RECEIPT_MISMATCH")
     return {
         "verified": True,
         "digest_sha256": payload["digest_sha256"],
@@ -329,6 +356,58 @@ def _compare_readbacks(
     }
 
 
+def _validate_target_readback(
+    payload: Mapping[str, Any], matrix: Mapping[str, Any], *, label: str
+) -> dict[str, Any]:
+    if not payload.get("verified") or payload.get("finance_tables") != 4:
+        raise CutoverError(f"{label}_READBACK_REQUIRED")
+    tables = payload.get("tables")
+    expected_names = sorted(TARGETS)
+    if not isinstance(tables, list) or [table.get("name") for table in tables] != expected_names:
+        raise CutoverError("EXACT_FINANCE_DATA_TABLE_NAMES_REQUIRED")
+    expected_schema = _target_schema_digests(matrix)
+    result_tables: list[dict[str, Any]] = []
+    for table in tables:
+        name = table["name"]
+        if table.get("schema_sha256") != expected_schema[name]:
+            raise CutoverError(f"TARGET_SCHEMA_DIGEST_MISMATCH:{name}")
+        for field in ("schema_sha256", "rows_sha256", "digest_sha256"):
+            _require_digest(table.get(field), f"{label}_{name}_{field}")
+        if not isinstance(table.get("row_count"), int) or table["row_count"] < 0:
+            raise CutoverError(f"{label}_{name}_ROW_COUNT_INVALID")
+        result_tables.append(
+            {
+                "name": name,
+                "schema_sha256": table["schema_sha256"],
+                "row_count": table["row_count"],
+                "rows_sha256": table["rows_sha256"],
+                "digest_sha256": table["digest_sha256"],
+            }
+        )
+    return {
+        "verified": True,
+        "digest_sha256": _require_digest(payload.get("digest_sha256"), f"{label}_DIGEST"),
+        "finance_tables": 4,
+        "total_rows": payload["total_rows"],
+        "tables": result_tables,
+    }
+
+
+def _compare_forward_readbacks(
+    before: Mapping[str, Any],
+    first_after: Mapping[str, Any],
+    second_after: Mapping[str, Any],
+    matrix: Mapping[str, Any],
+) -> dict[str, Any]:
+    if before.get("phase") != "FORWARD_PRE" or before.get("finance_tables") != 0:
+        raise CutoverError("FORWARD_FIRST_RUN_PRE_READBACK_REQUIRED")
+    first = _validate_target_readback(first_after, matrix, label="FIRST_POST")
+    second = _validate_target_readback(second_after, matrix, label="SECOND_POST")
+    if first != second:
+        raise CutoverError("SECOND_RUNTIME_RUN_NOT_NOOP")
+    return first
+
+
 def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) -> tuple[str, str, str]:
     try:
         repository_root = args.repository_root.resolve(strict=True)
@@ -336,6 +415,12 @@ def _heads(args: argparse.Namespace, expected_ack: str, expected_action: str) ->
         raise CutoverError("REPOSITORY_ROOT_UNAVAILABLE") from error
     if repository_root != ROOT:
         raise CutoverError("REPOSITORY_ROOT_MISMATCH")
+    try:
+        workflow_root = args.workflow_root.resolve(strict=True)
+    except OSError as error:
+        raise CutoverError("WORKFLOW_ROOT_UNAVAILABLE") from error
+    if workflow_root != WORKFLOW_ROOT:
+        raise CutoverError("WORKFLOW_ROOT_MISMATCH")
     try:
         source_head = subprocess.run(
             ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
@@ -381,7 +466,8 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
     references = _check_reference_rewrite(args.workflow_root)
     before = _parse_readback(args.pre_readback_raw, receipt_sha)
     after = _parse_readback(args.post_readback_raw, receipt_sha)
-    readback = _compare_readbacks(before, after, matrix)
+    second_after = _parse_readback(args.second_post_readback_raw, receipt_sha)
+    readback = _compare_forward_readbacks(before, after, second_after, matrix)
     table_receipts = _target_table_receipts(runner, matrix)
     result = _seal({
         "schema_version": "finance-four-table-cutover-receipt-v1",
@@ -397,9 +483,11 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
         "exact_target_names": True,
         "reference_rewrite": references,
         "second_run_noop": True,
+        "first_run_created": True,
         "readback": readback,
         "pre_readback": before,
         "post_readback": after,
+        "second_post_readback": second_after,
         "runtime_execution": True,
         "runtime_action": FORWARD_RUNTIME_ACTION,
         "old_tables_preserved": True,
@@ -447,6 +535,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     before = _parse_readback(args.pre_readback_raw, receipt_sha)
     after = _parse_readback(args.post_readback_raw, receipt_sha)
     readback = _compare_readbacks(before, after, matrix)
+    _verify_runtime_proof(args.runtime_proof, receipt_sha, source_head, generator_head, source)
     runner = module.MigrationRunner(_source_rows(source))
     rehearsal = runner.reverse_rehearsal()
     source_digest = migration_receipt.get("source_digest")
@@ -482,10 +571,80 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def _verify_runtime_proof(
+    path: Path, receipt_sha: str, source_head: str, generator_head: str, source: Mapping[str, Any]
+) -> None:
+    _require_protected(path)
+    proof, _ = _read_json(path)
+    if (
+        proof.get("schema_version") != "data-table-reverse-rehearsal-runtime-proof-v1"
+        or proof.get("migration_receipt_sha256") != receipt_sha
+        or proof.get("source_head") != source_head
+        or proof.get("generator_head") != generator_head
+        or proof.get("operator_ack") != REQUIRED_ROLLBACK_ACK
+        or proof.get("runtime_action") != ROLLBACK_RUNTIME_ACTION
+        or proof.get("pre_delete") is not True
+        or proof.get("restore_roundtrip") is not True
+        or proof.get("target_tables_untouched") is not True
+    ):
+        raise CutoverError("ROLLBACK_RUNTIME_PROOF_BINDING_MISMATCH")
+    source_digest = _load_migration_module().MigrationRunner(_source_rows(source)).backup_digest()
+    if proof.get("source_digest") != source_digest or proof.get("restored_source_digest") != source_digest:
+        raise CutoverError("ROLLBACK_RUNTIME_PROOF_DIGEST_MISMATCH")
+    integrity = _require_digest(proof.get("runtime_proof_sha256"), "RUNTIME_PROOF_SHA256")
+    unsigned = dict(proof)
+    unsigned.pop("runtime_proof_sha256", None)
+    if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != integrity:
+        raise CutoverError("ROLLBACK_RUNTIME_PROOF_INTEGRITY_MISMATCH")
+
+
+def run_rollback_rehearsal(args: argparse.Namespace) -> dict[str, Any]:
+    source_head, generator_head, receipt_sha = _heads(
+        args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
+    )
+    source, migration_receipt, _ = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha
+    )
+    if migration_receipt.get("old_tables_preserved") is not True or migration_receipt.get(
+        "deletion_authorized"
+    ) is not False:
+        raise CutoverError("ROLLBACK_ONLY_BEFORE_LEGACY_DELETION")
+    runner = _load_migration_module().MigrationRunner(_source_rows(source))
+    rehearsal = runner.reverse_rehearsal()
+    source_digest = migration_receipt.get("source_digest")
+    if (
+        rehearsal.get("restore_roundtrip") is not True
+        or rehearsal.get("source_digest") != source_digest
+        or rehearsal.get("restored_source_digest") != source_digest
+        or rehearsal.get("target_tables_untouched") is not True
+    ):
+        raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
+    result = _seal(
+        {
+            "schema_version": "data-table-reverse-rehearsal-runtime-proof-v1",
+            "migration_receipt_sha256": receipt_sha,
+            "source_head": source_head,
+            "generator_head": generator_head,
+            "source_digest": source_digest,
+            "restored_source_digest": rehearsal["restored_source_digest"],
+            "restore_roundtrip": True,
+            "target_tables_untouched": True,
+            "pre_delete": True,
+            "runtime_execution": True,
+            "runtime_action": ROLLBACK_RUNTIME_ACTION,
+            "operator_ack": REQUIRED_ROLLBACK_ACK,
+        }
+    )
+    # _seal uses the cutover key; this proof has its own schema/key.
+    result["runtime_proof_sha256"] = result.pop("cutover_receipt_sha256")
+    _write_json(args.output, result)
+    return result
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    for operation in ("forward", "rollback"):
+    for operation in ("forward", "rollback", "rollback-rehearsal"):
         command = subparsers.add_parser(operation)
         command.add_argument("--source-backup", type=Path, required=True)
         command.add_argument("--migration-receipt", type=Path, required=True)
@@ -493,19 +652,28 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--repository-root", type=Path, required=True)
         command.add_argument("--operator-ack", required=True)
         command.add_argument("--runtime-action", required=True)
-        command.add_argument("--output", type=Path, required=True)
-        command.add_argument("--pre-readback-raw", type=Path, required=True)
-        command.add_argument("--post-readback-raw", type=Path, required=True)
         command.add_argument("--workflow-root", type=Path, required=True)
+        command.add_argument("--output", type=Path, required=True)
+        if operation in {"forward", "rollback"}:
+            command.add_argument("--pre-readback-raw", type=Path, required=True)
+            command.add_argument("--post-readback-raw", type=Path, required=True)
+        if operation == "forward":
+            command.add_argument("--second-post-readback-raw", type=Path, required=True)
         if operation == "rollback":
             command.add_argument("--forward-receipt", type=Path, required=True)
+            command.add_argument("--runtime-proof", type=Path, required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        result = run_forward(args) if args.operation == "forward" else run_rollback(args)
+        if args.operation == "forward":
+            result = run_forward(args)
+        elif args.operation == "rollback":
+            result = run_rollback(args)
+        else:
+            result = run_rollback_rehearsal(args)
     except (CutoverError, OSError, KeyError, TypeError) as error:
         print(str(error), file=sys.stderr)
         return 1

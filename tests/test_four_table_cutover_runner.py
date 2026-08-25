@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -112,17 +113,36 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "finance data table digest verified:" + json.dumps(readback) + "\n",
             encoding="utf-8",
         )
+        raw_pre = temp / "readback-pre.raw"
+        raw_pre.write_text(
+            "finance data table digest verified:"
+            + json.dumps(
+                {
+                    "status": "FORWARD_PRE_READBACK",
+                    "finance_tables": 0,
+                    "tables": [],
+                    "total_rows": 0,
+                    "digest_sha256": self.runner._digest_json_without_newline([]),
+                    "migration_receipt": {"bound": True, "sha256": receipt_sha},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         workflow_root = temp / "workflows"
         workflow_root.mkdir()
         (workflow_root / "cutover.json").write_text(
             json.dumps({"tables": list(self.runner.TARGETS)}) + "\n", encoding="utf-8"
         )
-        return source_path, migration_path, receipt_sha, workflow_root, raw_readback
+        # The unit fixture is a disposable checkout; production code still
+        # binds the workflow root to the real checkout path.
+        self.runner.WORKFLOW_ROOT = workflow_root
+        return source_path, migration_path, receipt_sha, workflow_root, raw_readback, raw_pre
 
     def test_forward_binds_receipt_heads_and_proves_noop(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
             output = temp / "forward.json"
             args = [
                 "forward",
@@ -141,8 +161,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
-                str(raw_readback),
+                str(raw_pre),
                 "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
                 str(raw_readback),
                 "--output",
                 str(output),
@@ -168,7 +190,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_forward_rejects_legacy_references(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
             (workflow_root / "old.json").write_text(
                 '{"table":"finance_source_cursors"}\n', encoding="utf-8"
             )
@@ -189,8 +211,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
-                str(raw_readback),
+                str(raw_pre),
                 "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
                 str(raw_readback),
                 "--output",
                 str(temp / "forward.json"),
@@ -200,7 +224,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_rollback_requires_forward_receipt_and_restores_exact_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -218,8 +242,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
-                str(raw_readback),
+                str(raw_pre),
                 "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
                 str(raw_readback),
                 "--output",
                 str(forward),
@@ -233,13 +259,31 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             rollback_common[
                 rollback_common.index(self.runner.FORWARD_RUNTIME_ACTION)
             ] = self.runner.ROLLBACK_RUNTIME_ACTION
+            second_index = rollback_common.index("--second-post-readback-raw")
+            del rollback_common[second_index : second_index + 2]
+            rollback_common[rollback_common.index(str(raw_pre))] = str(raw_readback)
+            rollback_common[-1] = str(rollback)
+            runtime_proof = temp / "runtime-proof.json"
             rollback_args = [
                 "rollback",
-                *rollback_common[:-1],
-                str(rollback),
+                *rollback_common,
                 "--forward-receipt",
                 str(forward),
+                "--runtime-proof",
+                str(runtime_proof),
             ]
+            rehearsal_args = [
+                "rollback-rehearsal",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_ROLLBACK_ACK,
+                "--runtime-action", self.runner.ROLLBACK_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+                "--output", str(runtime_proof),
+            ]
+            self.assertEqual(self.runner.main(rehearsal_args), 0)
             self.assertEqual(self.runner.main(rollback_args), 0)
             result = json.loads(rollback.read_text(encoding="utf-8"))
             Draft202012Validator(self.schema).validate(result)
@@ -250,7 +294,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_receipt_must_be_mode_six_hundred(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
             os.chmod(migration, 0o644)
             args = [
                 "forward",
@@ -269,8 +313,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
-                str(raw_readback),
+                str(raw_pre),
                 "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
                 str(raw_readback),
                 "--output",
                 str(temp / "forward.json"),
@@ -280,7 +326,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_rollback_rejects_tampered_forward_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback = self._fixture(temp)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre = self._fixture(temp)
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -298,8 +344,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
-                str(raw_readback),
+                str(raw_pre),
                 "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
                 str(raw_readback),
                 "--output",
                 str(forward),
@@ -309,12 +357,17 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             tampered["target_digest"] = "f" * 64
             forward.write_bytes(self.runner._canonical_bytes(tampered))
             os.chmod(forward, 0o600)
+            rollback_common = common.copy()
+            second_index = rollback_common.index("--second-post-readback-raw")
+            del rollback_common[second_index : second_index + 2]
+            rollback_common[-1] = str(temp / "rollback.json")
             rollback_args = [
                 "rollback",
-                *common[:-1],
-                str(temp / "rollback.json"),
+                *rollback_common,
                 "--forward-receipt",
                 str(forward),
+                "--runtime-proof",
+                str(temp / "missing-proof.json"),
             ]
             rollback_args[rollback_args.index(self.runner.REQUIRED_FORWARD_ACK)] = (
                 self.runner.REQUIRED_ROLLBACK_ACK
@@ -333,9 +386,67 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "n8n execute --id 10000000-0000-4000-8000-000000000019",
             "--pre-readback-raw",
             "--post-readback-raw",
+            "--second-post-readback-raw",
+            "rollback-rehearsal",
+            "--runtime-proof",
+            "FINANCE_DATA_TABLE_READBACK_PHASE",
             "FINANCE_N8N_RUNTIME_MODE",
         ):
             self.assertIn(command, script)
+
+    def test_shell_disposable_forward_call_order(self):
+        """The dual CLI reaches runtime twice before sealing its receipt."""
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, _receipt_sha, _workflow_root, raw_readback, raw_pre = self._fixture(temp)
+            receipt_dir = temp / "receipts"
+            receipt_dir.mkdir()
+            shutil.copy2(source, receipt_dir / "finance-data-table-backup-v1.json")
+            shutil.copy2(migration, receipt_dir / "data-table-migration-receipt.json")
+            os.chmod(receipt_dir / "data-table-migration-receipt.json", 0o600)
+            (receipt_dir / "forward.raw").write_text(raw_readback.read_text(encoding="utf-8"), encoding="utf-8")
+            (receipt_dir / "pre.raw").write_text(raw_pre.read_text(encoding="utf-8"), encoding="utf-8")
+            log = temp / "docker.log"
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                f"log={log}\n"
+                "if [[ \"$*\" == *'n8n execute'* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
+                "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
+                "echo READ >> \"$log\"\n"
+                "if [[ \"$count\" = 0 ]]; then cat \"$FINANCE_TEST_PRE\"; else cat \"$FINANCE_TEST_POST\"; fi\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_docker, 0o700)
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
+                "FINANCE_N8N_CONTAINER": "disposable-finance",
+                "N8N_FINANCE_PROJECT_ID": "finance-test-project",
+                "FINANCE_N8N_RUNTIME_MODE": "DISPOSABLE_ONLY",
+                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
+                "FINANCE_TEST_PRE": str(receipt_dir / "pre.raw"),
+                "FINANCE_TEST_POST": str(receipt_dir / "forward.raw"),
+            }
+            completed = subprocess.run(
+                ["bash", str(SHELL_RUNNER_PATH), "forward"],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertEqual(
+                log.read_text(encoding="utf-8").splitlines(),
+                ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
+            )
+            self.assertIn("LEGACY_TABLE_REFERENCES_REMAIN", completed.stderr)
 
 
 if __name__ == "__main__":

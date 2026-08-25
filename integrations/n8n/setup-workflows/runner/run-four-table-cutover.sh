@@ -33,6 +33,8 @@ cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
 forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
 pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
 post_readback="$receipt_dir/finance-data-table-readback-${operation}-post.raw"
+second_post_readback="$receipt_dir/finance-data-table-readback-${operation}-second-post.raw"
+runtime_proof="$receipt_dir/finance-data-table-rollback-runtime-proof.json"
 adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
 workflow_root="$repo_dir/integrations/n8n/workflows"
 test -f "$source_backup"
@@ -45,8 +47,10 @@ test "$(stat -c '%a' "$migration_receipt")" = 600
 
 run_readback() {
   local destination="$1"
+  local phase="$2"
   cat "$adapter" | docker exec -i \
     -e FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY \
+    -e FINANCE_DATA_TABLE_READBACK_PHASE="$phase" \
     -e N8N_FINANCE_PROJECT_ID="$N8N_FINANCE_PROJECT_ID" \
     -e FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256="$migration_sha" \
     "$FINANCE_N8N_CONTAINER" node - list:workflow > "$destination"
@@ -57,17 +61,28 @@ case "$operation" in
     test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
-    run_readback "$pre_readback"
+    run_readback "$pre_readback" FORWARD_PRE
     docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
-    run_readback "$post_readback"
+    run_readback "$post_readback" FORWARD_POST
+    docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
+    run_readback "$second_post_readback" FORWARD_POST
     ;;
   rollback)
     test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
     test -f "$forward_receipt"
     operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
     runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
-    run_readback "$pre_readback"
-    run_readback "$post_readback"
+    run_readback "$pre_readback" ROLLBACK
+    python3 "$runner_dir/four_table_cutover.py" rollback-rehearsal \
+      --source-backup "$source_backup" \
+      --migration-receipt "$migration_receipt" \
+      --migration-receipt-sha256 "$migration_sha" \
+      --repository-root "$repo_dir" \
+      --operator-ack "$operator_ack" \
+      --runtime-action "$runtime_action" \
+      --workflow-root "$workflow_root" \
+      --output "$runtime_proof"
+    run_readback "$post_readback" ROLLBACK
     ;;
 esac
 
@@ -84,8 +99,11 @@ args=(
   --post-readback-raw "$post_readback"
   --output "$cutover_receipt"
 )
+if [[ "$operation" = forward ]]; then
+  args+=(--second-post-readback-raw "$second_post_readback")
+fi
 if [[ "$operation" = rollback ]]; then
-  args+=(--forward-receipt "$forward_receipt")
+  args+=(--forward-receipt "$forward_receipt" --runtime-proof "$runtime_proof")
 fi
 
 python3 "$runner_dir/four_table_cutover.py" "${args[@]}"

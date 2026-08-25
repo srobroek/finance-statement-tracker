@@ -25,7 +25,8 @@
         "runtime_action": {"const": "FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"},
         "reference_rewrite": {
           "properties": {"verified": {"const": true}}
-        }
+        },
+        "pre_readback": {"$ref": "#/$defs/forward_pre_readback"}
       },
       "required": [
         "target_digest",
@@ -34,10 +35,12 @@
         "exact_target_names",
         "target_tables",
         "reference_rewrite",
+        "first_run_created",
         "second_run_noop",
         "readback",
         "pre_readback",
         "post_readback",
+        "second_post_readback",
         "runtime_execution",
         "runtime_action"
       ]
@@ -108,9 +111,16 @@
       }
     },
     "second_run_noop": {"const": true},
+    "first_run_created": {"const": true},
     "readback": {"$ref": "#/$defs/readback"},
-    "pre_readback": {"$ref": "#/$defs/readback"},
+    "pre_readback": {
+      "oneOf": [
+        {"$ref": "#/$defs/forward_pre_readback"},
+        {"$ref": "#/$defs/readback"}
+      ]
+    },
     "post_readback": {"$ref": "#/$defs/readback"},
+    "second_post_readback": {"$ref": "#/$defs/readback"},
     "runtime_execution": {"const": true},
     "runtime_action": {"type": "string", "minLength": 1},
     "restore_roundtrip": {"const": true},
@@ -156,6 +166,19 @@
             }
           }
         }
+      }
+    },
+    "forward_pre_readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "properties": {
+        "verified": {"const": true},
+        "phase": {"const": "FORWARD_PRE"},
+        "digest_sha256": {"$ref": "#/$defs/digest"},
+        "finance_tables": {"const": 0},
+        "total_rows": {"const": 0},
+        "tables": {"const": []}
       }
     }
   }
