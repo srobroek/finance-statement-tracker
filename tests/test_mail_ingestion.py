@@ -3199,6 +3199,49 @@ try {
                 self.assertNotIn("codex login", invalid["error"])
                 self.assertNotIn("re-enable", invalid["error"])
 
+    def test_prodex_auth_failure_contract_is_stable_at_w12_and_w21(self):
+        expected = (
+            "PRODEX_AUTH_REQUIRED: restore the existing persistent one-time "
+            "subscription auth state from protected state"
+        )
+        forbidden_directives = (
+            "api key", "api-key", "custom mcp", "custom-mcp",
+            "separate runner", "separate-runner", "codex login",
+            "re-enable", "per-run", "per run", "device auth", "device-auth",
+        )
+        terminals = (
+            (
+                "12-outlook-message-sweep.json",
+                "Validate Email Proposal Result",
+                {"Build Idempotent W09 Email Handoff": {}},
+            ),
+            (
+                "21-subscription-agent-adapter.json",
+                "Validate ProDex Proposal Schema and Normalize Provider Output",
+                {"Validate and Build Fixed Provider Invocation": {
+                    "agent_provider": "CODEX_SUBSCRIPTION",
+                }},
+            ),
+        )
+        for workflow_name, node_name, refs in terminals:
+            workflow = self.workflow(workflow_name)
+            for auth_error in (
+                "authentication token revoked",
+                "codex login required",
+                "credential unavailable",
+            ):
+                with self.subTest(workflow=workflow_name, auth_error=auth_error):
+                    invalid = self.execute_code_node(
+                        workflow,
+                        node_name,
+                        json_value={"errorMessage": auth_error},
+                        refs=refs,
+                    )
+                    self.assertFalse(invalid["ok"])
+                    self.assertEqual(invalid["error"], expected)
+                    for directive in forbidden_directives:
+                        self.assertNotIn(directive, invalid["error"].lower())
+
     def test_generic_evidence_binds_currency_direction_kind_and_message_reuse(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         base = {
