@@ -111,6 +111,20 @@ function safeFailureCode(error) {
     : 'WF23_REDACTED_EXECUTION_FAILED';
 }
 
+function executionFinishedFailureCode(data) {
+  let code;
+  try { code = data?.error?.code ?? data?.errorCode; } catch {
+    return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  }
+  return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
+    ? code
+    : 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+}
+
+function executionFailure(code) {
+  return Object.assign(new Error(code), { code });
+}
+
 function terminalLine(error, receipt) {
   if (!error && receipt) return `${SUCCESS_PREFIX}${JSON.stringify(receipt)}\n`;
   return `${FAILURE_PREFIX}${JSON.stringify({
@@ -345,6 +359,7 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
   let settled = false;
   let executionId;
   let finishedStatus;
+  let finishedFailureCode;
   let terminalTask;
   let failureError;
   let runRequest;
@@ -392,10 +407,11 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
     }
     if (frame.type === 'executionFinished' && (!data.workflowId || data.workflowId === workflowId)) {
       if (data.status !== 'success') {
+        const failureCode = executionFinishedFailureCode(data);
         if (executionId && frameExecutionId === executionId) {
-          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          failRun(executionFailure(failureCode));
         } else if (!executionId) {
-          pendingFinished.set(frameExecutionId, data.status);
+          pendingFinished.set(frameExecutionId, { status: data.status, failureCode });
         }
         return;
       }
@@ -403,7 +419,7 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
         finishedStatus = data.status;
         maybeFinish();
       } else if (!executionId) {
-        pendingFinished.set(frameExecutionId, data.status);
+        pendingFinished.set(frameExecutionId, { status: data.status, failureCode: null });
       }
     }
   };
@@ -421,9 +437,11 @@ async function runLocalWorkflow({ token, wsModule, fetchImpl = globalThis.fetch,
         if (!response?.ok) fail('WF23_REST_RUN_FAILED');
         executionId = wrappedExecutionId(await response.json());
         terminalTask = pendingTerminal.get(executionId);
-        finishedStatus = pendingFinished.get(executionId);
+        const pendingFinishedEvent = pendingFinished.get(executionId);
+        finishedStatus = pendingFinishedEvent?.status;
+        finishedFailureCode = pendingFinishedEvent?.failureCode;
         if (finishedStatus && finishedStatus !== 'success') {
-          failRun(Object.assign(new Error('WF23_EXECUTION_NOT_FINISHED_SUCCESS'), { code: 'WF23_EXECUTION_NOT_FINISHED_SUCCESS' }));
+          failRun(executionFailure(finishedFailureCode));
           return;
         }
         maybeFinish();

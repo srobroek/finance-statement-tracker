@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Accept only exact redacted WF23 success or internal-timeout terminal lines."""
+"""Accept only exact redacted WF23 success or terminal failure lines."""
 
 from __future__ import annotations
 

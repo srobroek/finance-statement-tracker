@@ -781,6 +781,63 @@ sys.exit(0)
         self.assertEqual(json.loads(completed.stdout), {"code": "WF23_EXECUTION_NOT_FINISHED_SUCCESS"})
         self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
+    def test_local_transport_emits_allowlisted_auth_failure_for_parser_without_mutation(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        parser = load_module("wf23_execution_output_e2e", RUNNER / "parse_wf23_execution_output.py")
+        for failure_code in ("OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"):
+            with self.subTest(failure_code=failure_code):
+                event = {
+                    "error": {"code": failure_code, "access_token": "SECRET_PROVIDER_VALUE"},
+                }
+                code = (
+                    f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
+                    "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+                    "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+                    "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+                    f"const event={json.dumps(event,separators=(',',':'))};"
+                    "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
+                    "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
+                    "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "throw new Error('unexpected request')};"
+                    "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
+                    ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls})))"
+                )
+                completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+                observed = json.loads(completed.stdout)
+                self.assertEqual(parser.parse_timeout(observed["line"]), failure_code)
+                self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "POST", "GET"])
+                self.assertTrue(observed["calls"][0]["url"].endswith("/run"))
+                self.assertTrue(observed["calls"][1]["url"].endswith("/stop"))
+                self.assertTrue(observed["calls"][2]["url"].endswith("/123"))
+                self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
+                self.assertNotIn("secret-token", completed.stdout + completed.stderr)
+
+        for malformed_event in (
+            {"error": {"code": "UNKNOWN_PROVIDER_FAILURE", "message": "SECRET_PROVIDER_VALUE"}},
+            {"error": {"code": {"nested": "SECRET_PROVIDER_VALUE"}}},
+        ):
+            with self.subTest(malformed_event=malformed_event):
+                code = (
+                    f"const shim=require({json.dumps(str(shim))});let socket;"
+                    "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+                    "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+                    "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+                    f"const event={json.dumps(malformed_event,separators=(',',':'))};"
+                    "const fetchImpl=async(url)=>{"
+                    "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
+                    "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+                    "throw new Error('unexpected request')};"
+                    "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
+                    ".then(()=>process.exit(1)).catch(error=>process.stdout.write(shim.terminalLine(error,null)))"
+                )
+                completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+                with self.assertRaises(ValueError):
+                    parser.parse_timeout(completed.stdout)
+                self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
+                self.assertNotIn("secret-token", completed.stdout + completed.stderr)
+
     def test_stdin_entrypoint_gate_and_local_client_is_inert_when_imported(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
