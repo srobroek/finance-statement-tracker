@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-four-table-cutover-receipt-v1.json",
+  "title": "Finance four-table cutover proof receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "cutover_receipt_sha256",
+    "migration_receipt_sha256",
+    "source_head",
+    "generator_head",
+    "accepted_identity_sha256",
+    "source_digest",
+    "runtime_state_sha256",
+    "old_tables_preserved",
+    "runtime_cutover",
+    "deletion_authorized",
+    "operator_ack"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "operation": {"const": "FORWARD"},
+        "operator_ack": {"const": "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"},
+        "runtime_action": {"const": "FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"},
+        "reference_rewrite": {
+          "properties": {"verified": {"const": true}}
+        },
+        "pre_readback": {"$ref": "#/$defs/forward_pre_readback"},
+        "readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
+        "post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
+        "second_post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}}
+      },
+      "required": [
+        "target_digest",
+        "target_schema_sha256",
+        "side_by_side_created",
+        "exact_target_names",
+        "target_tables",
+        "reference_rewrite",
+        "first_run_created",
+        "second_run_noop",
+        "readback",
+        "pre_readback",
+        "post_readback",
+        "second_post_readback",
+        "runtime_execution",
+        "runtime_action"
+      ]
+    },
+    {
+      "properties": {
+        "operation": {"const": "ROLLBACK"},
+        "operator_ack": {"const": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"},
+        "runtime_action": {"const": "FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"},
+        "readback": {"properties": {"phase": {"const": "ROLLBACK_POST"}}},
+        "pre_readback": {"properties": {"phase": {"const": "ROLLBACK_PRE"}}},
+        "post_readback": {"properties": {"phase": {"const": "ROLLBACK_POST"}}}
+      },
+      "required": [
+        "restored_source_digest",
+        "restore_roundtrip",
+        "pre_delete",
+        "target_tables_untouched",
+        "readback",
+        "pre_readback",
+        "post_readback",
+        "runtime_execution",
+        "runtime_action"
+      ]
+    }
+  ],
+  "properties": {
+    "schema_version": {"const": "finance-four-table-cutover-receipt-v1"},
+    "operation": {"enum": ["FORWARD", "ROLLBACK"]},
+    "cutover_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "migration_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "source_head": {"$ref": "#/$defs/head"},
+    "generator_head": {"$ref": "#/$defs/head"},
+    "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "runtime_state_sha256": {"$ref": "#/$defs/digest"},
+    "restored_source_digest": {"$ref": "#/$defs/digest"},
+    "target_digest": {"$ref": "#/$defs/digest"},
+    "target_schema_sha256": {"$ref": "#/$defs/digest"},
+    "side_by_side_created": {"const": true},
+    "target_tables": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "allOf": [
+        {"contains": {"properties": {"name": {"const": "finance_actual_batches"}}, "required": ["name"]}},
+        {"contains": {"properties": {"name": {"const": "finance_ai_reviews"}}, "required": ["name"]}},
+        {"contains": {"properties": {"name": {"const": "finance_documents"}}, "required": ["name"]}},
+        {"contains": {"properties": {"name": {"const": "finance_ingestion_state"}}, "required": ["name"]}}
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "schema_sha256", "row_count", "rows_sha256", "digest_sha256"],
+        "properties": {
+          "name": {"type": "string"},
+          "schema_sha256": {"$ref": "#/$defs/digest"},
+          "row_count": {"type": "integer", "minimum": 0},
+          "rows_sha256": {"$ref": "#/$defs/digest"},
+          "digest_sha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "exact_target_names": {"const": true},
+    "reference_rewrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "verified", "legacy_references"],
+      "properties": {
+        "checked": {"type": "boolean"},
+        "verified": {"type": "boolean"},
+        "legacy_references": {"type": "array", "maxItems": 0}
+      }
+    },
+    "second_run_noop": {"const": true},
+    "first_run_created": {"const": true},
+    "readback": {"$ref": "#/$defs/readback"},
+    "pre_readback": {
+      "oneOf": [
+        {"$ref": "#/$defs/forward_pre_readback"},
+        {"$ref": "#/$defs/rollback_pre_readback"},
+        {"$ref": "#/$defs/readback"}
+      ]
+    },
+    "post_readback": {"$ref": "#/$defs/readback"},
+    "second_post_readback": {"$ref": "#/$defs/readback"},
+    "runtime_execution": {"const": true},
+    "runtime_action": {"type": "string", "minLength": 1},
+    "restore_roundtrip": {"const": true},
+    "pre_delete": {"const": true},
+    "target_tables_untouched": {"const": true},
+    "old_tables_preserved": {"const": true},
+    "runtime_cutover": {"const": false},
+    "deletion_authorized": {"const": false},
+    "operator_ack": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "head": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+    ,"readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "properties": {
+        "verified": {"const": true},
+        "phase": {"enum": ["FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"]},
+        "digest_sha256": {"$ref": "#/$defs/digest"},
+        "finance_tables": {"const": 4},
+        "total_rows": {"type": "integer", "minimum": 0},
+        "tables": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "allOf": [
+            {"contains": {"properties": {"name": {"const": "finance_actual_batches"}}, "required": ["name"]}},
+            {"contains": {"properties": {"name": {"const": "finance_ai_reviews"}}, "required": ["name"]}},
+            {"contains": {"properties": {"name": {"const": "finance_documents"}}, "required": ["name"]}},
+            {"contains": {"properties": {"name": {"const": "finance_ingestion_state"}}, "required": ["name"]}}
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "schema_sha256", "row_count", "rows_sha256", "digest_sha256"],
+            "properties": {
+              "name": {"type": "string"},
+              "schema_sha256": {"$ref": "#/$defs/digest"},
+              "row_count": {"type": "integer", "minimum": 0},
+              "rows_sha256": {"$ref": "#/$defs/digest"},
+              "digest_sha256": {"$ref": "#/$defs/digest"}
+            }
+          }
+        }
+      }
+    },
+    "forward_pre_readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "properties": {
+        "verified": {"const": true},
+        "phase": {"const": "FORWARD_PRE"},
+        "digest_sha256": {"$ref": "#/$defs/digest"},
+        "finance_tables": {"const": 0},
+        "total_rows": {"const": 0},
+        "tables": {"const": []}
+      }
+    },
+    "rollback_pre_readback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
+      "properties": {
+        "verified": {"const": true},
+        "phase": {"const": "ROLLBACK_PRE"},
+        "digest_sha256": {"$ref": "#/$defs/digest"},
+        "finance_tables": {"const": 0},
+        "total_rows": {"const": 0},
+        "tables": {"const": []}
+      }
+    }
+  }
+}

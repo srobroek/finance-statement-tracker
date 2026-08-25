@@ -30,6 +30,10 @@ const CANONICAL_TABLE_NAMES = [
   'finance_ai_reviews',
 ];
 const CANONICAL_TABLES = new Set(CANONICAL_TABLE_NAMES);
+const readbackPhase = process.env.FINANCE_DATA_TABLE_READBACK_PHASE || 'FORWARD_POST';
+if (!['FORWARD_PRE', 'FORWARD_POST', 'ROLLBACK_PRE', 'ROLLBACK_POST'].includes(readbackPhase)) {
+  throw new Error('FINANCE_DATA_TABLE_READBACK_PHASE_INVALID');
+}
 const migrationReceiptSha256 = process.env.FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256 || null;
 if (migrationReceiptSha256 !== null && !/^[0-9a-f]{64}$/.test(migrationReceiptSha256)) {
   throw new Error('FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256_INVALID');
@@ -75,10 +79,35 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
     const service = Container.get(DataTableService);
     stage = 'table-list';
     const listed = await service.getManyAndCount({ filter: { projectId }, take: 100 });
-    if (listed.count !== CANONICAL_TABLES.size || listed.data.length !== CANONICAL_TABLES.size) {
-      throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${listed.count}`);
-    }
     const tables = listed.data.filter((table) => CANONICAL_TABLES.has(String(table.name))).sort((a, b) => a.name.localeCompare(b.name));
+    if (readbackPhase === 'FORWARD_PRE') {
+      if (tables.length !== 0) throw new Error(`FORWARD_PRE_TARGETS_ALREADY_EXIST:${tables.length}`);
+      process.stdout.write(`finance data table digest verified:${JSON.stringify({
+        schema_version: 1,
+        receipt_contract: 'finance-data-table-readback-receipt-v1',
+        status: 'FORWARD_PRE_READBACK',
+        phase: readbackPhase,
+        scope: 'READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST',
+        finance_tables: 0,
+        tables: [],
+        total_rows: 0,
+        digest_sha256: sha256(JSON.stringify([])),
+        migration_receipt: {
+          schema_version: 'data-table-migration-receipt-v1',
+          required: true,
+          bound: migrationReceiptSha256 !== null,
+          sha256: migrationReceiptSha256,
+        },
+        forward_gate: blockedGate('FORWARD', 'FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE'),
+        rollback_gate: blockedGate('ROLLBACK', 'FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE'),
+        writes_performed: false,
+        provider_calls: false,
+        row_values_recorded: false,
+        secret_values_recorded: false,
+      })}\n`);
+      completed = true;
+      return;
+    }
     if (tables.length !== CANONICAL_TABLES.size) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
     assertCanonicalTableNames(tables);
     const tableReceipts = [];
@@ -135,6 +164,7 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
       schema_version: 1,
       receipt_contract: 'finance-data-table-readback-receipt-v1',
       status: 'VERIFIED',
+      phase: readbackPhase,
       scope: 'READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST',
       finance_tables: tables.length,
       tables: tableReceipts,
