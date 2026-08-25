@@ -108,17 +108,31 @@ The migration target contains four tables in [`integrations/n8n/data-table-migra
 - `finance_actual_batches`
 - `finance_ai_reviews`
 
-[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. The test does not prove four live tables.
+[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. A separate retained-runtime receipt proves the four target tables; this test does not prove live tables.
 
 ### runtime acceptance boundary
 
-Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pending until a current redacted receipt records each result:
+Checked-in n8n exports remain inactive and `SPEC_ONLY`.
+
+A retained n8n readback proves these fields:
+
+- 19 inactive workflows
+- six credentials
+- one project
+- four ordered Data Tables
+- HTTP 200 health
+- zero restarts
+- no duplicate retained names
+
+The readback does not prove provider authentication, Actual/Cashback semantic
+readback, Cloudflare routes, or rollback.
+
+These results remain pending until a current redacted receipt records each result:
 
 - ProDex device login
 - `auth.json` persistence
 - Microsoft refresh
 - Microsoft restart
-- Four live tables
 - Ledger/Cashback readback
 - Cloudflare routes
 - Production identities
@@ -171,11 +185,16 @@ node writes through `@actual-app/api` only after validation and review gates.
 
 ## Runtime model
 
-The target adapter writes ordinary finance records to Actual Budget through its official Node API. Outlook messages are retrieved by bank-specific scheduled Codex tasks. The companion SQLite store owns each durable mailbox cursor and live cashback state; OneDrive owns evidence originals and its JSON catalogue. Individual notifications update cashback pace, bucket headroom, warnings, and routing recommendations immediately. Each card has an independent statement job that reconciles the live state, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
+The target adapter writes ordinary finance records to Actual Budget through its official Node API. n8n owns bank-specific Outlook retrieval and schedule orchestration.
 
-Four Codex automations are active: a daily RAKBANK live scan at 08:05 plus monthly statement jobs for RAKBANK, Emirates Islamic, and Wio. A separate Standard Chartered live job at 08:25 and its monthly job retain complete activation prompts but are paused until their source contracts are verified. Emirates Islamic, ADCB, and Wio are absent from live scanning; EI is represented as unlimited 6% Amazon cashback with statement-only totals. The ADCB statement task was removed and the former daily aggregate gate is paused. The RAKBANK job resumes from its durable source cursor, so a missed morning run is recovered on the next successful run rather than creating a data gap. Evidence search and full-budget classification run only in monthly statement jobs.
+The companion SQLite store owns the cashback mailbox cursor and live cashback state. n8n owns other acquisition cursors. OneDrive owns evidence originals and its JSON catalogue. Individual notifications update cashback pace, bucket headroom, warnings, and routing recommendations immediately. Each card has an independent statement job that reconciles the live state, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
 
-The expected schedules, models, statuses, and exact launcher prompts are versioned in `config/codex-automations.json`. The launcher prompts delegate to reusable runbooks under `agents/automations/`, so operational logic is reviewed in Git rather than copied between six local tasks. Audit a Codex installation with:
+`config/codex-automations.json` contains three local automation entries for
+installation drift checks. It is not the canonical production scheduler and does
+not establish production activity; n8n owns production schedules and orchestration.
+
+The launcher prompts delegate to reusable runbooks under `agents/automations/`.
+Audit a local Codex installation with:
 
 ```powershell
 python -m finance_tracker.cli automation-audit `

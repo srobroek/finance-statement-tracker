@@ -36,10 +36,15 @@ writes, verifies imported IDs, and cannot execute arbitrary commands.
 Retries reuse the immutable source identity and idempotency key. A failed or
 quarantined run never advances a cursor and never creates a balancing entry.
 
-## Cloudflare
+## Cloudflare target topology
 
-- `actual.vxsan.com` routes to `http://127.0.0.1:5006`.
-- `n8n.vxsan.com` routes to `http://172.20.10.20:5678`.
+Cloudflare publication is optional for local operation. The following mappings
+describe the target topology, not current route evidence. Access redirects and
+denials do not prove connector replicas, ingress bindings, origin reachability, or
+positive Service Auth.
+
+- `actual.vxsan.com` targets `http://127.0.0.1:5006`.
+- `n8n.vxsan.com` targets `http://172.20.10.20:5678`.
 - Leave origin Host-header overrides unset.
 - Protect browser UIs with interactive AD.
 - Use a separate machine-to-machine Access policy for n8n MCP or unattended
@@ -48,9 +53,9 @@ quarantined run never advances a cursor and never creates a balancing entry.
 | Boundary | Rule |
 |---|---|
 | Local connector | The finance checkout does not run `cloudflared`. Keep the service stopped and disabled. |
-| Tunnel owner | The `Home-beachhead` tunnel owns connector replicas and route identity. |
+| Tunnel owner | The target external tunnel is `Home-beachhead`; provider readback must prove connector replicas and route identity. |
 | Provider contract | [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md) |
-| Provider routes | After Service Auth checks pass, activate routes. |
+| Provider routes | After Service Auth checks and provider readback pass, activate target routes. |
 | Route script | [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh) |
 | Route verification | Run the script for positive and negative results. |
 | MCP route | `cloudflare-route-security` remains `IMPLEMENTED_NOT_DEPLOYED` in `config/project-acceptance.json`. Keep the route disabled until the connector receipt exists. |
@@ -75,6 +80,16 @@ passes. The pinned platform sets `EXECUTIONS_DATA_SAVE_ON_ERROR=none` and
 failed or successful runs. Durable redacted receipts provide the observability
 surface.
 
-Current production remains blocked until the fixed-purpose PDF/parser/Actual
-custom nodes are implemented, fixture-tested, shadow-run, and promoted through
-the acceptance gates in `config/project-acceptance.json`.
+Source code implements these fixed-purpose paths:
+
+- PDF extraction
+- statement parsing
+- the Actual custom node
+
+The deployed Cashback runtime is `READY`. Workflow integration status:
+
+| Workflow | Status |
+|---|---|
+| `W20` | `DEFERRED` |
+| `W02` | `DEFERRED` |
+| `W03` | `DEFERRED` |
