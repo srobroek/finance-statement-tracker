@@ -307,13 +307,11 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
     }
   } catch {}
   if (await pollExecution({ fetchImpl, executionUrl, headers, deadline, observe: observeTerminal })) return true;
-  while (true) {
-    try {
-      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, timeoutMs));
-      if (await observeTerminal(response, Math.max(1, timeoutMs))) return true;
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
-  }
+  try {
+    const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, timeoutMs));
+    if (await observeTerminal(response, Math.max(1, timeoutMs))) return true;
+  } catch {}
+  return false;
 }
 
 async function awaitExecutionRemoval({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {

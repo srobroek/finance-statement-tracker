@@ -1470,8 +1470,8 @@ try {{
             "throw new Error('unexpected request')};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:10})"
         )
-        with self.assertRaises(subprocess.TimeoutExpired):
-            subprocess.run(["node", "-e", code], text=True, capture_output=True, timeout=0.5, check=True)
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, timeout=0.5)
+        self.assertNotEqual(completed.returncode, 0)
 
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
