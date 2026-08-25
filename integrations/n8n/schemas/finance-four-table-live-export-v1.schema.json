@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-four-table-live-export-v1.json",
+  "title": "Finance four-table protected live workflow export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_sha256",
+    "repository_root",
+    "source_head",
+    "generator_head",
+    "migration_receipt_sha256",
+    "source_backup_sha256",
+    "accepted_identity_sha256",
+    "redacted",
+    "workflow_count",
+    "in_flight",
+    "workflows",
+    "targets",
+    "references"
+  ],
+  "properties": {
+    "schema_version": {"const": "finance-four-table-live-export-v1"},
+    "export_sha256": {"$ref": "#/$defs/digest"},
+    "repository_root": {"type": "string", "minLength": 1},
+    "source_head": {"$ref": "#/$defs/head"},
+    "generator_head": {"$ref": "#/$defs/head"},
+    "migration_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "source_backup_sha256": {"$ref": "#/$defs/digest"},
+    "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
+    "redacted": {"const": true},
+    "workflow_count": {"const": 19},
+    "in_flight": {"const": 0},
+    "workflows": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workflow_id", "revision_id", "active", "published", "in_flight"],
+        "properties": {
+          "workflow_id": {"type": "string", "minLength": 1},
+          "revision_id": {"type": "string", "minLength": 1},
+          "active": {"const": false},
+          "published": {"const": false},
+          "in_flight": {"const": 0}
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "table_id", "schema_sha256"],
+        "properties": {
+          "name": {"type": "string", "enum": ["finance_actual_batches", "finance_ai_reviews", "finance_documents", "finance_ingestion_state"]},
+          "table_id": {"type": "string", "minLength": 1},
+          "schema_sha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "minItems": 33,
+      "maxItems": 33,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference_id", "workflow_id", "revision_id", "node_id", "old_table_name", "old_table_id", "canonical_table_name", "canonical_table_id", "active", "published", "in_flight"],
+        "properties": {
+          "reference_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+          "workflow_id": {"type": "string", "minLength": 1},
+          "revision_id": {"type": "string", "minLength": 1},
+          "node_id": {"type": "string", "minLength": 1},
+          "workflow_path": {"type": "string", "minLength": 1},
+          "node_name": {"type": "string", "minLength": 1},
+          "operation": {"type": "string", "enum": ["create", "get", "insert", "upsert", "update", "list"]},
+          "old_table_name": {"type": "string", "minLength": 1},
+          "old_table_id": {"type": "string", "minLength": 1},
+          "canonical_table_name": {"type": ["string", "null"]},
+          "canonical_table_id": {"type": ["string", "null"]},
+          "active": {"const": false},
+          "published": {"const": false},
+          "in_flight": {"const": 0}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "head": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+  }
+}

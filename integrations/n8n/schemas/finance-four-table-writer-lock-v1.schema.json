@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-four-table-writer-lock-v1.json",
+  "title": "Finance four-table exclusive writer precondition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lock_name",
+    "resource_key",
+    "operation",
+    "export_sha256",
+    "migration_receipt_sha256",
+    "source_backup_sha256",
+    "accepted_identity_sha256",
+    "workflow_count",
+    "in_flight",
+    "held",
+    "lock_receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "finance-four-table-writer-lock-v1"},
+    "lock_name": {"const": "finance_four_table_cutover"},
+    "resource_key": {"type": "string", "minLength": 1},
+    "operation": {"enum": ["PRECONDITION", "FORWARD", "ROLLBACK"]},
+    "export_sha256": {"$ref": "#/$defs/digest"},
+    "migration_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "source_backup_sha256": {"$ref": "#/$defs/digest"},
+    "accepted_identity_sha256": {"$ref": "#/$defs/digest"},
+    "workflow_count": {"const": 19},
+    "in_flight": {"const": 0},
+    "held": {"const": true},
+    "lock_receipt_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

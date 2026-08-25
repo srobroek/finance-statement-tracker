@@ -30,6 +30,9 @@ test -d "$receipt_dir"
 source_backup="$receipt_dir/finance-data-table-backup-v1.json"
 migration_receipt="$receipt_dir/data-table-migration-receipt.json"
 accepted_identity="$receipt_dir/finance-four-table-accepted-identity.json"
+live_export="${FINANCE_N8N_LIVE_EXPORT:-$receipt_dir/finance-four-table-live-export.json}"
+lock_path="$receipt_dir/finance-four-table-cutover.lock"
+lock_receipt="$receipt_dir/finance-four-table-lock-receipt.json"
 cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
 forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
 pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
@@ -47,6 +50,19 @@ test -f "$adapter"
 test -f "$readback_parser"
 test -d "$workflow_root"
 test "$(stat -c '%a' "$source_backup")" = 600
+test -f "$live_export"
+test "$(stat -c '%a' "$live_export")" = 600
+if [[ -L "$live_export" ]]; then
+  echo "Live workflow export must not be a symlink" >&2
+  exit 1
+fi
+if [[ ! -e "$lock_path" ]]; then
+  (umask 077; : > "$lock_path")
+fi
+test ! -L "$lock_path"
+chmod 0600 "$lock_path"
+exec 9<>"$lock_path"
+flock -n 9 || { echo "Exclusive four-table writer lock is busy" >&2; exit 1; }
 
 approved_digests="$(python3 - "$accepted_identity" <<'PY'
 import json
@@ -74,7 +90,26 @@ validate_inputs() {
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \
     --runtime-action "$2" \
-    --workflow-root "$workflow_root" > /dev/null
+    --workflow-root "$workflow_root" \
+    --live-export "$live_export" \
+    --lock-receipt "$lock_receipt" \
+    --operation-kind "${3^^}" > /dev/null
+}
+
+preflight() {
+  python3 "$runner_dir/four_table_cutover.py" preflight \
+    --source-backup "$source_backup" \
+    --migration-receipt "$migration_receipt" \
+    --migration-receipt-sha256 "$migration_sha" \
+    --source-backup-sha256 "$source_backup_sha" \
+    --repository-root "$repo_dir" \
+    --accepted-identity "$accepted_identity" \
+    --operator-ack "$1" \
+    --runtime-action "$2" \
+    --workflow-root "$workflow_root" \
+    --live-export "$live_export" \
+    --operation-kind "${3^^}" \
+    --output "$lock_receipt" > "$receipt_dir/finance-four-table-precondition.json"
 }
 
 run_readback() {
@@ -94,10 +129,12 @@ case "$operation" in
     test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
+    preflight "$operator_ack" "$runtime_action" forward
     run_readback "$pre_readback" FORWARD_PRE
-    validate_inputs "$operator_ack" "$runtime_action"
+    validate_inputs "$operator_ack" "$runtime_action" forward
     docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
     run_readback "$post_readback" FORWARD_POST
+    validate_inputs "$operator_ack" "$runtime_action" forward
     docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
     run_readback "$second_post_readback" FORWARD_POST
     ;;
@@ -106,6 +143,7 @@ case "$operation" in
     test -f "$forward_receipt"
     operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
     runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
+    preflight "$operator_ack" "$runtime_action" rollback
     run_readback "$pre_readback" ROLLBACK_PRE
     python3 "$runner_dir/four_table_cutover.py" rollback-runtime \
       --source-backup "$source_backup" \
@@ -117,6 +155,8 @@ case "$operation" in
       --operator-ack "$operator_ack" \
       --runtime-action "$runtime_action" \
       --workflow-root "$workflow_root" \
+      --live-export "$live_export" \
+      --lock-receipt "$lock_receipt" \
       --runtime-state "$runtime_state" \
       --output "$runtime_proof"
     run_readback "$post_readback" ROLLBACK_POST
@@ -132,8 +172,10 @@ args=(
   --repository-root "$repo_dir"
   --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"
-  --runtime-action "$runtime_action"
-  --workflow-root "$workflow_root"
+    --runtime-action "$runtime_action"
+    --workflow-root "$workflow_root"
+    --live-export "$live_export"
+    --lock-receipt "$lock_receipt"
   --pre-readback-raw "$pre_readback"
   --post-readback-raw "$post_readback"
   --runtime-state "$runtime_state"
