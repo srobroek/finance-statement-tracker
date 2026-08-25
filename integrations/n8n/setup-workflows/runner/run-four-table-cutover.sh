@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 usage() {
   printf 'usage: %s forward|rollback\n' "$0" >&2
@@ -12,44 +13,83 @@ case "$operation" in
   *) usage ;;
 esac
 
-runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+: "${FINANCE_REPOSITORY_DIR:?FINANCE_REPOSITORY_DIR is required}"
+: "${FINANCE_N8N_RECEIPT_DIR:?FINANCE_N8N_RECEIPT_DIR is required}"
+: "${FINANCE_N8N_CONTAINER:?FINANCE_N8N_CONTAINER is required}"
+: "${N8N_FINANCE_PROJECT_ID:?N8N_FINANCE_PROJECT_ID is required}"
+: "${FINANCE_N8N_RUNTIME_MODE:?FINANCE_N8N_RUNTIME_MODE is required}"
+test "$FINANCE_N8N_RUNTIME_MODE" = "DISPOSABLE_ONLY"
 
-: "${FINANCE_DATA_TABLE_SOURCE_BACKUP:?FINANCE_DATA_TABLE_SOURCE_BACKUP is required}"
-: "${FINANCE_DATA_TABLE_MIGRATION_RECEIPT:?FINANCE_DATA_TABLE_MIGRATION_RECEIPT is required}"
-: "${FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256:?FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256 is required}"
-: "${FINANCE_DATA_TABLE_SOURCE_HEAD:?FINANCE_DATA_TABLE_SOURCE_HEAD is required}"
-: "${FINANCE_DATA_TABLE_GENERATOR_HEAD:?FINANCE_DATA_TABLE_GENERATOR_HEAD is required}"
-: "${FINANCE_DATA_TABLE_CUTOVER_RECEIPT:?FINANCE_DATA_TABLE_CUTOVER_RECEIPT is required}"
-: "${FINANCE_DATA_TABLE_WORKFLOW_ROOT:?FINANCE_DATA_TABLE_WORKFLOW_ROOT is required}"
+repo_dir="$(realpath -e -- "$FINANCE_REPOSITORY_DIR")"
+script_repo="$(realpath -e -- "$runner_dir/../../../..")"
+test "$repo_dir" = "$script_repo"
+receipt_dir="$(realpath -e -- "$FINANCE_N8N_RECEIPT_DIR")"
+test -d "$receipt_dir"
+
+source_backup="$receipt_dir/finance-data-table-backup-v1.json"
+migration_receipt="$receipt_dir/data-table-migration-receipt.json"
+cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
+forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
+pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
+post_readback="$receipt_dir/finance-data-table-readback-${operation}-post.raw"
+adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
+workflow_root="$repo_dir/integrations/n8n/workflows"
+test -f "$source_backup"
+test -f "$migration_receipt"
+test -f "$adapter"
+test -d "$workflow_root"
+
+migration_sha="$(sha256sum "$migration_receipt" | awk '{print $1}')"
+test "$(stat -c '%a' "$migration_receipt")" = 600
+
+run_readback() {
+  local destination="$1"
+  cat "$adapter" | docker exec -i \
+    -e FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY \
+    -e N8N_FINANCE_PROJECT_ID="$N8N_FINANCE_PROJECT_ID" \
+    -e FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256="$migration_sha" \
+    "$FINANCE_N8N_CONTAINER" node - list:workflow > "$destination"
+}
 
 case "$operation" in
   forward)
     test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
     operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+    runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
+    run_readback "$pre_readback"
+    docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
+    run_readback "$post_readback"
     ;;
   rollback)
     test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
-    : "${FINANCE_DATA_TABLE_FORWARD_RECEIPT:?FINANCE_DATA_TABLE_FORWARD_RECEIPT is required for rollback}"
+    test -f "$forward_receipt"
     operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+    runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
+    run_readback "$pre_readback"
+    run_readback "$post_readback"
     ;;
 esac
 
 args=(
   "$operation"
-  --source-backup "$FINANCE_DATA_TABLE_SOURCE_BACKUP"
-  --migration-receipt "$FINANCE_DATA_TABLE_MIGRATION_RECEIPT"
-  --migration-receipt-sha256 "$FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256"
-  --source-head "$FINANCE_DATA_TABLE_SOURCE_HEAD"
-  --generator-head "$FINANCE_DATA_TABLE_GENERATOR_HEAD"
+  --source-backup "$source_backup"
+  --migration-receipt "$migration_receipt"
+  --migration-receipt-sha256 "$migration_sha"
+  --repository-root "$repo_dir"
   --operator-ack "$operator_ack"
-  --workflow-root "$FINANCE_DATA_TABLE_WORKFLOW_ROOT"
-  --output "$FINANCE_DATA_TABLE_CUTOVER_RECEIPT"
+  --runtime-action "$runtime_action"
+  --workflow-root "$workflow_root"
+  --pre-readback-raw "$pre_readback"
+  --post-readback-raw "$post_readback"
+  --output "$cutover_receipt"
 )
-if [[ -n "${FINANCE_DATA_TABLE_READBACK_RAW:-}" ]]; then
-  args+=(--readback-raw "$FINANCE_DATA_TABLE_READBACK_RAW")
-fi
 if [[ "$operation" = rollback ]]; then
-  args+=(--forward-receipt "$FINANCE_DATA_TABLE_FORWARD_RECEIPT")
+  args+=(--forward-receipt "$forward_receipt")
 fi
 
-exec python3 "$runner_dir/four_table_cutover.py" "${args[@]}"
+python3 "$runner_dir/four_table_cutover.py" "${args[@]}"
+if [[ "$operation" = forward ]]; then
+  cp -- "$cutover_receipt" "$forward_receipt"
+  chmod 0600 "$forward_receipt"
+fi
