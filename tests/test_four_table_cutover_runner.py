@@ -523,7 +523,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
 
             protected.unlink()
             protected.mkdir()
-            os.chmod(protected, 0o700)
+            os.chmod(protected, 0o600)
             with self.assertRaisesRegex(
                 self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
             ):
