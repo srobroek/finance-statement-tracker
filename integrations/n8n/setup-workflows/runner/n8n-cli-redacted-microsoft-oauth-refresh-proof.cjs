@@ -112,62 +112,43 @@ function safeFailureCode(error) {
     : 'WF23_REDACTED_EXECUTION_FAILED';
 }
 
-function decodeExecutionDetailData(data) {
-  if (data && typeof data === 'object') return data;
-  if (typeof data !== 'string' || data.length > 65_536) return null;
-  const parsed = JSON.parse(data);
-  if (!Array.isArray(parsed)) return parsed;
-  const decode = (value, seen = new Set(), depth = 0) => {
-    if (depth > 64 || typeof value === 'function') return null;
-    if (typeof value === 'string') {
-      if (!/^(0|[1-9][0-9]*)$/.test(value)) return value;
-      const index = Number(value);
-      if (!Number.isSafeInteger(index) || index >= parsed.length || seen.has(index)) return value;
-      const target = parsed[index];
-      if (typeof target === 'string') return target;
-      const nextSeen = new Set(seen);
-      nextSeen.add(index);
-      return decode(target, nextSeen, depth + 1);
-    }
-    if (Array.isArray(value)) return value.map((item) => decode(item, seen, depth + 1));
-    if (!value || typeof value !== 'object') return value;
-    const result = Object.create(null);
-    for (const [key, item] of Object.entries(value)) {
-      if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
-        result[key] = decode(item, seen, depth + 1);
-      }
-    }
-    return result;
-  };
-  return decode(parsed[0]);
+function resolveFlattedReference(table, value, seen = new Set(), depth = 0) {
+  if (!Array.isArray(table) || typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value) || depth > 32) {
+    return value;
+  }
+  const index = Number(value);
+  if (!Number.isSafeInteger(index) || index >= table.length || seen.has(index)) return value;
+  const nextSeen = new Set(seen);
+  nextSeen.add(index);
+  return resolveFlattedReference(table, table[index], nextSeen, depth + 1);
 }
 
 function redactedExecutionFailureCode(body) {
-  let code;
   try {
-    const executionData = decodeExecutionDetailData(body?.data);
-    const resultData = executionData?.resultData;
-    code = resultData?.error?.code;
-    if (typeof code !== 'string') {
-      const runData = resultData?.runData;
-      if (runData && typeof runData === 'object' && !Array.isArray(runData)) {
-        for (const runs of Object.values(runData)) {
-          if (!Array.isArray(runs)) continue;
-          for (const run of runs) {
-            if (typeof run?.error?.code === 'string') {
-              code = run.error.code;
-              if (AUTH_FAILURE_CODES.has(code)) return code;
-            }
-          }
+    const rawData = body?.data;
+    const table = typeof rawData === 'string' ? JSON.parse(rawData) : null;
+    const root = Array.isArray(table)
+      ? resolveFlattedReference(table, table[0])
+      : table ?? rawData;
+    const resolve = (value) => resolveFlattedReference(table, value);
+    const resultData = resolve(root?.resultData);
+    const topError = resolve(resultData?.error);
+    const topCode = resolve(topError?.code);
+    if (AUTH_FAILURE_CODES.has(topCode)) return topCode;
+    const runData = resolve(resultData?.runData);
+    if (runData && typeof runData === 'object' && !Array.isArray(runData)) {
+      for (const key of Object.keys(runData)) {
+        const runs = resolve(runData[key]);
+        if (!Array.isArray(runs)) continue;
+        for (const run of runs) {
+          const runError = resolve(resolve(run)?.error);
+          const code = resolve(runError?.code);
+          if (AUTH_FAILURE_CODES.has(code)) return code;
         }
       }
     }
-  } catch {
-    return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
-  }
-  return typeof code === 'string' && AUTH_FAILURE_CODES.has(code)
-    ? code
-    : 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
+  } catch {}
+  return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
 }
 
 async function readRedactedExecutionFailureCode({ token, executionId, fetchImpl, timeoutMs }) {

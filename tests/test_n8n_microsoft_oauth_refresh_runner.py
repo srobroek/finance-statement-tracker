@@ -549,6 +549,35 @@ sys.exit(0)
             self.assertFalse(receipt["credential_ids_recorded"])
             self.assertNotIn("outlookCredential123", json.dumps(receipt))
             self.assertNotIn("onedriveCredential123", json.dumps(receipt))
+            temporary_destination = Path(tmp) / "temporary-bound" / SOURCE.name
+            temporary_env = os.environ.copy()
+            temporary_env["FINANCE_OUTLOOK_CREDENTIAL_ID"] = "outlookCredential123"
+            temporary_env["FINANCE_ONEDRIVE_CREDENTIAL_ID"] = "onedriveCredential123"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(RUNNER / "bind-microsoft-oauth-refresh-proof.py"),
+                    str(SOURCE),
+                    str(temporary_destination),
+                    "--finance-commit",
+                    "a" * 40,
+                    "--temporary-error-persistence",
+                ],
+                env=temporary_env,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            temporary_bound = json.loads(temporary_destination.read_text(encoding="utf-8"))
+            self.assertEqual(
+                json.loads(SOURCE.read_text(encoding="utf-8"))["settings"]["saveDataErrorExecution"],
+                "none",
+            )
+            self.assertEqual(temporary_bound["settings"]["saveDataErrorExecution"], "all")
+            temporary_receipt = json.loads(
+                (temporary_destination.parent / "binding-receipt.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(temporary_receipt["temporary_error_persistence"])
 
     def run_irun_validator(self, payload: dict) -> subprocess.CompletedProcess[str]:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
@@ -1111,6 +1140,20 @@ sys.exit(0)
                 )
                 self.assertEqual(receipt["failure_code"], code)
 
+        generic_payload = {
+            "schema_version": 1,
+            "status": "FAILED",
+            "error_code": "WF23_EXECUTION_NOT_FINISHED_SUCCESS",
+            "provider_response_logged": False,
+            "secret_values_recorded": False,
+        }
+        generic_raw = "transient WF23 execution failed:" + json.dumps(generic_payload, separators=(",", ":")) + "\n"
+        self.assertEqual(parser.parse_terminality(generic_raw), "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
+        with self.assertRaises(ValueError):
+            parser.parse_terminality(
+                generic_raw.replace("WF23_EXECUTION_NOT_FINISHED_SUCCESS", "UNKNOWN_PROVIDER_FAILURE")
+            )
+
         valid = (
             'transient WF23 execution failed:{"schema_version":1,"status":"FAILED",'
             '"error_code":"WF23_TIMEOUT_COMMAND_RUN","provider_response_logged":false,'
@@ -1494,6 +1537,11 @@ try {{
             "workflow.active !== false",
             "workflow.activeVersionId !== null",
             "providerMutationScope !== 'NONE'",
+            "ExecutionRepository",
+            "saveDataErrorExecution !== 'all'",
+            "TRANSIENT_WF23_EXECUTION_DELETE_READBACK_MISMATCH",
+            "saveDataErrorExecution: 'none'",
+            "TRANSIENT_WF23_EXECUTION_PERSISTENCE_RESTORE_MISMATCH",
             "workflowRepository.delete(workflowId)",
             "TRANSIENT_WF23_DELETE_READBACK_MISMATCH",
         ):
@@ -1515,6 +1563,9 @@ try {{
             "EXECUTIONS_DATA_SAVE_ON_SUCCESS=none",
             "EXECUTIONS_DATA_SAVE_ON_ERROR=none",
             "EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false",
+            "--temporary-error-persistence",
+            "first execution persistence exceeded one bounded row",
+            "second execution persistence exceeded one bounded row",
             "wf23_execution_count",
             "wf23_history_count",
             '[[ "$(wf23_execution_count)" == "0" ]] || return 1',
@@ -1656,6 +1707,10 @@ try {{
                     "  exit 0\n"
                     "fi\n"
                     "if [ \"$2\" = timeout ]; then exit 1; fi\n"
+                    "if [ \"$2\" = terminality ] && [ \"${WF23_PARSER_MODE}\" = unknown ]; then\n"
+                    "  printf '%s' WF23_EXECUTION_NOT_FINISHED_SUCCESS\n"
+                    "  exit 0\n"
+                    "fi\n"
                     "exit 0\n",
                     encoding="utf-8",
                 )
@@ -1716,11 +1771,11 @@ try {{
 
             unknown, unknown_timeout_args, unknown_removed, unknown_downstream = run_caller_boundary("unknown")
             self.assertNotEqual(unknown.returncode, 0)
-            self.assertFalse(unknown_removed.exists())
+            self.assertTrue(unknown_removed.exists())
             self.assertFalse(unknown_downstream.exists())
             self.assertTrue(unknown_timeout_args.exists(), unknown.stderr + unknown.stdout)
             self.assertIn("0.05s", unknown_timeout_args.read_text(encoding="utf-8"))
-            self.assertIn("WF23 execution terminality uncertain; retaining transient workflow", unknown.stderr)
+            self.assertNotIn("WF23 execution terminality uncertain; retaining transient workflow", unknown.stderr)
 
     def test_bounded_execution_timeout_is_not_reparsed_as_redacted_output(self) -> None:
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
