@@ -357,7 +357,10 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
   const headers = { Origin: LOCAL_ORIGIN, Cookie: `${AUTH_COOKIE}=${token}` };
   const stopUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}/stop`;
   const executionUrl = `${LOCAL_REST_ORIGIN}/rest/executions/${encodeURIComponent(executionId)}`;
-  const deadline = Date.now() + timeoutMs;
+  const operationTimeoutMs = Number.isFinite(timeoutMs)
+    ? Math.max(0, timeoutMs)
+    : EXECUTION_RECONCILIATION_TIMEOUT_MS;
+  const deadline = Date.now() + operationTimeoutMs;
   const observeTerminal = async (response, requestTimeoutMs) => {
     return response?.ok && executionIsTerminal(await readResponseBody(response, requestTimeoutMs));
   };
@@ -368,13 +371,8 @@ async function reconcileExecution({ token, executionId, fetchImpl, timeoutMs = E
     }
   } catch {}
   if (await pollExecution({ fetchImpl, executionUrl, headers, deadline, observe: observeTerminal })) return true;
-  while (true) {
-    try {
-      const response = await fetchWithin(fetchImpl, executionUrl, { method: 'GET', headers }, Math.max(1, timeoutMs));
-      if (await observeTerminal(response, Math.max(1, timeoutMs))) return true;
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, EXECUTION_POLL_INTERVAL_MS));
-  }
+  const graceDeadline = Date.now() + Math.max(EXECUTION_POLL_INTERVAL_MS, operationTimeoutMs);
+  return pollExecution({ fetchImpl, executionUrl, headers, deadline: graceDeadline, observe: observeTerminal });
 }
 
 async function awaitExecutionRemoval({ token, executionId, fetchImpl, timeoutMs = EXECUTION_RECONCILIATION_TIMEOUT_MS }) {

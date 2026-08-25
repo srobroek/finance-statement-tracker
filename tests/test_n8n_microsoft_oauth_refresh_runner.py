@@ -890,6 +890,46 @@ sys.exit(0)
                 self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
                 self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
+    def test_local_transport_bounds_auth_reconciliation_after_deadline(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        parser = load_module("wf23_bounded_auth_reconciliation", RUNNER / "parse_wf23_execution_output.py")
+        flatted_data = json.dumps([
+            {"resultData": "1"},
+            {"runData": "2"},
+            {"Microsoft OAuth": "3"},
+            ["4"],
+            {"error": "5"},
+            {"code": "6", "access_token": "SECRET_PROVIDER_VALUE"},
+            "OUTLOOK_AUTH_REQUIRED",
+        ], separators=(",", ":"))
+        execution_detail = {"status": "error", "finished": True, "data": flatted_data}
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;let detailReads=0;const calls=[];"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            f"const executionDetail={json.dumps(execution_detail,separators=(',',':'))};"
+            "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'}})));return {data:{executionId:'123'}}}};"
+            "if(url.endsWith('/stop'))return {ok:false,status:500};"
+            "if(url.endsWith('/123')){detailReads+=1;return detailReads===1?{ok:true,status:200,json:async()=>executionDetail}:{ok:true,status:200,json:async()=>({status:'running',finished:false})};}"
+            "throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:10})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls,detailReads})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        self.assertEqual(parser.parse_timeout(observed["line"]), "OUTLOOK_AUTH_REQUIRED")
+        self.assertNotIn("while (true)", shim.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(observed["detailReads"], 2)
+        self.assertLess(observed["detailReads"], 10)
+        self.assertEqual(observed["calls"][0]["method"], "POST")
+        self.assertEqual(observed["calls"][1]["method"], "GET")
+        self.assertEqual(observed["calls"][2]["method"], "POST")
+        self.assertTrue(all(call["method"] == "GET" for call in observed["calls"][3:]))
+        self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
+        self.assertNotIn("secret-token", completed.stdout + completed.stderr)
+
     def test_local_transport_rejects_save_none_execution_detail_without_auth_classification(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         parser = load_module("wf23_execution_output_save_none", RUNNER / "parse_wf23_execution_output.py")
@@ -1669,9 +1709,11 @@ try {{
             "if(url.endsWith('/123'))return {ok:true,json:async()=>({status:'running',finished:false})};"
             "throw new Error('unexpected request')};"
             "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:10,reconcileTimeoutMs:10})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(shim.terminalLine(error,null)))"
         )
-        with self.assertRaises(subprocess.TimeoutExpired):
-            subprocess.run(["node", "-e", code], text=True, capture_output=True, timeout=0.5, check=True)
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, timeout=0.5, check=True)
+        failure_payload = json.loads(completed.stdout.split("transient WF23 execution failed:", 1)[1])
+        self.assertEqual(failure_payload["error_code"], "WF23_TIMEOUT_COMMAND_RUN")
 
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
