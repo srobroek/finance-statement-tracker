@@ -70,8 +70,10 @@ stack health-gates n8n on Postgres and checks both services with
 [`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh).
 When the n8n MCP acceptance gate passes, query execution state through n8n MCP.
 The checked-in application manifest keeps n8n MCP disabled until that gate
-passes. Failed runs remain visible; successful run history is pruned by n8n
-retention settings.
+passes. The pinned platform sets `EXECUTIONS_DATA_SAVE_ON_ERROR=none` and
+`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, so n8n stores no execution history for
+failed or successful runs. Durable redacted receipts provide the observability
+surface.
 
 Current production remains blocked until the fixed-purpose PDF/parser/Actual
 custom nodes are implemented, fixture-tested, shadow-run, and promoted through
