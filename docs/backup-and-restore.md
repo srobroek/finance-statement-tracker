@@ -52,10 +52,10 @@ Before restoring n8n:
 3. create a safety dump of the current database;
 4. restore into a new empty database with `pg_restore`;
 5. point n8n at that database and run `scripts/doctor.sh`;
-6. verify workflow count;
-7. verify credential availability;
-8. verify Data Tables;
-9. verify execution receipts;
+6. verify workflow count.
+7. verify credential availability.
+8. verify Data Tables.
+9. verify execution receipts.
 10. verify MCP status before deleting the old database.
 
 The rootless stack owner performs key recovery with the pinned platform
@@ -68,12 +68,15 @@ Never restore Postgres by copying its live data directory. Never restore a dump
 over an active n8n main. Store the n8n encryption key separately in 1Password.
 Database credentials alone cannot decrypt n8n credentials.
 
-Before deleting old state, verify the 19-workflow count.
-Verify inactive and unpublished state.
-Verify the four-table digest.
-Verify the source cursor.
-Verify terminal receipts.
-Verify Cloudflare route status. A missing readback keeps rollback open.
+Before deleting old state:
+
+- Keep the workflow count at 19.
+- Check inactive and unpublished state.
+- Review four-table digest.
+- Review source cursor.
+- Check terminal receipts.
+- Check Cloudflare route status.
+- When readback lacks evidence, keep rollback open.
 
 ## Required drill
 

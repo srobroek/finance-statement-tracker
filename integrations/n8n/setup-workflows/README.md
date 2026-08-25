@@ -55,22 +55,45 @@ The receipt omits:
 - Credential values.
 - Token values.
 
-## OAuth lifecycle
+## oauth lifecycle
 
-Keep all workflows inactive during each proof. Run the proof for each row:
+### expired access token
 
-| Condition | Required readback | Failure action |
-|---|---|---|
-| The access token expired and a refresh token remains present | Run bounded Outlook and OneDrive reads. Record result counts and a redacted receipt. | If refresh fails, keep the cursor unchanged. |
-| n8n restarted | Repeat the bounded reads after restarting n8n only. | If the credential is unavailable, stop before cursor or evidence writes. |
-| Consent revoked | Record provider denial without message or file content. | Mark authentication revoked and request user-present consent. |
-| Credential or refresh token missing | Record negative-auth denial before provider access. | Emit a redacted failure receipt and stop acquisition. |
+- Keep workflows inactive during each proof.
+- When a refresh token remains, run bounded Outlook and OneDrive reads.
+- Record result counts.
+- Record a redacted receipt.
+- When refresh fails, keep the cursor unchanged.
 
-Classify `invalid_grant` as an authentication failure. Classify scope denial as
-an authentication failure. Classify missing credentials as an authentication
-failure. Classify a missing refresh token as an authentication failure. Do not
-retry authentication failures as transient provider errors. Keep each OAuth
-claim pending until a current mode-`0600` receipt proves it.
+### restart
+
+- After n8n restarts, repeat bounded reads.
+- If no credential exists, pause acquisition.
+- Keep cursor and evidence writes disabled.
+
+### revoked consent
+
+- After consent revocation, record provider denial.
+- Record no message or file content.
+- Set authentication status to revoked.
+- Request user-present consent.
+
+### missing credential
+
+- If no credential or refresh token exists, emit negative-auth denial.
+- Keep provider access disabled.
+- Emit a redacted failure receipt.
+- Stop acquisition.
+
+Classify these conditions as authentication failures:
+
+- `invalid_grant`
+- Scope denial
+- Missing credentials
+- Missing refresh token
+
+Treat authentication failures as non-transient. Keep each OAuth claim pending
+until a current mode-`0600` receipt proves it.
 
 ## recovery receipt
 
@@ -221,13 +244,32 @@ The cleanup gate restores these values:
 Runner emits a mode-`0600` success or failure receipt. Failure fields
 remain `null` until a zero-row or digest readback proves their postconditions.
 
-## Promotion identity receipt
+## promotion identity receipt
 
-Keep the mode-`0600` receipt redacted. Include the finance and platform commits.
-Include image and registry digests. Include the Compose project and service
-names. Include the n8n project ID, workflow IDs, and Data Table digest. Include
-the listener origin, Cloudflare connector identity, credential owner and scope
-results, authentication result, receipt status, and verification timestamp.
-Include `secret_values_recorded=false` and the rollback or recovery receipt
-reference. Exclude tokens, bearer material, mailbox content, document content,
-and financial plaintext. Missing identity fields keep the promotion pending.
+Record one mode-`0600` redacted receipt for each promotion or recovery proof.
+
+Include:
+
+- Finance and platform commits.
+- Image and registry digests.
+- Compose project and service names.
+- n8n project ID and workflow IDs.
+- Data Table digest.
+- Listener origin.
+- Cloudflare connector identity.
+- Credential owner and scope results.
+- Authentication result.
+- Receipt status.
+- Verification timestamp.
+- `secret_values_recorded=false`.
+- Rollback or recovery receipt reference.
+
+The receipt excludes:
+
+- Tokens
+- Bearer material
+- Mailbox content
+- Document content
+- Financial plaintext
+
+- Missing identity fields keep promotion pending.

@@ -44,18 +44,16 @@ quarantined run never advances a cursor and never creates a balancing entry.
 - Protect browser UIs with interactive AD.
 - Use a separate machine-to-machine Access policy for n8n MCP or unattended
   webhook paths. Browser cookies are not service credentials.
-- The finance checkout does not run `cloudflared`. Keep any local connector
-  service stopped and disabled; the external `Home-beachhead` tunnel owns the
-  connector replicas and route identity.
-- Defer provider route activation until the pinned platform
-  [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md)
-  contract passes Service Auth checks.
-- Run the pinned platform
-  [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh)
-  script for positive and negative results.
-- `cloudflare-route-security` remains `IMPLEMENTED_NOT_DEPLOYED` in
-  `config/project-acceptance.json`. Keep the MCP route disabled until the
-  route and connector receipt exists.
+
+| Boundary | Rule |
+|---|---|
+| Local connector | The finance checkout does not run `cloudflared`. Keep the service stopped and disabled. |
+| Tunnel owner | The `Home-beachhead` tunnel owns connector replicas and route identity. |
+| Provider contract | [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md) |
+| Provider routes | After Service Auth checks pass, activate routes. |
+| Route script | [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh) |
+| Route verification | Run the script for positive and negative results. |
+| MCP route | `cloudflare-route-security` remains `IMPLEMENTED_NOT_DEPLOYED` in `config/project-acceptance.json`. Keep the route disabled until the connector receipt exists. |
 
 ## Schedules
 
@@ -68,8 +66,8 @@ merchant order evidence uses generic Outlook email enrichment.
 ## Monitoring
 
 The existing host monitor owns only Actual, its proxy, and cashback. The n8n
-platform stack health-gates n8n on Postgres and uses the pinned platform
-[`doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
+stack health-gates n8n on Postgres and uses the pinned platform
+[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
 for deployment checks. Execution state is queryable through n8n MCP only after
 its separate acceptance gate passes. Failed runs remain visible; successful run
 history is pruned by n8n retention settings.

@@ -47,41 +47,95 @@ The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New bank
 
 `finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
 
-## Setup and operations
-
-The root README indexes the procedures. The linked leaf documents own the commands and acceptance gates.
+## setup and operations
 
 | Surface | Procedure owner |
 |---|---|
-| n8n workflow boundary and ProDex subscription adapter | [`integrations/n8n/README.md`](integrations/n8n/README.md) |
-| ProDex and Microsoft credential setup | [`docs/n8n-credential-setup-checklist.md`](docs/n8n-credential-setup-checklist.md) |
-| OneDrive root setup and Microsoft OAuth proof | [`integrations/n8n/setup-workflows/README.md`](integrations/n8n/setup-workflows/README.md) |
-| Actual and Cashback operations | [`docs/actual-production.md`](docs/actual-production.md) |
-| Backup, restore, and rollback | [`docs/backup-and-restore.md`](docs/backup-and-restore.md) |
-| Browser acquisition boundary | [`docs/browser-ingestion.md`](docs/browser-ingestion.md) |
+| Workflow boundary | [`integrations/n8n/README.md`](integrations/n8n/README.md) |
+| Credential setup | [`docs/n8n-credential-setup-checklist.md`](docs/n8n-credential-setup-checklist.md) |
+| OneDrive setup | [`integrations/n8n/setup-workflows/README.md`](integrations/n8n/setup-workflows/README.md) |
+| Ledger operations | [`docs/actual-production.md`](docs/actual-production.md) |
+| Backup and restore | [`docs/backup-and-restore.md`](docs/backup-and-restore.md) |
+| Browser boundary | [`docs/browser-ingestion.md`](docs/browser-ingestion.md) |
 
-### Ownership
+### procedure scope
+
+- ProDex subscription adapter: workflow boundary.
+- ProDex and Microsoft: credential setup.
+- OneDrive root: OneDrive setup.
+- Microsoft OAuth proof: OneDrive setup.
+- Ledger and Cashback: ledger operations.
+- Rollback: backup and restore.
+- Browser acquisition: separate boundary.
+
+### ownership
 
 | Owner | State |
 |---|---|
-| Actual Budget | Posted transactions, accounts, budgets, schedules, reconciliations, and reports |
-| n8n | Acquisition, orchestration, receipts, and cursor state |
-| Cashback Control | Live notification routing and cashback period state |
-| OneDrive | Evidence originals and the evidence catalogue |
+| `Actual` ledger | Ledger and budgets |
+| n8n | Acquisition and orchestration |
+| Cashback Control | Live routing and cashback state |
+| OneDrive | Evidence and catalog |
 
-Browser acquisition never writes directly to Actual or Cashback Control. The approved delta passes through n8n validation and the fenced Actual writer.
+The ledger owns:
 
-### Data Table migration lifecycle
+- posted transactions
+- accounts
+- budgets
+- schedules
+- reconciliations
+- reports
 
-The legacy input contract declares 15 `SPEC_ONLY` tables in [`integrations/n8n/data-tables.json`](integrations/n8n/data-tables.json). The migration target contains four tables in [`integrations/n8n/data-table-migration-matrix.json`](integrations/n8n/data-table-migration-matrix.json): `finance_ingestion_state`, `finance_documents`, `finance_actual_batches`, and `finance_ai_reviews`. [`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the source dispositions, target set, and bootstrap exclusion; it does not prove four live tables.
+n8n owns:
 
-### Runtime acceptance boundary
+- acquisition
+- orchestration
+- receipts
+- cursor state
 
-Checked-in n8n exports remain inactive and `SPEC_ONLY`. ProDex device login, `auth.json` persistence, Microsoft refresh and restart, four live tables, Actual/Cashback readback, Cloudflare routes, production identities, and rollback remain pending until a current redacted receipt records each result. The acceptance statuses are tracked in [`config/project-acceptance.json`](config/project-acceptance.json).
+Cashback Control owns notification routing and cashback period state. OneDrive owns evidence originals and the evidence index.
 
-### Platform-owned procedures
+Browser acquisition never writes directly to the ledger or Cashback Control. n8n validates approved deltas. n8n submits approved deltas through the fenced writer.
 
-The finance checkout does not own the n8n platform scripts. Use the pinned platform commit [`2c3286ae3c63a80b86ade945f19d419bf562874b`](https://github.com/srobroek/n8n/tree/2c3286ae3c63a80b86ade945f19d419bf562874b) for [`backup.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/backup.sh), [`doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh), [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/restore-disposable.sh), and [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/recover-retained-n8n-key.sh). The same commit owns the [`Cloudflare route contract`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md) and [`route verification`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh).
+### data migration
+
+The legacy input contract declares 15 `SPEC_ONLY` tables in [`integrations/n8n/data-tables.json`](integrations/n8n/data-tables.json).
+
+The migration target contains four tables in [`integrations/n8n/data-table-migration-matrix.json`](integrations/n8n/data-table-migration-matrix.json):
+
+- `finance_ingestion_state`
+- `finance_documents`
+- `finance_actual_batches`
+- `finance_ai_reviews`
+
+[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. The test does not prove four live tables.
+
+### runtime acceptance boundary
+
+Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pending until a current redacted receipt records each result:
+
+- ProDex device login
+- `auth.json` persistence
+- Microsoft refresh
+- Microsoft restart
+- Four live tables
+- Ledger/Cashback readback
+- Cloudflare routes
+- Production identities
+- Rollback
+
+- Acceptance statuses: [`config/project-acceptance.json`](config/project-acceptance.json)
+
+### platform-owned procedures
+
+The finance checkout does not own the n8n platform scripts. Use pinned commit [`2c3286ae3c63a80b86ade945f19d419bf562874b`](https://github.com/srobroek/n8n/tree/2c3286ae3c63a80b86ade945f19d419bf562874b).
+
+- [`backup.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/recover-retained-n8n-key.sh)
+- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/docs/cloudflare-publication.md)
+- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/verify-cloudflare-routes.sh)
 
 ## Recreate locally
 
