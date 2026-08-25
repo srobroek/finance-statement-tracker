@@ -144,6 +144,15 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                         "bound": True,
                         "sha256": receipt_sha,
                     },
+                    "schema_version": 1,
+                    "receipt_contract": "finance-data-table-readback-receipt-v1",
+                    "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
+                    "forward_gate": readback["forward_gate"],
+                    "rollback_gate": readback["rollback_gate"],
+                    "writes_performed": False,
+                    "provider_calls": False,
+                    "row_values_recorded": False,
+                    "secret_values_recorded": False,
                 }
             )
             + "\n",
