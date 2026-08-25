@@ -90,10 +90,10 @@ def _read_json(path: Path) -> tuple[dict[str, Any], bytes]:
 
 def _require_protected(path: Path, label: str = "PROTECTED_RECEIPT") -> None:
     try:
-        mode = stat.S_IMODE(path.stat().st_mode)
+        metadata = path.lstat()
     except OSError as error:
         raise CutoverError(f"{label}_UNAVAILABLE:{path.name}") from error
-    if mode & 0o077:
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600:
         raise CutoverError(f"{label}_MODE_REQUIRED:{path.name}")
 
 

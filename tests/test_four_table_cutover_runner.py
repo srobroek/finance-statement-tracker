@@ -476,7 +476,6 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
-            os.chmod(source, 0o644)
             args = [
                 "forward",
                 "--source-backup", str(source),
@@ -493,7 +492,42 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--runtime-state", str(temp / "runtime-state.json"),
                 "--output", str(temp / "forward.json"),
             ]
-            self.assertEqual(self.runner.main(args), 1)
+            for mode in (0o644, 0o400, 0o640):
+                os.chmod(source, mode)
+                self.assertEqual(self.runner.main(args), 1)
+
+    def test_protected_inputs_require_regular_non_symlink_exact_six_hundred_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            protected = temp / "protected.json"
+            protected.write_text("{}\n", encoding="utf-8")
+            os.chmod(protected, 0o600)
+            self.runner._require_protected(protected, "TEST_PROTECTED")
+
+            for mode in (0o400, 0o640):
+                os.chmod(protected, mode)
+                with self.assertRaisesRegex(
+                    self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+                ):
+                    self.runner._require_protected(protected, "TEST_PROTECTED")
+
+            replacement = temp / "replacement.json"
+            replacement.write_text("{}\n", encoding="utf-8")
+            os.chmod(replacement, 0o600)
+            protected.unlink()
+            protected.symlink_to(replacement)
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+            ):
+                self.runner._require_protected(protected, "TEST_PROTECTED")
+
+            protected.unlink()
+            protected.mkdir()
+            os.chmod(protected, 0o700)
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+            ):
+                self.runner._require_protected(protected, "TEST_PROTECTED")
 
     def test_forward_rejects_replaced_approved_input(self):
         with tempfile.TemporaryDirectory() as directory:
