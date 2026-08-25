@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "capture_id": "sarwa-holdings-2026-08-18",
+  "source": {
+    "provider": "Sarwa",
+    "captured_at": "2026-08-18T07:44:58.665Z",
+    "capture_method": "VISIBLE_ROWS",
+    "limitations": [
+      "No official web export was available",
+      "No stable activity rows were exposed"
+    ]
+  },
+  "currency": "USD",
+  "overall": {
+    "balance_usd": "1571611.22",
+    "earnings_usd": "448069.63",
+    "return_pct": "39.88",
+    "as_of": "2026-08-17"
+  },
+  "invest_accounts": [
+    {
+      "label": "Personal Investments",
+      "balance_usd": "1249330.82",
+      "earnings_usd": "492163.82",
+      "return_pct": "65.00",
+      "ownership": "Personal",
+      "positions": [
+        {"ticker": "VTI", "name": "US Stocks", "allocation_pct": "45.5", "units": "1486.3211", "market_value_usd": "567967.88", "performance_pct": "+66.93"},
+        {"ticker": "IEFA", "name": "Developed Markets Stocks", "allocation_pct": "32.5", "units": "4021.1971", "market_value_usd": "406261.54", "performance_pct": "+43.27"},
+        {"ticker": "VWO", "name": "Emerging Markets Stocks", "allocation_pct": "10.7", "units": "2219.3665", "market_value_usd": "134027.54", "performance_pct": "+28.17"},
+        {"ticker": "IBIT", "name": "Bitcoin", "allocation_pct": "5.0", "units": "1708.0506", "market_value_usd": "62207.20", "performance_pct": "-7.99"},
+        {"ticker": "VNQ", "name": "US Real Estate", "allocation_pct": "4.9", "units": "624.8233", "market_value_usd": "61220.19", "performance_pct": "+13.38"}
+      ],
+      "cash_usd": "17646.51",
+      "as_of": "Aug 17th 2026, 00:00 UTC",
+      "recent_activity_lines": [],
+      "limitations": ["Recent activity was unavailable"]
+    },
+    {
+      "label": "Sarwa Classic",
+      "balance_usd": "0.00",
+      "earnings_usd": "45777.70",
+      "return_pct": "-100.00",
+      "ownership": "Personal",
+      "positions": [],
+      "cash_usd": "0.00",
+      "as_of": "Feb 22nd 2021, 21:00 UTC",
+      "recent_activity_lines": [],
+      "limitations": ["Closed account"]
+    },
+    {
+      "label": "rekening ouders",
+      "balance_usd": "98819.13",
+      "earnings_usd": "9446.49",
+      "return_pct": "10.57",
+      "ownership": "Joint",
+      "positions": [
+        {"ticker": "VTI", "name": "US Stocks", "allocation_pct": "38.7", "units": "100.134", "market_value_usd": "38264.21", "performance_pct": "+14.40"},
+        {"ticker": "IEFA", "name": "Developed Markets Stocks", "allocation_pct": "34.3", "units": "335.5284", "market_value_usd": "33898.43", "performance_pct": "+13.14"},
+        {"ticker": "VWO", "name": "Emerging Markets Stocks", "allocation_pct": "11.2", "units": "183.377", "market_value_usd": "11074.14", "performance_pct": "+10.69"},
+        {"ticker": "IBIT", "name": "Bitcoin", "allocation_pct": "4.8", "units": "129.6162", "market_value_usd": "4720.62", "performance_pct": "-22.88"},
+        {"ticker": "VNQ", "name": "US Real Estate", "allocation_pct": "4.6", "units": "46.3067", "market_value_usd": "4537.14", "performance_pct": "+9.86"},
+        {"ticker": "BNDX", "name": "Global Bonds", "allocation_pct": "2.7", "units": "56.7743", "market_value_usd": "2705.30", "performance_pct": "-2.68"},
+        {"ticker": "BND", "name": "US Bonds", "allocation_pct": "2.7", "units": "37.4197", "market_value_usd": "2700.21", "performance_pct": "-2.51"}
+      ],
+      "cash_usd": "919.05",
+      "as_of": "Aug 17th 2026, 00:00 UTC",
+      "recent_activity_lines": [],
+      "limitations": []
+    },
+    {
+      "label": "shared airbnb returns",
+      "balance_usd": "15872.67",
+      "earnings_usd": "3068.18",
+      "return_pct": "23.96",
+      "ownership": "Joint",
+      "positions": [
+        {"ticker": "VTI", "name": "US Stocks", "allocation_pct": "46.5", "units": "19.3124", "market_value_usd": "7379.85", "performance_pct": "+28.05"},
+        {"ticker": "IEFA", "name": "Developed Markets Stocks", "allocation_pct": "32.8", "units": "51.5104", "market_value_usd": "5204.10", "performance_pct": "+24.70"},
+        {"ticker": "VWO", "name": "Emerging Markets Stocks", "allocation_pct": "10.7", "units": "28.0578", "market_value_usd": "1694.41", "performance_pct": "+30.14"},
+        {"ticker": "VNQ", "name": "US Real Estate", "allocation_pct": "4.8", "units": "7.7258", "market_value_usd": "756.97", "performance_pct": "+8.09"},
+        {"ticker": "IBIT", "name": "Bitcoin", "allocation_pct": "4.1", "units": "17.7366", "market_value_usd": "645.97", "performance_pct": "-23.86"}
+      ],
+      "cash_usd": "191.39",
+      "as_of": "Aug 17th 2026, 00:00 UTC",
+      "recent_activity_lines": [],
+      "limitations": []
+    }
+  ],
+  "other_products": {
+    "trade": {
+      "label": "Sarwa Trade",
+      "balance_usd": "207588.60",
+      "earnings_usd": "-101026.44",
+      "return_pct": "-32.73"
+    },
+    "protection": {
+      "label": "Black Swan Protection",
+      "coverage_usd": "1300000",
+      "status": "Active"
+    }
+  }
+}

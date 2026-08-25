@@ -1,0 +1,126 @@
+{
+  "artifacts": [
+    {
+      "archive_path": "archive/fab-inventory.json",
+      "archive_sha256": "f9eb0981fb3024c5c9210156190e141b2b859f2ffee7f0f6211084778c3d7343",
+      "id": "fab-inventory",
+      "kind": "FAB_ACCOUNT_INVENTORY",
+      "non_empty": true,
+      "observed_at": "2026-08-18T08:40:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/fab-inventory.json",
+      "source_sha256": "f9eb0981fb3024c5c9210156190e141b2b859f2ffee7f0f6211084778c3d7343"
+    },
+    {
+      "archive_path": "archive/sarwa-t1.json",
+      "archive_sha256": "3211cfbb84b84e5a4b8c4774e7d466c078c8974033c855c7a8044179529b86b7",
+      "id": "sarwa-t1",
+      "kind": "SARWA_WEALTH_SNAPSHOT",
+      "non_empty": true,
+      "observed_at": "2026-08-17T08:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/sarwa-t1.json",
+      "source_sha256": "3211cfbb84b84e5a4b8c4774e7d466c078c8974033c855c7a8044179529b86b7"
+    },
+    {
+      "archive_path": "archive/sarwa-t2.json",
+      "archive_sha256": "15dd341857b21371684c110f6f307dbbfb81012da7fd1f938abc69696c489b3c",
+      "id": "sarwa-t2",
+      "kind": "SARWA_WEALTH_SNAPSHOT",
+      "non_empty": true,
+      "observed_at": "2026-08-18T08:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/sarwa-t2.json",
+      "source_sha256": "15dd341857b21371684c110f6f307dbbfb81012da7fd1f938abc69696c489b3c"
+    },
+    {
+      "archive_path": "archive/fx-t1.json",
+      "archive_sha256": "d8bab74efc455084cb99a098048e2fdd94f5653fb8c69b07e4a4aa50f42f231a",
+      "id": "fx-t1",
+      "kind": "FX_SNAPSHOT",
+      "non_empty": true,
+      "observed_at": "2026-08-17T00:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/fx-t1.json",
+      "source_sha256": "d8bab74efc455084cb99a098048e2fdd94f5653fb8c69b07e4a4aa50f42f231a"
+    },
+    {
+      "archive_path": "archive/fx-t2.json",
+      "archive_sha256": "62d7277fad34d4974dd52ca580e818d437933ba287163b12923d7b11a0fa16ce",
+      "id": "fx-t2",
+      "kind": "FX_SNAPSHOT",
+      "non_empty": true,
+      "observed_at": "2026-08-18T00:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/fx-t2.json",
+      "source_sha256": "62d7277fad34d4974dd52ca580e818d437933ba287163b12923d7b11a0fa16ce"
+    },
+    {
+      "archive_path": "archive/adcb-zero.json",
+      "archive_sha256": "13afcec539eec039e33e78bb8bea8a28faaf95a81ddf0bd8ea6819a23f51c607",
+      "id": "adcb-zero",
+      "kind": "ADCB_ZERO_EVIDENCE",
+      "non_empty": true,
+      "observed_at": "2026-08-18T00:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/adcb-zero.json",
+      "source_sha256": "13afcec539eec039e33e78bb8bea8a28faaf95a81ddf0bd8ea6819a23f51c607"
+    },
+    {
+      "archive_path": "archive/actual-api.json",
+      "archive_sha256": "be902548350b76c637f6d8377fce085e8eece78188f4ef8f3ca7f61c0b12f6b2",
+      "id": "actual-api",
+      "kind": "ACTUAL_API_READBACK",
+      "non_empty": true,
+      "observed_at": "2026-08-19T00:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/actual-api.json",
+      "source_sha256": "be902548350b76c637f6d8377fce085e8eece78188f4ef8f3ca7f61c0b12f6b2"
+    },
+    {
+      "archive_path": "archive/actual-ui.json",
+      "archive_sha256": "4b727c4c76c946bac201ce68535ae11bc7278f0dc0d8c820fe23cda437e03d2a",
+      "id": "actual-ui",
+      "kind": "ACTUAL_UI_READBACK",
+      "non_empty": true,
+      "observed_at": "2026-08-19T00:00:00Z",
+      "reviewer": "disposable-fixture",
+      "source_path": "sources/actual-ui.json",
+      "source_sha256": "4b727c4c76c946bac201ce68535ae11bc7278f0dc0d8c820fe23cda437e03d2a"
+    }
+  ],
+  "environment": {
+    "actual_sync_id": "disposable-sync-wealth-1",
+    "git_commit": "0000000000000000000000000000000000000000",
+    "id": "disposable-actual-wealth",
+    "kind": "DISPOSABLE"
+  },
+  "policy": {
+    "actual_api_artifact_id": "actual-api",
+    "actual_ui_artifact_id": "actual-ui",
+    "adcb_account_id": "adcb:credit:8833-6838",
+    "adcb_zero_artifact_id": "adcb-zero",
+    "aggregate_only_sarwa_account_ids": ["sarwa:trade:primary"],
+    "evaluated_at": "2026-08-19T00:00:00Z",
+    "excluded_sarwa_account_ids": ["sarwa:invest:classic"],
+    "expected_fab_account_ids": ["fab:current:2001"],
+    "expected_sarwa_account_ids": [
+      "sarwa:invest:parents",
+      "sarwa:invest:personal",
+      "sarwa:invest:shared-airbnb",
+      "sarwa:trade:primary"
+    ],
+    "fab_inventory_artifact_id": "fab-inventory",
+    "fx_snapshot_artifact_ids": ["fx-t1", "fx-t2"],
+    "initial_observed_balances_minor": {
+      "sarwa:invest:parents": 0,
+      "sarwa:invest:personal": 0,
+      "sarwa:invest:shared-airbnb": 0,
+      "sarwa:trade:primary": 0
+    },
+    "position_tolerance": "0.05",
+    "sarwa_snapshot_artifact_ids": ["sarwa-t1", "sarwa-t2"],
+    "wealth_stale_after_seconds": 604800
+  },
+  "schema_version": 1
+}

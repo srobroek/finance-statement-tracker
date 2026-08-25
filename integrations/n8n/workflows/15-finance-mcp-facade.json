@@ -1,0 +1,346 @@
+{
+  "id": "10000000-0000-4000-8000-000000000015",
+  "name": "Finance · Bounded MCP Facade",
+  "active": false,
+  "nodes": [
+    {
+      "id": "15001",
+      "name": "Finance MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2,
+      "webhookId": "finance-operations-v1",
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "path": "finance-operations-v1",
+        "authentication": "bearerAuth"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "BIND_FINANCE_MCP_FACADE",
+          "name": "Finance MCP Facade Bearer"
+        }
+      }
+    },
+    {
+      "id": "15002",
+      "name": "finance.status.v1",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "name": "finance.status.v1",
+        "description": "Read redacted finance workflow and receipt status. This tool performs no finance mutation.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':finance-status' }}",
+            "operation_code": "finance.status"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "15003",
+      "name": "finance.reviewed-artifact.handoff.v1",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "name": "finance.reviewed-artifact.handoff.v1",
+        "description": "Submit an already staged and human-reviewed browser artifact by immutable server-owned artifact ID. The workflow loads the durable document and derives both hashes; URLs, paths, binaries, client hashes, providers, credentials, account IDs, and commit flags are forbidden.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':artifact-submit-reviewed' }}",
+            "operation_code": "artifact.submit_reviewed",
+            "artifact_id": "={{ $fromAI('artifact_id','Immutable reviewed artifact identifier','string') }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "15004",
+      "name": "finance.document.request.v1",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "name": "finance.document.request.v1",
+        "description": "Request extraction of an existing immutable document record using only its ID, expected hash, profile, and schema version.",
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000010",
+          "mode": "list",
+          "cachedResultName": "Finance · Operations Status and Audited MCP Dispatch"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "_mcp_request_id": "={{ $execution.id + ':document-request' }}",
+            "operation_code": "document.request",
+            "document_id": "={{ $fromAI('document_id','Immutable document identifier','string') }}",
+            "expected_sha256": "={{ $fromAI('expected_sha256','Expected lowercase SHA-256 hex','string') }}",
+            "document_profile": "={{ $fromAI('document_profile','Trusted configured document profile code','string') }}",
+            "requested_schema_version": "={{ $fromAI('requested_schema_version','Requested registered schema version','string') }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        }
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000015-generated-note-1",
+      "name": "Stage 1 · finance.status.v1 to Finance MCP Server Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -180
+      ],
+      "parameters": {
+        "content": "## Stage 1 · finance.status.v1 → Finance MCP Server Trigger\n**Input:** finance.status.v1  ·  **Output:** Finance MCP Server Trigger  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "height": 110,
+        "width": 2240,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "finance.status.v1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Finance MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "finance.reviewed-artifact.handoff.v1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Finance MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "finance.document.request.v1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Finance MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "FINANCE_MCP_FACADE",
+    "workflowPath": "finance-operations-v1",
+    "mcpSafe": true,
+    "migrationStatus": "SPEC_ONLY",
+    "instanceMcpRequired": false,
+    "allowedOperationCodes": [
+      "finance.status.v1",
+      "finance.document.request.v1",
+      "finance.reviewed-artifact.handoff.v1"
+    ],
+    "auditTable": "finance_mcp_requests",
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_FINANCE_MCP_FACADE",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ],
+    "activationBlocked": true,
+    "activationBlockers": [
+      "MCP_FACADE_CREDENTIAL_REQUIRED",
+      "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED"
+    ],
+    "blockerContract": {
+      "schemaVersion": 1,
+      "registryPath": "integrations/n8n/pipeline-registry.json",
+      "workflowCode": "FINANCE_MCP_FACADE",
+      "evaluation": "ALL_REQUIRED",
+      "activationBlocked": true,
+      "blockerCodes": [
+        "MCP_FACADE_CREDENTIAL_REQUIRED",
+        "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED"
+      ],
+      "required": [
+        {
+          "kind": "credential_binding",
+          "severity": "activation",
+          "objective": "The W15 bearer credential is created and owner-bound by the approved runtime binder.",
+          "evidence": {
+            "artifact": "n8n_credential_binding_receipt",
+            "required_fields": [
+              "credential_name",
+              "credential_owner",
+              "placeholder",
+              "workflow_id",
+              "secret_value_recorded"
+            ],
+            "assertions": [
+              {
+                "path": "binding.placeholder",
+                "operator": "equals",
+                "value": "BIND_FINANCE_MCP_FACADE"
+              },
+              {
+                "path": "binding.configured",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "path": "binding.owner_relation",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "path": "binding.secret_value_recorded",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          },
+          "operator_warning": "Keep the MCP facade inactive until its concealed bearer credential is bound and owner-read back.",
+          "code": "MCP_FACADE_CREDENTIAL_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        },
+        {
+          "kind": "disposable_runtime_proof",
+          "severity": "activation",
+          "objective": "Disposable W15 activation, authenticated tool discovery, bounded operation execution, and teardown are read back clean.",
+          "evidence": {
+            "artifact": "w15_disposable_proof_receipt",
+            "required_fields": [
+              "scope",
+              "status",
+              "tool_names",
+              "cleanup",
+              "production_writes"
+            ],
+            "assertions": [
+              {
+                "path": "receipt.scope",
+                "operator": "equals",
+                "value": "W15_DISPOSABLE_ONLY"
+              },
+              {
+                "path": "receipt.status",
+                "operator": "equals",
+                "value": "VERIFIED"
+              },
+              {
+                "path": "receipt.tool_names",
+                "operator": "equals",
+                "value": [
+                  "finance.document.request.v1",
+                  "finance.reviewed-artifact.handoff.v1",
+                  "finance.status.v1"
+                ]
+              },
+              {
+                "path": "receipt.cleanup.status",
+                "operator": "equals",
+                "value": "CLEAN"
+              },
+              {
+                "path": "receipt.production_writes",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          },
+          "operator_warning": "Do not expose the MCP facade until disposable initialize, tool-list, operation, and cleanup readbacks pass.",
+          "code": "MCP_FACADE_DISPOSABLE_PROOF_REQUIRED",
+          "required": true,
+          "state": "BLOCKED"
+        }
+      ],
+      "operatorWarning": {
+        "required": true,
+        "retainUntil": "ALL_REQUIRED_PROVEN",
+        "stickyNoteNames": [
+          "Stage 1 · finance.status.v1 to Finance MCP Server Trigger"
+        ],
+        "guardNodeNames": [
+          "Finance MCP Server Trigger"
+        ]
+      }
+    }
+  },
+  "nodeGroups": [],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "base_currency": "USD",
+  "max_age_seconds": 172800,
+  "observed_at": "2026-08-18T00:00:00Z",
+  "provider": "disposable-fixture",
+  "quote_currency": "AED",
+  "rate": "3.68",
+  "schema_version": 1,
+  "snapshot_id": "fx-disposable-t2"
+}

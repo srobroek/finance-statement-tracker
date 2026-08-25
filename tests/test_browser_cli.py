@@ -12,6 +12,42 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserCliTests(unittest.TestCase):
+    def test_original_codex_prompt_covers_sources_and_security_boundary(self) -> None:
+        prompt = (ROOT / "docs" / "original-codex-browser-task-prompt.md").read_text(encoding="utf-8")
+        for source in ("FAB_DEBIT", "SARWA", "AMAZON", "ADCB", "FUTURE_MFA"):
+            self.assertIn(source, prompt)
+        for forbidden in (
+            "credentials",
+            "OTP",
+            "cookies",
+            "session state",
+            "PIN",
+            "CVV",
+            "full account number",
+        ):
+            self.assertIn(forbidden, prompt)
+        self.assertIn('"actual_mutation":false', prompt)
+        self.assertIn('"cashback_mutation":false', prompt)
+        self.assertIn("INTERACTIVE_ARTIFACT_HANDOFF", prompt)
+        for parameter in (
+            "FAB_DEBIT_PROVIDER",
+            "FAB_DEBIT_DATA_ID",
+            "ACCOUNT_LABEL",
+            "DATE_RANGE_START",
+            "DATE_RANGE_END",
+            "SARWA_PORTFOLIO_REF",
+            "SARWA_AS_OF_DATE",
+            "AMAZON_YEAR",
+            "ADCB_CARD_REF",
+            "ADCB_STATEMENT_PERIOD",
+        ):
+            self.assertIn(parameter, prompt)
+        self.assertIn("portfolio_ref", prompt)
+        self.assertIn("as_of_date", prompt)
+        self.assertIn("account_ref=ACCOUNT_LABEL", prompt)
+        self.assertIn("year=AMAZON_YEAR", prompt)
+        self.assertIn("statement_period=ADCB_STATEMENT_PERIOD", prompt)
+
     def test_status_and_recipe_commands_write_machine_readable_results(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -47,6 +47,7 @@ def stage_statement(
                 source_type="statement",
                 source_message_id=source_message_id,
                 transaction_type=row.transaction_type,
+                source_direction=row.direction,
                 review_required=review_required,
                 is_refund=row.transaction_type == "REFUND",
                 metadata={

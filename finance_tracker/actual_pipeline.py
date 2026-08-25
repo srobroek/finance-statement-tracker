@@ -19,6 +19,13 @@ from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
+from .transaction_semantics import CASHBACK_TOPICS, finalize_transaction_topic
+from .classification_audit import enforce_transaction_invariants
+
+
+_ACTUAL_ACCOUNT_TYPES = frozenset(
+    {"checking", "savings", "investment", "trade", "credit", "mortgage"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,11 +51,64 @@ class ActualStatementRun:
 
 def load_actual_config(path: str | Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    if payload.get("schema_version") != 1:
+    if not isinstance(payload, dict):
+        raise ValueError("Actual bootstrap config must be an object")
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
         raise ValueError("Actual bootstrap config schema_version must be 1")
+    currency = payload.get("currency")
+    if currency is not None and (
+        not isinstance(currency, str)
+        or len(currency) != 3
+        or not currency.isascii()
+        or not currency.isalpha()
+    ):
+        raise ValueError("Actual bootstrap config currency must be a three-letter code")
     accounts = payload.get("accounts")
     if not isinstance(accounts, list) or not accounts:
         raise ValueError("Actual bootstrap config requires a non-empty accounts list")
+    for index, account in enumerate(accounts):
+        if not isinstance(account, dict):
+            raise ValueError(f"Actual bootstrap config account {index} must be an object")
+        name = account.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"Actual bootstrap config account {index} requires a name")
+        if "type" in account:
+            account_type = account["type"]
+            if not isinstance(account_type, str) or account_type not in _ACTUAL_ACCOUNT_TYPES:
+                raise ValueError(
+                    f"Actual bootstrap config account {index} type must be one of "
+                    f"{', '.join(sorted(_ACTUAL_ACCOUNT_TYPES))}"
+                )
+        if "enabled" in account and type(account["enabled"]) is not bool:
+            raise ValueError(
+                f"Actual bootstrap config account {index} enabled must be a boolean"
+            )
+        for field in ("card_last4", "aliases"):
+            values = account.get(field, [])
+            if not isinstance(values, list):
+                raise ValueError(f"Actual bootstrap config account {index} {field} must be a list")
+            for value in values:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(
+                        f"Actual bootstrap config account {index} {field} values must be strings"
+                    )
+                if field == "card_last4" and (
+                    len(value) != 4 or not value.isascii() or not value.isdigit()
+                ):
+                    raise ValueError(
+                        f"Actual bootstrap config account {index} card_last4 values must be four digits"
+                    )
+        for field in ("card_code", "owner"):
+            value = account.get(field)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"Actual bootstrap config account {index} {field} must be a string"
+                )
+    retired_accounts = payload.get("retired_accounts", [])
+    if not isinstance(retired_accounts, list) or any(
+        not isinstance(value, str) or not value.strip() for value in retired_accounts
+    ):
+        raise ValueError("Actual bootstrap config retired_accounts must be a list of strings")
     return payload
 
 
@@ -59,6 +119,11 @@ def account_maps(config: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]
     for account in config["accounts"]:
         name = str(account["name"])
         card_code = str(account.get("card_code") or name).upper()
+        if card_code in account_by_card and account_by_card[card_code] != name:
+            raise ValueError(
+                f"Card code {card_code} is mapped to multiple accounts: "
+                f"{account_by_card[card_code]}, {name}"
+            )
         account_by_card[card_code] = name
         for last4 in account.get("card_last4", []):
             token = str(last4).strip()
@@ -160,11 +225,12 @@ def build_actual_statement_run(
     for transaction in staged.transactions:
         transaction.account = account_by_card[transaction.card]
         transaction.owner = owner_by_card.get(transaction.card)
+        traces.extend(engine.apply_stages(transaction, ("TRANSACTION_NORMALIZATION",)))
+        finalize_transaction_topic(transaction)
         traces.extend(
             engine.apply_stages(
                 transaction,
                 (
-                    "TRANSACTION_NORMALIZATION",
                     "VENDOR_NORMALIZATION",
                     "CLASSIFICATION",
                     "TAGGING",
@@ -179,6 +245,7 @@ def build_actual_statement_run(
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
+        enforce_transaction_invariants(transaction)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
     period_start = statement.period_start or min(
@@ -204,7 +271,7 @@ def build_actual_statement_run(
         if transaction.card not in supported_cashback_cards:
             continue
         transaction_type = transaction.transaction_type.upper()
-        if transaction_type not in {"PURCHASE", "REFUND"}:
+        if transaction_type not in CASHBACK_TOPICS:
             continue
         purchase_type = str(
             transaction.metadata.get("purchase_type")

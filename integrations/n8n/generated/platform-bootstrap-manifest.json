@@ -1,0 +1,620 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "n8n_version": "2.36.2",
+  "sources": {
+    "data_tables": "integrations/n8n/data-tables.json",
+    "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
+    "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
+    "ai_policy_seed_sha256": "c74a8eb30ed016fff3c6619cf608fdae6e0c468c2ac3405b9101ac3eccf2922a",
+    "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
+    "config_version_seed_sha256": "c7ba3a1217252c67be73169ab6ea4a56a21d8e8becd09fe38a39eac70da5c905",
+    "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
+    "application_contract_bundle_sha256": "d618bd4eaa285ef244e8bf231ef434a0e3c02feeec731ef3efdd22bdc467c58a",
+    "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
+    "application_contract_bundle_schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
+    "data_table_migration_matrix": "integrations/n8n/data-table-migration-matrix.json"
+  },
+  "native_data_table_create_contract": {
+    "node_type": "n8n-nodes-base.dataTable",
+    "node_type_version": 1.1,
+    "resource": "table",
+    "operation": "create",
+    "reuse_option": "createIfNotExists",
+    "official_node_source": "https://github.com/n8n-io/n8n/blob/master/packages/nodes-base/nodes/DataTable/actions/table/create.operation.ts",
+    "official_docs": "https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.datatable/tables/"
+  },
+  "table_create_operations": [
+    {
+      "table_name": "finance_ingestion_state",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_ingestion_state",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "receipt_run_id",
+              "type": "string"
+            },
+            {
+              "name": "receipt_run_upper_bound",
+              "type": "date"
+            },
+            {
+              "name": "cursor_value",
+              "type": "date"
+            },
+            {
+              "name": "committed_run_id",
+              "type": "string"
+            },
+            {
+              "name": "run_upper_bound",
+              "type": "date"
+            },
+            {
+              "name": "overlap_seconds",
+              "type": "number"
+            },
+            {
+              "name": "scanned_count",
+              "type": "number"
+            },
+            {
+              "name": "matched_count",
+              "type": "number"
+            },
+            {
+              "name": "cursor_version",
+              "type": "number"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            },
+            {
+              "name": "last_window_start",
+              "type": "date"
+            },
+            {
+              "name": "last_pages_fetched",
+              "type": "number"
+            },
+            {
+              "name": "last_pagination_exhausted",
+              "type": "boolean"
+            },
+            {
+              "name": "last_heartbeat",
+              "type": "boolean"
+            },
+            {
+              "name": "last_terminal_state",
+              "type": "string"
+            },
+            {
+              "name": "last_receipt_created_at",
+              "type": "date"
+            },
+            {
+              "name": "downstream_receipt_sha256",
+              "type": "string"
+            },
+            {
+              "name": "attachment_verification_barrier",
+              "type": "string"
+            },
+            {
+              "name": "attachment_ids_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "attachment_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "attachments_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_receipt_barrier",
+              "type": "string"
+            },
+            {
+              "name": "email_evidence_receipts_verified",
+              "type": "number"
+            },
+            {
+              "name": "email_evidence_identity_keys_json",
+              "type": "string"
+            },
+            {
+              "name": "archive_ready",
+              "type": "boolean"
+            },
+            {
+              "name": "inventory_run_id",
+              "type": "string"
+            },
+            {
+              "name": "inventory_fence",
+              "type": "number"
+            },
+            {
+              "name": "inventory_sha256",
+              "type": "string"
+            },
+            {
+              "name": "inventory_item_id",
+              "type": "string"
+            },
+            {
+              "name": "inventory_path",
+              "type": "string"
+            },
+            {
+              "name": "inventory_etag",
+              "type": "string"
+            },
+            {
+              "name": "inventory_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "inventory_length_bytes",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_documents",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_documents",
+        "columns": {
+          "column": [
+            {
+              "name": "document_id",
+              "type": "string"
+            },
+            {
+              "name": "archive_receipt_id",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "source_message_id",
+              "type": "string"
+            },
+            {
+              "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_sha256",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_item_id",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_etag",
+              "type": "string"
+            },
+            {
+              "name": "archive_state",
+              "type": "string"
+            },
+            {
+              "name": "archive_verified_at",
+              "type": "date"
+            },
+            {
+              "name": "document_profile",
+              "type": "string"
+            },
+            {
+              "name": "requested_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "last_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "parser_version",
+              "type": "string"
+            },
+            {
+              "name": "output_sha256",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_detail_redacted",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_actual_batches",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_actual_batches",
+        "columns": {
+          "column": [
+            {
+              "name": "batch_id",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "idempotency_key",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "delta_sha256",
+              "type": "string"
+            },
+            {
+              "name": "delta_artifact_item_id",
+              "type": "string"
+            },
+            {
+              "name": "delta_artifact_etag",
+              "type": "string"
+            },
+            {
+              "name": "delta_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "parser_version",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "lease_owner",
+              "type": "string"
+            },
+            {
+              "name": "lease_fence",
+              "type": "number"
+            },
+            {
+              "name": "actual_transaction_id",
+              "type": "string"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "last_error_class",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            },
+            {
+              "name": "verification_version",
+              "type": "number"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
+              "type": "string"
+            },
+            {
+              "name": "period_start",
+              "type": "date"
+            },
+            {
+              "name": "period_end",
+              "type": "date"
+            },
+            {
+              "name": "expected_payload_sha256",
+              "type": "string"
+            },
+            {
+              "name": "observed_payload_sha256",
+              "type": "string"
+            },
+            {
+              "name": "expected_count",
+              "type": "number"
+            },
+            {
+              "name": "observed_count",
+              "type": "number"
+            },
+            {
+              "name": "expected_amount_sum_minor",
+              "type": "number"
+            },
+            {
+              "name": "observed_amount_sum_minor",
+              "type": "number"
+            },
+            {
+              "name": "expected_account_balance",
+              "type": "number"
+            },
+            {
+              "name": "observed_account_balance",
+              "type": "number"
+            },
+            {
+              "name": "invariants_passed",
+              "type": "boolean"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "reconciliation_version",
+              "type": "number"
+            },
+            {
+              "name": "statement_sha256",
+              "type": "string"
+            },
+            {
+              "name": "verification_artifact_sha256",
+              "type": "string"
+            },
+            {
+              "name": "reconciliation_state",
+              "type": "string"
+            },
+            {
+              "name": "reconciliation_difference_minor",
+              "type": "number"
+            },
+            {
+              "name": "reconciliation_verified_at",
+              "type": "date"
+            },
+            {
+              "name": "verification_artifact_item_id",
+              "type": "string"
+            },
+            {
+              "name": "verification_artifact_path",
+              "type": "string"
+            },
+            {
+              "name": "verification_artifact_etag",
+              "type": "string"
+            },
+            {
+              "name": "verification_artifact_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "verification_artifact_length_bytes",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_ai_reviews",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_ai_reviews",
+        "columns": {
+          "column": [
+            {
+              "name": "idempotency_key",
+              "type": "string"
+            },
+            {
+              "name": "policy_id",
+              "type": "string"
+            },
+            {
+              "name": "policy_sha256",
+              "type": "string"
+            },
+            {
+              "name": "config_sha256",
+              "type": "string"
+            },
+            {
+              "name": "output_schema_sha256",
+              "type": "string"
+            },
+            {
+              "name": "request_sha256",
+              "type": "string"
+            },
+            {
+              "name": "runner_receipt_id",
+              "type": "string"
+            },
+            {
+              "name": "proposal_sha256",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_item_id",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_etag",
+              "type": "string"
+            },
+            {
+              "name": "proposal_artifact_schema",
+              "type": "string"
+            },
+            {
+              "name": "review_state",
+              "type": "string"
+            },
+            {
+              "name": "review_decision",
+              "type": "string"
+            },
+            {
+              "name": "reviewed_by_hash",
+              "type": "string"
+            },
+            {
+              "name": "reviewed_at",
+              "type": "date"
+            },
+            {
+              "name": "terminal_readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    }
+  ],
+  "application_contract": {
+    "path": "integrations/n8n/generated/application-contract-bundle.json",
+    "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
+    "schema_version": 1,
+    "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
+    "resolver_order": [
+      "W02",
+      "W04",
+      "W05",
+      "W09"
+    ],
+    "source_paths": [
+      "config/statement-sources.json",
+      "config/transaction-email-sources.json",
+      "config/ai-policies.json"
+    ]
+  },
+  "execution_evidence": {
+    "exact_image_import_tested": false,
+    "disposable_create_reuse_tested": false,
+    "table_list_readback_tested": false,
+    "production_validated": false
+  },
+  "activation_blockers": [
+    "EXACT_IMAGE_IMPORT_REQUIRED",
+    "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+    "SOURCE_MIGRATION_GATE_REQUIRED"
+  ],
+  "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
+  "target_schema_contract": {
+    "path": "integrations/n8n/data-table-migration-matrix.json",
+    "digest": "655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515",
+    "target_tables": [
+      "finance_ingestion_state",
+      "finance_documents",
+      "finance_actual_batches",
+      "finance_ai_reviews"
+    ],
+    "readback_operation": "list",
+    "readback_required": true,
+    "legacy_table_creation_forbidden": true,
+    "row_seed_writes_forbidden": true
+  }
+}

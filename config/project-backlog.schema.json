@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-backlog-schema-v1",
+  "title": "Finance platform orchestrated backlog",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source_artifacts",
+    "summary",
+    "ordered_executable_queue",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated_at": {"type": "string", "format": "date"},
+    "source_artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "by_status", "by_priority", "by_domain", "verified_count"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 1},
+        "verified_count": {"type": "integer", "minimum": 0},
+        "by_status": {"$ref": "#/$defs/countMap"},
+        "by_priority": {"$ref": "#/$defs/countMap"},
+        "by_domain": {"$ref": "#/$defs/countMap"}
+      },
+      "additionalProperties": false
+    },
+    "ordered_executable_queue": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "rank", "id", "status", "priority", "owner_workstream", "next_action", "blocked_by"
+        ],
+        "properties": {
+          "rank": {"type": "integer", "minimum": 1},
+          "id": {"$ref": "#/$defs/taskId"},
+          "status": {"$ref": "#/$defs/status"},
+          "priority": {"enum": ["P0", "P1", "P2"]},
+          "owner_workstream": {"type": "string", "minLength": 1},
+          "next_action": {"type": "string", "minLength": 1},
+          "blocked_by": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/task"}
+    },
+    "progress_overlay": {
+      "type": "object",
+      "required": [
+        "path", "recorded_at", "evidence_commit", "evidence_commits",
+        "snapshot_notes", "resolved_blockers", "superseded_text_markers", "update_count"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "recorded_at": {"type": "string", "format": "date"},
+        "evidence_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "evidence_commits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "uniqueItems": true
+        },
+        "snapshot_notes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "resolved_blockers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "superseded_text_markers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "update_count": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "countMap": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^(N8N|DOC|AGENT|ACTUAL|CASHBACK|BROWSER|AUTO|PLATFORM|DOCS)-[0-9]{3}$"
+    },
+    "status": {
+      "enum": [
+        "NOT_STARTED",
+        "PARTIAL",
+        "IMPLEMENTED_UNVERIFIED",
+        "BLOCKED",
+        "VERIFIED",
+        "SUPERSEDED"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "task": {
+      "type": "object",
+      "required": [
+        "id",
+        "domain",
+        "title",
+        "requirement",
+        "priority",
+        "status",
+        "owner_workstream",
+        "acceptance_validator",
+        "dependencies",
+        "acceptance_criteria",
+        "implementation_state",
+        "verification_state",
+        "evidence_paths",
+        "tests",
+        "live_readback",
+        "remaining_work",
+        "blockers",
+        "source_status",
+        "contradictions",
+        "last_verified",
+        "next_action"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/taskId"},
+        "domain": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "requirement": {"type": "string", "minLength": 1},
+        "priority": {"enum": ["P0", "P1", "P2"]},
+        "status": {"$ref": "#/$defs/status"},
+        "owner_workstream": {"type": "string", "minLength": 1},
+        "acceptance_validator": {"type": "string", "minLength": 1},
+        "dependencies": {"$ref": "#/$defs/stringArray"},
+        "acceptance_criteria": {"$ref": "#/$defs/stringArray"},
+        "implementation_state": {"type": "string", "minLength": 1},
+        "verification_state": {"type": "string", "minLength": 1},
+        "evidence_paths": {"$ref": "#/$defs/stringArray"},
+        "tests": {"$ref": "#/$defs/stringArray"},
+        "live_readback": {"type": "string"},
+        "remaining_work": {"type": "string", "minLength": 1},
+        "blockers": {"$ref": "#/$defs/stringArray"},
+        "source_status": {
+          "enum": [
+            "FINAL_DECISION",
+            "USER_CONFIRMED_ACCEPTANCE",
+            "USER_REPORTED_DEFECT",
+            "REQUESTED_UNVERIFIED",
+            "ASSISTANT_CLAIM_ONLY",
+            "MIXED",
+            "SUPERSEDED"
+          ]
+        },
+        "contradictions": {"$ref": "#/$defs/stringArray"},
+        "last_verified": {"type": ["string", "null"], "format": "date"},
+        "next_action": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  }
+}

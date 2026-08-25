@@ -1,0 +1,14 @@
+{
+  "accounts": [
+    {"balance_minor": 2500000, "closed": false, "offbudget": false, "provider_account_id": "fab:current:2001"},
+    {"balance_minor": 404800, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:personal"},
+    {"balance_minor": 165600, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:parents"},
+    {"balance_minor": 110400, "closed": false, "offbudget": true, "provider_account_id": "sarwa:invest:shared-airbnb"},
+    {"balance_minor": 44160, "closed": false, "offbudget": true, "provider_account_id": "sarwa:trade:primary"},
+    {"balance_minor": 0, "closed": true, "history_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "offbudget": false, "provider_account_id": "adcb:credit:8833-6838"}
+  ],
+  "aggregate_net_worth_minor": 3224960,
+  "captured_at": "2026-08-19T00:00:00Z",
+  "schema_version": 1,
+  "sync_id": "disposable-sync-wealth-1"
+}

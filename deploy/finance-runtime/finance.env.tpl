@@ -10,3 +10,6 @@ CASHBACK_VAPID_PUBLIC_KEY=op://FinanceRuntime/Finance Statement Tracker Runtime/
 CASHBACK_VAPID_PRIVATE_KEY=op://FinanceRuntime/Finance Statement Tracker Runtime/cashback_vapid_private_key
 CASHBACK_VAPID_SUBJECT=https://cashback.vxsan.com
 CASHBACK_PUBLIC_URL=https://cashback.vxsan.com
+CASHBACK_ACCESS_ISSUER=op://FinanceRuntime/Finance Statement Tracker Runtime/cashback_access_issuer
+CASHBACK_ACCESS_AUDIENCE=op://FinanceRuntime/Finance Statement Tracker Runtime/cashback_access_audience
+CASHBACK_ACCESS_JWKS_URL=op://FinanceRuntime/Finance Statement Tracker Runtime/cashback_access_jwks_url

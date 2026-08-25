@@ -1,0 +1,1098 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
+  "schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
+  "content_digest": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
+    "excluded_fields": [
+      "bundle_content_sha256"
+    ]
+  },
+  "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
+  "source_documents": [
+    {
+      "path": "config/statement-sources.json",
+      "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+    },
+    {
+      "path": "config/transaction-email-sources.json",
+      "sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+    },
+    {
+      "path": "config/ai-policies.json",
+      "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
+    }
+  ],
+  "resolver_order": [
+    "W02",
+    "W04",
+    "W05",
+    "W09"
+  ],
+  "resolver_maps": [
+    {
+      "workflow_code": "W02",
+      "workflow_path": "integrations/n8n/workflows/02-rakbank-live-cashback.json",
+      "selection_key": "code",
+      "sources": [
+        {
+          "path": "config/transaction-email-sources.json",
+          "sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+        }
+      ],
+      "entries": [
+        {
+          "key": "RAKBANK_CARD_TRANSACTION",
+          "value": {
+            "code": "RAKBANK_CARD_TRANSACTION",
+            "institution": "RAKBANK",
+            "card_code": "RAK_WORLD",
+            "status": "ACTIVE",
+            "evidence_semantics": "LIVE_TRANSACTION_NOTIFICATION",
+            "adapter": "rakbank_card_transaction_v1",
+            "mail_folder": "Inbox/Rakbank",
+            "senders": [
+              "alerts@rakbank.ae"
+            ],
+            "subjects": [
+              "An update on your Card transaction"
+            ],
+            "subject_match": "EXACT",
+            "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and statement reconciliation remains authoritative. A separately observed Apple Pay purchase used the identical template and exposed no wallet marker. Explicit merchant channel rules run first; unresolved RAK_WORLD transactions use the configurable APPLE_PAY_POS user default."
+          }
+        },
+        {
+          "key": "STANDARD_CHARTERED_CARD_TRANSACTION",
+          "value": {
+            "code": "STANDARD_CHARTERED_CARD_TRANSACTION",
+            "institution": "Standard Chartered",
+            "card_code": "SC_PLATINUM_X",
+            "status": "PLACEHOLDER",
+            "evidence_semantics": "UNKNOWN",
+            "adapter": null,
+            "mail_folder": null,
+            "senders": [],
+            "subjects": [],
+            "subject_match": "EXACT",
+            "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
+          }
+        }
+      ]
+    },
+    {
+      "workflow_code": "W04",
+      "workflow_path": "integrations/n8n/workflows/04-ei-monthly-statement.json",
+      "selection_key": "card_code",
+      "sources": [
+        {
+          "path": "config/statement-sources.json",
+          "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+        }
+      ],
+      "entries": [
+        {
+          "key": "ADCB_CASHBACK",
+          "value": {
+            "card_code": "ADCB_CASHBACK",
+            "institution": "ADCB",
+            "adapter_status": "ACTIVE",
+            "adapter": "adcb_v1",
+            "password_env": "ADCB_STATEMENT_PASSWORD",
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "estatement@adcb.com"
+            ],
+            "email_subjects": [
+              "ADCB Credit card e-Statement"
+            ],
+            "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+          }
+        },
+        {
+          "key": "EI_AMAZON",
+          "value": {
+            "card_code": "EI_AMAZON",
+            "institution": "Emirates Islamic",
+            "adapter_status": "ACTIVE",
+            "adapter": "emirates_islamic_v1",
+            "password_env": "EI_STATEMENT_PASSWORD",
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "estatement@emiratesislamic.ae"
+            ],
+            "email_subjects": [
+              "Statement of your Emirates Islamic Credit Card"
+            ],
+            "notes": "PDF parser and recurring production mailbox contract are verified."
+          }
+        },
+        {
+          "key": "WIO_CREDIT",
+          "value": {
+            "card_code": "WIO_CREDIT",
+            "institution": "Wio",
+            "adapter_status": "ACTIVE",
+            "adapter": "wio_credit_v1",
+            "password_env": null,
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "communications@email.wio.io",
+              "communications@mail.wio.io"
+            ],
+            "email_subjects": [
+              "Your Wio Credit statement for this month"
+            ],
+            "notes": "PDF parser and recurring production mailbox contract are verified. The sender migrated from communications@email.wio.io to communications@mail.wio.io in July 2026; both exact senders remain allowlisted for historical backfills. Statements arrive on day 1 or 2 and the scheduled job runs on day 3. Account mapping remains deployment-specific."
+          }
+        },
+        {
+          "key": "RAK_WORLD",
+          "value": {
+            "card_code": "RAK_WORLD",
+            "institution": "RAKBANK",
+            "adapter_status": "PLACEHOLDER",
+            "adapter": null,
+            "email_status": "PLACEHOLDER",
+            "email_senders": [],
+            "email_subjects": [],
+            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+          }
+        },
+        {
+          "key": "SC_PLATINUM_X",
+          "value": {
+            "card_code": "SC_PLATINUM_X",
+            "institution": "Standard Chartered",
+            "adapter_status": "PLACEHOLDER",
+            "adapter": null,
+            "email_status": "PLACEHOLDER",
+            "email_senders": [],
+            "email_subjects": [],
+            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+          }
+        }
+      ]
+    },
+    {
+      "workflow_code": "W05",
+      "workflow_path": "integrations/n8n/workflows/05-wio-monthly-statement.json",
+      "selection_key": "card_code",
+      "sources": [
+        {
+          "path": "config/statement-sources.json",
+          "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+        }
+      ],
+      "entries": [
+        {
+          "key": "ADCB_CASHBACK",
+          "value": {
+            "card_code": "ADCB_CASHBACK",
+            "institution": "ADCB",
+            "adapter_status": "ACTIVE",
+            "adapter": "adcb_v1",
+            "password_env": "ADCB_STATEMENT_PASSWORD",
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "estatement@adcb.com"
+            ],
+            "email_subjects": [
+              "ADCB Credit card e-Statement"
+            ],
+            "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+          }
+        },
+        {
+          "key": "EI_AMAZON",
+          "value": {
+            "card_code": "EI_AMAZON",
+            "institution": "Emirates Islamic",
+            "adapter_status": "ACTIVE",
+            "adapter": "emirates_islamic_v1",
+            "password_env": "EI_STATEMENT_PASSWORD",
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "estatement@emiratesislamic.ae"
+            ],
+            "email_subjects": [
+              "Statement of your Emirates Islamic Credit Card"
+            ],
+            "notes": "PDF parser and recurring production mailbox contract are verified."
+          }
+        },
+        {
+          "key": "WIO_CREDIT",
+          "value": {
+            "card_code": "WIO_CREDIT",
+            "institution": "Wio",
+            "adapter_status": "ACTIVE",
+            "adapter": "wio_credit_v1",
+            "password_env": null,
+            "email_status": "ACTIVE",
+            "email_senders": [
+              "communications@email.wio.io",
+              "communications@mail.wio.io"
+            ],
+            "email_subjects": [
+              "Your Wio Credit statement for this month"
+            ],
+            "notes": "PDF parser and recurring production mailbox contract are verified. The sender migrated from communications@email.wio.io to communications@mail.wio.io in July 2026; both exact senders remain allowlisted for historical backfills. Statements arrive on day 1 or 2 and the scheduled job runs on day 3. Account mapping remains deployment-specific."
+          }
+        },
+        {
+          "key": "RAK_WORLD",
+          "value": {
+            "card_code": "RAK_WORLD",
+            "institution": "RAKBANK",
+            "adapter_status": "PLACEHOLDER",
+            "adapter": null,
+            "email_status": "PLACEHOLDER",
+            "email_senders": [],
+            "email_subjects": [],
+            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+          }
+        },
+        {
+          "key": "SC_PLATINUM_X",
+          "value": {
+            "card_code": "SC_PLATINUM_X",
+            "institution": "Standard Chartered",
+            "adapter_status": "PLACEHOLDER",
+            "adapter": null,
+            "email_status": "PLACEHOLDER",
+            "email_senders": [],
+            "email_subjects": [],
+            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+          }
+        }
+      ]
+    },
+    {
+      "workflow_code": "W09",
+      "workflow_path": "integrations/n8n/workflows/09-ai-proposal.json",
+      "selection_key": "policy_id",
+      "sources": [
+        {
+          "path": "config/ai-policies.json",
+          "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
+        }
+      ],
+      "entries": [
+        {
+          "key": "classify-unresolved",
+          "value": {
+            "policy_id": "classify-unresolved",
+            "version": 2,
+            "agent_profile": "LUNA_MAX",
+            "name": "Classify unresolved purchases",
+            "priority": 10,
+            "instruction": "Using the merchant description and existing deterministic outputs, propose only a vendor, category, subcategory, or approved reporting tags. Do not infer source facts. Leave a field unresolved when evidence is weak.",
+            "target_fields": [
+              "vendor",
+              "category",
+              "subcategory",
+              "tags"
+            ],
+            "trigger_fields": [
+              "category"
+            ],
+            "conditions": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE"
+              }
+            ],
+            "minimum_confidence": 0.82,
+            "allowed_value_sources": {
+              "category": "actual.categories"
+            },
+            "allowed_tags": [
+              "home",
+              "grocery",
+              "dining",
+              "transport",
+              "travel",
+              "online",
+              "health",
+              "education",
+              "gift",
+              "business",
+              "shared",
+              "review"
+            ]
+          }
+        },
+        {
+          "key": "recommend-category",
+          "value": {
+            "policy_id": "recommend-category",
+            "version": 1,
+            "agent_profile": "SOL_MEDIUM",
+            "name": "Recommend a missing category",
+            "priority": 15,
+            "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
+            "target_fields": [
+              "category_recommendation"
+            ],
+            "trigger_fields": [
+              "category_recommendation"
+            ],
+            "conditions": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE",
+                "group": 1
+              },
+              {
+                "field": "category",
+                "operator": "is_empty",
+                "group": 1
+              }
+            ],
+            "minimum_confidence": 0.92
+          }
+        },
+        {
+          "key": "detect-subscription",
+          "value": {
+            "policy_id": "detect-subscription",
+            "version": 1,
+            "agent_profile": "LUNA_MAX",
+            "name": "Detect recurring subscription",
+            "priority": 20,
+            "instruction": "Mark a transaction as a subscription only when the merchant or related evidence indicates a recurring service. Add only approved subscription tags.",
+            "target_fields": [
+              "is_subscription",
+              "tags"
+            ],
+            "trigger_fields": [
+              "is_subscription"
+            ],
+            "conditions": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE",
+                "group": 1
+              },
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Software & App Subscriptions",
+                  "Media Subscriptions",
+                  "Mobile & Internet",
+                  "Cloud Services"
+                ],
+                "group": 1
+              }
+            ],
+            "minimum_confidence": 0.9,
+            "allowed_values": {
+              "is_subscription": [
+                true
+              ]
+            },
+            "allowed_tags": [
+              "subscription",
+              "recurring"
+            ]
+          }
+        },
+        {
+          "key": "enrich-property",
+          "value": {
+            "policy_id": "enrich-property",
+            "version": 2,
+            "agent_profile": "SOL_MEDIUM",
+            "name": "Enrich property and rental unit",
+            "priority": 30,
+            "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
+            "target_fields": [
+              "property_code",
+              "rental_unit"
+            ],
+            "conditions": [
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Electricity & Water",
+                  "District Cooling",
+                  "Service Charges",
+                  "Maintenance & Repairs",
+                  "Rental Income"
+                ]
+              }
+            ],
+            "minimum_confidence": 0.9,
+            "allowed_value_sources": {
+              "property_code": "properties.codes",
+              "rental_unit": "properties.rental_units"
+            }
+          }
+        },
+        {
+          "key": "find-purchase-evidence",
+          "value": {
+            "policy_id": "find-purchase-evidence",
+            "version": 2,
+            "agent_profile": "LUNA_MAX",
+            "name": "Find receipt bill or warranty evidence",
+            "priority": 40,
+            "instruction": "Use config/evidence-search-policy.json and its store/do-not-store examples. Propose an evidence search for document-worthy categories or for a qualifying high-value transaction whose statement description lacks the product detail. The evidence worker searches vendor aliases plus amount/currency within the date buffer and uses matched email/order content to identify the product, model, order reference, serial number, warranty dates, or return deadline. Never propose a vendor-only match or evidence collection for a configured never-search category unless a manual evidence request exists.",
+            "target_fields": [
+              "evidence_policy"
+            ],
+            "trigger_fields": [
+              "evidence_policy"
+            ],
+            "conditions": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE",
+                "group": 1
+              },
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Electricity & Water",
+                  "District Cooling",
+                  "Service Charges",
+                  "Maintenance & Repairs",
+                  "Electronics",
+                  "Furniture & Appliances",
+                  "Flights",
+                  "Accommodation",
+                  "Insurance"
+                ],
+                "group": 1
+              },
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE",
+                "group": 2
+              },
+              {
+                "field": "amount_aed",
+                "operator": "gte",
+                "value": "500",
+                "group": 2
+              },
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Groceries",
+                  "Dining Out",
+                  "Food Delivery",
+                  "Coffee & Snacks",
+                  "Fuel",
+                  "Parking & Tolls",
+                  "Ride Hailing",
+                  "Public Transport",
+                  "Rent & Mortgage",
+                  "Mortgage Interest",
+                  "Mortgage Payments",
+                  "Investment Contributions",
+                  "Investments",
+                  "Savings Transfers",
+                  "Internal Transfers",
+                  "Cash Withdrawal",
+                  "Card Payments",
+                  "Bank Fees"
+                ],
+                "group": 2,
+                "negate": true
+              }
+            ],
+            "minimum_confidence": 0.8,
+            "allowed_values": {
+              "evidence_policy": [
+                "SEARCH_RELATED_EMAIL",
+                "SEARCH_RECEIPT_BILL_WARRANTY",
+                "MATCH_AMOUNT_AND_PERIOD"
+              ]
+            }
+          }
+        },
+        {
+          "key": "enrich-cashback-classification",
+          "value": {
+            "policy_id": "enrich-cashback-classification",
+            "version": 1,
+            "agent_profile": "LUNA_MAX",
+            "name": "Enrich channel and cashback bucket",
+            "priority": 50,
+            "instruction": "Only when deterministic rules leave them unresolved, infer channel or propose a configured cashback bucket from explicit merchant, notification, wallet, currency, and card evidence. Do not calculate rewards or invent wallet usage.",
+            "target_fields": [
+              "channel",
+              "reward_bucket"
+            ],
+            "trigger_fields": [
+              "channel",
+              "reward_bucket"
+            ],
+            "conditions": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE",
+                "group": 1
+              },
+              {
+                "field": "card",
+                "operator": "in",
+                "value": [
+                  "RAK_WORLD",
+                  "SC_PLATINUM_X"
+                ],
+                "group": 1
+              }
+            ],
+            "minimum_confidence": 0.95,
+            "allowed_values": {
+              "channel": [
+                "ONLINE",
+                "PHYSICAL_POS",
+                "APPLE_PAY_POS",
+                "UNKNOWN"
+              ]
+            },
+            "allowed_value_sources": {
+              "reward_bucket": "cashback.buckets"
+            }
+          }
+        },
+        {
+          "key": "recommend-static-rule",
+          "value": {
+            "policy_id": "recommend-static-rule",
+            "version": 1,
+            "agent_profile": "SOL_MEDIUM",
+            "name": "Recommend a repeated-pattern rule",
+            "priority": 90,
+            "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",
+            "target_fields": [
+              "rule_recommendation"
+            ],
+            "conditions": [
+              {
+                "field": "history_count",
+                "operator": "gte",
+                "value": 3
+              }
+            ],
+            "minimum_confidence": 0.95
+          }
+        }
+      ]
+    }
+  ],
+  "source_contracts": [
+    {
+      "source_code": "ADCB_CASHBACK",
+      "config_version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "contract": {
+        "card_code": "ADCB_CASHBACK",
+        "institution": "ADCB",
+        "adapter_status": "ACTIVE",
+        "adapter": "adcb_v1",
+        "password_env": "ADCB_STATEMENT_PASSWORD",
+        "email_status": "ACTIVE",
+        "email_senders": [
+          "estatement@adcb.com"
+        ],
+        "email_subjects": [
+          "ADCB Credit card e-Statement"
+        ],
+        "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+      }
+    },
+    {
+      "source_code": "EI_AMAZON",
+      "config_version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "contract": {
+        "card_code": "EI_AMAZON",
+        "institution": "Emirates Islamic",
+        "adapter_status": "ACTIVE",
+        "adapter": "emirates_islamic_v1",
+        "password_env": "EI_STATEMENT_PASSWORD",
+        "email_status": "ACTIVE",
+        "email_senders": [
+          "estatement@emiratesislamic.ae"
+        ],
+        "email_subjects": [
+          "Statement of your Emirates Islamic Credit Card"
+        ],
+        "notes": "PDF parser and recurring production mailbox contract are verified."
+      }
+    },
+    {
+      "source_code": "WIO_CREDIT",
+      "config_version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "contract": {
+        "card_code": "WIO_CREDIT",
+        "institution": "Wio",
+        "adapter_status": "ACTIVE",
+        "adapter": "wio_credit_v1",
+        "password_env": null,
+        "email_status": "ACTIVE",
+        "email_senders": [
+          "communications@email.wio.io",
+          "communications@mail.wio.io"
+        ],
+        "email_subjects": [
+          "Your Wio Credit statement for this month"
+        ],
+        "notes": "PDF parser and recurring production mailbox contract are verified. The sender migrated from communications@email.wio.io to communications@mail.wio.io in July 2026; both exact senders remain allowlisted for historical backfills. Statements arrive on day 1 or 2 and the scheduled job runs on day 3. Account mapping remains deployment-specific."
+      }
+    },
+    {
+      "source_code": "RAK_WORLD",
+      "config_version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "contract": {
+        "card_code": "RAK_WORLD",
+        "institution": "RAKBANK",
+        "adapter_status": "PLACEHOLDER",
+        "adapter": null,
+        "email_status": "PLACEHOLDER",
+        "email_senders": [],
+        "email_subjects": [],
+        "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+      }
+    },
+    {
+      "source_code": "SC_PLATINUM_X",
+      "config_version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "contract": {
+        "card_code": "SC_PLATINUM_X",
+        "institution": "Standard Chartered",
+        "adapter_status": "PLACEHOLDER",
+        "adapter": null,
+        "email_status": "PLACEHOLDER",
+        "email_senders": [],
+        "email_subjects": [],
+        "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+      }
+    },
+    {
+      "source_code": "RAKBANK_CARD_TRANSACTION",
+      "config_version": "1",
+      "source_path": "config/transaction-email-sources.json",
+      "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
+      "contract": {
+        "code": "RAKBANK_CARD_TRANSACTION",
+        "institution": "RAKBANK",
+        "card_code": "RAK_WORLD",
+        "status": "ACTIVE",
+        "evidence_semantics": "LIVE_TRANSACTION_NOTIFICATION",
+        "adapter": "rakbank_card_transaction_v1",
+        "mail_folder": "Inbox/Rakbank",
+        "senders": [
+          "alerts@rakbank.ae"
+        ],
+        "subjects": [
+          "An update on your Card transaction"
+        ],
+        "subject_match": "EXACT",
+        "notes": "Verified 2026-08-17 format: You spent <currency> <amount> at <merchant> on your Credit Card <masked-card> on <DD/MM>. Date-only source; year is resolved against receivedDateTime and statement reconciliation remains authoritative. A separately observed Apple Pay purchase used the identical template and exposed no wallet marker. Explicit merchant channel rules run first; unresolved RAK_WORLD transactions use the configurable APPLE_PAY_POS user default."
+      }
+    },
+    {
+      "source_code": "STANDARD_CHARTERED_CARD_TRANSACTION",
+      "config_version": "1",
+      "source_path": "config/transaction-email-sources.json",
+      "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
+      "contract": {
+        "code": "STANDARD_CHARTERED_CARD_TRANSACTION",
+        "institution": "Standard Chartered",
+        "card_code": "SC_PLATINUM_X",
+        "status": "PLACEHOLDER",
+        "evidence_semantics": "UNKNOWN",
+        "adapter": null,
+        "mail_folder": null,
+        "senders": [],
+        "subjects": [],
+        "subject_match": "EXACT",
+        "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
+      }
+    }
+  ],
+  "config_versions": [
+    {
+      "config_name": "statement-sources",
+      "version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "state": "ACTIVE"
+    },
+    {
+      "config_name": "transaction-email-sources",
+      "version": "1",
+      "source_path": "config/transaction-email-sources.json",
+      "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
+      "state": "ACTIVE"
+    },
+    {
+      "config_name": "ai-policies",
+      "version": "1",
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "state": "ACTIVE"
+    }
+  ],
+  "ai_policy_contracts": [
+    {
+      "policy_id": "classify-unresolved",
+      "policy_version": 2,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "classify-unresolved",
+        "version": 2,
+        "agent_profile": "LUNA_MAX",
+        "name": "Classify unresolved purchases",
+        "priority": 10,
+        "instruction": "Using the merchant description and existing deterministic outputs, propose only a vendor, category, subcategory, or approved reporting tags. Do not infer source facts. Leave a field unresolved when evidence is weak.",
+        "target_fields": [
+          "vendor",
+          "category",
+          "subcategory",
+          "tags"
+        ],
+        "trigger_fields": [
+          "category"
+        ],
+        "conditions": [
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE"
+          }
+        ],
+        "minimum_confidence": 0.82,
+        "allowed_value_sources": {
+          "category": "actual.categories"
+        },
+        "allowed_tags": [
+          "home",
+          "grocery",
+          "dining",
+          "transport",
+          "travel",
+          "online",
+          "health",
+          "education",
+          "gift",
+          "business",
+          "shared",
+          "review"
+        ]
+      }
+    },
+    {
+      "policy_id": "recommend-category",
+      "policy_version": 1,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "recommend-category",
+        "version": 1,
+        "agent_profile": "SOL_MEDIUM",
+        "name": "Recommend a missing category",
+        "priority": 15,
+        "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
+        "target_fields": [
+          "category_recommendation"
+        ],
+        "trigger_fields": [
+          "category_recommendation"
+        ],
+        "conditions": [
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE",
+            "group": 1
+          },
+          {
+            "field": "category",
+            "operator": "is_empty",
+            "group": 1
+          }
+        ],
+        "minimum_confidence": 0.92
+      }
+    },
+    {
+      "policy_id": "detect-subscription",
+      "policy_version": 1,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "detect-subscription",
+        "version": 1,
+        "agent_profile": "LUNA_MAX",
+        "name": "Detect recurring subscription",
+        "priority": 20,
+        "instruction": "Mark a transaction as a subscription only when the merchant or related evidence indicates a recurring service. Add only approved subscription tags.",
+        "target_fields": [
+          "is_subscription",
+          "tags"
+        ],
+        "trigger_fields": [
+          "is_subscription"
+        ],
+        "conditions": [
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE",
+            "group": 1
+          },
+          {
+            "field": "category",
+            "operator": "in",
+            "value": [
+              "Software & App Subscriptions",
+              "Media Subscriptions",
+              "Mobile & Internet",
+              "Cloud Services"
+            ],
+            "group": 1
+          }
+        ],
+        "minimum_confidence": 0.9,
+        "allowed_values": {
+          "is_subscription": [
+            true
+          ]
+        },
+        "allowed_tags": [
+          "subscription",
+          "recurring"
+        ]
+      }
+    },
+    {
+      "policy_id": "enrich-property",
+      "policy_version": 2,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "enrich-property",
+        "version": 2,
+        "agent_profile": "SOL_MEDIUM",
+        "name": "Enrich property and rental unit",
+        "priority": 30,
+        "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
+        "target_fields": [
+          "property_code",
+          "rental_unit"
+        ],
+        "conditions": [
+          {
+            "field": "category",
+            "operator": "in",
+            "value": [
+              "Electricity & Water",
+              "District Cooling",
+              "Service Charges",
+              "Maintenance & Repairs",
+              "Rental Income"
+            ]
+          }
+        ],
+        "minimum_confidence": 0.9,
+        "allowed_value_sources": {
+          "property_code": "properties.codes",
+          "rental_unit": "properties.rental_units"
+        }
+      }
+    },
+    {
+      "policy_id": "find-purchase-evidence",
+      "policy_version": 2,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "find-purchase-evidence",
+        "version": 2,
+        "agent_profile": "LUNA_MAX",
+        "name": "Find receipt bill or warranty evidence",
+        "priority": 40,
+        "instruction": "Use config/evidence-search-policy.json and its store/do-not-store examples. Propose an evidence search for document-worthy categories or for a qualifying high-value transaction whose statement description lacks the product detail. The evidence worker searches vendor aliases plus amount/currency within the date buffer and uses matched email/order content to identify the product, model, order reference, serial number, warranty dates, or return deadline. Never propose a vendor-only match or evidence collection for a configured never-search category unless a manual evidence request exists.",
+        "target_fields": [
+          "evidence_policy"
+        ],
+        "trigger_fields": [
+          "evidence_policy"
+        ],
+        "conditions": [
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE",
+            "group": 1
+          },
+          {
+            "field": "category",
+            "operator": "in",
+            "value": [
+              "Electricity & Water",
+              "District Cooling",
+              "Service Charges",
+              "Maintenance & Repairs",
+              "Electronics",
+              "Furniture & Appliances",
+              "Flights",
+              "Accommodation",
+              "Insurance"
+            ],
+            "group": 1
+          },
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE",
+            "group": 2
+          },
+          {
+            "field": "amount_aed",
+            "operator": "gte",
+            "value": "500",
+            "group": 2
+          },
+          {
+            "field": "category",
+            "operator": "in",
+            "value": [
+              "Groceries",
+              "Dining Out",
+              "Food Delivery",
+              "Coffee & Snacks",
+              "Fuel",
+              "Parking & Tolls",
+              "Ride Hailing",
+              "Public Transport",
+              "Rent & Mortgage",
+              "Mortgage Interest",
+              "Mortgage Payments",
+              "Investment Contributions",
+              "Investments",
+              "Savings Transfers",
+              "Internal Transfers",
+              "Cash Withdrawal",
+              "Card Payments",
+              "Bank Fees"
+            ],
+            "group": 2,
+            "negate": true
+          }
+        ],
+        "minimum_confidence": 0.8,
+        "allowed_values": {
+          "evidence_policy": [
+            "SEARCH_RELATED_EMAIL",
+            "SEARCH_RECEIPT_BILL_WARRANTY",
+            "MATCH_AMOUNT_AND_PERIOD"
+          ]
+        }
+      }
+    },
+    {
+      "policy_id": "enrich-cashback-classification",
+      "policy_version": 1,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "enrich-cashback-classification",
+        "version": 1,
+        "agent_profile": "LUNA_MAX",
+        "name": "Enrich channel and cashback bucket",
+        "priority": 50,
+        "instruction": "Only when deterministic rules leave them unresolved, infer channel or propose a configured cashback bucket from explicit merchant, notification, wallet, currency, and card evidence. Do not calculate rewards or invent wallet usage.",
+        "target_fields": [
+          "channel",
+          "reward_bucket"
+        ],
+        "trigger_fields": [
+          "channel",
+          "reward_bucket"
+        ],
+        "conditions": [
+          {
+            "field": "transaction_type",
+            "operator": "equals",
+            "value": "PURCHASE",
+            "group": 1
+          },
+          {
+            "field": "card",
+            "operator": "in",
+            "value": [
+              "RAK_WORLD",
+              "SC_PLATINUM_X"
+            ],
+            "group": 1
+          }
+        ],
+        "minimum_confidence": 0.95,
+        "allowed_values": {
+          "channel": [
+            "ONLINE",
+            "PHYSICAL_POS",
+            "APPLE_PAY_POS",
+            "UNKNOWN"
+          ]
+        },
+        "allowed_value_sources": {
+          "reward_bucket": "cashback.buckets"
+        }
+      }
+    },
+    {
+      "policy_id": "recommend-static-rule",
+      "policy_version": 1,
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "contract": {
+        "policy_id": "recommend-static-rule",
+        "version": 1,
+        "agent_profile": "SOL_MEDIUM",
+        "name": "Recommend a repeated-pattern rule",
+        "priority": 90,
+        "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",
+        "target_fields": [
+          "rule_recommendation"
+        ],
+        "conditions": [
+          {
+            "field": "history_count",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "minimum_confidence": 0.95
+      }
+    }
+  ]
+}

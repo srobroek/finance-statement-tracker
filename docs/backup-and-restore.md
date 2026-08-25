@@ -1,75 +1,90 @@
 # Backup and restore
 
-The CI host runs a quiesced filesystem backup at approximately 03:15 Asia/Dubai. Actual, Cashback Control, and the ingestion worker are paused briefly, then the host flushes pending filesystem writes before copying the Actual files, cashback SQLite database, and durable ingestion jobs. The same containers are unpaused after the snapshot. The backup never stops, recreates, or pulls a container, so a registry login or runtime monitor cannot strand services after a successful archive. Only services that were running before the backup are paused.
+Finance data has three independent persistence domains and must never be
+presented as one database:
 
-Backups are stored outside the stack at `/opt/backups/finance-actual-poc/<UTC timestamp>/` and contain:
+- Actual ledger files under `/opt/stacks/finance-actual-poc/data`;
+- cashback operational SQLite under the configured cashback data directory;
+- n8n Postgres plus the n8n persistent volume for workflows, credentials,
+  cursors, receipts, and transient binary references.
 
-- `finance-data.tar.gz` with `actual-data/`, `cashback-data/`, `ingestion-data/`, and a secret-free `configuration/` snapshot of all three Compose projects and mounted cashback configuration.
-- `SHA256SUMS` for integrity verification.
-- `manifest.json` with schema, scope, and container metadata.
-- `verification.json` with the archive digest, extraction count, parsed JSON
-  count, and every SQLite database that passed `PRAGMA integrity_check`.
+OneDrive evidence follows OneDrive retention/versioning and is not copied into
+container backups.
 
-The stack `.env` is deliberately excluded. Back up its secret values separately in the approved password manager. The default retention is 30 days and can be changed with `FINANCE_BACKUP_RETENTION_DAYS` in a systemd override.
+## Actual and cashback
 
-Every scheduled backup is restored into a disposable temporary directory before
-the backup job succeeds. `verify-backup.py` rejects checksum drift, path
-traversal, links and special files, a missing state store, malformed JSON, an
-included `.env`, or any SQLite integrity failure. It never writes to the live
-Actual, cashback, or ingestion directories. The five-minute health monitor
-requires a matching successful verification receipt on the newest backup, so a
-fresh archive without proven readable contents is unhealthy.
+`deploy/actual-poc/backup.sh` briefly pauses only Actual, its proxy when needed,
+and cashback, copies the two data stores plus secret-free configuration, writes
+checksums, and runs `verify-backup.py` in a disposable extraction directory. It
+does not know about or pause n8n.
 
-## Verify a backup
+The version 4 cashback archive excludes `push_subscriptions`, `push_deliveries`, and
+`push_state` from `cashback-events.sqlite3`. These tables contain browser push
+credentials or ephemeral delivery state. The backup manifest lists the three
+exclusions. It also excludes disposable `pre-deploy-*.sqlite3*` snapshots and
+all SQLite sidecars. The verifier rejects an archive that contains rows in the
+push tables or any member of that historical snapshot family.
+Push subscriptions are recreated by the browser after restore; cashback events,
+period state, and configuration remain restorable.
 
-```bash
-cd /opt/backups/finance-actual-poc/<timestamp>
-sha256sum -c SHA256SUMS
-tar -tzf finance-data.tar.gz | head
-cat verification.json
+The verifier recognizes legacy version 3 manifests but rejects one without the
+push-state classification. Create a new version 4 backup before restore.
 
-sudo /opt/stacks/finance-actual-poc/verify-backup.py \
-  --backup-root /opt/backups/finance-actual-poc \
-  --backup-path /opt/backups/finance-actual-poc/<timestamp>
-```
+Backups live at `/opt/backups/finance-actual-poc/<UTC timestamp>/`. Restore only
+after checksum verification, with Actual and cashback stopped, and retain the
+pre-restore copies until UI/API balances and cashback event counts agree.
 
-Pause/unpause is intentional on the Podman-backed host: restarting a container
-from a one-shot systemd service can attach its `conmon` process to the backup
-unit's cgroup. Quiescing avoids that lifecycle coupling while preserving a
-stable, flushable snapshot boundary. Podman can still replace `conmon` while
-unpausing, so the systemd unit uses `KillMode=process`; systemd supervises the
-backup script but does not terminate the independent container monitor when the
-one-shot completes.
+## n8n Postgres
 
-## Restore
+The pinned n8n platform commit
+[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867)
+owns [`scripts/backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh),
+[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh),
+and [`scripts/restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh).
+The backup creates a PostgreSQL custom-format dump under
+`/opt/backups/n8n`, writes a SHA-256 sidecar, and retains 30 days by
+default. Schedule it independently of the Actual backup.
 
-Restoration replaces live data. Confirm the exact timestamp first, then:
+Before restoring n8n:
 
-```bash
-sudo podman stop finance-actual-proxy finance-actual-ingestion finance-actual-poc finance-cashback-control
-sudo cp -a /opt/stacks/finance-actual-poc/data "/opt/stacks/finance-actual-poc/data.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
-sudo cp -a /opt/stacks/finance-actual-poc/cashback-data "/opt/stacks/finance-actual-poc/cashback-data.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
-sudo cp -a /opt/stacks/finance-actual-poc/ingestion-data "/opt/stacks/finance-actual-poc/ingestion-data.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
-cd /opt/backups/finance-actual-poc/<timestamp>
-sha256sum -c SHA256SUMS
-restore_root="$(sudo mktemp -d /opt/backups/finance-restore.XXXXXX)"
-sudo tar -C "${restore_root}" -xzf finance-data.tar.gz
-sudo rsync -a --delete "${restore_root}/actual-data/" /opt/stacks/finance-actual-poc/data/
-sudo rsync -a --delete "${restore_root}/cashback-data/" /opt/stacks/finance-actual-poc/cashback-data/
-sudo rsync -a --delete "${restore_root}/ingestion-data/" /opt/stacks/finance-actual-poc/ingestion-data/
-sudo podman start finance-actual-poc finance-cashback-control finance-actual-ingestion finance-actual-proxy
-sudo podman ps --filter name=finance-
-curl -fsS http://127.0.0.1:5006/ >/dev/null
-curl -fsS http://127.0.0.1:5010/api/health
-curl -fsS http://127.0.0.1:5020/api/health
-```
+1. stop n8n and task runners but keep Postgres running;
+2. verify the selected dump checksum;
+3. create a safety dump of the current database;
+4. restore into a new empty database with `pg_restore`;
+5. point n8n at that database and run `scripts/doctor.sh`;
+6. verify workflow count.
+7. verify credential availability.
+8. verify Data Tables.
+9. verify execution receipts.
+10. verify MCP status before deleting the old database.
 
-Never restore over running containers, never restore a backup with a failed checksum, and retain the pre-restore copies until balances and event counts have been verified.
+The rootless stack owner performs key recovery with the pinned platform
+[`scripts/recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
+procedure. The finance checkout does not recreate, rotate, or print the n8n
+encryption key. A failed restore retains the pre-restore database and safety
+dump until the owner records a redacted recovery receipt.
 
-## Password reset recovery copy
+Never restore Postgres by copying its live data directory. Never restore a dump
+over an active n8n main. Store the n8n encryption key separately in 1Password.
+Database credentials alone cannot decrypt n8n credentials.
 
-An Actual password reset may create a one-off sibling copy of
-`data/server-files/account.sqlite`. That file is not part of the normal backup
-contract and must not be treated as a substitute for a complete cold backup.
-Remove it only after the new login is verified and at least one scheduled cold
-backup has completed successfully.
+Before deleting old state:
+
+- Keep the workflow count at 19.
+- Check inactive and unpublished state.
+- Review four-table digest.
+- Review source cursor.
+- Check terminal receipts.
+- Check Cloudflare route status.
+- When readback lacks evidence, keep rollback open.
+
+## Required drill
+
+Production readiness requires one disposable restore of all three domains and
+verification that:
+
+- Actual UI/API account balances match;
+- the closed ADCB card is AED 0 and remains historical;
+- cashback events and period states match their backup receipt;
+- n8n can read its Data Tables and resume a cursor without duplicate writes;
+- Cloudflare routes return healthy Actual and n8n pages.

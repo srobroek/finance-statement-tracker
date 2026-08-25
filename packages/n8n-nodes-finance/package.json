@@ -1,0 +1,48 @@
+{
+  "name": "n8n-nodes-finance",
+  "version": "0.1.0",
+  "description": "Fixed-purpose finance nodes for the Actual-first finance pipeline",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "CONTRACT.md"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "test": "npm run clean && tsc -p tsconfig.json && node --test dist/**/*.test.js",
+    "prepack": "npm run build",
+    "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@actual-app/api": "26.8.1",
+    "re2js": "2.8.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "n8n-workflow": "2.36.1",
+    "typescript": "5.8.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "2.36.1"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/ActualBudgetApi.credentials.js",
+      "dist/credentials/FinanceStatementPassword.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/ActualBudget/ActualBudget.node.js",
+      "dist/nodes/FinancePdf/FinancePdf.node.js",
+      "dist/nodes/FinanceRules/FinanceRules.node.js",
+      "dist/nodes/FinanceStatement/FinanceStatement.node.js"
+    ]
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

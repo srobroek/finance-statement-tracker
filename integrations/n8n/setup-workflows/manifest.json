@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "n8n_version": "2.36.2",
+  "contract_status": "SETUP_ONLY",
+  "import_policy": "EXPLICIT_SINGLE_FILE_ONLY",
+  "activation_forbidden": true,
+  "workflows": [
+    {
+      "code": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP",
+      "file": "22-onedrive-finance-evidence-root-setup.json",
+      "manual_only": true,
+      "folder_id": "f1000000-0000-4000-8000-000000000191",
+      "folder_name": "Shared",
+      "project_name": "Global",
+      "credential_placeholder": "BIND_ONEDRIVE",
+      "allowed_provider_mutation": "CREATE_SINGLE_ONEDRIVE_ROOT_FOLDER_IF_ABSENT",
+      "receipt": "REDACTED"
+    },
+    {
+      "code": "MICROSOFT_OAUTH_REFRESH_PROOF",
+      "file": "23-microsoft-oauth-refresh-proof.json",
+      "manual_only": true,
+      "folder_id": "f1000000-0000-4000-8000-000000000191",
+      "folder_name": "Shared",
+      "project_name": "Global",
+      "credential_placeholders": ["BIND_OUTLOOK", "BIND_ONEDRIVE"],
+      "allowed_provider_mutation": "NONE",
+      "receipt": "REDACTED",
+      "restart_proof_required": true
+    }
+  ]
+}

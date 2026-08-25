@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+  "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+  "source_repository": "https://github.com/srobroek/n8n",
+  "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
+  "runtime_receipt": "final-images-platform-187-2/platform-image-receipt.json",
+  "runtime_receipt_sha256": "9e9bc4dadd079323638fffa473af7e88605661fabd53505ae24bc9ae1f93b02f"
+}

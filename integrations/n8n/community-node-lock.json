@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "n8n_version": "2.36.2",
+  "activation_state": "INACTIVE_UNTIL_DISPOSABLE_PROOF",
+  "packages": [
+    {
+      "package": "n8n-nodes-prodex",
+      "version": "0.5.1",
+      "integrity": "sha512-T3Wmr2vl/jnTDFHXDwTVhMvrWf7oU5VEtyLGPzKSJn4t/XsroYdpVuKOItiYmT0c54yyzepz+Q487ZL+nah7EQ==",
+      "shasum": "eae4b9444c1a7dd7adbb5ddbf8fe385473491798",
+      "node_types": {"n8n-nodes-prodex.prodex": 2},
+      "use": "CODEX_SUBSCRIPTION schema-bound proposal only",
+      "blocked_until": ["EXACT_IMAGE_REGISTRATION", "DEVICE_LOGIN_READBACK", "SCHEMA_BOUND_LUNA_AND_SOL_RECEIPTS", "NO_TOOL_OR_WRITE_PROOF"]
+    }
+  ],
+  "security_boundary": {
+    "caller_selects_provider": false,
+    "caller_selects_model": false,
+    "caller_selects_prompt": false,
+    "caller_selects_command_or_path": false,
+    "codex_sandbox": "read_only",
+    "thread_mode": "new",
+    "proposal_only": true,
+    "downstream_schema_validation_required": true
+  },
+  "lockfile": {
+    "path": "packages/n8n-nodes-finance/community-ai/package-lock.json",
+    "sha256": "6271bc36b879426de90ff7866170ad05472a9972c682498647e7b5d08d16349f"
+  },
+  "registration": {
+    "status": "SPEC_ONLY",
+    "assertion_script": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs",
+    "nodes": [
+      "n8n-nodes-prodex.prodex",
+      "n8n-nodes-prodex.prodexChatModel",
+      "n8n-nodes-prodex.prodexSetup"
+    ],
+    "credentials": ["prodexAuthApi"]
+  }
+}

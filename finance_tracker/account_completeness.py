@@ -1,0 +1,300 @@
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+
+_STABLE_ID = re.compile(r"^[a-z0-9-]+(?::[a-z0-9-]+)+$")
+_ACCOUNT_TYPES = {"checking", "savings", "investment", "trade", "credit", "mortgage"}
+_BALANCE_SIGNS = {"ASSET_POSITIVE", "LIABILITY_NEGATIVE"}
+_BALANCE_EVIDENCE_STATUS = {"EVIDENCED", "UNAVAILABLE", "PLANNED"}
+_INVENTORY_STATUSES = {"COMPLETE", "INCOMPLETE"}
+
+
+@dataclass(frozen=True, slots=True)
+class AccountIdentity:
+    provider_id: str
+    account_key: str
+    provider_account_id: str | None
+    provider_identity_status: str
+    provider_identity_source: str | None
+    display_name: str
+    actual_account_name: str | None
+    account_type: str
+    currency: str
+    last4: str | None
+    owner: str | None
+    lifecycle_status: str
+    include_in_actual: bool
+    actual_offbudget: bool
+    include_in_net_worth: bool
+    balance_sign: str
+    balance_evidence_status: str
+    balance_source: str | None
+    balance_as_of: str | None
+    active: bool
+    retain_history: bool
+    include_in_active_routing: bool
+    expected_balance_minor: int | None
+    balance_reconciliation_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderInventory:
+    provider_id: str
+    inventory_status: str
+    discovery_required: bool
+    blocker: str | None
+    evidence: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class AccountCompletenessManifest:
+    schema_version: int
+    accounts: tuple[AccountIdentity, ...]
+    providers: tuple[ProviderInventory, ...]
+
+    def provider(self, provider_id: str) -> ProviderInventory:
+        matches = [row for row in self.providers if row.provider_id == provider_id]
+        if len(matches) != 1:
+            raise ValueError(f"Provider inventory not found uniquely: {provider_id}")
+        return matches[0]
+
+    @property
+    def account_count(self) -> int:
+        return len(self.accounts)
+
+    def provider_identity_candidates(self, provider_id: str | None = None) -> tuple[AccountIdentity, ...]:
+        """Return only rows with authoritative provider identities for reconciliation."""
+        return tuple(
+            row for row in self.accounts
+            if row.provider_account_id is not None
+            and (provider_id is None or row.provider_id == provider_id)
+        )
+
+
+def _load_payload(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(source, Mapping):
+        return dict(source)
+    payload = json.loads(Path(source).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Account completeness manifest must be an object")
+    return payload
+
+
+def _strict_bool(raw: Mapping[str, Any], field: str, default: bool) -> bool:
+    value = raw.get(field, default)
+    if type(value) is not bool:
+        raise ValueError(f"Account completeness field {field} must be a boolean")
+    return value
+
+
+def _parse_account_row(raw: Any, identities: set[str]) -> AccountIdentity:
+    if not isinstance(raw, Mapping):
+        raise ValueError("Account entries must be objects")
+    provider_id = str(raw.get("provider_id") or "").strip().casefold()
+    identity = str(raw.get("provider_account_id") or "").strip()
+    provider_identity = identity or None
+    account_key = str(raw.get("account_key") or "").strip()
+    identity_status = str(raw.get("provider_identity_status") or "").strip().upper()
+    identity_source = str(raw.get("provider_identity_source") or "").strip() or None
+    display_name = str(raw.get("display_name") or "").strip()
+    account_type = str(raw.get("account_type") or "").strip().casefold()
+    currency = str(raw.get("currency") or "").strip().upper()
+    last4 = str(raw.get("last4") or "").strip() or None
+    if not provider_id or not display_name or not _STABLE_ID.fullmatch(account_key):
+        raise ValueError("Account provider_id, account_key, and display_name are required")
+    if identity_status == "EVIDENCED":
+        if not _STABLE_ID.fullmatch(identity) or not identity.startswith(f"{provider_id}:"):
+            raise ValueError(f"Unsafe or provider-mismatched account identity: {identity}")
+        if not identity_source:
+            raise ValueError(f"Evidence-backed account identity has no source: {account_key}")
+    elif identity_status == "UNAVAILABLE":
+        if identity or identity_source:
+            raise ValueError(f"Unavailable account identity has provider metadata: {account_key}")
+    else:
+        raise ValueError(f"Unsupported provider identity status: {identity_status}")
+    if provider_identity and provider_identity in identities:
+        raise ValueError(f"Duplicate provider_account_id: {identity}")
+    if provider_identity and identity == display_name:
+        raise ValueError("Display names must not be used as stable account identities")
+    if account_type not in _ACCOUNT_TYPES:
+        raise ValueError(f"Unsupported account type: {account_type}")
+    if len(currency) != 3 or not currency.isalpha():
+        raise ValueError(f"Invalid account currency: {currency}")
+    if last4 and (len(last4) != 4 or not last4.isdigit()):
+        raise ValueError(f"Account last4 must be exactly four digits: {identity}")
+    if identity_status == "UNAVAILABLE" and account_type in {"credit", "mortgage"} and str(raw.get("balance_sign") or "ASSET_POSITIVE").upper() != "LIABILITY_NEGATIVE":
+        raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {account_key}")
+    account = AccountIdentity(
+        provider_id=provider_id,
+        account_key=account_key,
+        provider_account_id=provider_identity,
+        provider_identity_status=identity_status,
+        provider_identity_source=identity_source,
+        display_name=display_name,
+        actual_account_name=str(raw.get("actual_account_name") or "").strip() or None,
+        account_type=account_type,
+        currency=currency,
+        last4=last4,
+        owner=str(raw.get("owner") or "").strip() or None,
+        lifecycle_status=str(raw.get("lifecycle_status") or "ACTIVE").upper(),
+        include_in_actual=_strict_bool(raw, "include_in_actual", True),
+        actual_offbudget=_strict_bool(raw, "actual_offbudget", False),
+        include_in_net_worth=_strict_bool(raw, "include_in_net_worth", True),
+        balance_sign=str(raw.get("balance_sign") or "ASSET_POSITIVE").upper(),
+        balance_evidence_status=str(raw.get("balance_evidence_status") or "UNAVAILABLE").upper(),
+        balance_source=str(raw.get("balance_source") or "").strip() or None,
+        balance_as_of=str(raw.get("balance_as_of") or "").strip() or None,
+        active=_strict_bool(raw, "active", True),
+        retain_history=_strict_bool(raw, "retain_history", True),
+        include_in_active_routing=_strict_bool(raw, "include_in_active_routing", True),
+        expected_balance_minor=(
+            int(raw["expected_balance_minor"])
+            if raw.get("expected_balance_minor") is not None else None
+        ),
+        balance_reconciliation_required=_strict_bool(
+            raw, "balance_reconciliation_required", False
+        ),
+    )
+    if provider_identity:
+        identities.add(identity)
+    return account
+
+
+def _validate_account_lifecycle_and_balance(account: AccountIdentity) -> None:
+    if account.lifecycle_status == "CLOSED" and account.active:
+        raise ValueError(f"Closed account cannot be active: {account.account_key}")
+    if account.lifecycle_status == "CLOSED" and account.include_in_active_routing:
+        raise ValueError(
+            f"Closed account cannot participate in active routing: {account.account_key}"
+        )
+    if account.balance_reconciliation_required and account.expected_balance_minor is None:
+        raise ValueError(
+            f"Reconciled account requires expected_balance_minor: {account.account_key}"
+        )
+    if account.balance_sign not in _BALANCE_SIGNS:
+        raise ValueError(f"Unsupported balance sign convention: {account.account_key}")
+    if account.balance_evidence_status not in _BALANCE_EVIDENCE_STATUS:
+        raise ValueError(f"Unsupported balance evidence status: {account.account_key}")
+    if account.lifecycle_status not in {"ACTIVE", "CLOSED", "PLANNED"}:
+        raise ValueError(f"Unsupported lifecycle status: {account.account_key}")
+    if account.lifecycle_status == "PLANNED" and (
+        account.active or account.include_in_active_routing
+    ):
+        raise ValueError(
+            f"Planned account cannot be active or routed: {account.account_key}"
+        )
+    if account.account_type in {"credit", "mortgage"} and account.balance_sign != "LIABILITY_NEGATIVE":
+        raise ValueError(
+            "Credit and mortgage accounts must use liability-negative balances: "
+            f"{account.account_key}"
+        )
+
+
+def _parse_provider_inventory(raw: Any, provider_ids: set[str]) -> ProviderInventory:
+    if not isinstance(raw, Mapping):
+        raise ValueError("Provider inventory entries must be objects")
+    provider_id = str(raw.get("provider_id") or "").strip().casefold()
+    status = str(raw.get("inventory_status") or "").strip().upper()
+    if not provider_id or provider_id in provider_ids:
+        raise ValueError(f"Missing or duplicate provider inventory: {provider_id}")
+    if status not in _INVENTORY_STATUSES:
+        raise ValueError(f"Invalid provider inventory status: {status}")
+    inventory = ProviderInventory(
+        provider_id=provider_id,
+        inventory_status=status,
+        discovery_required=_strict_bool(raw, "discovery_required", False),
+        blocker=str(raw.get("blocker") or "").strip() or None,
+        evidence=str(raw.get("evidence") or "").strip() or None,
+    )
+    provider_ids.add(provider_id)
+    return inventory
+
+
+def load_account_completeness_manifest(
+    source: str | Path | Mapping[str, Any],
+) -> AccountCompletenessManifest:
+    payload = _load_payload(source)
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
+        raise ValueError("Account completeness schema_version must be 1")
+    raw_accounts = payload.get("accounts")
+    raw_providers = payload.get("providers")
+    if not isinstance(raw_accounts, list) or not isinstance(raw_providers, list):
+        raise ValueError("Account completeness manifest requires accounts and providers")
+
+    accounts: list[AccountIdentity] = []
+    identities: set[str] = set()
+    for raw in raw_accounts:
+        account = _parse_account_row(raw, identities)
+        _validate_account_lifecycle_and_balance(account)
+        accounts.append(account)
+
+    providers: list[ProviderInventory] = []
+    provider_ids: set[str] = set()
+    for raw in raw_providers:
+        providers.append(_parse_provider_inventory(raw, provider_ids))
+    if {row.provider_id for row in accounts} - provider_ids:
+        raise ValueError("Every account provider requires a provider inventory entry")
+    return AccountCompletenessManifest(1, tuple(accounts), tuple(providers))
+
+
+def validate_account_completeness(
+    manifest: AccountCompletenessManifest,
+    *,
+    observed_provider_account_ids: set[str],
+    provider_id: str,
+    observed_balances_minor: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
+    inventory = manifest.provider(provider_id)
+    expected = {
+        row.provider_account_id
+        for row in manifest.provider_identity_candidates(provider_id)
+    }
+    missing = sorted(expected - observed_provider_account_ids)
+    unexpected = sorted(observed_provider_account_ids - expected)
+    observed_balances = dict(observed_balances_minor or {})
+    balance_mismatches: list[dict[str, Any]] = []
+    for row in manifest.accounts:
+        if row.provider_id != provider_id or not row.balance_reconciliation_required:
+            continue
+        observed = observed_balances.get(row.provider_account_id)
+        if observed is None or observed != row.expected_balance_minor:
+            balance_mismatches.append({
+                "provider_account_id": row.provider_account_id,
+                "expected_balance_minor": row.expected_balance_minor,
+                "observed_balance_minor": observed,
+            })
+    blockers: list[str] = []
+    if inventory.inventory_status != "COMPLETE":
+        blockers.append(inventory.blocker or f"{provider_id.upper()}_ACCOUNT_INVENTORY_REQUIRED")
+    if missing:
+        blockers.append("EXPECTED_ACCOUNTS_MISSING")
+    if unexpected:
+        blockers.append("UNEXPECTED_ACCOUNTS_PRESENT")
+    if balance_mismatches:
+        blockers.append("ACCOUNT_BALANCE_RECONCILIATION_FAILED")
+    if inventory.inventory_status != "COMPLETE":
+        status = "INCOMPLETE_SOURCE_INVENTORY"
+    elif missing or unexpected:
+        status = "ACCOUNT_SET_MISMATCH"
+    elif balance_mismatches:
+        status = "ACCOUNT_BALANCE_MISMATCH"
+    else:
+        status = "COMPLETE"
+    return {
+        "schema_version": 1,
+        "provider_id": provider_id,
+        "status": status,
+        "production_write_allowed": status == "COMPLETE",
+        "expected": sorted(expected),
+        "observed": sorted(observed_provider_account_ids),
+        "missing": missing,
+        "unexpected": unexpected,
+        "balance_mismatches": balance_mismatches,
+        "blockers": blockers,
+        "inventory_evidence": inventory.evidence,
+    }

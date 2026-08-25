@@ -11,16 +11,21 @@ on:
       - ".dockerignore"
       - "apps/cashback-control/**"
       - "deploy/cashback/**"
+      - "deploy/actual-poc/backup.sh"
+      - "deploy/actual-poc/sanitize-cashback-backup.py"
+      - "deploy/actual-poc/verify-backup.py"
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/actual-note-contract.json"
       - "config/cashback-programs.json"
       - "config/cashback-profile-schema-v1.json"
+      - "config/cashback-profile-schema-v2.json"
       - "config/static-rules.seed.json"
       - "config/transaction-email-sources.json"
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "pyproject.toml"
+      - "uv.lock"
       - "README.md"
   workflow_dispatch:
 
@@ -46,13 +51,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: pip
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.5"
+          enable-cache: true
 
       - name: Install package
-        run: python -m pip install ".[statements,test]"
+        run: uv sync --frozen --extra statements --extra test
 
       - name: Run regression suite
-        run: python -m unittest discover -s tests -v
+        run: uv run --frozen python -m unittest discover -s tests -v
 
       - name: Deploy fictional profile matrix
         shell: bash
@@ -66,12 +76,14 @@ jobs:
           for profile in flat-rate-usd tiered-gbp rotating-eur requirements-cad; do
             cleanup
             docker run -d --name cashback-profile-test-run \
+              -e CASHBACK_HOST=127.0.0.1 \
+              -e CASHBACK_PUBLIC_URL=http://127.0.0.1:5010 \
+              -e CASHBACK_INGEST_TOKEN=profile-test-token \
               -e CASHBACK_PROGRAM_CONFIG_PATH=/etc/cashback/profile.json \
               -v "$PWD/examples/cashback-profiles/${profile}.json:/etc/cashback/profile.json:ro" \
               cashback-profile-test >/dev/null
             for attempt in $(seq 1 30); do
-              if docker exec cashback-profile-test-run python -c \
-                "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=2)"; then
+              if docker exec cashback-profile-test-run python apps/cashback-control/probe_health.py; then
                 break
               fi
               if [ "$attempt" -eq 30 ]; then
@@ -81,11 +93,13 @@ jobs:
               sleep 1
             done
             docker exec cashback-profile-test-run python -c \
-              "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:5010/api/dashboard')); assert d['cards']; assert d['routing_graphs']; assert d['currency'] != 'AED'"
+              "import json; d=json.load(open('/var/lib/cashback-control/cashback-dashboard.json')); assert d['cards']; assert d['routing_graphs']; assert d['currency'] != 'AED'"
           done
 
   publish:
     needs: test
+    outputs:
+      image_digest: ${{ steps.publish.outputs.digest }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -112,6 +126,7 @@ jobs:
             type=ref,event=tag
 
       - name: Build and publish image
+        id: publish
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -128,6 +143,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: publish
+    env:
+      PUBLISHED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
     runs-on:
       - self-hosted
       - finance-ci
@@ -154,13 +171,55 @@ jobs:
           test "$(git -C "$source_dir" rev-parse HEAD)" = "$GITHUB_SHA"
           printf 'DEPLOY_SOURCE=%s\n' "$source_dir" >> "$GITHUB_ENV"
 
+      - name: Resolve tested image identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$PUBLISHED_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Published Cashback image digest is missing or malformed" >&2
+            exit 1
+          fi
+          image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"
+          printf 'IMAGE_REF=%s\n' "$image_ref" >> "$GITHUB_ENV"
+
       - name: Back up cashback state and Dockge configuration
         shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-cashback
+          sanitizer=/opt/stacks/finance-actual-poc/sanitize-cashback-backup.py
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           sudo install -d "$stack"
+          if sudo test -f "$stack/compose.yaml"; then
+            sudo cp --preserve=mode,timestamps "$stack/compose.yaml" \
+              "$stack/compose.yaml.pre-${stamp}"
+          fi
+          if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
+            running_image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
+            running_image_digest="$(sudo docker image inspect "$running_image_id" --format '{{.Digest}}')"
+            if [[ ! "$running_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Running Cashback image digest is missing or malformed" >&2
+              exit 1
+            fi
+            rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"
+            running_repo_digests="$(sudo docker image inspect "$running_image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
+            if ! rollback_image_ref="$(
+              printf '%s\n' "$running_repo_digests" |
+                awk -v expected="$rollback_image_ref" '
+                  $0 == expected { found += 1 }
+                  END { if (found != 1) exit 1; print expected }
+                '
+            )"; then
+              echo "Running Cashback image digest is not a unique RepoDigest for ${IMAGE_NAME}" >&2
+              exit 1
+            fi
+            printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
+              "$rollback_image_ref" | sudo tee "$stack/.env.rollback-${stamp}" >/dev/null
+            sudo chmod 0600 "$stack/.env.rollback-${stamp}"
+          fi
+          sudo install -m 0750 deploy/actual-poc/sanitize-cashback-backup.py "$sanitizer"
+          sudo test -x "$sanitizer"
           sudo install -d -m 0700 /opt/stacks/finance-runtime
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
           sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
@@ -169,15 +228,18 @@ jobs:
           sudo install -m 0644 config/actual-bootstrap.json "$stack/actual-bootstrap.json"
           sudo install -m 0644 config/static-rules.seed.json "$stack/static-rules.json"
           sudo install -m 0644 config/transaction-email-sources.json "$stack/transaction-email-sources.json"
-          printf '%s\n' 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data' | \
-            sudo tee "$stack/.env" >/dev/null
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
+            "$IMAGE_REF" | sudo tee "$stack/.env" >/dev/null
           if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
             sudo docker exec finance-cashback-control python -c \
               "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
           elif sudo test -f /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3; then
             sudo cp --preserve=mode,timestamps \
               /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3 \
+              "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
+          fi
+          if sudo test -f "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"; then
+            sudo "$sanitizer" \
               "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
           fi
 
@@ -195,7 +257,7 @@ jobs:
             ghcr.io \
             --username "${{ github.actor }}" \
             --password-stdin
-          sudo podman pull --authfile "$auth_file" "$IMAGE_NAME:main"
+          sudo podman pull --authfile "$auth_file" "$IMAGE_REF"
           sudo install -m 0644 deploy/cashback/compose.yaml /opt/stacks/finance-cashback/compose.yaml
           cd /opt/stacks/finance-cashback
           # This project owns only cashback; it cannot touch Actual or its
@@ -210,7 +272,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5010/api/health | grep -q '"status": "ok"'; then
+            if sudo docker exec finance-cashback-control python apps/cashback-control/probe_health.py >/dev/null; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
@@ -221,6 +283,11 @@ jobs:
             sleep 2
           done
           image="$(sudo docker inspect finance-cashback-control --format '{{.Config.Image}}')"
-          test "$image" = "$IMAGE_NAME:main"
-          curl -fsS http://127.0.0.1:5010/api/dashboard >/dev/null
+          test "$image" = "$IMAGE_REF"
+          image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
+          repo_digests="$(sudo docker image inspect "$image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
+          resolved="$(printf '%s\n' "$repo_digests" | awk -v expected="$IMAGE_REF" '$0 == expected { found += 1 } END { if (found != 1) exit 1; print expected }')"
+          test "$resolved" = "$IMAGE_REF"
+          sudo docker exec finance-cashback-control python -c \
+            "import json; d=json.load(open('/var/lib/cashback-control/cashback-dashboard.json')); assert d['cards']; assert d['routing_graphs']"
           curl -fsS http://127.0.0.1:5006/ >/dev/null

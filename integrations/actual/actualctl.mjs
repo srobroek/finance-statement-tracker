@@ -6,39 +6,17 @@ import * as actual from "@actual-app/api";
 import { buildTagReport, csvTags } from "./tag-report.mjs";
 import { statementPaymentReminderSpec } from "./payment-reminder.mjs";
 import { validateCanonicalActualNotes } from "./note-contract.mjs";
-import {
-  compileCanonicalRules,
-  scheduleSignature,
-  validateBootstrapConfig,
-} from "./bootstrap-config.mjs";
+import { reconcileAccounts } from "./account-reconciliation.mjs";
+import { reconcileBootstrapResources, schedulesDiffer } from "./bootstrap-resources.mjs";
 import {
   canonicalCleanup,
   cleanupGroupNames,
   compileCleanup,
   validateBudgetAutomationConfig,
 } from "./budget-automation.mjs";
+import { ACTUALCTL_OPTIONS, parseCliArgs } from "./cli-args.mjs";
 
 let actualInternal = null;
-
-function parseArgs(values) {
-  const result = { _: [] };
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) {
-      result._.push(token);
-      continue;
-    }
-    const key = token.slice(2);
-    const next = values[index + 1];
-    if (next && !next.startsWith("--")) {
-      result[key] = next;
-      index += 1;
-    } else {
-      result[key] = true;
-    }
-  }
-  return result;
-}
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -66,6 +44,206 @@ const economicKey = row => JSON.stringify([
   Number(row.amount ?? 0),
   importedPayeeKey(row.imported_payee),
 ]);
+
+function canonicalText(value) {
+  return String(value ?? "");
+}
+
+function canonicalTransferId(value) {
+  if (value === undefined || value === null || value === "") return null;
+  return String(value);
+}
+
+function resolvePayee(row, payees) {
+  if (!(payees instanceof Map)) return null;
+  const payeeId = row?.payee_id ?? row?.payee;
+  if (payeeId !== undefined && payeeId !== null && payeeId !== "") {
+    const payee = payees.get(String(payeeId));
+    if (payee) return payee;
+  }
+  const name = row?.payee_name;
+  if (name === undefined || name === null || name === "") return null;
+  const wanted = normalized(name);
+  return [...payees.values()].find(payee => normalized(payee?.name) === wanted) ?? null;
+}
+
+/**
+ * Project the fields that give an imported Actual transaction its meaning.
+ *
+ * Provider IDs for payees and categories are deliberately not resolved here:
+ * categories are already resolved during import and payees are resolved by
+ * the caller.  This keeps the projection stable across a replay while still
+ * detecting a changed payee/category name or transfer link.
+ */
+export function canonicalActualImportProjection(row, {
+  account = row?.account,
+  payees = new Map(),
+  payeeName,
+  transferAccount,
+  expectGeneratedTransfer = false,
+  defaultCleared = false,
+} = {}) {
+  const payee = resolvePayee({ ...row, payee_name: payeeName ?? row?.payee_name }, payees);
+  const resolvedPayeeName = payeeName ?? row?.payee_name ?? payee?.name;
+  const resolvedTransferAccount = transferAccount ?? row?.transfer_account ?? payee?.transfer_acct;
+  const transferId = canonicalTransferId(row?.transfer_id);
+  return {
+    imported_id: canonicalText(row?.imported_id),
+    account: canonicalText(account),
+    date: canonicalText(row?.date),
+    amount: Number(row?.amount ?? 0),
+    imported_payee: canonicalText(row?.imported_payee),
+    payee: canonicalText(resolvedPayeeName),
+    category: canonicalText(row?.category ?? row?.category_name),
+    notes: canonicalText(row?.notes),
+    cleared: row?.cleared === undefined ? Boolean(defaultCleared) : Boolean(row.cleared),
+    reconciled: Boolean(row?.reconciled),
+    transfer: {
+      linked: transferId !== null || (expectGeneratedTransfer && Boolean(resolvedTransferAccount)),
+      account: canonicalText(resolvedTransferAccount),
+    },
+  };
+}
+
+function projectionDifferences(expected, observed) {
+  return Object.keys(expected).filter(key =>
+    JSON.stringify(expected[key]) !== JSON.stringify(observed?.[key]));
+}
+
+/**
+ * Compare imported transaction projections in imported-id order.
+ *
+ * The API returns all transactions in a date range, so callers may pass
+ * unrelated rows; only rows with an expected imported_id participate in the
+ * equality check. Duplicate IDs, missing rows, and field drift are failures.
+ */
+export function compareActualImportProjections(expectedRows, observedRows) {
+  const expected = [...expectedRows].sort((left, right) =>
+    left.imported_id.localeCompare(right.imported_id));
+  const observed = [...observedRows].sort((left, right) =>
+    left.imported_id.localeCompare(right.imported_id));
+  const expectedIds = new Set(expected.map(row => row.imported_id));
+  const observedById = new Map();
+  for (const row of observed) {
+    if (!expectedIds.has(row.imported_id)) continue;
+    const matches = observedById.get(row.imported_id) ?? [];
+    matches.push(row);
+    observedById.set(row.imported_id, matches);
+  }
+  const expectedCounts = new Map();
+  for (const row of expected) {
+    expectedCounts.set(row.imported_id, (expectedCounts.get(row.imported_id) ?? 0) + 1);
+  }
+  const missing = [...expectedIds]
+    .filter(importedId => !observedById.has(importedId))
+    .sort((left, right) => left.localeCompare(right));
+  const duplicated = [...observedById.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([importedId]) => importedId)
+    .sort((left, right) => left.localeCompare(right));
+  const duplicateExpected = [...expectedCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([importedId]) => importedId)
+    .sort((left, right) => left.localeCompare(right));
+  const mismatches = [];
+  for (const row of expected) {
+    const matches = observedById.get(row.imported_id) ?? [];
+    if (matches.length !== 1) continue;
+    const observedRow = matches[0];
+    const fields = projectionDifferences(row, observedRow);
+    if (fields.length) mismatches.push({ imported_id: row.imported_id, fields });
+  }
+  return {
+    expected,
+    observed: observed.filter(row => expectedIds.has(row.imported_id)),
+    missing,
+    duplicated,
+    duplicate_expected: duplicateExpected,
+    mismatches,
+  };
+}
+
+export function findUnexpectedActualImportRows(rows, {
+  allowedImportedIds = new Set(),
+  baselineRowIds = new Set(),
+} = {}) {
+  const allowed = allowedImportedIds instanceof Set
+    ? allowedImportedIds
+    : new Set(allowedImportedIds);
+  const baseline = baselineRowIds instanceof Set
+    ? baselineRowIds
+    : new Set(baselineRowIds);
+  return rows
+    .filter(row => !allowed.has(String(row.imported_id ?? "")) &&
+      (!row.id || !baseline.has(String(row.id))))
+    .map(row => String(row.imported_id ?? row.id ?? "<missing-id>"))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function actualRowKey(row) {
+  if (row?.id !== undefined && row?.id !== null && row.id !== "") {
+    return `id:${String(row.id)}`;
+  }
+  return `fallback:${String(row?.imported_id ?? "")}:${String(row?.date ?? "")}:${String(row?.amount ?? "")}`;
+}
+
+/**
+ * Refresh every account over the complete transfer verification range.
+ *
+ * Readback contexts are intentionally seeded with each envelope's narrower
+ * range, but a sibling envelope can leave a cached account covering a
+ * disjoint range. Always merging a union-range fetch prevents that cache
+ * from hiding a transfer counterpart.
+ */
+export async function fetchActualTransferRows(api, accounts, start, end, seeded = new Map()) {
+  const allRowsByAccount = new Map();
+  for (const account of accounts) {
+    const accountId = String(account.id);
+    const byKey = new Map();
+    for (const row of seeded.get(account.id) ?? seeded.get(accountId) ?? []) {
+      byKey.set(actualRowKey(row), row);
+    }
+    for (const row of await api.getTransactions(account.id, start, end)) {
+      byKey.set(actualRowKey(row), row);
+    }
+    allRowsByAccount.set(account.id, [...byKey.values()]);
+  }
+  return allRowsByAccount;
+}
+
+export function validateActualTransferCounterparts(sourceRows, allRows, payees = new Map()) {
+  const rowsById = new Map();
+  for (const row of allRows) {
+    const id = String(row.id ?? "");
+    if (!id) continue;
+    const matches = rowsById.get(id) ?? [];
+    matches.push(row);
+    rowsById.set(id, matches);
+  }
+  const failures = [];
+  for (const source of sourceRows) {
+    const transferId = canonicalTransferId(source.transfer_id);
+    if (!transferId) continue;
+    const sourceId = String(source.id ?? source.imported_id ?? "<missing-id>");
+    const peers = rowsById.get(transferId) ?? [];
+    if (peers.length !== 1) {
+      failures.push({ imported_id: source.imported_id ?? sourceId, fields: ["transfer.counterpart"] });
+      continue;
+    }
+    const peer = peers[0];
+    const fields = [];
+    if (String(peer.transfer_id ?? "") !== String(source.id ?? "")) fields.push("transfer.reciprocal");
+    if (String(peer.account ?? "") === String(source.account ?? "")) fields.push("transfer.account");
+    if (Number(peer.amount ?? 0) !== -Number(source.amount ?? 0)) fields.push("transfer.inverse_amount");
+    if (String(peer.date ?? "") !== String(source.date ?? "")) fields.push("transfer.date");
+    const payee = resolvePayee(source, payees);
+    if (payee?.transfer_acct && String(peer.account ?? "") !== String(payee.transfer_acct)) {
+      fields.push("transfer.payee_account");
+    }
+    if (fields.length) failures.push({ imported_id: source.imported_id ?? sourceId, fields });
+  }
+  return failures.sort((left, right) => String(left.imported_id).localeCompare(String(right.imported_id)));
+}
 
 export function partitionCrossSourceStatementDuplicates(records, existingRows) {
   const existingIds = new Set(
@@ -136,42 +314,7 @@ async function withoutActualReconciliationNoise(callback) {
   }
 }
 
-function signature(rule) {
-  const compact = item => {
-    const result = { op: item.op, value: stable(item.value) };
-    if (item.field !== undefined && !["append-notes", "prepend-notes"].includes(item.op)) {
-      result.field = item.field;
-    }
-    if (item.options !== undefined) result.options = stable(item.options);
-    return result;
-  };
-  return JSON.stringify(stable({
-    stage: rule.stage,
-    conditionsOp: rule.conditionsOp ?? "and",
-    conditions: (rule.conditions ?? []).map(compact),
-    actions: (rule.actions ?? []).map(compact),
-  }));
-}
-
-export function selectRetiredRuleIds(existingRules, retiredRules) {
-  const retiredSignatures = new Set(retiredRules.map(signature));
-  return existingRules
-    .filter(existing => retiredSignatures.has(signature(existing)))
-    .map(existing => existing.id);
-}
-
-export function selectStageMigrationRuleIds(existingRules, desiredRules, migrations) {
-  const stageValue = stage => stage === "default" ? null : stage;
-  const candidates = [];
-  for (const rule of desiredRules) {
-    for (const migration of migrations ?? []) {
-      if (stageValue(migration.to) === rule.stage) {
-        candidates.push({ ...rule, stage: stageValue(migration.from) });
-      }
-    }
-  }
-  return selectRetiredRuleIds(existingRules, candidates);
-}
+export { selectRetiredRuleIds, selectStageMigrationRuleIds } from "./bootstrap-resources.mjs";
 
 export async function openBudget() {
   const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
@@ -193,28 +336,29 @@ export async function openBudget() {
   await actual.sync();
 }
 
-async function doctor() {
-  const server = await actual.getServerVersion();
-  const accounts = await actual.getAccounts();
-  const categories = await actual.getCategories();
-  const groups = await actual.getCategoryGroups();
-  const tags = await actual.getTags();
-  const rules = await actual.getRules();
-  const schedules = await actual.getSchedules();
+export async function doctor(api = actual) {
+  const server = await api.getServerVersion();
+  const accounts = await api.getAccounts();
+  const categories = await api.getCategories();
+  const groups = await api.getCategoryGroups();
+  const tags = await api.getTags();
+  const rules = await api.getRules();
+  const schedules = await api.getSchedules();
+  const syncId = requireEnv("ACTUAL_SYNC_ID");
   const balances = [];
   for (const account of accounts) {
     balances.push({
-      id: account.id,
+      id: "[REDACTED]",
       name: account.name,
       offbudget: Boolean(account.offbudget),
       closed: Boolean(account.closed),
-      balance: await actual.getAccountBalance(account.id),
+      balance: await api.getAccountBalance(account.id),
     });
   }
   return {
     status: "ok",
     server,
-    sync_id: requireEnv("ACTUAL_SYNC_ID"),
+    sync_id_present: Boolean(syncId),
     counts: {
       accounts: accounts.length,
       category_groups: groups.length,
@@ -481,293 +625,16 @@ async function budgetAutomation(configPath, apply) {
   };
 }
 
-async function canonicalRules(config, configPath) {
-  const collected = [];
-  const skipped = [];
-  const deferred = [];
-  for (const source of config.canonical_rule_sources ?? []) {
-    const filename = path.resolve(path.dirname(path.resolve(configPath)), source.path);
-    const payload = await readJson(filename);
-    const allRows = Array.isArray(payload) ? payload : [payload];
-    const include = new Set(source.include_rule_ids ?? []);
-    const rows = include.size ? allRows.filter(row => include.has(row.rule_id)) : allRows;
-    const compiled = compileCanonicalRules(rows, { onlyMarked: source.only_marked !== false });
-    collected.push(...compiled.rules);
-    skipped.push(...compiled.skipped.map(item => ({ ...item, source: filename })));
-    deferred.push(...compiled.deferred.map(item => ({ ...item, source: filename })));
-  }
-  return { rules: collected, skipped, deferred };
-}
-
 export async function bootstrap(config, apply, configPath, { syncRemote = true } = {}) {
-  validateBootstrapConfig(config);
-  const changes = [];
-  let accounts = await actual.getAccounts();
-  let groups = await actual.getCategoryGroups();
-  let categories = await actual.getCategories();
-  let tags = await actual.getTags();
-  let payees = await actual.getPayees();
-
-  for (const desired of (config.accounts ?? []).filter(item => item.enabled !== false)) {
-    const names = [desired.name, ...(desired.aliases ?? [])].map(normalized);
-    const found = accounts.find(account => names.includes(normalized(account.name)));
-    if (!found) {
-      changes.push({ action: "create", type: "account", name: desired.name });
-      if (apply) {
-        await actual.createAccount({
-          name: desired.name,
-          type: desired.type ?? "other",
-          offbudget: Boolean(desired.offbudget),
-          closed: false,
-        }, Number(desired.initial_balance ?? 0));
-      }
-      continue;
-    }
-    const fields = {};
-    if (found.name !== desired.name) fields.name = desired.name;
-    if (Boolean(found.offbudget) !== Boolean(desired.offbudget)) {
-      fields.offbudget = Boolean(desired.offbudget);
-    }
-    if (Object.keys(fields).length) {
-      changes.push({ action: "update", type: "account", name: found.name, fields });
-      if (apply) await actual.updateAccount(found.id, fields);
-    }
-  }
-
-  const desiredAccountNames = new Set(
-    (config.accounts ?? [])
-      .filter(item => item.enabled !== false)
-      .flatMap(desired => [desired.name, ...(desired.aliases ?? [])])
-      .map(normalized),
-  );
-  for (const retiredName of config.retired_accounts ?? []) {
-    const retiredKey = normalized(retiredName);
-    if (desiredAccountNames.has(retiredKey)) {
-      throw new Error(`Account cannot be both active and retired: ${retiredName}`);
-    }
-    const found = accounts.find(account => normalized(account.name) === retiredKey);
-    if (!found || Boolean(found.closed)) continue;
-    const balance = await actual.getAccountBalance(found.id);
-    if (balance !== 0) {
-      throw new Error(`Refusing to close non-zero retired account ${found.name}: ${balance}`);
-    }
-    changes.push({ action: "close", type: "account", name: found.name });
-    if (apply) await actual.closeAccount(found.id);
-  }
-
-  if (apply) accounts = await actual.getAccounts();
-  const groupIndex = byName(groups);
-  for (const desired of config.category_groups ?? []) {
-    let group = groupIndex.get(normalized(desired.name));
-    if (!group) {
-      changes.push({ action: "create", type: "category_group", name: desired.name });
-      if (apply) {
-        const id = await actual.createCategoryGroup({
-          name: desired.name,
-          is_income: Boolean(desired.is_income),
-          hidden: Boolean(desired.hidden),
-        });
-        group = { id, name: desired.name };
-        groupIndex.set(normalized(desired.name), group);
-      }
-    }
-    for (const categoryName of desired.categories ?? []) {
-      const existing = categories.find(category => normalized(category.name) === normalized(categoryName));
-      if (!existing) {
-        changes.push({ action: "create", type: "category", name: categoryName, group: desired.name });
-        if (apply) {
-          if (!group?.id) throw new Error(`Category group was not created: ${desired.name}`);
-          await actual.createCategory({
-            name: categoryName,
-            group_id: group.id,
-            is_income: Boolean(desired.is_income),
-            hidden: false,
-          });
-        }
-      } else if (apply && group?.id && existing.group_id !== group.id) {
-        changes.push({ action: "update", type: "category", name: categoryName, group: desired.name });
-        await actual.updateCategory(existing.id, { group_id: group.id });
-      }
-    }
-  }
-
-  const tagIndex = byName(tags, "tag");
-  for (const desired of config.tags ?? []) {
-    if (!tagIndex.has(normalized(desired.tag))) {
-      changes.push({ action: "create", type: "tag", name: desired.tag });
-      if (apply) {
-        const tag = { tag: desired.tag, description: desired.description ?? "" };
-        if (desired.color) tag.color = desired.color;
-        await actual.createTag(tag);
-      }
-    }
-  }
-
-  const payeeIndex = byName(payees);
-  for (const desired of config.payees ?? []) {
-    if (!payeeIndex.has(normalized(desired.name))) {
-      changes.push({ action: "create", type: "payee", name: desired.name });
-      if (apply) await actual.createPayee({ name: desired.name });
-    }
-  }
-
-  if (apply) {
-    groups = await actual.getCategoryGroups();
-    categories = await actual.getCategories();
-    tags = await actual.getTags();
-    payees = await actual.getPayees();
-  }
-  if (config.actual_settings?.category_learning === false) {
-    const learningPayees = (await actual.aqlQuery(
-      actual.q("payees").select(["id", "name", "transfer_acct", "learn_categories"]),
-    )).data;
-    for (const payee of learningPayees.filter(item => !item.transfer_acct)) {
-      if (payee.learn_categories !== false) {
-        changes.push({ action: "disable", type: "payee_category_learning", name: payee.name });
-        if (apply) await actual.updatePayee(payee.id, { learn_categories: false });
-      }
-    }
-  }
-  const refs = {
-    account: byName(accounts),
-    category: byName(categories),
-    category_group: byName(groups),
-    payee: byName(payees),
-    tag: byName(tags, "tag"),
-  };
-  function resolve(value) {
-    if (Array.isArray(value)) return value.map(resolve);
-    if (value && typeof value === "object" && value.ref && value.name) {
-      const match = refs[value.ref]?.get(normalized(value.name));
-      if (!match) {
-        if (!apply) return `@${value.ref}:${value.name}`;
-        throw new Error(`Unknown ${value.ref} reference: ${value.name}`);
-      }
-      return match.id;
-    }
-    if (value && typeof value === "object") {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolve(item)]));
-    }
-    return value;
-  }
-
-  const compiled = await canonicalRules(config, configPath);
-  const desiredRules = [
-    ...(config.rules ?? []).filter(item => item.enabled !== false),
-    ...compiled.rules,
-  ].map(desired => ({
-    desired,
-    rule: resolve({
-      stage: desired.stage === undefined ? "pre" : desired.stage,
-      conditionsOp: desired.conditionsOp ?? "and",
-      conditions: desired.conditions ?? [],
-      actions: desired.actions ?? [],
-    }),
-  }));
-  let existingRules = await actual.getRules();
-  const retiredRules = (config.retired_rules ?? []).map(desired => resolve({
-      stage: desired.stage ?? "pre",
-      conditionsOp: desired.conditionsOp ?? "and",
-      conditions: desired.conditions ?? [],
-      actions: desired.actions ?? [],
-    }));
-  const retiredRuleIds = new Set([
-    ...selectRetiredRuleIds(existingRules, retiredRules),
-    ...selectStageMigrationRuleIds(
-      existingRules,
-      desiredRules.map(item => item.rule),
-      config.rule_stage_migrations,
-    ),
-  ]);
-  for (const existing of existingRules) {
-    if (!retiredRuleIds.has(existing.id)) continue;
-    changes.push({ action: "delete", type: "rule", id: existing.id });
-    if (apply && await actual.deleteRule(existing.id) === false) {
-      throw new Error(`Actual refused to delete retired rule ${existing.id}`);
-    }
-  }
-  if (apply && retiredRuleIds.size) existingRules = await actual.getRules();
-  const existingRuleSignatures = new Set(existingRules.map(signature));
-  for (const { desired, rule } of desiredRules) {
-    if (!existingRuleSignatures.has(signature(rule))) {
-      changes.push({ action: "create", type: "rule", name: desired.name });
-      if (apply) {
-        await actual.createRule(rule);
-        existingRuleSignatures.add(signature(rule));
-      }
-    }
-  }
-
-  const existingSchedules = await actual.getSchedules();
-  const schedulesByName = byName(existingSchedules);
-  for (const desired of (config.schedules ?? []).filter(item => item.enabled !== false)) {
-    const amountOp = desired.amount_op ?? "is";
-    const amount = amountOp === "isbetween"
-      ? { num1: desired.amount_min_minor, num2: desired.amount_max_minor }
-      : desired.amount_minor;
-    const schedule = resolve({
-      name: desired.name,
-      account: { ref: "account", name: desired.account },
-      payee: { ref: "payee", name: desired.payee },
-      amount,
-      amountOp,
-      date: desired.date,
-      posts_transaction: Boolean(desired.posts_transaction),
-    });
-    const existing = schedulesByName.get(normalized(desired.name));
-    if (!existing) {
-      changes.push({ action: "create", type: "schedule", name: desired.name });
-      if (apply) await actual.createSchedule(schedule);
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
-      changes.push({ action: "update", type: "schedule", name: desired.name });
-      if (apply) await actual.updateSchedule(existing.id, schedule, true);
-    }
-  }
-
-  for (const desiredMonth of config.budget_months ?? []) {
-    const month = await actual.getBudgetMonth(desiredMonth.month);
-    const current = new Map(
-      month.categoryGroups.flatMap(group => (group.categories ?? []).map(category => [category.id, category])),
-    );
-    for (const desired of desiredMonth.categories) {
-      const category = refs.category.get(normalized(desired.name));
-      if (!category) throw new Error(`Unknown category reference: ${desired.name}`);
-      const existing = current.get(category.id) ?? {};
-      if (Number(existing.budgeted ?? 0) !== desired.amount_minor) {
-        changes.push({
-          action: "set",
-          type: "budget",
-          month: desiredMonth.month,
-          category: desired.name,
-          amount_minor: desired.amount_minor,
-        });
-        if (apply) await actual.setBudgetAmount(desiredMonth.month, category.id, desired.amount_minor);
-      }
-      if (desired.carryover !== undefined && Boolean(existing.carryover) !== Boolean(desired.carryover)) {
-        changes.push({
-          action: "set",
-          type: "budget_carryover",
-          month: desiredMonth.month,
-          category: desired.name,
-          carryover: Boolean(desired.carryover),
-        });
-        if (apply) await actual.setBudgetCarryover(desiredMonth.month, category.id, Boolean(desired.carryover));
-      }
-    }
-  }
-
-  if (apply && syncRemote) await actual.sync();
-  return {
-    status: apply ? "applied" : "planned",
-    changes,
-    native_rule_compilation: {
-      compiled: compiled.rules.length,
-      skipped: compiled.skipped,
-      deferred: compiled.deferred,
-    },
-  };
+  return reconcileBootstrapResources({
+    api: actual,
+    config,
+    apply,
+    configPath,
+    readJson,
+    syncRemote,
+  });
 }
-
 export async function importEnvelopes(
   payload,
   commit,
@@ -799,11 +666,38 @@ export async function importEnvelopes(
       ? await actual.getTransactions(account.id, dates[0], dates[dates.length - 1])
       : [];
     const partition = partitionCrossSourceStatementDuplicates(records, existingRows);
-    prepared.push({ account, envelope, records: partition.records, suppressed: partition.suppressed });
+    prepared.push({
+      account,
+      envelope,
+      records: partition.records,
+      suppressed: partition.suppressed,
+      existingRows,
+    });
   }
 
+  const batchExpectedIdsByAccount = new Map();
+  for (const item of prepared) {
+    const expectedIds = batchExpectedIdsByAccount.get(item.account.id) ?? new Set();
+    for (const record of item.records) {
+      const importedId = String(record.imported_id ?? "").trim();
+      if (expectedIds.has(importedId)) {
+        throw new Error(`Duplicate imported_id in Actual import batch: ${importedId}`);
+      }
+      expectedIds.add(importedId);
+    }
+    batchExpectedIdsByAccount.set(item.account.id, expectedIds);
+  }
   const preflight = [];
   for (const item of prepared) {
+    const missingImportedIds = item.records
+      .map((record, index) => String(record.imported_id ?? "").trim() ? null : index)
+      .filter(index => index !== null);
+    if (missingImportedIds.length) {
+      throw new Error(
+        `Actual import requires imported_id for ${item.account.name}: ` +
+        `${JSON.stringify(missingImportedIds)}`,
+      );
+    }
     const result = item.records.length
       ? await withoutActualReconciliationNoise(() =>
         actual.importTransactions(item.account.id, item.records, {
@@ -840,6 +734,10 @@ export async function importEnvelopes(
     });
   }
   const verification = [];
+  const payees = prepared.some(item => item.records.length)
+    ? new Map((await actual.getPayees()).map(row => [String(row.id), row]))
+    : new Map();
+  const readbackContexts = [];
   for (const item of prepared) {
     if (!item.records.length) {
       verification.push({
@@ -857,26 +755,71 @@ export async function importEnvelopes(
       dates[0],
       dates[dates.length - 1],
     );
-    const counts = new Map();
-    for (const row of rows) {
-      if (row.imported_id) counts.set(row.imported_id, (counts.get(row.imported_id) ?? 0) + 1);
-    }
-    const expected = item.records.map(record => record.imported_id).filter(Boolean);
-    const missing = expected.filter(importedId => !counts.has(importedId));
-    const duplicated = expected.filter(importedId => (counts.get(importedId) ?? 0) > 1);
-    if (missing.length || duplicated.length) {
+    const expected = item.records.map(record => canonicalActualImportProjection(record, {
+      account: item.account.id,
+      payees,
+      expectGeneratedTransfer: true,
+      defaultCleared: Boolean(item.envelope.default_cleared),
+    }));
+    const expectedIds = new Set(expected.map(row => row.imported_id));
+    const existingRowIds = new Set(item.existingRows.map(row => String(row.id ?? "")).filter(Boolean));
+    const unexpected = findUnexpectedActualImportRows(rows, {
+      allowedImportedIds: batchExpectedIdsByAccount.get(item.account.id),
+      baselineRowIds: existingRowIds,
+    });
+    const observed = rows.map(row => canonicalActualImportProjection(row, {
+      account: row.account,
+      payees,
+    }));
+    const readback = compareActualImportProjections(expected, observed);
+    if (
+      readback.missing.length ||
+      readback.duplicated.length ||
+      readback.duplicate_expected.length ||
+      readback.mismatches.length ||
+      unexpected.length
+    ) {
       throw new Error(
         `Actual import verification failed for ${item.account.name}: ` +
-        `missing=${JSON.stringify(missing)} duplicated=${JSON.stringify(duplicated)}`,
+        `missing=${JSON.stringify(readback.missing)} ` +
+        `duplicated=${JSON.stringify(readback.duplicated)} ` +
+        `duplicate_expected=${JSON.stringify(readback.duplicate_expected)} ` +
+        `mismatched=${JSON.stringify(readback.mismatches)} ` +
+        `unexpected=${JSON.stringify(unexpected)}`,
       );
     }
     verification.push({
       account: item.account.name,
-      expected: expected.length,
-      verified: expected.length,
+      expected: readback.expected.length,
+      verified: readback.expected.length,
       duplicated: 0,
+      mismatched: 0,
+      unexpected: 0,
       suppressed_cross_source: item.suppressed.length,
     });
+    readbackContexts.push({ item, rows, expectedIds });
+  }
+  const linkedSources = readbackContexts.flatMap(({ rows, expectedIds }) =>
+    rows.filter(row => expectedIds.has(String(row.imported_id ?? "")) && row.transfer_id));
+  if (linkedSources.length) {
+    const dates = prepared.flatMap(item => item.records.map(record => record.date)).sort();
+    const seededRowsByAccount = new Map();
+    for (const { item, rows } of readbackContexts) seededRowsByAccount.set(item.account.id, rows);
+    const allRowsByAccount = await fetchActualTransferRows(
+      actual,
+      accounts.values(),
+      dates[0],
+      dates.at(-1),
+      seededRowsByAccount,
+    );
+    const transferFailures = validateActualTransferCounterparts(
+      linkedSources,
+      [...allRowsByAccount.values()].flat(),
+      payees,
+    );
+    if (transferFailures.length) {
+      throw new Error(`Actual import transfer verification failed: ${JSON.stringify(transferFailures)}`);
+    }
   }
   const reminderSpec = statementPaymentReminderSpec(payload);
   let paymentReminder = reminderSpec;
@@ -895,7 +838,7 @@ export async function importEnvelopes(
         date: schedule.date,
         amount_minor: schedule.amount,
       };
-    } else if (scheduleSignature(existing) !== scheduleSignature(schedule)) {
+    } else if (schedulesDiffer(existing, schedule)) {
       await actual.updateSchedule(existing.id, schedule, true);
       paymentReminder = {
         status: "updated",
@@ -1245,6 +1188,23 @@ function splitMatches(row, desiredChildren) {
   });
 }
 
+export function resolveSplitChildren(children, categories) {
+  if (children === undefined) return undefined;
+  return children.map(child => {
+    const category = child.category_name
+      ? categories.get(normalized(child.category_name))
+      : null;
+    if (child.category_name && !category) {
+      throw new Error(`Unknown Actual category in split: ${child.category_name}`);
+    }
+    return {
+      amount: child.amount,
+      notes: child.notes,
+      ...(category ? { category: category.id } : {}),
+    };
+  });
+}
+
 export async function enrichTransactions(plan, apply, api = actual, { syncRemote = true } = {}) {
   const changes = validateTransactionEnrichmentPlan(plan);
   const serverResponse = await api.getServerVersion();
@@ -1290,19 +1250,7 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
         change.add_note_tokens,
         change.remove_note_tokens,
       );
-      const desiredChildren = change.split?.map(child => {
-        const category = child.category_name
-          ? categories.get(normalized(child.category_name))
-          : null;
-        if (child.category_name && !category) {
-          throw new Error(`Unknown Actual category in split: ${child.category_name}`);
-        }
-        return {
-          amount: child.amount,
-          notes: child.notes,
-          ...(category ? { category: category.id } : {}),
-        };
-      });
+      const desiredChildren = resolveSplitChildren(change.split, categories);
       const item = {
         transaction_id: row.id,
         imported_id: row.imported_id,
@@ -1347,12 +1295,7 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
         change.add_note_tokens,
         change.remove_note_tokens,
       );
-      const desiredChildren = change.split?.map(child => {
-        const category = child.category_name
-          ? categories.get(normalized(child.category_name))
-          : null;
-        return { amount: child.amount, notes: child.notes, ...(category ? { category: category.id } : {}) };
-      });
+      const desiredChildren = resolveSplitChildren(change.split, categories);
       if (!row || String(row.notes ?? "") !== desiredNotes ||
           (desiredChildren && !splitMatches(row, desiredChildren))) {
         throw new Error(`Enrichment verification failed for ${change.imported_id}`);
@@ -1371,29 +1314,33 @@ export async function enrichTransactions(plan, apply, api = actual, { syncRemote
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const args = parseArgs(rest);
-  if (!command || !["budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
-    throw new Error("Usage: node actualctl.mjs <budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
+  const args = parseCliArgs(rest, ACTUALCTL_OPTIONS);
+  if (!command || !["account-reconciliation", "budget-automation", "dashboard-apply", "dashboard-audit", "dashboard-export", "delete-transactions", "doctor", "bootstrap", "enrich-transactions", "import", "repair-transactions", "snapshot", "tag-report"].includes(command)) {
+    throw new Error("Usage: node actualctl.mjs <account-reconciliation|budget-automation|dashboard-apply|dashboard-audit|dashboard-export|delete-transactions|doctor|bootstrap|enrich-transactions|import|repair-transactions|snapshot|tag-report> [options]");
   }
-  if (command === "import") assertCommitEnabled(Boolean(args.commit));
-  if (command === "repair-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "enrich-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "delete-transactions") assertCommitEnabled(Boolean(args.apply));
-  if (command === "dashboard-apply") assertCommitEnabled(Boolean(args.apply));
-  if (command === "budget-automation") assertCommitEnabled(Boolean(args.apply));
+  if (command === "account-reconciliation") assertCommitEnabled(args.apply);
+  if (command === "import") assertCommitEnabled(args.commit);
+  if (command === "repair-transactions") assertCommitEnabled(args.apply);
+  if (command === "enrich-transactions") assertCommitEnabled(args.apply);
+  if (command === "delete-transactions") assertCommitEnabled(args.apply);
+  if (command === "dashboard-apply") assertCommitEnabled(args.apply);
+  if (command === "budget-automation") assertCommitEnabled(args.apply);
   await openBudget();
   try {
     let result;
-    if (command === "doctor") {
+    if (command === "account-reconciliation") {
+      if (!args.plan) throw new Error("account-reconciliation requires --plan <file>");
+      result = await reconcileAccounts(actual, await readJson(args.plan), args.apply);
+    } else if (command === "doctor") {
       result = await doctor();
     } else if (command === "budget-automation") {
-      result = await budgetAutomation(args.config, Boolean(args.apply));
+      result = await budgetAutomation(args.config, args.apply);
     } else if (command === "dashboard-audit") {
       result = await dashboardAudit();
     } else if (command === "dashboard-export") {
       result = await dashboardExport(args.name);
     } else if (command === "dashboard-apply") {
-      result = await dashboardApply(args.config, Boolean(args.apply));
+      result = await dashboardApply(args.config, args.apply);
     } else if (command === "snapshot") {
       result = await snapshot(args.start, args.end);
     } else if (command === "tag-report") {
@@ -1408,19 +1355,19 @@ async function main() {
       result.generated_at = source.generated_at;
     } else if (command === "bootstrap") {
       if (!args.config) throw new Error("bootstrap requires --config <file>");
-      result = await bootstrap(await readJson(args.config), Boolean(args.apply), args.config);
+      result = await bootstrap(await readJson(args.config), args.apply, args.config);
     } else if (command === "repair-transactions") {
       if (!args.plan) throw new Error("repair-transactions requires --plan <file>");
-      result = await repairTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await repairTransactions(await readJson(args.plan), args.apply);
     } else if (command === "enrich-transactions") {
       if (!args.plan) throw new Error("enrich-transactions requires --plan <file>");
-      result = await enrichTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await enrichTransactions(await readJson(args.plan), args.apply);
     } else if (command === "delete-transactions") {
       if (!args.plan) throw new Error("delete-transactions requires --plan <file>");
-      result = await deleteTransactions(await readJson(args.plan), Boolean(args.apply));
+      result = await deleteTransactions(await readJson(args.plan), args.apply);
     } else {
       if (!args.input) throw new Error("import requires --input <file>");
-      result = await importEnvelopes(await readJson(args.input), Boolean(args.commit));
+      result = await importEnvelopes(await readJson(args.input), args.commit);
     }
     await writeResult(args.result, result);
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

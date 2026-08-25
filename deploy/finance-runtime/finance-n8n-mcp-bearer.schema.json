@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://finance-statement-tracker.invalid/schemas/finance-n8n-mcp-bearer.schema.json",
+  "title": "Finance n8n MCP bearer contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "item_path",
+    "concealed_field",
+    "environment_name",
+    "workflow_path",
+    "credential_name",
+    "credential_type",
+    "placeholder"
+  ],
+  "properties": {
+    "item_path": {
+      "const": "FinanceRuntime/Finance Statement Tracker Runtime"
+    },
+    "concealed_field": {
+      "const": "finance_n8n_mcp_bearer"
+    },
+    "environment_name": {
+      "const": "FINANCE_N8N_MCP_BEARER"
+    },
+    "workflow_path": {
+      "const": "finance-operations-v1"
+    },
+    "credential_name": {
+      "const": "Finance MCP Facade Bearer"
+    },
+    "credential_type": {
+      "const": "httpBearerAuth"
+    },
+    "placeholder": {
+      "const": "BIND_FINANCE_MCP_FACADE"
+    }
+  }
+}

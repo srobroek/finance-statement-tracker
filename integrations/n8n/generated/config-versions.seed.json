@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "rows": [
+    {
+      "config_name": "ai-policies",
+      "version": "1",
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "agent-providers",
+      "version": "1",
+      "source_path": "config/agent-providers.json",
+      "content_sha256": "1ad9885f705311090990607c9c32ea38356f835ccedc9f0a0462f3e9a1291e77",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "static-rules.seed",
+      "version": "sha256-92680d5c55464a77",
+      "source_path": "config/static-rules.seed.json",
+      "content_sha256": "92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "transaction-email-sources",
+      "version": "1",
+      "source_path": "config/transaction-email-sources.json",
+      "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "statement-sources",
+      "version": "1",
+      "source_path": "config/statement-sources.json",
+      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "browser-sources",
+      "version": "1",
+      "source_path": "config/browser-sources.json",
+      "content_sha256": "ab134b07a5e21db3b93986b722cd4b16d563471807a0022fdc59a6a3c39a32ac",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "cashback-programs",
+      "version": "2",
+      "source_path": "config/cashback-programs.json",
+      "content_sha256": "6cf341b7173a24a5373a5da8b658e8bd3a876c6121e734589126352938277b4c",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "document-processing",
+      "version": "1",
+      "source_path": "config/document-processing.json",
+      "content_sha256": "32c892f8a774a17032dc70689e2f25b4fc969b81fa6dc9d71b16028db0ea64d3",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    },
+    {
+      "config_name": "evidence-search-policy",
+      "version": "1",
+      "source_path": "config/evidence-search-policy.json",
+      "content_sha256": "1bde26d58631d7c5924543715347a6bc471f66a5825e5426560ffbab05c3b96e",
+      "git_commit": "RUNTIME_BIND_GIT_COMMIT",
+      "state": "ACTIVE",
+      "readback_verified": false
+    }
+  ],
+  "warning": "Generated hashes are Git-canonical LF fingerprints, not runtime import evidence."
+}

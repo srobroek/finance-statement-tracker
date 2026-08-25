@@ -1,0 +1,56 @@
+{
+  "as_of": "2026-08-18T00:00:00Z",
+  "captured_at": "2026-08-18T08:00:00Z",
+  "currency": "USD",
+  "portfolios": [
+    {
+      "cash_value": "200.00",
+      "closed": false,
+      "components_available": true,
+      "include_in_net_worth": true,
+      "positions": [{"instrument_id": "ticker:AAA", "market_value": "900.00", "units": "9"}],
+      "provider_account_id": "sarwa:invest:personal",
+      "total_value": "1100.00"
+    },
+    {
+      "cash_value": "0.00",
+      "closed": false,
+      "components_available": true,
+      "include_in_net_worth": true,
+      "positions": [{"instrument_id": "ticker:BBB", "market_value": "450.00", "units": "4.5"}],
+      "provider_account_id": "sarwa:invest:parents",
+      "total_value": "450.00"
+    },
+    {
+      "cash_value": "50.00",
+      "closed": false,
+      "components_available": true,
+      "include_in_net_worth": true,
+      "positions": [{"instrument_id": "ticker:CCC", "market_value": "250.00", "units": "2.5"}],
+      "provider_account_id": "sarwa:invest:shared-airbnb",
+      "total_value": "300.00"
+    },
+    {
+      "cash_value": null,
+      "closed": false,
+      "components_available": false,
+      "include_in_net_worth": true,
+      "positions": [],
+      "provider_account_id": "sarwa:trade:primary",
+      "total_value": "120.00"
+    },
+    {
+      "cash_value": "0.00",
+      "closed": true,
+      "components_available": true,
+      "include_in_net_worth": false,
+      "positions": [],
+      "provider_account_id": "sarwa:invest:classic",
+      "total_value": "0.00"
+    }
+  ],
+  "provider_id": "sarwa",
+  "schema_version": 1,
+  "snapshot_id": "sarwa-disposable-t2",
+  "total_value": "1970.00"
+}

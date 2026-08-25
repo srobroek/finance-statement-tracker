@@ -116,10 +116,23 @@ def build_ingest_commit_payload(
         raise ValueError("Service cursor candidate does not match the frozen envelope cursor")
     if service_response.get("cursor_committed") is not False:
         raise ValueError("Outlook message submission must not commit the cursor")
+    receipt = service_response.get("service_receipt")
+    if not isinstance(receipt, dict):
+        raise ValueError("Service response service_receipt is required")
+    receipt_id = str(receipt.get("receipt_id") or "").strip()
+    receipt_sha256 = str(receipt.get("receipt_sha256") or "").strip()
+    if not receipt_id or not receipt_sha256:
+        raise ValueError(
+            "Service response service_receipt requires receipt_id and receipt_sha256"
+        )
     return {
         "source": str(envelope.get("source") or "outlook"),
         "completed_at": str(envelope.get("completed_at") or cursor),
         "scanned_count": scanned,
         "accepted_count": accepted,
         "cursor": cursor,
+        "service_receipt": {
+            "receipt_id": receipt_id,
+            "receipt_sha256": receipt_sha256,
+        },
     }

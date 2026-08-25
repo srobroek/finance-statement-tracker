@@ -2,8 +2,6 @@
   "schema_version": 1,
   "ssh_target": "user@finance-host",
   "cashback_container": "finance-cashback-control",
-  "actual_ingestion_container": "finance-actual-ingestion",
   "actual_internal_url": "http://finance-host:5006",
-  "cashback_internal_url": "http://finance-host:5010",
-  "actual_ingestion_internal_url": "http://127.0.0.1:5020"
+  "cashback_internal_url": "http://finance-host:5010"
 }

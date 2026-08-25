@@ -1,3 +1,5 @@
 1. GOTO url: "https://online.bankfab.com/PersonalBankingWeb/login"
-2. NOTE Stop and let the user log in and complete OTP/2FA. Never enter or capture credentials or OTP codes. Continue only after the user confirms authentication.
-3. ASSERT condition: "authenticated FAB dashboard or home screen visible"
+2. PAUSE_FOR_USER reason: "AUTHENTICATION_AND_MFA"
+3. NOTE The user completes login and OTP/2FA in the headed window; never type, inspect, copy, log, or store any authentication value.
+4. ASSERT condition: "authenticated FAB dashboard or home screen visible"
+5. NOTE Use the data recipe for the requested debit/current-account scope. Produce only the redacted browser-capture-schema-v1 artifact and never write Actual or Cashback.

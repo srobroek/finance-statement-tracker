@@ -4,17 +4,108 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+from finance_tracker.actual_pipeline import load_compiled_rules
 from finance_tracker.browser_ingestion import (
+    _enrich_browser_transactions,
+    _match_browser_transactions,
+    _normalize_browser_capture,
+    _serialize_browser_ingestion_run,
+    _validate_browser_capture,
     build_browser_ingestion_run,
     export_browser_capture_for_actual,
 )
-from finance_tracker.actual_pipeline import load_compiled_rules
+from finance_tracker.classification_audit import enforce_transaction_invariants
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class BrowserIngestionTests(TestCase):
+    def test_private_phases_reconstruct_the_exported_run_exactly(self):
+        capture = self.capture()
+        validated = _validate_browser_capture(capture)
+        normalized = _normalize_browser_capture(
+            validated,
+            self.config(),
+            ai_engine=None,
+            ai_resolver=None,
+        )
+        rule_traces, history_traces, ai_traces = _enrich_browser_transactions(
+            normalized.transactions,
+            self.config(),
+            (),
+            history_index=None,
+            ai_engine=None,
+            ai_resolver=None,
+            property_registry=None,
+        )
+        _match_browser_transactions(normalized.transactions)
+        for transaction in normalized.transactions:
+            enforce_transaction_invariants(transaction)
+
+        phased = _serialize_browser_ingestion_run(
+            normalized,
+            rule_traces,
+            history_traces,
+            ai_traces,
+        )
+
+        self.assertEqual(
+            phased.to_dict(),
+            build_browser_ingestion_run(capture, self.config()).to_dict(),
+        )
+
+    def test_inactive_n8n_handoff_validates_browser_capture_before_writes(self):
+        workflow = json.loads(
+            (ROOT / "integrations" / "n8n" / "workflows" / "11-interactive-artifact-handoff.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertFalse(workflow["active"])
+        handoff = workflow["meta"]["browserHandoff"]
+        self.assertEqual("BROWSER_CAPTURE_V1", handoff["document_profile"])
+        self.assertEqual("browser-capture-schema-v1", handoff["capture_schema"])
+        self.assertEqual("N8N", handoff["headless_owner"])
+        self.assertTrue(handoff["actual_mutation_forbidden"])
+        self.assertTrue(handoff["cashback_mutation_forbidden"])
+        names = {node["name"]: node for node in workflow["nodes"]}
+        self.assertEqual("N8N", handoff["archive_owner"])
+        self.assertEqual("BOUNDED_BINARY_UPLOAD", handoff["archive_mode"])
+        self.assertEqual("AJV_REQUIRED_FAIL_CLOSED", handoff["validation_runtime"])
+        self.assertEqual("SHARED_STATEMENT_PIPELINE", handoff["headless_workflow_code"])
+        self.assertIn("Archive Browser Capture in OneDrive", names)
+        self.assertIn("Read Back Durable Browser Archive Receipt", names)
+        self.assertIn("Extract Browser Capture JSON", names)
+        self.assertIn("Build Browser Headless Handoff", names)
+        self.assertIn("Dispatch Browser Capture to Headless Pipeline", names)
+        self.assertNotIn("Require Typed Browser Capture Validator", names)
+        self.assertNotIn("stopAndError", {node["type"] for node in workflow["nodes"]})
+        handoff = workflow["connections"]["Validate Browser Capture Schema"]["main"][0][0]
+        self.assertEqual("Load Existing Browser Archive Receipt", handoff["node"])
+        dispatch = workflow["connections"]["Build Browser Headless Handoff"]["main"][0][0]
+        self.assertEqual("Dispatch Browser Capture to Headless Pipeline", dispatch["node"])
+        receipt = names["Upsert Durable Browser Archive Receipt"]["parameters"]
+        self.assertIn("source_sha256", receipt["columns"]["value"])
+        self.assertIn("output_sha256", receipt["columns"]["value"])
+        verify_archive = names["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
+        self.assertIn("input_sha256", verify_archive)
+        self.assertIn("archived_sha256", verify_archive)
+        self.assertEqual(
+            "10000000-0000-4000-8000-000000000003",
+            names["Dispatch Browser Capture to Headless Pipeline"]["parameters"]["workflowId"]["value"],
+        )
+        validator = names["Validate Browser Capture Schema"]
+        self.assertEqual("n8n-nodes-base.code", validator["type"])
+        code = validator["parameters"]["jsCode"]
+        self.assertIn("require('ajv')", code)
+        self.assertIn(".compile(schema)", code)
+        self.assertIn("BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE", code)
+        self.assertIn("BROWSER_CAPTURE_PROVENANCE_MISMATCH", code)
+        self.assertIn("BROWSER_CAPTURE_BINARY_HASH_MISMATCH", code)
+        self.assertIn("source_content_sha256", code)
+        self.assertIn("minLength: 1", code)
+        self.assertIn("actual_mutation: false", code)
+        self.assertIn("cashback_mutation: false", code)
+        self.assertNotIn("n8n-nodes-finance.actualBudget", {node["type"] for node in workflow["nodes"]})
     def config(self):
         return {
             "schema_version": 1,
@@ -103,9 +194,10 @@ class BrowserIngestionTests(TestCase):
 
         run = build_browser_ingestion_run(capture, self.config())
 
-        self.assertEqual(run.staging_status, "READY_FOR_APPROVAL")
-        self.assertEqual(run.review_count, 0)
-        self.assertFalse(run.transactions[0]["review_required"])
+        self.assertEqual(run.staging_status, "REVIEW_REQUIRED")
+        self.assertEqual(run.review_count, 1)
+        self.assertTrue(run.transactions[0]["review_required"])
+        self.assertIn("UNCATEGORIZED", run.transactions[0]["metadata"]["classification_review_reasons"])
         self.assertEqual(
             run.transactions[0]["metadata"]["browser_review_resolutions"],
             ["OWNER_APPROVED_VISIBLE_CAPTURE"],
@@ -184,11 +276,56 @@ class BrowserIngestionTests(TestCase):
 
         run = build_browser_ingestion_run(capture, self.config())
 
-        self.assertEqual(run.staging_status, "READY_FOR_APPROVAL")
-        self.assertEqual(run.review_count, 0)
+        self.assertEqual(run.staging_status, "REVIEW_REQUIRED")
+        self.assertEqual(run.review_count, 2)
         self.assertTrue(run.statement_check["balance_tied"])
         self.assertTrue(run.envelopes[0]["default_cleared"])
         self.assertTrue(all(row["source_type"] == "browser_statement" for row in run.transactions))
+
+    def test_mortgage_uses_liability_balance_convention_and_preserves_signed_balance(self):
+        capture = self.capture()
+        capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
+        capture["artifact"]["kind"] = "STATEMENT_ROWS"
+        capture["account"] = {
+            "label": "FAB Mortgage ending 0203",
+            "account_last4": "0203",
+            "currency": "AED",
+            "balance": "-2550.00",
+        }
+        capture["statement"] = {
+            "statement_reference": "FAB-MORTGAGE-2026-08",
+            "opening_balance_aed": "2500.00",
+            "closing_balance_aed": "2525.50",
+        }
+        capture["rows"] = [
+            {
+                "source_id": "mortgage-payment-1",
+                "transaction_date": "2026-08-15",
+                "description": "MORTGAGE PAYMENT",
+                "amount_aed": "25.50",
+                "direction": "DEBIT",
+                "transaction_type": "PAYMENT",
+            }
+        ]
+        config = deepcopy(self.config())
+        config["accounts"].append(
+            {
+                "name": "FAB Mortgage · 0203",
+                "type": "mortgage",
+                "card_code": "FAB_MORTGAGE_0203",
+                "card_last4": ["0203"],
+            }
+        )
+
+        run = build_browser_ingestion_run(capture, config)
+
+        self.assertEqual(run.account_snapshot["balance"], "-2550.00")
+        self.assertEqual(run.statement_check["balance_convention"], "LIABILITY")
+        self.assertEqual(run.statement_check["calculated_closing_balance_aed"], "2525.50")
+        self.assertTrue(run.statement_check["balance_tied"])
+        self.assertEqual(
+            run.transactions[0]["metadata"]["account_balance_convention"], "LIABILITY"
+        )
 
     def test_unbalanced_statement_rows_are_blocked_from_partial_import(self):
         capture = self.capture()
@@ -336,7 +473,7 @@ class BrowserIngestionTests(TestCase):
             load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
         )
 
-        self.assertEqual(run.review_count, 0)
+        self.assertEqual(run.review_count, 2)
         self.assertEqual(
             [row["transaction_type"] for row in run.transactions],
             ["TRANSFER", "REWARD_CREDIT", "INCOME", "REFUND", "INCOME", "REFUND"],
@@ -418,7 +555,7 @@ class BrowserIngestionTests(TestCase):
             ["EXACT_UNIQUE_REFUND_PAIR"],
         )
 
-    def test_ambiguous_duplicate_purchase_candidates_do_not_infer_a_refund(self):
+    def test_ambiguous_credit_defaults_to_refund_but_stays_in_review(self):
         capture = self.capture()
         capture["source"]["capture_method"] = "OFFICIAL_EXPORT"
         capture["rows"] = [
@@ -449,7 +586,8 @@ class BrowserIngestionTests(TestCase):
         )
 
         credit = run.transactions[2]
-        self.assertEqual(credit["transaction_type"], "CREDIT")
+        self.assertEqual(credit["transaction_type"], "REFUND")
+        self.assertTrue(credit["is_refund"])
         self.assertTrue(credit["review_required"])
         self.assertEqual(run.review_count, 1)
 

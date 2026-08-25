@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "providers": {
+    "sarwa": {
+      "parser": "sarwa_holdings_v1",
+      "source_capture": "runtime/browser-captures/sarwa-holdings-2026-08-18.json",
+      "stale_after_seconds": 604800,
+      "capability": {
+        "official_api_supported": false,
+        "official_export_supported": false,
+        "unattended_refresh_supported": false,
+        "acquisition_mode": "USER_ASSISTED_BROWSER_CAPTURE",
+        "persist_browser_cookies": false,
+        "persist_credentials": false,
+        "reason": "The authenticated web view exposes holdings but no verified official API or export. The user completes login and MFA for each capture."
+      },
+      "accounts": [
+        {
+          "provider_account_id": "sarwa:invest:personal",
+          "capture_labels": ["Personal Investments"],
+          "actual_account_name": "Sarwa Invest · Personal",
+          "include_in_net_worth": true,
+          "closed": false
+        },
+        {
+          "provider_account_id": "sarwa:invest:classic",
+          "capture_labels": ["Sarwa Classic"],
+          "actual_account_name": null,
+          "include_in_net_worth": false,
+          "closed": true
+        },
+        {
+          "provider_account_id": "sarwa:invest:parents",
+          "capture_labels": ["rekening ouders"],
+          "actual_account_name": "Sarwa Invest · Parents",
+          "include_in_net_worth": true,
+          "closed": false
+        },
+        {
+          "provider_account_id": "sarwa:invest:shared-airbnb",
+          "capture_labels": ["shared airbnb returns"],
+          "actual_account_name": "Sarwa Invest · Shared Airbnb",
+          "include_in_net_worth": true,
+          "closed": false
+        },
+        {
+          "provider_account_id": "sarwa:trade:primary",
+          "capture_labels": ["Sarwa Trade"],
+          "actual_account_name": "Sarwa Trade · Primary",
+          "include_in_net_worth": true,
+          "closed": false
+        }
+      ],
+      "non_asset_products": [
+        {
+          "capture_label": "Black Swan Protection",
+          "kind": "INSURANCE_COVERAGE",
+          "include_in_net_worth": false
+        }
+      ]
+    }
+  }
+}

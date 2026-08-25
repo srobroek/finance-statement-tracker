@@ -3,6 +3,8 @@ import importlib.util
 import io
 import json
 import sqlite3
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -25,17 +27,87 @@ class BackupVerifierTests(unittest.TestCase):
         connection.commit()
         connection.close()
 
-    def _backup(self, root: Path, *, unsafe_member: str | None = None) -> Path:
+    def _push_state(self, path: Path) -> None:
+        with sqlite3.connect(path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE push_subscriptions (
+                    endpoint TEXT PRIMARY KEY,
+                    p256dh TEXT NOT NULL,
+                    auth TEXT NOT NULL
+                );
+                CREATE TABLE push_deliveries (
+                    notification_key TEXT NOT NULL,
+                    endpoint TEXT NOT NULL,
+                    payload_hash TEXT NOT NULL
+                );
+                CREATE TABLE push_state (
+                    state_key TEXT PRIMARY KEY,
+                    state_value TEXT NOT NULL
+                );
+                INSERT INTO push_subscriptions VALUES (
+                    'https://push.example/private-endpoint',
+                    'secret-p256dh-value',
+                    'secret-auth-value'
+                );
+                INSERT INTO push_deliveries VALUES (
+                    'alert-1', 'https://push.example/private-endpoint', 'hash'
+                );
+                INSERT INTO push_state VALUES ('routing-map', '{}');
+                """
+            )
+
+    def _backup(
+        self,
+        root: Path,
+        *,
+        unsafe_member: str | None = None,
+        push_data: bool = False,
+        sanitize_push: bool = False,
+        extra_push_database: bool = False,
+        historical_push_snapshot: bool = False,
+        historical_sidecar_sentinels: bool = False,
+    ) -> Path:
         source = root / "source"
+        cashback_database = source / "cashback-data/cashback-events.sqlite3"
         self._sqlite(source / "actual-data/server-files/account.sqlite")
         self._sqlite(source / "actual-data/user-files/budget.sqlite")
-        self._sqlite(source / "cashback-data/cashback-events.sqlite3")
+        self._sqlite(cashback_database)
+        if push_data:
+            self._push_state(cashback_database)
+        if extra_push_database:
+            auxiliary_database = source / "cashback-data/auxiliary.sqlite3"
+            self._sqlite(auxiliary_database)
+            self._push_state(auxiliary_database)
+        if historical_push_snapshot:
+            historical_database = source / "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+            self._sqlite(historical_database)
+            self._push_state(historical_database)
+        if historical_sidecar_sentinels:
+            historical_base = source / "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+            self._sqlite(historical_base)
+            sentinels = (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            )
+            for suffix in ("-wal", "-shm", "-journal"):
+                (historical_base.with_name(historical_base.name + suffix)).write_bytes(
+                    b"|".join(sentinels)
+                )
+        if sanitize_push:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(Path("deploy/actual-poc/sanitize-cashback-backup.py")),
+                    str(cashback_database),
+                ],
+                check=True,
+            )
         (source / "configuration").mkdir(parents=True)
-        for name in ("actual-compose.yaml", "cashback-compose.yaml", "ingestion-compose.yaml"):
+        for name in ("actual-compose.yaml", "cashback-compose.yaml"):
             (source / "configuration" / name).write_text("services: {}\n", encoding="utf-8")
         (source / "configuration/profile.json").write_text('{"schema_version": 1}\n', encoding="utf-8")
-        (source / "ingestion-data/jobs/job-1").mkdir(parents=True)
-        (source / "ingestion-data/jobs/job-1/request.json").write_text('{"type": "test"}\n', encoding="utf-8")
 
         backup = root / "20260818T010203Z"
         backup.mkdir()
@@ -53,10 +125,12 @@ class BackupVerifierTests(unittest.TestCase):
         (backup / "manifest.json").write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 4,
                     "created_at": backup.name,
-                    "includes": ["actual-data", "cashback-data", "ingestion-data", "configuration"],
+                    "includes": ["actual-data", "cashback-data", "configuration"],
                     "secrets_included": False,
+                    "excluded_data": sorted(verifier.EXCLUDED_PUSH_DATA),
+                    "excluded_paths": sorted(verifier.EXCLUDED_CASHBACK_PATHS),
                 }
             ),
             encoding="utf-8",
@@ -72,8 +146,127 @@ class BackupVerifierTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["backup"], backup.name)
-            self.assertEqual(result["json_documents"], 2)
+            self.assertEqual(result["json_documents"], 1)
             self.assertEqual(len(result["sqlite_databases"]), 3)
+            self.assertEqual(result["excluded_data"], sorted(verifier.EXCLUDED_PUSH_DATA))
+            self.assertEqual(result["excluded_paths"], sorted(verifier.EXCLUDED_CASHBACK_PATHS))
+
+    def test_sanitized_backup_excludes_push_credentials_and_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, push_data=True, sanitize_push=True)
+
+            result = verifier.verify_backup(root, backup, None)
+
+            self.assertEqual(result["status"], "ok")
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile("cashback-data/cashback-events.sqlite3")
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            self.assertNotIn(b"secret-p256dh-value", contents)
+            self.assertNotIn(b"secret-auth-value", contents)
+            self.assertNotIn(b"https://push.example/private-endpoint", contents)
+
+    def test_rejects_push_sentinels_in_any_sqlite_archive_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, extra_push_database=True)
+
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile("cashback-data/auxiliary.sqlite3")
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            for sentinel in (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            ):
+                self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "excluded push state"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_historical_snapshot_with_push_sentinels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, historical_push_snapshot=True)
+
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                database = archive.extractfile(
+                    "cashback-data/pre-deploy-20260818T010203Z.sqlite3"
+                )
+                self.assertIsNotNone(database)
+                contents = database.read() if database is not None else b""
+            for sentinel in (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            ):
+                self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "historical cashback snapshot"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_historical_snapshot_sidecars_with_push_sentinels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, historical_sidecar_sentinels=True)
+
+            sentinels = (
+                b"https://push.example/private-endpoint",
+                b"secret-p256dh-value",
+                b"secret-auth-value",
+            )
+            with tarfile.open(backup / "finance-data.tar.gz", "r:gz") as archive:
+                for suffix in ("-wal", "-shm", "-journal"):
+                    member = archive.extractfile(
+                        "cashback-data/pre-deploy-20260818T010203Z.sqlite3" + suffix
+                    )
+                    self.assertIsNotNone(member)
+                    contents = member.read() if member is not None else b""
+                    for sentinel in sentinels:
+                        self.assertIn(sentinel, contents)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "historical cashback snapshot"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_backup_that_claims_push_exclusion_without_scrubbing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root, push_data=True)
+
+            with self.assertRaisesRegex(verifier.VerificationError, "excluded push state"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_rejects_unclassified_legacy_v3_backup_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root)
+            manifest_path = backup / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["schema_version"] = 3
+            manifest.pop("excluded_data")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(verifier.VerificationError, "legacy v3"):
+                verifier.verify_backup(root, backup, None)
+
+    def test_accepts_prior_v4_snapshot_path_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backup = self._backup(root)
+            manifest_path = backup / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["excluded_paths"] = sorted(verifier.PRIOR_V4_EXCLUDED_CASHBACK_PATHS)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = verifier.verify_backup(root, backup, None)
+
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(
+                result["excluded_paths"],
+                sorted(verifier.PRIOR_V4_EXCLUDED_CASHBACK_PATHS),
+            )
 
     def test_rejects_checksum_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

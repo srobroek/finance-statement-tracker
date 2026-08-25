@@ -1,14 +1,18 @@
 {
-  "schema_version": "actual-note-contract-v1",
+  "schema_version": "actual-note-contract-v2",
   "delimiter": " | ",
-  "detail_order": ["Doc", "FX", "Review", "Memo"],
+  "detail_order": ["Doc", "Review", "Memo"],
   "forbidden_tags": ["browser-import", "primary", "evidence", "statement"],
+  "forbidden_tag_prefixes": ["cashback-"],
   "discarded_legacy_fields": [
     "source",
     "message",
     "message-id",
     "attachment-id",
-    "evidence"
+    "evidence",
+    "currency",
+    "original",
+    "fx"
   ],
   "document_root": "Finance Evidence/"
 }

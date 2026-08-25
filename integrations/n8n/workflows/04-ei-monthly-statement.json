@@ -1,0 +1,171 @@
+{
+  "id": "10000000-0000-4000-8000-000000000004",
+  "name": "Finance · EI Statement Cycle Poll",
+  "active": false,
+  "nodes": [
+    {
+      "id": "4001",
+      "name": "Daily 20:40 Cycle Poll",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 20 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4002",
+      "name": "Open Configured Cycle Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Open Configured Cycle Window. Keep this deterministic and fail closed.\nconst now = new Date();\nconst cycleDay = 1, deadlineDays = 5;\nconst day = now.getDate();\nif (day < cycleDay || day > cycleDay + deadlineDays)\n    return [];\nconst upper = now.toISOString();\nconst start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, cycleDay));\nreturn [{ json: { run_id: `EI_AMAZON:${upper}`, source_code: 'EI_AMAZON', window_start: start.toISOString(), run_upper_bound: upper, cycle_day: cycleDay, deadline_at: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), cycleDay + deadlineDays, 23, 59, 59)).toISOString(), period_key: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`, trigger_kind: 'SCHEDULE' } }];\n"
+      }
+    },
+    {
+      "id": "4003",
+      "name": "Run Shared Monthly Statement Cycle",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000024",
+          "mode": "list",
+          "cachedResultName": "Finance · Shared Monthly Statement Cycle"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cycle_context",
+              "displayName": "cycle_context",
+              "type": "object",
+              "display": true
+            },
+            {
+              "id": "deadline_policy",
+              "displayName": "deadline_policy",
+              "type": "object",
+              "display": true
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "type": "string",
+              "display": true
+            }
+          ],
+          "value": {
+            "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: 'EI_AMAZON', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
+            "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: 5 } }}",
+            "execution_id": "={{ $execution.id }}"
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 20:40 Cycle Poll": {
+      "main": [
+        [
+          {
+            "node": "Open Configured Cycle Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open Configured Cycle Window": {
+      "main": [
+        [
+          {
+            "node": "Run Shared Monthly Statement Cycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "EI_MONTHLY_STATEMENT",
+    "migrationStatus": "SPEC_ONLY",
+    "cyclePollingRequired": true,
+    "cycleDay": 1,
+    "deadlineDays": 5,
+    "terminalReceiptReadbackRequired": true,
+    "importTested": false,
+    "credentialBindings": [],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "name": "Account Reconciliation",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ],
+    "sharedCycleWorkflow": "SHARED_MONTHLY_STATEMENT_CYCLE",
+    "sharedCycleWorkflowId": "10000000-0000-4000-8000-000000000024",
+    "sourceIdentity": "EI_AMAZON",
+    "workflowCode": "EI_MONTHLY_STATEMENT"
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Open Configured Cycle Window to Run Shared Monthly Statement Cycle",
+      "nodeIds": [
+        "4002",
+        "4003"
+      ],
+      "description": "Finance stage 1. Input starts at Open Configured Cycle Window; verified output leaves through Run Shared Monthly Statement Cycle."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}

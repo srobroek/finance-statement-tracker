@@ -4,6 +4,7 @@
     {
       "policy_id": "classify-unresolved",
       "version": 2,
+      "agent_profile": "LUNA_MAX",
       "name": "Classify unresolved purchases",
       "priority": 10,
       "instruction": "Using the merchant description and existing deterministic outputs, propose only a vendor, category, subcategory, or approved reporting tags. Do not infer source facts. Leave a field unresolved when evidence is weak.",
@@ -17,6 +18,7 @@
     {
       "policy_id": "recommend-category",
       "version": 1,
+      "agent_profile": "SOL_MEDIUM",
       "name": "Recommend a missing category",
       "priority": 15,
       "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
@@ -31,6 +33,7 @@
     {
       "policy_id": "detect-subscription",
       "version": 1,
+      "agent_profile": "LUNA_MAX",
       "name": "Detect recurring subscription",
       "priority": 20,
       "instruction": "Mark a transaction as a subscription only when the merchant or related evidence indicates a recurring service. Add only approved subscription tags.",
@@ -47,6 +50,7 @@
     {
       "policy_id": "enrich-property",
       "version": 2,
+      "agent_profile": "SOL_MEDIUM",
       "name": "Enrich property and rental unit",
       "priority": 30,
       "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
@@ -61,6 +65,7 @@
     {
       "policy_id": "find-purchase-evidence",
       "version": 2,
+      "agent_profile": "LUNA_MAX",
       "name": "Find receipt bill or warranty evidence",
       "priority": 40,
       "instruction": "Use config/evidence-search-policy.json and its store/do-not-store examples. Propose an evidence search for document-worthy categories or for a qualifying high-value transaction whose statement description lacks the product detail. The evidence worker searches vendor aliases plus amount/currency within the date buffer and uses matched email/order content to identify the product, model, order reference, serial number, warranty dates, or return deadline. Never propose a vendor-only match or evidence collection for a configured never-search category unless a manual evidence request exists.",
@@ -79,6 +84,7 @@
     {
       "policy_id": "enrich-cashback-classification",
       "version": 1,
+      "agent_profile": "LUNA_MAX",
       "name": "Enrich channel and cashback bucket",
       "priority": 50,
       "instruction": "Only when deterministic rules leave them unresolved, infer channel or propose a configured cashback bucket from explicit merchant, notification, wallet, currency, and card evidence. Do not calculate rewards or invent wallet usage.",
@@ -97,6 +103,7 @@
     {
       "policy_id": "recommend-static-rule",
       "version": 1,
+      "agent_profile": "SOL_MEDIUM",
       "name": "Recommend a repeated-pattern rule",
       "priority": 90,
       "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",

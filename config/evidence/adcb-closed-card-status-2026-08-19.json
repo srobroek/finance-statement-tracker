@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "provider_account_id": "adcb:credit:8833-6838",
+  "account_lifecycle": "CLOSED_HISTORICAL_TARGET",
+  "issuer_statement": {
+    "statement_date": "2026-08-15",
+    "period_start": "2026-07-10",
+    "period_end": "2026-08-15",
+    "currency": "AED",
+    "opening_balance_minor": 1310879,
+    "closing_balance_minor": -23832,
+    "statement_tied": true,
+    "transaction_count": 132,
+    "evidence_id": "sha256:edf889f3dd86d1bb278605b72ea7906c48e572689fb79afeabf1297b22b7a4e1",
+    "source_manifest": "runtime/full-restage/final/manifests/statement-ADCB_CASHBACK-2026-08-15.json"
+  },
+  "required_outcome": {
+    "issuer_closing_balance_minor": 0,
+    "actual_balance_minor": 0,
+    "actual_closed": true,
+    "retain_history": true,
+    "reconciliation_method": "ACTUAL_NATIVE_RECONCILIATION_ADJUSTMENT",
+    "synthetic_balancing_row_allowed": false
+  },
+  "status": "BLOCKED_NONZERO_ISSUER_STATEMENT",
+  "blockers": [
+    "FINAL_ISSUER_ZERO_EVIDENCE_REQUIRED",
+    "DISPOSABLE_ACTUAL_REPLAY_REQUIRED",
+    "ACTUAL_API_UI_READBACK_REQUIRED"
+  ]
+}

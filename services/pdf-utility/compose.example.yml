@@ -1,0 +1,44 @@
+name: finance-pdf-utility
+
+services:
+  socket-init:
+    image: busybox:1.37.0@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+    network_mode: none
+    command: ["sh", "-c", "chmod 0770 /run/platform-pdf && chown 1000:1000 /run/platform-pdf"]
+    volumes:
+      - finance-pdf-socket:/run/platform-pdf
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "FOWNER"]
+    security_opt: ["no-new-privileges:true"]
+
+  pdf-utility:
+    build: .
+    image: finance-pdf-utility:0.1.0
+    network_mode: none
+    depends_on:
+      socket-init:
+        condition: service_completed_successfully
+    volumes:
+      - finance-pdf-socket:/run/platform-pdf
+    read_only: true
+    tmpfs:
+      - /tmp:size=96m,mode=1770,uid=1000,gid=1000
+    pids_limit: 32
+    mem_limit: 192m
+    cpus: 0.75
+    ulimits:
+      nofile: {soft: 128, hard: 128}
+      nproc: {soft: 32, hard: 32}
+      fsize: {soft: 52428800, hard: 52428800}
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "/opt/platform-pdf/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  finance-pdf-socket:

@@ -28,7 +28,11 @@ venv/
 
 # Node / Actual API bridge
 node_modules/
+.npm-cache/
 .actual-cache/
+packages/*/dist/
+services/*/dist/
+.upstream/
 
 # Editors and operating-system files
 .idea/

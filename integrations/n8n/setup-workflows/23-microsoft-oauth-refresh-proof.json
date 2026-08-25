@@ -1,0 +1,167 @@
+{
+  "id": "10000000-0000-4000-8000-000000000023",
+  "name": "Finance · Microsoft OAuth Refresh Proof · Manual Read Only",
+  "active": false,
+  "nodes": [
+    {
+      "id": "23000",
+      "name": "Manual Read-Only Proof",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-940, -500],
+      "parameters": {
+        "content": "## Manual Microsoft OAuth refresh proof\n\nPerforms exactly one bounded Outlook Inbox read and one OneDrive root list. It does not download messages or files and cannot write to either provider.\n\nRun once, capture only credential expiry/updatedAt metadata with the guarded operator readback, restart n8n, and run it again. Retain the two redacted receipts plus the metadata-only before/after readback. Never record credential data or tokens.",
+        "height": 360,
+        "width": 540,
+        "color": 5
+      }
+    },
+    {
+      "id": "23001",
+      "name": "Run Reviewed OAuth Proof",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-900, 0],
+      "parameters": {}
+    },
+    {
+      "id": "23002",
+      "name": "Freeze Bounded Probe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-660, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Freeze a small, deterministic provider-read window for this manual proof.\nconst runUpperBound = new Date();\nconst windowStart = new Date(runUpperBound.getTime() - (7 * 24 * 60 * 60 * 1000));\nreturn [{\n    json: {\n        contract_version: 'MICROSOFT_OAUTH_REFRESH_PROOF_V1',\n        outlook_folder_id: 'inbox',\n        outlook_window_start: windowStart.toISOString(),\n        outlook_window_end: runUpperBound.toISOString(),\n        outlook_server_filter: 'isDraft eq false',\n        outlook_max_messages: 1,\n        onedrive_folder_id: 'root',\n        receipt_mode: 'REDACTED',\n    },\n}];\n"
+      }
+    },
+    {
+      "id": "23003",
+      "name": "Read One Bounded Outlook Message",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [-400, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "folderMessage",
+        "operation": "getAll",
+        "folderId": "={{ $('Freeze Bounded Probe').first().json.outlook_folder_id }}",
+        "returnAll": false,
+        "limit": "={{ $('Freeze Bounded Probe').first().json.outlook_max_messages }}",
+        "output": "fields",
+        "fields": ["id"],
+        "filtersUI": {
+          "values": {
+            "filterBy": "filters",
+            "filters": {
+              "receivedAfter": "={{ $('Freeze Bounded Probe').first().json.outlook_window_start }}",
+              "receivedBefore": "={{ $('Freeze Bounded Probe').first().json.outlook_window_end }}",
+              "readStatus": "both",
+              "custom": "={{ $('Freeze Bounded Probe').first().json.outlook_server_filter }}"
+            }
+          }
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "BIND_OUTLOOK",
+          "name": "Finance Outlook"
+        }
+      }
+    },
+    {
+      "id": "23004",
+      "name": "Reduce Outlook to Redacted State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Discard all message fields before the OneDrive proof runs.\nconst contract = $('Freeze Bounded Probe').first().json;\nif (contract.contract_version !== 'MICROSOFT_OAUTH_REFRESH_PROOF_V1'\n    || contract.outlook_folder_id !== 'inbox'\n    || contract.outlook_server_filter !== 'isDraft eq false'\n    || contract.outlook_max_messages !== 1\n    || contract.onedrive_folder_id !== 'root'\n    || contract.receipt_mode !== 'REDACTED') {\n    throw new Error('MICROSOFT_OAUTH_PROBE_CONTRACT_MISMATCH');\n}\nconst rows = $input.all().map(item => item.json).filter(row => row && row.id);\nif (rows.length > contract.outlook_max_messages) {\n    throw new Error(`MICROSOFT_OAUTH_OUTLOOK_BOUND_EXCEEDED:${rows.length}`);\n}\nreturn [{\n    json: {\n        outlook_read_succeeded: true,\n        outlook_items_observed: rows.length,\n        outlook_max_messages: contract.outlook_max_messages,\n        outlook_server_filter_applied: true,\n        outlook_window_start: contract.outlook_window_start,\n        outlook_window_end: contract.outlook_window_end,\n    },\n}];\n"
+      }
+    },
+    {
+      "id": "23005",
+      "name": "List OneDrive Root Read Only",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [120, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "folder",
+        "operation": "getChildren",
+        "folderId": "={{ $('Freeze Bounded Probe').first().json.onedrive_folder_id }}"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "23006",
+      "name": "Emit Redacted OAuth Proof Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [380, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Emit terminal proof without message, file, identity, or credential data.\nconst outlook = $('Reduce Outlook to Redacted State').first().json;\nconst driveRows = $input.all().map(item => item.json).filter(row => row && row.id);\nreturn [{\n    json: {\n        schema_version: 'microsoft-oauth-refresh-proof-receipt-v1',\n        status: 'VERIFIED',\n        execution_id: String($execution.id),\n        outlook_read_succeeded: outlook.outlook_read_succeeded === true,\n        outlook_items_observed: outlook.outlook_items_observed,\n        outlook_max_messages: outlook.outlook_max_messages,\n        outlook_server_filter_applied: outlook.outlook_server_filter_applied === true,\n        outlook_window_start: outlook.outlook_window_start,\n        outlook_window_end: outlook.outlook_window_end,\n        onedrive_root_read_succeeded: true,\n        onedrive_root_items_observed: driveRows.length,\n        provider_writes: false,\n        message_fields_recorded: false,\n        file_fields_recorded: false,\n        credential_values_recorded: false,\n        token_values_recorded: false,\n        production_workflows_activated: false,\n        actual_writes: false,\n        cashback_writes: false,\n        verified_at: new Date().toISOString(),\n    },\n}];\n"
+      }
+    }
+  ],
+  "connections": {
+    "Run Reviewed OAuth Proof": {"main": [[{"node": "Freeze Bounded Probe", "type": "main", "index": 0}]]},
+    "Freeze Bounded Probe": {"main": [[{"node": "Read One Bounded Outlook Message", "type": "main", "index": 0}]]},
+    "Read One Bounded Outlook Message": {"main": [[{"node": "Reduce Outlook to Redacted State", "type": "main", "index": 0}]]},
+    "Reduce Outlook to Redacted State": {"main": [[{"node": "List OneDrive Root Read Only", "type": "main", "index": 0}]]},
+    "List OneDrive Root Read Only": {"main": [[{"node": "Emit Redacted OAuth Proof Receipt", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "MICROSOFT_OAUTH_REFRESH_PROOF",
+    "migrationStatus": "READY_FOR_REVIEWED_MANUAL_IMPORT",
+    "manualOnly": true,
+    "setupOnly": true,
+    "activationForbidden": true,
+    "scheduleForbidden": true,
+    "providerMutationScope": "NONE",
+    "financeLedgerMutationForbidden": true,
+    "actualMutationForbidden": true,
+    "cashbackMutationForbidden": true,
+    "credentialBindings": [
+      {"type": "microsoftOutlookOAuth2Api", "placeholder": "BIND_OUTLOOK", "name": "Finance Outlook"},
+      {"type": "microsoftOneDriveOAuth2Api", "placeholder": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+    ],
+    "setupRequired": true,
+    "workflowFolder": {"id": "f1000000-0000-4000-8000-000000000191", "name": "Shared", "project": "Global", "placement": "EXPLICIT_SETUP_IMPORT_ONLY"},
+    "workflowTags": ["finance", "setup-required", "inactive"]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Bounded Outlook credential proof",
+      "nodeIds": ["23002", "23003", "23004"],
+      "description": "Finance stage 1. Freeze a seven-day window, perform at most one server-filtered Inbox read, and discard every message field."
+    },
+    {
+      "name": "Stage 2: OneDrive credential proof and redacted receipt",
+      "nodeIds": ["23005", "23006"],
+      "description": "Finance stage 2. List the OneDrive root without downloading content and emit only bounded redacted proof fields."
+    }
+  ],
+  "tags": [
+    {"id": "fin0000000000001", "name": "finance"},
+    {"id": "fin0000000000002", "name": "setup-required"},
+    {"id": "fin0000000000003", "name": "inactive"}
+  ]
+}

@@ -67,7 +67,27 @@ class ActualBudgetAdapterTests(TestCase):
         self.assertTrue(envelope.records[0]["cleared"])
         self.assertIn("#shared-household", envelope.records[0]["notes"])
         self.assertIn("#owner-sjors-van-der-meer", envelope.records[0]["notes"])
-        self.assertIn("#cashback-online-spend", envelope.records[0]["notes"])
+        self.assertNotIn("#cashback-", envelope.records[0]["notes"])
+
+    def test_foreign_exchange_metadata_is_not_written_to_display_notes(self) -> None:
+        row = Transaction(
+            transaction_id="statement:foreign",
+            transaction_at=datetime(2026, 7, 13),
+            card="EI_AMAZON",
+            account="Emirates Islamic Amazon CC",
+            merchant_raw="MUHAVRA ENTERPRISES",
+            amount_aed=Decimal("11.41"),
+            currency="INR",
+            amount_original=Decimal("284"),
+            source_direction="DEBIT",
+            tags={"foreign"},
+        )
+
+        record = ActualBudgetAdapter().serialize_import([row])[0].records[0]
+
+        self.assertEqual(record["notes"], "#foreign #needs-review")
+        self.assertNotIn("INR", record["notes"])
+        self.assertNotIn("284", record["notes"])
 
     def test_tied_browser_statement_rows_are_cleared_but_portal_rows_are_not(self) -> None:
         common = {

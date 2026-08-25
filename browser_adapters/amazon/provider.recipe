@@ -1,4 +1,0 @@
-1. GOTO url: "https://www.amazon.ae/gp/your-account/order-history"
-2. NOTE Stop and let the user log in and complete any passkey, OTP, or authentication challenge. Never enter or capture credentials. Continue only after the user confirms authentication.
-3. ASSERT condition: "authenticated Amazon UAE order-history page is visible"
-4. NOTE Do not capture delivery addresses, payment credentials, gift messages, browser cookies, or session state.

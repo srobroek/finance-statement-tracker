@@ -26,7 +26,7 @@ The audit fails closed for:
 
 A statement row omitted because an earlier browser row has the same unique
 date, amount, and normalized imported payee is reported as an explicit
-cross-source suppression. This mirrors the guarded Actual bridge and never
+cross-source suppression. This mirrors the guarded direct Actual writer and never
 hides an ambiguous many-to-one match.
 
 ## Final rebuild sequence

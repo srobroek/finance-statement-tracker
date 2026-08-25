@@ -17,7 +17,7 @@ _FX = re.compile(r"^FX:?\s+([A-Za-z]{3})(?:\s+(.+))?$", re.I)
 
 def _load_contract() -> dict[str, object]:
     source = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))
-    if source.get("schema_version") != "actual-note-contract-v1":
+    if source.get("schema_version") != "actual-note-contract-v2":
         raise ValueError("Unsupported Actual note contract")
     return source
 
@@ -25,6 +25,9 @@ def _load_contract() -> dict[str, object]:
 CONTRACT = _load_contract()
 DELIMITER = str(CONTRACT["delimiter"])
 FORBIDDEN_TAGS = frozenset(str(value).casefold() for value in CONTRACT["forbidden_tags"])
+FORBIDDEN_TAG_PREFIXES = tuple(
+    str(value).casefold() for value in CONTRACT.get("forbidden_tag_prefixes", [])
+)
 DISCARDED_LEGACY_FIELDS = frozenset(
     str(value).casefold() for value in CONTRACT["discarded_legacy_fields"]
 )
@@ -35,7 +38,6 @@ DOCUMENT_ROOT = str(CONTRACT["document_root"])
 class ActualNoteParts:
     tags: tuple[str, ...] = ()
     documents: tuple[str, ...] = ()
-    fx: tuple[str, ...] = ()
     reviews: tuple[str, ...] = ()
     memos: tuple[str, ...] = ()
 
@@ -46,7 +48,7 @@ def normalize_actual_tag(value: str) -> str:
     token = token.casefold()
     if not token or not _VALID_TAG.fullmatch(token):
         raise ValueError(f"Invalid Actual tag: {value!r}")
-    if token in FORBIDDEN_TAGS:
+    if token in FORBIDDEN_TAGS or token.startswith(FORBIDDEN_TAG_PREFIXES):
         raise ValueError(f"Technical Actual tag is forbidden by the note contract: #{token}")
     return token
 
@@ -69,7 +71,6 @@ def _format_parts(parts: ActualNoteParts) -> str:
     if parts.tags:
         segments.append(" ".join(f"#{tag}" for tag in _unique_sorted(parts.tags)))
     segments.extend(f"Doc: {value}" for value in _unique_sorted(parts.documents))
-    segments.extend(f"FX: {value}" for value in _unique_sorted(parts.fx))
     segments.extend(f"Review: {value}" for value in _unique_sorted(parts.reviews))
     segments.extend(f"Memo: {value}" for value in _unique_sorted(parts.memos))
     return DELIMITER.join(segments)
@@ -79,13 +80,12 @@ def format_actual_notes(
     *,
     tags: Iterable[str] = (),
     documents: Iterable[str] = (),
-    fx: Iterable[str] = (),
     reviews: Iterable[str] = (),
     memos: Iterable[str] = (),
 ) -> str:
     """Format the only note grammar accepted at the Actual import boundary.
 
-    Grammar: ``#tag #tag | Doc: ... | FX: ... | Review: ... | Memo: ...``.
+    Grammar: ``#tag #tag | Doc: ... | Review: ... | Memo: ...``.
     Collections are de-duplicated and sorted so ingestion is byte-idempotent.
     """
     normalized_documents = []
@@ -97,7 +97,6 @@ def format_actual_notes(
     parts = ActualNoteParts(
         tags=_unique_sorted(normalize_actual_tag(value) for value in tags),
         documents=_unique_sorted(normalized_documents),
-        fx=_unique_sorted(_clean_detail(value, "FX") for value in fx),
         reviews=_unique_sorted(_clean_detail(value, "Review") for value in reviews),
         memos=_unique_sorted(_clean_detail(value, "Memo") for value in memos),
     )
@@ -114,15 +113,15 @@ def parse_actual_notes(notes: str, *, legacy: bool = False) -> ActualNoteParts:
 
     tags: list[str] = []
     documents: list[str] = []
-    fx: list[str] = []
     reviews: list[str] = []
     memos: list[str] = []
-    legacy_currency: str | None = None
-    legacy_original: str | None = None
 
     for match in _TAG_PATTERN.finditer(source):
         raw = match.group(1).casefold()
-        if raw in FORBIDDEN_TAGS and legacy:
+        if (
+            raw in FORBIDDEN_TAGS
+            or raw.startswith(FORBIDDEN_TAG_PREFIXES)
+        ) and legacy:
             continue
         tags.append(normalize_actual_tag(raw))
 
@@ -137,16 +136,12 @@ def parse_actual_notes(notes: str, *, legacy: bool = False) -> ActualNoteParts:
             value = field_match.group(2).strip()
             if field == "doc":
                 documents.append(_clean_detail(value, "Doc"))
-            elif field == "fx":
-                fx.append(_clean_detail(value, "FX"))
+            elif field == "fx" and legacy:
+                continue
             elif field == "review":
                 reviews.append(_clean_detail(value, "Review"))
             elif field == "memo":
                 memos.append(_clean_detail(value, "Memo"))
-            elif legacy and field == "currency":
-                legacy_currency = value.upper()
-            elif legacy and field == "original":
-                legacy_original = value
             elif legacy and field == "evidence" and value.startswith(DOCUMENT_ROOT):
                 documents.append(value)
             elif legacy and field in DISCARDED_LEGACY_FIELDS:
@@ -159,10 +154,8 @@ def parse_actual_notes(notes: str, *, legacy: bool = False) -> ActualNoteParts:
             continue
         fx_match = _FX.match(segment)
         if fx_match:
-            value = fx_match.group(1).upper()
-            if fx_match.group(2):
-                value += f" {fx_match.group(2).strip()}"
-            fx.append(_clean_detail(value, "FX"))
+            if not legacy:
+                raise ValueError(f"Unsupported Actual note segment: {segment!r}")
         elif legacy and segment.casefold() in {"evidence", "primary", "statement"}:
             continue
         elif legacy:
@@ -170,12 +163,9 @@ def parse_actual_notes(notes: str, *, legacy: bool = False) -> ActualNoteParts:
         else:
             raise ValueError(f"Unsupported Actual note segment: {segment!r}")
 
-    if legacy_currency:
-        fx.append(f"{legacy_currency}{f' {legacy_original}' if legacy_original else ''}")
     return ActualNoteParts(
         tags=_unique_sorted(tags),
         documents=_unique_sorted(documents),
-        fx=_unique_sorted(fx),
         reviews=_unique_sorted(reviews),
         memos=_unique_sorted(memos),
     )
@@ -186,7 +176,6 @@ def canonicalize_actual_notes(notes: str) -> str:
     return format_actual_notes(
         tags=parts.tags,
         documents=parts.documents,
-        fx=parts.fx,
         reviews=parts.reviews,
         memos=parts.memos,
     )
@@ -197,7 +186,6 @@ def add_actual_document(notes: str, relative_path: str) -> str:
     return format_actual_notes(
         tags=parts.tags,
         documents=(*parts.documents, relative_path),
-        fx=parts.fx,
         reviews=parts.reviews,
         memos=parts.memos,
     )
@@ -222,6 +210,7 @@ def build_actual_note_cleanup_plan(
     changes_by_account: Counter[str] = Counter()
     removed_legacy_fields: Counter[str] = Counter()
     removed_technical_tags: Counter[str] = Counter()
+    removed_technical_tag_prefixes: Counter[str] = Counter()
     desired_empty_count = 0
     seen_imported_ids: set[str] = set()
     scanned = 0
@@ -236,6 +225,14 @@ def build_actual_note_cleanup_plan(
         for tag in FORBIDDEN_TAGS:
             removed_technical_tags[tag] += len(
                 re.findall(rf"(?<!\S)#{re.escape(tag)}(?=\s|$)", current, re.I)
+            )
+        for prefix in FORBIDDEN_TAG_PREFIXES:
+            removed_technical_tag_prefixes[prefix] += len(
+                re.findall(
+                    rf"(?<!\S)#{re.escape(prefix)}[A-Za-z0-9_:-]*(?=\s|$)",
+                    current,
+                    re.I,
+                )
             )
         for field in DISCARDED_LEGACY_FIELDS:
             removed_legacy_fields[field] += len(
@@ -277,7 +274,7 @@ def build_actual_note_cleanup_plan(
     plan = {
         "schema_version": "actual-transaction-enrichment-v1",
         "expected_server_version": expected_server_version,
-        "reason": "Normalize Actual notes to actual-note-contract-v1",
+        "reason": "Normalize Actual notes to actual-note-contract-v2",
         "changes": changes,
     }
     audit = {
@@ -290,6 +287,11 @@ def build_actual_note_cleanup_plan(
         "changes_by_account": dict(sorted(changes_by_account.items())),
         "removed_technical_tags": {
             key: value for key, value in sorted(removed_technical_tags.items()) if value
+        },
+        "removed_technical_tag_prefixes": {
+            key: value
+            for key, value in sorted(removed_technical_tag_prefixes.items())
+            if value
         },
         "removed_legacy_fields": {
             key: value for key, value in sorted(removed_legacy_fields.items()) if value

@@ -460,7 +460,7 @@ Official reference: [Budget Automation](https://actualbudget.org/docs/experiment
 
 ### Pre-import normalization outside Actual
 
-The deterministic ingestion worker should:
+The deterministic n8n stages should:
 
 - parse and preserve the exact imported description;
 - normalize the vendor using the versioned Vendor Registry;

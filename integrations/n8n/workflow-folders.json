@@ -1,0 +1,237 @@
+{
+  "schema_version": 2,
+  "n8n_version": "2.36.2",
+  "contract_status": "SETUP_REQUIRED",
+  "project_id_binding": "N8N_FINANCE_PROJECT_ID",
+  "folders": [
+    {
+      "id": "f1000000-0000-4000-8000-000000000100",
+      "name": "Finance",
+      "parentFolderId": null,
+      "root": true
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000190",
+      "name": "Global",
+      "parentFolderId": null,
+      "root": true
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "name": "Account Reconciliation",
+      "parentFolderId": "f1000000-0000-4000-8000-000000000100",
+      "root": false
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000102",
+      "name": "Cashback Sweep",
+      "parentFolderId": "f1000000-0000-4000-8000-000000000100",
+      "root": false
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
+      "parentFolderId": "f1000000-0000-4000-8000-000000000100",
+      "root": false
+    },
+    {
+      "id": "f1000000-0000-4000-8000-000000000191",
+      "name": "Shared",
+      "parentFolderId": "f1000000-0000-4000-8000-000000000190",
+      "root": false
+    }
+  ],
+  "tags": [
+    "finance",
+    "setup-required",
+    "inactive",
+    "active"
+  ],
+  "workflow_tags": [
+    "finance",
+    "setup-required",
+    "inactive"
+  ],
+  "tag_definitions": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    },
+    {
+      "id": "fin0000000000004",
+      "name": "active"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "code": "OUTLOOK_FINANCE_ACQUISITION",
+      "current_name": "Finance · Acquire Outlook Documents · Setup Required",
+      "target_name": "Acquire Outlook Documents",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/01-outlook-finance-acquisition.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "code": "RAKBANK_LIVE_CASHBACK",
+      "current_name": "Finance · RAKBANK Live Cashback · Setup Required",
+      "target_name": "RAKBANK Live Cashback",
+      "folder_id": "f1000000-0000-4000-8000-000000000102",
+      "source": "integrations/n8n/workflows/02-rakbank-live-cashback.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000003",
+      "code": "SHARED_STATEMENT_PIPELINE",
+      "current_name": "Finance · Shared Deterministic Statement Pipeline · Setup Required",
+      "target_name": "Shared Deterministic Statement Pipeline",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/03-shared-statement-pipeline.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000004",
+      "code": "EI_MONTHLY_STATEMENT",
+      "current_name": "Finance · EI Statement Cycle Poll · Setup Required",
+      "target_name": "EI Statement Cycle Poll",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/04-ei-monthly-statement.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000005",
+      "code": "WIO_MONTHLY_STATEMENT",
+      "current_name": "Finance · Wio Statement Cycle Poll · Setup Required",
+      "target_name": "Wio Statement Cycle Poll",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/05-wio-monthly-statement.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009",
+      "code": "AI_PROPOSAL",
+      "current_name": "Finance · Subscription Agent Proposal · Setup Required",
+      "target_name": "Subscription Agent Proposal",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/09-ai-proposal.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000010",
+      "code": "FINANCE_OPERATIONS_STATUS",
+      "current_name": "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
+      "target_name": "Operations Status and Audited MCP Dispatch",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/10-finance-operations-status.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000011",
+      "code": "INTERACTIVE_ARTIFACT_HANDOFF",
+      "current_name": "Finance · Interactive Artifact Handoff · Setup Required",
+      "target_name": "Interactive Artifact Handoff",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/11-interactive-artifact-handoff.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000012",
+      "code": "OUTLOOK_MESSAGE_SWEEP",
+      "current_name": "Finance · Sweep Outlook Messages · Setup Required",
+      "target_name": "Sweep Outlook Messages",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/12-outlook-message-sweep.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000013",
+      "code": "DOCUMENT_EXTRACTION_REQUEST",
+      "current_name": "Finance · Request Document Extraction · Setup Required",
+      "target_name": "Request Document Extraction",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/13-document-extraction-request.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000014",
+      "code": "LOCAL_PDF_EXTRACTION",
+      "current_name": "Finance · Local PDF Extraction Ladder · Setup Required",
+      "target_name": "Local PDF Extraction Ladder",
+      "folder_id": "f1000000-0000-4000-8000-000000000101",
+      "source": "integrations/n8n/workflows/14-local-pdf-extraction.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000015",
+      "code": "FINANCE_MCP_FACADE",
+      "current_name": "Finance · Bounded MCP Facade · Setup Required",
+      "target_name": "Bounded MCP Facade",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/15-finance-mcp-facade.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000016",
+      "code": "OPERATIONS_ERROR_HANDLER",
+      "current_name": "Finance · Redacted Operations Error Handler · Setup Required",
+      "target_name": "Redacted Operations Error Handler",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/16-operations-error-handler.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000017",
+      "code": "ACTUAL_OUTBOX_RECOVERY",
+      "current_name": "Finance · Actual Outbox Recovery · Setup Required",
+      "target_name": "Actual Outbox Recovery",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/17-actual-outbox-recovery.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000018",
+      "code": "FINANCE_WRITER_LEASE",
+      "current_name": "Finance · Fenced Actual Writer Lease · Setup Required",
+      "target_name": "Fenced Actual Writer Lease",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/18-finance-writer-lease.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000019",
+      "code": "PLATFORM_DATA_TABLE_BOOTSTRAP",
+      "current_name": "Finance · Platform Data Table Bootstrap · Setup Required",
+      "target_name": "Platform Data Table Bootstrap",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/19-platform-data-table-bootstrap.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000020",
+      "code": "ACTUAL_OUTBOX_APPLY",
+      "current_name": "Finance · Apply Prepared Actual Outbox · Setup Required",
+      "target_name": "Apply Prepared Actual Outbox",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/20-actual-outbox-apply.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000021",
+      "code": "SUBSCRIPTION_AGENT_ADAPTER",
+      "current_name": "Finance · Subscription Agent Adapter · Setup Required",
+      "target_name": "Subscription Agent Adapter",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/21-subscription-agent-adapter.json"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000024",
+      "code": "SHARED_MONTHLY_STATEMENT_CYCLE",
+      "current_name": "Finance · Shared Monthly Statement Cycle",
+      "target_name": "Shared Monthly Statement Cycle",
+      "folder_id": "f1000000-0000-4000-8000-000000000103",
+      "source": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json"
+    }
+  ],
+  "legacy_folder_ids": [
+    "f1000000-0000-4000-8000-000000000001",
+    "f1000000-0000-4000-8000-000000000002",
+    "f1000000-0000-4000-8000-000000000003",
+    "f1000000-0000-4000-8000-000000000004",
+    "f1000000-0000-4000-8000-000000000005",
+    "f1000000-0000-4000-8000-000000000006",
+    "f1000000-0000-4000-8000-000000000007",
+    "f1000000-0000-4000-8000-000000000090"
+  ]
+}

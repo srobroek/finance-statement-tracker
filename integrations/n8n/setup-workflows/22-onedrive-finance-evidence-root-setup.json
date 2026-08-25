@@ -1,0 +1,201 @@
+{
+  "id": "10000000-0000-4000-8000-000000000022",
+  "name": "Finance · OneDrive Finance Evidence Root · Manual Setup",
+  "active": false,
+  "nodes": [
+    {
+      "id": "22000",
+      "name": "Manual Setup Only",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-940, -500],
+      "parameters": {
+        "content": "## Manual OneDrive root setup\n\nCreates exactly one top-level `Finance Evidence` folder only when it is absent. It reads the drive root before and after the decision, refuses case variants or non-folder conflicts, and fails if a nested `Finance Evidence/Finance Evidence` folder exists.\n\nThe final receipt omits the folder ID, drive metadata, credential values, URLs, and file contents. This workflow must remain inactive and must never be scheduled.",
+        "height": 360,
+        "width": 520,
+        "color": 5
+      }
+    },
+    {
+      "id": "22001",
+      "name": "Run Reviewed Setup",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-900, 0],
+      "parameters": {}
+    },
+    {
+      "id": "22002",
+      "name": "Setup Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-660, 0],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "22002-caller-1", "name": "root_folder_id", "type": "string", "value": "={{ $json.root_folder_id }}"},
+            {"id": "22002-caller-2", "name": "run_id", "type": "string", "value": "={{ $json.run_id }}"},
+            {"id": "22002-a", "name": "contract_version", "type": "string", "value": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP_V1"},
+            {"id": "22002-b", "name": "root_folder_name", "type": "string", "value": "Finance Evidence"},
+            {"id": "22002-c", "name": "expected_parent_scope", "type": "string", "value": "root"},
+            {"id": "22002-d", "name": "create_if_absent", "type": "boolean", "value": true},
+            {"id": "22002-e", "name": "receipt_mode", "type": "string", "value": "REDACTED"}
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "22003",
+      "name": "List Drive Root Children",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [-420, 0],
+      "parameters": {"resource": "folder", "operation": "getChildren", "folderId": "root"},
+      "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+      "alwaysOutputData": true
+    },
+    {
+      "id": "22004",
+      "name": "Resolve Existing Root State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-180, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Resolve the exact top-level Finance Evidence state and fail closed.\nconst contract = $('Setup Parameters').first().json;\nconst expectedName = 'Finance Evidence';\nif (contract.contract_version !== 'ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP_V1'\n    || contract.root_folder_name !== expectedName\n    || contract.expected_parent_scope !== 'root'\n    || contract.create_if_absent !== true\n    || contract.receipt_mode !== 'REDACTED') {\n    throw new Error('ONEDRIVE_ROOT_SETUP_CONTRACT_MISMATCH');\n}\nif (expectedName.includes('/') || expectedName.includes('\\\\') || expectedName.trim() !== expectedName) {\n    throw new Error('ONEDRIVE_ROOT_FOLDER_NAME_INVALID');\n}\nconst rows = $input.all().map(item => item.json).filter(row => row && row.id);\nconst sameName = rows.filter(row => String(row.name || '').toLocaleLowerCase('en-US') === expectedName.toLocaleLowerCase('en-US'));\nconst nonFolders = sameName.filter(row => !row.folder);\nif (nonFolders.length) {\n    throw new Error('ONEDRIVE_ROOT_NAME_OCCUPIED_BY_NON_FOLDER');\n}\nconst caseVariants = sameName.filter(row => String(row.name) !== expectedName);\nif (caseVariants.length) {\n    throw new Error('ONEDRIVE_ROOT_FOLDER_CASE_MISMATCH');\n}\nconst exactFolders = sameName.filter(row => row.folder && String(row.name) === expectedName);\nif (exactFolders.length > 1) {\n    throw new Error('ONEDRIVE_ROOT_FOLDER_DUPLICATE_EXACT_MATCH');\n}\nif (exactFolders.length === 1) {\n    return [{ json: { action: 'REUSE_EXISTING', existing_folder_id: String(exactFolders[0].id) } }];\n}\nreturn [{ json: { action: 'CREATE_REQUIRED', existing_folder_id: null } }];\n"
+      }
+    },
+    {
+      "id": "22005",
+      "name": "Create Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [60, 0],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "typeValidation": "strict"},
+          "combinator": "and",
+          "conditions": [
+            {"leftValue": "={{ $json.action }}", "rightValue": "CREATE_REQUIRED", "operator": {"type": "string", "operation": "equals"}}
+          ]
+        }
+      }
+    },
+    {
+      "id": "22006",
+      "name": "Create Finance Evidence at Drive Root",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [300, -140],
+      "parameters": {
+        "resource": "folder",
+        "operation": "create",
+        "name": "={{ $('Setup Parameters').first().json.root_folder_name }}",
+        "options": {}
+      },
+      "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}}
+    },
+    {
+      "id": "22007",
+      "name": "Read Back Drive Root Children",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [540, 0],
+      "parameters": {"resource": "folder", "operation": "getChildren", "folderId": "root"},
+      "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+      "alwaysOutputData": true
+    },
+    {
+      "id": "22008",
+      "name": "Verify Exact Root Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Verify the exact root folder after the create-or-reuse decision.\nconst expectedName = $('Setup Parameters').first().json.root_folder_name;\nconst decision = $('Resolve Existing Root State').first().json;\nconst rows = $input.all().map(item => item.json).filter(row => row && row.id);\nconst sameName = rows.filter(row => String(row.name || '').toLocaleLowerCase('en-US') === expectedName.toLocaleLowerCase('en-US'));\nif (sameName.some(row => !row.folder)) {\n    throw new Error('ONEDRIVE_ROOT_READBACK_NON_FOLDER_CONFLICT');\n}\nif (sameName.some(row => String(row.name) !== expectedName)) {\n    throw new Error('ONEDRIVE_ROOT_READBACK_CASE_MISMATCH');\n}\nconst exactFolders = sameName.filter(row => row.folder && String(row.name) === expectedName);\nif (exactFolders.length !== 1 || !exactFolders[0].id) {\n    throw new Error(`ONEDRIVE_ROOT_READBACK_EXACT_COUNT_MISMATCH:${exactFolders.length}`);\n}\nconst observedId = String(exactFolders[0].id);\nif (decision.action === 'REUSE_EXISTING' && observedId !== decision.existing_folder_id) {\n    throw new Error('ONEDRIVE_ROOT_REUSE_ID_DRIFT');\n}\nif (decision.action === 'CREATE_REQUIRED') {\n    const created = $('Create Finance Evidence at Drive Root').first().json;\n    if (!created.folder || String(created.name) !== expectedName || String(created.id || '') !== observedId) {\n        throw new Error('ONEDRIVE_ROOT_CREATE_READBACK_MISMATCH');\n    }\n}\nreturn [{\n    json: {\n        root_folder_id: observedId,\n        root_folder_name: expectedName,\n        action: decision.action === 'CREATE_REQUIRED' ? 'CREATED' : 'REUSED',\n    },\n}];\n"
+      }
+    },
+    {
+      "id": "22009",
+      "name": "List Finance Evidence Children",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [1020, 0],
+      "parameters": {"resource": "folder", "operation": "getChildren", "folderId": "={{ $json.root_folder_id }}"},
+      "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+      "alwaysOutputData": true
+    },
+    {
+      "id": "22010",
+      "name": "Emit Redacted Setup Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 0],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Purpose: Reject Finance Evidence/Finance Evidence and emit a redacted setup receipt.\nconst verified = $('Verify Exact Root Readback').first().json;\nconst children = $input.all().map(item => item.json).filter(row => row && row.id);\nconst nestedSameName = children.filter(row => row.folder\n    && String(row.name || '').toLocaleLowerCase('en-US') === verified.root_folder_name.toLocaleLowerCase('en-US'));\nif (nestedSameName.length) {\n    throw new Error(`ONEDRIVE_NESTED_FINANCE_EVIDENCE_DUPLICATION_DETECTED:${nestedSameName.length}`);\n}\nreturn [{\n    json: {\n        schema_version: 'onedrive-finance-evidence-root-setup-receipt-v1',\n        status: 'VERIFIED',\n        action: verified.action,\n        folder_name: verified.root_folder_name,\n        parent_scope: 'root',\n        exact_root_match_count: 1,\n        nested_same_name_folder_count: 0,\n        folder_id_present: Boolean(verified.root_folder_id),\n        folder_id_redacted: true,\n        credential_values_recorded: false,\n        drive_metadata_recorded: false,\n        file_contents_recorded: false,\n        production_workflows_activated: false,\n        actual_writes: false,\n        cashback_writes: false,\n        provider_mutation_scope: verified.action === 'CREATED'\n            ? 'CREATE_SINGLE_ONEDRIVE_ROOT_FOLDER'\n            : 'NONE',\n        verified_at: new Date().toISOString(),\n    },\n}];\n"
+      }
+    }
+  ],
+  "connections": {
+    "Run Reviewed Setup": {"main": [[{"node": "Setup Parameters", "type": "main", "index": 0}]]},
+    "Setup Parameters": {"main": [[{"node": "List Drive Root Children", "type": "main", "index": 0}]]},
+    "List Drive Root Children": {"main": [[{"node": "Resolve Existing Root State", "type": "main", "index": 0}]]},
+    "Resolve Existing Root State": {"main": [[{"node": "Create Required?", "type": "main", "index": 0}]]},
+    "Create Required?": {
+      "main": [
+        [{"node": "Create Finance Evidence at Drive Root", "type": "main", "index": 0}],
+        [{"node": "Read Back Drive Root Children", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Finance Evidence at Drive Root": {"main": [[{"node": "Read Back Drive Root Children", "type": "main", "index": 0}]]},
+    "Read Back Drive Root Children": {"main": [[{"node": "Verify Exact Root Readback", "type": "main", "index": 0}]]},
+    "Verify Exact Root Readback": {"main": [[{"node": "List Finance Evidence Children", "type": "main", "index": 0}]]},
+    "List Finance Evidence Children": {"main": [[{"node": "Emit Redacted Setup Receipt", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP",
+    "migrationStatus": "READY_FOR_REVIEWED_MANUAL_IMPORT",
+    "manualOnly": true,
+    "setupOnly": true,
+    "activationForbidden": true,
+    "scheduleForbidden": true,
+    "providerMutationScope": "CREATE_SINGLE_ONEDRIVE_ROOT_FOLDER_IF_ABSENT",
+    "financeLedgerMutationForbidden": true,
+    "actualMutationForbidden": true,
+    "cashbackMutationForbidden": true,
+    "credentialBindings": [
+      {"type": "microsoftOneDriveOAuth2Api", "placeholder": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+    ],
+    "setupRequired": true,
+    "workflowFolder": {"id": "f1000000-0000-4000-8000-000000000191", "name": "Shared", "project": "Global", "placement": "EXPLICIT_SETUP_IMPORT_ONLY"},
+    "workflowTags": ["finance", "setup-required", "inactive"]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Exact root create-or-reuse",
+      "nodeIds": ["22002", "22003", "22004", "22005", "22006", "22007", "22008"],
+      "description": "Finance stage 1. Validate the fixed setup contract, create only if absent, and verify exact root readback."
+    },
+    {
+      "name": "Stage 2: Nested duplication check and redacted receipt",
+      "nodeIds": ["22009", "22010"],
+      "description": "Finance stage 2. Reject Finance Evidence/Finance Evidence and emit only redacted verification fields."
+    }
+  ],
+  "tags": [
+    {"id": "fin0000000000001", "name": "finance"},
+    {"id": "fin0000000000002", "name": "setup-required"},
+    {"id": "fin0000000000003", "name": "inactive"}
+  ]
+}

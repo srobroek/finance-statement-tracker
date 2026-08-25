@@ -1,0 +1,54 @@
+FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
+
+USER root
+RUN apk add --no-cache \
+      g++=15.2.0-r5 \
+      make=4.4.1-r4 \
+      python3=3.14.7-r1
+WORKDIR /tmp/n8n-nodes-finance
+COPY packages/n8n-nodes-finance/package.json packages/n8n-nodes-finance/package-lock.json packages/n8n-nodes-finance/tsconfig.json packages/n8n-nodes-finance/tsconfig.build.json ./
+RUN npm ci --include=dev
+COPY packages/n8n-nodes-finance/src ./src
+COPY packages/n8n-nodes-finance/CONTRACT.md ./
+RUN npm run build \
+    && npm prune --omit=dev --omit=peer \
+    && npm cache clean --force
+
+WORKDIR /tmp/community-ai
+COPY packages/n8n-nodes-finance/community-ai/package.json packages/n8n-nodes-finance/community-ai/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --legacy-peer-deps \
+    && npm audit --omit=dev --audit-level=high \
+    && test "$(node -p "require('./node_modules/n8n-nodes-prodex/package.json').version")" = "0.5.1" \
+    && test "$(node -p "require('./node_modules/@openai/codex/package.json').version")" = "0.142.1"
+COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-community-ai.cjs
+RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
+    && npm cache clean --force
+
+ARG N8N_BASE_IMAGE=ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6
+FROM ${N8N_BASE_IMAGE}
+
+ARG N8N_BASE_IMAGE
+ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
+LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
+      org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
+      io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
+      io.finance.n8n.base-source="https://github.com/srobroek/n8n@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+
+USER root
+RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /opt/finance-n8n/custom-extensions/n8n-nodes-finance/package.json
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /opt/finance-n8n/custom-extensions/n8n-nodes-finance/CONTRACT.md
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/dist /opt/finance-n8n/custom-extensions/n8n-nodes-finance/dist
+COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/node_modules /opt/finance-n8n/custom-extensions/n8n-nodes-finance/node_modules
+COPY --from=node-builder --chown=node:node /tmp/community-ai/package.json /opt/finance-n8n/community-extensions/package.json
+COPY --from=node-builder --chown=node:node /tmp/community-ai/package-lock.json /opt/finance-n8n/community-extensions/package-lock.json
+COPY --from=node-builder --chown=node:node /tmp/community-ai/node_modules /opt/finance-n8n/community-extensions/node_modules
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs /opt/finance-n8n/assert-runtime-registration.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs /opt/finance-n8n/verify-immutable-extension.cjs
+COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh /opt/finance-n8n/finance-entrypoint.sh
+RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
+    && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
+    && chmod 0444 /opt/finance-n8n/extension-tree.sha256
+WORKDIR /opt/finance-n8n/community-extensions
+USER node
+ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]

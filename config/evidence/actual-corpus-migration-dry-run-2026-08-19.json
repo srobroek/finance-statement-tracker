@@ -1,0 +1,81 @@
+{
+  "schema_version": "actual-corpus-migration-evidence-v1",
+  "observed_at": "2026-08-19",
+  "mode": "READ_ONLY_DRY_RUN",
+  "source": {
+    "manifest_root": "runtime/full-restage/final/manifests",
+    "actual_snapshot": "runtime/audit/live-full-chat-audit-snapshot.json"
+  },
+  "corpus": {
+    "manifest_count": 45,
+    "transaction_count": 3927,
+    "unique_imported_id_count": 3927,
+    "amount_and_sign_checked_count": 3927,
+    "amount_mutation_count": 0,
+    "note_contract_checked_count": 3927,
+    "note_contract_violation_count": 0,
+    "exception_count": 877,
+    "topic_counts": {
+      "FEE": 207,
+      "INCOME": 3,
+      "PURCHASE": 3400,
+      "REFUND": 47,
+      "REVERSAL": 5,
+      "REWARD_CREDIT": 115,
+      "TRANSFER": 120,
+      "UNRESOLVED_CREDIT": 30
+    }
+  },
+  "deterministic_double_run": {
+    "consecutive_run_artifacts_identical": true,
+    "regenerated_manifest_count": 45,
+    "regenerated_manifest_set_sha256": "368d055adfc7912c1c350608e6f267c5bdd136972cc802ecda81385836c5b61c"
+  },
+  "snapshot_comparison": {
+    "snapshot_transaction_count": 3912,
+    "matched_identity_count": 3912,
+    "change_count": 400,
+    "manual_category_conflict_count": 28,
+    "missing_from_snapshot_count": 15,
+    "amount_mutation_count": 0
+  },
+  "known_regressions": {
+    "ei_positive_amazon_statement_355_fils": {
+      "imported_id": "statement:emirates_islamic_v1:96e9876e030608dad7782688",
+      "topic": "REFUND",
+      "reason": "POSITIVE_MERCHANT_CREDIT_DEFAULT"
+    },
+    "ei_positive_amazon_statement_257_fils": {
+      "imported_id": "statement:emirates_islamic_v1:12d433c4308d8f05eacadd30",
+      "topic": "REFUND",
+      "reason": "POSITIVE_MERCHANT_CREDIT_DEFAULT"
+    },
+    "explicit_ei_amazon_credit_fixture": {
+      "topic": "REWARD_CREDIT",
+      "reward_medium": "AMAZON_CREDIT",
+      "cash_equivalent": false
+    },
+    "amazon_credit_words_without_reward_evidence_fixture": "REFUND",
+    "generic_positive_merchant_credit_fixture": "REFUND",
+    "manual_actual_categories_preserved": 28
+  },
+  "preflight": {
+    "status": "PASS",
+    "checked_change_count": 400,
+    "actual_write_performed": false
+  },
+  "artifact_sha256": {
+    "runtime/audit/actual-corpus-semantics-audit-2026-08-19.json": "dbbcbb7ec8e607c467d09f5c032dbe068363fc64721ae6261290cf949ce23d69",
+    "runtime/plans/actual-corpus-migration-dry-run-2026-08-19.json": "af256ed9bbbb563d4281c077b5511438d66f1d8d8ca290a15c0f25fde300b6d8",
+    "runtime/audit/actual-corpus-migration-audit-2026-08-19.json": "2277fdf9975df8f461cdbe60e6adbc6294929c4c52f0060ee4e9643e252a6acf"
+  },
+  "production_write_performed": false,
+  "remaining_gates": [
+    "REVIEW_877_EXCEPTIONS",
+    "REVIEW_28_MANUAL_CATEGORY_CONFLICTS",
+    "EXPLAIN_15_CORPUS_IDENTITIES_ABSENT_FROM_SNAPSHOT",
+    "DISPOSABLE_ACTUAL_REPLAY",
+    "SEPARATE_PRODUCTION_AUTHORIZATION",
+    "AUTHENTICATED_UI_READBACK"
+  ]
+}

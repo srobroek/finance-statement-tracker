@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import signal
@@ -14,23 +15,48 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from access_auth import (
+    ACCESS_ASSERTION_HEADER,
+    AccessVerificationError,
+    build_access_verifier,
+    local_access_exemption,
+)
+
 APP_ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = APP_ROOT.parent.parent
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from finance_tracker.actual_pipeline import account_maps, load_actual_config, load_compiled_rules
+from finance_tracker.actual_pipeline import (
+    account_maps,
+    load_actual_config,
+    load_compiled_rules,
+)
 from finance_tracker.cashback import load_program_configuration
-from finance_tracker.cashback_events import CashbackEventStore, build_live_dashboard, write_dashboard
+from finance_tracker.cashback_events import (
+    CashbackEventStore,
+    IngestCursorConflict,
+    _iso_datetime,
+    _json_digest,
+    build_live_dashboard,
+    write_dashboard,
+)
 from finance_tracker.notification_sources import (
     load_notification_sources,
     validate_notification_adapter_coverage,
 )
-from finance_tracker.notifications import DEFAULT_NOTIFICATION_ADAPTERS, parse_outlook_notifications
+from finance_tracker.notifications import (
+    DEFAULT_NOTIFICATION_ADAPTERS,
+    parse_outlook_notifications,
+)
 from finance_tracker.web_push import WebPushDispatcher, WebPushStore
 
-
 WEB_ROOT = APP_ROOT / "web"
+CASHBACK_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; "
+    "frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'"
+)
 DASHBOARD_PATH = Path(
     os.environ.get(
         "CASHBACK_DASHBOARD_PATH",
@@ -46,6 +72,8 @@ DATABASE_PATH = Path(
 INGEST_TOKEN = os.environ.get("CASHBACK_INGEST_TOKEN", "")
 PUBLIC_URL = os.environ.get("CASHBACK_PUBLIC_URL", "").strip()
 PUBLIC_ORIGIN = urlsplit(PUBLIC_URL)
+BIND_HOST = os.environ.get("CASHBACK_HOST", "127.0.0.1").strip()
+ACCESS_VERIFIER = build_access_verifier(bind_host=BIND_HOST, public_url=PUBLIC_URL)
 STORE = CashbackEventStore(DATABASE_PATH)
 PUSH_STORE = WebPushStore(DATABASE_PATH)
 WRITE_LOCK = threading.Lock()
@@ -86,6 +114,11 @@ PUSH_DISPATCHER = WebPushDispatcher(
 
 
 def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
+    source_name = str(source.get("source") or "outlook").strip()
+    completed_at = _iso_datetime(source.get("completed_at"))
+    cursor = str(source.get("cursor") or "").strip()
+    if not cursor:
+        raise ValueError("cursor is required")
     messages = source.get("messages")
     if not isinstance(messages, list) or any(not isinstance(message, dict) for message in messages):
         raise ValueError("messages must be a list of Outlook message objects")
@@ -124,11 +157,23 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
         if batch.events
         else {"inserted": 0, "updated": 0, "event_count": 0}
     )
+    service_receipt = STORE.create_ingest_receipt(
+        {
+            "source": source_name,
+            "completed_at": completed_at,
+            "scanned_count": batch.scanned_count,
+            "accepted_count": batch.accepted_count,
+            "cursor": cursor,
+        },
+        event_ids=(event["source_event_id"] for event in batch.events),
+        event_digests=(_json_digest(event) for event in batch.events),
+    )
     return {
         "parse": batch.to_dict(),
         "persistence": persistence,
-        "cursor_candidate": source.get("cursor"),
+        "cursor_candidate": cursor,
         "cursor_committed": False,
+        "service_receipt": service_receipt,
     }
 
 
@@ -195,6 +240,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         if not urlsplit(self.path).path.startswith("/api/"):
+            self.send_header("Content-Security-Policy", CASHBACK_CONTENT_SECURITY_POLICY)
+            self.send_header("X-Content-Type-Options", "nosniff")
             # The dashboard is a small operational UI. Revalidate its static
             # shell on every visit so a container rollout cannot leave a
             # device running stale routing code from its browser cache.
@@ -203,6 +250,14 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlsplit(self.path).path
+        if path in {
+            "/api/dashboard",
+            "/api/periods",
+            "/api/health",
+            "/api/push/config",
+        } and not self._authorize_operational_read(allow_ingest_token=path == "/api/health"):
+            self._json(HTTPStatus.FORBIDDEN, {"error": "Operational read authorization required"})
+            return
         if path == "/api/health":
             self._json(
                 HTTPStatus.OK,
@@ -245,18 +300,19 @@ class CashbackHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlsplit(self.path).path
-        if path not in {
-            "/api/events",
-            "/api/events/validate",
-            "/api/ingest-runs",
-            "/api/ingest-state",
-            "/api/reconcile",
-            "/api/corrections",
-            "/api/periods/finalize",
-            "/api/alerts/ack",
-            "/api/outlook/messages",
-            "/api/push/subscriptions",
-        }:
+        handlers = {
+            "/api/events": self._post_events,
+            "/api/events/validate": self._post_events_validate,
+            "/api/ingest-runs": self._post_ingest_runs,
+            "/api/ingest-state": self._post_ingest_state,
+            "/api/reconcile": self._post_reconcile,
+            "/api/corrections": self._post_corrections,
+            "/api/periods/finalize": self._post_period_finalize,
+            "/api/alerts/ack": self._post_alert_ack,
+            "/api/outlook/messages": self._post_outlook_messages,
+            "/api/push/subscriptions": self._post_push_subscription,
+        }
+        if path not in handlers:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
         same_origin_paths = {
@@ -264,118 +320,156 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/push/subscriptions",
         }
         if path in same_origin_paths:
-            origin = urlsplit(self.headers.get("Origin") or "")
-            if (
-                self.headers.get_content_type() != "application/json"
-                or not origin.netloc
-                or origin.netloc.casefold() != str(self.headers.get("Host") or "").casefold()
-            ):
-                self._json(HTTPStatus.FORBIDDEN, {"error": "Same-origin JSON request required"})
+            if not self._authorize_browser_mutation():
+                self._json(HTTPStatus.FORBIDDEN, {"error": "Browser mutation authorization required"})
                 return
-        elif INGEST_TOKEN and self.headers.get("Authorization") != f"Bearer {INGEST_TOKEN}":
+        elif not INGEST_TOKEN:
+            self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Cashback ingest token is not configured"})
+            return
+        elif not self._authorize_ingest():
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Invalid ingest token"})
             return
         try:
-            length = int(self.headers.get("Content-Length") or "0")
-            if length <= 0 or length > 1_000_000:
-                raise ValueError("Request body must be between 1 byte and 1 MB")
-            source = json.loads(self.rfile.read(length))
-            if path == "/api/push/subscriptions":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a push subscription request")
-                action = str(source.get("action") or "subscribe").strip().casefold()
-                subscription = source.get("subscription")
-                if not isinstance(subscription, dict):
-                    raise ValueError("subscription must be an object")
-                if action == "unsubscribe":
-                    result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
-                    self._json(HTTPStatus.OK, {"subscription": result, "push": PUSH_DISPATCHER.config()})
-                    return
-                if action != "subscribe":
-                    raise ValueError("action must be subscribe or unsubscribe")
-                result = PUSH_STORE.upsert_subscription(
-                    subscription,
-                    str(self.headers.get("User-Agent") or "")[:500],
-                )
-                delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
-                self._json(
-                    HTTPStatus.OK,
-                    {"subscription": result, "test_delivery": delivery, "push": PUSH_DISPATCHER.config()},
-                )
-                return
-            if path == "/api/alerts/ack":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an alert acknowledgement object")
-                result = STORE.set_alert_acknowledgement(
-                    source.get("alert_key"),
-                    source.get("acknowledged"),
-                )
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"alert": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/ingest-runs":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an ingest run object")
-                result = STORE.record_ingest_success(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"ingest": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/ingest-state":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an ingest state request object")
-                state = STORE.ingest_state(str(source.get("source") or "outlook"))
-                self._json(HTTPStatus.OK, {"ingest_state": state})
-                return
-            if path == "/api/outlook/messages":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an Outlook message batch object")
-                result = parse_outlook_batch(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {**result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/reconcile":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a statement reconciliation object")
-                result = STORE.reconcile_statement(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"reconciliation": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/corrections":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be an event correction object")
-                result = STORE.correct_event(source)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"correction": result, "event_store": dashboard["data_status"]})
-                return
-            if path == "/api/periods/finalize":
-                if not isinstance(source, dict):
-                    raise ValueError("Payload must be a card-period finalization object")
-                result = STORE.finalize_period(source, program_config_path=PROGRAM_CONFIG_PATH)
-                dashboard = rebuild_dashboard()
-                self._json(HTTPStatus.OK, {"period": result, "event_store": dashboard["data_status"]})
-                return
-            events = source if isinstance(source, list) else [source]
-            if any(not isinstance(event, dict) for event in events):
-                raise ValueError("Payload must be an event object or a list of event objects")
-            profile_currency = str(
-                load_program_configuration(PROGRAM_CONFIG_PATH).get("currency") or ""
-            ).strip().upper()
-            if not profile_currency:
-                raise ValueError("Cashback profile currency is required")
-            events = [
-                {**event, "currency": event.get("currency") or profile_currency}
-                for event in events
-            ]
-            if path == "/api/events/validate":
-                STORE.validate(events)
-                self._json(HTTPStatus.OK, {"valid": True, "event_count": len(events)})
-                return
-            result = STORE.upsert(events)
-            dashboard = rebuild_dashboard()
+            result = handlers[path](self._read_json_body())
         except (ValueError, json.JSONDecodeError) as error:
-            self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            status = HTTPStatus.CONFLICT if isinstance(error, IngestCursorConflict) else HTTPStatus.BAD_REQUEST
+            self._json(status, {"error": str(error)})
             return
-        self._json(HTTPStatus.OK, {**result, "event_store": dashboard["data_status"]})
+        except Exception as error:  # service boundary: keep operational details out of responses
+            self._log_post_failure(path, error)
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Internal server error"})
+            return
+        self._json(HTTPStatus.OK, result)
+
+    def _read_json_body(self) -> object:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0 or length > 1_000_000:
+            raise ValueError("Request body must be between 1 byte and 1 MB")
+        return json.loads(self.rfile.read(length))
+
+    def _post_push_subscription(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a push subscription request")
+        action = str(source.get("action") or "subscribe").strip().casefold()
+        subscription = source.get("subscription")
+        if not isinstance(subscription, dict):
+            raise ValueError("subscription must be an object")
+        if action == "unsubscribe":
+            result = PUSH_STORE.remove_subscription(subscription.get("endpoint"))
+            return {
+                "subscription": {"removed": bool(result["removed"])},
+                "push": PUSH_DISPATCHER.config(),
+            }
+        if action != "subscribe":
+            raise ValueError("action must be subscribe or unsubscribe")
+        result = PUSH_STORE.upsert_subscription(
+            subscription,
+            str(self.headers.get("User-Agent") or "")[:500],
+        )
+        delivery = PUSH_DISPATCHER.send_test(str(result["endpoint"]))
+        return {
+            "subscription": {"enabled": bool(result["enabled"])},
+            "test_delivery": delivery,
+            "push": PUSH_DISPATCHER.config(),
+        }
+
+    def _post_alert_ack(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an alert acknowledgement object")
+        result = STORE.set_alert_acknowledgement(
+            source.get("alert_key"),
+            source.get("acknowledged"),
+        )
+        dashboard = rebuild_dashboard()
+        return {"alert": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_runs(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an ingest run object")
+        result = STORE.record_ingest_success(source)
+        dashboard = rebuild_dashboard()
+        return {"ingest": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_state(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an ingest state request object")
+        state = STORE.ingest_state(str(source.get("source") or "outlook"))
+        return {"ingest_state": state}
+
+    def _post_outlook_messages(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an Outlook message batch object")
+        result = parse_outlook_batch(source)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _post_reconcile(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a statement reconciliation object")
+        result = STORE.reconcile_statement(source)
+        dashboard = rebuild_dashboard()
+        return {"reconciliation": result, "event_store": dashboard["data_status"]}
+
+    def _post_corrections(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be an event correction object")
+        result = STORE.correct_event(source)
+        dashboard = rebuild_dashboard()
+        return {"correction": result, "event_store": dashboard["data_status"]}
+
+    def _post_period_finalize(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a card-period finalization object")
+        result = STORE.finalize_period(source, program_config_path=PROGRAM_CONFIG_PATH)
+        dashboard = rebuild_dashboard()
+        return {"period": result, "event_store": dashboard["data_status"]}
+
+    def _post_events_payload(self, source: object) -> list[dict[str, object]]:
+        events = source if isinstance(source, list) else [source]
+        if any(not isinstance(event, dict) for event in events):
+            raise ValueError("Payload must be an event object or a list of event objects")
+        event_objects = [event for event in events if isinstance(event, dict)]
+        profile_currency = str(
+            load_program_configuration(PROGRAM_CONFIG_PATH).get("currency") or ""
+        ).strip().upper()
+        if not profile_currency:
+            raise ValueError("Cashback profile currency is required")
+        return [
+            {**event, "currency": event.get("currency") or profile_currency}
+            for event in event_objects
+        ]
+
+    def _post_events_validate(self, source: object) -> dict[str, object]:
+        events = self._post_events_payload(source)
+        STORE.validate(events)
+        return {"valid": True, "event_count": len(events)}
+
+    def _post_events(self, source: object) -> dict[str, object]:
+        events = self._post_events_payload(source)
+        result = STORE.upsert(events)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _log_post_failure(self, path: str, error: Exception) -> None:
+        print(json.dumps({
+            "timestamp": datetime_now(),
+            "level": "error",
+            "event": "http_request_failed",
+            "path": path,
+            "exception_type": type(error).__name__,
+        }), flush=True)
+
+    def _authorize_ingest(self) -> bool:
+        authorization = self.headers.get("Authorization")
+        if not isinstance(authorization, str):
+            return False
+        try:
+            return hmac.compare_digest(
+                authorization.encode("ascii"),
+                f"Bearer {INGEST_TOKEN}".encode("ascii"),
+            )
+        except UnicodeEncodeError:
+            return False
 
     def _json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
         body = json.dumps(payload).encode("utf-8")
@@ -385,6 +479,50 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _authorize_browser_mutation(self) -> bool:
+        """Enforce the public-origin CSRF check and Access session boundary."""
+        origin = self.headers.get("Origin") or ""
+        if (
+            self.headers.get_content_type() != "application/json"
+            or not hmac.compare_digest(origin, PUBLIC_URL)
+            or not hmac.compare_digest(
+                (self.headers.get("Host") or "").casefold(),
+                PUBLIC_ORIGIN.netloc.casefold(),
+            )
+            or self.headers.get("Authorization")
+        ):
+            return False
+        return self._verify_access_session()
+
+    def _authorize_operational_read(self, *, allow_ingest_token: bool = False) -> bool:
+        """Require the Access session for dashboard and operational metadata reads."""
+        if (
+            allow_ingest_token
+            and INGEST_TOKEN
+            and hmac.compare_digest(
+                self.headers.get("Authorization") or "",
+                f"Bearer {INGEST_TOKEN}",
+            )
+        ):
+            return True
+        if not hmac.compare_digest(
+            (self.headers.get("Host") or "").casefold(),
+            PUBLIC_ORIGIN.netloc.casefold(),
+        ):
+            return False
+        return self._verify_access_session()
+
+    def _verify_access_session(self) -> bool:
+        if local_access_exemption(BIND_HOST, self.client_address[0], PUBLIC_URL):
+            return True
+        if ACCESS_VERIFIER is None:
+            return False
+        try:
+            ACCESS_VERIFIER.verify(self.headers.get(ACCESS_ASSERTION_HEADER))
+        except AccessVerificationError:
+            return False
+        return True
 
     def log_message(self, format: str, *args: object) -> None:
         print(json.dumps({
@@ -402,7 +540,7 @@ def datetime_now() -> str:
 
 
 def main() -> None:
-    host = os.environ.get("CASHBACK_HOST", "127.0.0.1")
+    host = BIND_HOST
     port = int(os.environ.get("CASHBACK_PORT", "5010"))
     rebuild_dashboard()
     server = ThreadingHTTPServer((host, port), CashbackHandler)

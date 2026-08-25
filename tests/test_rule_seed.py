@@ -177,6 +177,18 @@ class RuleSeedTests(TestCase):
         self.assertEqual(transaction.reward_bucket, "EI_AMAZON")
         self.assertEqual(transaction.evidence_policy, "SEARCH_RECEIPT_BILL_WARRANTY")
 
+    def test_ei_amazon_statement_credit_is_refund_not_cashback(self) -> None:
+        transaction = self.transaction("AMAZON.AE DUBAI ARE", card="EI_AMAZON")
+        transaction.source_direction = "CREDIT"
+        transaction.metadata["statement_direction"] = "CREDIT"
+        transaction.transaction_type = "REFUND"
+        transaction.is_refund = True
+
+        self.engine.apply(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REFUND")
+        self.assertIsNone(transaction.reward_bucket)
+
     def test_aws_domain_is_cloud_services_not_amazon_retail(self) -> None:
         transaction = self.transaction("AWS EMEA aws.amazon.co - 0.61 USD")
 

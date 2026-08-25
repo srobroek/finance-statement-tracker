@@ -1,0 +1,337 @@
+{
+  "id": "10000000-0000-4000-8000-000000000018",
+  "name": "Finance · Fenced Actual Writer Lease",
+  "active": false,
+  "nodes": [
+    {
+      "id": "18001",
+      "name": "Trusted Lease Request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "18002",
+      "name": "Validate Fixed Lease Operation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.\nconst r = $json, op = String(r.operation || '');\nif (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))\n    throw new Error('INVALID_LEASE_OPERATION');\nif (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))\n    throw new Error('INVALID_LEASE_RESOURCE');\nif (op === 'ACQUIRE') {\n    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))\n        throw new Error('INVALID_LEASE_OWNER');\n    const ttl = Number(r.ttl_seconds || 120);\n    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)\n        throw new Error('INVALID_LEASE_TTL');\n    return [{ json: { ...r, ttl_seconds: ttl } }];\n}\nif (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isInteger(Number(r.fencing_token)) || Number(r.fencing_token) <= 0)\n    throw new Error('INVALID_LEASE_TOKEN');\nreturn [{ json: { ...r, fencing_token: Number(r.fencing_token) } }];\n"
+      }
+    },
+    {
+      "id": "18003",
+      "name": "Lease Operation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "ACQUIRE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "ASSERT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "RELEASE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      }
+    },
+    {
+      "id": "18004",
+      "name": "Atomic Acquire Writer Lease",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -220,
+        0
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer);",
+        "options": {
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "18005",
+      "name": "Assert Current Writer Fence",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT finance_ops.assert_writer_lease($1::text, $2::uuid, $3::bigint) AS valid;",
+        "options": {
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "18006",
+      "name": "Release Exact Writer Fence",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        380,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
+        "options": {
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "18007",
+      "name": "Validate Lease Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Lease Result. Keep this deterministic and fail closed.\nconst req = $('Validate Fixed Lease Operation').first().json, row = $json;\nif (req.operation === 'ACQUIRE') {\n    if (!row.lease_id || Number(row.fencing_token) <= 0 || new Date(row.expires_at) <= new Date())\n        throw new Error('WRITER_LEASE_BUSY_OR_INVALID');\n    return [{ json: { operation: 'ACQUIRE', resource_key: String(row.resource_key), lease_id: String(row.lease_id), lease_owner: String(row.lease_owner), fencing_token: Number(row.fencing_token), expires_at: String(row.expires_at) } }];\n}\nif (req.operation === 'ASSERT' && row.valid !== true)\n    throw new Error('WRITER_LEASE_STALE');\nif (req.operation === 'RELEASE' && row.released !== true)\n    throw new Error('WRITER_LEASE_RELEASE_FAILED');\nreturn [{ json: { operation: req.operation, resource_key: req.resource_key, lease_id: req.lease_id, fencing_token: req.fencing_token, valid: row.valid === true, released: row.released === true } }];\n"
+      }
+    }
+  ],
+  "connections": {
+    "Trusted Lease Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Fixed Lease Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Fixed Lease Operation": {
+      "main": [
+        [
+          {
+            "node": "Lease Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lease Operation": {
+      "main": [
+        [
+          {
+            "node": "Atomic Acquire Writer Lease",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assert Current Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Release Exact Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atomic Acquire Writer Lease": {
+      "main": [
+        [
+          {
+            "node": "Validate Lease Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Current Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Validate Lease Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Exact Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Validate Lease Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "FINANCE_WRITER_LEASE",
+    "migrationStatus": "SPEC_ONLY",
+    "fixedSqlOnly": true,
+    "callerSqlForbidden": true,
+    "terminalReceiptReadback": true,
+    "importTested": false,
+    "fixtureExecuted": false,
+    "credentialBindings": [
+      {
+        "placeholder": "BIND_FINANCE_OPS_DB",
+        "configured": false,
+        "action_required": true
+      }
+    ],
+    "setupRequired": true,
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Validate Fixed Lease Operation to Validate Lease Result",
+      "nodeIds": [
+        "18002",
+        "18003",
+        "18004",
+        "18005",
+        "18006",
+        "18007"
+      ],
+      "description": "Finance stage 1. Input starts at Validate Fixed Lease Operation; verified output leaves through Validate Lease Result."
+    }
+  ],
+  "tags": [
+    {
+      "id": "fin0000000000001",
+      "name": "finance"
+    },
+    {
+      "id": "fin0000000000002",
+      "name": "setup-required"
+    },
+    {
+      "id": "fin0000000000003",
+      "name": "inactive"
+    }
+  ]
+}
