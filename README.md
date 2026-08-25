@@ -95,7 +95,7 @@ n8n owns:
 
 Cashback Control owns notification routing and cashback period state. OneDrive owns evidence originals and the evidence index.
 
-Browser acquisition never writes directly to the ledger or Cashback Control. n8n validates approved deltas. n8n submits approved deltas through the fenced writer.
+The browser never writes directly to the ledger or Cashback Control. n8n validates each delta. n8n sends each validated delta through its fenced writer.
 
 ### data migration
 
