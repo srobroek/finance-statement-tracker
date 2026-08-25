@@ -47,6 +47,96 @@ The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New bank
 
 `finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
 
+## setup and operations
+
+| Surface | Procedure owner |
+|---|---|
+| Workflow boundary | [`integrations/n8n/README.md`](integrations/n8n/README.md) |
+| Credential setup | [`docs/n8n-credential-setup-checklist.md`](docs/n8n-credential-setup-checklist.md) |
+| OneDrive setup | [`integrations/n8n/setup-workflows/README.md`](integrations/n8n/setup-workflows/README.md) |
+| Ledger operations | [`docs/actual-production.md`](docs/actual-production.md) |
+| Backup and restore | [`docs/backup-and-restore.md`](docs/backup-and-restore.md) |
+| Browser boundary | [`docs/browser-ingestion.md`](docs/browser-ingestion.md) |
+
+### procedure scope
+
+- ProDex subscription adapter: workflow boundary.
+- ProDex and Microsoft: credential setup.
+- OneDrive root: OneDrive setup.
+- Microsoft OAuth proof: OneDrive setup.
+- Ledger and Cashback: ledger operations.
+- Rollback: backup and restore.
+- Browser acquisition: separate boundary.
+
+### ownership
+
+| Owner | State |
+|---|---|
+| `Actual` ledger | Ledger and budgets |
+| n8n | Acquisition and orchestration |
+| Cashback Control | Live routing and cashback state |
+| OneDrive | Evidence and catalog |
+
+The ledger owns:
+
+- posted transactions
+- accounts
+- budgets
+- schedules
+- reconciliations
+- reports
+
+n8n owns:
+
+- acquisition
+- orchestration
+- receipts
+- cursor state
+
+Cashback Control owns notification routing and cashback period state. OneDrive owns evidence originals and the evidence index.
+
+The browser never writes directly to the ledger or Cashback Control. n8n validates each delta. n8n sends each validated delta through its fenced writer.
+
+### data migration
+
+The legacy input contract declares 15 `SPEC_ONLY` tables in [`integrations/n8n/data-tables.json`](integrations/n8n/data-tables.json).
+
+The migration target contains four tables in [`integrations/n8n/data-table-migration-matrix.json`](integrations/n8n/data-table-migration-matrix.json):
+
+- `finance_ingestion_state`
+- `finance_documents`
+- `finance_actual_batches`
+- `finance_ai_reviews`
+
+[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. The test does not prove four live tables.
+
+### runtime acceptance boundary
+
+Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pending until a current redacted receipt records each result:
+
+- ProDex device login
+- `auth.json` persistence
+- Microsoft refresh
+- Microsoft restart
+- Four live tables
+- Ledger/Cashback readback
+- Cloudflare routes
+- Production identities
+- Rollback
+
+- Acceptance statuses: [`config/project-acceptance.json`](config/project-acceptance.json)
+
+### platform-owned procedures
+
+The finance checkout does not own the n8n platform scripts. Use pinned commit [`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
+
+- [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
+- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md)
+- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh)
+
 ## Recreate locally
 
 ```powershell

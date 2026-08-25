@@ -57,8 +57,19 @@ checks before a workflow leaves `SPEC_ONLY`:
 ## operational state
 
 `data-tables.json` v4 assigns each declared Data Table a retention rule and an
-idempotency key. It also assigns a concurrency rule and lookup contract. The 19
-workflows use 15 tables through connected nodes.
+idempotency key. It also assigns a concurrency rule and lookup contract. The 15
+declared tables are the legacy `SPEC_ONLY` input contract.
+
+The generated [`data-table-migration-matrix.json`](data-table-migration-matrix.json)
+targets four tables:
+
+- `finance_ingestion_state`
+- `finance_documents`
+- `finance_actual_batches`
+- `finance_ai_reviews`
+
+The migration tests prove the dispositions and target set. Runtime readback does
+not prove live tables.
 
 The Outlook sweep has two phases:
 

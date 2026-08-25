@@ -36,10 +36,14 @@ pre-restore copies until UI/API balances and cashback event counts agree.
 
 ## n8n Postgres
 
-The n8n deployment repository provides `scripts/backup-postgres.sh`. It creates
-a PostgreSQL custom-format dump under `/opt/backups/finance-n8n`, writes a
-SHA-256 sidecar, and retains 30 days by default. Schedule it independently of
-the Actual backup.
+The pinned n8n platform commit
+[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867)
+owns [`scripts/backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh),
+[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh),
+and [`scripts/restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh).
+The backup creates a PostgreSQL custom-format dump under
+`/opt/backups/n8n`, writes a SHA-256 sidecar, and retains 30 days by
+default. Schedule it independently of the Actual backup.
 
 Before restoring n8n:
 
@@ -48,12 +52,31 @@ Before restoring n8n:
 3. create a safety dump of the current database;
 4. restore into a new empty database with `pg_restore`;
 5. point n8n at that database and run `scripts/doctor.sh`;
-6. verify workflow count, credentials availability, Data Tables, execution
-   receipts, and MCP status before deleting the old database.
+6. verify workflow count.
+7. verify credential availability.
+8. verify Data Tables.
+9. verify execution receipts.
+10. verify MCP status before deleting the old database.
+
+The rootless stack owner performs key recovery with the pinned platform
+[`scripts/recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
+procedure. The finance checkout does not recreate, rotate, or print the n8n
+encryption key. A failed restore retains the pre-restore database and safety
+dump until the owner records a redacted recovery receipt.
 
 Never restore Postgres by copying its live data directory. Never restore a dump
-over an active n8n main. The n8n encryption key must be preserved separately in
-1Password; database credentials alone cannot decrypt n8n credentials.
+over an active n8n main. Store the n8n encryption key separately in 1Password.
+Database credentials alone cannot decrypt n8n credentials.
+
+Before deleting old state:
+
+- Keep the workflow count at 19.
+- Check inactive and unpublished state.
+- Review four-table digest.
+- Review source cursor.
+- Check terminal receipts.
+- Check Cloudflare route status.
+- When readback lacks evidence, keep rollback open.
 
 ## Required drill
 

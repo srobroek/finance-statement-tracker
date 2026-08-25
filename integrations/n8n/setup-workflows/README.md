@@ -55,6 +55,46 @@ The receipt omits:
 - Credential values.
 - Token values.
 
+## oauth lifecycle
+
+### expired access token
+
+- Keep workflows inactive during each proof.
+- When a refresh token remains, run bounded Outlook and OneDrive reads.
+- Record result counts.
+- Record a redacted receipt.
+- When refresh fails, keep the cursor unchanged.
+
+### restart
+
+- After n8n restarts, repeat bounded reads.
+- If no credential exists, pause acquisition.
+- Keep cursor and evidence writes disabled.
+
+### revoked consent
+
+- After consent revocation, record provider denial.
+- Record no message or file content.
+- Set authentication status to revoked.
+- Request user-present consent.
+
+### missing credential
+
+- If no credential or refresh token exists, emit negative-auth denial.
+- Keep provider access disabled.
+- Emit a redacted failure receipt.
+- Stop acquisition.
+
+Classify these conditions as authentication failures:
+
+- `invalid_grant`
+- Scope denial
+- Missing credentials
+- Missing refresh token
+
+Treat authentication failures as non-transient. Keep each OAuth claim pending
+until a current mode-`0600` receipt proves it.
+
 ## recovery receipt
 
 Runner reads a recovered Postgres ID from a protected receipt. Set
@@ -162,6 +202,13 @@ The preflight checks that these boundaries hold:
 - Four canonical Data Tables.
 - Redacted Microsoft credential metadata.
 
+The four-table check is a migration-target check. The legacy input contract still
+declares 15 `SPEC_ONLY` tables in [`../data-tables.json`](../data-tables.json).
+The generated [`../data-table-migration-matrix.json`](../data-table-migration-matrix.json)
+and [`tests/test_data_table_migration_matrix.py`](../../../tests/test_data_table_migration_matrix.py)
+prove the source dispositions, four target names, and bootstrap exclusion. A
+successful preflight does not promote the target to live runtime evidence.
+
 ## run the full proof
 
 After the preflight succeeds, run the full proof. Keep the same exports and
@@ -196,3 +243,33 @@ The cleanup gate restores these values:
 
 Runner emits a mode-`0600` success or failure receipt. Failure fields
 remain `null` until a zero-row or digest readback proves their postconditions.
+
+## promotion identity receipt
+
+Record one mode-`0600` redacted receipt for each promotion or recovery proof.
+
+Include:
+
+- Finance and platform commits.
+- Image and registry digests.
+- Compose project and service names.
+- n8n project ID and workflow IDs.
+- Data Table digest.
+- Listener origin.
+- Cloudflare connector identity.
+- Credential owner and scope results.
+- Authentication result.
+- Receipt status.
+- Verification timestamp.
+- `secret_values_recorded=false`.
+- Rollback or recovery receipt reference.
+
+The receipt excludes:
+
+- Tokens
+- Bearer material
+- Mailbox content
+- Document content
+- Financial plaintext
+
+- Missing identity fields keep promotion pending.

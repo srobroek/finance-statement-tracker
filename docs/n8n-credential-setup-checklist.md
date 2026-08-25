@@ -23,6 +23,35 @@ step.
 - [ ] Keep the >4 MiB upload-session path and HTML/MIME-to-PDF renderer blocked
   until exact implementations pass disposable tests.
 
+## microsoft refresh and failure handling
+
+- [ ] Run read-only WF23 with an expired access token and a refresh token.
+- [ ] Record result counts and time bounds.
+- [ ] Record the execution ID and safety flags.
+- [ ] Record verification time without token or provider-content values.
+- [ ] Restart only n8n.
+- [ ] Rerun WF23.
+- [ ] Compare redacted receipt fields with the pre-restart run.
+- [ ] Leave task runners unchanged.
+- [ ] Leave Postgres unchanged.
+- [ ] Leave the host unchanged.
+- [ ] Revoke each Microsoft consent grant.
+- [ ] Rerun the negative-auth proof.
+- [ ] Outlook read failure blocks cursor and evidence writes.
+- [ ] OneDrive read failure blocks cursor and evidence writes.
+- [ ] Classify `invalid_grant` as an authentication failure.
+- [ ] Classify a missing refresh token as an authentication failure.
+- [ ] Classify a scope denial as an authentication failure.
+- [ ] Classify a missing credential as an authentication failure.
+- [ ] Failures stop acquisition.
+- [ ] Preserve the last cursor.
+- [ ] Emit a redacted failure receipt.
+- [ ] User-present consent precedes each retry.
+- [ ] Keep the refresh proof pending until a receipt proves it.
+- [ ] Keep the restart proof pending until a receipt proves it.
+- [ ] Keep the revocation proof pending until a receipt proves it.
+- [ ] Keep the negative-auth proof pending until a receipt proves it.
+
 ## Statement and Actual
 
 - [ ] Bind `BIND_CARD_PASSWORD` to `financeStatementPassword`; do not place
@@ -59,20 +88,52 @@ step.
   pre-existing parent bearer and scrubs the child-only environment after both
   success and failure.
 
-## Subscription agents
+## subscription agents
 
 - [ ] Install exact integrity-pinned packages from
   `integrations/n8n/community-node-lock.json` into the immutable custom image.
-- [ ] Assert the four finance custom node types plus ProDex and Claude node types
-  register without `?` placeholders.
-- [ ] Complete ProDex device login with the user and verify ChatGPT subscription
-  auth; do not enable API-key fallback.
-- [ ] Complete Claude CLI subscription login with the user.
-- [ ] Prove ProDex read-only/new-thread/schema-bound Luna and gated Sol receipts.
-- [ ] Prove Claude emits a schema-valid proposal and does not persist a session,
-  or use a reviewed fork that enforces no-session persistence.
+- [ ] Assert four finance nodes register without `?` placeholders.
+- [ ] Assert ProDex nodes register without `?` placeholders.
+- [ ] Complete the direct ProDex device login with the user through the pinned
+  platform [`login-community-subscriptions.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/login-community-subscriptions.sh)
+  procedure.
+- [ ] Keep API-key fallback disabled.
+- [ ] Store ProDex auth at `/home/ci/.codex-n8n-community/auth.json`.
+- [ ] Mount the auth file at `/home/node/.n8n/codex/auth.json`.
+- [ ] Set the directory mode to `0700`.
+- [ ] Set the file mode to `0600`.
+- [ ] Keep the bind mount across n8n restarts.
+- [ ] Exclude `auth.json` from ordinary platform backups.
+- [ ] Use the platform's separate encrypted recovery path or repeat device login.
+- [ ] Keep `auth.json` contents outside Git.
+- [ ] Keep `auth.json` contents outside images.
+- [ ] Keep `auth.json` contents outside workflow data.
+- [ ] Keep `auth.json` contents outside logs.
+- [ ] Keep `auth.json` contents outside receipts.
+- [ ] Keep `auth.json` contents outside backups.
+- [ ] Run `codex login status` with `CODEX_HOME=/home/node/.n8n/codex` inside the n8n container.
+- [ ] Retain a redacted receipt with `auth_file_present`.
+- [ ] Retain `auth_file_mode` in the receipt.
+- [ ] Retain `login_status` in the receipt.
+- [ ] Set `auth_contents_read=false` in the receipt.
+- [ ] Retain the verification timestamp.
+- [ ] Login rejection emits a redacted `AUTH_REQUIRED` or `AUTH_REVOKED` receipt.
+- [ ] Stop subscription work until the user repeats device login.
+- [ ] Prove ProDex read-only receipts.
+- [ ] Prove ProDex new-thread receipts.
+- [ ] Prove a schema-bound Luna receipt.
+- [ ] Prove gated Sol receipts.
+- [ ] Keep these claims `SPEC_ONLY` until three schema-valid receipts exist.
 - [ ] Confirm provider/model/prompt/command/path/sandbox/credential controls are
   absent from every caller and supplied only by workflow 21.
+
+## later credential reconciliation
+
+The runtime owns the ProDex `auth.json` file. n8n owns Microsoft refresh state in
+its encrypted credentials. A later 1Password reconciliation may add references
+for these two state owners through the platform's existing `FinanceAutomation`
+record and restore procedure. It must not create a second credential store or put
+secret values in this repository. This reconciliation remains pending.
 
 ## Promotion readback
 
@@ -83,3 +144,40 @@ step.
   the public workflow GET omits write-only `parentFolderId`.
 - [ ] Verify exact workflow tags and all `From list` subworkflow references.
 - [ ] Confirm no workflow is published or active after credential binding.
+
+## production identity receipt
+
+Record one mode-`0600` redacted receipt for each promotion or recovery proof.
+Include these fields:
+
+- Finance source commit.
+- Platform source commit.
+- Immutable image digest.
+- Registry digest.
+- Compose project.
+- Service names.
+- n8n project ID.
+- Workflow IDs.
+- Data Table digest.
+- Listener origin.
+- Cloudflare connector identity.
+- Route status.
+- Outlook credential type.
+- OneDrive credential type.
+- Credential owner relations.
+- Scope results.
+- Authentication results.
+- ProDex auth result.
+- `auth_file_mode` without `auth.json` contents.
+- Receipt status.
+- Verification timestamp.
+- `secret_values_recorded=false`.
+- Exact rollback or recovery receipt reference.
+
+The receipt excludes sensitive values. Missing identity fields keep promotion pending.
+
+- Bearer material.
+- Token values.
+- Mailbox content.
+- Document content.
+- Financial plaintext.
