@@ -182,6 +182,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "workflow_root": str(workflow_root),
             "source_head": self.source_head,
             "generator_head": self.generator_head,
+            "migration_receipt_sha256": receipt_sha,
+            "source_backup_sha256": self.runner.hashlib.sha256(source_path.read_bytes()).hexdigest(),
             "clean_checkout": True,
             "legacy_references": [],
         }
@@ -279,6 +281,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 str(migration),
                 "--migration-receipt-sha256",
                 receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root",
                 str(ROOT),
                 "--operator-ack",
@@ -331,6 +335,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 str(migration),
                 "--migration-receipt-sha256",
                 receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root",
                 str(ROOT),
                 "--operator-ack",
@@ -364,6 +370,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 str(migration),
                 "--migration-receipt-sha256",
                 receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root",
                 str(ROOT),
                 "--operator-ack",
@@ -412,6 +420,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "--source-backup", str(source),
                 "--migration-receipt", str(migration),
                 "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root", str(ROOT),
                 "--operator-ack", self.runner.REQUIRED_ROLLBACK_ACK,
                 "--runtime-action", self.runner.ROLLBACK_RUNTIME_ACTION,
@@ -440,6 +449,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 str(migration),
                 "--migration-receipt-sha256",
                 receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root",
                 str(ROOT),
                 "--operator-ack",
@@ -461,6 +472,54 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             ]
             self.assertEqual(self.runner.main(args), 1)
 
+    def test_source_backup_must_be_mode_six_hundred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            os.chmod(source, 0o644)
+            args = [
+                "forward",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+                "--pre-readback-raw", str(raw_pre),
+                "--post-readback-raw", str(raw_readback),
+                "--second-post-readback-raw", str(raw_readback),
+                "--runtime-state", str(temp / "runtime-state.json"),
+                "--output", str(temp / "forward.json"),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
+    def test_forward_rejects_replaced_approved_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            source_sha = self.runner.hashlib.sha256(source.read_bytes()).hexdigest()
+            source.write_bytes(source.read_bytes() + b" ")
+            os.chmod(source, 0o600)
+            args = [
+                "validate-inputs",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", source_sha,
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
+            migration.write_bytes(migration.read_bytes() + b" ")
+            os.chmod(migration, 0o600)
+            args[args.index("--source-backup-sha256") + 1] = self.runner.hashlib.sha256(source.read_bytes()).hexdigest()
+            self.assertEqual(self.runner.main(args), 1)
+
     def test_rollback_rejects_tampered_forward_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
@@ -473,6 +532,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 str(migration),
                 "--migration-receipt-sha256",
                 receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
                 "--repository-root",
                 str(ROOT),
                 "--operator-ack",
@@ -532,6 +593,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "rollback-runtime",
             "--runtime-proof",
             "--runtime-state",
+            "validate-inputs",
+            "--source-backup-sha256",
+            "stat -c '%a'",
             "finance-four-table-accepted-identity.json",
             "FINANCE_DATA_TABLE_READBACK_PHASE",
             "FINANCE_N8N_RUNTIME_MODE",
@@ -578,6 +642,12 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "workflow_root": str(checkout / "integrations/n8n/workflows"),
                 "source_head": checkout_head,
                 "generator_head": self.generator_head,
+                "migration_receipt_sha256": self.runner.hashlib.sha256(
+                    (receipt_dir / "data-table-migration-receipt.json").read_bytes()
+                ).hexdigest(),
+                "source_backup_sha256": self.runner.hashlib.sha256(
+                    (receipt_dir / "finance-data-table-backup-v1.json").read_bytes()
+                ).hexdigest(),
                 "clean_checkout": True,
                 "legacy_references": [],
             }
@@ -687,6 +757,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             for line in (runtime_line, final_line):
                 self.assertIn("--source-backup " + str(receipt_dir / "finance-data-table-backup-v1.json"), line)
                 self.assertIn("--migration-receipt " + str(receipt_dir / "data-table-migration-receipt.json"), line)
+                self.assertIn("--source-backup-sha256 ", line)
                 self.assertIn("--accepted-identity " + str(receipt_dir / "finance-four-table-accepted-identity.json"), line)
                 self.assertIn("--runtime-state " + str(receipt_dir / "finance-data-table-disposable-runtime-state.json"), line)
                 self.assertIn("--runtime-action FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED", line)
