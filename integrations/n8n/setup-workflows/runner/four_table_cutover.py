@@ -356,6 +356,7 @@ def _compare_readbacks(
         raise CutoverError("PRE_POST_READBACK_DIGEST_MISMATCH")
     return {
         "verified": True,
+        "phase": after["phase"],
         "digest_sha256": after["digest_sha256"],
         "finance_tables": 4,
         "total_rows": after["total_rows"],
@@ -393,6 +394,7 @@ def _validate_target_readback(
         )
     return {
         "verified": True,
+        "phase": payload["phase"],
         "digest_sha256": _require_digest(payload.get("digest_sha256"), f"{label}_DIGEST"),
         "finance_tables": 4,
         "total_rows": payload["total_rows"],
