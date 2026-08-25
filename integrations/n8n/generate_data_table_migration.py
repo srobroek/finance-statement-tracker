@@ -97,6 +97,11 @@ def sha256_json(value: Any) -> str:
     return sha256_bytes(canonical_bytes(value))
 
 
+def target_schema_digest(target_schemas: dict[str, Any]) -> str:
+    """Hash the generated four-table schema contract."""
+    return sha256_json(target_schemas)
+
+
 def _text(value: Any, label: str, *, allow_empty: bool = False) -> str:
     if value is None and allow_empty:
         return ""
@@ -1255,7 +1260,7 @@ def generated_target_schema_digest() -> str:
     matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
     if set(matrix.get("target_schemas", {})) != set(TARGETS):
         raise MigrationError("matrix does not contain exactly four target schemas")
-    return sha256_json(matrix["target_schemas"])
+    return target_schema_digest(matrix["target_schemas"])
 
 
 def main() -> int:

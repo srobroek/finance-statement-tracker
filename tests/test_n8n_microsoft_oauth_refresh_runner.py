@@ -255,6 +255,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         bin_dir.mkdir()
         docker = bin_dir / "docker"
         docker.write_text(r'''#!/usr/bin/env python3
+import hashlib
 import json
 import os
 import sys
@@ -354,10 +355,44 @@ ack = exec_env.get("FINANCE_WF23_TRANSPORT_PROBE_ACK")
 if ack == "READ_ONLY_DIRECT_EXECUTE_INSTANCE":
     print('WF23 direct transport probe verified:{"schema_version":1,"status":"VERIFIED","scope":"DIRECT_EXECUTE_INSTANCE_TRANSPORT","execute_instance_resolved":true,"instance_log_override_invoked":true,"workflow_loaded":false,"workflow_executed":false,"provider_calls":false,"database_initialized":false,"raw_irun_persisted":false,"provider_response_logged":false,"secret_values_recorded":false}')
 elif exec_env.get("FINANCE_DATA_TABLE_DIGEST_ACK") == "READ_ONLY_IN_MEMORY":
+    canonical_sha256 = lambda value: hashlib.sha256(json.dumps(
+        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+    ).encode()).hexdigest()
+    names = ["finance_actual_batches", "finance_ai_reviews", "finance_documents", "finance_ingestion_state"]
+    counts = [0, 0, 0, 0]
+    tables = []
+    for name, count in zip(names, counts):
+        field = "idempotency_key" if name in names[:2] else "document_id" if name == names[2] else "source_code"
+        schema = [{"name": field, "type": "string"}]
+        table = {
+            "name": name,
+            "table_id_sha256": hashlib.sha256(("table-id:" + name).encode()).hexdigest(),
+            "schema": schema,
+            "schema_sha256": canonical_sha256(schema),
+            "row_count": count,
+            "rows_sha256": hashlib.sha256(("rows:" + name).encode()).hexdigest(),
+        }
+        tables.append({**table, "digest_sha256": canonical_sha256(table)})
     print("finance data table digest verified:" + json.dumps({
         "schema_version": 1, "status": "VERIFIED",
+        "receipt_contract": "finance-data-table-readback-receipt-v1",
         "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
-        "finance_tables": 4, "total_rows": 0, "digest_sha256": "a" * 64,
+        "finance_tables": 4, "tables": tables, "total_rows": 0,
+        "digest_sha256": canonical_sha256(tables),
+        "migration_receipt": {
+            "schema_version": "data-table-migration-receipt-v1",
+            "required": True, "bound": False, "sha256": None,
+        },
+        "forward_gate": {
+            "gate": "FORWARD", "status": "BLOCKED",
+            "required_ack": "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE",
+            "migration_receipt_required": True, "command_executed": False,
+        },
+        "rollback_gate": {
+            "gate": "ROLLBACK", "status": "BLOCKED",
+            "required_ack": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE",
+            "migration_receipt_required": True, "command_executed": False,
+        },
         "writes_performed": False, "provider_calls": False,
         "row_values_recorded": False, "secret_values_recorded": False,
     }, separators=(",", ":")))
@@ -1138,6 +1173,14 @@ sys.exit(0)
             "getColumns",
             "getManyRowsAndCount",
             "createHash('sha256')",
+            "table_id_sha256",
+            "schema_sha256",
+            "rows_sha256",
+            "digest_sha256",
+            "FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256",
+            "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE",
+            "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE",
+            "command_executed: false",
             "listed.count !== CANONICAL_TABLES.size",
             "listed.data.length !== CANONICAL_TABLES.size",
             "'finance_ingestion_state'",
@@ -1155,7 +1198,16 @@ sys.exit(0)
     def test_transport_parser_accepts_exact_n8n_2362_framing(self) -> None:
         parser = load_module("wf23_transport_parser", RUNNER / "parse_n8n_redacted_wrapper_output.py")
         fixture = json.loads(DATA_TABLE_OUTPUT_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
-        self.assertEqual(parser.parse_data_table(fixture), "0" * 64)
+        parsed = parser.parse_data_table_receipt(fixture)
+        self.assertEqual(parser.parse_data_table(fixture), parsed["digest_sha256"])
+        self.assertEqual(
+            [table["name"] for table in parsed["tables"]],
+            ["finance_actual_batches", "finance_ai_reviews", "finance_documents", "finance_ingestion_state"],
+        )
+        self.assertEqual(sum(table["row_count"] for table in parsed["tables"]), parsed["total_rows"])
+        self.assertFalse(parsed["migration_receipt"]["bound"])
+        self.assertEqual(parsed["forward_gate"]["status"], "BLOCKED")
+        self.assertEqual(parsed["rollback_gate"]["status"], "BLOCKED")
 
         with self.assertRaisesRegex(ValueError, "UNEXPECTED_N8N_WRAPPER_OUTPUT"):
             parser.parse_data_table("unreviewed warning\n" + fixture)
@@ -1169,6 +1221,9 @@ sys.exit(0)
             "boolean schema version": fixture.replace('"schema_version":1', '"schema_version":true'),
             "boolean row count": fixture.replace('"total_rows":17', '"total_rows":false'),
             "duplicate status": fixture.replace('"status":"VERIFIED"', '"status":"BOGUS","status":"VERIFIED"'),
+            "unbound receipt with digest": fixture.replace('"bound":false,"sha256":null', '"bound":false,"sha256":"' + "a" * 64 + '"'),
+            "forward command executed": fixture.replace('"gate":"FORWARD","status":"BLOCKED"', '"gate":"FORWARD","status":"BLOCKED","command_executed":true'),
+            "schema plaintext field": fixture.replace('"type":"string"', '"type":"string","value":"plaintext"', 1),
             "padded warning": fixture.replace("Postgres 16 is outside", " Postgres 16 is outside"),
         }
         for name, raw in adversarial.items():

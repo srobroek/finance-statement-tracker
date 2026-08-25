@@ -605,7 +605,7 @@
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {
     "path": "integrations/n8n/data-table-migration-matrix.json",
-    "digest": "b3a5881c911a742b21f1f3eea351f91078ee9b7b6dbe2b35d0012c70777ab5ea",
+    "digest": "655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515",
     "target_tables": [
       "finance_ingestion_state",
       "finance_documents",
