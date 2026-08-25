@@ -540,9 +540,24 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
+            real_python = shutil.which("python3")
+            self.assertIsNotNone(real_python)
+            fake_python = fake_bin / "python3"
+            fake_python.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                f"log={log}\n"
+                "if [[ \"$*\" == *'four_table_cutover.py forward '* ]]; then echo \"PY_FORWARD $*\" >> \"$log\"; fi\n"
+                "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* ]]; then echo \"PY_ROLLBACK_RUNTIME $*\" >> \"$log\"; fi\n"
+                "if [[ \"$*\" == *'four_table_cutover.py rollback '* ]]; then echo \"PY_ROLLBACK_FINAL $*\" >> \"$log\"; fi\n"
+                "exec \"$REAL_PYTHON\" \"$@\"\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_python, 0o700)
             environment = {
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "REAL_PYTHON": real_python,
                 "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
@@ -563,10 +578,14 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr + " log=" + log.read_text(encoding="utf-8"))
-            call_order = [line for line in log.read_text(encoding="utf-8").splitlines() if line in {"READ", "EXECUTE"}]
+            call_order = [
+                line.split(maxsplit=1)[0]
+                for line in log.read_text(encoding="utf-8").splitlines()
+                if line in {"READ", "EXECUTE"} or line.startswith("PY_")
+            ]
             self.assertEqual(
                 call_order,
-                ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
+                ["READ", "EXECUTE", "READ", "EXECUTE", "READ", "PY_FORWARD"],
             )
             environment["FOUR_TABLE_FORWARD_ACK"] = ""
             environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
@@ -580,8 +599,33 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             )
             self.assertEqual(rollback_completed.returncode, 0, rollback_completed.stderr)
             self.assertTrue((receipt_dir / "finance-data-table-rollback-runtime-proof.json").exists())
-            call_order = [line for line in log.read_text(encoding="utf-8").splitlines() if line in {"READ", "EXECUTE"}]
-            self.assertEqual(call_order, ["READ", "EXECUTE", "READ", "EXECUTE", "READ", "READ", "READ"])
+            lines = log.read_text(encoding="utf-8").splitlines()
+            call_order = [
+                line.split(maxsplit=1)[0]
+                for line in lines
+                if line in {"READ", "EXECUTE"} or line.startswith("PY_")
+            ]
+            self.assertEqual(
+                call_order,
+                [
+                    "READ", "EXECUTE", "READ", "EXECUTE", "READ", "PY_FORWARD",
+                    "READ", "PY_ROLLBACK_RUNTIME", "READ", "PY_ROLLBACK_FINAL",
+                ],
+            )
+            runtime_line = next(line for line in lines if line.startswith("PY_ROLLBACK_RUNTIME "))
+            final_line = next(line for line in lines if line.startswith("PY_ROLLBACK_FINAL "))
+            for line in (runtime_line, final_line):
+                self.assertIn("--source-backup " + str(receipt_dir / "finance-data-table-backup-v1.json"), line)
+                self.assertIn("--migration-receipt " + str(receipt_dir / "data-table-migration-receipt.json"), line)
+                self.assertIn("--accepted-identity " + str(receipt_dir / "finance-four-table-accepted-identity.json"), line)
+                self.assertIn("--runtime-state " + str(receipt_dir / "finance-data-table-disposable-runtime-state.json"), line)
+                self.assertIn("--runtime-action FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED", line)
+            runtime_state = json.loads(
+                (receipt_dir / "finance-data-table-disposable-runtime-state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(runtime_state["operation"], "ROLLBACK")
+            self.assertTrue(runtime_state["target_tables_untouched"])
+            self.assertEqual(runtime_state["source_digest"], runtime_state["restored_source_digest"])
 
 
 if __name__ == "__main__":
