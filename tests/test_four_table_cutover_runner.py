@@ -15,6 +15,8 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/four_table_cutover.py"
 MIGRATION_PATH = ROOT / "integrations/n8n/generate_data_table_migration.py"
+READBACK_PARSER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py"
+RETAINED_READBACK_FIXTURE = ROOT / "tests/fixtures/n8n-2.36.2-data-table-digest-output.json"
 SCHEMA_PATH = ROOT / "integrations/n8n/schemas/finance-four-table-cutover-receipt-v1.schema.json"
 SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
 
@@ -33,6 +35,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.runner = _load("finance_four_table_cutover", RUNNER_PATH)
         cls.migration = _load("finance_four_table_migration", MIGRATION_PATH)
+        cls.readback_parser = _load("finance_readback_parser", READBACK_PARSER_PATH)
         cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         cls.source_head = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
@@ -198,6 +201,70 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             rollback_pre_path,
             raw_rollback_post,
         )
+
+    def _rewrite_readback(
+        self,
+        raw: str,
+        *,
+        phase: str,
+        migration_sha: str,
+        bound: bool = True,
+        remove_sha: bool = False,
+    ) -> str:
+        prefix = "finance data table digest verified:"
+        payload = self.readback_parser.extract_payload(raw, prefix)
+        payload["phase"] = phase
+        migration_receipt = dict(payload["migration_receipt"])
+        migration_receipt["bound"] = bound
+        if remove_sha:
+            migration_receipt.pop("sha256", None)
+        else:
+            migration_receipt["sha256"] = migration_sha if bound else None
+        payload["migration_receipt"] = migration_receipt
+        replacement = prefix + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        return "".join(
+            replacement if line.lstrip("\x1b[0123456789; mK").startswith(prefix) else line
+            for line in raw.splitlines(keepends=True)
+        )
+
+    def test_readback_requires_bound_matching_migration_sha_for_every_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            _source, _migration, receipt_sha, _workflow_root, _raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            retained = json.loads(RETAINED_READBACK_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
+            phase_inputs = {
+                "FORWARD_PRE": raw_pre.read_text(encoding="utf-8"),
+                "FORWARD_POST": retained,
+                "ROLLBACK_PRE": retained,
+                "ROLLBACK_POST": retained,
+            }
+            for phase, original in phase_inputs.items():
+                valid = self._rewrite_readback(
+                    original, phase=phase, migration_sha=receipt_sha
+                )
+                path = temp / f"valid-{phase}.raw"
+                path.write_text(valid, encoding="utf-8")
+                self.assertTrue(
+                    self.runner._parse_readback(path, receipt_sha, phase)["verified"], phase
+                )
+                for label, mutation in (
+                    ("bound-false", {"bound": False}),
+                    ("missing-sha", {"remove_sha": True}),
+                    ("mismatched-sha", {"migration_sha": "f" * 64}),
+                ):
+                    mutated = self._rewrite_readback(
+                        original,
+                        phase=phase,
+                        migration_sha=mutation.get("migration_sha", receipt_sha),
+                        bound=mutation.get("bound", True),
+                        remove_sha=mutation.get("remove_sha", False),
+                    )
+                    path.write_text(mutated, encoding="utf-8")
+                    with self.assertRaisesRegex(
+                        self.runner.CutoverError,
+                        r"READBACK_(MIGRATION_RECEIPT_MISMATCH|RECEIPT_INVALID)",
+                    ):
+                        self.runner._parse_readback(path, receipt_sha, phase)
 
     def test_forward_binds_receipt_heads_and_proves_noop(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -468,6 +535,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "finance-four-table-accepted-identity.json",
             "FINANCE_DATA_TABLE_READBACK_PHASE",
             "FINANCE_N8N_RUNTIME_MODE",
+            "parse_n8n_redacted_wrapper_output.py",
+            "data-table-receipt",
         ):
             self.assertIn(command, script)
 
@@ -534,6 +603,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "if [[ \"$*\" == *' execute --id '* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
                 "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
                 "echo READ >> \"$log\"\n"
+                "printf '\\033[4m>>>> Executing external compose provider \"/usr/local/bin/docker-compose\". Please refer to the documentation for details. <<<<\\n\\n\\033[0mPostgres 16 is outside the supported range and receives compatibility support only. Upgrade to Postgres 17 or newer.\\nAcquiring database migration lock...\\nDeprecation warning: The storage directory \"/home/node/.n8n/binaryData\" will be renamed to \"/home/node/.n8n/storage\" in n8n v3. To migrate now, set N8N_MIGRATE_FS_STORAGE_PATH=true. If you have a volume mounted at the old path, update your mount configuration after migration.\\n'\n"
                 "if [[ \"$*\" == *'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_PRE'* ]]; then cat \"$FINANCE_TEST_ROLLBACK_PRE\"; "
                 "elif [[ \"$*\" == *'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_POST'* ]]; then cat \"$FINANCE_TEST_ROLLBACK_POST\"; "
                 "elif [[ \"$count\" = 0 ]]; then cat \"$FINANCE_TEST_PRE\"; else cat \"$FINANCE_TEST_POST\"; fi\n",

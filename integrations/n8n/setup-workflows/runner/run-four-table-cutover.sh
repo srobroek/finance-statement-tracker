@@ -38,11 +38,13 @@ second_post_readback="$receipt_dir/finance-data-table-readback-${operation}-seco
 runtime_proof="$receipt_dir/finance-data-table-rollback-runtime-proof.json"
 runtime_state="$receipt_dir/finance-data-table-disposable-runtime-state.json"
 adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
+readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
 test -f "$source_backup"
 test -f "$migration_receipt"
 test -f "$accepted_identity"
 test -f "$adapter"
+test -f "$readback_parser"
 test -d "$workflow_root"
 
 migration_sha="$(sha256sum "$migration_receipt" | awk '{print $1}')"
@@ -57,6 +59,7 @@ run_readback() {
     -e N8N_FINANCE_PROJECT_ID="$N8N_FINANCE_PROJECT_ID" \
     -e FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256="$migration_sha" \
     "$FINANCE_N8N_CONTAINER" node - list:workflow < "$adapter" > "$destination"
+  python3 "$readback_parser" data-table-receipt < "$destination" > /dev/null
 }
 
 case "$operation" in

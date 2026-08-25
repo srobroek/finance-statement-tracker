@@ -309,18 +309,18 @@ def _parse_readback(path: Path, migration_sha256: str, expected_phase: str) -> d
     parser_spec.loader.exec_module(parser)
     raw = path.read_text(encoding="utf-8")
     prefix = "finance data table digest verified:"
-    if not raw.startswith(prefix):
-        raise CutoverError("READBACK_RECEIPT_INVALID")
     try:
-        raw_payload = json.loads(raw[len(prefix) :].strip(), object_pairs_hook=_reject_duplicate_keys)
-    except (json.JSONDecodeError, CutoverError) as error:
-        raise CutoverError("READBACK_RECEIPT_INVALID") from error
-    if not isinstance(raw_payload, dict):
-        raise CutoverError("READBACK_RECEIPT_INVALID")
-    try:
+        raw_payload = parser.extract_payload(raw, prefix)
         payload = parser.parse_data_table_receipt(raw, expected_phase=expected_phase)
-    except (ValueError, json.JSONDecodeError) as error:
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise CutoverError("READBACK_RECEIPT_INVALID") from error
+    migration_receipt = payload.get("migration_receipt")
+    if (
+        not isinstance(migration_receipt, dict)
+        or migration_receipt.get("bound") is not True
+        or migration_receipt.get("sha256") != migration_sha256
+    ):
+        raise CutoverError("READBACK_MIGRATION_RECEIPT_MISMATCH")
     if raw_payload.get("status") in {"FORWARD_PRE_READBACK", "ROLLBACK_PRE_READBACK"}:
         return {
             "verified": True,
