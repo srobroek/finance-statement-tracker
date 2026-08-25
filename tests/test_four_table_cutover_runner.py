@@ -486,6 +486,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"log={log}\n"
+                "echo CALL:$* >> \"$log\"\n"
                 "if [[ \"$*\" == *' execute --id '* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
                 "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
                 "echo READ >> \"$log\"\n"
