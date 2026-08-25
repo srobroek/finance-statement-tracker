@@ -486,7 +486,6 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"log={log}\n"
-                "echo CALL:$* >> \"$log\"\n"
                 "if [[ \"$*\" == *' execute --id '* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
                 "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
                 "echo READ >> \"$log\"\n"
@@ -517,10 +516,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr + " log=" + log.read_text(encoding="utf-8"))
+            call_order = [line for line in log.read_text(encoding="utf-8").splitlines() if line in {"READ", "EXECUTE"}]
             self.assertEqual(
-                log.read_text(encoding="utf-8").splitlines(),
+                call_order,
                 ["READ", "EXECUTE", "READ", "EXECUTE", "READ"],
-                log.read_text(encoding="utf-8"),
             )
             environment["FOUR_TABLE_FORWARD_ACK"] = ""
             environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
@@ -534,7 +533,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             )
             self.assertEqual(rollback_completed.returncode, 0, rollback_completed.stderr)
             self.assertTrue((receipt_dir / "finance-data-table-rollback-runtime-proof.json").exists())
-            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["READ", "EXECUTE", "READ", "EXECUTE", "READ", "READ", "READ"])
+            call_order = [line for line in log.read_text(encoding="utf-8").splitlines() if line in {"READ", "EXECUTE"}]
+            self.assertEqual(call_order, ["READ", "EXECUTE", "READ", "EXECUTE", "READ", "READ", "READ"])
 
 
 if __name__ == "__main__":
