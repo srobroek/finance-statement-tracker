@@ -95,7 +95,7 @@ step.
 - [ ] Assert four finance nodes register without `?` placeholders.
 - [ ] Assert ProDex nodes register without `?` placeholders.
 - [ ] Complete the direct ProDex device login with the user through the pinned
-  platform [`login-community-subscriptions.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/login-community-subscriptions.sh)
+  platform [`login-community-subscriptions.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/login-community-subscriptions.sh)
   procedure.
 - [ ] Keep API-key fallback disabled.
 - [ ] Store ProDex auth at `/home/ci/.codex-n8n-community/auth.json`.

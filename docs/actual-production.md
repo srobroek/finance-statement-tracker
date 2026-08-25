@@ -68,9 +68,9 @@ merchant order evidence uses generic Outlook email enrichment.
 The existing host monitor owns only Actual, its proxy, and cashback. The n8n
 stack health-gates n8n on Postgres and uses the pinned platform
 [`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/2c3286ae3c63a80b86ade945f19d419bf562874b/scripts/doctor.sh)
-for deployment checks. Execution state is queryable through n8n MCP only after
-its separate acceptance gate passes. Failed runs remain visible; successful run
-history is pruned by n8n retention settings.
+for deployment checks. After its separate acceptance gate passes, n8n MCP
+exposes execution state. Failed runs remain visible; successful run history is
+pruned by n8n retention settings.
 
 Current production remains blocked until the fixed-purpose PDF/parser/Actual
 custom nodes are implemented, fixture-tested, shadow-run, and promoted through
