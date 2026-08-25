@@ -789,16 +789,16 @@ sys.exit(0)
                 event = {
                     "source": "workflow",
                 }
-                execution_detail = {
-                    "status": "error",
-                    "finished": True,
-                    "data": {"resultData": {"runData": {
-                        "Microsoft OAuth": [{"error": {
-                            "code": failure_code,
-                            "access_token": "SECRET_PROVIDER_VALUE",
-                        }}],
-                    }}},
-                }
+                flatted_data = json.dumps([
+                    {"resultData": "1"},
+                    {"runData": "2"},
+                    {"Microsoft OAuth": "3"},
+                    ["4"],
+                    {"error": "5"},
+                    {"code": "6", "access_token": "SECRET_PROVIDER_VALUE"},
+                    failure_code,
+                ], separators=(",", ":"))
+                execution_detail = {"status": "error", "finished": True, "data": flatted_data}
                 code = (
                     f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
                     "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
@@ -827,15 +827,18 @@ sys.exit(0)
         for malformed_event in (
             {"code": "UNKNOWN_PROVIDER_FAILURE", "message": "SECRET_PROVIDER_VALUE"},
             {"code": {"nested": "SECRET_PROVIDER_VALUE"}},
+            {"code": "WF23_TIMEOUT_COMMAND_RUN"},
         ):
             with self.subTest(malformed_event=malformed_event):
-                malformed_detail = {
-                    "status": "error",
-                    "finished": True,
-                    "data": {"resultData": {"runData": {
-                        "Microsoft OAuth": [{"error": malformed_event}],
-                    }}},
-                }
+                malformed_data = json.dumps([
+                    {"resultData": "1"},
+                    {"runData": "2"},
+                    {"Microsoft OAuth": "3"},
+                    ["4"],
+                    {"error": "5"},
+                    malformed_event,
+                ], separators=(",", ":"))
+                malformed_detail = {"status": "error", "finished": True, "data": malformed_data}
                 code = (
                     f"const shim=require({json.dumps(str(shim))});let socket;"
                     "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
@@ -853,8 +856,36 @@ sys.exit(0)
                 completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
                 with self.assertRaises(ValueError):
                     parser.parse_timeout(completed.stdout)
+                failure_payload = json.loads(completed.stdout.split("transient WF23 execution failed:", 1)[1])
+                self.assertEqual(failure_payload["error_code"], "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
                 self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
                 self.assertNotIn("secret-token", completed.stdout + completed.stderr)
+
+    def test_local_transport_rejects_save_none_execution_detail_without_auth_classification(self) -> None:
+        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+        parser = load_module("wf23_execution_output_save_none", RUNNER / "parse_wf23_execution_output.py")
+        code = (
+            f"const shim=require({json.dumps(str(shim))});let socket;let detailReads=0;const calls=[];"
+            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+            "const event={source:'workflow'};"
+            "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
+            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
+            "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
+            "if(url.endsWith('/123')){detailReads+=1;return detailReads===1?{ok:false,status:404}:{ok:true,status:200,json:async()=>({status:'error',finished:true})};}"
+            "throw new Error('unexpected request')};"
+            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
+            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls})))"
+        )
+        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+        observed = json.loads(completed.stdout)
+        with self.assertRaises(ValueError):
+            parser.parse_timeout(observed["line"])
+        failure_payload = json.loads(observed["line"].split("transient WF23 execution failed:", 1)[1])
+        self.assertEqual(failure_payload["error_code"], "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
+        self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "GET", "POST", "GET"])
+        self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
     def test_stdin_entrypoint_gate_and_local_client_is_inert_when_imported(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"

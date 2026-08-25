@@ -12,6 +12,7 @@ const WATCHDOG_TIMEOUT_MS = 120_000;
 const EXECUTION_RECONCILIATION_TIMEOUT_MS = 5_000;
 const EXECUTION_POLL_INTERVAL_MS = 100;
 const TERMINAL_EXECUTION_STATUSES = new Set(['success', 'error', 'canceled', 'cancelled', 'crashed', 'failed']);
+const AUTH_FAILURE_CODES = new Set(['OUTLOOK_AUTH_REQUIRED', 'ONEDRIVE_AUTH_REQUIRED']);
 const EXPECTED_KEYS = new Set([
   'schema_version', 'status', 'execution_id', 'outlook_read_succeeded',
   'outlook_items_observed', 'outlook_max_messages', 'outlook_server_filter_applied',
@@ -111,10 +112,41 @@ function safeFailureCode(error) {
     : 'WF23_REDACTED_EXECUTION_FAILED';
 }
 
+function decodeExecutionDetailData(data) {
+  if (data && typeof data === 'object') return data;
+  if (typeof data !== 'string' || data.length > 65_536) return null;
+  const parsed = JSON.parse(data);
+  if (!Array.isArray(parsed)) return parsed;
+  const decode = (value, seen = new Set(), depth = 0) => {
+    if (depth > 64 || typeof value === 'function') return null;
+    if (typeof value === 'string') {
+      if (!/^(0|[1-9][0-9]*)$/.test(value)) return value;
+      const index = Number(value);
+      if (!Number.isSafeInteger(index) || index >= parsed.length || seen.has(index)) return value;
+      const target = parsed[index];
+      if (typeof target === 'string') return target;
+      const nextSeen = new Set(seen);
+      nextSeen.add(index);
+      return decode(target, nextSeen, depth + 1);
+    }
+    if (Array.isArray(value)) return value.map((item) => decode(item, seen, depth + 1));
+    if (!value || typeof value !== 'object') return value;
+    const result = Object.create(null);
+    for (const [key, item] of Object.entries(value)) {
+      if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+        result[key] = decode(item, seen, depth + 1);
+      }
+    }
+    return result;
+  };
+  return decode(parsed[0]);
+}
+
 function redactedExecutionFailureCode(body) {
   let code;
   try {
-    const resultData = body?.data?.resultData;
+    const executionData = decodeExecutionDetailData(body?.data);
+    const resultData = executionData?.resultData;
     code = resultData?.error?.code;
     if (typeof code !== 'string') {
       const runData = resultData?.runData;
@@ -124,7 +156,7 @@ function redactedExecutionFailureCode(body) {
           for (const run of runs) {
             if (typeof run?.error?.code === 'string') {
               code = run.error.code;
-              if (SAFE_FAILURE_CODES.has(code)) return code;
+              if (AUTH_FAILURE_CODES.has(code)) return code;
             }
           }
         }
@@ -133,7 +165,7 @@ function redactedExecutionFailureCode(body) {
   } catch {
     return 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
   }
-  return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
+  return typeof code === 'string' && AUTH_FAILURE_CODES.has(code)
     ? code
     : 'WF23_EXECUTION_NOT_FINISHED_SUCCESS';
 }
