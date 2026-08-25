@@ -3192,7 +3192,12 @@ try {
                 )
                 self.assertFalse(invalid["ok"])
                 self.assertIn("PRODEX_AUTH_REQUIRED", invalid["error"])
-                self.assertIn("run codex login", invalid["error"])
+                self.assertIn(
+                    "restore the existing persistent one-time subscription auth state from protected state",
+                    invalid["error"],
+                )
+                self.assertNotIn("codex login", invalid["error"])
+                self.assertNotIn("re-enable", invalid["error"])
 
     def test_generic_evidence_binds_currency_direction_kind_and_message_reuse(self):
         workflow = self.workflow("12-outlook-message-sweep.json")

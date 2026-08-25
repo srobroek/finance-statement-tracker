@@ -3338,7 +3338,7 @@ const provider = invocation.agent_provider;
 const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
 if (providerError) {
   if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
-    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+    throw new Error('PRODEX_AUTH_REQUIRED: restore the existing persistent one-time subscription auth state from protected state');
   }
   throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
 }
@@ -4152,7 +4152,7 @@ const input = $('Build Authoritative W09 Email Job').first().json;
 const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
 if (providerError) {
   if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
-    throw new Error('PRODEX_AUTH_REQUIRED: run codex login and re-enable the n8n credential');
+    throw new Error('PRODEX_AUTH_REQUIRED: restore the existing persistent one-time subscription auth state from protected state');
   }
   throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
 }
