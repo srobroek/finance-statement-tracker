@@ -157,11 +157,11 @@ identity, ledger readback, Cashback readback, routes, or rollback.
 
 - no production receipt exists here
 - protected runner steps are in [`README.md`](../README.md)
-- full cutover is unavailable
+- the documented production procedure is runnable, but live receipt and semantic acceptance are incomplete
 
 `PRODUCTION_ONLY` requires protected receipt inputs, an exact project ID, and a
 named forward or rollback acknowledgment. The script records a durable runtime
 journal. When output fails, it recovers a forward receipt.
 
-The documented invocation is disposable. Do not treat its fixtures as retained-
-state migration inputs.
+After protected checks pass, run the documented procedure against the production runtime.
+Its disposable fixtures are not retained-state migration inputs.
