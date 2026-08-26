@@ -351,6 +351,7 @@ function load() { return JSON.parse(fs.readFileSync(process.env.FINANCE_TEST_DB_
 function save(value) { fs.writeFileSync(process.env.FINANCE_TEST_DB_STATE, JSON.stringify(value)); }
 class Client {
   constructor() { this.state = load(); this.tx = null; }
+  async connect() {}
   current() { return this.tx || this.state; }
   async query(sql, params = []) {
     const statement = sql.trim();
@@ -401,10 +402,9 @@ class Client {
     if (statement === 'ROLLBACK') { this.tx = null; return { rows: [] }; }
     throw new Error('UNEXPECTED_QUERY:' + statement.slice(0, 80));
   }
-  release() {}
+  async end() {}
 }
-class Pool { async connect() { return new Client(); } async end() {} }
-module.exports = { Pool };
+module.exports = { Client };
 """,
             encoding="utf-8",
         )
@@ -1137,6 +1137,9 @@ module.exports = { Pool };
             "FROM data_table",
             '"projectId" = $1',
             "ANY($2::text[])",
+            "new pg.Client",
+            "await client.connect()",
+            "await client.end()",
             "await main();",
             "process.exitCode = 1",
         ):
@@ -1149,6 +1152,10 @@ module.exports = { Pool };
             "n8nRequire",
             "n8nRoot",
             "bin', 'n8n",
+            "new pg.Pool",
+            "idleTimeoutMillis",
+            ".release()",
+            "lock.pool",
         ):
             self.assertNotIn(forbidden, runtime)
 
