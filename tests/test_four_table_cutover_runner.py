@@ -839,6 +839,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FORWARD_REPLAY_READBACK_MISMATCH",
             "readback_verified",
             "readback_digest_sha256",
+            "finance_four_table_cutover:${projectId}",
             "FOR UPDATE",
             "UPDATE workflow_entity",
             "LIVE_WORKFLOW_REVISION_MISMATCH",

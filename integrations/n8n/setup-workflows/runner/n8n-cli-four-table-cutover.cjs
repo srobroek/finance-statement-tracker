@@ -185,7 +185,7 @@ async function loadWorkflows(client, graph, strict = true) {
     `SELECT w.id, w.active, w."activeVersionId", w."versionId", w.nodes, w.meta, w.settings
        FROM workflow_entity w
        JOIN shared_workflow s ON s."workflowId" = w.id
-      WHERE s."projectId" = $1 AND s.role = 'workflow:owner' AND w.id = ANY($2::uuid[])
+      WHERE s."projectId" = $1 AND s.role = 'workflow:owner' AND w.id = ANY($2::text[])
       FOR UPDATE`,
     [projectId, workflowIds],
   );
@@ -206,8 +206,8 @@ async function updateWorkflows(client, changes) {
     const revisionId = crypto.randomUUID();
     const result = await client.query(
       `UPDATE workflow_entity w
-          SET nodes = $1::jsonb, "versionId" = $3::uuid
-        WHERE w.id = $2::uuid
+          SET nodes = $1::json, "versionId" = $3
+        WHERE w.id = $2
           AND EXISTS (
             SELECT 1 FROM shared_workflow s
              WHERE s."workflowId" = w.id
@@ -368,7 +368,11 @@ async function execute() {
     }
     const unsigned = { ...forwardReceipt };
     delete unsigned.runtime_plan_receipt_sha256;
-    if (digest(unsigned) !== forwardReceipt.runtime_plan_receipt_sha256 || forwardReceipt.action_count !== 33) throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
+    if (digest(unsigned) !== forwardReceipt.runtime_plan_receipt_sha256 || forwardReceipt.action_count !== 33 ||
+        forwardReceipt.readback_verified !== true || typeof forwardReceipt.readback_digest_sha256 !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(forwardReceipt.readback_digest_sha256)) {
+      throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
+    }
     const byId = new Map(forwardReceipt.actions.map((action) => [action.reference_id, action]));
     if (byId.size !== 33) throw new Error('FORWARD_RUNTIME_ACTION_COUNT_INVALID');
     const prestate = findReferences(graph, workflows);
