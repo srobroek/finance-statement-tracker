@@ -299,6 +299,9 @@ def _validate_live_export(
         raise CutoverError("LIVE_EXPORT_INTEGRITY_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
+    project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", project_id):
+        raise CutoverError("LIVE_EXPORT_PROJECT_ID_INVALID")
     for field, expected in (
         ("source_head", source_head),
         ("generator_head", generator_head),
@@ -316,6 +319,7 @@ def _validate_live_export(
     if export.get("in_flight") != 0:
         raise CutoverError("WORKFLOW_QUIESCENCE_REQUIRED")
     workflow_ids: set[str] = set()
+    workflow_revisions: dict[str, str] = {}
     for workflow in workflows:
         if not isinstance(workflow, Mapping):
             raise CutoverError("LIVE_EXPORT_WORKFLOW_INVALID")
@@ -329,7 +333,10 @@ def _validate_live_export(
             or workflow.get("in_flight") != 0
         ):
             raise CutoverError("WORKFLOW_NOT_QUIESCENT")
-        _require_text(workflow.get("revision_id"), "WORKFLOW_REVISION_ID")
+        revision_id = _require_text(workflow.get("revision_id"), "WORKFLOW_REVISION_ID")
+        if workflow_id in workflow_revisions:
+            raise CutoverError("DUPLICATE_WORKFLOW_ID")
+        workflow_revisions[workflow_id] = revision_id
     target_ids = export.get("targets")
     if (
         not isinstance(target_ids, list)
@@ -370,7 +377,12 @@ def _validate_live_export(
             if observed.get(field) != expected_value:
                 raise CutoverError(f"LIVE_REFERENCE_{field.upper()}_MISMATCH:{expected['reference_id']}")
         _require_text(observed.get("workflow_id"), "LIVE_REFERENCE_WORKFLOW_ID")
-        _require_text(observed.get("revision_id"), "LIVE_REFERENCE_REVISION_ID")
+        observed_workflow_id = observed["workflow_id"]
+        observed_revision_id = _require_text(observed.get("revision_id"), "LIVE_REFERENCE_REVISION_ID")
+        if observed_workflow_id not in workflow_revisions:
+            raise CutoverError(f"LIVE_REFERENCE_WORKFLOW_UNKNOWN:{expected['reference_id']}")
+        if observed_revision_id != workflow_revisions[observed_workflow_id]:
+            raise CutoverError(f"LIVE_REFERENCE_REVISION_MISMATCH:{expected['reference_id']}")
         _require_text(observed.get("node_id"), "LIVE_REFERENCE_NODE_ID")
         _require_text(observed.get("old_table_id"), "LIVE_REFERENCE_OLD_TABLE_ID")
         if observed.get("active") is not False or observed.get("published") is not False or observed.get("in_flight") != 0:
@@ -385,6 +397,7 @@ def _validate_live_export(
         actions.append({**expected, "workflow_id": observed["workflow_id"], "revision_id": observed["revision_id"], "node_id": observed["node_id"], "old_table_id": observed["old_table_id"], "canonical_table_id": observed.get("canonical_table_id")})
     return {
         "path": str(path),
+        "project_id": project_id,
         "export_sha256": export_sha,
         "workflow_count": 19,
         "in_flight": 0,
@@ -404,12 +417,14 @@ def _validate_lock_receipt(
     migration_receipt_sha: str,
     source_backup_sha: str,
     identity_digest: str,
+    project_id: str,
 ) -> tuple[dict[str, Any], str]:
     _require_protected(path, "PROTECTED_WRITER_LOCK_RECEIPT")
     receipt, raw = _read_json(path)
     if receipt.get("schema_version") != LOCK_RECEIPT_SCHEMA or receipt.get("lock_name") != LOCK_NAME:
         raise CutoverError("WRITER_LOCK_RECEIPT_SCHEMA_INVALID")
     for field, expected in (
+        ("project_id", project_id),
         ("export_sha256", export_sha),
         ("migration_receipt_sha256", migration_receipt_sha),
         ("source_backup_sha256", source_backup_sha),
@@ -433,13 +448,15 @@ def _lock_receipt(
     migration_receipt_sha: str,
     source_backup_sha: str,
     identity_digest: str,
+    project_id: str,
     operation: str,
 ) -> dict[str, Any]:
     return _seal_with_key(
         {
             "schema_version": LOCK_RECEIPT_SCHEMA,
             "lock_name": LOCK_NAME,
-            "resource_key": f"{LOCK_NAME}:{export['export_sha256']}:{source_backup_sha}",
+            "project_id": project_id,
+            "resource_key": f"{LOCK_NAME}:{project_id}:{export['export_sha256']}:{source_backup_sha}",
             "operation": operation,
             "export_sha256": export["export_sha256"],
             "migration_receipt_sha256": migration_receipt_sha,
@@ -913,12 +930,8 @@ def _bound_live_inputs(
     identity_digest: str,
     operation: str,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
-    live_export_path = getattr(args, "live_export", None)
-    lock_receipt_path = getattr(args, "lock_receipt", None)
-    if live_export_path is None:
-        if lock_receipt_path is not None:
-            raise CutoverError("LIVE_EXPORT_REQUIRED_FOR_WRITER_PRECONDITION")
-        return None, None, None
+    live_export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
+    lock_receipt_path = getattr(args, "lock_receipt", None) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
     matrix = _load_matrix()
     export = _validate_live_export(
         live_export_path,
@@ -929,14 +942,14 @@ def _bound_live_inputs(
         identity_digest=identity_digest,
         matrix=matrix,
     )
-    if lock_receipt_path is None:
-        raise CutoverError("EXCLUSIVE_WRITER_PRECONDITION_REQUIRED")
+    project_id = export["project_id"]
     lock_receipt, lock_sha = _validate_lock_receipt(
         lock_receipt_path,
         export_sha=export["export_sha256"],
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        project_id=project_id,
     )
     if lock_receipt.get("operation") not in {operation, "PRECONDITION"}:
         raise CutoverError("WRITER_LOCK_OPERATION_MISMATCH")
@@ -1099,6 +1112,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
                 },
                 "exclusive_writer_precondition": {
                     "lock_name": LOCK_NAME,
+                    "project_id": export["project_id"],
                     "lock_receipt_sha256": lock_sha,
                     "held": lock_receipt["held"] if lock_receipt else False,
                     "in_flight": lock_receipt["in_flight"] if lock_receipt else None,
@@ -1275,6 +1289,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
                 },
                 "exclusive_writer_precondition": {
                     "lock_name": LOCK_NAME,
+                    "project_id": export["project_id"],
                     "lock_receipt_sha256": lock_sha,
                     "held": lock_receipt["held"] if lock_receipt else False,
                     "in_flight": lock_receipt["in_flight"] if lock_receipt else None,
@@ -1545,6 +1560,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        project_id=export["project_id"],
         operation="PRECONDITION",
     )
     _write_json(args.output, lock)
@@ -1556,6 +1572,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         "migration_receipt_sha256": receipt_sha,
         "source_backup_sha256": source_backup_sha,
         "accepted_identity_sha256": identity_digest,
+        "project_id": export["project_id"],
         "workflow_export_sha256": export["export_sha256"],
         "reference_count": export["reference_count"],
         "unresolved": export["unresolved"],

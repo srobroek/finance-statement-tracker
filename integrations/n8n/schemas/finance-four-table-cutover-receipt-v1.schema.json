@@ -14,6 +14,9 @@
     "accepted_identity_sha256",
     "source_backup_sha256",
     "source_digest",
+    "workflow_export_sha256",
+    "reference_action_plan",
+    "exclusive_writer_precondition",
     "runtime_state_sha256",
     "old_tables_preserved",
     "runtime_cutover",
@@ -171,7 +174,8 @@
               "workflow_id": {"type": "string", "minLength": 1},
               "revision_id": {"type": "string", "minLength": 1},
               "node_id": {"type": "string", "minLength": 1},
-              "old_table_id": {"type": "string", "minLength": 1}
+              "old_table_id": {"type": "string", "minLength": 1},
+              "canonical_table_id": {"type": ["string", "null"]}
             }
           }
         },
@@ -182,9 +186,10 @@
     "exclusive_writer_precondition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lock_name", "lock_receipt_sha256", "held", "in_flight"],
+      "required": ["lock_name", "project_id", "lock_receipt_sha256", "held", "in_flight"],
       "properties": {
         "lock_name": {"const": "finance_four_table_cutover"},
+        "project_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$"},
         "lock_receipt_sha256": {"$ref": "#/$defs/digest"},
         "held": {"const": true},
         "in_flight": {"const": 0}

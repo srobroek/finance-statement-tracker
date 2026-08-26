@@ -193,6 +193,82 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         identity_path = migration_path.with_name("finance-four-table-accepted-identity.json")
         identity_path.write_bytes(self.runner._canonical_bytes(identity))
         os.chmod(identity_path, 0o600)
+        matrix = json.loads(
+            (ROOT / "integrations/n8n/data-table-migration-matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        inventory = self.runner._reference_inventory(matrix)
+        schema_digests = self.runner._target_schema_digests(matrix)
+        targets = [
+            {
+                "name": name,
+                "table_id": f"live-{index}",
+                "schema_sha256": schema_digests[name],
+            }
+            for index, name in enumerate(sorted(self.runner.TARGETS))
+        ]
+        target_ids = {target["name"]: target["table_id"] for target in targets}
+        live_export = {
+            "schema_version": self.runner.LIVE_EXPORT_SCHEMA,
+            "project_id": "finance-test-project",
+            "repository_root": str(ROOT),
+            "source_head": self.source_head,
+            "generator_head": self.generator_head,
+            "migration_receipt_sha256": identity["migration_receipt_sha256"],
+            "source_backup_sha256": identity["source_backup_sha256"],
+            "accepted_identity_sha256": identity["identity_sha256"],
+            "redacted": True,
+            "workflow_count": 19,
+            "in_flight": 0,
+            "workflows": [
+                {
+                    "workflow_id": f"live-workflow-{index}",
+                    "revision_id": f"live-revision-{index}",
+                    "active": False,
+                    "published": False,
+                    "in_flight": 0,
+                }
+                for index in range(19)
+            ],
+            "targets": targets,
+            "references": [
+                {
+                    "reference_id": item["reference_id"],
+                    "workflow_id": "live-workflow-0",
+                    "revision_id": "live-revision-0",
+                    "node_id": f"live-node-{index}",
+                    "workflow_path": item["workflow_path"],
+                    "node_name": item["node_name"],
+                    "operation": item["operation"],
+                    "old_table_name": item["source_table"],
+                    "old_table_id": f"old-{index}",
+                    "canonical_table_name": item["canonical_table_name"],
+                    "canonical_table_id": target_ids.get(item["canonical_table_name"]),
+                    "active": False,
+                    "published": False,
+                    "in_flight": 0,
+                }
+                for index, item in enumerate(inventory)
+            ],
+        }
+        live_export["export_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(live_export)
+        ).hexdigest()
+        live_export_path = migration_path.with_name(self.runner.LIVE_EXPORT_FILENAME)
+        live_export_path.write_bytes(self.runner._canonical_bytes(live_export))
+        os.chmod(live_export_path, 0o600)
+        lock_receipt = self.runner._lock_receipt(
+            export=live_export,
+            migration_receipt_sha=identity["migration_receipt_sha256"],
+            source_backup_sha=identity["source_backup_sha256"],
+            identity_digest=identity["identity_sha256"],
+            project_id=live_export["project_id"],
+            operation="PRECONDITION",
+        )
+        lock_receipt_path = migration_path.with_name(self.runner.LOCK_RECEIPT_FILENAME)
+        lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+        os.chmod(lock_receipt_path, 0o600)
         return (
             source_path,
             migration_path,
@@ -736,6 +812,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 )
             live_export = {
                 "schema_version": self.runner.LIVE_EXPORT_SCHEMA,
+                "project_id": "finance-test-project",
                 "repository_root": str(checkout),
                 "source_head": checkout_head,
                 "generator_head": self.generator_head,

@@ -7,6 +7,7 @@
   "required": [
     "schema_version",
     "lock_name",
+    "project_id",
     "resource_key",
     "operation",
     "export_sha256",
@@ -21,6 +22,7 @@
   "properties": {
     "schema_version": {"const": "finance-four-table-writer-lock-v1"},
     "lock_name": {"const": "finance_four_table_cutover"},
+    "project_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$"},
     "resource_key": {"type": "string", "minLength": 1},
     "operation": {"enum": ["PRECONDITION", "FORWARD", "ROLLBACK"]},
     "export_sha256": {"$ref": "#/$defs/digest"},
