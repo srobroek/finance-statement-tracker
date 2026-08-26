@@ -47,8 +47,10 @@ COPY --chown=node:node packages/n8n-nodes-finance/scripts/assert-runtime-registr
 COPY --chown=node:node packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs /opt/finance-n8n/verify-immutable-extension.cjs
 COPY --chown=node:node packages/n8n-nodes-finance/scripts/finance-entrypoint.sh /opt/finance-n8n/finance-entrypoint.sh
 RUN node /opt/finance-n8n/verify-immutable-extension.cjs --write \
+    && if [ -e /home/node/node_modules ] || [ -L /home/node/node_modules ]; then echo 'FINANCE_NODE_MODULES_PATH_MUST_BE_ABSENT' >&2; exit 1; fi \
+    && ln -s /opt/finance-n8n/community-extensions/node_modules /home/node/node_modules \
     && chmod 0555 /opt/finance-n8n/finance-entrypoint.sh \
     && chmod 0444 /opt/finance-n8n/extension-tree.sha256
-WORKDIR /opt/finance-n8n/community-extensions
+WORKDIR /home/node
 USER node
 ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]
