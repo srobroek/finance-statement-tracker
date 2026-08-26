@@ -647,6 +647,24 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             ]
             self.assertEqual(self.runner.main(args), 1)
 
+    def test_lock_resource_is_stable_for_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export = json.loads((migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8"))
+            lock = json.loads((migration.parent / self.runner.LOCK_RECEIPT_FILENAME).read_text(encoding="utf-8"))
+            self.assertEqual(lock["resource_key"], f"{self.runner.LOCK_NAME}:{export['project_id']}")
+            export["export_sha256"] = "f" * 64
+            replacement = self.runner._lock_receipt(
+                export=export,
+                migration_receipt_sha=lock["migration_receipt_sha256"],
+                source_backup_sha=lock["source_backup_sha256"],
+                identity_digest=lock["accepted_identity_sha256"],
+                project_id=export["project_id"],
+                operation="PRECONDITION",
+            )
+            self.assertEqual(replacement["resource_key"], lock["resource_key"])
+
     def test_live_export_rejects_aliasing_two_references_to_one_node(self):
         with tempfile.TemporaryDirectory() as directory:
             source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(Path(directory))
