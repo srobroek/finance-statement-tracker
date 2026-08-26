@@ -236,7 +236,6 @@ export FINANCE_REPOSITORY_DIR="$PWD"
 export FINANCE_N8N_RECEIPT_DIR='<absolute mode-0700 receipt directory>'
 export FINANCE_N8N_COMPOSE_PROJECT='<production Compose project label>'
 export N8N_FINANCE_PROJECT_ID='<internal Data Table project ID>'
-export FINANCE_N8N_CONTAINER='<selected running n8n container ID>'
 export FINANCE_N8N_LIVE_EXPORT="$FINANCE_N8N_RECEIPT_DIR/finance-four-table-live-export.json"
 export FINANCE_N8N_RUNTIME_MODE=PRODUCTION_ONLY
 for file in finance-data-table-backup-v1.json data-table-migration-receipt.json finance-four-table-accepted-identity.json finance-four-table-live-export.json; do
@@ -244,8 +243,29 @@ for file in finance-data-table-backup-v1.json data-table-migration-receipt.json 
 done
 ```
 
-Select `FINANCE_N8N_CONTAINER` with the Compose-label filter. The script checks
-that the values match and writes protected receipts:
+Select one running `n8n` container by its Compose labels. Reject a wrong project,
+service, or state. Save the identity receipt with mode `0600`:
+
+```sh
+mapfile -t n8n_candidates < <(
+  docker ps \
+    --filter "label=com.docker.compose.project=$FINANCE_N8N_COMPOSE_PROJECT" \
+    --filter "label=com.docker.compose.service=n8n" \
+    --filter status=running \
+    --format '{{.ID}}'
+)
+test "${#n8n_candidates[@]}" -eq 1
+FINANCE_N8N_CONTAINER="$(docker inspect -f '{{.Id}}' "${n8n_candidates[0]}")"
+container_identity="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER")"
+test "$container_identity" = "$FINANCE_N8N_COMPOSE_PROJECT|n8n|true"
+export FINANCE_N8N_CONTAINER
+umask 077
+docker inspect -f '{{.Id}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER" > "$FINANCE_N8N_RECEIPT_DIR/finance-n8n-container-identity.txt"
+```
+
+The selector binds one running `n8n` service to the production Compose project.
+The script checks that the internal project ID matches and writes protected
+receipts:
 
 - project ID
 - source digests

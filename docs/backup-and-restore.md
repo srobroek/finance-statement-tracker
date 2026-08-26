@@ -187,9 +187,10 @@ proves only the bytes. It cannot identify the server, sync session, or budget.
 Record the target and prestate in an operator receipt. Read the restored budget
 through the API and UI. Keep the exact checksum in that receipt.
 
-The four-table runner supports disposable and production modes. This checkout
-documents the disposable path only. Its rollback is not an `Actual` restore. Retain
-source files until a separate operator readback passes.
+The four-table runner supports disposable and production modes. The protected
+production steps are in [`README.md`](../README.md). This checkout has no receipt
+from a live production acceptance. Its rollback is not an `Actual` restore.
+Retain source files until a separate operator readback passes.
 
 ## required drill
 
