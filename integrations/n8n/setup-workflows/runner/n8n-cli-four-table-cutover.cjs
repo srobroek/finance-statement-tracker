@@ -76,6 +76,36 @@ function text(value, code) {
   return value;
 }
 
+function bindingFromEnvironment(exported) {
+  const binding = {
+    operation_nonce: text(process.env.FINANCE_FOUR_TABLE_OPERATION_NONCE, 'OPERATION_NONCE_REQUIRED'),
+    protected_quiescence_receipt_digest: text(
+      process.env.FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST,
+      'PROTECTED_QUIESCENCE_RECEIPT_DIGEST_REQUIRED',
+    ),
+    required_live_export_digest: text(
+      process.env.FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST,
+      'REQUIRED_LIVE_EXPORT_DIGEST_REQUIRED',
+    ),
+    contract_bijection_digest: text(
+      process.env.FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST,
+      'CONTRACT_BIJECTION_DIGEST_REQUIRED',
+    ),
+  };
+  for (const [field, value] of Object.entries(binding)) {
+    if (field !== 'operation_nonce' && !/^[0-9a-f]{64}$/.test(value)) {
+      throw new Error(`${field.toUpperCase()}_INVALID`);
+    }
+  }
+  return binding;
+}
+
+function validateBinding(value, binding, code) {
+  for (const [field, expected] of Object.entries(binding)) {
+    if (!value || value[field] !== expected) throw new Error(`${code}_${field.toUpperCase()}_MISMATCH`);
+  }
+}
+
 function selectorId(selector) {
   if (selector && typeof selector === 'object' && selector.__rl === true) return String(selector.value || '');
   return typeof selector === 'string' ? selector : '';
@@ -346,7 +376,27 @@ async function persistRecoveryJournal(client, receipt) {
   );
 }
 
-function validateForwardReceipt(receipt, exported, resource) {
+function validateLockReceipt(lockReceipt, exported, binding, resource) {
+  if (!lockReceipt || lockReceipt.schema_version !== 'finance-four-table-writer-lock-v1' ||
+      lockReceipt.lock_name !== 'finance_four_table_cutover' ||
+      lockReceipt.project_id !== projectId ||
+      lockReceipt.export_sha256 !== exported.export_sha256 ||
+      lockReceipt.migration_receipt_sha256 !== process.env.FINANCE_FOUR_TABLE_MIGRATION_SHA256 ||
+      lockReceipt.source_backup_sha256 !== process.env.FINANCE_FOUR_TABLE_SOURCE_SHA256 ||
+      lockReceipt.accepted_identity_sha256 !== process.env.FINANCE_FOUR_TABLE_IDENTITY_SHA256 ||
+      lockReceipt.held !== true || lockReceipt.in_flight !== 0) {
+    throw new Error('WRITER_LOCK_RECEIPT_BINDING_INVALID');
+  }
+  validateBinding(lockReceipt, binding, 'WRITER_LOCK_RECEIPT');
+  const unsigned = { ...lockReceipt };
+  delete unsigned.lock_receipt_sha256;
+  if (digest(unsigned) !== lockReceipt.lock_receipt_sha256) {
+    throw new Error('WRITER_LOCK_RECEIPT_INTEGRITY_INVALID');
+  }
+  if (lockReceipt.resource_key !== resource) throw new Error('WRITER_LOCK_RESOURCE_MISMATCH');
+}
+
+function validateForwardReceipt(receipt, exported, resource, binding) {
   if (!receipt || receipt.schema_version !== RUNTIME_SCHEMA || receipt.operation !== 'FORWARD' ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
       receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 33 ||
@@ -355,6 +405,7 @@ function validateForwardReceipt(receipt, exported, resource) {
       !/^[0-9a-f]{64}$/.test(receipt.readback_digest_sha256) || !Array.isArray(receipt.actions)) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
   }
+  validateBinding(receipt, binding, 'FORWARD_RUNTIME_RECEIPT');
   const unsigned = { ...receipt };
   delete unsigned.runtime_plan_receipt_sha256;
   if (digest(unsigned) !== receipt.runtime_plan_receipt_sha256 ||
@@ -367,7 +418,10 @@ function validateForwardReceipt(receipt, exported, resource) {
 async function recoverForwardJournal() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   validateExport(exported);
+  const binding = bindingFromEnvironment(exported);
+  const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
+  validateLockReceipt(lockReceipt, exported, binding, resource);
   const pool = new pg.Pool(databaseOptions(process.env));
   let client;
   try {
@@ -386,7 +440,7 @@ async function recoverForwardJournal() {
     const row = result.rows?.[0];
     if (!row) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
     const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
-    await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource));
+    await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource, binding));
   } finally {
     client?.release();
     await pool.end();
@@ -396,23 +450,9 @@ async function recoverForwardJournal() {
 async function acquireProjectLock() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
-  if (lockReceipt.schema_version !== 'finance-four-table-writer-lock-v1' ||
-      lockReceipt.lock_name !== 'finance_four_table_cutover' ||
-      lockReceipt.project_id !== projectId ||
-      lockReceipt.export_sha256 !== exported.export_sha256 ||
-      lockReceipt.migration_receipt_sha256 !== process.env.FINANCE_FOUR_TABLE_MIGRATION_SHA256 ||
-      lockReceipt.source_backup_sha256 !== process.env.FINANCE_FOUR_TABLE_SOURCE_SHA256 ||
-      lockReceipt.accepted_identity_sha256 !== process.env.FINANCE_FOUR_TABLE_IDENTITY_SHA256 ||
-      lockReceipt.held !== true || lockReceipt.in_flight !== 0) {
-    throw new Error('WRITER_LOCK_RECEIPT_BINDING_INVALID');
-  }
-  const unsigned = { ...lockReceipt };
-  delete unsigned.lock_receipt_sha256;
-  if (digest(unsigned) !== lockReceipt.lock_receipt_sha256) {
-    throw new Error('WRITER_LOCK_RECEIPT_INTEGRITY_INVALID');
-  }
   const resource = `finance_four_table_cutover:${projectId}`;
-  if (lockReceipt.resource_key !== resource) throw new Error('WRITER_LOCK_RESOURCE_MISMATCH');
+  const binding = bindingFromEnvironment(exported);
+  validateLockReceipt(lockReceipt, exported, binding, resource);
   const pool = new pg.Pool(databaseOptions(process.env));
   let client;
   try {
@@ -422,7 +462,7 @@ async function acquireProjectLock() {
     await client.query("SET LOCAL synchronous_commit = 'on'");
     const result = await client.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [resource]);
     if (result.rows?.[0]?.acquired !== true) throw new Error('PROJECT_WRITER_LOCK_BUSY');
-    return { pool, client, resource };
+    return { pool, client, resource, binding };
   } catch (error) {
     // BEGIN, SET, and lock acquisition all happen before execute() owns cleanup.
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -441,9 +481,11 @@ async function execute() {
   const commitAndJournal = async (unsignedReceipt) => {
     const journal = {
       ...unsignedReceipt,
+      ...lock.binding,
       durable_journal: true,
       commit_protocol: 'postgresql_synchronous_wal',
     };
+    validateBinding(journal, lock.binding, 'RUNTIME_JOURNAL');
     await persistRecoveryJournal(lock.client, journal);
     await lock.client.query('COMMIT');
     // COMMIT releases the transaction-scoped advisory lock before this output.
@@ -476,14 +518,14 @@ async function execute() {
       if (!replayPlan.alreadyApplied || !sameJson(selectorReadback(replayState), readback)) {
         throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
       }
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
       return commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
     }
-    validateForwardReceipt(forwardReceipt, exported, lock.resource);
+    validateForwardReceipt(forwardReceipt, exported, lock.resource, lock.binding);
     const byId = new Map(forwardReceipt.actions.map((action) => [action.reference_id, action]));
     const prestate = findReferences(graph, workflows);
     const changed = new Map();
@@ -511,7 +553,7 @@ async function execute() {
       }
     }
     const readback = selectorReadback(restoredState);
-    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
+    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
     return commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
     // PostgreSQL transaction rollback is the only compensation path. A second
