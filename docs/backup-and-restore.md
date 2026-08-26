@@ -142,12 +142,14 @@ evidence.
 
 ### reset after login failure
 
-Confirm that current authentication is unusable. Record that failure. Do not reset
-`Actual` by default. Use the supported reset at version `26.8.1`.
+Confirm that current authentication is unusable. Record that failure with the
+shared ingestion `run_id`. Bind the reset receipt to that same `run_id`.
+Do not reset `Actual` by default. Use the supported reset at version `26.8.1`.
 
 Keep runtime data under `/opt/stacks/finance-actual-poc/data`. This checkout
 provides no reset command. Keep storage private. Record only redacted receipt
-fields.
+fields. Keep this credential reset runtime-only. Do not reset ledger data, Data
+Tables, or source cursors.
 
 Before reset, retain these protected files:
 
@@ -197,4 +199,3 @@ Complete one disposable restore for each domain. Verify that these results hold:
 - the closed ADCB card has an AED 0 balance
 - Cashback events and period state match the backup receipt
 - `n8n` reads Data Tables and resumes a cursor without duplicate writes
-- Cloudflare routes return the expected ledger and `n8n` pages

@@ -13,7 +13,7 @@ baseline has no Outlook or OneDrive credential.
 | Outlook and OneDrive | Microsoft | mail and evidence |
 | ledger API | disposable ledger project | ledger operations |
 | Finance MCP bearer | internal facade | workflow calls |
-| ProDex auth | runtime image | subscription agents |
+| ProDex auth | host mount `/home/ci/.codex-n8n-community` | subscription agents |
 
 Each receipt identifies its system. A login cannot prove ledger writes. Route
 publication needs its own readback. Before promotion, bind each receipt to its

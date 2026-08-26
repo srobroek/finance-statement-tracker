@@ -152,8 +152,6 @@ python -m unittest tests.test_data_table_migration_matrix -v
 python integrations/n8n/generate_data_table_migration_matrix.py --check
 ```
 
-This checkout has no production guide. It has no production receipt.
-
 `run-four-table-cutover.sh` supports both modes. `DISPOSABLE_ONLY` runs a disposable
 check. `PRODUCTION_ONLY` runs production orchestration.
 
@@ -163,7 +161,7 @@ Name the forward or rollback acknowledgment. The script records a runtime journa
 
 Cutover status:
 
-- no operator production guide or production receipt exists here
+- no production receipt exists here
 - the runner supports forward and rollback in production
 - the linked invocation is a disposable PR58 proof
 - retained state is out of scope
@@ -225,6 +223,61 @@ The value appears below:
 ```sh
 export FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE
 integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh rollback
+```
+
+### protected production runner
+
+Use protected inputs for `PRODUCTION_ONLY`. Keep the receipt directory at mode
+`0700`. Set the Compose project label separately from the internal Data Table
+project ID:
+
+```sh
+export FINANCE_REPOSITORY_DIR="$PWD"
+export FINANCE_N8N_RECEIPT_DIR='<absolute mode-0700 receipt directory>'
+export FINANCE_N8N_COMPOSE_PROJECT='<production Compose project label>'
+export N8N_FINANCE_PROJECT_ID='<internal Data Table project ID>'
+export FINANCE_N8N_CONTAINER='<selected running n8n container ID>'
+export FINANCE_N8N_LIVE_EXPORT="$FINANCE_N8N_RECEIPT_DIR/finance-four-table-live-export.json"
+export FINANCE_N8N_RUNTIME_MODE=PRODUCTION_ONLY
+for file in finance-data-table-backup-v1.json data-table-migration-receipt.json finance-four-table-accepted-identity.json finance-four-table-live-export.json; do
+  test "$(stat -c '%a' "$FINANCE_N8N_RECEIPT_DIR/$file")" = 600
+done
+```
+
+Select `FINANCE_N8N_CONTAINER` with the Compose-label filter. The script checks
+that the values match and writes protected receipts:
+
+- project ID
+- source digests
+- target tables
+- workflow graph
+
+```sh
+export FOUR_TABLE_FORWARD_ACK=FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE
+integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh forward
+forward_receipt="$FINANCE_N8N_RECEIPT_DIR/finance-four-table-runtime-forward.json"
+test "$(stat -c '%a' "$forward_receipt")" = 600
+jq -e '(.operation == "FORWARD") and (.project_id == env.N8N_FINANCE_PROJECT_ID) and (.action_count == 33) and (.replay_noop == true) and (.readback_verified == true) and (.durable_journal == true) and (.commit_protocol == "postgresql_synchronous_wal")' "$forward_receipt" >/dev/null
+```
+
+Runtime output failure starts journal recovery. The recovery writes
+`finance-four-table-runtime-forward-recovered.json` and updates
+`finance-four-table-runtime-forward.json`.
+
+```sh
+test -s "$FINANCE_N8N_RECEIPT_DIR/finance-four-table-runtime-forward-recovered.json"
+test -s "$FINANCE_N8N_RECEIPT_DIR/finance-four-table-runtime-forward.json"
+```
+
+After both files pass, use the recovered forward receipt for rollback. The rollback
+reads the same project ID and export. It reads the protected files:
+
+```sh
+export FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE
+integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh rollback
+rollback_receipt="$FINANCE_N8N_RECEIPT_DIR/finance-four-table-runtime-rollback.json"
+test "$(stat -c '%a' "$rollback_receipt")" = 600
+jq -e '(.operation == "ROLLBACK") and (.project_id == env.N8N_FINANCE_PROJECT_ID) and (.action_count == 33) and (.readback_verified == true) and (.durable_journal == true) and (.commit_protocol == "postgresql_synchronous_wal")' "$rollback_receipt" >/dev/null
 ```
 
 ### runtime acceptance boundary

@@ -153,9 +153,11 @@ failed execution history.
 Static exports and local tests do not prove provider authentication, production
 identity, ledger readback, Cashback readback, routes, or rollback.
 
-`n8n` has no production cutover guide in this checkout. The checkout has no
-production receipt. `run-four-table-cutover.sh` supports `PRODUCTION_ONLY` and
-`DISPOSABLE_ONLY`.
+`n8n` status:
+
+- no production receipt exists here
+- protected runner steps are in [`README.md`](../README.md)
+- full cutover is unavailable
 
 `PRODUCTION_ONLY` requires protected receipt inputs, an exact project ID, and a
 named forward or rollback acknowledgment. The script records a durable runtime
