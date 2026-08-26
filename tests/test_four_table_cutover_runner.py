@@ -272,7 +272,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             binding={
                 "operation_nonce": self.runner.DEFAULT_OPERATION_NONCE,
                 "protected_quiescence_receipt_digest": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-                "required_live_export_digest": live_export["export_sha256"],
+                "required_live_export_digest": self.runner._export_semantic_digest(live_export),
                 "contract_bijection_digest": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             },
         )
@@ -297,6 +297,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         lock_receipt_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
         exported = json.loads(live_export_path.read_text(encoding="utf-8"))
         lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
+        semantic_digest = self.runner._export_semantic_digest(exported)
         state_path = temp / "database-state.json"
         state = {
             "workflows": {
@@ -421,6 +422,9 @@ module.exports = { Client };
         runtime_environment = {
             **os.environ,
             "N8N_FINANCE_PROJECT_ID": exported["project_id"],
+            "FINANCE_FOUR_TABLE_REPOSITORY_ROOT": exported["repository_root"],
+            "FINANCE_FOUR_TABLE_SOURCE_HEAD": exported["source_head"],
+            "FINANCE_FOUR_TABLE_GENERATOR_HEAD": exported["generator_head"],
             "FINANCE_FOUR_TABLE_MIGRATION_SHA256": lock_receipt["migration_receipt_sha256"],
             "FINANCE_FOUR_TABLE_SOURCE_SHA256": lock_receipt["source_backup_sha256"],
             "FINANCE_FOUR_TABLE_IDENTITY_SHA256": lock_receipt["accepted_identity_sha256"],
@@ -438,7 +442,7 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_ACK": self.runner.REQUIRED_FORWARD_ACK,
             "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
             "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": exported["export_sha256"],
+            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": semantic_digest,
             "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             "FINANCE_TEST_LIFECYCLE_LOG": str(lifecycle_log),
         }
@@ -513,6 +517,46 @@ module.exports = { Client };
             for line in raw.splitlines(keepends=True)
         )
 
+    def _rewrite_export(self, path: Path, mutate) -> dict:
+        export = json.loads(path.read_text(encoding="utf-8"))
+        mutate(export)
+        unsigned = dict(export)
+        unsigned.pop("export_sha256", None)
+        export["export_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(unsigned)
+        ).hexdigest()
+        path.write_bytes(self.runner._canonical_bytes(export))
+        os.chmod(path, 0o600)
+        return export
+
+    def _validate_fixture_export(
+        self,
+        export_path: Path,
+        source: Path,
+        receipt_sha: str,
+        required_digest: str,
+        *,
+        source_head: str | None = None,
+        generator_head: str | None = None,
+        identity_digest: str | None = None,
+    ) -> dict:
+        export = json.loads(export_path.read_text(encoding="utf-8"))
+        matrix = json.loads(
+            (ROOT / "integrations/n8n/data-table-migration-matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return self.runner._validate_live_export(
+            export_path,
+            source_head=source_head or self.source_head,
+            generator_head=generator_head or self.generator_head,
+            migration_receipt_sha=receipt_sha,
+            source_backup_sha=self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+            identity_digest=identity_digest or export["accepted_identity_sha256"],
+            required_export_digest=required_digest,
+            matrix=matrix,
+        )
+
     def test_readback_requires_bound_matching_migration_sha_for_every_phase(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
@@ -556,9 +600,11 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
-            export_digest = json.loads(
-                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
-            )["export_sha256"]
+            export_digest = self.runner._export_semantic_digest(
+                json.loads(
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                )
+            )
             output = temp / "forward.json"
             args = [
                 "forward",
@@ -611,7 +657,7 @@ module.exports = { Client };
                 result["contract_bijection_digest"],
                 self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             )
-            self.assertEqual(
+            self.assertNotEqual(
                 result["required_live_export_digest"], result["workflow_export_sha256"]
             )
             self.assertTrue(result["reference_rewrite"]["verified"])
@@ -667,9 +713,11 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
-            export_digest = json.loads(
-                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
-            )["export_sha256"]
+            export_digest = self.runner._export_semantic_digest(
+                json.loads(
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                )
+            )
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -825,6 +873,119 @@ module.exports = { Client };
                     "--workflow-root", str(workflow_root),
                 ]
                 self.assertEqual(self.runner.main(args), 1)
+
+    def test_live_export_provenance_rebind_preserves_semantic_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            original = json.loads(export_path.read_text(encoding="utf-8"))
+            required_digest = self.runner._export_semantic_digest(original)
+            rebound = self._rewrite_export(
+                export_path,
+                lambda export: export.update(
+                    {
+                        "source_head": "b" * 40,
+                        "accepted_identity_sha256": "c" * 64,
+                    }
+                ),
+            )
+            validated = self._validate_fixture_export(
+                export_path,
+                source,
+                receipt_sha,
+                required_digest,
+                source_head=rebound["source_head"],
+                identity_digest=rebound["accepted_identity_sha256"],
+            )
+            self.assertEqual(validated["semantic_digest"], required_digest)
+
+    def test_live_export_every_semantic_change_fails_binding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            original_bytes = export_path.read_bytes()
+            original = json.loads(original_bytes)
+            required_digest = self.runner._export_semantic_digest(original)
+            mutations = (
+                ("schema_version", lambda export: export.update({"schema_version": "changed"})),
+                ("project_id", lambda export: export.update({"project_id": "other-project"})),
+                ("generator_head", lambda export: export.update({"generator_head": "d" * 40})),
+                ("migration_receipt_sha256", lambda export: export.update({"migration_receipt_sha256": "e" * 64})),
+                ("source_backup_sha256", lambda export: export.update({"source_backup_sha256": "f" * 64})),
+                ("redacted", lambda export: export.update({"redacted": False})),
+                ("workflow_count", lambda export: export.update({"workflow_count": 18})),
+                ("in_flight", lambda export: export.update({"in_flight": 1})),
+                (
+                    "workflows",
+                    lambda export: export["workflows"][0].update({"revision_id": "changed"}),
+                ),
+                (
+                    "targets",
+                    lambda export: export["targets"][0].update({"table_id": "changed"}),
+                ),
+                (
+                    "references",
+                    lambda export: export["references"][0].update({"node_id": "changed"}),
+                ),
+            )
+            for field, mutation in mutations:
+                with self.subTest(field=field):
+                    export_path.write_bytes(original_bytes)
+                    os.chmod(export_path, 0o600)
+                    self._rewrite_export(export_path, mutation)
+                    with self.assertRaises(self.runner.CutoverError):
+                        self._validate_fixture_export(
+                            export_path, source, receipt_sha, required_digest
+                        )
+
+    def test_live_export_rejects_wrong_head_path_and_identity_provenance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            original_bytes = export_path.read_bytes()
+            original = json.loads(original_bytes)
+            for field, value, expected_error in (
+                ("source_head", "a" * 40, "LIVE_EXPORT_SOURCE_HEAD_MISMATCH"),
+                ("repository_root", "/rebound/checkout", "LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH"),
+                ("accepted_identity_sha256", "b" * 64, "LIVE_EXPORT_ACCEPTED_IDENTITY_SHA256_MISMATCH"),
+            ):
+                with self.subTest(field=field):
+                    export_path.write_bytes(original_bytes)
+                    os.chmod(export_path, 0o600)
+                    rebound = self._rewrite_export(
+                        export_path, lambda export, field=field, value=value: export.update({field: value})
+                    )
+                    with self.assertRaisesRegex(self.runner.CutoverError, expected_error):
+                        self._validate_fixture_export(
+                            export_path,
+                            source,
+                            receipt_sha,
+                            self.runner._export_semantic_digest(rebound),
+                            identity_digest=original["accepted_identity_sha256"],
+                        )
+
+    def test_repeated_export_generation_has_one_semantic_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            original = json.loads(
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+            )
+            rebound = dict(original)
+            rebound.update(
+                {
+                    "repository_root": "/another/checkout",
+                    "source_head": "d" * 40,
+                    "accepted_identity_sha256": "e" * 64,
+                }
+            )
+            self.assertEqual(
+                self.runner._export_semantic_digest(original),
+                self.runner._export_semantic_digest(rebound),
+            )
 
     def test_live_export_binds_reference_revision_to_workflow_graph(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1023,9 +1184,11 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
-            export_digest = json.loads(
-                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
-            )["export_sha256"]
+            export_digest = self.runner._export_semantic_digest(
+                json.loads(
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                )
+            )
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -1380,6 +1543,7 @@ ROLLBACK;''',
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
             exported = harness["exported"]
+            semantic_digest = self.runner._export_semantic_digest(exported)
             state_path = harness["state_path"]
             initial_state = harness["initial_state"]
             reset_state = harness["reset_state"]
@@ -1395,13 +1559,11 @@ ROLLBACK;''',
                     "protected_quiescence_receipt_digest",
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
-                ("required_live_export_digest", exported["export_sha256"]),
+                ("required_live_export_digest", semantic_digest),
                 ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
             ):
                 self.assertEqual(forward_receipt[field], value)
-            self.assertEqual(
-                forward_receipt["required_live_export_digest"], exported["export_sha256"]
-            )
+            self.assertEqual(forward_receipt["required_live_export_digest"], semantic_digest)
             self.assertTrue(forward_receipt["durable_journal"])
             after_forward = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_forward["journal"]), 1)
@@ -1432,7 +1594,7 @@ ROLLBACK;''',
                     "protected_quiescence_receipt_digest",
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
-                ("required_live_export_digest", exported["export_sha256"]),
+                ("required_live_export_digest", semantic_digest),
                 ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
             ):
                 self.assertEqual(rollback_receipt[field], value)
@@ -1474,7 +1636,7 @@ ROLLBACK;''',
             )
             self.assertEqual(
                 after_receipt_failure["journal"][-1]["receipt"]["required_live_export_digest"],
-                exported["export_sha256"],
+                semantic_digest,
             )
             for reference in exported["references"]:
                 node = next(
@@ -1515,12 +1677,22 @@ ROLLBACK;''',
         """Every runtime entry point validates the shared binding before state changes."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
+            wrong_digest = self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, "LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH"
+            ):
+                self._validate_fixture_export(
+                    harness["live_export_path"],
+                    harness["migration"].parent / "finance-data-table-backup-v1.json",
+                    self.runner.hashlib.sha256(harness["migration"].read_bytes()).hexdigest(),
+                    wrong_digest,
+                )
             state_path = harness["state_path"]
             initial_state = harness["initial_state"]
             run_runtime = harness["run_runtime"]
 
             unknown_export = run_runtime(
-                FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=wrong_digest,
             )
             self.assertNotEqual(unknown_export.returncode, 0)
             self.assertIn("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH", unknown_export.stderr)
@@ -1624,7 +1796,7 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": exported["export_sha256"],
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
                 "FINANCE_REPOSITORY_DIR": str(ROOT),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
@@ -1632,7 +1804,7 @@ ROLLBACK;''',
                 "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
                 "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
                 "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
@@ -1760,7 +1932,7 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": exported["export_sha256"],
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
                 "FINANCE_REPOSITORY_DIR": str(ROOT),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
@@ -1768,7 +1940,7 @@ ROLLBACK;''',
                 "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
                 "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
                 "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
@@ -1968,7 +2140,7 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": live_export["export_sha256"],
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(live_export),
                 "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
@@ -1976,7 +2148,7 @@ ROLLBACK;''',
                 "FINANCE_N8N_RUNTIME_MODE": "DISPOSABLE_ONLY",
                 "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
                 "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
@@ -2004,7 +2176,7 @@ ROLLBACK;''',
             self.assertNotEqual(stale.returncode, 0)
             self.assertEqual(log.read_text(encoding="utf-8"), "")
             environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
-                "03f4cfec931c9e8a38f7ba4c6590e42045f8ba1111a76998efd84ba75a7479f2"
+                "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
             )
             completed = subprocess.run(
                 command,
