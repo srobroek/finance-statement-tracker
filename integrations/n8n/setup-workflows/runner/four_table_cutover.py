@@ -87,7 +87,7 @@ EXPECTED_REFERENCE_ACTIONS = {
 }
 DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
 APPROVED_QUIESCENCE_RECEIPT_DIGEST = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-APPROVED_PROTECTED_EXPORT_DIGEST = "03f4cfec931c9e8a38f7ba4c6590e42045f8ba1111a76998efd84ba75a7479f2"
+APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST = "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
 APPROVED_CONTRACT_BIJECTION_DIGEST = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
@@ -188,7 +188,7 @@ def _binding_inputs(args: argparse.Namespace) -> dict[str, str]:
         "PROTECTED_QUIESCENCE_RECEIPT_DIGEST",
     )
     required_export_digest = _require_digest(
-        getattr(args, "required_live_export_digest", None) or APPROVED_PROTECTED_EXPORT_DIGEST,
+        getattr(args, "required_live_export_digest", None) or APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
         "REQUIRED_LIVE_EXPORT_DIGEST",
     )
     contract_digest = _require_digest(
@@ -326,11 +326,54 @@ def _reference_inventory(matrix: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(inventory, key=lambda item: item["reference_id"])
 
 
+LIVE_EXPORT_FIELDS = frozenset(
+    {
+        "schema_version",
+        "export_sha256",
+        "repository_root",
+        "project_id",
+        "source_head",
+        "generator_head",
+        "migration_receipt_sha256",
+        "source_backup_sha256",
+        "accepted_identity_sha256",
+        "redacted",
+        "workflow_count",
+        "in_flight",
+        "workflows",
+        "targets",
+        "references",
+    }
+)
+LIVE_EXPORT_SEMANTIC_FIELDS = (
+    "schema_version",
+    "project_id",
+    "generator_head",
+    "migration_receipt_sha256",
+    "source_backup_sha256",
+    "redacted",
+    "workflow_count",
+    "in_flight",
+    "workflows",
+    "targets",
+    "references",
+)
+
+
 def _export_without_hash(value: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(value)
     result.pop("export_sha256", None)
-    result.pop("workflow_export_sha256", None)
     return result
+
+
+def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    if set(value) != LIVE_EXPORT_FIELDS:
+        raise CutoverError("LIVE_EXPORT_FIELDS_INVALID")
+    return {field: value[field] for field in LIVE_EXPORT_SEMANTIC_FIELDS}
+
+
+def _export_semantic_digest(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_bytes(_export_semantic_projection(value))).hexdigest()
 
 
 def _validate_live_export(
@@ -346,13 +389,16 @@ def _validate_live_export(
 ) -> dict[str, Any]:
     _require_protected(path, "PROTECTED_LIVE_EXPORT")
     export, raw = _read_json(path)
+    if set(export) != LIVE_EXPORT_FIELDS:
+        raise CutoverError("LIVE_EXPORT_FIELDS_INVALID")
     if export.get("schema_version") != LIVE_EXPORT_SCHEMA:
         raise CutoverError("LIVE_EXPORT_SCHEMA_INVALID")
-    export_sha = export.get("export_sha256", export.get("workflow_export_sha256"))
+    export_sha = export.get("export_sha256")
     export_sha = _require_digest(export_sha, "LIVE_EXPORT_SHA256")
     if hashlib.sha256(_canonical_bytes(_export_without_hash(export))).hexdigest() != export_sha:
         raise CutoverError("LIVE_EXPORT_INTEGRITY_MISMATCH")
-    if export_sha != required_export_digest:
+    semantic_digest = _export_semantic_digest(export)
+    if semantic_digest != required_export_digest:
         raise CutoverError("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
@@ -463,6 +509,7 @@ def _validate_live_export(
         "path": str(path),
         "project_id": project_id,
         "export_sha256": export_sha,
+        "semantic_digest": semantic_digest,
         "workflow_count": 19,
         "in_flight": 0,
         "redacted": True,
@@ -522,7 +569,7 @@ def _lock_receipt(
     binding = dict(binding or {
         "operation_nonce": DEFAULT_OPERATION_NONCE,
         "protected_quiescence_receipt_digest": APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-        "required_live_export_digest": APPROVED_PROTECTED_EXPORT_DIGEST,
+        "required_live_export_digest": APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
         "contract_bijection_digest": APPROVED_CONTRACT_BIJECTION_DIGEST,
     })
     return _seal_with_key(
@@ -1075,7 +1122,7 @@ def _assert_currentness(
     if export_sha is not None:
         export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
         export = _read_json(export_path)[0]
-        observed_export_sha = export.get("export_sha256", export.get("workflow_export_sha256"))
+        observed_export_sha = export.get("export_sha256")
         if observed_export_sha != export_sha:
             raise CutoverError("LIVE_EXPORT_CURRENTNESS_DRIFT")
     if args.accepted_identity:

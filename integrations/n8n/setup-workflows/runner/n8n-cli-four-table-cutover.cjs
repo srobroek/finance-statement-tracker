@@ -36,6 +36,36 @@ const LEGACY_TABLE_IDS = new Map([
   ['finance_reconciliations', 'sha256:f47bf1e1'],
   ['finance_mcp_requests', 'sha256:3b9034f0'],
 ]);
+const LIVE_EXPORT_FIELDS = new Set([
+  'schema_version',
+  'export_sha256',
+  'repository_root',
+  'project_id',
+  'source_head',
+  'generator_head',
+  'migration_receipt_sha256',
+  'source_backup_sha256',
+  'accepted_identity_sha256',
+  'redacted',
+  'workflow_count',
+  'in_flight',
+  'workflows',
+  'targets',
+  'references',
+]);
+const LIVE_EXPORT_SEMANTIC_FIELDS = [
+  'schema_version',
+  'project_id',
+  'generator_head',
+  'migration_receipt_sha256',
+  'source_backup_sha256',
+  'redacted',
+  'workflow_count',
+  'in_flight',
+  'workflows',
+  'targets',
+  'references',
+];
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -92,6 +122,24 @@ function bindingFromEnvironment() {
   return binding;
 }
 
+function provenanceFromEnvironment() {
+  const provenance = {
+    repository_root: text(process.env.FINANCE_FOUR_TABLE_REPOSITORY_ROOT, 'REPOSITORY_ROOT_REQUIRED'),
+    source_head: text(process.env.FINANCE_FOUR_TABLE_SOURCE_HEAD, 'SOURCE_HEAD_REQUIRED'),
+    generator_head: text(process.env.FINANCE_FOUR_TABLE_GENERATOR_HEAD, 'GENERATOR_HEAD_REQUIRED'),
+    migration_receipt_sha256: text(process.env.FINANCE_FOUR_TABLE_MIGRATION_SHA256, 'MIGRATION_RECEIPT_SHA256_REQUIRED'),
+    source_backup_sha256: text(process.env.FINANCE_FOUR_TABLE_SOURCE_SHA256, 'SOURCE_BACKUP_SHA256_REQUIRED'),
+    accepted_identity_sha256: text(process.env.FINANCE_FOUR_TABLE_IDENTITY_SHA256, 'IDENTITY_SHA256_REQUIRED'),
+  };
+  if (!/^[0-9a-f]{40,64}$/.test(provenance.source_head) || !/^[0-9a-f]{40,64}$/.test(provenance.generator_head)) {
+    throw new Error('SOURCE_OR_GENERATOR_HEAD_INVALID');
+  }
+  for (const field of ['migration_receipt_sha256', 'source_backup_sha256', 'accepted_identity_sha256']) {
+    if (!/^[0-9a-f]{64}$/.test(provenance[field])) throw new Error(`${field.toUpperCase()}_INVALID`);
+  }
+  return provenance;
+}
+
 function validateBinding(value, binding, code) {
   for (const [field, expected] of Object.entries(binding)) {
     if (!value || value[field] !== expected) throw new Error(`${code}_${field.toUpperCase()}_MISMATCH`);
@@ -105,6 +153,14 @@ function selectorId(selector) {
 
 function sameJson(left, right) {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function semanticProjection(exported) {
+  if (Object.keys(exported).length !== LIVE_EXPORT_FIELDS.size ||
+      Object.keys(exported).some((field) => !LIVE_EXPORT_FIELDS.has(field))) {
+    throw new Error('LIVE_EXPORT_FIELDS_INVALID');
+  }
+  return Object.fromEntries(LIVE_EXPORT_SEMANTIC_FIELDS.map((field) => [field, exported[field]]));
 }
 
 function setSelector(node, tableId) {
@@ -142,15 +198,23 @@ function databaseOptions(env) {
 }
 
 function validateExport(exported) {
-  if (!exported || exported.schema_version !== EXPORT_SCHEMA || exported.redacted !== true) {
+  if (!exported || typeof exported !== 'object' || Array.isArray(exported) ||
+      exported.schema_version !== EXPORT_SCHEMA || exported.redacted !== true) {
     throw new Error('LIVE_EXPORT_SCHEMA_INVALID');
   }
+  semanticProjection(exported);
   const exportDigest = text(exported.export_sha256, 'LIVE_EXPORT_SHA256_INVALID');
   const unsigned = { ...exported };
   delete unsigned.export_sha256;
   if (digest(unsigned) !== exportDigest) throw new Error('LIVE_EXPORT_INTEGRITY_INVALID');
-  if (bindingFromEnvironment().required_live_export_digest !== exportDigest) {
+  const semanticDigest = digest(semanticProjection(exported));
+  const binding = bindingFromEnvironment();
+  if (binding.required_live_export_digest !== semanticDigest) {
     throw new Error('LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH');
+  }
+  const provenance = provenanceFromEnvironment();
+  for (const [field, expected] of Object.entries(provenance)) {
+    if (exported[field] !== expected) throw new Error(`LIVE_EXPORT_${field.toUpperCase()}_MISMATCH`);
   }
   if (exported.project_id !== projectId || exported.workflow_count !== 19 || exported.in_flight !== 0) {
     throw new Error('LIVE_EXPORT_PROJECT_OR_QUIESCENCE_MISMATCH');
@@ -206,7 +270,7 @@ function validateExport(exported) {
   if (legacyTables.size !== LEGACY_TABLE_IDS.size || [...legacyTables].some((name) => !LEGACY_TABLE_IDS.has(name))) {
     throw new Error('EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED');
   }
-  return { workflows, references, targetIds, exportDigest };
+  return { workflows, references, targetIds, exportDigest, semanticDigest };
 }
 
 function assertWorkflow(workflow, expectedRevision, workflowId) {

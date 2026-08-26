@@ -25,7 +25,7 @@ runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 : "${FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST:?FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST is required}"
 test "$FINANCE_FOUR_TABLE_OPERATION_NONCE" = "r6-20260826-orc-partial-cutover-recovery-plan"
 test "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "03f4cfec931c9e8a38f7ba4c6590e42045f8ba1111a76998efd84ba75a7479f2"
+test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
 test "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 case "$FINANCE_N8N_RUNTIME_MODE" in
   DISPOSABLE_ONLY|PRODUCTION_ONLY) ;;
@@ -108,6 +108,10 @@ with open(sys.argv[1], encoding="utf-8") as handle:
 PY
 )"
 test -n "$identity_sha"
+source_head="$(git -C "$repo_dir" rev-parse HEAD)"
+generator_head="$(python3 "$repo_dir/integrations/n8n/generate_data_table_migration.py" --schema-digest | tail -n 1)"
+test -n "$source_head"
+test -n "$generator_head"
 
 validate_inputs() {
   python3 "$runner_dir/four_table_cutover.py" validate-inputs \
@@ -168,6 +172,9 @@ run_production_runtime() {
     -e "FINANCE_FOUR_TABLE_MIGRATION_SHA256=$migration_sha"
     -e "FINANCE_FOUR_TABLE_SOURCE_SHA256=$source_backup_sha"
     -e "FINANCE_FOUR_TABLE_IDENTITY_SHA256=$identity_sha"
+    -e "FINANCE_FOUR_TABLE_REPOSITORY_ROOT=$repo_dir"
+    -e "FINANCE_FOUR_TABLE_SOURCE_HEAD=$source_head"
+    -e "FINANCE_FOUR_TABLE_GENERATOR_HEAD=$generator_head"
     -e "FINANCE_FOUR_TABLE_OPERATION_NONCE=$FINANCE_FOUR_TABLE_OPERATION_NONCE"
     -e "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST=$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST"
     -e "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"
