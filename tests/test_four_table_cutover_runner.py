@@ -1740,7 +1740,7 @@ ROLLBACK;''',
                 self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
 
     def test_shell_disposable_forward_call_order(self):
-        """The dual CLI reaches runtime twice, then rolls back successfully."""
+        """The shell rejects the stale binding before canonical forward/rollback."""
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, _receipt_sha, _workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
@@ -1924,8 +1924,29 @@ ROLLBACK;''',
                 "FINANCE_TEST_ROLLBACK_PRE": str(receipt_dir / "rollback-pre.raw"),
                 "FINANCE_TEST_ROLLBACK_POST": str(receipt_dir / "rollback-post.raw"),
             }
+            command = [
+                "bash",
+                str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"),
+                "forward",
+            ]
+            environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
+                "e6a226d0d7c6949e1d4263505f8bcf2405aba5f908eeb09bb7427ebb5f86f154"
+            )
+            stale = subprocess.run(
+                command,
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertEqual(log.read_text(encoding="utf-8"), "")
+            environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
+                "03f4cfec931c9e8a38f7ba4c6590e42045f8ba1111a76998efd84ba75a7479f2"
+            )
             completed = subprocess.run(
-                ["bash", str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"), "forward"],
+                command,
                 cwd=checkout,
                 env=environment,
                 capture_output=True,
