@@ -307,6 +307,9 @@ async function execute() {
       return { ...unsigned, runtime_plan_receipt_sha256: digest(unsigned) };
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
+    if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
+      throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
+    }
     const unsigned = { ...forwardReceipt };
     delete unsigned.runtime_plan_receipt_sha256;
     if (digest(unsigned) !== forwardReceipt.runtime_plan_receipt_sha256 || forwardReceipt.action_count !== 33) throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
@@ -316,7 +319,10 @@ async function execute() {
     const changed = new Map();
     for (const item of prestate) {
       const action = byId.get(item.reference.reference_id);
-      if (!action || action.workflow_id !== item.reference.workflow_id || action.node_id !== item.reference.node_id) throw new Error(`FORWARD_RUNTIME_ACTION_MISMATCH:${item.reference.reference_id}`);
+      if (!action || action.workflow_id !== item.reference.workflow_id || action.revision_id !== item.reference.revision_id ||
+          action.node_id !== item.reference.node_id || action.canonical_table_id !== item.reference.canonical_table_id) {
+        throw new Error(`FORWARD_RUNTIME_ACTION_MISMATCH:${item.reference.reference_id}`);
+      }
       const currentRevision = String(item.workflow.versionId || item.workflow.revisionId || '');
       if (currentRevision !== action.post_revision_id) throw new Error(`ROLLBACK_WORKFLOW_REVISION_MISMATCH:${item.reference.reference_id}`);
       const nodes = changed.get(item.reference.workflow_id) || clone(item.workflow.nodes);

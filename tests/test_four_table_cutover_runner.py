@@ -808,6 +808,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         for command in (
             "pg_try_advisory_xact_lock",
             "WRITER_LOCK_RECEIPT_BINDING_INVALID",
+            "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
             "LIVE_WORKFLOW_REVISION_MISMATCH",
             "runtime_plan_receipt_sha256",
             "workflowRepository.update",
