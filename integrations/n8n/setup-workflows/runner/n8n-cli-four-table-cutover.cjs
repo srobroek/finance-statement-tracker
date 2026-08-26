@@ -21,7 +21,6 @@ const n8nRoot = path.dirname(n8nPackageJson);
 process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
 const n8nRequire = createRequire(n8nPackageJson);
 const { Container } = n8nRequire('@n8n/di');
-const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
 const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
 const { DataTableService } = n8nRequire('./dist/modules/data-table/data-table.service.js');
 const pg = n8nRequire('pg');
@@ -578,19 +577,12 @@ async function writeRuntimeReceipt(receipt) {
   });
 }
 
-let completed = false;
-const originalInit = BaseCommand.prototype.init;
-BaseCommand.prototype.init = async function financeFourTableCutover(...args) {
-  await originalInit.apply(this, args);
+ListWorkflowCommand.prototype.run = async function financeFourTableCutoverRun() {
   if (process.env.FINANCE_FOUR_TABLE_RECOVER_JOURNAL === '1') {
     if (operation !== 'FORWARD') throw new Error('FORWARD_JOURNAL_RECOVERY_ONLY');
     await recoverForwardJournal();
   } else {
     await execute();
   }
-  completed = true;
-};
-ListWorkflowCommand.prototype.run = async function suppressWorkflowCommand() {
-  if (!completed) throw new Error('FOUR_TABLE_RUNTIME_DID_NOT_COMPLETE');
 };
 require(path.join(n8nRoot, 'bin', 'n8n'));

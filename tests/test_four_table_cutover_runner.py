@@ -317,6 +317,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             )
         state_path.write_text(json.dumps(state), encoding="utf-8")
         initial_state = json.loads(json.dumps(state))
+        lifecycle_log = temp / "n8n-lifecycle.log"
+        lifecycle_log.write_text("", encoding="utf-8")
 
         def reset_state():
             state_path.write_text(json.dumps(initial_state), encoding="utf-8")
@@ -346,11 +348,36 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             encoding="utf-8",
         )
         (node_root / "@n8n/di/index.js").write_text(
-            "const { DataTableService } = require('n8n/dist/modules/data-table/data-table.service.js');\nconst Container = { get: () => new DataTableService() };\nmodule.exports = { Container };\n",
+            """const fs = require('node:fs');
+const { DataTableService } = require('n8n/dist/modules/data-table/data-table.service.js');
+function mark(stage) {
+  if (process.env.FINANCE_TEST_LIFECYCLE_LOG) {
+    fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, `${stage}\\n`);
+  }
+}
+const Container = { get: () => { mark('data-table-service:get'); return new DataTableService(); } };
+module.exports = { Container };
+""",
             encoding="utf-8",
         )
         (n8n_root / "bin/n8n").write_text(
-            "const { BaseCommand } = require('../dist/commands/base-command.js');\nconst { ListWorkflowCommand } = require('../dist/commands/list/workflow.js');\n(async () => { await new BaseCommand().init(); await new ListWorkflowCommand().run(); })().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });\n",
+            """const fs = require('node:fs');
+const lifecycleLog = process.env.FINANCE_TEST_LIFECYCLE_LOG;
+function mark(stage) {
+  if (lifecycleLog) fs.appendFileSync(lifecycleLog, `${stage}\\n`);
+}
+const { BaseCommand } = require('../dist/commands/base-command.js');
+const { ListWorkflowCommand } = require('../dist/commands/list/workflow.js');
+(async () => {
+  mark('base-init:start');
+  await new BaseCommand().init();
+  mark('base-init:complete');
+  const command = new ListWorkflowCommand();
+  mark('command-run:start');
+  await command.run();
+  mark('command-run:complete');
+})().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+""",
             encoding="utf-8",
         )
         (node_root / "pg/index.js").write_text(
@@ -436,6 +463,7 @@ module.exports = { Pool };
             "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
             "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
             "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+            "FINANCE_TEST_LIFECYCLE_LOG": str(lifecycle_log),
         }
 
         def run_runtime(**overrides):
@@ -460,6 +488,7 @@ module.exports = { Pool };
             "target_json": target_json,
             "runtime_environment": runtime_environment,
             "run_runtime": run_runtime,
+            "lifecycle_log": lifecycle_log,
         }
 
     def _rewrite_readback(
@@ -1303,6 +1332,23 @@ ROLLBACK;''',
                 capture_output=True,
                 text=True,
                 check=False,
+            )
+
+    def test_production_runtime_executes_after_init_inside_command_run(self):
+        """The cutover runs after BaseCommand.init and before command completion."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            completed = harness["run_runtime"]()
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                harness["lifecycle_log"].read_text(encoding="utf-8").splitlines(),
+                [
+                    "base-init:start",
+                    "base-init:complete",
+                    "command-run:start",
+                    "data-table-service:get",
+                    "command-run:complete",
+                ],
             )
 
     def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(self):
