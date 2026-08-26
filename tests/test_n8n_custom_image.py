@@ -44,7 +44,11 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("ARG N8N_BASE_IMAGE", dockerfile)
         self.assertIn(f"ARG N8N_BASE_IMAGE={base_image}", dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
-        self.assertIn("WORKDIR /opt/finance-n8n/community-extensions\nUSER node", dockerfile)
+        self.assertIn("WORKDIR /home/node\nUSER node", dockerfile)
+        self.assertIn(
+            "ln -s /opt/finance-n8n/community-extensions/node_modules /home/node/node_modules",
+            dockerfile,
+        )
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
 
     def test_finance_image_builder_uses_only_immutable_base_and_writes_external_receipt(self):
@@ -127,6 +131,13 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("--entrypoint node", workflow)
         self.assertIn('-v "$state_dir:/home/node/.n8n"', workflow)
         self.assertLess(workflow.index(first_start), workflow.index(registration))
+
+    def test_ci_image_smoke_imports_prodex_sdk_from_n8n_process_context(self):
+        workflow = (ROOT / ".github/workflows/phase1-finance-artifacts.yml").read_text(encoding="utf-8")
+        self.assertIn("--input-type=module", workflow)
+        self.assertIn("process.cwd() !== '/home/node'", workflow)
+        self.assertIn("import { Codex } from '@openai/codex-sdk'", workflow)
+        self.assertIn("typeof Codex !== 'function'", workflow)
 
     def test_community_ai_closure_is_exact_audited_and_hardened(self):
         package = json.loads(

@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-prodex-promotion-restart-receipt-v1.json",
+  "title": "Finance ProDex image promotion and n8n-only restart receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "scope",
+    "redacted",
+    "recorded_at_utc",
+    "source",
+    "image",
+    "auth",
+    "process_context",
+    "protected_state",
+    "restart",
+    "topology",
+    "redaction"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["SPEC_ONLY", "VERIFIED", "BLOCKED", "FAILED"]},
+    "scope": {"const": "PRODEX_IMAGE_PROMOTION_RESTART"},
+    "redacted": {"const": true},
+    "recorded_at_utc": {"type": "string", "format": "date-time"},
+    "source": {"$ref": "#/$defs/source"},
+    "image": {"$ref": "#/$defs/image"},
+    "auth": {"$ref": "#/$defs/auth"},
+    "process_context": {"$ref": "#/$defs/processContext"},
+    "protected_state": {"$ref": "#/$defs/protectedState"},
+    "restart": {"$ref": "#/$defs/restart"},
+    "topology": {"$ref": "#/$defs/topology"},
+    "redaction": {"$ref": "#/$defs/redaction"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "VERIFIED"}}},
+      "then": {
+        "properties": {
+          "image": {"$ref": "#/$defs/verifiedImage"},
+          "process_context": {"properties": {"import_verified": {"const": true}}},
+          "protected_state": {"properties": {"equal": {"const": true}}},
+          "restart": {
+            "properties": {
+              "only_n8n_restarted": {"const": true},
+              "n8n_healthy_after_restart": {"const": true},
+              "auth_reused": {"const": true},
+              "process_context_import_verified_after_restart": {"const": true}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finance_commit", "dockerfile_sha256", "community_lock_sha256"],
+      "properties": {
+        "finance_commit": {"$ref": "#/$defs/commit"},
+        "dockerfile_sha256": {"$ref": "#/$defs/sha256"},
+        "community_lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "imageIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest", "source_commit"],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "source_commit": {"$ref": "#/$defs/commit"}
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "before", "after", "digest_matches_reference"],
+      "properties": {
+        "candidate": {"$ref": "#/$defs/imageIdentity"},
+        "before": {"$ref": "#/$defs/imageIdentity"},
+        "after": {"$ref": "#/$defs/imageIdentity"},
+        "digest_matches_reference": {"type": "boolean"}
+      }
+    },
+    "verifiedImage": {
+      "allOf": [
+        {"$ref": "#/$defs/image"},
+        {
+          "properties": {
+            "digest_matches_reference": {"const": true}
+          }
+        }
+      ]
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "mount_path", "auth_file"],
+      "properties": {
+        "mode": {"const": "CHATGPT_SUBSCRIPTION"},
+        "mount_path": {"const": "/home/node/.n8n/codex"},
+        "auth_file": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["present", "mode", "uid", "gid"],
+          "properties": {
+            "present": {"const": true},
+            "mode": {"const": "0600"},
+            "uid": {"type": "integer", "minimum": 0},
+            "gid": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "processContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cwd", "sdk_package", "sdk_version", "prodex_version", "import_verified"],
+      "properties": {
+        "cwd": {"const": "/home/node"},
+        "sdk_package": {"const": "@openai/codex-sdk"},
+        "sdk_version": {"const": "0.142.1"},
+        "prodex_version": {"const": "0.5.1"},
+        "import_verified": {"type": "boolean"}
+      }
+    },
+    "protectedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "before_sha256", "after_sha256", "equal"],
+      "properties": {
+        "scope": {"const": "N8N_PROTECTED_STATE"},
+        "before_sha256": {"$ref": "#/$defs/sha256"},
+        "after_sha256": {"$ref": "#/$defs/sha256"},
+        "equal": {"type": "boolean"}
+      }
+    },
+    "restart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "only_n8n_restarted",
+        "n8n_healthy_after_restart",
+        "auth_reused",
+        "process_context_import_verified_after_restart"
+      ],
+      "properties": {
+        "only_n8n_restarted": {"type": "boolean"},
+        "n8n_healthy_after_restart": {"type": "boolean"},
+        "auth_reused": {"type": "boolean"},
+        "process_context_import_verified_after_restart": {"type": "boolean"}
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direct_node_execution",
+        "separate_runner_required",
+        "separate_listener_required",
+        "api_key_required",
+        "per_run_auth_required"
+      ],
+      "properties": {
+        "direct_node_execution": {"const": true},
+        "separate_runner_required": {"const": false},
+        "separate_listener_required": {"const": false},
+        "api_key_required": {"const": false},
+        "per_run_auth_required": {"const": false}
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_values_recorded",
+        "token_values_recorded",
+        "api_key_values_recorded",
+        "auth_contents_recorded"
+      ],
+      "properties": {
+        "secret_values_recorded": {"const": false},
+        "token_values_recorded": {"const": false},
+        "api_key_values_recorded": {"const": false},
+        "auth_contents_recorded": {"const": false}
+      }
+    }
+  }
+}
