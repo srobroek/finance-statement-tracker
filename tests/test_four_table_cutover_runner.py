@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -2333,6 +2334,82 @@ ROLLBACK;''',
                 "FINANCE_TEST_ROLLBACK_PRE": str(receipt_dir / "rollback-pre.raw"),
                 "FINANCE_TEST_ROLLBACK_POST": str(receipt_dir / "rollback-post.raw"),
             }
+            cli_lock_output = receipt_dir / "cli-lock.json"
+            cli_preflight = subprocess.run(
+                [
+                    sys.executable,
+                    str(checkout / "integrations/n8n/setup-workflows/runner/four_table_cutover.py"),
+                    "preflight",
+                    "--source-backup",
+                    str(receipt_dir / "finance-data-table-backup-v1.json"),
+                    "--migration-receipt",
+                    str(receipt_dir / "data-table-migration-receipt.json"),
+                    "--migration-receipt-sha256",
+                    identity["migration_receipt_sha256"],
+                    "--source-backup-sha256",
+                    identity["source_backup_sha256"],
+                    "--repository-root",
+                    str(checkout),
+                    "--project-id",
+                    "finance-test-project",
+                    "--accepted-identity",
+                    str(identity_path),
+                    "--operator-ack",
+                    self.runner.REQUIRED_FORWARD_ACK,
+                    "--runtime-action",
+                    self.runner.FORWARD_RUNTIME_ACTION,
+                    "--workflow-root",
+                    str(checkout / "integrations/n8n/workflows"),
+                    "--live-export",
+                    str(live_export_path),
+                    "--required-live-export-digest",
+                    self.runner._export_semantic_digest(live_export),
+                    "--operation-kind",
+                    "FORWARD",
+                    "--output",
+                    str(cli_lock_output),
+                ],
+                cwd=checkout,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(cli_preflight.returncode, 0, cli_preflight.stderr)
+            self.assertEqual(cli_preflight.stderr, "")
+            decoder = json.JSONDecoder()
+            cli_result, end = decoder.raw_decode(cli_preflight.stdout)
+            self.assertEqual(cli_preflight.stdout[end:].strip(), "")
+            self.assertEqual(cli_result, json.loads(cli_preflight.stdout))
+            self.assertEqual(
+                set(cli_result),
+                {
+                    "schema_version",
+                    "operation",
+                    "operation_nonce",
+                    "protected_quiescence_receipt_digest",
+                    "required_live_export_digest",
+                    "contract_bijection_digest",
+                    "migration_receipt_sha256",
+                    "source_head",
+                    "generator_head",
+                    "accepted_identity_sha256",
+                    "source_backup_sha256",
+                    "project_id",
+                    "workflow_export_sha256",
+                    "reference_count",
+                    "unresolved",
+                    "replay_noop",
+                    "lock_receipt_sha256",
+                },
+            )
+            self.assertEqual(cli_result["schema_version"], self.runner.PRECONDITION_SCHEMA)
+            self.assertEqual(cli_result["operation"], "FORWARD")
+            self.assertEqual(cli_result["reference_count"], len(inventory))
+            self.assertEqual(cli_result["unresolved"], [])
+            self.assertTrue(cli_result["replay_noop"])
+            cli_lock = json.loads(cli_lock_output.read_text(encoding="utf-8"))
+            self.assertEqual(cli_lock["schema_version"], self.runner.LOCK_RECEIPT_SCHEMA)
+            self.assertEqual(cli_lock["lock_receipt_sha256"], cli_result["lock_receipt_sha256"])
             command = [
                 "bash",
                 str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"),
@@ -2363,6 +2440,11 @@ ROLLBACK;''',
                 check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr + " log=" + log.read_text(encoding="utf-8"))
+            captured_preflight = receipt_dir / "finance-four-table-precondition.json"
+            captured_text = captured_preflight.read_text(encoding="utf-8")
+            captured_result, captured_end = decoder.raw_decode(captured_text)
+            self.assertEqual(captured_text[captured_end:].strip(), "")
+            self.assertEqual(captured_result, cli_result)
             call_order = [
                 line.split(maxsplit=1)[0]
                 for line in log.read_text(encoding="utf-8").splitlines()

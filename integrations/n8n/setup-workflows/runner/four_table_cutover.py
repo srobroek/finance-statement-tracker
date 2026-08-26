@@ -1807,7 +1807,6 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         export_sha=export["export_sha256"],
     )
-    print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return result
 
 
