@@ -19,6 +19,14 @@ runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 : "${FINANCE_N8N_CONTAINER:?FINANCE_N8N_CONTAINER is required}"
 : "${N8N_FINANCE_PROJECT_ID:?N8N_FINANCE_PROJECT_ID is required}"
 : "${FINANCE_N8N_RUNTIME_MODE:?FINANCE_N8N_RUNTIME_MODE is required}"
+: "${FINANCE_FOUR_TABLE_OPERATION_NONCE:?FINANCE_FOUR_TABLE_OPERATION_NONCE is required}"
+: "${FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST:?FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST is required}"
+: "${FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST:?FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST is required}"
+: "${FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST:?FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST is required}"
+test "$FINANCE_FOUR_TABLE_OPERATION_NONCE" = "r6-20260826-orc-partial-cutover-recovery-plan"
+test "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
+test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "e6a226d0d7c6949e1d4263505f8bcf2405aba5f908eeb09bb7427ebb5f86f154"
+test "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 case "$FINANCE_N8N_RUNTIME_MODE" in
   DISPOSABLE_ONLY|PRODUCTION_ONLY) ;;
   *) echo "FINANCE_N8N_RUNTIME_MODE must be DISPOSABLE_ONLY or PRODUCTION_ONLY" >&2; exit 1 ;;
@@ -104,6 +112,10 @@ validate_inputs() {
     --migration-receipt "$migration_receipt" \
     --migration-receipt-sha256 "$migration_sha" \
     --source-backup-sha256 "$source_backup_sha" \
+    --operation-nonce "$FINANCE_FOUR_TABLE_OPERATION_NONCE" \
+    --protected-quiescence-receipt-digest "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" \
+    --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
+    --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
     --repository-root "$repo_dir" \
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \
@@ -143,6 +155,10 @@ run_production_runtime() {
     -e "FINANCE_FOUR_TABLE_MIGRATION_SHA256=$migration_sha"
     -e "FINANCE_FOUR_TABLE_SOURCE_SHA256=$source_backup_sha"
     -e "FINANCE_FOUR_TABLE_IDENTITY_SHA256=$identity_sha"
+    -e "FINANCE_FOUR_TABLE_OPERATION_NONCE=$FINANCE_FOUR_TABLE_OPERATION_NONCE"
+    -e "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST=$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST"
+    -e "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"
+    -e "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST=$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST"
     -e "FINANCE_FOUR_TABLE_EXPORT_B64=$export_b64"
     -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
   )
@@ -187,6 +203,10 @@ preflight() {
     --migration-receipt "$migration_receipt" \
     --migration-receipt-sha256 "$migration_sha" \
     --source-backup-sha256 "$source_backup_sha" \
+    --operation-nonce "$FINANCE_FOUR_TABLE_OPERATION_NONCE" \
+    --protected-quiescence-receipt-digest "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" \
+    --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
+    --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
     --repository-root "$repo_dir" \
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \
@@ -271,6 +291,10 @@ args=(
   --migration-receipt "$migration_receipt"
   --migration-receipt-sha256 "$migration_sha"
   --source-backup-sha256 "$source_backup_sha"
+  --operation-nonce "$FINANCE_FOUR_TABLE_OPERATION_NONCE"
+  --protected-quiescence-receipt-digest "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST"
+  --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"
+  --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST"
   --repository-root "$repo_dir"
   --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"

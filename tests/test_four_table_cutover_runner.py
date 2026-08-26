@@ -432,6 +432,10 @@ module.exports = { Pool };
             "DB_POSTGRESDB_PASSWORD": "test",
             "FINANCE_FOUR_TABLE_OPERATION": "FORWARD",
             "FINANCE_FOUR_TABLE_ACK": self.runner.REQUIRED_FORWARD_ACK,
+            "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
+            "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+            "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
         }
 
         def run_runtime(**overrides):
@@ -563,6 +567,22 @@ module.exports = { Pool };
             self.assertEqual(result["migration_receipt_sha256"], receipt_sha)
             self.assertEqual(result["source_head"], self.source_head)
             self.assertEqual(result["generator_head"], self.generator_head)
+            self.assertEqual(result["operation_nonce"], self.runner.DEFAULT_OPERATION_NONCE)
+            self.assertEqual(
+                result["protected_quiescence_receipt_digest"],
+                self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+            )
+            self.assertEqual(
+                result["required_live_export_digest"],
+                self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+            )
+            self.assertEqual(
+                result["contract_bijection_digest"],
+                self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+            )
+            self.assertNotEqual(
+                result["required_live_export_digest"], result["workflow_export_sha256"]
+            )
             self.assertTrue(result["reference_rewrite"]["verified"])
             self.assertTrue(result["second_run_noop"])
             self.assertEqual([row["name"] for row in result["target_tables"]], sorted(self.runner.TARGETS))
@@ -1045,6 +1065,13 @@ module.exports = { Pool };
             "data-table-receipt",
         ):
             self.assertIn(command, script)
+        for binding in (
+            "FINANCE_FOUR_TABLE_OPERATION_NONCE",
+            "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST",
+            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST",
+            "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST",
+        ):
+            self.assertIn(binding, script)
 
     def test_production_shell_surface_requires_project_lock_and_runtime_replay(self):
         script = PRODUCTION_SHELL_RUNNER_PATH.read_text(encoding="utf-8")
@@ -1280,6 +1307,19 @@ ROLLBACK;''',
             marker = "finance four-table runtime verified:"
             forward_line = next(line for line in forward.stdout.splitlines() if line.startswith(marker))
             forward_receipt = json.loads(forward_line.removeprefix(marker))
+            for field, value in (
+                ("operation_nonce", self.runner.DEFAULT_OPERATION_NONCE),
+                (
+                    "protected_quiescence_receipt_digest",
+                    self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                ),
+                ("required_live_export_digest", self.runner.APPROVED_PROTECTED_EXPORT_DIGEST),
+                ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
+            ):
+                self.assertEqual(forward_receipt[field], value)
+            self.assertNotEqual(
+                forward_receipt["required_live_export_digest"], exported["export_sha256"]
+            )
             self.assertTrue(forward_receipt["durable_journal"])
             after_forward = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_forward["journal"]), 1)
@@ -1302,6 +1342,18 @@ ROLLBACK;''',
                 ).decode("ascii"),
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            rollback_line = next(line for line in rollback.stdout.splitlines() if line.startswith(marker))
+            rollback_receipt = json.loads(rollback_line.removeprefix(marker))
+            for field, value in (
+                ("operation_nonce", self.runner.DEFAULT_OPERATION_NONCE),
+                (
+                    "protected_quiescence_receipt_digest",
+                    self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                ),
+                ("required_live_export_digest", self.runner.APPROVED_PROTECTED_EXPORT_DIGEST),
+                ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
+            ):
+                self.assertEqual(rollback_receipt[field], value)
             after_rollback = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_rollback["journal"]), 2)
             for reference in exported["references"]:
@@ -1334,6 +1386,14 @@ ROLLBACK;''',
             after_receipt_failure = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_receipt_failure["journal"]), 1)
             self.assertEqual(after_receipt_failure["journal"][-1]["receipt"]["operation"], "FORWARD")
+            self.assertEqual(
+                after_receipt_failure["journal"][-1]["receipt"]["operation_nonce"],
+                self.runner.DEFAULT_OPERATION_NONCE,
+            )
+            self.assertEqual(
+                after_receipt_failure["journal"][-1]["receipt"]["required_live_export_digest"],
+                self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+            )
             for reference in exported["references"]:
                 node = next(
                     node
@@ -1368,6 +1428,37 @@ ROLLBACK;''',
                     if node["id"] == reference["node_id"]
                 )
                 self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+
+    def test_runtime_rejects_missing_or_mismatched_binding_before_mutation_or_recovery(self):
+        """Every runtime entry point validates the shared binding before state changes."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            state_path = harness["state_path"]
+            initial_state = harness["initial_state"]
+            run_runtime = harness["run_runtime"]
+
+            missing = run_runtime(FINANCE_FOUR_TABLE_OPERATION_NONCE="")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("OPERATION_NONCE_REQUIRED", missing.stderr)
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8")), initial_state)
+
+            failed_forward = run_runtime(FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE="1")
+            self.assertNotEqual(failed_forward.returncode, 0)
+            before_recovery = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(before_recovery["journal"]), 1)
+
+            mismatched_recovery = run_runtime(
+                FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1",
+                FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST="f" * 64,
+            )
+            self.assertNotEqual(mismatched_recovery.returncode, 0)
+            self.assertIn(
+                "WRITER_LOCK_RECEIPT_PROTECTED_QUIESCENCE_RECEIPT_DIGEST_MISMATCH",
+                mismatched_recovery.stderr,
+            )
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")), before_recovery
+            )
 
     def test_production_shell_recovers_forward_receipt_for_rollback(self):
         """Recover a committed receipt after output failure, then roll back."""
@@ -1440,6 +1531,10 @@ ROLLBACK;''',
                 "FINANCE_N8N_CONTAINER": "production-finance",
                 "N8N_FINANCE_PROJECT_ID": exported["project_id"],
                 "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
+                "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
+                "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FOUR_TABLE_ROLLBACK_ACK": "",
@@ -1654,6 +1749,10 @@ ROLLBACK;''',
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
                 "N8N_FINANCE_PROJECT_ID": "finance-test-project",
                 "FINANCE_N8N_RUNTIME_MODE": "DISPOSABLE_ONLY",
+                "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
+                "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FINANCE_TEST_PRE": str(receipt_dir / "pre.raw"),

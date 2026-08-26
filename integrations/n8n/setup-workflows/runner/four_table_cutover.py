@@ -85,6 +85,10 @@ EXPECTED_REFERENCE_ACTIONS = {
     "6f99252a931a2e20": "remove_legacy_selector_bind_mcp_audit_contract",
     "5c77dce64a30fe30": "remove_legacy_selector_bind_mcp_audit_contract",
 }
+DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
+APPROVED_QUIESCENCE_RECEIPT_DIGEST = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
+APPROVED_PROTECTED_EXPORT_DIGEST = "e6a226d0d7c6949e1d4263505f8bcf2405aba5f908eeb09bb7427ebb5f86f154"
+APPROVED_CONTRACT_BIJECTION_DIGEST = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
 }
@@ -170,6 +174,42 @@ def _require_text(value: Any, label: str, *, allow_empty: bool = False) -> str:
     if not isinstance(value, str) or (not value and not allow_empty):
         raise CutoverError(f"{label}_INVALID")
     return value
+
+
+def _binding_inputs(args: argparse.Namespace) -> dict[str, str]:
+    """Resolve the one operation binding shared by every cutover receipt."""
+    operation_nonce = _require_text(
+        getattr(args, "operation_nonce", None) or DEFAULT_OPERATION_NONCE,
+        "OPERATION_NONCE",
+    )
+    quiescence_digest = _require_digest(
+        getattr(args, "protected_quiescence_receipt_digest", None)
+        or APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+        "PROTECTED_QUIESCENCE_RECEIPT_DIGEST",
+    )
+    required_export_digest = _require_digest(
+        getattr(args, "required_live_export_digest", None) or APPROVED_PROTECTED_EXPORT_DIGEST,
+        "REQUIRED_LIVE_EXPORT_DIGEST",
+    )
+    contract_digest = _require_digest(
+        getattr(args, "contract_bijection_digest", None)
+        or APPROVED_CONTRACT_BIJECTION_DIGEST,
+        "CONTRACT_BIJECTION_DIGEST",
+    )
+    return {
+        "operation_nonce": operation_nonce,
+        "protected_quiescence_receipt_digest": quiescence_digest,
+        "required_live_export_digest": required_export_digest,
+        "contract_bijection_digest": contract_digest,
+    }
+
+
+def _validate_binding(
+    value: Mapping[str, Any], binding: Mapping[str, str], label: str
+) -> None:
+    for field, expected in binding.items():
+        if value.get(field) != expected:
+            raise CutoverError(f"{label}_{field.upper()}_MISMATCH")
 
 
 def _atomic_write(path: Path, payload: bytes) -> None:
@@ -439,6 +479,7 @@ def _validate_lock_receipt(
     source_backup_sha: str,
     identity_digest: str,
     project_id: str,
+    binding: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], str]:
     _require_protected(path, "PROTECTED_WRITER_LOCK_RECEIPT")
     receipt, raw = _read_json(path)
@@ -453,6 +494,8 @@ def _validate_lock_receipt(
     ):
         if receipt.get(field) != expected:
             raise CutoverError(f"WRITER_LOCK_{field.upper()}_MISMATCH")
+    if binding is not None:
+        _validate_binding(receipt, binding, "WRITER_LOCK")
     if receipt.get("held") is not True or receipt.get("in_flight") != 0:
         raise CutoverError("EXCLUSIVE_WRITER_PRECONDITION_REQUIRED")
     integrity = _require_digest(receipt.get("lock_receipt_sha256"), "LOCK_RECEIPT_SHA256")
@@ -471,7 +514,14 @@ def _lock_receipt(
     identity_digest: str,
     project_id: str,
     operation: str,
+    binding: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
+    binding = dict(binding or {
+        "operation_nonce": DEFAULT_OPERATION_NONCE,
+        "protected_quiescence_receipt_digest": APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+        "required_live_export_digest": APPROVED_PROTECTED_EXPORT_DIGEST,
+        "contract_bijection_digest": APPROVED_CONTRACT_BIJECTION_DIGEST,
+    })
     return _seal_with_key(
         {
             "schema_version": LOCK_RECEIPT_SCHEMA,
@@ -483,6 +533,7 @@ def _lock_receipt(
             "migration_receipt_sha256": migration_receipt_sha,
             "source_backup_sha256": source_backup_sha,
             "accepted_identity_sha256": identity_digest,
+            **binding,
             "workflow_count": 19,
             "in_flight": 0,
             "held": True,
@@ -673,6 +724,7 @@ def _validate_runtime_state(
     source_backup_sha256: str,
     workflow_export_sha256: str | None = None,
     lock_receipt_sha256: str | None = None,
+    binding: Mapping[str, str] | None = None,
 ) -> None:
     if (
         state.get("schema_version") != RUNTIME_STATE_SCHEMA
@@ -692,6 +744,8 @@ def _validate_runtime_state(
         raise CutoverError("RUNTIME_STATE_EXPORT_BINDING_MISMATCH")
     if lock_receipt_sha256 is not None and state.get("lock_receipt_sha256") != lock_receipt_sha256:
         raise CutoverError("RUNTIME_STATE_LOCK_BINDING_MISMATCH")
+    if binding is not None:
+        _validate_binding(state, binding, "RUNTIME_STATE")
 
 
 def _parse_readback(path: Path, migration_sha256: str, expected_phase: str) -> dict[str, Any]:
@@ -950,7 +1004,7 @@ def _bound_live_inputs(
     source_backup_sha: str,
     identity_digest: str,
     operation: str,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None, dict[str, str]]:
     live_export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
     lock_receipt_path = getattr(args, "lock_receipt", None) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
     matrix = _load_matrix()
@@ -964,6 +1018,7 @@ def _bound_live_inputs(
         matrix=matrix,
     )
     project_id = export["project_id"]
+    binding = _binding_inputs(args)
     lock_receipt, lock_sha = _validate_lock_receipt(
         lock_receipt_path,
         export_sha=export["export_sha256"],
@@ -971,10 +1026,11 @@ def _bound_live_inputs(
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
         project_id=project_id,
+        binding=binding,
     )
     if lock_receipt.get("operation") not in {operation, "PRECONDITION"}:
         raise CutoverError("WRITER_LOCK_OPERATION_MISMATCH")
-    return export, lock_receipt, lock_sha
+    return export, lock_receipt, lock_sha, binding
 
 
 def _assert_currentness(
@@ -1029,7 +1085,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
     source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION
     )
-    export, lock_receipt, lock_sha = _bound_live_inputs(
+    export, lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
         source_head=source_head,
         generator_head=generator_head,
@@ -1091,12 +1147,14 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
             "operator_ack": REQUIRED_FORWARD_ACK,
             "workflow_export_sha256": export["export_sha256"] if export else None,
             "lock_receipt_sha256": lock_sha,
+            **binding,
         },
     )
     result = _seal({
         "schema_version": "finance-four-table-cutover-receipt-v1",
         "operation": "FORWARD",
         "migration_receipt_sha256": receipt_sha,
+        **binding,
         "source_head": source_head,
         "generator_head": generator_head,
         "accepted_identity_sha256": identity_digest,
@@ -1159,7 +1217,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
-    export, lock_receipt, lock_sha = _bound_live_inputs(
+    export, lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
         source_head=source_head,
         generator_head=generator_head,
@@ -1202,6 +1260,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         )
     ):
         raise CutoverError("FORWARD_RECEIPT_BINDING_MISMATCH")
+    _validate_binding(forward, binding, "FORWARD_RECEIPT")
     forward_integrity = _require_digest(
         forward.get("cutover_receipt_sha256"), "CUTOVER_RECEIPT_SHA256"
     )
@@ -1240,6 +1299,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         source_backup_sha256=observed_source_backup_sha,
         workflow_export_sha256=export["export_sha256"] if export else None,
         lock_receipt_sha256=lock_sha,
+        binding=binding,
     )
     if (
         runtime_state.get("status") != "RESTORED"
@@ -1259,6 +1319,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         runtime_state_sha,
         workflow_export_sha256=export["export_sha256"] if export else None,
         lock_receipt_sha256=lock_sha,
+        binding=binding,
     )
     _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
     try:
@@ -1279,6 +1340,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": "finance-four-table-cutover-receipt-v1",
         "operation": "ROLLBACK",
         "migration_receipt_sha256": receipt_sha,
+        **binding,
         "source_head": source_head,
         "generator_head": generator_head,
         "accepted_identity_sha256": identity_digest,
@@ -1343,6 +1405,7 @@ def _verify_runtime_proof(
     runtime_state_sha: str,
     workflow_export_sha256: str | None = None,
     lock_receipt_sha256: str | None = None,
+    binding: Mapping[str, str] | None = None,
 ) -> None:
     _require_protected(path)
     proof, _ = _read_json(path)
@@ -1366,6 +1429,8 @@ def _verify_runtime_proof(
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_EXPORT_MISMATCH")
     if lock_receipt_sha256 is not None and proof.get("lock_receipt_sha256") != lock_receipt_sha256:
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_LOCK_MISMATCH")
+    if binding is not None:
+        _validate_binding(proof, binding, "ROLLBACK_RUNTIME_PROOF")
     source_digest = _load_migration_module().MigrationRunner(_source_rows(source)).backup_digest()
     if proof.get("source_digest") != source_digest or proof.get("restored_source_digest") != source_digest:
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_DIGEST_MISMATCH")
@@ -1380,7 +1445,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
     source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
         args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
     )
-    export, _lock_receipt, lock_sha = _bound_live_inputs(
+    export, _lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
         source_head=source_head,
         generator_head=generator_head,
@@ -1422,6 +1487,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         source_backup_sha256=observed_source_backup_sha,
         workflow_export_sha256=export["export_sha256"] if export else None,
         lock_receipt_sha256=lock_sha,
+        binding=binding,
     )
     if (
         runtime_state.get("status") != "MIGRATED"
@@ -1469,6 +1535,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "operator_ack": REQUIRED_ROLLBACK_ACK,
             "workflow_export_sha256": export["export_sha256"] if export else None,
             "lock_receipt_sha256": lock_sha,
+            **binding,
         },
     )
     result = _seal(
@@ -1492,6 +1559,7 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_command": "rollback-runtime",
             "workflow_export_sha256": export["export_sha256"] if export else None,
             "lock_receipt_sha256": lock_sha,
+            **binding,
         }
     )
     # _seal uses the cutover key; this runtime proof has its own schema/key.
@@ -1524,7 +1592,7 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
     module = _load_migration_module()
     if module.MigrationRunner(_source_rows(source)).run() != migration_receipt:
         raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
-    export, _lock_receipt, lock_sha = _bound_live_inputs(
+    export, _lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
         source_head=source_head,
         generator_head=generator_head,
@@ -1549,6 +1617,7 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         "generator_head": generator_head,
         "accepted_identity_sha256": identity_digest,
         "migration_receipt_sha256": observed_receipt_sha,
+        **binding,
         "source_backup_sha256": observed_source_backup_sha,
         "source_digest": migration_receipt["source_digest"],
         "inputs_verified": True,
@@ -1577,6 +1646,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         matrix=_load_matrix(),
     )
+    binding = _binding_inputs(args)
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
@@ -1584,6 +1654,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         project_id=export["project_id"],
         operation="PRECONDITION",
+        binding=binding,
     )
     _write_json(args.output, lock)
     result = {
@@ -1592,6 +1663,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         "source_head": source_head,
         "generator_head": generator_head,
         "migration_receipt_sha256": receipt_sha,
+        **binding,
         "source_backup_sha256": source_backup_sha,
         "accepted_identity_sha256": identity_digest,
         "project_id": export["project_id"],
@@ -1623,6 +1695,10 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--migration-receipt", type=Path, required=True)
         command.add_argument("--migration-receipt-sha256", required=True)
         command.add_argument("--source-backup-sha256", required=True)
+        command.add_argument("--operation-nonce")
+        command.add_argument("--protected-quiescence-receipt-digest")
+        command.add_argument("--required-live-export-digest")
+        command.add_argument("--contract-bijection-digest")
         command.add_argument("--repository-root", type=Path, required=True)
         command.add_argument("--accepted-identity", type=Path)
         command.add_argument("--operator-ack", required=True)
