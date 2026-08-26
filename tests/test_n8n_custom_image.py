@@ -117,6 +117,9 @@ class N8nCustomImageTests(unittest.TestCase):
         entrypoint = (ROOT / "packages/n8n-nodes-finance/scripts/finance-entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn("ln -s", entrypoint)
         self.assertIn("readlink", entrypoint)
+        self.assertIn("sdk_link=/home/node/node_modules", entrypoint)
+        self.assertIn("sdk_immutable=/opt/finance-n8n/community-extensions/node_modules", entrypoint)
+        self.assertIn('ensure_link "${sdk_link}" "${sdk_immutable}"', entrypoint)
         self.assertIn("FINANCE_EXTENSION_MUTABLE_PATH_REJECTED", entrypoint)
         self.assertNotIn("cp ", entrypoint)
         verifier = (ROOT / "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs").read_text(encoding="utf-8")
@@ -138,6 +141,7 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("process.cwd() !== '/home/node'", workflow)
         self.assertIn("import { Codex } from '@openai/codex-sdk'", workflow)
         self.assertIn("typeof Codex !== 'function'", workflow)
+        self.assertIn("Mutated ProDex SDK resolution path unexpectedly passed startup validation", workflow)
 
     def test_community_ai_closure_is_exact_audited_and_hardened(self):
         package = json.loads(

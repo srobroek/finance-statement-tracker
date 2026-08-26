@@ -21,6 +21,25 @@ def schema_errors(document: dict, schema: dict) -> list:
     )
 
 
+def cross_field_errors(document: dict) -> list[str]:
+    errors = []
+    source_commit = document["source"]["finance_commit"]
+    image = document["image"]
+    identities = {name: image[name] for name in ("candidate", "before", "after")}
+    for name, identity in identities.items():
+        reference_digest = identity["reference"].rsplit("@", 1)[-1]
+        if identity["digest"] != reference_digest:
+            errors.append(f"{name}: reference digest mismatch")
+    if identities["candidate"] != identities["after"]:
+        errors.append("candidate and after image identities differ")
+    if identities["after"]["source_commit"] != source_commit:
+        errors.append("after image source commit mismatch")
+    protected = document["protected_state"]
+    if protected["equal"] and protected["before_sha256"] != protected["after_sha256"]:
+        errors.append("protected state fingerprint mismatch")
+    return errors
+
+
 def verified_receipt() -> dict:
     digest = "b" * 64
     commit = "a" * 40
@@ -95,8 +114,22 @@ class N8nProdexRuntimeTests(unittest.TestCase):
         cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
     def test_verified_promotion_restart_receipt_is_schema_valid(self) -> None:
-        errors = schema_errors(verified_receipt(), self.schema)
+        receipt = verified_receipt()
+        errors = schema_errors(receipt, self.schema)
         self.assertEqual(errors, [], "; ".join(error.message for error in errors))
+        self.assertEqual(cross_field_errors(receipt), [])
+
+    def test_verified_receipt_binds_image_identities_and_protected_fingerprints(self) -> None:
+        for mutate, expected in (
+            (lambda receipt: receipt["image"]["candidate"].update(digest="sha256:" + "0" * 64), "reference digest mismatch"),
+            (lambda receipt: receipt["image"]["after"].update(reference="ghcr.io/srobroek/finance-n8n@sha256:" + "0" * 64), "reference digest mismatch"),
+            (lambda receipt: receipt["image"]["after"].update(source_commit="f" * 40), "source commit mismatch"),
+            (lambda receipt: receipt["protected_state"].update(after_sha256="f" * 64), "fingerprint mismatch"),
+        ):
+            invalid = copy.deepcopy(verified_receipt())
+            mutate(invalid)
+            self.assertEqual(schema_errors(invalid, self.schema), [], expected)
+            self.assertIn(expected, " ".join(cross_field_errors(invalid)))
 
     def test_verified_receipt_requires_import_restart_and_protected_state_proof(self) -> None:
         for path in (
