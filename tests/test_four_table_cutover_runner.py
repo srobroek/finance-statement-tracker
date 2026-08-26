@@ -1101,7 +1101,7 @@ module.exports = { Pool };
         self.assertIn('> "$recovery_stdout" 2> "$recovery_stderr"', script)
         self.assertIn('> "$runtime_stdout" 2> "$runtime_stderr"', script)
         self.assertNotIn('"$runtime_output"', script)
-        self.assertIn('"$FINANCE_N8N_CONTAINER" node - \\n', script)
+        self.assertIn('"$FINANCE_N8N_CONTAINER" node - \\\n', script)
         self.assertNotIn('"$FINANCE_N8N_CONTAINER" node - list:workflow', script.split('run_readback()')[0])
         runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
         for command in (
@@ -1597,7 +1597,7 @@ ROLLBACK;''',
             self.assertTrue((temp / "docker-runtime-argv.log").exists(), failed_forward.stderr)
             self.assertEqual(
                 (temp / "docker-runtime-argv.log").read_text(encoding="utf-8").splitlines(),
-                ["RUNTIME\tnode\t-\tlist:workflow", "RECOVERY\tnode\t-\tlist:workflow"],
+                ["RUNTIME\tnode\t-", "RECOVERY\tnode\t-"],
             )
             forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
             self.assertTrue(forward_runtime.exists())
