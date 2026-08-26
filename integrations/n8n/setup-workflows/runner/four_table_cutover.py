@@ -87,7 +87,7 @@ EXPECTED_REFERENCE_ACTIONS = {
 }
 DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
 APPROVED_QUIESCENCE_RECEIPT_DIGEST = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST = "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
+APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST = "e233e0169eeb3b5df8f87982d9fd8224283e718f62d0829ed376332c49fd2b03"
 APPROVED_CONTRACT_BIJECTION_DIGEST = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
@@ -345,19 +345,30 @@ LIVE_EXPORT_FIELDS = frozenset(
         "references",
     }
 )
-LIVE_EXPORT_SEMANTIC_FIELDS = (
-    "schema_version",
-    "project_id",
-    "generator_head",
-    "migration_receipt_sha256",
-    "source_backup_sha256",
-    "redacted",
-    "workflow_count",
+WORKFLOW_SEMANTIC_FIELDS = (
+    "workflow_id",
+    "active",
+    "published",
     "in_flight",
-    "workflows",
-    "targets",
-    "references",
+    "workflow_body_sha256",
 )
+TARGET_SEMANTIC_FIELDS = ("name", "table_id", "schema_sha256")
+REFERENCE_SEMANTIC_FIELDS = (
+    "reference_id",
+    "workflow_id",
+    "workflow_path",
+    "node_id",
+    "node_name",
+    "operation",
+    "old_table_name",
+    "old_table_id",
+    "canonical_table_name",
+    "canonical_table_id",
+    "active",
+    "published",
+    "in_flight",
+)
+WORKFLOW_BODY_FIELDS = ("name", "nodes", "connections", "settings", "meta", "pinData")
 
 
 def _export_without_hash(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -366,10 +377,63 @@ def _export_without_hash(value: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _workflow_body_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    try:
+        return {field: value[field] for field in WORKFLOW_BODY_FIELDS}
+    except (KeyError, TypeError) as error:
+        raise CutoverError("WORKFLOW_BODY_INVALID") from error
+
+
+def _workflow_body_digest(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_bytes(_workflow_body_projection(value))).hexdigest()
+
+
 def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     if set(value) != LIVE_EXPORT_FIELDS:
         raise CutoverError("LIVE_EXPORT_FIELDS_INVALID")
-    return {field: value[field] for field in LIVE_EXPORT_SEMANTIC_FIELDS}
+    workflows = value.get("workflows")
+    targets = value.get("targets")
+    references = value.get("references")
+    if not isinstance(workflows, list) or not isinstance(targets, list) or not isinstance(references, list):
+        raise CutoverError("LIVE_EXPORT_SEMANTIC_COLLECTIONS_INVALID")
+    try:
+        projected_workflows = sorted(
+            [
+                {
+                    **{field: workflow[field] for field in WORKFLOW_SEMANTIC_FIELDS[:-1]},
+                    "workflow_body_sha256": _require_digest(
+                        workflow["workflow_body_sha256"], "WORKFLOW_BODY_SHA256"
+                    ),
+                }
+                for workflow in workflows
+            ],
+            key=lambda workflow: workflow["workflow_id"],
+        )
+        projected_targets = sorted(
+            [
+                {
+                    "name": target["name"],
+                    "table_id": target["table_id"],
+                    "schema_sha256": _require_digest(target["schema_sha256"], "TARGET_SCHEMA_SHA256"),
+                }
+                for target in targets
+            ],
+            key=lambda target: target["name"],
+        )
+        projected_references = sorted(
+            [{field: reference[field] for field in REFERENCE_SEMANTIC_FIELDS} for reference in references],
+            key=lambda reference: reference["reference_id"],
+        )
+    except (KeyError, TypeError) as error:
+        raise CutoverError("LIVE_EXPORT_SEMANTIC_RECORD_INVALID") from error
+    return {
+        "schema_version": value["schema_version"],
+        "workflow_count": value["workflow_count"],
+        "in_flight": value["in_flight"],
+        "workflows": projected_workflows,
+        "targets": projected_targets,
+        "references": projected_references,
+    }
 
 
 def _export_semantic_digest(value: Mapping[str, Any]) -> str:
@@ -386,6 +450,7 @@ def _validate_live_export(
     identity_digest: str,
     required_export_digest: str,
     matrix: Mapping[str, Any],
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     _require_protected(path, "PROTECTED_LIVE_EXPORT")
     export, raw = _read_json(path)
@@ -402,9 +467,11 @@ def _validate_live_export(
         raise CutoverError("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
-    project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", project_id):
+    export_project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", export_project_id):
         raise CutoverError("LIVE_EXPORT_PROJECT_ID_INVALID")
+    if project_id is not None and export_project_id != project_id:
+        raise CutoverError("LIVE_EXPORT_PROJECT_ID_MISMATCH")
     for field, expected in (
         ("source_head", source_head),
         ("generator_head", generator_head),
@@ -436,6 +503,7 @@ def _validate_live_export(
             or workflow.get("in_flight") != 0
         ):
             raise CutoverError("WORKFLOW_NOT_QUIESCENT")
+        _require_digest(workflow.get("workflow_body_sha256"), "WORKFLOW_BODY_SHA256")
         revision_id = _require_text(workflow.get("revision_id"), "WORKFLOW_REVISION_ID")
         if workflow_id in workflow_revisions:
             raise CutoverError("DUPLICATE_WORKFLOW_ID")
@@ -444,7 +512,8 @@ def _validate_live_export(
     if (
         not isinstance(target_ids, list)
         or not all(isinstance(item, Mapping) for item in target_ids)
-        or [item.get("name") for item in target_ids] != sorted(TARGETS)
+        or len(target_ids) != len(TARGETS)
+        or {item.get("name") for item in target_ids} != set(TARGETS)
     ):
         raise CutoverError("EXACT_TARGET_EXPORT_REQUIRED")
     expected_schemas = _target_schema_digests(matrix)
@@ -480,6 +549,8 @@ def _validate_live_export(
         ):
             if observed.get(field) != expected_value:
                 raise CutoverError(f"LIVE_REFERENCE_{field.upper()}_MISMATCH:{expected['reference_id']}")
+        if "source_table" in observed and observed.get("source_table") != observed.get("old_table_name"):
+            raise CutoverError(f"LIVE_REFERENCE_SOURCE_TABLE_MISMATCH:{expected['reference_id']}")
         _require_text(observed.get("workflow_id"), "LIVE_REFERENCE_WORKFLOW_ID")
         observed_workflow_id = observed["workflow_id"]
         observed_revision_id = _require_text(observed.get("revision_id"), "LIVE_REFERENCE_REVISION_ID")
@@ -507,7 +578,7 @@ def _validate_live_export(
         actions.append({**expected, "workflow_id": observed["workflow_id"], "revision_id": observed["revision_id"], "node_id": observed["node_id"], "old_table_id": observed["old_table_id"], "canonical_table_id": observed.get("canonical_table_id")})
     return {
         "path": str(path),
-        "project_id": project_id,
+        "project_id": export_project_id,
         "export_sha256": export_sha,
         "semantic_digest": semantic_digest,
         "workflow_count": 19,
@@ -1068,6 +1139,7 @@ def _bound_live_inputs(
         identity_digest=identity_digest,
         required_export_digest=binding["required_live_export_digest"],
         matrix=matrix,
+        project_id=getattr(args, "project_id", None),
     )
     project_id = export["project_id"]
     lock_receipt, lock_sha = _validate_lock_receipt(
@@ -1698,6 +1770,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         required_export_digest=binding["required_live_export_digest"],
         matrix=_load_matrix(),
+        project_id=getattr(args, "project_id", None),
     )
     lock = _lock_receipt(
         export=export,
@@ -1752,6 +1825,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--required-live-export-digest")
         command.add_argument("--contract-bijection-digest")
         command.add_argument("--repository-root", type=Path, required=True)
+        command.add_argument("--project-id")
         command.add_argument("--accepted-identity", type=Path)
         command.add_argument("--operator-ack", required=True)
         command.add_argument("--runtime-action", required=True)

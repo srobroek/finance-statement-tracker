@@ -25,7 +25,7 @@ runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 : "${FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST:?FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST is required}"
 test "$FINANCE_FOUR_TABLE_OPERATION_NONCE" = "r6-20260826-orc-partial-cutover-recovery-plan"
 test "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
+test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "e233e0169eeb3b5df8f87982d9fd8224283e718f62d0829ed376332c49fd2b03"
 test "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 case "$FINANCE_N8N_RUNTIME_MODE" in
   DISPOSABLE_ONLY|PRODUCTION_ONLY) ;;
@@ -124,6 +124,7 @@ validate_inputs() {
     --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
     --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
     --repository-root "$repo_dir" \
+    --project-id "$N8N_FINANCE_PROJECT_ID" \
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \
     --runtime-action "$2" \
@@ -231,6 +232,7 @@ preflight() {
     --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
     --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
     --repository-root "$repo_dir" \
+    --project-id "$N8N_FINANCE_PROJECT_ID" \
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \
     --runtime-action "$2" \
@@ -296,6 +298,7 @@ case "$operation" in
       --migration-receipt-sha256 "$migration_sha" \
       --source-backup-sha256 "$source_backup_sha" \
       --repository-root "$repo_dir" \
+      --project-id "$N8N_FINANCE_PROJECT_ID" \
       --accepted-identity "$accepted_identity" \
       --operator-ack "$operator_ack" \
       --runtime-action "$runtime_action" \
@@ -319,6 +322,7 @@ args=(
   --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"
   --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST"
   --repository-root "$repo_dir"
+  --project-id "$N8N_FINANCE_PROJECT_ID"
   --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"
     --runtime-action "$runtime_action"
