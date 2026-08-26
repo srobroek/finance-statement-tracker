@@ -76,7 +76,7 @@ function text(value, code) {
   return value;
 }
 
-function bindingFromEnvironment(exported) {
+function bindingFromEnvironment() {
   const binding = {
     operation_nonce: text(process.env.FINANCE_FOUR_TABLE_OPERATION_NONCE, 'OPERATION_NONCE_REQUIRED'),
     protected_quiescence_receipt_digest: text(
@@ -418,7 +418,7 @@ function validateForwardReceipt(receipt, exported, resource, binding) {
 async function recoverForwardJournal() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   validateExport(exported);
-  const binding = bindingFromEnvironment(exported);
+  const binding = bindingFromEnvironment();
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
   validateLockReceipt(lockReceipt, exported, binding, resource);
@@ -451,7 +451,7 @@ async function acquireProjectLock() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
-  const binding = bindingFromEnvironment(exported);
+  const binding = bindingFromEnvironment();
   validateLockReceipt(lockReceipt, exported, binding, resource);
   const pool = new pg.Pool(databaseOptions(process.env));
   let client;

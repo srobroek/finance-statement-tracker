@@ -176,7 +176,7 @@ def _require_text(value: Any, label: str, *, allow_empty: bool = False) -> str:
     return value
 
 
-def _binding_inputs(args: argparse.Namespace, export_sha: str) -> dict[str, str]:
+def _binding_inputs(args: argparse.Namespace) -> dict[str, str]:
     """Resolve the one operation binding shared by every cutover receipt."""
     operation_nonce = _require_text(
         getattr(args, "operation_nonce", None) or DEFAULT_OPERATION_NONCE,
@@ -1018,7 +1018,7 @@ def _bound_live_inputs(
         matrix=matrix,
     )
     project_id = export["project_id"]
-    binding = _binding_inputs(args, export["export_sha256"])
+    binding = _binding_inputs(args)
     lock_receipt, lock_sha = _validate_lock_receipt(
         lock_receipt_path,
         export_sha=export["export_sha256"],
@@ -1646,7 +1646,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         matrix=_load_matrix(),
     )
-    binding = _binding_inputs(args, export["export_sha256"])
+    binding = _binding_inputs(args)
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
