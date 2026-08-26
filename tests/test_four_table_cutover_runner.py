@@ -882,6 +882,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FINANCE_FOUR_TABLE_MIGRATION_SHA256",
             "FINANCE_FOUR_TABLE_IDENTITY_SHA256",
             "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
+            "FINANCE_FOUR_TABLE_RECOVER_JOURNAL",
+            "recover_forward_runtime_receipt",
+            "forward_runtime_receipt",
             "n8n-cli-four-table-cutover.cjs",
             "replay_noop",
             "durable_journal",
@@ -910,6 +913,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "CREATE TABLE IF NOT EXISTS",
             "INJECTED_RECEIPT_FAILURE",
             "writeRuntimeReceipt",
+            "recoverForwardJournal",
+            "FORWARD_RUNTIME_JOURNAL_NOT_FOUND",
+            "export_sha256",
             "ROLLBACK",
             "finance_four_table_cutover:${projectId}",
             "FOR UPDATE",
@@ -1172,6 +1178,14 @@ class Client {
     if (statement.startsWith('SET LOCAL synchronous_commit')) return { rows: [] };
     if (statement.includes('pg_try_advisory_xact_lock')) return { rows: [{ acquired: true }] };
     if (statement.includes('FROM execution_entity')) return { rows: [{ count: 0 }] };
+    if (statement.startsWith('SELECT receipt') && statement.includes('FROM finance_four_table_cutover_journal')) {
+      const [projectId, lockResource, operation, exportSha] = params;
+      const rows = this.current().journal.filter((entry) =>
+        entry.projectId === projectId && entry.lockResource === lockResource &&
+        entry.operation === operation && entry.receipt.export_sha256 === exportSha,
+      );
+      return { rows: rows.length ? [{ receipt: clone(rows[rows.length - 1].receipt) }] : [] };
+    }
     if (statement.startsWith('SELECT w.id')) {
       return { rows: (params[1] || []).map((id) => this.current().workflows[id]).filter(Boolean).map(clone) };
     }
@@ -1313,6 +1327,244 @@ module.exports = { Pool };
                     self.assertNotIn("dataTableId", node["parameters"])
                 else:
                     self.assertEqual(node["parameters"]["dataTableId"], reference["canonical_table_id"])
+
+            recovered = run_runtime(FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1")
+            self.assertEqual(recovered.returncode, 0, recovered.stderr)
+            recovered_line = next(line for line in recovered.stdout.splitlines() if line.startswith(marker))
+            recovered_receipt = json.loads(recovered_line.removeprefix(marker))
+            self.assertEqual(recovered_receipt, after_receipt_failure["journal"][-1]["receipt"])
+
+            rollback_after_failure = run_runtime(
+                FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
+                FINANCE_FOUR_TABLE_ACK=self.runner.REQUIRED_ROLLBACK_ACK,
+                FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=base64.b64encode(
+                    json.dumps(recovered_receipt, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii"),
+            )
+            self.assertEqual(rollback_after_failure.returncode, 0, rollback_after_failure.stderr)
+            after_recovered_rollback = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(after_recovered_rollback["journal"]), 2)
+            for reference in exported["references"]:
+                node = next(
+                    node
+                    for node in after_recovered_rollback["workflows"][reference["workflow_id"]]["nodes"]
+                    if node["id"] == reference["node_id"]
+                )
+                self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+
+    def test_production_shell_recovers_forward_receipt_for_rollback(self):
+        """Recover a committed receipt after output failure, then roll back."""
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            live_export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
+            lock_receipt_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity.pop("identity_sha256", None)
+            identity["identity_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(identity)
+            ).hexdigest()
+            identity_path.write_bytes(self.runner._canonical_bytes(identity))
+            os.chmod(identity_path, 0o600)
+            exported = json.loads(live_export_path.read_text(encoding="utf-8"))
+            exported["accepted_identity_sha256"] = identity["identity_sha256"]
+            exported.pop("export_sha256", None)
+            exported["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(exported)
+            ).hexdigest()
+            live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+            os.chmod(live_export_path, 0o600)
+            lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
+            lock_receipt["accepted_identity_sha256"] = identity["identity_sha256"]
+            lock_receipt["export_sha256"] = exported["export_sha256"]
+            lock_receipt.pop("lock_receipt_sha256", None)
+            lock_receipt["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(lock_receipt)
+            ).hexdigest()
+            lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+            os.chmod(lock_receipt_path, 0o600)
+            state_path = temp / "database-state.json"
+            state = {
+                "workflows": {
+                    workflow["workflow_id"]: {
+                        "id": workflow["workflow_id"],
+                        "active": False,
+                        "activeVersionId": None,
+                        "versionId": workflow["revision_id"],
+                        "nodes": [],
+                        "meta": {},
+                        "settings": {},
+                    }
+                    for workflow in exported["workflows"]
+                },
+                "journal": [],
+            }
+            for reference in exported["references"]:
+                state["workflows"][reference["workflow_id"]]["nodes"].append(
+                    {
+                        "id": reference["node_id"],
+                        "name": reference["node_name"],
+                        "parameters": {"dataTableId": reference["old_table_id"]},
+                    }
+                )
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            node_root = temp / "node_modules"
+            n8n_root = node_root / "n8n"
+            for path in (
+                n8n_root / "dist/commands",
+                n8n_root / "dist/modules/data-table",
+                n8n_root / "bin",
+                node_root / "@n8n/di",
+                node_root / "pg",
+            ):
+                path.mkdir(parents=True, exist_ok=True)
+            (n8n_root / "package.json").write_text('{"name":"n8n","version":"test"}\n', encoding="utf-8")
+            (n8n_root / "dist/commands/base-command.js").write_text(
+                "class BaseCommand { async init() {} }\nmodule.exports = { BaseCommand };\n", encoding="utf-8"
+            )
+            (n8n_root / "dist/commands/list/workflow.js").parent.mkdir(parents=True, exist_ok=True)
+            (n8n_root / "dist/commands/list/workflow.js").write_text(
+                "class ListWorkflowCommand { async run() {} }\nmodule.exports = { ListWorkflowCommand };\n", encoding="utf-8"
+            )
+            (n8n_root / "dist/modules/data-table/data-table.service.js").write_text(
+                "class DataTableService { async getManyAndCount() { return { data: JSON.parse(process.env.FINANCE_TEST_TARGETS_JSON), count: 4 }; } }\nmodule.exports = { DataTableService };\n",
+                encoding="utf-8",
+            )
+            (node_root / "@n8n/di/index.js").write_text(
+                "const { DataTableService } = require('n8n/dist/modules/data-table/data-table.service.js');\nconst Container = { get: () => new DataTableService() };\nmodule.exports = { Container };\n",
+                encoding="utf-8",
+            )
+            (n8n_root / "bin/n8n").write_text(
+                "const { BaseCommand } = require('../dist/commands/base-command.js');\nconst { ListWorkflowCommand } = require('../dist/commands/list/workflow.js');\n(async () => { await new BaseCommand().init(); await new ListWorkflowCommand().run(); })().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });\n",
+                encoding="utf-8",
+            )
+            (node_root / "pg/index.js").write_text(
+                """'use strict';
+const fs = require('node:fs');
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function load() { return JSON.parse(fs.readFileSync(process.env.FINANCE_TEST_DB_STATE, 'utf8')); }
+function save(value) { fs.writeFileSync(process.env.FINANCE_TEST_DB_STATE, JSON.stringify(value)); }
+class Client {
+  constructor() { this.state = load(); this.tx = null; }
+  current() { return this.tx || this.state; }
+  async query(sql, params = []) {
+    const statement = sql.trim();
+    if (statement === 'BEGIN') { this.tx = clone(this.state); return { rows: [] }; }
+    if (statement.startsWith('SET LOCAL synchronous_commit')) return { rows: [] };
+    if (statement.includes('pg_try_advisory_xact_lock')) return { rows: [{ acquired: true }] };
+    if (statement.includes('FROM execution_entity')) return { rows: [{ count: 0 }] };
+    if (statement.startsWith('SELECT receipt') && statement.includes('FROM finance_four_table_cutover_journal')) {
+      const [projectId, lockResource, operation, exportSha] = params;
+      const rows = this.current().journal.filter((entry) => entry.projectId === projectId && entry.lockResource === lockResource && entry.operation === operation && entry.receipt.export_sha256 === exportSha);
+      return { rows: rows.length ? [{ receipt: clone(rows[rows.length - 1].receipt) }] : [] };
+    }
+    if (statement.startsWith('SELECT w.id')) {
+      return { rows: (params[1] || []).map((id) => this.current().workflows[id]).filter(Boolean).map(clone) };
+    }
+    if (statement.startsWith('UPDATE workflow_entity')) {
+      const [nodesJson, workflowId, revisionId] = params;
+      const workflow = this.current().workflows[workflowId];
+      if (!workflow) return { rowCount: 0, rows: [] };
+      workflow.nodes = JSON.parse(nodesJson);
+      workflow.versionId = revisionId;
+      return { rowCount: 1, rows: [{ id: workflowId, versionId: revisionId }] };
+    }
+    if (statement.startsWith('CREATE TABLE IF NOT EXISTS')) return { rows: [] };
+    if (statement.startsWith('INSERT INTO finance_four_table_cutover_journal')) {
+      const [receiptSha, projectId, operation, lockResource, receiptJson] = params;
+      this.current().journal.push({ receiptSha, projectId, operation, lockResource, receipt: JSON.parse(receiptJson) });
+      return { rowCount: 1, rows: [] };
+    }
+    if (statement === 'COMMIT') {
+      this.state = this.tx;
+      this.tx = null;
+      save(this.state);
+      return { rows: [] };
+    }
+    if (statement === 'ROLLBACK') { this.tx = null; return { rows: [] }; }
+    throw new Error(`UNEXPECTED_QUERY:${statement.slice(0, 80)}`);
+  }
+  release() {}
+}
+class Pool { async connect() { return new Client(); } async end() {} }
+module.exports = { Pool };
+""",
+                encoding="utf-8",
+            )
+            target_json = json.dumps([{"name": target["name"], "id": target["table_id"]} for target in exported["targets"]])
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "test \"${1:-}\" = exec\n"
+                "shift\n"
+                "while [[ $# -gt 0 ]]; do\n"
+                "  case \"$1\" in\n"
+                "    -i) shift ;;\n"
+                "    -e) export \"$2\"; shift 2 ;;\n"
+                "    *) break ;;\n"
+                "  esac\n"
+                "done\n"
+                "shift\n"
+                "test \"${1:-}\" = node\n"
+                "shift\n"
+                "export FINANCE_FOUR_TABLE_N8N_ROOT=\"$FINANCE_TEST_N8N_ROOT\"\n"
+                "if [[ \"${FINANCE_FOUR_TABLE_OPERATION:-}\" = FORWARD && \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" != 1 && \"${FINANCE_TEST_FAIL_RECEIPT:-}\" = 1 ]]; then export FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE=1; fi\n"
+                "exec node \"$@\"\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_docker, 0o700)
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
+                "FINANCE_N8N_CONTAINER": "production-finance",
+                "N8N_FINANCE_PROJECT_ID": exported["project_id"],
+                "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
+                "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
+                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
+                "FOUR_TABLE_ROLLBACK_ACK": "",
+                "FINANCE_TEST_FAIL_RECEIPT": "1",
+                "FINANCE_TEST_N8N_ROOT": str(node_root),
+                "FINANCE_TEST_DB_STATE": str(state_path),
+                "FINANCE_TEST_TARGETS_JSON": target_json,
+                "FINANCE_FOUR_TABLE_RECOVER_JOURNAL": "",
+                "FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE": "",
+            }
+            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            failed_forward = subprocess.run(
+                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertNotEqual(failed_forward.returncode, 0, failed_forward.stderr)
+            forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
+            self.assertTrue(forward_runtime.exists())
+            recovered = json.loads(forward_runtime.read_text(encoding="utf-8"))
+            self.assertEqual(recovered["operation"], "FORWARD")
+            self.assertTrue(recovered["durable_journal"])
+            self.assertEqual(len(json.loads(state_path.read_text(encoding="utf-8"))["journal"]), 1)
+
+            environment["FOUR_TABLE_FORWARD_ACK"] = ""
+            environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
+            rollback = subprocess.run(
+                ["bash", str(shell), "rollback"], cwd=ROOT, env=environment,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            after_rollback = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(after_rollback["journal"]), 2)
+            for reference in exported["references"]:
+                node = next(
+                    node
+                    for node in after_rollback["workflows"][reference["workflow_id"]]["nodes"]
+                    if node["id"] == reference["node_id"]
+                )
+                self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
 
     def test_shell_disposable_forward_call_order(self):
         """The dual CLI reaches runtime twice, then rolls back successfully."""

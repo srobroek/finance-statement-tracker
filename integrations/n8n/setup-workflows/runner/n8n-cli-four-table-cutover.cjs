@@ -346,6 +346,53 @@ async function persistRecoveryJournal(client, receipt) {
   );
 }
 
+function validateForwardReceipt(receipt, exported, resource) {
+  if (!receipt || receipt.schema_version !== RUNTIME_SCHEMA || receipt.operation !== 'FORWARD' ||
+      receipt.project_id !== projectId || receipt.lock_resource !== resource ||
+      receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 33 ||
+      receipt.durable_journal !== true || receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
+      receipt.readback_verified !== true || typeof receipt.readback_digest_sha256 !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(receipt.readback_digest_sha256) || !Array.isArray(receipt.actions)) {
+    throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
+  }
+  const unsigned = { ...receipt };
+  delete unsigned.runtime_plan_receipt_sha256;
+  if (digest(unsigned) !== receipt.runtime_plan_receipt_sha256 ||
+      new Map(receipt.actions.map((action) => [action.reference_id, action])).size !== 33) {
+    throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
+  }
+  return receipt;
+}
+
+async function recoverForwardJournal() {
+  const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
+  validateExport(exported);
+  const resource = `finance_four_table_cutover:${projectId}`;
+  const pool = new pg.Pool(databaseOptions(process.env));
+  let client;
+  try {
+    client = await pool.connect();
+    const result = await client.query(
+      `SELECT receipt
+         FROM ${JOURNAL_TABLE}
+        WHERE project_id = $1
+          AND lock_resource = $2
+          AND operation = $3
+          AND receipt->>'export_sha256' = $4
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [projectId, resource, 'FORWARD', exported.export_sha256],
+    );
+    const row = result.rows?.[0];
+    if (!row) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
+    const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
+    await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource));
+  } finally {
+    client?.release();
+    await pool.end();
+  }
+}
+
 async function acquireProjectLock() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
@@ -399,7 +446,8 @@ async function execute() {
     };
     await persistRecoveryJournal(lock.client, journal);
     await lock.client.query('COMMIT');
-    // The host shell captures this line while this process still owns the lock.
+    // COMMIT releases the transaction-scoped advisory lock before this output.
+    // The committed journal is the recovery boundary for this read-only step.
     await writeRuntimeReceipt(journal);
     return journal;
   };
@@ -428,23 +476,15 @@ async function execute() {
       if (!replayPlan.alreadyApplied || !sameJson(selectorReadback(replayState), readback)) {
         throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
       }
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
       return commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
     }
-    const unsigned = { ...forwardReceipt };
-    delete unsigned.runtime_plan_receipt_sha256;
-    if (digest(unsigned) !== forwardReceipt.runtime_plan_receipt_sha256 || forwardReceipt.action_count !== 33 ||
-        forwardReceipt.durable_journal !== true || forwardReceipt.commit_protocol !== 'postgresql_synchronous_wal' ||
-        forwardReceipt.readback_verified !== true || typeof forwardReceipt.readback_digest_sha256 !== 'string' ||
-        !/^[0-9a-f]{64}$/.test(forwardReceipt.readback_digest_sha256)) {
-      throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
-    }
+    validateForwardReceipt(forwardReceipt, exported, lock.resource);
     const byId = new Map(forwardReceipt.actions.map((action) => [action.reference_id, action]));
-    if (byId.size !== 33) throw new Error('FORWARD_RUNTIME_ACTION_COUNT_INVALID');
     const prestate = findReferences(graph, workflows);
     const changed = new Map();
     for (const item of prestate) {
@@ -471,7 +511,7 @@ async function execute() {
       }
     }
     const readback = selectorReadback(restoredState);
-    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
+    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
     return commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
     // PostgreSQL transaction rollback is the only compensation path. A second
@@ -500,7 +540,12 @@ let completed = false;
 const originalInit = BaseCommand.prototype.init;
 BaseCommand.prototype.init = async function financeFourTableCutover(...args) {
   await originalInit.apply(this, args);
-  await execute();
+  if (process.env.FINANCE_FOUR_TABLE_RECOVER_JOURNAL === '1') {
+    if (operation !== 'FORWARD') throw new Error('FORWARD_JOURNAL_RECOVERY_ONLY');
+    await recoverForwardJournal();
+  } else {
+    await execute();
+  }
   completed = true;
 };
 ListWorkflowCommand.prototype.run = async function suppressWorkflowCommand() {

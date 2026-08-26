@@ -114,6 +114,21 @@ validate_inputs() {
     --operation-kind "${3^^}" > /dev/null
 }
 
+recover_forward_runtime_receipt() {
+  local -a recovery_env=("$@")
+  recovery_env+=( -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1" )
+  docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$runtime_output"
+  local recovered_json="$receipt_dir/finance-four-table-runtime-forward-recovered.json"
+  grep '^finance four-table runtime verified:' "$runtime_output" \
+    | tail -n 1 \
+    | sed 's/^finance four-table runtime verified://' \
+    > "$recovered_json"
+  test -s "$recovered_json"
+  chmod 0600 "$recovered_json"
+  cp -- "$recovered_json" "$forward_runtime_receipt"
+  chmod 0600 "$forward_runtime_receipt"
+}
+
 run_production_runtime() {
   preflight "$operator_ack" "$runtime_action" "$operation"
   chmod 0600 "$lock_receipt" "$receipt_dir/finance-four-table-precondition.json"
@@ -136,7 +151,18 @@ run_production_runtime() {
     runtime_env+=( -e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")" )
   fi
 
-  docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$runtime_output"
+  local runtime_status
+  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$runtime_output"; then
+    runtime_status=0
+  else
+    runtime_status=$?
+    if [[ "$operation" = forward ]]; then
+      if ! recover_forward_runtime_receipt "${runtime_env[@]}"; then
+        echo "Unable to recover the committed forward runtime journal" >&2
+      fi
+    fi
+    return "$runtime_status"
+  fi
   runtime_json="$receipt_dir/finance-four-table-runtime-${operation}.json"
   grep '^finance four-table runtime verified:' "$runtime_output" \
     | tail -n 1 \
@@ -149,6 +175,10 @@ run_production_runtime() {
   fi
   grep -F '"durable_journal":true' "$runtime_json" >/dev/null
   grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
+  if [[ "$operation" = forward ]]; then
+    cp -- "$runtime_json" "$forward_runtime_receipt"
+    chmod 0600 "$forward_runtime_receipt"
+  fi
 }
 
 preflight() {
