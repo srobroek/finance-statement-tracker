@@ -53,19 +53,24 @@ const LIVE_EXPORT_FIELDS = new Set([
   'targets',
   'references',
 ]);
-const LIVE_EXPORT_SEMANTIC_FIELDS = [
-  'schema_version',
-  'project_id',
-  'generator_head',
-  'migration_receipt_sha256',
-  'source_backup_sha256',
-  'redacted',
-  'workflow_count',
+const WORKFLOW_SEMANTIC_FIELDS = ['workflow_id', 'active', 'published', 'in_flight', 'workflow_body_sha256'];
+const TARGET_SEMANTIC_FIELDS = ['name', 'table_id', 'schema_sha256'];
+const REFERENCE_SEMANTIC_FIELDS = [
+  'reference_id',
+  'workflow_id',
+  'workflow_path',
+  'node_id',
+  'node_name',
+  'operation',
+  'old_table_name',
+  'old_table_id',
+  'canonical_table_name',
+  'canonical_table_id',
+  'active',
+  'published',
   'in_flight',
-  'workflows',
-  'targets',
-  'references',
 ];
+const WORKFLOW_BODY_FIELDS = ['name', 'nodes', 'connections', 'settings', 'meta', 'pinData'];
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -95,6 +100,11 @@ function decode(name) {
 
 function text(value, code) {
   if (typeof value !== 'string' || value.length === 0) throw new Error(code);
+  return value;
+}
+
+function digestText(value, code) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) throw new Error(code);
   return value;
 }
 
@@ -160,7 +170,41 @@ function semanticProjection(exported) {
       Object.keys(exported).some((field) => !LIVE_EXPORT_FIELDS.has(field))) {
     throw new Error('LIVE_EXPORT_FIELDS_INVALID');
   }
-  return Object.fromEntries(LIVE_EXPORT_SEMANTIC_FIELDS.map((field) => [field, exported[field]]));
+  if (!Array.isArray(exported.workflows) || !Array.isArray(exported.targets) || !Array.isArray(exported.references)) {
+    throw new Error('LIVE_EXPORT_SEMANTIC_COLLECTIONS_INVALID');
+  }
+  const project = (records, fields, key) => records
+    .map((record) => {
+      if (!record || typeof record !== 'object' || fields.some((field) => !Object.hasOwn(record, field))) {
+        throw new Error('LIVE_EXPORT_SEMANTIC_RECORD_INVALID');
+      }
+      return Object.fromEntries(fields.map((field) => [field, record[field]]));
+    })
+    .sort((left, right) => String(left[key]).localeCompare(String(right[key])));
+  const workflows = project(exported.workflows, WORKFLOW_SEMANTIC_FIELDS, 'workflow_id');
+  for (const workflow of workflows) {
+    digestText(workflow.workflow_body_sha256, 'WORKFLOW_BODY_SHA256_INVALID');
+  }
+  const targets = project(exported.targets, TARGET_SEMANTIC_FIELDS, 'name');
+  for (const target of targets) {
+    digestText(target.schema_sha256, 'TARGET_SCHEMA_SHA256_INVALID');
+  }
+  return {
+    schema_version: exported.schema_version,
+    workflow_count: exported.workflow_count,
+    in_flight: exported.in_flight,
+    workflows,
+    targets,
+    references: project(exported.references, REFERENCE_SEMANTIC_FIELDS, 'reference_id'),
+  };
+}
+
+function workflowBodyProjection(workflow) {
+  return Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field]]));
+}
+
+function workflowBodyDigest(workflow) {
+  return digest(workflowBodyProjection(workflow));
 }
 
 function setSelector(node, tableId) {
@@ -223,13 +267,16 @@ function validateExport(exported) {
     throw new Error('EXACT_19_WORKFLOW_EXPORT_REQUIRED');
   }
   const workflows = new Map();
+  const workflowBodyDigests = new Map();
   for (const workflow of exported.workflows) {
     const id = text(workflow.workflow_id, 'LIVE_WORKFLOW_ID_INVALID');
     const revision = text(workflow.revision_id, 'LIVE_WORKFLOW_REVISION_INVALID');
+    const bodyDigest = digestText(workflow.workflow_body_sha256, 'WORKFLOW_BODY_SHA256_INVALID');
     if (workflows.has(id) || workflow.active !== false || workflow.published !== false || workflow.in_flight !== 0) {
       throw new Error('LIVE_WORKFLOW_GRAPH_INVALID');
     }
     workflows.set(id, revision);
+    workflowBodyDigests.set(id, bodyDigest);
   }
   if (!Array.isArray(exported.targets) || exported.targets.length !== 4 ||
       exported.targets.some((target) => !TARGET_NAMES.has(target.name) || !text(target.table_id, 'LIVE_TARGET_ID_INVALID'))) {
@@ -247,6 +294,12 @@ function validateExport(exported) {
     if (references.has(id) || !workflows.has(reference.workflow_id) ||
         workflows.get(reference.workflow_id) !== reference.revision_id) {
       throw new Error(`LIVE_REFERENCE_GRAPH_INVALID:${id}`);
+    }
+    if (Object.hasOwn(reference, 'source_table') && reference.source_table !== reference.old_table_name) {
+      throw new Error(`LIVE_REFERENCE_SOURCE_TABLE_MISMATCH:${id}`);
+    }
+    if (reference.active !== false || reference.published !== false || reference.in_flight !== 0) {
+      throw new Error(`LIVE_REFERENCE_STATE_INVALID:${id}`);
     }
     if (reference.canonical_table_name !== null && !targetIds.has(reference.canonical_table_name)) {
       throw new Error(`LIVE_REFERENCE_TARGET_INVALID:${id}`);
@@ -270,16 +323,19 @@ function validateExport(exported) {
   if (legacyTables.size !== LEGACY_TABLE_IDS.size || [...legacyTables].some((name) => !LEGACY_TABLE_IDS.has(name))) {
     throw new Error('EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED');
   }
-  return { workflows, references, targetIds, exportDigest, semanticDigest };
+  return { workflows, workflowBodyDigests, references, targetIds, exportDigest, semanticDigest };
 }
 
-function assertWorkflow(workflow, expectedRevision, workflowId) {
+function assertWorkflow(workflow, expectedRevision, expectedBodyDigest, workflowId) {
   if (!workflow || workflow.id !== workflowId || workflow.active === true || workflow.activeVersionId) {
     throw new Error(`LIVE_WORKFLOW_STATE_INVALID:${workflowId}`);
   }
   const revision = String(workflow.versionId || workflow.revisionId || workflow.activeVersionId || '');
   if (revision !== expectedRevision) throw new Error(`LIVE_WORKFLOW_REVISION_MISMATCH:${workflowId}`);
   if (!Array.isArray(workflow.nodes)) throw new Error(`LIVE_WORKFLOW_NODES_INVALID:${workflowId}`);
+  if (workflowBodyDigest(workflow) !== expectedBodyDigest) {
+    throw new Error(`LIVE_WORKFLOW_BODY_MISMATCH:${workflowId}`);
+  }
   return revision;
 }
 
@@ -287,7 +343,8 @@ async function loadWorkflows(client, graph, strict = true) {
   const loaded = new Map();
   const workflowIds = [...graph.workflows.keys()];
   const result = await client.query(
-    `SELECT w.id, w.active, w."activeVersionId", w."versionId", w.nodes, w.meta, w.settings
+    `SELECT w.id, w.name, w.active, w."activeVersionId", w."versionId", w.nodes, w.connections,
+            w.meta, w.settings, w."pinData"
        FROM workflow_entity w
        JOIN shared_workflow s ON s."workflowId" = w.id
       WHERE s."projectId" = $1 AND s.role = 'workflow:owner' AND w.id = ANY($2::text[])
@@ -297,7 +354,7 @@ async function loadWorkflows(client, graph, strict = true) {
   const rows = new Map(result.rows.map((workflow) => [workflow.id, workflow]));
   for (const [workflowId, revision] of graph.workflows) {
     const workflow = rows.get(workflowId);
-    if (strict) assertWorkflow(workflow, revision, workflowId);
+    if (strict) assertWorkflow(workflow, revision, graph.workflowBodyDigests.get(workflowId), workflowId);
     else if (!workflow || workflow.id !== workflowId || workflow.active === true || workflow.activeVersionId || !Array.isArray(workflow.nodes)) {
       throw new Error(`LIVE_WORKFLOW_POST_STATE_INVALID:${workflowId}`);
     }

@@ -49,6 +49,16 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         ).stdout.strip()
         cls.generator_head = cls.migration.generated_target_schema_digest()
 
+    def _workflow_body(self, index: int, nodes: list[dict] | None = None) -> dict:
+        return {
+            "name": f"Live Workflow {index}",
+            "nodes": list(nodes or []),
+            "connections": {},
+            "settings": {},
+            "meta": {},
+            "pinData": {},
+        }
+
     def _fixture(self, temp: Path):
         source = {name: [] for name in self.runner._legacy_names()}
         source["finance_source_cursors"] = [{"source_code": "disposable-test-source"}]
@@ -229,6 +239,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 {
                     "workflow_id": f"live-workflow-{index}",
                     "revision_id": f"live-revision-{index}",
+                    "workflow_body_sha256": self.runner._workflow_body_digest(self._workflow_body(index)),
                     "active": False,
                     "published": False,
                     "in_flight": 0,
@@ -297,12 +308,12 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         lock_receipt_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
         exported = json.loads(live_export_path.read_text(encoding="utf-8"))
         lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
-        semantic_digest = self.runner._export_semantic_digest(exported)
         state_path = temp / "database-state.json"
         state = {
             "workflows": {
                 workflow["workflow_id"]: {
                     "id": workflow["workflow_id"],
+                    **self._workflow_body(index),
                     "active": False,
                     "activeVersionId": None,
                     "versionId": workflow["revision_id"],
@@ -310,7 +321,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                     "meta": {},
                     "settings": {},
                 }
-                for workflow in exported["workflows"]
+                for index, workflow in enumerate(exported["workflows"])
             },
             "dataTables": {
                 target["name"]: {
@@ -330,6 +341,29 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                     "parameters": {"dataTableId": reference["old_table_id"]},
                 }
             )
+        for workflow in exported["workflows"]:
+            workflow["workflow_body_sha256"] = self.runner._workflow_body_digest(
+                state["workflows"][workflow["workflow_id"]]
+            )
+        exported.pop("export_sha256", None)
+        exported["export_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(exported)
+        ).hexdigest()
+        semantic_digest = self.runner._export_semantic_digest(exported)
+        live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+        os.chmod(live_export_path, 0o600)
+        lock_receipt.update(
+            {
+                "export_sha256": exported["export_sha256"],
+                "required_live_export_digest": semantic_digest,
+            }
+        )
+        lock_receipt.pop("lock_receipt_sha256", None)
+        lock_receipt["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(lock_receipt)
+        ).hexdigest()
+        lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+        os.chmod(lock_receipt_path, 0o600)
         state_path.write_text(json.dumps(state), encoding="utf-8")
         initial_state = json.loads(json.dumps(state))
         lifecycle_log = temp / "n8n-lifecycle.log"
@@ -539,6 +573,7 @@ module.exports = { Client };
         source_head: str | None = None,
         generator_head: str | None = None,
         identity_digest: str | None = None,
+        project_id: str | None = None,
     ) -> dict:
         export = json.loads(export_path.read_text(encoding="utf-8"))
         matrix = json.loads(
@@ -555,6 +590,7 @@ module.exports = { Client };
             identity_digest=identity_digest or export["accepted_identity_sha256"],
             required_export_digest=required_digest,
             matrix=matrix,
+            project_id=project_id or export["project_id"],
         )
 
     def test_readback_requires_bound_matching_migration_sha_for_every_phase(self):
@@ -910,35 +946,153 @@ module.exports = { Client };
             required_digest = self.runner._export_semantic_digest(original)
             mutations = (
                 ("schema_version", lambda export: export.update({"schema_version": "changed"})),
-                ("project_id", lambda export: export.update({"project_id": "other-project"})),
-                ("generator_head", lambda export: export.update({"generator_head": "d" * 40})),
-                ("migration_receipt_sha256", lambda export: export.update({"migration_receipt_sha256": "e" * 64})),
-                ("source_backup_sha256", lambda export: export.update({"source_backup_sha256": "f" * 64})),
-                ("redacted", lambda export: export.update({"redacted": False})),
                 ("workflow_count", lambda export: export.update({"workflow_count": 18})),
                 ("in_flight", lambda export: export.update({"in_flight": 1})),
+                ("workflow_id", lambda export: export["workflows"][0].update({"workflow_id": "changed"})),
+                ("workflow_active", lambda export: export["workflows"][0].update({"active": True})),
+                ("workflow_published", lambda export: export["workflows"][0].update({"published": True})),
+                ("workflow_in_flight", lambda export: export["workflows"][0].update({"in_flight": 1})),
                 (
-                    "workflows",
-                    lambda export: export["workflows"][0].update({"revision_id": "changed"}),
+                    "workflow_body_sha256",
+                    lambda export: export["workflows"][0].update({"workflow_body_sha256": "a" * 64}),
                 ),
-                (
-                    "targets",
-                    lambda export: export["targets"][0].update({"table_id": "changed"}),
-                ),
-                (
-                    "references",
-                    lambda export: export["references"][0].update({"node_id": "changed"}),
-                ),
+                ("target_name", lambda export: export["targets"][0].update({"name": "changed"})),
+                ("target_table_id", lambda export: export["targets"][0].update({"table_id": "changed"})),
+                ("target_schema_sha256", lambda export: export["targets"][0].update({"schema_sha256": "a" * 64})),
+                ("reference_id", lambda export: export["references"][0].update({"reference_id": "changed"})),
+                ("reference_workflow_id", lambda export: export["references"][0].update({"workflow_id": "changed"})),
+                ("reference_workflow_path", lambda export: export["references"][0].update({"workflow_path": "changed"})),
+                ("reference_node_id", lambda export: export["references"][0].update({"node_id": "changed"})),
+                ("reference_node_name", lambda export: export["references"][0].update({"node_name": "changed"})),
+                ("reference_operation", lambda export: export["references"][0].update({"operation": "changed"})),
+                ("reference_old_table_name", lambda export: export["references"][0].update({"old_table_name": "changed"})),
+                ("reference_old_table_id", lambda export: export["references"][0].update({"old_table_id": "changed"})),
+                ("reference_canonical_table_name", lambda export: export["references"][0].update({"canonical_table_name": "changed"})),
+                ("reference_canonical_table_id", lambda export: export["references"][0].update({"canonical_table_id": "changed"})),
+                ("reference_active", lambda export: export["references"][0].update({"active": True})),
+                ("reference_published", lambda export: export["references"][0].update({"published": True})),
+                ("reference_in_flight", lambda export: export["references"][0].update({"in_flight": 1})),
             )
             for field, mutation in mutations:
                 with self.subTest(field=field):
                     export_path.write_bytes(original_bytes)
                     os.chmod(export_path, 0o600)
-                    self._rewrite_export(export_path, mutation)
+                    rebound = self._rewrite_export(export_path, mutation)
+                    self.assertNotEqual(self.runner._export_semantic_digest(rebound), required_digest)
                     with self.assertRaises(self.runner.CutoverError):
                         self._validate_fixture_export(
                             export_path, source, receipt_sha, required_digest
                         )
+
+    def test_live_export_volatile_fields_do_not_change_semantic_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            original = json.loads(export_path.read_text(encoding="utf-8"))
+            required_digest = self.runner._export_semantic_digest(original)
+
+            def mutate(export):
+                revisions = {}
+                for index, workflow in enumerate(export["workflows"]):
+                    workflow["revision_id"] = f"replacement-revision-{index}"
+                    revisions[workflow["workflow_id"]] = workflow["revision_id"]
+                for reference in export["references"]:
+                    reference["revision_id"] = revisions[reference["workflow_id"]]
+                    reference["source_table"] = reference["old_table_name"]
+                export["workflows"].reverse()
+                export["targets"].reverse()
+                export["references"].reverse()
+
+            rebound = self._rewrite_export(export_path, mutate)
+            self.assertEqual(self.runner._export_semantic_digest(rebound), required_digest)
+            validated = self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            self.assertEqual(validated["semantic_digest"], required_digest)
+
+    def test_live_export_rejects_derived_source_table_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            rebound = self._rewrite_export(
+                export_path,
+                lambda export: export["references"][0].update({"source_table": "finance_wrong_table"}),
+            )
+            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_REFERENCE_SOURCE_TABLE_MISMATCH"):
+                self._validate_fixture_export(
+                    export_path, source, receipt_sha, self.runner._export_semantic_digest(rebound)
+                )
+
+    def test_live_export_body_change_fails_with_unchanged_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            original = json.loads(export_path.read_text(encoding="utf-8"))
+            required_digest = self.runner._export_semantic_digest(original)
+            revision = original["workflows"][0]["revision_id"]
+            rebound = self._rewrite_export(
+                export_path,
+                lambda export: export["workflows"][0].update({"workflow_body_sha256": "b" * 64}),
+            )
+            self.assertEqual(rebound["workflows"][0]["revision_id"], revision)
+            self.assertNotEqual(self.runner._export_semantic_digest(rebound), required_digest)
+            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH"):
+                self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+
+    def test_real_workflow_fixture_matches_volatile_export_variant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            workflows = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted((ROOT / "integrations/n8n/workflows").glob("*.json"))
+            ]
+            by_path = {
+                str(path.relative_to(ROOT)): json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted((ROOT / "integrations/n8n/workflows").glob("*.json"))
+            }
+            self.assertEqual(len(workflows), 19)
+
+            def bind_real_bodies(export):
+                revisions = {}
+                for index, (record, body) in enumerate(zip(export["workflows"], workflows, strict=True)):
+                    record.update(
+                        {
+                            "workflow_id": body["id"],
+                            "revision_id": f"retained-revision-{index}",
+                            "workflow_body_sha256": self.runner._workflow_body_digest(body),
+                        }
+                    )
+                    revisions[body["id"]] = record["revision_id"]
+                for reference in export["references"]:
+                    body = by_path[reference["workflow_path"]]
+                    reference["workflow_id"] = body["id"]
+                    reference["revision_id"] = revisions[body["id"]]
+
+            real_export = self._rewrite_export(export_path, bind_real_bodies)
+            required_digest = self.runner._export_semantic_digest(real_export)
+            self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            mutated_body = json.loads(json.dumps(workflows[0]))
+            mutated_body["nodes"][0]["name"] += " changed"
+            self.assertNotEqual(
+                self.runner._workflow_body_digest(workflows[0]),
+                self.runner._workflow_body_digest(mutated_body),
+            )
+
+            def volatile_variant(export):
+                revisions = {}
+                for index, workflow in enumerate(export["workflows"]):
+                    workflow["revision_id"] = f"refreshed-revision-{index}"
+                    revisions[workflow["workflow_id"]] = workflow["revision_id"]
+                for reference in export["references"]:
+                    reference["revision_id"] = revisions[reference["workflow_id"]]
+                    reference["source_table"] = reference["old_table_name"]
+
+            rebound = self._rewrite_export(export_path, volatile_variant)
+            self.assertEqual(self.runner._export_semantic_digest(rebound), required_digest)
+            self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
 
     def test_live_export_rejects_wrong_head_path_and_identity_provenance(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -950,7 +1104,12 @@ module.exports = { Client };
             for field, value, expected_error in (
                 ("source_head", "a" * 40, "LIVE_EXPORT_SOURCE_HEAD_MISMATCH"),
                 ("repository_root", "/rebound/checkout", "LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH"),
+                ("project_id", "other-project", "LIVE_EXPORT_PROJECT_ID_MISMATCH"),
+                ("generator_head", "d" * 64, "LIVE_EXPORT_GENERATOR_HEAD_MISMATCH"),
+                ("migration_receipt_sha256", "e" * 64, "LIVE_EXPORT_MIGRATION_RECEIPT_SHA256_MISMATCH"),
+                ("source_backup_sha256", "f" * 64, "LIVE_EXPORT_SOURCE_BACKUP_SHA256_MISMATCH"),
                 ("accepted_identity_sha256", "b" * 64, "LIVE_EXPORT_ACCEPTED_IDENTITY_SHA256_MISMATCH"),
+                ("redacted", False, "LIVE_EXPORT_REDACTION_REQUIRED"),
             ):
                 with self.subTest(field=field):
                     export_path.write_bytes(original_bytes)
@@ -965,7 +1124,23 @@ module.exports = { Client };
                             receipt_sha,
                             self.runner._export_semantic_digest(rebound),
                             identity_digest=original["accepted_identity_sha256"],
+                            project_id=original["project_id"],
                         )
+
+            export_path.write_bytes(original_bytes)
+            os.chmod(export_path, 0o600)
+            tampered = json.loads(original_bytes)
+            tampered["source_head"] = "c" * 40
+            export_path.write_bytes(self.runner._canonical_bytes(tampered))
+            os.chmod(export_path, 0o600)
+            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_EXPORT_INTEGRITY_MISMATCH"):
+                self._validate_fixture_export(
+                    export_path,
+                    source,
+                    receipt_sha,
+                    self.runner._export_semantic_digest(tampered),
+                    project_id=original["project_id"],
+                )
 
     def test_repeated_export_generation_has_one_semantic_digest(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2078,6 +2253,7 @@ ROLLBACK;''',
                     {
                         "workflow_id": f"live-workflow-{index}",
                         "revision_id": f"live-revision-{index}",
+                        "workflow_body_sha256": self.runner._workflow_body_digest(self._workflow_body(index)),
                         "active": False,
                         "published": False,
                         "in_flight": 0,
@@ -2176,7 +2352,7 @@ ROLLBACK;''',
             self.assertNotEqual(stale.returncode, 0)
             self.assertEqual(log.read_text(encoding="utf-8"), "")
             environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
-                "83e69722690f388c1c934c5a4bad688973fdc9b89290e05b46a838addf72973c"
+                "e233e0169eeb3b5df8f87982d9fd8224283e718f62d0829ed376332c49fd2b03"
             )
             completed = subprocess.run(
                 command,
