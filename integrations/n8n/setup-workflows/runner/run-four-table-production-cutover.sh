@@ -63,6 +63,15 @@ migration_sha="${approved_digests%%$'\n'*}"
 source_backup_sha="${approved_digests#*$'\n'}"
 test -n "$migration_sha"
 test -n "$source_backup_sha"
+identity_sha="$(python3 - "$accepted_identity" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    print(json.load(handle)["identity_sha256"])
+PY
+)"
+test -n "$identity_sha"
 
 ack="FOUR_TABLE_${operation^^}_REQUIRES_NAMED_OPERATOR_GATE"
 runtime_action="FOUR_TABLE_${operation^^}_RUNTIME_EXECUTED"
@@ -87,7 +96,9 @@ runtime_env=(
   -e "N8N_FINANCE_PROJECT_ID=$N8N_FINANCE_PROJECT_ID"
   -e "FINANCE_FOUR_TABLE_OPERATION=${operation^^}"
   -e "FINANCE_FOUR_TABLE_ACK=$ack"
+  -e "FINANCE_FOUR_TABLE_MIGRATION_SHA256=$migration_sha"
   -e "FINANCE_FOUR_TABLE_SOURCE_SHA256=$source_backup_sha"
+  -e "FINANCE_FOUR_TABLE_IDENTITY_SHA256=$identity_sha"
   -e "FINANCE_FOUR_TABLE_EXPORT_B64=$export_b64"
   -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
 )

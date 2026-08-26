@@ -796,6 +796,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "four_table_cutover.py\" preflight",
             "FINANCE_FOUR_TABLE_EXPORT_B64",
             "FINANCE_FOUR_TABLE_LOCK_B64",
+            "FINANCE_FOUR_TABLE_MIGRATION_SHA256",
+            "FINANCE_FOUR_TABLE_IDENTITY_SHA256",
             "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
             "n8n-cli-four-table-cutover.cjs",
             "replay_noop",

@@ -245,7 +245,9 @@ async function acquireProjectLock() {
       lockReceipt.lock_name !== 'finance_four_table_cutover' ||
       lockReceipt.project_id !== projectId ||
       lockReceipt.export_sha256 !== exported.export_sha256 ||
+      lockReceipt.migration_receipt_sha256 !== process.env.FINANCE_FOUR_TABLE_MIGRATION_SHA256 ||
       lockReceipt.source_backup_sha256 !== process.env.FINANCE_FOUR_TABLE_SOURCE_SHA256 ||
+      lockReceipt.accepted_identity_sha256 !== process.env.FINANCE_FOUR_TABLE_IDENTITY_SHA256 ||
       lockReceipt.held !== true || lockReceipt.in_flight !== 0) {
     throw new Error('WRITER_LOCK_RECEIPT_BINDING_INVALID');
   }
