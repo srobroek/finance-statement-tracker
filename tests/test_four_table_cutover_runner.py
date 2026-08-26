@@ -19,7 +19,7 @@ READBACK_PARSER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/parse_n8n
 RETAINED_READBACK_FIXTURE = ROOT / "tests/fixtures/n8n-2.36.2-data-table-digest-output.json"
 SCHEMA_PATH = ROOT / "integrations/n8n/schemas/finance-four-table-cutover-receipt-v1.schema.json"
 SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
-PRODUCTION_SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-production-cutover.sh"
+PRODUCTION_SHELL_RUNNER_PATH = SHELL_RUNNER_PATH
 PRODUCTION_RUNTIME_PATH = ROOT / "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs"
 
 
@@ -836,6 +836,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "integrations/n8n/data-tables.json",
                 "integrations/n8n/setup-workflows/runner/four_table_cutover.py",
                 "integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs",
+                "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs",
                 "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py",
                 "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh",
             ):
