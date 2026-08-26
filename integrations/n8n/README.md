@@ -7,7 +7,7 @@ runtime tests. Do not treat them as executable or production-ready.
 ## scope
 
 - n8n schedules and coordinates finance workflows.
-- Actual remains the posted ledger.
+- `Actual` remains the posted ledger.
 - The cashback service owns its cursor and routing data.
 - OneDrive stores evidence.
 - OneDrive stores import files.
@@ -23,10 +23,8 @@ runtime tests. Do not treat them as executable or production-ready.
 - `pipeline-registry.json` records production state.
 - Each financial stage is a visible node or sub-workflow.
 - The finance package is `n8n-nodes-finance@0.1.0`.
-- The package handles PDF workflows.
-- The package handles statement workflows.
-- The package handles rules and projection workflows.
-- The package handles Actual operations.
+- Use the finance package for PDF and statement work.
+- Use the same package for rules, projections, and `Actual` operations.
 - Workflows do not use Execute Command or SSH.
 - Workflows do not accept caller-selected shell arguments.
 - Workflows do not accept caller-selected filesystem paths.
@@ -70,6 +68,18 @@ targets four tables:
 
 The migration tests prove the dispositions and target set. Runtime readback does
 not prove live tables.
+
+The generator builds this matrix from versioned inputs. It names the source
+checkout and scan corpus. Each run updates provenance. The check compares table
+names and dispositions, and its unit test checks that same contract. A live
+`n8n` server sits outside this check. Promotion uses readback from runtime.
+
+Use the migration map for decisions. Its source names the finance commit and
+node scan corpus. When tables or workflows change,
+regenerate it. The generator updates provenance and preserves the four target
+rows. A changed snapshot
+without a matching source commit is drift, not runtime evidence, and the file
+holds intended dispositions only. Promotion uses runtime readback.
 
 The Outlook sweep has two phases:
 
@@ -166,16 +176,17 @@ Workflow 19 is inactive and manual-only. It creates or reuses each table in
 
 The workflow reads `generated/ai-policy-contracts.seed.json`. It upserts rows
 into `finance_ai_policy_contracts`. It reads every ACTIVE policy.
-It compares the policy identity and profile. It compares hashes.
-It compares allowed fields. It compares value domains and state.
+
+It compares the policy identity and profile. It compares hashes. It compares
+allowed fields. It compares value domains and state.
 
 The workflow has no custom finance node. It cannot write ledger transactions.
-It has no Actual node. It has no cashback node. It has no Outlook node.
+It has no `Actual` node. It has no cashback node. It has no Outlook node.
 It has no OneDrive, HTTP, or Postgres node.
 
 `generate_platform_bootstrap.py` generates the workflow and
 `generated/platform-bootstrap-manifest.json` from versioned contracts. When the
 table or seed contract drifts, tests fail.
 
-The export has not passed the pinned 2.36.2 image. This manifest and export are
+The export has not passed the pinned 2.36.2 image. The generated files are
 specifications, not runtime evidence.

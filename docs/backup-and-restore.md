@@ -1,90 +1,202 @@
-# Backup and restore
+# backup and restore
 
-Finance data has three independent persistence domains and must never be
-presented as one database:
+Finance uses three persistence domains:
 
-- Actual ledger files under `/opt/stacks/finance-actual-poc/data`;
-- cashback operational SQLite under the configured cashback data directory;
-- n8n Postgres plus the n8n persistent volume for workflows, credentials,
-  cursors, receipts, and transient binary references.
+- `Actual Budget` ledger files
+- Cashback Control SQLite state
+- `n8n` Postgres and its persistent volume
 
-OneDrive evidence follows OneDrive retention/versioning and is not copied into
-container backups.
+Keep each domain separate. `OneDrive` holds source evidence. The backup process
+does not copy that evidence into container archives.
 
-## Actual and cashback
+## ledger and cashback
 
-`deploy/actual-poc/backup.sh` briefly pauses only Actual, its proxy when needed,
-and cashback, copies the two data stores plus secret-free configuration, writes
-checksums, and runs `verify-backup.py` in a disposable extraction directory. It
-does not know about or pause n8n.
+[`deploy/actual-poc/backup.sh`](../deploy/actual-poc/backup.sh) pauses the
+ledger and Cashback Control. It copies both data stores. It writes checksums. It
+runs [`verify-backup.py`](../deploy/actual-poc/verify-backup.py) in a disposable
+directory. It does not pause `n8n`.
 
-The version 4 cashback archive excludes `push_subscriptions`, `push_deliveries`, and
-`push_state` from `cashback-events.sqlite3`. These tables contain browser push
-credentials or ephemeral delivery state. The backup manifest lists the three
-exclusions. It also excludes disposable `pre-deploy-*.sqlite3*` snapshots and
-all SQLite sidecars. The verifier rejects an archive that contains rows in the
-push tables or any member of that historical snapshot family.
-Push subscriptions are recreated by the browser after restore; cashback events,
-period state, and configuration remain restorable.
+The version 4 Cashback archive excludes these tables:
 
-The verifier recognizes legacy version 3 manifests but rejects one without the
-push-state classification. Create a new version 4 backup before restore.
+- `push_subscriptions`
+- `push_deliveries`
+- `push_state`
 
-Backups live at `/opt/backups/finance-actual-poc/<UTC timestamp>/`. Restore only
-after checksum verification, with Actual and cashback stopped, and retain the
-pre-restore copies until UI/API balances and cashback event counts agree.
+Those tables hold browser push credentials or delivery state. It also excludes
+disposable `pre-deploy-*.sqlite3*` files and SQLite sidecars. The
+verifier rejects an archive that contains excluded rows.
 
-## n8n Postgres
+After browser registration, push subscriptions return. The archive retains
+Cashback events.
+The archive retains period state. The archive retains configuration.
 
-The pinned n8n platform commit
-[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867)
-owns [`scripts/backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh),
-[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh),
-and [`scripts/restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh).
-The backup creates a PostgreSQL custom-format dump under
-`/opt/backups/n8n`, writes a SHA-256 sidecar, and retains 30 days by
-default. Schedule it independently of the Actual backup.
+Version 3 manifests need push-state classification. Use a version 4 archive for
+a restore.
 
-Before restoring n8n:
+Archives live under `/opt/backups/finance-actual-poc/<UTC timestamp>/`. Verify
+that the checksum is valid. Stop the ledger and Cashback Control. Retain the
+pre-restore copy.
+Compare ledger balances through UI and API. Compare Cashback event counts.
 
-1. stop n8n and task runners but keep Postgres running;
-2. verify the selected dump checksum;
-3. create a safety dump of the current database;
-4. restore into a new empty database with `pg_restore`;
-5. point n8n at that database and run `scripts/doctor.sh`;
-6. verify workflow count.
-7. verify credential availability.
-8. verify Data Tables.
-9. verify execution receipts.
-10. verify MCP status before deleting the old database.
+## workflow database
 
-The rootless stack owner performs key recovery with the pinned platform
-[`scripts/recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
-procedure. The finance checkout does not recreate, rotate, or print the n8n
-encryption key. A failed restore retains the pre-restore database and safety
-dump until the owner records a redacted recovery receipt.
+The pinned `n8n` platform commit owns the backup scripts:
+[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
 
-Never restore Postgres by copying its live data directory. Never restore a dump
-over an active n8n main. Store the n8n encryption key separately in 1Password.
-Database credentials alone cannot decrypt n8n credentials.
+- [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
 
-Before deleting old state:
+The backup script writes a PostgreSQL custom-format dump under `/opt/backups/n8n`.
+It writes a SHA-256 sidecar. It retains 30 days by default. Schedule this
+backup separately from the ledger backup.
 
-- Keep the workflow count at 19.
-- Check inactive and unpublished state.
-- Review four-table digest.
-- Review source cursor.
-- Check terminal receipts.
-- Check Cloudflare route status.
-- When readback lacks evidence, keep rollback open.
+Restore into a new empty database:
 
-## Required drill
+1. stop `n8n` and its task runners
+2. keep Postgres running
+3. verify that the dump checksum is valid
+4. create a safety dump of the existing database
+5. restore the dump with `pg_restore`
+6. point `n8n` at the new database
+7. run `scripts/doctor.sh`
+8. check that the workflow count is 19
+9. check credential availability
+10. check Data Tables
+11. check execution receipts
+12. check MCP status
 
-Production readiness requires one disposable restore of all three domains and
-verification that:
+The stack owner handles key recovery with
+[`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh).
+The finance checkout does not recreate, rotate, or print the encryption key.
+Keep the pre-restore database and safety dump until a recovery receipt exists.
 
-- Actual UI/API account balances match;
-- the closed ADCB card is AED 0 and remains historical;
-- cashback events and period states match their backup receipt;
-- n8n can read its Data Tables and resume a cursor without duplicate writes;
-- Cloudflare routes return healthy Actual and n8n pages.
+Do not copy a live Postgres data directory. Do not restore over an active main
+process. Store the encryption key in 1Password. Database credentials cannot
+decrypt `n8n` credentials.
+
+Deletion checklist:
+
+- workflow count is 19
+- inactive and unpublished state
+- four-table digest
+- source cursor
+- terminal receipts
+- Cloudflare route status
+- rollback remains open when readback lacks evidence
+
+## greenfield rebuild
+
+Use [`full-ingestion-validation.md`](full-ingestion-validation.md) for the
+rebuild audit. Keep the ledger, Cashback Control, and `n8n` as separate restore
+domains. Install the locked `Actual` dependencies:
+
+```sh
+npm ci --prefix integrations/actual
+```
+
+`full-rebuild.mjs` imports `@actual-app/api`. Run the disposable rebuild from the
+repository root. Supply all seven required options:
+
+```sh
+node integrations/actual/full-rebuild.mjs \
+  --root . \
+  --validation config/full-ingestion-validation.json \
+  --bootstrap config/actual-bootstrap.json \
+  --start 2026-01-01 \
+  --end 2026-08-31 \
+  --snapshot runtime/audit/disposable-full-rebuild-snapshot.json \
+  --result runtime/audit/disposable-full-rebuild-result.json
+```
+
+The command needs these options:
+
+- `--root`
+- `--validation`
+- `--bootstrap`
+- `--start`
+- `--end`
+- `--snapshot`
+- `--result`
+
+The command creates a temporary data directory. It does not clear production
+data.
+
+Use this result receipt shape for a passing run:
+
+```json
+{
+  "schema_version": "actual-disposable-full-rebuild-v1",
+  "status": "PASS",
+  "replay": {"verification": {"status": "PASS"}}
+}
+```
+
+Accept the rebuild only with a passing audit and replay verification.
+
+Use one real production ingestion followed by an identical replay and controlled
+`n8n` restart for semantic acceptance. Keep an `Actual` reset as a fallback-only
+recovery action. A reset does not replace the ingestion, replay, or restart
+evidence.
+
+### reset after login failure
+
+Confirm that current authentication is unusable. Record that failure with the
+shared ingestion `run_id`. Bind the reset receipt to that same `run_id`.
+Do not reset `Actual` by default. Use the supported reset at version `26.8.1`.
+
+Keep runtime data under `/opt/stacks/finance-actual-poc/data`. This checkout
+provides no reset command. Keep storage private. Record only redacted receipt
+fields. Keep this credential reset runtime-only. Do not reset ledger data, Data
+Tables, or source cursors.
+
+Before reset, retain these protected files:
+
+- mode-`0600` prestate receipt
+- verified archive under `/opt/backups/finance-actual-poc`
+- its `SHA256SUMS` checksum
+
+After reset, check that these readbacks succeed:
+
+- `@actual-app/api` reads the expected budget and its account balances
+- the ledger UI reads the same budget and account balances
+- API and UI authentication both succeed
+- API and UI identify the same data
+
+Reset is not acceptance evidence. After reset, repeat these checks:
+
+- one real ingestion
+- identical replay
+- controlled `n8n` restart
+
+### production apply stays disabled
+
+This checkout keeps production apply disabled. The production CLI accepts no
+disposable result input. It has no export restore command. Its result receipt does
+not prove server, sync, or budget identity. Keep `--apply` out of commands from
+this checkout.
+
+Keep the production target unchanged. This checkout has no operator-owned apply
+procedure or tested receipt. Such a procedure binds the `Actual` target to a
+pre-apply export. It validates the export checksum. It restores that exact export.
+It reads the budget back through the API and UI.
+
+The restore proof compares archive and target identity. An archive checksum
+proves only the bytes. It cannot identify the server, sync session, or budget.
+Record the target and prestate in an operator receipt. Read the restored budget
+through the API and UI. Keep the exact checksum in that receipt.
+
+The four-table runner supports disposable and production modes. The protected
+production steps are in [`README.md`](../README.md). This checkout has no receipt
+from a live production acceptance. Its rollback is not an `Actual` restore.
+Retain source files until a separate operator readback passes.
+
+## required drill
+
+Complete one disposable restore for each domain. Verify that these results hold:
+
+- ledger UI and API balances agree
+- the closed ADCB card has an AED 0 balance
+- Cashback events and period state match the backup receipt
+- `n8n` reads Data Tables and resumes a cursor without duplicate writes

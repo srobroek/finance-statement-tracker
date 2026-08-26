@@ -1,80 +1,167 @@
-# Actual production
+# ledger operations
 
-Actual is the authoritative ledger, budget, rule, schedule, reconciliation, and
-reporting application. n8n owns acquisition and orchestration; the cashback app
-owns live routing state. No ingestion bridge or second posted-transaction store
-exists.
+`Actual Budget` is the posted finance ledger. `n8n` acquires source files and
+runs orchestration. Cashback Control owns routing state. `OneDrive` owns source
+evidence. No second posted-transaction store exists.
 
-## Runtime topology
+## runtime topology
 
-| Service | Responsibility | Exposure |
+| service | responsibility | exposure |
 |---|---|---|
-| `finance-actual-poc` | Actual server and ledger files | private Docker network |
-| `finance-actual-proxy` | SharedArrayBuffer headers | host `127.0.0.1:5006`, Cloudflare Tunnel |
-| `finance-cashback-control` | live cashback routing and push | independent stack |
-| `finance-n8n` | schedules, ETL, review, and operations | host `172.20.10.20:5678`, Cloudflare Tunnel |
-| `finance-n8n-postgres` | n8n workflow and operational state | private to n8n network |
+| `finance-actual-poc` | ledger files and the `Actual` server | private Docker network |
+| `finance-actual-proxy` | shared-array-buffer headers | `127.0.0.1:5006` and tunnel |
+| `finance-cashback-control` | cashback routing and push state | separate stack |
+| `finance-n8n` | schedules and workflow work | `172.20.10.20:5678` and tunnel |
+| `finance-n8n-postgres` | workflow state | private n8n network |
 
-The n8n Actual custom node uses `@actual-app/api` directly over
-`finance-actual-poc_default`. Its local Actual cache is inside the persistent
-n8n volume. The node accepts typed finance operations only, serializes ledger
-writes, verifies imported IDs, and cannot execute arbitrary commands.
+`n8n` uses a custom node with `@actual-app/api` over
+`finance-actual-poc_default`. `n8n` stores its node cache in the persistent
+volume. Typed finance operations pass through the custom node. It serializes
+ledger writes. It reads each imported ID back. It cannot run arbitrary commands.
 
-## Import gates
+## import gates
 
-1. Archive the immutable source in OneDrive and persist its SHA-256 identity.
-2. Parse and normalize without writing to Actual.
-3. Apply ordered static rules, history matching, and bounded AI proposals.
-4. Require tied statement arithmetic, mapped accounts, stable imported IDs,
-   valid notes, and an explicit review result.
-5. Preflight against Actual.
-6. Write through the direct Actual node and read every imported ID back.
-7. Advance the Outlook/browser cursor only after the execution receipt is
-   durable in n8n Postgres.
-8. Finalize a cashback period only after statement reconciliation succeeds.
+Use this order for an import:
 
-Retries reuse the immutable source identity and idempotency key. A failed or
-quarantined run never advances a cursor and never creates a balancing entry.
+1. archive the source in `OneDrive` and save its SHA-256 identity
+2. parse and normalize without a ledger write
+3. apply static rules and history matching
+4. review bounded AI proposals
+5. check statement arithmetic and account mapping
+6. preflight the `Actual` target
+7. write through the custom node
+8. read every imported ID back
+9. advance a cursor only after a durable receipt exists
 
-## Cloudflare
+When statement reconciliation succeeds, close the Cashback period. A failed or
+quarantined run keeps its cursor unchanged. It cannot create a balancing entry.
 
-- `actual.vxsan.com` routes to `http://127.0.0.1:5006`.
-- `n8n.vxsan.com` routes to `http://172.20.10.20:5678`.
-- Leave origin Host-header overrides unset.
-- Protect browser UIs with interactive AD.
-- Use a separate machine-to-machine Access policy for n8n MCP or unattended
-  webhook paths. Browser cookies are not service credentials.
+## acceptance ledger
 
-| Boundary | Rule |
+The [project acceptance ledger](../config/project-acceptance.json) is the source
+for runtime acceptance. The `cashback-reusability-mobile-push` entry is the
+Cashback gate. Its checkout status is `PARTIAL`. Its blockers are
+`FICTIONAL_PORTFOLIO_MATRIX_REQUIRED` and `MOBILE_PUSH_ACCEPTANCE_REQUIRED`.
+Run its declared verifier from the repository root:
+
+```sh
+python scripts/verify-project-acceptance.py --require cashback-reusability-mobile-push
+```
+
+The ledger entry records the verifier and its evidence. A service health check
+does not establish workflow acceptance.
+
+## semantic acceptance
+
+The semantic gate requires one real production ingestion through the import gates
+above. Record each field in its terminal receipt:
+
+- source SHA-256
+- normalized batch
+- imported IDs
+- cursor before and after
+
+Replay the identical source. Do a controlled `n8n` restart. When all checks pass,
+accept the run:
+
+- replay is a no-op
+- the cursor is unchanged
+- ledger readback matches the first receipt
+
+Cloudflare publication is not part of this semantic gate. Treat its connector
+and authorization checks as a separate optional boundary.
+
+## runtime status
+
+| surface | status |
 |---|---|
-| Local connector | The finance checkout does not run `cloudflared`. Keep the service stopped and disabled. |
-| Tunnel owner | The `Home-beachhead` tunnel owns connector replicas and route identity. |
-| Provider contract | [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md) |
-| Provider routes | After Service Auth checks pass, activate routes. |
-| Route script | [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh) |
-| Route verification | Run the script for positive and negative results. |
-| MCP route | `cloudflare-route-security` remains `IMPLEMENTED_NOT_DEPLOYED` in `config/project-acceptance.json`. Keep the route disabled until the connector receipt exists. |
+| `Cashback Control` runtime | `READY` |
+| `W20` workflow integration | `DEFERRED` |
+| `W02` workflow integration | `DEFERRED` |
+| `W03` workflow integration | `DEFERRED` |
+| shared ingestion authority | `OPEN` |
 
-## Schedules
+The table records the current runtime split. The acceptance ledger remains the
+source for production promotion. The `cashback-reusability-mobile-push` entry
+still reports its own gate status and blockers.
 
-n8n owns the twice-daily/live notification scans and issuer-specific monthly
-statement workflows. An overlap cursor catches missed runs. Statement periods
-close per card only after the expected statement arrives and reconciles.
-Interactive FAB and Sarwa acquisition remains user-assisted. Amazon and other
-merchant order evidence uses generic Outlook email enrichment.
+When its named verifier and runtime readback pass, a production gate opens. A
+container health response does not prove a workflow result. The ledger stores the
+gate status and verifier. Its entry records blockers and evidence for review.
+When either declared blocker remains, the Cashback entry stays `PARTIAL`. The
+operator records each command result with the same checkout and ledger source,
+binding the status to the target service and review time.
 
-## Monitoring
+The shared ingestion authority stays `OPEN` until the semantic receipt binds each
+owner.
 
-The existing host monitor owns only Actual, its proxy, and cashback. The n8n
-stack health-gates n8n on Postgres and checks both services with
-[`scripts/doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh).
-When the n8n MCP acceptance gate passes, query execution state through n8n MCP.
-The checked-in application manifest keeps n8n MCP disabled until that gate
-passes. The pinned platform sets `EXECUTIONS_DATA_SAVE_ON_ERROR=none` and
-`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, so n8n stores no execution history for
-failed or successful runs. Durable redacted receipts provide the observability
-surface.
+## cloudflare target
 
-Current production remains blocked until the fixed-purpose PDF/parser/Actual
-custom nodes are implemented, fixture-tested, shadow-run, and promoted through
-the acceptance gates in `config/project-acceptance.json`.
+Cloudflare is optional. The user waived its publication and has not verified it. The
+checkout has no current provider authority. It has no provider readback.
+Cloudflare stays outside semantic acceptance. These mappings describe a target,
+not a deployment receipt:
+
+- `actual.vxsan.com` targets `http://127.0.0.1:5006`
+- `n8n.vxsan.com` targets `http://172.20.10.20:5678`
+- origin host overrides stay unset
+- browser UIs use interactive access
+- machine access uses a separate service policy
+
+The local checkout does not run `cloudflared`. Keep routes disabled until provider
+readback proves:
+
+- connector identity
+- route identity
+- origin reachability
+- service authorization
+
+Use the pinned platform contract:
+[`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md).
+Use its route check:
+[`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh).
+The ledger keeps `cloudflare-route-security` at `IMPLEMENTED_NOT_DEPLOYED` until
+that readback exists.
+
+## schedules
+
+`n8n` owns these jobs:
+
+- notification scans
+- issuer statement jobs
+
+Missed runs use an overlap cursor. Each card has a job.
+
+For each card, `n8n` checks:
+
+- statement arrival
+- reconciliation success
+
+When both checks pass, close the card period. The job records the payment due
+date.
+
+FAB and Sarwa acquisition stays user-assisted. Amazon order evidence uses
+Outlook email enrichment. Browser credentials stay outside unattended jobs.
+
+## monitoring
+
+The host monitor checks `Actual`, its proxy, and Cashback Control. The `n8n`
+stack checks Postgres and uses the pinned `doctor.sh` procedure. Durable redacted
+receipts are the execution record because the platform disables successful and
+failed execution history.
+
+Static exports and local tests do not prove provider authentication, production
+identity, ledger readback, Cashback readback, routes, or rollback.
+
+`n8n` status:
+
+- no production receipt exists here
+- protected runner steps are in [`README.md`](../README.md)
+- the documented production procedure is runnable, but live receipt and semantic acceptance are incomplete
+
+`PRODUCTION_ONLY` requires protected receipt inputs, an exact project ID, and a
+named forward or rollback acknowledgment. The script records a durable runtime
+journal. When output fails, it recovers a forward receipt.
+
+After protected checks pass, run the documented procedure against the production runtime.
+Its disposable fixtures are not retained-state migration inputs.
