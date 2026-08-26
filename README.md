@@ -108,37 +108,36 @@ The migration target contains four tables in [`integrations/n8n/data-table-migra
 - `finance_actual_batches`
 - `finance_ai_reviews`
 
-[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. A separate retained-runtime receipt proves the four target tables; this test does not prove live tables.
+[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. The test does not prove live tables.
+
+The generated matrix records 33 node references. It records 121 write-reference edges.
+Use [`run-four-table-cutover.sh`](integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh)
+for this migration:
+
+1. Place `finance-data-table-backup-v1.json`,
+   `data-table-migration-receipt.json`, and
+   `finance-four-table-accepted-identity.json` in the protected receipt
+   directory.
+2. Run `run-four-table-cutover.sh forward` with
+   `FINANCE_N8N_RUNTIME_MODE=DISPOSABLE_ONLY`.
+3. Let the runner validate the digests and capture pre-state.
+4. Let the runner apply workflow 19 and read the four target tables back.
+5. Let the runner execute workflow 19 again. Verify that the second run is a no-op.
+6. Run `run-four-table-cutover.sh rollback` only after a forward receipt exists
+   and a named operator acknowledges the rollback gate.
+
+PR58's runner is disposable-only. It must not mutate retained
+production tables. Keep the source export and all receipts until acceptance and
+rollback evidence pass.
 
 ### runtime acceptance boundary
 
 Checked-in n8n exports remain inactive and `SPEC_ONLY`.
 
-A retained n8n readback proves these fields:
-
-- 19 inactive workflows
-- six credentials
-- one project
-- four ordered Data Tables
-- HTTP 200 health
-- zero restarts
-- no duplicate retained names
-
-The readback does not prove provider authentication, Actual/Cashback semantic
-readback, Cloudflare routes, or rollback.
-
-These results remain pending until a current redacted receipt records each result:
-
-- ProDex device login
-- `auth.json` persistence
-- Microsoft refresh
-- Microsoft restart
-- Ledger/Cashback readback
-- Cloudflare routes
-- Production identities
-- Rollback
-
-- Acceptance statuses: [`config/project-acceptance.json`](config/project-acceptance.json)
+Static exports and local tests do not prove provider authentication, live table
+state, Actual or Cashback readback, Cloudflare routes, production identities,
+or rollback. The machine-readable [`config/project-acceptance.json`](config/project-acceptance.json)
+ledger is the only source for current acceptance status.
 
 ### platform-owned procedures
 

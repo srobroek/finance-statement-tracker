@@ -86,10 +86,7 @@ Source code implements these fixed-purpose paths:
 - statement parsing
 - the Actual custom node
 
-The deployed Cashback runtime is `READY`. Workflow integration status:
-
-| Workflow | Status |
-|---|---|
-| `W20` | `DEFERRED` |
-| `W02` | `DEFERRED` |
-| `W03` | `DEFERRED` |
+Cashback Control is healthy as a service. Its n8n workflow integration remains
+unaccepted until the machine-readable
+[`config/project-acceptance.json`](../config/project-acceptance.json) ledger
+records the required production evidence. That ledger is the only status source.
