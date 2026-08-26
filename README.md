@@ -234,6 +234,12 @@ or rollback. The machine-readable
 [`config/project-acceptance.json`](config/project-acceptance.json) ledger is the
 sole source for current acceptance status.
 
+For semantic acceptance, complete one real production ingestion. Replay the
+identical source. Restart `n8n` under control. Check for a no-op replay with matching
+ledger readback and cursor state. Cloudflare publication is an optional boundary,
+not a semantic acceptance gate. An `Actual` reset is fallback-only and does not
+replace the ingestion, replay, or restart evidence.
+
 ### platform-owned procedures
 
 The finance checkout does not own the `n8n` platform scripts. Use pinned commit

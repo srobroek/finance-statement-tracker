@@ -51,6 +51,26 @@ python scripts/verify-project-acceptance.py --require cashback-reusability-mobil
 The ledger entry records the verifier and its evidence. A service health check
 does not establish workflow acceptance.
 
+## semantic acceptance
+
+The semantic gate requires one real production ingestion through the import gates
+above. Record each field in its terminal receipt:
+
+- source SHA-256
+- normalized batch
+- imported IDs
+- cursor before and after
+
+Replay the identical source. Do a controlled `n8n` restart. When all checks pass,
+accept the run:
+
+- replay is a no-op
+- the cursor is unchanged
+- ledger readback matches the first receipt
+
+Cloudflare publication is not part of this semantic gate. Treat its connector
+and authorization checks as a separate optional boundary.
+
 ## runtime status
 
 | surface | status |

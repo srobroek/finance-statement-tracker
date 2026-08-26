@@ -135,6 +135,11 @@ Use this result receipt shape for a passing run:
 
 Accept the rebuild only with a passing audit and replay verification.
 
+Use one real production ingestion followed by an identical replay and controlled
+`n8n` restart for semantic acceptance. Keep an `Actual` reset as a fallback-only
+recovery action. A reset does not replace the ingestion, replay, or restart
+evidence.
+
 ### production apply stays disabled
 
 This checkout keeps production apply disabled. The production CLI accepts no
