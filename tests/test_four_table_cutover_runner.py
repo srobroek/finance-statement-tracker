@@ -698,12 +698,17 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             export = json.loads(export_path.read_text(encoding="utf-8"))
             source_table = export["references"][0]["old_table_name"]
+            conflicting_reference = next(
+                reference
+                for reference in export["references"][1:]
+                if reference["old_table_name"] == source_table
+            )
             replacement = next(
                 table_id
                 for table_name, table_id in self.runner.LEGACY_TABLE_IDS.items()
                 if table_name != source_table
             )
-            export["references"][0]["old_table_id"] = replacement
+            conflicting_reference["old_table_id"] = replacement
             unsigned = dict(export)
             unsigned.pop("export_sha256", None)
             export["export_sha256"] = self.runner.hashlib.sha256(

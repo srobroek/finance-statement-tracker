@@ -339,18 +339,22 @@ async function acquireProjectLock() {
   const resource = `finance_four_table_cutover:${projectId}`;
   if (lockReceipt.resource_key !== resource) throw new Error('WRITER_LOCK_RESOURCE_MISMATCH');
   const pool = new pg.Pool(databaseOptions(process.env));
-  const client = await pool.connect();
-  await client.query('BEGIN');
-  // Require the commit to flush PostgreSQL WAL before releasing the project lock.
-  await client.query("SET LOCAL synchronous_commit = 'on'");
-  const result = await client.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [resource]);
-  if (result.rows?.[0]?.acquired !== true) {
-    await client.query('ROLLBACK');
-    client.release();
-    await pool.end();
-    throw new Error('PROJECT_WRITER_LOCK_BUSY');
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    // Require the commit to flush PostgreSQL WAL before releasing the project lock.
+    await client.query("SET LOCAL synchronous_commit = 'on'");
+    const result = await client.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [resource]);
+    if (result.rows?.[0]?.acquired !== true) throw new Error('PROJECT_WRITER_LOCK_BUSY');
+    return { pool, client, resource };
+  } catch (error) {
+    // BEGIN, SET, and lock acquisition all happen before execute() owns cleanup.
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    client?.release();
+    await pool.end().catch(() => {});
+    throw error;
   }
-  return { pool, client, resource };
 }
 
 async function execute() {
