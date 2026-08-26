@@ -129,7 +129,7 @@ validate_inputs() {
 recover_forward_runtime_receipt() {
   local -a recovery_env=("$@")
   recovery_env+=( -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1" )
-  docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$runtime_output"
+  docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"
   local recovered_json="$receipt_dir/finance-four-table-runtime-forward-recovered.json"
   grep '^finance four-table runtime verified:' "$runtime_output" \
     | tail -n 1 \
@@ -168,7 +168,7 @@ run_production_runtime() {
   fi
 
   local runtime_status
-  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$runtime_output"; then
+  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"; then
     runtime_status=0
   else
     runtime_status=$?
