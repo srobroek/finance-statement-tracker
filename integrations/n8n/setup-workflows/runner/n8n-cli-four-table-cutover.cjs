@@ -15,7 +15,8 @@ if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(projectId)) {
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { createRequire } = require('node:module');
-const n8nPackageJson = require.resolve('n8n/package.json', { paths: ['/usr/local/lib/node_modules'] });
+const n8nPackageRoot = process.env.FINANCE_FOUR_TABLE_N8N_ROOT || '/usr/local/lib/node_modules';
+const n8nPackageJson = require.resolve('n8n/package.json', { paths: [n8nPackageRoot] });
 const n8nRoot = path.dirname(n8nPackageJson);
 process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
 const n8nRequire = createRequire(n8nPackageJson);
@@ -27,6 +28,7 @@ const pg = n8nRequire('pg');
 
 const EXPORT_SCHEMA = 'finance-four-table-live-export-v1';
 const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
+const JOURNAL_TABLE = 'finance_four_table_cutover_journal';
 const TARGET_NAMES = new Set([
   'finance_ingestion_state',
   'finance_documents',
@@ -318,6 +320,32 @@ async function verifyInFlight(client) {
   if (result.rows[0]?.count !== 0) throw new Error('LIVE_IN_FLIGHT_EXECUTIONS_PRESENT');
 }
 
+async function persistRecoveryJournal(client, receipt) {
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS ${JOURNAL_TABLE} (
+       receipt_sha256 varchar(64) PRIMARY KEY,
+       project_id varchar(64) NOT NULL,
+       operation varchar(16) NOT NULL,
+       lock_resource varchar(128) NOT NULL,
+       receipt jsonb NOT NULL,
+       created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+     )`,
+  );
+  await client.query(
+    `INSERT INTO ${JOURNAL_TABLE}
+       (receipt_sha256, project_id, operation, lock_resource, receipt)
+     VALUES ($1, $2, $3, $4, $5::jsonb)
+     ON CONFLICT (receipt_sha256) DO NOTHING`,
+    [
+      receipt.runtime_plan_receipt_sha256,
+      receipt.project_id,
+      receipt.operation,
+      receipt.lock_resource,
+      JSON.stringify(receipt),
+    ],
+  );
+}
+
 async function acquireProjectLock() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
@@ -369,6 +397,7 @@ async function execute() {
       durable_journal: true,
       commit_protocol: 'postgresql_synchronous_wal',
     };
+    await persistRecoveryJournal(lock.client, journal);
     await lock.client.query('COMMIT');
     // The host shell captures this line while this process still owns the lock.
     await writeRuntimeReceipt(journal);
@@ -456,6 +485,9 @@ async function execute() {
 }
 
 async function writeRuntimeReceipt(receipt) {
+  if (process.env.FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE === '1') {
+    throw new Error('INJECTED_RECEIPT_FAILURE');
+  }
   const line = `finance four-table runtime verified:${JSON.stringify(receipt)}\n`;
   if (process.stdout.write(line)) return;
   await new Promise((resolve, reject) => {
