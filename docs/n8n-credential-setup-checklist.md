@@ -152,8 +152,11 @@ Complete the direct ProDex device login with the user by following the pinned
 platform [`login-community-subscriptions.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/login-community-subscriptions.sh)
 procedure. Keep API-key fallback disabled.
 
-Store ProDex auth at `/home/ci/.codex-n8n-community/auth.json`. Mount it at
-`/home/node/.n8n/codex/auth.json`. Set directory mode `0700` and file mode
+The retained host owns ProDex auth at
+`/home/ci/.codex-n8n-community/auth.json`. Mount the host directory at
+`/home/node/.n8n/codex` in `n8n`. `n8n` reads
+`/home/node/.n8n/codex/auth.json` as the container `node` user. The host owner and
+container UID are different identities. Set directory mode `0700` and file mode
 `0600`. Keep the bind mount across `n8n` restarts.
 
 Keep `auth.json` out of ordinary platform backups. Use the platform's encrypted
@@ -196,9 +199,11 @@ Workflow 21 supplies these controls. Keep them absent from callers:
 
 ## later reconciliation
 
-The runtime owns the ProDex `auth.json` file. `n8n` owns Microsoft refresh state
-in encrypted credentials. A later 1Password reconciliation may add references
+The retained host owns the ProDex `auth.json` file. The `n8n` container reads the
+file through the mounted container path. `n8n` owns Microsoft refresh state in
+encrypted credentials. A later 1Password reconciliation may add references
 through the existing `FinanceAutomation` record and restore procedure.
+
 Keep one state owner for each credential. Keep secret values out of this repo.
 This reconciliation stays pending.
 

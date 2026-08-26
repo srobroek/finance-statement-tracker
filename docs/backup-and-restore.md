@@ -140,6 +140,34 @@ Use one real production ingestion followed by an identical replay and controlled
 recovery action. A reset does not replace the ingestion, replay, or restart
 evidence.
 
+### reset after login failure
+
+Confirm that current authentication is unusable. Record that failure. Do not reset
+`Actual` by default. Use the supported reset at version `26.8.1`.
+
+Keep runtime data under `/opt/stacks/finance-actual-poc/data`. This checkout
+provides no reset command. Keep storage private. Record only redacted receipt
+fields.
+
+Before reset, retain these protected files:
+
+- mode-`0600` prestate receipt
+- verified archive under `/opt/backups/finance-actual-poc`
+- its `SHA256SUMS` checksum
+
+After reset, check that these readbacks succeed:
+
+- `@actual-app/api` reads the expected budget and its account balances
+- the ledger UI reads the same budget and account balances
+- API and UI authentication both succeed
+- API and UI identify the same data
+
+Reset is not acceptance evidence. After reset, repeat these checks:
+
+- one real ingestion
+- identical replay
+- controlled `n8n` restart
+
 ### production apply stays disabled
 
 This checkout keeps production apply disabled. The production CLI accepts no
@@ -157,9 +185,9 @@ proves only the bytes. It cannot identify the server, sync session, or budget.
 Record the target and prestate in an operator receipt. Read the restored budget
 through the API and UI. Keep the exact checksum in that receipt.
 
-The four-table runner is disposable-only. No production four-table `n8n`
-cutover script exists in this repository. Its rollback is not an `Actual` restore.
-Retain source files until a separate operator readback passes.
+The four-table runner supports disposable and production modes. This checkout
+documents the disposable path only. Its rollback is not an `Actual` restore. Retain
+source files until a separate operator readback passes.
 
 ## required drill
 

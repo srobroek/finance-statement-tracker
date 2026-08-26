@@ -79,6 +79,7 @@ and authorization checks as a separate optional boundary.
 | `W20` workflow integration | `DEFERRED` |
 | `W02` workflow integration | `DEFERRED` |
 | `W03` workflow integration | `DEFERRED` |
+| shared ingestion authority | `OPEN` |
 
 The table records the current runtime split. The acceptance ledger remains the
 source for production promotion. The `cashback-reusability-mobile-push` entry
@@ -91,10 +92,15 @@ When either declared blocker remains, the Cashback entry stays `PARTIAL`. The
 operator records each command result with the same checkout and ledger source,
 binding the status to the target service and review time.
 
+The shared ingestion authority stays `OPEN` until the semantic receipt binds each
+owner.
+
 ## cloudflare target
 
-Cloudflare publication is an optional target. These mappings describe the
-target, not a deployment receipt:
+Cloudflare is optional. The user waived its publication and has not verified it. The
+checkout has no current provider authority. It has no provider readback.
+Cloudflare stays outside semantic acceptance. These mappings describe a target,
+not a deployment receipt:
 
 - `actual.vxsan.com` targets `http://127.0.0.1:5006`
 - `n8n.vxsan.com` targets `http://172.20.10.20:5678`
@@ -102,8 +108,8 @@ target, not a deployment receipt:
 - browser UIs use interactive access
 - machine access uses a separate service policy
 
-The local checkout does not run `cloudflared`. The external tunnel owner is
-`Home-beachhead`. Keep routes disabled until provider readback proves:
+The local checkout does not run `cloudflared`. Keep routes disabled until provider
+readback proves:
 
 - connector identity
 - route identity
@@ -147,5 +153,13 @@ failed execution history.
 Static exports and local tests do not prove provider authentication, production
 identity, ledger readback, Cashback readback, routes, or rollback.
 
-This checkout has no production four-table `n8n` cutover procedure. The checked-in
-runner is a disposable proof. Do not treat it as a retained-state migration.
+`n8n` has no production cutover guide in this checkout. The checkout has no
+production receipt. `run-four-table-cutover.sh` supports `PRODUCTION_ONLY` and
+`DISPOSABLE_ONLY`.
+
+`PRODUCTION_ONLY` requires protected receipt inputs, an exact project ID, and a
+named forward or rollback acknowledgment. The script records a durable runtime
+journal. When output fails, it recovers a forward receipt.
+
+The documented invocation is disposable. Do not treat its fixtures as retained-
+state migration inputs.

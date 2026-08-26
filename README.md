@@ -152,13 +152,20 @@ python -m unittest tests.test_data_table_migration_matrix -v
 python integrations/n8n/generate_data_table_migration_matrix.py --check
 ```
 
-No production guide exists here. The linked script is a disposable proof. It is
-the PR58 proof.
+This checkout has no production guide. It has no production receipt.
+
+`run-four-table-cutover.sh` supports both modes. `DISPOSABLE_ONLY` runs a disposable
+check. `PRODUCTION_ONLY` runs production orchestration.
+
+Production mode uses protected values. Provide the receipt inputs.
+
+Name the forward or rollback acknowledgment. The script records a runtime journal.
 
 Cutover status:
 
-- no production guide exists here
-- the linked script is a disposable PR58 proof
+- no operator production guide or production receipt exists here
+- the runner supports forward and rollback in production
+- the linked invocation is a disposable PR58 proof
 - retained state is out of scope
 - the acceptance ledger has no runtime evidence
 - see [`docs/actual-production.md`](docs/actual-production.md) for the ledger guide
