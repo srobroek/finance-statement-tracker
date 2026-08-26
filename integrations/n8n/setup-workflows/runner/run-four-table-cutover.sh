@@ -47,7 +47,10 @@ lock_receipt="$receipt_dir/finance-four-table-lock-receipt.json"
 cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
 forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
 forward_runtime_receipt="$receipt_dir/finance-four-table-runtime-forward.json"
-runtime_output="$receipt_dir/finance-four-table-runtime-${operation}.raw"
+runtime_stdout="$receipt_dir/finance-four-table-runtime-${operation}.stdout.raw"
+runtime_stderr="$receipt_dir/finance-four-table-runtime-${operation}.stderr.raw"
+recovery_stdout="$receipt_dir/finance-four-table-runtime-forward-recovery.stdout.raw"
+recovery_stderr="$receipt_dir/finance-four-table-runtime-forward-recovery.stderr.raw"
 pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
 post_readback="$receipt_dir/finance-data-table-readback-${operation}-post.raw"
 second_post_readback="$receipt_dir/finance-data-table-readback-${operation}-second-post.raw"
@@ -129,9 +132,19 @@ validate_inputs() {
 recover_forward_runtime_receipt() {
   local -a recovery_env=("$@")
   recovery_env+=( -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1" )
-  docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"
+  local recovery_status
+  if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow \
+    < "$runtime_script" > "$recovery_stdout" 2> "$recovery_stderr"; then
+    recovery_status=0
+  else
+    recovery_status=$?
+  fi
+  chmod 0600 "$recovery_stdout" "$recovery_stderr"
+  if (( recovery_status != 0 )); then
+    return "$recovery_status"
+  fi
   local recovered_json="$receipt_dir/finance-four-table-runtime-forward-recovered.json"
-  grep '^finance four-table runtime verified:' "$runtime_output" \
+  grep '^finance four-table runtime verified:' "$recovery_stdout" \
     | tail -n 1 \
     | sed 's/^finance four-table runtime verified://' \
     > "$recovered_json"
@@ -168,10 +181,12 @@ run_production_runtime() {
   fi
 
   local runtime_status
-  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"; then
+  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow \
+    < "$runtime_script" > "$runtime_stdout" 2> "$runtime_stderr"; then
     runtime_status=0
   else
     runtime_status=$?
+    chmod 0600 "$runtime_stdout" "$runtime_stderr"
     if [[ "$operation" = forward ]]; then
       if ! recover_forward_runtime_receipt "${runtime_env[@]}"; then
         echo "Unable to recover the committed forward runtime journal" >&2
@@ -179,8 +194,9 @@ run_production_runtime() {
     fi
     return "$runtime_status"
   fi
+  chmod 0600 "$runtime_stdout" "$runtime_stderr"
   runtime_json="$receipt_dir/finance-four-table-runtime-${operation}.json"
-  grep '^finance four-table runtime verified:' "$runtime_output" \
+  grep '^finance four-table runtime verified:' "$runtime_stdout" \
     | tail -n 1 \
     | sed 's/^finance four-table runtime verified://' \
     > "$runtime_json"
