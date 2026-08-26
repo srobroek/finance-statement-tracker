@@ -87,7 +87,7 @@ EXPECTED_REFERENCE_ACTIONS = {
 }
 DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
 APPROVED_QUIESCENCE_RECEIPT_DIGEST = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-APPROVED_PROTECTED_EXPORT_DIGEST = "e6a226d0d7c6949e1d4263505f8bcf2405aba5f908eeb09bb7427ebb5f86f154"
+APPROVED_PROTECTED_EXPORT_DIGEST = "03f4cfec931c9e8a38f7ba4c6590e42045f8ba1111a76998efd84ba75a7479f2"
 APPROVED_CONTRACT_BIJECTION_DIGEST = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
@@ -341,6 +341,7 @@ def _validate_live_export(
     migration_receipt_sha: str,
     source_backup_sha: str,
     identity_digest: str,
+    required_export_digest: str,
     matrix: Mapping[str, Any],
 ) -> dict[str, Any]:
     _require_protected(path, "PROTECTED_LIVE_EXPORT")
@@ -351,6 +352,8 @@ def _validate_live_export(
     export_sha = _require_digest(export_sha, "LIVE_EXPORT_SHA256")
     if hashlib.sha256(_canonical_bytes(_export_without_hash(export))).hexdigest() != export_sha:
         raise CutoverError("LIVE_EXPORT_INTEGRITY_MISMATCH")
+    if export_sha != required_export_digest:
+        raise CutoverError("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
     project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
@@ -1008,6 +1011,7 @@ def _bound_live_inputs(
     live_export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
     lock_receipt_path = getattr(args, "lock_receipt", None) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
     matrix = _load_matrix()
+    binding = _binding_inputs(args)
     export = _validate_live_export(
         live_export_path,
         source_head=source_head,
@@ -1015,10 +1019,10 @@ def _bound_live_inputs(
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        required_export_digest=binding["required_live_export_digest"],
         matrix=matrix,
     )
     project_id = export["project_id"]
-    binding = _binding_inputs(args)
     lock_receipt, lock_sha = _validate_lock_receipt(
         lock_receipt_path,
         export_sha=export["export_sha256"],
@@ -1637,6 +1641,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
     )
     if args.live_export is None:
         raise CutoverError("PROTECTED_LIVE_EXPORT_REQUIRED")
+    binding = _binding_inputs(args)
     export = _validate_live_export(
         args.live_export,
         source_head=source_head,
@@ -1644,9 +1649,9 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        required_export_digest=binding["required_live_export_digest"],
         matrix=_load_matrix(),
     )
-    binding = _binding_inputs(args)
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
