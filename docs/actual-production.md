@@ -86,7 +86,8 @@ Source code implements these fixed-purpose paths:
 - statement parsing
 - the Actual custom node
 
-Cashback Control is healthy as a service. Its n8n workflow integration remains
-unaccepted until the machine-readable
-[`config/project-acceptance.json`](../config/project-acceptance.json) ledger
-records the required production evidence. That ledger is the only status source.
+The machine-readable
+[`config/project-acceptance.json`](../config/project-acceptance.json) ledger is
+the source for Cashback and workflow acceptance. Each requirement records its
+status, verifier, and blockers. A service health check does not establish
+workflow acceptance.

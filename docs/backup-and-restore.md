@@ -82,30 +82,85 @@ Before deleting old state:
 
 Use [`full-ingestion-validation.md`](full-ingestion-validation.md) for the
 ledger rebuild audit. Keep Actual, Cashback Control, and n8n as separate
-restore domains.
+restore domains. Install the Actual runner's locked dependencies before the
+first run; it imports `@actual-app/api`:
 
-1. Before you reset, snapshot each domain. Save the verified Actual archive.
-   Save the Cashback archive. Save the n8n dump and its checksum sidecar.
-2. Reset only disposable targets. Run
-   [`full-rebuild.mjs`](../integrations/actual/full-rebuild.mjs) with its
-   required command-line options.
-   This command creates a temporary Actual data directory and does not clear
-   production data. Restore n8n into a new empty database with
-   `restore-disposable.sh`.
-3. Import the exact manifest set into the disposable Actual target.
-   The rebuild runner bootstraps the target and imports every manifest.
-4. The rebuild runner captures a snapshot and replays the same manifest set.
-5. After the full-ingestion audit passes, accept the rebuild.
-6. Compare the Actual readback with the disposable snapshot.
-7. Compare Cashback events and period state with the backup receipt.
-8. Run the n8n Data Table check twice. Verify that the replay is a no-op.
-9. Record the result in the acceptance ledger.
-10. Keep the pre-reset archives until all readbacks pass. If any check fails,
-   stop the apply path and restore the pre-reset archives.
-11. Run the service health checks and repeat the readbacks.
-   Use [`run-four-table-cutover.sh`](../integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh)
-   with `rollback` after its forward receipt and named-operator acknowledgment
-   exist.
+```sh
+npm ci --prefix integrations/actual
+```
+
+Run the disposable rebuild from the repository root. All seven options are
+required: `--root`, `--validation`, `--bootstrap`, `--start`, `--end`,
+`--snapshot`, and `--result`.
+
+```sh
+node integrations/actual/full-rebuild.mjs \
+  --root . \
+  --validation config/full-ingestion-validation.json \
+  --bootstrap config/actual-bootstrap.json \
+  --start 2026-01-01 \
+  --end 2026-08-31 \
+  --snapshot runtime/audit/disposable-full-rebuild-snapshot.json \
+  --result runtime/audit/disposable-full-rebuild-result.json
+```
+
+The command creates a temporary Actual data directory and does not clear
+production data. A passing result receipt has this shape; accept it only when
+the full-ingestion audit and both replay statuses pass:
+
+```json
+{
+  "schema_version": "actual-disposable-full-rebuild-v1",
+  "status": "PASS",
+  "replay": {"verification": {"status": "PASS"}}
+}
+```
+
+Complete the greenfield recovery in this order:
+
+1. Before any reset, snapshot Actual, Cashback Control, and n8n. Save the
+   verified Actual archive, Cashback archive, n8n dump, and checksum sidecar.
+2. Restore n8n into a new empty disposable database with
+   `restore-disposable.sh`; import the exact reviewed manifest set into the
+   disposable Actual target.
+3. Run the seven-flag disposable rebuild command. Compare its Actual snapshot
+   with API/UI readback, compare Cashback events and period state with the
+   backup receipt, and run the n8n Data Table check twice. The second run must
+   be a no-op.
+4. Record the disposable result and readbacks in the acceptance ledger. Do not
+   apply to production until the ledger has the required evidence.
+5. For production, follow the guarded [Actual production procedure](actual-production.md):
+   plan first with the same arguments but without `--apply`, then run the
+   exact production apply below with
+   `ALLOW_ACTUAL_LEDGER_REPLACEMENT=true`. If the plan reports preservation
+   blockers, also provide `ALLOW_ACTUAL_MANUAL_STATE_REPLACEMENT=true` and the
+   exact `--approve-preservation-sha256` value printed by the plan:
+
+   ```sh
+   export ALLOW_ACTUAL_LEDGER_REPLACEMENT=true
+   node integrations/actual/production-rebuild.mjs \
+     --root . \
+     --validation config/full-ingestion-validation.json \
+     --bootstrap config/actual-bootstrap.json \
+     --start 2026-01-01 \
+     --end 2026-08-31 \
+     --backup runtime/audit/actual-production-pre-apply.backup \
+     --snapshot runtime/audit/actual-production-post-apply-snapshot.json \
+     --result runtime/audit/actual-production-apply-result.json \
+     --apply
+   ```
+
+   Add `--approve-preservation-sha256 <plan preservation sha256>` to this
+   command only when the reviewed plan requires the manual-state override.
+6. Read back Actual through the API and UI, verify the production result is
+   `status: APPLIED` with preservation verification `PASS`, and repeat the
+   Cashback and n8n readbacks. Record every receipt in the acceptance ledger.
+7. Retain the pre-apply Actual archive and checksum sidecar until all readbacks
+   pass. If any readback fails, stop further apply operations and use the
+   retained archive with the operator restore procedure, then repeat readback.
+8. The four-table runner is disposable-only. Use its `rollback` only after the
+   forward receipt and named-operator acknowledgment exist; retain both source
+   files until rollback readback passes.
 
 ## Required drill
 

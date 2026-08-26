@@ -108,27 +108,78 @@ The migration target contains four tables in [`integrations/n8n/data-table-migra
 - `finance_actual_batches`
 - `finance_ai_reviews`
 
-[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py) proves the migration dispositions. It also proves the target set and bootstrap exclusion. The test does not prove live tables.
+[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py)
+checks the migration dispositions, target set, and bootstrap exclusion. Run the
+test and the generator check after changing a workflow or table contract:
 
-The generated matrix records 33 node references. It records 121 write-reference edges.
-Use [`run-four-table-cutover.sh`](integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh)
-for this migration:
+```sh
+python -m unittest tests.test_data_table_migration_matrix -v
+python integrations/n8n/generate_data_table_migration_matrix.py --check
+```
 
-1. Place `finance-data-table-backup-v1.json`,
-   `data-table-migration-receipt.json`, and
-   `finance-four-table-accepted-identity.json` in the protected receipt
-   directory.
-2. Run `run-four-table-cutover.sh forward` with
-   `FINANCE_N8N_RUNTIME_MODE=DISPOSABLE_ONLY`.
-3. Let the runner validate the digests and capture pre-state.
-4. Let the runner apply workflow 19 and read the four target tables back.
-5. Let the runner execute workflow 19 again. Verify that the second run is a no-op.
-6. Run `run-four-table-cutover.sh rollback` only after a forward receipt exists
-   and a named operator acknowledges the rollback gate.
+The checked matrix contains 33 node references and 121 write-reference edges.
+The test fails when the generated matrix drifts from those values.
 
-PR58's runner is disposable-only. It must not mutate retained
-production tables. Keep the source export and all receipts until acceptance and
-rollback evidence pass.
+The [`run-four-table-cutover.sh`](integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh)
+procedure is a disposable-only PR58 proof. It is not a production cutover.
+Production cutover remains pending until the acceptance ledger records its
+runtime evidence. Follow the [Actual production procedure](docs/actual-production.md)
+for production operations.
+
+Before a disposable forward run, place these files in a protected mode-`0700`
+receipt directory:
+
+- `finance-data-table-backup-v1.json`
+- `data-table-migration-receipt.json`
+- `finance-four-table-accepted-identity.json`
+
+Set these inputs:
+
+```sh
+export FINANCE_REPOSITORY_DIR="$PWD"
+export FINANCE_N8N_RECEIPT_DIR='<absolute mode-0700 receipt directory>'
+export N8N_FINANCE_PROJECT_ID='<disposable Compose project>'
+export FINANCE_N8N_RUNTIME_MODE=DISPOSABLE_ONLY
+```
+
+Resolve exactly one running `n8n` container from that disposable project. Record
+the redacted identity and reject any project, service, or running-state mismatch:
+
+```sh
+mapfile -t n8n_candidates < <(
+  docker ps \
+    --filter "label=com.docker.compose.project=$N8N_FINANCE_PROJECT_ID" \
+    --filter "label=com.docker.compose.service=n8n" \
+    --filter status=running \
+    --format '{{.ID}}'
+)
+test "${#n8n_candidates[@]}" -eq 1
+FINANCE_N8N_CONTAINER="$(docker inspect -f '{{.Id}}' "${n8n_candidates[0]}")"
+container_identity="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER")"
+test "$container_identity" = "$N8N_FINANCE_PROJECT_ID|n8n|true"
+export FINANCE_N8N_CONTAINER
+umask 077
+docker inspect -f '{{.Id}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER" > "$FINANCE_N8N_RECEIPT_DIR/finance-n8n-container-identity.txt"
+```
+
+Run the forward proof only after a named operator acknowledges it:
+
+```sh
+export FOUR_TABLE_FORWARD_ACK=FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE
+integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh forward
+```
+
+The runner validates the source and migration digests, reads the four target
+tables before and after workflow 19, and runs workflow 19 twice. The second
+readback must be a no-op. Set
+`FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE`
+before `rollback`, and retain the forward receipt and source files until the
+rollback readback passes:
+
+```sh
+export FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE
+integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh rollback
+```
 
 ### runtime acceptance boundary
 
@@ -137,7 +188,7 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`.
 Static exports and local tests do not prove provider authentication, live table
 state, Actual or Cashback readback, Cloudflare routes, production identities,
 or rollback. The machine-readable [`config/project-acceptance.json`](config/project-acceptance.json)
-ledger is the only source for current acceptance status.
+ledger is the sole source for current acceptance status.
 
 ### platform-owned procedures
 
