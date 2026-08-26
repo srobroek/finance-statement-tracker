@@ -572,6 +572,79 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 os.chmod(source, mode)
                 self.assertEqual(self.runner.main(args), 1)
 
+    def test_cutover_rejects_missing_export_or_lock_receipt(self):
+        for missing_name in (self.runner.LIVE_EXPORT_FILENAME, self.runner.LOCK_RECEIPT_FILENAME):
+            with self.subTest(missing_name=missing_name), tempfile.TemporaryDirectory() as directory:
+                temp = Path(directory)
+                source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+                (migration.parent / missing_name).unlink()
+                args = [
+                    "validate-inputs",
+                    "--source-backup", str(source),
+                    "--migration-receipt", str(migration),
+                    "--migration-receipt-sha256", receipt_sha,
+                    "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                    "--repository-root", str(ROOT),
+                    "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                    "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                    "--workflow-root", str(workflow_root),
+                ]
+                self.assertEqual(self.runner.main(args), 1)
+
+    def test_live_export_binds_reference_revision_to_workflow_graph(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            export = json.loads(export_path.read_text(encoding="utf-8"))
+            export["references"][0]["revision_id"] = "live-revision-1"
+            unsigned = dict(export)
+            unsigned.pop("export_sha256", None)
+            export["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(unsigned)
+            ).hexdigest()
+            export_path.write_bytes(self.runner._canonical_bytes(export))
+            os.chmod(export_path, 0o600)
+            args = [
+                "validate-inputs",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
+    def test_lock_receipt_binds_project_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            lock_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["project_id"] = "other-project"
+            unsigned = dict(lock)
+            unsigned.pop("lock_receipt_sha256", None)
+            lock["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(unsigned)
+            ).hexdigest()
+            lock_path.write_bytes(self.runner._canonical_bytes(lock))
+            os.chmod(lock_path, 0o600)
+            args = [
+                "validate-inputs",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
     def test_protected_inputs_require_regular_non_symlink_exact_six_hundred_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
