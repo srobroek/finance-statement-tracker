@@ -1120,20 +1120,15 @@ module.exports = { Pool };
             "durable_journal",
             "postgresql_synchronous_wal",
             "N8N_FINANCE_PROJECT_ID",
+            "runtime_stdout",
+            "runtime_stderr",
+            "recovery_stdout",
+            "recovery_stderr",
         ):
             self.assertIn(command, script)
-        self.assertIn(
-            'docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"',
-            script,
-        )
-        self.assertIn(
-            'if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"; then',
-            script,
-        )
-        self.assertEqual(
-            script.count('node - list:workflow < "$runtime_script" > "$runtime_output"'),
-            2,
-        )
+        self.assertIn('> "$recovery_stdout" 2> "$recovery_stderr"', script)
+        self.assertIn('> "$runtime_stdout" 2> "$runtime_stderr"', script)
+        self.assertNotIn('"$runtime_output"', script)
         runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
         for command in (
             "pg_try_advisory_xact_lock",
@@ -1576,6 +1571,8 @@ ROLLBACK;''',
                 "test \"${1:-}\" = node\n"
                 "runtime_argv=(\"$@\")\n"
                 "if [[ \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" = 1 ]]; then runtime_label=RECOVERY; else runtime_label=RUNTIME; fi\n"
+                "if [[ \"$runtime_label\" = RECOVERY && \"${FINANCE_TEST_FAIL_RECOVERY:-}\" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n"
+                "if [[ \"$runtime_label\" = RECOVERY ]]; then printf 'recovery-stdout\\n'; printf 'recovery-stderr\\n' >&2; else printf 'initial-stdout\\n'; printf 'initial-stderr\\n' >&2; fi\n"
                 "printf '%s' \"$runtime_label\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
                 "printf '\\t%s' \"${runtime_argv[@]}\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
                 "printf '\\n' >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
@@ -1602,6 +1599,7 @@ ROLLBACK;''',
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FOUR_TABLE_ROLLBACK_ACK": "",
                 "FINANCE_TEST_FAIL_RECEIPT": "1",
+                "FINANCE_TEST_FAIL_RECOVERY": "",
                 "FINANCE_TEST_DOCKER_LOG": str(temp / "docker-runtime-argv.log"),
                 "FINANCE_TEST_N8N_ROOT": str(node_root),
                 "FINANCE_TEST_DB_STATE": str(state_path),
@@ -1615,12 +1613,26 @@ ROLLBACK;''',
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(failed_forward.returncode, 0, failed_forward.stderr)
+            self.assertTrue((temp / "docker-runtime-argv.log").exists(), failed_forward.stderr)
             self.assertEqual(
                 (temp / "docker-runtime-argv.log").read_text(encoding="utf-8").splitlines(),
                 ["RUNTIME\tnode\t-\tlist:workflow", "RECOVERY\tnode\t-\tlist:workflow"],
             )
             forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
             self.assertTrue(forward_runtime.exists())
+            runtime_stdout = migration.parent / "finance-four-table-runtime-forward.stdout.raw"
+            runtime_stderr = migration.parent / "finance-four-table-runtime-forward.stderr.raw"
+            recovery_stdout = migration.parent / "finance-four-table-runtime-forward-recovery.stdout.raw"
+            recovery_stderr = migration.parent / "finance-four-table-runtime-forward-recovery.stderr.raw"
+            for evidence in (runtime_stdout, runtime_stderr, recovery_stdout, recovery_stderr):
+                self.assertTrue(evidence.exists())
+                self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
+            self.assertIn("initial-stdout", runtime_stdout.read_text(encoding="utf-8"))
+            self.assertIn("initial-stderr", runtime_stderr.read_text(encoding="utf-8"))
+            self.assertIn("recovery-stdout", recovery_stdout.read_text(encoding="utf-8"))
+            self.assertIn("recovery-stderr", recovery_stderr.read_text(encoding="utf-8"))
+            self.assertNotEqual(runtime_stdout.read_bytes(), recovery_stdout.read_bytes())
+            self.assertNotEqual(runtime_stderr.read_bytes(), recovery_stderr.read_bytes())
             recovered = json.loads(forward_runtime.read_text(encoding="utf-8"))
             self.assertEqual(recovered["operation"], "FORWARD")
             self.assertTrue(recovered["durable_journal"])
@@ -1642,6 +1654,102 @@ ROLLBACK;''',
                     if node["id"] == reference["node_id"]
                 )
                 self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+
+    def test_production_shell_preserves_initial_runtime_evidence_when_recovery_fails(self):
+        """A failed recovery keeps the initial runtime status and evidence streams."""
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            harness = self._production_runtime_harness(temp)
+            migration = harness["migration"]
+            live_export_path = harness["live_export_path"]
+            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
+            lock_receipt_path = harness["lock_receipt_path"]
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity.pop("identity_sha256", None)
+            identity["identity_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(identity)
+            ).hexdigest()
+            identity_path.write_bytes(self.runner._canonical_bytes(identity))
+            os.chmod(identity_path, 0o600)
+            exported = json.loads(live_export_path.read_text(encoding="utf-8"))
+            exported["accepted_identity_sha256"] = identity["identity_sha256"]
+            exported.pop("export_sha256", None)
+            exported["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(exported)
+            ).hexdigest()
+            live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+            os.chmod(live_export_path, 0o600)
+            lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
+            lock_receipt["accepted_identity_sha256"] = identity["identity_sha256"]
+            lock_receipt["export_sha256"] = exported["export_sha256"]
+            lock_receipt.pop("lock_receipt_sha256", None)
+            lock_receipt["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(lock_receipt)
+            ).hexdigest()
+            lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+            os.chmod(lock_receipt_path, 0o600)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "test \"${1:-}\" = exec\n"
+                "shift\n"
+                "while [[ $# -gt 0 ]]; do\n"
+                "  case \"$1\" in\n"
+                "    -i) shift ;;\n"
+                "    -e) export \"$2\"; shift 2 ;;\n"
+                "    *) break ;;\n"
+                "  esac\n"
+                "done\n"
+                "shift\n"
+                "test \"${1:-}\" = node\n"
+                "if [[ \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n"
+                "printf 'initial-stdout\\n'\n"
+                "printf 'initial-stderr\\n' >&2\n"
+                "shift\n"
+                "export FINANCE_FOUR_TABLE_N8N_ROOT=\"$FINANCE_TEST_N8N_ROOT\"\n"
+                "export FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE=1\n"
+                "exec node \"$@\"\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_docker, 0o700)
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
+                "FINANCE_N8N_CONTAINER": "production-finance",
+                "N8N_FINANCE_PROJECT_ID": exported["project_id"],
+                "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
+                "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
+                "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+                "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
+                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
+                "FINANCE_TEST_N8N_ROOT": str(harness["node_root"]),
+                "FINANCE_TEST_DB_STATE": str(harness["state_path"]),
+                "FINANCE_TEST_TARGETS_JSON": harness["target_json"],
+            }
+            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            failed_forward = subprocess.run(
+                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(failed_forward.returncode, 1, failed_forward.stderr)
+            runtime_stdout = migration.parent / "finance-four-table-runtime-forward.stdout.raw"
+            runtime_stderr = migration.parent / "finance-four-table-runtime-forward.stderr.raw"
+            recovery_stdout = migration.parent / "finance-four-table-runtime-forward-recovery.stdout.raw"
+            recovery_stderr = migration.parent / "finance-four-table-runtime-forward-recovery.stderr.raw"
+            self.assertIn("initial-stdout", runtime_stdout.read_text(encoding="utf-8"))
+            self.assertIn("initial-stderr", runtime_stderr.read_text(encoding="utf-8"))
+            self.assertEqual(recovery_stdout.read_text(encoding="utf-8"), "")
+            self.assertIn("RECOVERY_FAILED", recovery_stderr.read_text(encoding="utf-8"))
+            for evidence in (runtime_stdout, runtime_stderr, recovery_stdout, recovery_stderr):
+                self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
 
     def test_shell_disposable_forward_call_order(self):
         """The dual CLI reaches runtime twice, then rolls back successfully."""
