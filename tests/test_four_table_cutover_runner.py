@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -244,7 +245,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                     "node_name": item["node_name"],
                     "operation": item["operation"],
                     "old_table_name": item["source_table"],
-                    "old_table_id": f"old-{index}",
+                    "old_table_id": self.runner.LEGACY_TABLE_IDS[item["source_table"]],
                     "canonical_table_name": item["canonical_table_name"],
                     "canonical_table_id": target_ids.get(item["canonical_table_name"]),
                     "active": False,
@@ -691,6 +692,38 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             ]
             self.assertEqual(self.runner.main(args), 1)
 
+    def test_live_export_rejects_conflicting_legacy_table_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(Path(directory))
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            export = json.loads(export_path.read_text(encoding="utf-8"))
+            source_table = export["references"][0]["old_table_name"]
+            replacement = next(
+                table_id
+                for table_name, table_id in self.runner.LEGACY_TABLE_IDS.items()
+                if table_name != source_table
+            )
+            export["references"][0]["old_table_id"] = replacement
+            unsigned = dict(export)
+            unsigned.pop("export_sha256", None)
+            export["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(unsigned)
+            ).hexdigest()
+            export_path.write_bytes(self.runner._canonical_bytes(export))
+            os.chmod(export_path, 0o600)
+            args = [
+                "validate-inputs",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
     def test_protected_inputs_require_regular_non_symlink_exact_six_hundred_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
@@ -845,6 +878,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
             "n8n-cli-four-table-cutover.cjs",
             "replay_noop",
+            "durable_journal",
+            "postgresql_synchronous_wal",
             "N8N_FINANCE_PROJECT_ID",
         ):
             self.assertIn(command, script)
@@ -854,9 +889,18 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "WRITER_LOCK_RECEIPT_BINDING_INVALID",
             "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
             "LIVE_REFERENCE_NODE_ALIAS_CONFLICT",
+            "LIVE_REFERENCE_OLD_TABLE_ID_CONFLICT",
+            "EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED",
             "FORWARD_REPLAY_READBACK_MISMATCH",
+            "LIVE_IN_FLIGHT_EXECUTIONS_PRESENT",
+            "INJECTED_FAILURE_AFTER_UPDATE",
             "readback_verified",
             "readback_digest_sha256",
+            "durable_journal",
+            "commit_protocol",
+            "postgresql_synchronous_wal",
+            "writeRuntimeReceipt",
+            "ROLLBACK",
             "finance_four_table_cutover:${projectId}",
             "FOR UPDATE",
             "UPDATE workflow_entity",
@@ -874,6 +918,163 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_production_transaction_rolls_back_disposable_forced_failure(self):
+        """Exercise the lock, in-flight guard, and atomic update against disposable PostgreSQL."""
+        dsn = os.environ.get("FINANCE_FOUR_TABLE_TEST_DSN") or os.environ.get(
+            "FINANCE_WORKFLOW_SQL_TEST_DSN"
+        )
+        if not dsn or shutil.which("psql") is None:
+            self.skipTest("set FINANCE_FOUR_TABLE_TEST_DSN for disposable PostgreSQL")
+
+        schema = f"four_table_cutover_{uuid.uuid4().hex}"
+        project_id = f"finance-test-{uuid.uuid4().hex[:16]}"
+        workflow_id = f"workflow-{uuid.uuid4().hex[:16]}"
+        resource = f"finance_four_table_cutover:{project_id}"
+        base_command = ["psql", dsn, "--set", "ON_ERROR_STOP=1"]
+        setup_sql = f'''
+CREATE SCHEMA "{schema}";
+SET search_path TO "{schema}";
+CREATE TABLE workflow_entity (
+  id varchar(36) PRIMARY KEY,
+  active boolean NOT NULL,
+  "activeVersionId" varchar(36),
+  "versionId" varchar(36),
+  nodes json NOT NULL,
+  meta json,
+  settings json
+);
+CREATE TABLE shared_workflow (
+  "workflowId" varchar(36) NOT NULL,
+  "projectId" varchar(64) NOT NULL,
+  role varchar(64) NOT NULL
+);
+CREATE TABLE execution_entity (
+  "workflowId" varchar(36) NOT NULL,
+  finished boolean
+);
+INSERT INTO workflow_entity (id, active, "activeVersionId", "versionId", nodes) VALUES
+  ('{workflow_id}', FALSE, NULL, 'revision-before', '{{"selector":"legacy"}}');
+INSERT INTO shared_workflow VALUES ('{workflow_id}', '{project_id}', 'workflow:owner');
+INSERT INTO execution_entity VALUES ('{workflow_id}', FALSE);
+'''
+        setup = subprocess.run(
+            [*base_command, "--command", setup_sql],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(setup.returncode, 0, setup.stderr)
+        try:
+            in_flight = subprocess.run(
+                [
+                    *base_command,
+                    "--tuples-only",
+                    "--no-align",
+                    "--command",
+                    f'''SET search_path TO "{schema}";
+SELECT COUNT(*)::int
+  FROM execution_entity e
+  JOIN shared_workflow s ON s."workflowId" = e."workflowId"
+ WHERE s."projectId" = '{project_id}' AND e.finished IS NOT TRUE;''',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(in_flight.returncode, 0, in_flight.stderr)
+            self.assertEqual(in_flight.stdout.strip(), "1")
+
+            clear_execution = subprocess.run(
+                [
+                    *base_command,
+                    "--command",
+                    f'DELETE FROM "{schema}".execution_entity',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(clear_execution.returncode, 0, clear_execution.stderr)
+
+            forced_failure = subprocess.run(
+                [
+                    *base_command,
+                    "--command",
+                    f'''SET search_path TO "{schema}";
+BEGIN;
+SET LOCAL synchronous_commit = 'on';
+SELECT pg_try_advisory_xact_lock(hashtextextended('{resource}', 0));
+UPDATE workflow_entity w
+   SET nodes = '{{"selector":"target"}}'::json, "versionId" = 'revision-after'
+ WHERE w.id = '{workflow_id}'
+   AND EXISTS (
+     SELECT 1 FROM shared_workflow s
+      WHERE s."workflowId" = w.id
+        AND s."projectId" = '{project_id}'
+        AND s.role = 'workflow:owner'
+   )
+ RETURNING w.id, w."versionId";
+SELECT 1 / 0;
+COMMIT;''',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(forced_failure.returncode, 0, forced_failure.stdout)
+
+            readback = subprocess.run(
+                [
+                    *base_command,
+                    "--tuples-only",
+                    "--no-align",
+                    "--command",
+                    f'''SET search_path TO "{schema}";
+SELECT nodes->>'selector' || '|' || "versionId" FROM workflow_entity
+ WHERE id = '{workflow_id}';''',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(readback.returncode, 0, readback.stderr)
+            self.assertEqual(readback.stdout.strip(), "legacy|revision-before")
+
+            lock_after_rollback = subprocess.run(
+                [
+                    *base_command,
+                    "--tuples-only",
+                    "--no-align",
+                    "--command",
+                    f'''BEGIN;
+SELECT pg_try_advisory_xact_lock(hashtextextended('{resource}', 0));
+ROLLBACK;''',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(lock_after_rollback.returncode, 0, lock_after_rollback.stderr)
+            self.assertEqual(lock_after_rollback.stdout.strip(), "t")
+        finally:
+            subprocess.run(
+                [
+                    *base_command,
+                    "--command",
+                    f'DROP SCHEMA IF EXISTS "{schema}" CASCADE',
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
     def test_shell_disposable_forward_call_order(self):
         """The dual CLI reaches runtime twice, then rolls back successfully."""
@@ -964,7 +1165,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                         "node_name": item["node_name"],
                         "operation": item["operation"],
                         "old_table_name": item["source_table"],
-                        "old_table_id": f"old-{index}",
+                        "old_table_id": self.runner.LEGACY_TABLE_IDS[item["source_table"]],
                         "canonical_table_name": item["canonical_table_name"],
                         "canonical_table_id": target,
                         "active": False,

@@ -88,6 +88,15 @@ EXPECTED_REFERENCE_ACTIONS = {
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
 }
+LEGACY_TABLE_IDS = {
+    "finance_source_contracts": "sha256:73b62207",
+    "finance_source_cursors": "sha256:60e428cd",
+    "finance_archive_receipts": "sha256:49bf4e32",
+    "finance_document_operations": "sha256:2ad2a52a",
+    "finance_pipeline_runs": "sha256:48eb19e5",
+    "finance_reconciliations": "sha256:f47bf1e1",
+    "finance_mcp_requests": "sha256:3b9034f0",
+}
 
 
 class CutoverError(ValueError):
@@ -270,6 +279,10 @@ def _reference_inventory(matrix: Mapping[str, Any]) -> list[dict[str, Any]]:
         item["reference_id"] for item in inventory
     } != set(EXPECTED_REFERENCE_ACTIONS):
         raise CutoverError("COMPLETE_REFERENCE_ACTION_MAP_REQUIRED")
+    if {item["source_table"] for item in inventory} != set(LEGACY_TABLE_IDS):
+        raise CutoverError("EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED")
+    for item in inventory:
+        item["legacy_table_id"] = LEGACY_TABLE_IDS[item["source_table"]]
     return sorted(inventory, key=lambda item: item["reference_id"])
 
 
@@ -387,6 +400,8 @@ def _validate_live_export(
             raise CutoverError(f"LIVE_REFERENCE_REVISION_MISMATCH:{expected['reference_id']}")
         _require_text(observed.get("node_id"), "LIVE_REFERENCE_NODE_ID")
         _require_text(observed.get("old_table_id"), "LIVE_REFERENCE_OLD_TABLE_ID")
+        if observed["old_table_id"] != expected["legacy_table_id"]:
+            raise CutoverError(f"LIVE_REFERENCE_OLD_TABLE_ID_CONFLICT:{expected['reference_id']}")
         node_key = (observed_workflow_id, observed["node_id"])
         if node_key in node_aliases:
             raise CutoverError(f"LIVE_REFERENCE_NODE_ALIAS_CONFLICT:{expected['reference_id']}")

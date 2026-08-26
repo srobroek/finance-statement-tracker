@@ -33,6 +33,15 @@ const TARGET_NAMES = new Set([
   'finance_actual_batches',
   'finance_ai_reviews',
 ]);
+const LEGACY_TABLE_IDS = new Map([
+  ['finance_source_contracts', 'sha256:73b62207'],
+  ['finance_source_cursors', 'sha256:60e428cd'],
+  ['finance_archive_receipts', 'sha256:49bf4e32'],
+  ['finance_document_operations', 'sha256:2ad2a52a'],
+  ['finance_pipeline_runs', 'sha256:48eb19e5'],
+  ['finance_reconciliations', 'sha256:f47bf1e1'],
+  ['finance_mcp_requests', 'sha256:3b9034f0'],
+]);
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -159,12 +168,19 @@ function validateExport(exported) {
     if (reference.canonical_table_name === null && reference.canonical_table_id !== null) {
       throw new Error(`LIVE_REFERENCE_UNDECLARED_TARGET:${id}`);
     }
+    if (reference.old_table_id !== LEGACY_TABLE_IDS.get(reference.old_table_name)) {
+      throw new Error(`LIVE_REFERENCE_OLD_TABLE_ID_CONFLICT:${id}`);
+    }
     const nodeKey = `${reference.workflow_id}:${text(reference.node_id, 'LIVE_REFERENCE_NODE_ID_INVALID')}`;
     if (nodeAliases.has(nodeKey)) throw new Error(`LIVE_REFERENCE_NODE_ALIAS_CONFLICT:${id}`);
     nodeAliases.add(nodeKey);
     references.set(id, reference);
   }
   if (references.size !== 33) throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
+  const legacyTables = new Set([...references.values()].map((reference) => reference.old_table_name));
+  if (legacyTables.size !== LEGACY_TABLE_IDS.size || [...legacyTables].some((name) => !LEGACY_TABLE_IDS.has(name))) {
+    throw new Error('EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED');
+  }
   return { workflows, references, targetIds, exportDigest };
 }
 
@@ -219,6 +235,9 @@ async function updateWorkflows(client, changes) {
     );
     if (result.rowCount !== 1 || result.rows[0].versionId !== revisionId) {
       throw new Error(`LIVE_WORKFLOW_UPDATE_FAILED:${workflowId}`);
+    }
+    if (process.env.FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE === workflowId) {
+      throw new Error(`INJECTED_FAILURE_AFTER_UPDATE:${workflowId}`);
     }
   }
 }
@@ -288,6 +307,17 @@ async function verifyTargets(service, targetIds) {
   }
 }
 
+async function verifyInFlight(client) {
+  const result = await client.query(
+    `SELECT COUNT(*)::int AS count
+       FROM execution_entity e
+       JOIN shared_workflow s ON s."workflowId" = e."workflowId"
+      WHERE s."projectId" = $1 AND e.finished IS NOT TRUE`,
+    [projectId],
+  );
+  if (result.rows[0]?.count !== 0) throw new Error('LIVE_IN_FLIGHT_EXECUTIONS_PRESENT');
+}
+
 async function acquireProjectLock() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
@@ -311,6 +341,8 @@ async function acquireProjectLock() {
   const pool = new pg.Pool(databaseOptions(process.env));
   const client = await pool.connect();
   await client.query('BEGIN');
+  // Require the commit to flush PostgreSQL WAL before releasing the project lock.
+  await client.query("SET LOCAL synchronous_commit = 'on'");
   const result = await client.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [resource]);
   if (result.rows?.[0]?.acquired !== true) {
     await client.query('ROLLBACK');
@@ -327,22 +359,26 @@ async function execute() {
   const forwardReceipt = operation === 'ROLLBACK' ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') : null;
   const lock = await acquireProjectLock();
   const dataTableService = Container.get(DataTableService);
-  let workflows;
-  const originalNodes = new Map();
-  const mutated = [];
-  let rollbackTransaction = false;
+  const commitAndJournal = async (unsignedReceipt) => {
+    const journal = {
+      ...unsignedReceipt,
+      durable_journal: true,
+      commit_protocol: 'postgresql_synchronous_wal',
+    };
+    await lock.client.query('COMMIT');
+    // The host shell captures this line while this process still owns the lock.
+    await writeRuntimeReceipt(journal);
+    return journal;
+  };
   try {
+    await verifyInFlight(lock.client);
     await verifyTargets(dataTableService, graph.targetIds);
-    workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
+    const workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
       const plan = applyForward(prestate);
       if (!plan.alreadyApplied) {
-        for (const [workflowId] of plan.changed) {
-          originalNodes.set(workflowId, clone(workflows.get(workflowId).nodes));
-        }
         await updateWorkflows(lock.client, plan.changed);
-        mutated.push(...plan.changed.keys());
       }
       const updated = await loadWorkflows(lock.client, graph, false);
       const poststate = findReferences(graph, updated);
@@ -360,7 +396,7 @@ async function execute() {
         throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
       }
       const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
-      return { ...unsigned, runtime_plan_receipt_sha256: digest(unsigned) };
+      return commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
@@ -369,6 +405,7 @@ async function execute() {
     const unsigned = { ...forwardReceipt };
     delete unsigned.runtime_plan_receipt_sha256;
     if (digest(unsigned) !== forwardReceipt.runtime_plan_receipt_sha256 || forwardReceipt.action_count !== 33 ||
+        forwardReceipt.durable_journal !== true || forwardReceipt.commit_protocol !== 'postgresql_synchronous_wal' ||
         forwardReceipt.readback_verified !== true || typeof forwardReceipt.readback_digest_sha256 !== 'string' ||
         !/^[0-9a-f]{64}$/.test(forwardReceipt.readback_digest_sha256)) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
@@ -391,11 +428,7 @@ async function execute() {
       restoreSelector(node, action.selector);
       changed.set(item.reference.workflow_id, nodes);
     }
-    for (const [workflowId] of changed) {
-      originalNodes.set(workflowId, clone(workflows.get(workflowId).nodes));
-    }
     await updateWorkflows(lock.client, changed);
-    mutated.push(...changed.keys());
     const restored = await loadWorkflows(lock.client, graph, false);
     const restoredState = findReferences(graph, restored);
     for (const item of restoredState) {
@@ -406,30 +439,32 @@ async function execute() {
     }
     const readback = selectorReadback(restoredState);
     const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
-    return { ...unsignedRollback, runtime_plan_receipt_sha256: digest(unsignedRollback) };
+    return commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
-    for (const workflowId of mutated.reverse()) {
-      try {
-        await updateWorkflows(lock.client, new Map([[workflowId, originalNodes.get(workflowId)]]));
-      } catch {
-        rollbackTransaction = true;
-      }
-    }
+    // PostgreSQL transaction rollback is the only compensation path. A second
+    // application update could itself fail or create a new revision.
+    await lock.client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
-    if (rollbackTransaction) await lock.client.query('ROLLBACK').catch(() => {});
-    else await lock.client.query('COMMIT').catch(async () => { await lock.client.query('ROLLBACK').catch(() => {}); });
     lock.client.release();
     await lock.pool.end();
   }
+}
+
+async function writeRuntimeReceipt(receipt) {
+  const line = `finance four-table runtime verified:${JSON.stringify(receipt)}\n`;
+  if (process.stdout.write(line)) return;
+  await new Promise((resolve, reject) => {
+    process.stdout.once('drain', resolve);
+    process.stdout.once('error', reject);
+  });
 }
 
 let completed = false;
 const originalInit = BaseCommand.prototype.init;
 BaseCommand.prototype.init = async function financeFourTableCutover(...args) {
   await originalInit.apply(this, args);
-  const receipt = await execute();
-  process.stdout.write(`finance four-table runtime verified:${JSON.stringify(receipt)}\n`);
+  await execute();
   completed = true;
 };
 ListWorkflowCommand.prototype.run = async function suppressWorkflowCommand() {

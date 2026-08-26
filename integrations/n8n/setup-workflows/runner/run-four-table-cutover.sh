@@ -147,6 +147,8 @@ run_production_runtime() {
   if [[ "$operation" = forward ]]; then
     grep -F '"replay_noop":true' "$runtime_json" >/dev/null
   fi
+  grep -F '"durable_journal":true' "$runtime_json" >/dev/null
+  grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
 }
 
 preflight() {
