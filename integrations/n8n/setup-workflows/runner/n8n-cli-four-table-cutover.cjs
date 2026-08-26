@@ -137,9 +137,7 @@ function databaseOptions(env) {
     database: env.DB_POSTGRESDB_DATABASE,
     user: env.DB_POSTGRESDB_USER,
     password: env.DB_POSTGRESDB_PASSWORD,
-    max: 1,
     connectionTimeoutMillis: 5_000,
-    idleTimeoutMillis: 1_000,
   };
 }
 
@@ -425,10 +423,9 @@ async function recoverForwardJournal() {
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
   validateLockReceipt(lockReceipt, exported, binding, resource);
-  const pool = new pg.Pool(databaseOptions(process.env));
-  let client;
+  const client = new pg.Client(databaseOptions(process.env));
   try {
-    client = await pool.connect();
+    await client.connect();
     const result = await client.query(
       `SELECT receipt
          FROM ${JOURNAL_TABLE}
@@ -445,8 +442,7 @@ async function recoverForwardJournal() {
     const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
     await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource, binding));
   } finally {
-    client?.release();
-    await pool.end();
+    await client.end();
   }
 }
 
@@ -456,21 +452,19 @@ async function acquireProjectLock() {
   const resource = `finance_four_table_cutover:${projectId}`;
   const binding = bindingFromEnvironment();
   validateLockReceipt(lockReceipt, exported, binding, resource);
-  const pool = new pg.Pool(databaseOptions(process.env));
-  let client;
+  const client = new pg.Client(databaseOptions(process.env));
   try {
-    client = await pool.connect();
+    await client.connect();
     await client.query('BEGIN');
     // Require the commit to flush PostgreSQL WAL before releasing the project lock.
     await client.query("SET LOCAL synchronous_commit = 'on'");
     const result = await client.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired', [resource]);
     if (result.rows?.[0]?.acquired !== true) throw new Error('PROJECT_WRITER_LOCK_BUSY');
-    return { pool, client, resource, binding };
+    return { client, resource, binding };
   } catch (error) {
     // BEGIN, SET, and lock acquisition all happen before execute() owns cleanup.
-    if (client) await client.query('ROLLBACK').catch(() => {});
-    client?.release();
-    await pool.end().catch(() => {});
+    await client.query('ROLLBACK').catch(() => {});
+    await client.end().catch(() => {});
     throw error;
   }
 }
@@ -563,8 +557,7 @@ async function execute() {
     await lock.client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
-    lock.client.release();
-    await lock.pool.end();
+    await lock.client.end();
   }
 }
 
