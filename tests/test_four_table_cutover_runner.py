@@ -305,6 +305,14 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 }
                 for workflow in exported["workflows"]
             },
+            "dataTables": {
+                target["name"]: {
+                    "id": target["table_id"],
+                    "name": target["name"],
+                    "projectId": exported["project_id"],
+                }
+                for target in exported["targets"]
+            },
             "journal": [],
         }
         for reference in exported["references"]:
@@ -325,58 +333,13 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
 
         node_root = temp / "node_modules"
         n8n_root = node_root / "n8n"
-        for path in (
-            n8n_root / "dist/commands",
-            n8n_root / "dist/modules/data-table",
-            n8n_root / "bin",
-            node_root / "@n8n/di",
-            node_root / "pg",
-        ):
+        for path in (n8n_root / "bin", node_root / "pg"):
             path.mkdir(parents=True, exist_ok=True)
         (n8n_root / "package.json").write_text('{"name":"n8n","version":"test"}\n', encoding="utf-8")
-        (n8n_root / "dist/commands/base-command.js").write_text(
-            "class BaseCommand { async init() {} }\nmodule.exports = { BaseCommand };\n",
-            encoding="utf-8",
-        )
-        (n8n_root / "dist/commands/list/workflow.js").parent.mkdir(parents=True, exist_ok=True)
-        (n8n_root / "dist/commands/list/workflow.js").write_text(
-            "class ListWorkflowCommand { async run() {} }\nmodule.exports = { ListWorkflowCommand };\n",
-            encoding="utf-8",
-        )
-        (n8n_root / "dist/modules/data-table/data-table.service.js").write_text(
-            "class DataTableService { async getManyAndCount() { return { data: JSON.parse(process.env.FINANCE_TEST_TARGETS_JSON), count: 4 }; } }\nmodule.exports = { DataTableService };\n",
-            encoding="utf-8",
-        )
-        (node_root / "@n8n/di/index.js").write_text(
-            """const fs = require('node:fs');
-const { DataTableService } = require('n8n/dist/modules/data-table/data-table.service.js');
-function mark(stage) {
-  if (process.env.FINANCE_TEST_LIFECYCLE_LOG) {
-    fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, `${stage}\\n`);
-  }
-}
-const Container = { get: () => { mark('data-table-service:get'); return new DataTableService(); } };
-module.exports = { Container };
-""",
-            encoding="utf-8",
-        )
         (n8n_root / "bin/n8n").write_text(
             """const fs = require('node:fs');
-const lifecycleLog = process.env.FINANCE_TEST_LIFECYCLE_LOG;
-function mark(stage) {
-  if (lifecycleLog) fs.appendFileSync(lifecycleLog, `${stage}\\n`);
-}
-const { BaseCommand } = require('../dist/commands/base-command.js');
-const { ListWorkflowCommand } = require('../dist/commands/list/workflow.js');
-(async () => {
-  mark('base-init:start');
-  await new BaseCommand().init();
-  mark('base-init:complete');
-  const command = new ListWorkflowCommand();
-  mark('command-run:start');
-  await command.run();
-  mark('command-run:complete');
-})().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, 'managed-db-close\\n');
+process.exitCode = 97;
 """,
             encoding="utf-8",
         )
@@ -395,6 +358,14 @@ class Client {
     if (statement.startsWith('SET LOCAL synchronous_commit')) return { rows: [] };
     if (statement.includes('pg_try_advisory_xact_lock')) return { rows: [{ acquired: true }] };
     if (statement.includes('FROM execution_entity')) return { rows: [{ count: 0 }] };
+    if (statement.startsWith('SELECT id, name') && statement.includes('FROM data_table')) {
+      const [projectId, names] = params;
+      return {
+        rows: Object.values(this.current().dataTables)
+          .filter((table) => table.projectId === projectId && names.includes(table.name))
+          .map(clone),
+      };
+    }
     if (statement.startsWith('SELECT receipt') && statement.includes('FROM finance_four_table_cutover_journal')) {
       const [projectId, lockResource, operation, exportSha] = params;
       const rows = this.current().journal.filter((entry) =>
@@ -468,9 +439,10 @@ module.exports = { Pool };
 
         def run_runtime(**overrides):
             return subprocess.run(
-                ["node", str(PRODUCTION_RUNTIME_PATH)],
+                ["node", "-"],
                 cwd=ROOT,
                 env={**runtime_environment, **overrides},
+                input=PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8"),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1129,6 +1101,8 @@ module.exports = { Pool };
         self.assertIn('> "$recovery_stdout" 2> "$recovery_stderr"', script)
         self.assertIn('> "$runtime_stdout" 2> "$runtime_stderr"', script)
         self.assertNotIn('"$runtime_output"', script)
+        self.assertIn('"$FINANCE_N8N_CONTAINER" node - \\\n', script)
+        self.assertNotIn('"$FINANCE_N8N_CONTAINER" node - list:workflow', script.split('run_readback()')[0])
         runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
         for command in (
             "pg_try_advisory_xact_lock",
@@ -1160,8 +1134,23 @@ module.exports = { Pool };
             "LIVE_WORKFLOW_REVISION_MISMATCH",
             "runtime_plan_receipt_sha256",
             "updateWorkflows",
+            "FROM data_table",
+            '"projectId" = $1',
+            "ANY($2::text[])",
+            "await main();",
+            "process.exitCode = 1",
         ):
             self.assertIn(command, runtime)
+        for forbidden in (
+            "ListWorkflowCommand",
+            "DataTableService",
+            "@n8n/di",
+            "Container",
+            "n8nRequire",
+            "n8nRoot",
+            "bin', 'n8n",
+        ):
+            self.assertNotIn(forbidden, runtime)
 
     def test_production_runtime_script_has_valid_javascript(self):
         completed = subprocess.run(
@@ -1329,22 +1318,14 @@ ROLLBACK;''',
                 check=False,
             )
 
-    def test_production_runtime_executes_after_init_inside_command_run(self):
-        """The cutover runs after BaseCommand.init and before command completion."""
+    def test_production_runtime_bypasses_command_finalizer_and_managed_db_close(self):
+        """A managed command finalizer cannot close the direct transaction client."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
             completed = harness["run_runtime"]()
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertEqual(
-                harness["lifecycle_log"].read_text(encoding="utf-8").splitlines(),
-                [
-                    "base-init:start",
-                    "base-init:complete",
-                    "command-run:start",
-                    "data-table-service:get",
-                    "command-run:complete",
-                ],
-            )
+            self.assertEqual(harness["lifecycle_log"].read_text(encoding="utf-8"), "")
+            self.assertEqual(len(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"]), 1)
 
     def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(self):
         """Run the actual CJS runtime with a disposable n8n and PostgreSQL harness."""
@@ -1616,7 +1597,7 @@ ROLLBACK;''',
             self.assertTrue((temp / "docker-runtime-argv.log").exists(), failed_forward.stderr)
             self.assertEqual(
                 (temp / "docker-runtime-argv.log").read_text(encoding="utf-8").splitlines(),
-                ["RUNTIME\tnode\t-\tlist:workflow", "RECOVERY\tnode\t-\tlist:workflow"],
+                ["RUNTIME\tnode\t-", "RECOVERY\tnode\t-"],
             )
             forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
             self.assertTrue(forward_runtime.exists())

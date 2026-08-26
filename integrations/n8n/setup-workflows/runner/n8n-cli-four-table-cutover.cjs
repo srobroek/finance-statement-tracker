@@ -13,17 +13,10 @@ if (typeof projectId !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(projectId)) {
 }
 
 const crypto = require('node:crypto');
-const path = require('node:path');
 const { createRequire } = require('node:module');
 const n8nPackageRoot = process.env.FINANCE_FOUR_TABLE_N8N_ROOT || '/usr/local/lib/node_modules';
 const n8nPackageJson = require.resolve('n8n/package.json', { paths: [n8nPackageRoot] });
-const n8nRoot = path.dirname(n8nPackageJson);
-process.env.NODE_CONFIG_DIR ||= path.join(n8nRoot, 'bin', 'config');
-const n8nRequire = createRequire(n8nPackageJson);
-const { Container } = n8nRequire('@n8n/di');
-const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
-const { DataTableService } = n8nRequire('./dist/modules/data-table/data-table.service.js');
-const pg = n8nRequire('pg');
+const pg = createRequire(n8nPackageJson)('pg');
 
 const EXPORT_SCHEMA = 'finance-four-table-live-export-v1';
 const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
@@ -329,11 +322,22 @@ function applyForward(prestate) {
   return { changed, alreadyApplied };
 }
 
-async function verifyTargets(service, targetIds) {
-  const listed = await service.getManyAndCount({ filter: { projectId }, take: 100 });
-  const tables = listed.data.filter((table) => TARGET_NAMES.has(String(table.name)));
-  if (tables.length !== 4 || new Set(tables.map((table) => table.id)).size !== 4) throw new Error('EXACT_TARGET_READBACK_REQUIRED');
+async function verifyTargets(client, targetIds) {
+  const result = await client.query(
+    `SELECT id, name
+       FROM data_table
+      WHERE "projectId" = $1 AND name = ANY($2::text[])
+      ORDER BY name
+      FOR UPDATE`,
+    [projectId, [...targetIds.keys()]],
+  );
+  const tables = result.rows || [];
+  if (tables.length !== TARGET_NAMES.size || new Set(tables.map((table) => table.name)).size !== TARGET_NAMES.size ||
+      new Set(tables.map((table) => table.id)).size !== TARGET_NAMES.size) {
+    throw new Error('EXACT_TARGET_READBACK_REQUIRED');
+  }
   for (const table of tables) {
+    if (!TARGET_NAMES.has(String(table.name))) throw new Error(`UNEXPECTED_TARGET_READBACK:${table.name}`);
     if (table.id !== targetIds.get(table.name)) throw new Error(`TARGET_ID_READBACK_MISMATCH:${table.name}`);
   }
 }
@@ -476,7 +480,6 @@ async function execute() {
   const graph = validateExport(exported);
   const forwardReceipt = operation === 'ROLLBACK' ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') : null;
   const lock = await acquireProjectLock();
-  const dataTableService = Container.get(DataTableService);
   const commitAndJournal = async (unsignedReceipt) => {
     const journal = {
       ...unsignedReceipt,
@@ -494,7 +497,7 @@ async function execute() {
   };
   try {
     await verifyInFlight(lock.client);
-    await verifyTargets(dataTableService, graph.targetIds);
+    await verifyTargets(lock.client, graph.targetIds);
     const workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
@@ -577,12 +580,21 @@ async function writeRuntimeReceipt(receipt) {
   });
 }
 
-ListWorkflowCommand.prototype.run = async function financeFourTableCutoverRun() {
+async function main() {
   if (process.env.FINANCE_FOUR_TABLE_RECOVER_JOURNAL === '1') {
     if (operation !== 'FORWARD') throw new Error('FORWARD_JOURNAL_RECOVERY_ONLY');
     await recoverForwardJournal();
   } else {
     await execute();
   }
-};
-require(path.join(n8nRoot, 'bin', 'n8n'));
+}
+
+(async () => {
+  try {
+    await main();
+  } catch (error) {
+    const detail = error instanceof Error ? error.stack || error.message : String(error);
+    process.stderr.write(`finance four-table runtime failure:${detail}\n`);
+    process.exitCode = 1;
+  }
+})();
