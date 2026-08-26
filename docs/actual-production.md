@@ -51,6 +51,19 @@ python scripts/verify-project-acceptance.py --require cashback-reusability-mobil
 The ledger entry records the verifier and its evidence. A service health check
 does not establish workflow acceptance.
 
+## runtime status
+
+| surface | status |
+|---|---|
+| `Cashback Control` runtime | `READY` |
+| `W20` workflow integration | `DEFERRED` |
+| `W02` workflow integration | `DEFERRED` |
+| `W03` workflow integration | `DEFERRED` |
+
+The table records the current runtime split. The acceptance ledger remains the
+source for production promotion. The `cashback-reusability-mobile-push` entry
+still reports its own gate status and blockers.
+
 When its named verifier and runtime readback pass, a production gate opens. A
 container health response does not prove a workflow result. The ledger stores the
 gate status and verifier. Its entry records blockers and evidence for review.

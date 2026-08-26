@@ -135,62 +135,26 @@ Use this result receipt shape for a passing run:
 
 Accept the rebuild only with a passing audit and replay verification.
 
-### production apply
+### production apply stays disabled
 
-Production gate steps:
+This checkout keeps production apply disabled. The production CLI accepts no
+disposable result input. It has no export restore command. Its result receipt does
+not prove server, sync, or budget identity. Keep `--apply` out of commands from
+this checkout.
 
-- use the disposable result as the input to a production plan
-- run the production command without `--apply`
-- review the preservation report
-- export the replacement gate
-- run the guarded apply
+Keep the production target unchanged. This checkout has no operator-owned apply
+procedure or tested receipt. Such a procedure binds the `Actual` target to a
+pre-apply export. It validates the export checksum. It restores that exact export.
+It reads the budget back through the API and UI.
 
-```sh
-export ALLOW_ACTUAL_LEDGER_REPLACEMENT=true
-node integrations/actual/production-rebuild.mjs \
-  --root . \
-  --validation config/full-ingestion-validation.json \
-  --bootstrap config/actual-bootstrap.json \
-  --start 2026-01-01 \
-  --end 2026-08-31 \
-  --backup runtime/audit/actual-production-pre-apply.backup \
-  --snapshot runtime/audit/actual-production-post-apply-snapshot.json \
-  --result runtime/audit/actual-production-apply-result.json \
-  --apply
-```
-
-If the plan reports preservation blockers, export
-`ALLOW_ACTUAL_MANUAL_STATE_REPLACEMENT=true`. Add the exact
-`--approve-preservation-sha256` value from the reviewed plan.
-
-Read the ledger through API and UI. Read Cashback events and period state. Read
-the `n8n` Data Tables twice. Confirm that the second read is a no-op. An apply
-result is acceptable with `status: APPLIED` and preservation verification at
-`status: PASS`.
-
-### ledger rollback
-
-Bind each restore receipt to these values:
-
-- target: `finance-actual-poc` with data under `/opt/stacks/finance-actual-poc/data`
-- prestate: `runtime/audit/actual-production-pre-apply.backup`
-- checksum: `runtime/audit/actual-production-pre-apply.backup.sha256.json`
-- result: `runtime/audit/actual-production-apply-result.json`
-
-The `--backup` path names the pre-apply archive. The operator receipt names the
-target service. It names the archive path and SHA-256. Before apply, the receipt
-records the target state. It records the restore archive and its checksum sidecar.
-These bindings prevent a restore for another ledger.
-
-When readback fails, stop further apply operations. Restore the prestate archive
-through the operator-owned `Actual` restore procedure. Read the API and UI
-again. After a restore, repeat every readback. Keep the receipt and archive
-until those checks pass.
+The restore proof compares archive and target identity. An archive checksum
+proves only the bytes. It cannot identify the server, sync session, or budget.
+Record the target and prestate in an operator receipt. Read the restored budget
+through the API and UI. Keep the exact checksum in that receipt.
 
 The four-table runner is disposable-only. No production four-table `n8n`
-cutover script exists in this repository. Use the runner rollback only with a
-forward receipt and a named operator acknowledgment. Retain source files until
-the rollback readback passes.
+cutover script exists in this repository. Its rollback is not an `Actual` restore.
+Retain source files until a separate operator readback passes.
 
 ## required drill
 

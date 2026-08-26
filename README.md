@@ -141,6 +141,12 @@ The matrix check covers dispositions. It covers target names and bootstrap
 exclusion. The matrix records 33 node references. It records 121
 write-reference edges. A drifted matrix fails the check.
 
+After source changes, regenerate the checked-in migration matrix from the repository:
+
+```sh
+python integrations/n8n/generate_data_table_migration_matrix.py --write
+```
+
 ```sh
 python -m unittest tests.test_data_table_migration_matrix -v
 python integrations/n8n/generate_data_table_migration_matrix.py --check
