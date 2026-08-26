@@ -1120,6 +1120,10 @@ ROLLBACK;''',
                     }
                 )
             state_path.write_text(json.dumps(state), encoding="utf-8")
+            initial_state = json.loads(json.dumps(state))
+
+            def reset_state():
+                state_path.write_text(json.dumps(initial_state), encoding="utf-8")
 
             node_root = temp / "node_modules"
             n8n_root = node_root / "n8n"
@@ -1277,25 +1281,38 @@ module.exports = { Pool };
                 )
                 self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
 
+            reset_state()
             update_failure = run_runtime(
                 FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE="live-workflow-0",
             )
             self.assertNotEqual(update_failure.returncode, 0)
             after_update_failure = json.loads(state_path.read_text(encoding="utf-8"))
-            self.assertEqual(len(after_update_failure["journal"]), 2)
-            self.assertEqual(after_update_failure["workflows"], after_rollback["workflows"])
+            self.assertEqual(len(after_update_failure["journal"]), 0)
+            self.assertEqual(after_update_failure, initial_state)
 
+            reset_state()
             commit_failure = run_runtime(FINANCE_TEST_PG_COMMIT_FAILURE="1")
             self.assertNotEqual(commit_failure.returncode, 0)
             after_commit_failure = json.loads(state_path.read_text(encoding="utf-8"))
-            self.assertEqual(len(after_commit_failure["journal"]), 2)
-            self.assertEqual(after_commit_failure["workflows"], after_rollback["workflows"])
+            self.assertEqual(len(after_commit_failure["journal"]), 0)
+            self.assertEqual(after_commit_failure, initial_state)
 
+            reset_state()
             receipt_failure = run_runtime(FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE="1")
             self.assertNotEqual(receipt_failure.returncode, 0)
             after_receipt_failure = json.loads(state_path.read_text(encoding="utf-8"))
-            self.assertEqual(len(after_receipt_failure["journal"]), 3)
+            self.assertEqual(len(after_receipt_failure["journal"]), 1)
             self.assertEqual(after_receipt_failure["journal"][-1]["receipt"]["operation"], "FORWARD")
+            for reference in exported["references"]:
+                node = next(
+                    node
+                    for node in after_receipt_failure["workflows"][reference["workflow_id"]]["nodes"]
+                    if node["id"] == reference["node_id"]
+                )
+                if reference["canonical_table_id"] is None:
+                    self.assertNotIn("dataTableId", node["parameters"])
+                else:
+                    self.assertEqual(node["parameters"]["dataTableId"], reference["canonical_table_id"])
 
     def test_shell_disposable_forward_call_order(self):
         """The dual CLI reaches runtime twice, then rolls back successfully."""
