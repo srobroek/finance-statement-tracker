@@ -827,9 +827,6 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
             "n8n-cli-four-table-cutover.cjs",
             "replay_noop",
-            "readback_verified",
-            "readback_digest_sha256",
-            "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
             "N8N_FINANCE_PROJECT_ID",
         ):
             self.assertIn(command, script)
@@ -840,6 +837,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
             "LIVE_REFERENCE_NODE_ALIAS_CONFLICT",
             "FORWARD_REPLAY_READBACK_MISMATCH",
+            "readback_verified",
+            "readback_digest_sha256",
             "FOR UPDATE",
             "UPDATE workflow_entity",
             "LIVE_WORKFLOW_REVISION_MISMATCH",
