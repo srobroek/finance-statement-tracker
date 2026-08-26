@@ -1,154 +1,187 @@
-# Finance Statement Tracker
+# finance statement tracker
 
-This project contains the deterministic finance contracts and n8n workflows for
-an Actual-first personal finance tracker. n8n owns scheduling and orchestration;
-Actual owns the ledger, the cashback app owns live routing state, and OneDrive
-owns evidence.
+This project contains deterministic finance contracts and `n8n` workflows. The
+system uses `Actual Budget` as its ledger. The cashback app owns live routing
+state. `OneDrive` owns evidence. The parser and rule engine use a small pinned
+Python set.
 
-The deterministic parser and rule engine use a small pinned Python dependency set. The continuously running cashback companion uses SQLite for durable operational state and `pywebpush` for iOS Declarative Web Push delivery.
+The cashback companion uses SQLite and sends iOS declarative web push messages
+through `pywebpush`. Finance separates acquisition from ledger work. Evidence
+has its own boundary. Notification state has its own boundary. Each boundary
+has a receipt and an owner. The setup guides list the required checks.
 
-The target is **Actual Budget as the primary ledger**, with a small continuous companion application for cashback control and OneDrive for evidence. See `docs/platform-evaluation.md`, `docs/actual-production.md`, `docs/cashback-companion-decision.md`, and `config/project-acceptance.json`.
+Read these guides:
 
-## Included
+- [`docs/platform-evaluation.md`](docs/platform-evaluation.md)
+- [`docs/actual-production.md`](docs/actual-production.md)
+- [`docs/cashback-companion-decision.md`](docs/cashback-companion-decision.md)
+- [`config/project-acceptance.json`](config/project-acceptance.json)
 
-- AutoCat-style ordered static rules with OR groups of AND conditions.
-- Multiple actions per rule and stage-aware execution.
-- A versioned, JSON-serialisable internal rule representation.
-- Separate AI-policy contract; AI is never used for arithmetic or static matching.
-- Cashback tier, cap, pace, over/under, and payment-routing calculations.
-- Deterministic email/document matching and portable OneDrive evidence paths.
-- Month-close Markdown with a static Mermaid category chart.
-- A bank-adapter API that normalizes different statement layouts behind one contract.
-- A CLI that processes JSON transactions and rules locally.
-- Account, owner, category, subcategory, vendor, and tag attribution for Actual.
-- Savings reservations and safe-to-spend calculations without splitting a bank account.
-- Recurring-subscription detection that excludes variable utilities.
-- Reusable reports by account, owner, category, vendor, tag, and transaction type.
-- Unit tests for rules, refunds, tier uplift, routing, savings, subscriptions, and reports.
-- A platform adapter boundary and an Actual Budget import serializer.
-- An idempotent Actual account/category/tag/payee/rule bootstrap.
-- Two-phase statement-to-Actual ingestion with a durable run manifest and mandatory preflight.
-- Read-only Actual snapshots that drive cashback pace and routing without a duplicate ledger.
-- A compact live cashback companion in `apps/cashback-control`, recalculated immediately after each accepted event.
-- A tabbed mobile-first cashback interface verified at the 428 x 926 iPhone 13 Pro Max viewport: Routing and its decision tree fill one screen, while Cards and History have dedicated screens without horizontal overflow.
-- Installable iOS PWA support with declarative bucket-full, final-week target, and routing-change notifications; delivery state is deduplicated per device in the companion database.
-- Independent minute-level dashboard recalculation and stale-ingestion push warnings, even when no new transaction arrives.
-- Conservative Outlook notification adapters that update live buckets only when card, amount, currency, merchant, and a usable timestamp are evidenced.
-- Recipe-driven browser acquisition and deterministic official-export parsers migrated from the previous source app for ADCB, Emirates Islamic, FAB, Wio, generic CSV, and Sarwa capture.
-- A public, profile-driven cashback engine with external cards, currencies, tiers, compound requirements, buckets, caps, alert thresholds, weekly pace policies, and decision-tree routing; four unrelated fictional profiles are boot-tested in CI.
+## included
 
-Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schema-v1.json`. The worker validates and evaluates it deterministically, while compatible rules are compiled into Actual. `rule_sets` provide searchable scopes such as `LIVE_CASHBACK` without duplicating rules.
+- ordered static rules with OR groups and AND conditions
+- multiple rule actions with stage-aware execution
+- a versioned JSON rule model
+- a separate AI policy contract
+- cashback tier calculations
+- cashback cap calculations
+- cashback pace and routing calculations
+- deterministic email and document matching
+- portable `OneDrive` evidence paths
+- month-close Markdown with a Mermaid category chart
+- a bank adapter API for different statement layouts
+- a local CLI for JSON transactions and rules
+- account and owner attribution
+- category and vendor attribution
+- tag attribution
+- savings reservation and safe-to-spend calculations
+- recurring-subscription detection
+- reports grouped by account or owner
+- reports grouped by category or vendor
+- reports grouped by tag or type
+- unit tests for rules and refunds
+- unit tests for uplift and routing
+- unit tests for savings and reports
+- a platform adapter
+- an `Actual Budget` import serializer
+- an idempotent ledger bootstrap for accounts and categories
+- an idempotent ledger bootstrap for tags and payees
+- an idempotent ledger bootstrap for rules
+- two-phase statement ingestion with a durable run manifest
+- read-only ledger snapshots for cashback pace and routing
+- a compact live cashback companion in `apps/cashback-control`
+- a mobile-first cashback interface for the iPhone 13 Pro Max viewport
+- an installable iOS PWA with declarative notifications
+- independent dashboard recalculation and stale-ingestion warnings
+- Outlook notification adapters
+- browser acquisition recipes for ADCB and Emirates Islamic
+- browser recipes for FAB and Wio
+- browser recipes for Sarwa
+- a profile-driven cashback engine with card and currency data
+- tier and cap data in the cashback profile
+- alert data in the cashback profile
 
-## Bank adapter API
+Rules use [`config/static-rule-schema-v1.json`](config/static-rule-schema-v1.json).
+`finance_tracker` validates and evaluates each rule. Compatible rules compile into
+`Actual Budget`. `rule_sets` provide searchable scopes. One scope is
+`LIVE_CASHBACK`.
 
-`finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the n8n Actual node consume only those normalized objects.
+## bank adapter api
 
-The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered remain explicitly non-importing placeholders until real fixtures pass parser and arithmetic tests. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
+`finance_tracker.statements.BankStatementAdapter` is the extension boundary for
+banks. Each adapter detects and parses one layout. It emits
+`NormalizedStatement` and `NormalizedStatementTransaction` objects.
 
-`finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
+The POC includes `emirates_islamic_v1`. It also includes `adcb_v1` and
+`wio_credit_v1`. New banks
+register one adapter with `StatementAdapterRegistry`. RAKBANK and Standard
+Chartered remain placeholders until fixtures pass parser and arithmetic tests.
+Supply statement passwords through runtime secrets or an approved credential
+store. Never commit them or write them to logs.
+
+`finance_tracker.ingestion.stage_statement` creates a reviewable staging batch.
+a statement can be `balance_tied` while `ledger_reconciled` remains false. The
+matching workflow can change the latter.
 
 ## setup and operations
 
-| Surface | Procedure owner |
+| surface | procedure owner |
 |---|---|
-| Workflow boundary | [`integrations/n8n/README.md`](integrations/n8n/README.md) |
-| Credential setup | [`docs/n8n-credential-setup-checklist.md`](docs/n8n-credential-setup-checklist.md) |
-| OneDrive setup | [`integrations/n8n/setup-workflows/README.md`](integrations/n8n/setup-workflows/README.md) |
-| Ledger operations | [`docs/actual-production.md`](docs/actual-production.md) |
-| Backup and restore | [`docs/backup-and-restore.md`](docs/backup-and-restore.md) |
-| Browser boundary | [`docs/browser-ingestion.md`](docs/browser-ingestion.md) |
+| workflow boundary | [`integrations/n8n/README.md`](integrations/n8n/README.md) |
+| credential setup | [`docs/n8n-credential-setup-checklist.md`](docs/n8n-credential-setup-checklist.md) |
+| `OneDrive` setup | [`integrations/n8n/setup-workflows/README.md`](integrations/n8n/setup-workflows/README.md) |
+| ledger operations | [`docs/actual-production.md`](docs/actual-production.md) |
+| backup and restore | [`docs/backup-and-restore.md`](docs/backup-and-restore.md) |
+| browser boundary | [`docs/browser-ingestion.md`](docs/browser-ingestion.md) |
 
 ### procedure scope
 
-- ProDex subscription adapter: workflow boundary.
-- ProDex and Microsoft: credential setup.
-- OneDrive root: OneDrive setup.
-- Microsoft OAuth proof: OneDrive setup.
-- Ledger and Cashback: ledger operations.
-- Rollback: backup and restore.
-- Browser acquisition: separate boundary.
+- `ProDex` subscription adapter: workflow boundary
+- `ProDex` and Microsoft credential setup
+- `OneDrive` root: `OneDrive` setup
+- Microsoft OAuth proof: `OneDrive` setup
+- ledger and Cashback Control: ledger operations
+- rollback: backup and restore
+- browser acquisition: separate boundary
 
-### ownership
+## ownership
 
-| Owner | State |
+| owner | responsibility |
 |---|---|
-| `Actual` ledger | Ledger and budgets |
-| n8n | Acquisition and orchestration |
-| Cashback Control | Live routing and cashback state |
-| OneDrive | Evidence and catalog |
+| `Actual Budget` | ledger and budgets |
+| `n8n` | acquisition and orchestration |
+| Cashback Control | routing and cashback state |
+| `OneDrive` | evidence and catalog |
 
-The ledger owns:
+The browser never writes to the ledger or Cashback Control. `n8n` validates each
+delta. The fenced writer sends each accepted delta to `Actual Budget`.
 
-- posted transactions
-- accounts
-- budgets
-- schedules
-- reconciliations
-- reports
+## boundary map
 
-n8n owns:
+Each source keeps its original artifact. The staging layer records an immutable
+source identity. `n8n` sends accepted deltas to the fenced ledger writer. The
+writer records a receipt for each ledger readback. Cashback Control reads only
+the fields allowed by its routing contract. `OneDrive` stores the evidence copy
+and its checksum.
 
-- acquisition
-- orchestration
-- receipts
-- cursor state
+## data migration
 
-Cashback Control owns notification routing and cashback period state. OneDrive owns evidence originals and the evidence index.
+The legacy input contract declares 15 `SPEC_ONLY` tables in
+[`integrations/n8n/data-tables.json`](integrations/n8n/data-tables.json).
 
-The browser never writes directly to the ledger or Cashback Control. n8n validates each delta. n8n sends each validated delta through its fenced writer.
-
-### data migration
-
-The legacy input contract declares 15 `SPEC_ONLY` tables in [`integrations/n8n/data-tables.json`](integrations/n8n/data-tables.json).
-
-The migration target contains four tables in [`integrations/n8n/data-table-migration-matrix.json`](integrations/n8n/data-table-migration-matrix.json):
+The migration target has four tables in
+[`integrations/n8n/data-table-migration-matrix.json`](integrations/n8n/data-table-migration-matrix.json):
 
 - `finance_ingestion_state`
 - `finance_documents`
 - `finance_actual_batches`
 - `finance_ai_reviews`
 
-[`tests/test_data_table_migration_matrix.py`](tests/test_data_table_migration_matrix.py)
-checks the migration dispositions, target set, and bootstrap exclusion. Run the
-test and the generator check after changing a workflow or table contract:
+The matrix check covers dispositions. It covers target names and bootstrap
+exclusion. The matrix records 33 node references. It records 121
+write-reference edges. A drifted matrix fails the check.
 
 ```sh
 python -m unittest tests.test_data_table_migration_matrix -v
 python integrations/n8n/generate_data_table_migration_matrix.py --check
 ```
 
-The checked matrix contains 33 node references and 121 write-reference edges.
-The test fails when the generated matrix drifts from those values.
+No production guide exists here. The linked script is a disposable proof. It is
+the PR58 proof.
 
-The [`run-four-table-cutover.sh`](integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh)
-procedure is a disposable-only PR58 proof. It is not a production cutover.
-Production cutover remains pending until the acceptance ledger records its
-runtime evidence. Follow the [Actual production procedure](docs/actual-production.md)
-for production operations.
+Cutover status:
 
-Before a disposable forward run, place these files in a protected mode-`0700`
-receipt directory:
+- no production guide exists here
+- the linked script is a disposable PR58 proof
+- retained state is out of scope
+- the acceptance ledger has no runtime evidence
+- see [`docs/actual-production.md`](docs/actual-production.md) for the ledger guide
+
+Before a disposable forward run, create a receipt directory with mode `0700`.
+Place these files in it:
 
 - `finance-data-table-backup-v1.json`
 - `data-table-migration-receipt.json`
 - `finance-four-table-accepted-identity.json`
 
-Set these inputs:
+Set the required inputs. Keep the Compose project label separate from the
+internal Data Table project ID:
 
 ```sh
 export FINANCE_REPOSITORY_DIR="$PWD"
 export FINANCE_N8N_RECEIPT_DIR='<absolute mode-0700 receipt directory>'
-export N8N_FINANCE_PROJECT_ID='<disposable Compose project>'
+export FINANCE_N8N_COMPOSE_PROJECT='<disposable Compose project label>'
+export N8N_FINANCE_PROJECT_ID='<internal Data Table project ID>'
 export FINANCE_N8N_RUNTIME_MODE=DISPOSABLE_ONLY
 ```
 
-Resolve exactly one running `n8n` container from that disposable project. Record
-the redacted identity and reject any project, service, or running-state mismatch:
+Select one running `n8n` container by its Compose labels. Reject a wrong project,
+service, or state. Save the identity receipt with mode `0600`:
 
 ```sh
 mapfile -t n8n_candidates < <(
   docker ps \
-    --filter "label=com.docker.compose.project=$N8N_FINANCE_PROJECT_ID" \
+    --filter "label=com.docker.compose.project=$FINANCE_N8N_COMPOSE_PROJECT" \
     --filter "label=com.docker.compose.service=n8n" \
     --filter status=running \
     --format '{{.ID}}'
@@ -156,25 +189,25 @@ mapfile -t n8n_candidates < <(
 test "${#n8n_candidates[@]}" -eq 1
 FINANCE_N8N_CONTAINER="$(docker inspect -f '{{.Id}}' "${n8n_candidates[0]}")"
 container_identity="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER")"
-test "$container_identity" = "$N8N_FINANCE_PROJECT_ID|n8n|true"
+test "$container_identity" = "$FINANCE_N8N_COMPOSE_PROJECT|n8n|true"
 export FINANCE_N8N_CONTAINER
 umask 077
 docker inspect -f '{{.Id}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}' "$FINANCE_N8N_CONTAINER" > "$FINANCE_N8N_RECEIPT_DIR/finance-n8n-container-identity.txt"
 ```
 
-Run the forward proof only after a named operator acknowledges it:
+The forward gate needs a named operator acknowledgment. The value appears below:
 
 ```sh
 export FOUR_TABLE_FORWARD_ACK=FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE
 integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh forward
 ```
 
-The runner validates the source and migration digests, reads the four target
-tables before and after workflow 19, and runs workflow 19 twice. The second
-readback must be a no-op. Set
-`FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE`
-before `rollback`, and retain the forward receipt and source files until the
-rollback readback passes:
+`run-four-table-cutover.sh` checks source and migration digests. It reads the
+four target tables in each phase. It executes workflow 19 twice. Confirm that
+the second readback is a no-op.
+
+The rollback gate needs a forward receipt and a named operator acknowledgment.
+The value appears below:
 
 ```sh
 export FOUR_TABLE_ROLLBACK_ACK=FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE
@@ -183,16 +216,22 @@ integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh rollback
 
 ### runtime acceptance boundary
 
-Checked-in n8n exports remain inactive and `SPEC_ONLY`.
+`n8n` export status:
+
+- inactive
+- `SPEC_ONLY`
+- the acceptance ledger is authoritative
 
 Static exports and local tests do not prove provider authentication, live table
-state, Actual or Cashback readback, Cloudflare routes, production identities,
-or rollback. The machine-readable [`config/project-acceptance.json`](config/project-acceptance.json)
-ledger is the sole source for current acceptance status.
+state, ledger or Cashback readback, Cloudflare routes, production identities,
+or rollback. The machine-readable
+[`config/project-acceptance.json`](config/project-acceptance.json) ledger is the
+sole source for current acceptance status.
 
 ### platform-owned procedures
 
-The finance checkout does not own the n8n platform scripts. Use pinned commit [`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
+The finance checkout does not own the `n8n` platform scripts. Use pinned commit
+[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
 
 - [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
 - [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
@@ -201,7 +240,7 @@ The finance checkout does not own the n8n platform scripts. Use pinned commit [`
 - [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md)
 - [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh)
 
-## Recreate locally
+## recreate locally
 
 ```powershell
 git clone <private-repository-url>
@@ -212,11 +251,10 @@ python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
 
-PDF extraction is an explicit n8n sub-workflow. Install the `statements`
-optional dependency only for local parser development; production extraction
-uses reviewed fixed-purpose n8n nodes.
+PDF extraction is an explicit `n8n` sub-workflow. Install the `statements`
+extra for local parser work. Production extraction uses reviewed nodes.
 
-## Run
+## run
 
 ```powershell
 python -m unittest discover -s tests -v
@@ -226,25 +264,33 @@ python -m finance_tracker.cli month-close --input data\sample_transactions.json 
 python -m finance_tracker.cli browser-adapters-status --sources config\browser-sources.json --adapters-root browser_adapters
 ```
 
-Browser acquisition is an alternate source, not a second ledger. Provider/data recipes describe the exact authenticated UI path; official CSV/XLSX/PDF artifacts are normalized into the same staging, rules, review, and Actual import pipeline as email statements. See `docs/browser-ingestion.md`.
+Browser acquisition is an alternate source. It is not a second ledger. Provider
+recipes describe the authenticated UI path. Official CSV and XLSX files enter
+the same staging and review pipeline. Official PDF files use that pipeline too.
 
-Statement PDFs, normalized browser captures, and official browser exports enter
-the versioned workflows under `integrations/n8n`. There is no ingestion bridge,
-SSH submission wrapper, or second transaction store. The fixed-purpose Actual
-node writes through `@actual-app/api` only after validation and review gates.
+This repository has no ingestion bridge or second transaction store. The fixed-purpose
+ledger node writes through `@actual-app/api` after validation and review.
 
-## Runtime model
+## runtime model
 
-The target adapter writes ordinary finance records to Actual Budget through its official Node API. n8n owns bank-specific Outlook retrieval and schedule orchestration.
+The adapter writes records to the ledger through Node API. `n8n` owns Outlook
+retrieval and schedule work.
 
-The companion SQLite store owns the cashback mailbox cursor and live cashback state. n8n owns other acquisition cursors. OneDrive owns evidence originals and its JSON catalogue. Individual notifications update cashback pace, bucket headroom, warnings, and routing recommendations immediately. Each card has an independent statement job that reconciles the live state, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
+The companion SQLite store owns its cashback mailbox cursor. It owns live state.
+`n8n` owns other acquisition cursors. `OneDrive` owns evidence originals. Its
+JSON catalog has the same owner.
 
-`config/codex-automations.json` contains three local automation entries for
-installation drift checks. It is not the canonical production scheduler and does
-not establish production activity; n8n owns production schedules and orchestration.
+a notification can update pace or routing. It
+can update bucket headroom or warnings.
 
-The launcher prompts delegate to reusable runbooks under `agents/automations/`.
-Audit a local Codex installation with:
+Each card has a statement job. The job reconciles live state. The
+job closes the card period. The job extracts the payment due date.
+
+`config/codex-automations.json` contains local checks. It is not a
+production scheduler. `n8n` owns production schedules.
+
+The launcher prompts use runbooks under `agents/automations/`. Audit a local
+installation with:
 
 ```powershell
 python -m finance_tracker.cli automation-audit `
@@ -253,12 +299,24 @@ python -m finance_tracker.cli automation-audit `
   --automation-root "$env:USERPROFILE\.codex\automations"
 ```
 
-The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual and Cashback Control, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails. n8n and its Postgres database use their own stack health checks.
+The companion recalculates its dashboard every minute. A separate host timer
+probes the ledger and Cashback Control. `n8n` and Postgres use their own health
+checks.
 
-Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.
+Adapters emit review rows. They emit an exact balance check.
+Passwords come from runtime secrets or interactive input. A successful parse does
+not close a card period. The matching workflow proves the ledger delta. Period
+close follows that proof.
 
-See `AGENTS.md` for architecture and extension rules.
+See [`AGENTS.md`](AGENTS.md) for extension rules. The guide lists the extension
+rules used by this project.
 
-## Reusable cashback deployment
+## reusable cashback deployment
 
-Cashback Control is not tied to the bundled cards. Supply a validated JSON profile through `CASHBACK_PROGRAM_CONFIG_PATH`; the container and UI derive card names, short labels, currency, tiers, caps, transaction bucket assignment, alerts, and routing trees from that profile. See `docs/cashback-profile.md`, `config/cashback-profile-schema-v1.json`, and `examples/cashback-profiles/`.
+Cashback Control accepts a validated profile through
+`CASHBACK_PROGRAM_CONFIG_PATH`. The profile defines card names and currency. It
+defines tiers and caps. It defines buckets and alerts. It defines routing trees.
+See
+[`docs/cashback-profile.md`](docs/cashback-profile.md),
+[`config/cashback-profile-schema-v1.json`](config/cashback-profile-schema-v1.json),
+and [`examples/cashback-profiles/`](examples/cashback-profiles/).
