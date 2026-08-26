@@ -992,7 +992,8 @@ def _assert_currentness(
     if observed_source_sha != source_backup_sha or observed_receipt_sha != receipt_sha:
         raise CutoverError("RECEIPT_CURRENTNESS_DRIFT")
     if export_sha is not None:
-        export = _read_json(args.live_export)[0]
+        export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
+        export = _read_json(export_path)[0]
         observed_export_sha = export.get("export_sha256", export.get("workflow_export_sha256"))
         if observed_export_sha != export_sha:
             raise CutoverError("LIVE_EXPORT_CURRENTNESS_DRIFT")
