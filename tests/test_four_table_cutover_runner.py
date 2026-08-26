@@ -19,6 +19,8 @@ READBACK_PARSER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/parse_n8n
 RETAINED_READBACK_FIXTURE = ROOT / "tests/fixtures/n8n-2.36.2-data-table-digest-output.json"
 SCHEMA_PATH = ROOT / "integrations/n8n/schemas/finance-four-table-cutover-receipt-v1.schema.json"
 SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+PRODUCTION_SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-production-cutover.sh"
+PRODUCTION_RUNTIME_PATH = ROOT / "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs"
 
 
 def _load(name: str, path: Path):
@@ -786,6 +788,38 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "data-table-receipt",
         ):
             self.assertIn(command, script)
+
+    def test_production_shell_surface_requires_project_lock_and_runtime_replay(self):
+        script = PRODUCTION_SHELL_RUNNER_PATH.read_text(encoding="utf-8")
+        for command in (
+            "PRODUCTION_ONLY",
+            "four_table_cutover.py\" preflight",
+            "FINANCE_FOUR_TABLE_EXPORT_B64",
+            "FINANCE_FOUR_TABLE_LOCK_B64",
+            "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
+            "n8n-cli-four-table-cutover.cjs",
+            "replay_noop",
+            "N8N_FINANCE_PROJECT_ID",
+        ):
+            self.assertIn(command, script)
+        runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
+        for command in (
+            "pg_try_advisory_xact_lock",
+            "WRITER_LOCK_RECEIPT_BINDING_INVALID",
+            "LIVE_WORKFLOW_REVISION_MISMATCH",
+            "runtime_plan_receipt_sha256",
+            "workflowRepository.update",
+        ):
+            self.assertIn(command, runtime)
+
+    def test_production_runtime_script_has_valid_javascript(self):
+        completed = subprocess.run(
+            ["node", "--check", str(PRODUCTION_RUNTIME_PATH)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_shell_disposable_forward_call_order(self):
         """The dual CLI reaches runtime twice, then rolls back successfully."""
