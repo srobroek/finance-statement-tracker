@@ -7,6 +7,11 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from integrations.n8n.validate_prodex_promotion_receipt import (
+    ReceiptValidationError,
+    validate_receipt,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "integrations/n8n/schemas/prodex-promotion-restart-receipt-v1.schema.json"
@@ -19,25 +24,6 @@ def schema_errors(document: dict, schema: dict) -> list:
         Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document),
         key=str,
     )
-
-
-def cross_field_errors(document: dict) -> list[str]:
-    errors = []
-    source_commit = document["source"]["finance_commit"]
-    image = document["image"]
-    identities = {name: image[name] for name in ("candidate", "before", "after")}
-    for name, identity in identities.items():
-        reference_digest = identity["reference"].rsplit("@", 1)[-1]
-        if identity["digest"] != reference_digest:
-            errors.append(f"{name}: reference digest mismatch")
-    if identities["candidate"] != identities["after"]:
-        errors.append("candidate and after image identities differ")
-    if identities["after"]["source_commit"] != source_commit:
-        errors.append("after image source commit mismatch")
-    protected = document["protected_state"]
-    if protected["equal"] and protected["before_sha256"] != protected["after_sha256"]:
-        errors.append("protected state fingerprint mismatch")
-    return errors
 
 
 def verified_receipt() -> dict:
@@ -117,7 +103,7 @@ class N8nProdexRuntimeTests(unittest.TestCase):
         receipt = verified_receipt()
         errors = schema_errors(receipt, self.schema)
         self.assertEqual(errors, [], "; ".join(error.message for error in errors))
-        self.assertEqual(cross_field_errors(receipt), [])
+        self.assertIs(validate_receipt(receipt, schema=self.schema), receipt)
 
     def test_verified_receipt_binds_image_identities_and_protected_fingerprints(self) -> None:
         for mutate, expected in (
@@ -129,7 +115,8 @@ class N8nProdexRuntimeTests(unittest.TestCase):
             invalid = copy.deepcopy(verified_receipt())
             mutate(invalid)
             self.assertEqual(schema_errors(invalid, self.schema), [], expected)
-            self.assertIn(expected, " ".join(cross_field_errors(invalid)))
+            with self.assertRaisesRegex(ReceiptValidationError, expected):
+                validate_receipt(invalid, schema=self.schema)
 
     def test_verified_receipt_requires_import_restart_and_protected_state_proof(self) -> None:
         for path in (
