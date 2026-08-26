@@ -22,7 +22,6 @@ const n8nRequire = createRequire(n8nPackageJson);
 const { Container } = n8nRequire('@n8n/di');
 const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
 const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
-const { WorkflowRepository } = n8nRequire('@n8n/db');
 const { DataTableService } = n8nRequire('./dist/modules/data-table/data-table.service.js');
 const pg = n8nRequire('pg');
 
@@ -69,6 +68,10 @@ function text(value, code) {
 function selectorId(selector) {
   if (selector && typeof selector === 'object' && selector.__rl === true) return String(selector.value || '');
   return typeof selector === 'string' ? selector : '';
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
 function setSelector(node, tableId) {
@@ -140,6 +143,7 @@ function validateExport(exported) {
     throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
   }
   const references = new Map();
+  const nodeAliases = new Set();
   for (const reference of exported.references) {
     const id = text(reference.reference_id, 'LIVE_REFERENCE_ID_INVALID');
     if (references.has(id) || !workflows.has(reference.workflow_id) ||
@@ -155,6 +159,9 @@ function validateExport(exported) {
     if (reference.canonical_table_name === null && reference.canonical_table_id !== null) {
       throw new Error(`LIVE_REFERENCE_UNDECLARED_TARGET:${id}`);
     }
+    const nodeKey = `${reference.workflow_id}:${text(reference.node_id, 'LIVE_REFERENCE_NODE_ID_INVALID')}`;
+    if (nodeAliases.has(nodeKey)) throw new Error(`LIVE_REFERENCE_NODE_ALIAS_CONFLICT:${id}`);
+    nodeAliases.add(nodeKey);
     references.set(id, reference);
   }
   if (references.size !== 33) throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
@@ -171,13 +178,20 @@ function assertWorkflow(workflow, expectedRevision, workflowId) {
   return revision;
 }
 
-async function loadWorkflows(repository, graph, strict = true) {
+async function loadWorkflows(client, graph, strict = true) {
   const loaded = new Map();
+  const workflowIds = [...graph.workflows.keys()];
+  const result = await client.query(
+    `SELECT w.id, w.active, w."activeVersionId", w."versionId", w.nodes, w.meta, w.settings
+       FROM workflow_entity w
+       JOIN shared_workflow s ON s."workflowId" = w.id
+      WHERE s."projectId" = $1 AND s.role = 'workflow:owner' AND w.id = ANY($2::uuid[])
+      FOR UPDATE`,
+    [projectId, workflowIds],
+  );
+  const rows = new Map(result.rows.map((workflow) => [workflow.id, workflow]));
   for (const [workflowId, revision] of graph.workflows) {
-    const workflow = await repository.findOne({
-      where: { id: workflowId },
-      select: ['id', 'active', 'activeVersionId', 'versionId', 'nodes', 'meta', 'settings'],
-    });
+    const workflow = rows.get(workflowId);
     if (strict) assertWorkflow(workflow, revision, workflowId);
     else if (!workflow || workflow.id !== workflowId || workflow.active === true || workflow.activeVersionId || !Array.isArray(workflow.nodes)) {
       throw new Error(`LIVE_WORKFLOW_POST_STATE_INVALID:${workflowId}`);
@@ -187,10 +201,36 @@ async function loadWorkflows(repository, graph, strict = true) {
   return loaded;
 }
 
+async function updateWorkflows(client, changes) {
+  for (const [workflowId, nodes] of changes) {
+    const revisionId = crypto.randomUUID();
+    const result = await client.query(
+      `UPDATE workflow_entity w
+          SET nodes = $1::jsonb, "versionId" = $3::uuid
+        WHERE w.id = $2::uuid
+          AND EXISTS (
+            SELECT 1 FROM shared_workflow s
+             WHERE s."workflowId" = w.id
+               AND s."projectId" = $4
+               AND s.role = 'workflow:owner'
+          )
+      RETURNING w.id, w."versionId"`,
+      [JSON.stringify(nodes), workflowId, revisionId, projectId],
+    );
+    if (result.rowCount !== 1 || result.rows[0].versionId !== revisionId) {
+      throw new Error(`LIVE_WORKFLOW_UPDATE_FAILED:${workflowId}`);
+    }
+  }
+}
+
 function findReferences(graph, workflows) {
   const prestate = [];
+  const nodeAliases = new Set();
   for (const reference of graph.references.values()) {
     const workflow = workflows.get(reference.workflow_id);
+    const nodeKey = `${reference.workflow_id}:${reference.node_id}`;
+    if (nodeAliases.has(nodeKey)) throw new Error(`LIVE_REFERENCE_NODE_ALIAS_CONFLICT:${reference.reference_id}`);
+    nodeAliases.add(nodeKey);
     const node = workflow.nodes.find((candidate) => candidate.id === reference.node_id);
     if (!node || node.name !== reference.node_name) throw new Error(`LIVE_REFERENCE_NODE_INVALID:${reference.reference_id}`);
     const observed = selectorId(node.parameters?.dataTableId);
@@ -209,6 +249,16 @@ function findReferences(graph, workflows) {
     });
   }
   return prestate;
+}
+
+function selectorReadback(prestate) {
+  return prestate.map((item) => ({
+    reference_id: item.reference.reference_id,
+    workflow_id: item.reference.workflow_id,
+    node_id: item.reference.node_id,
+    selector: clone(item.node.parameters?.dataTableId),
+    selector_id: selectorId(item.node.parameters?.dataTableId),
+  })).sort((left, right) => left.reference_id.localeCompare(right.reference_id));
 }
 
 function applyForward(prestate) {
@@ -256,7 +306,7 @@ async function acquireProjectLock() {
   if (digest(unsigned) !== lockReceipt.lock_receipt_sha256) {
     throw new Error('WRITER_LOCK_RECEIPT_INTEGRITY_INVALID');
   }
-  const resource = `finance_four_table_cutover:${projectId}:${exported.export_sha256}:${process.env.FINANCE_FOUR_TABLE_SOURCE_SHA256 || ''}`;
+  const resource = `finance_four_table_cutover:${projectId}`;
   if (lockReceipt.resource_key !== resource) throw new Error('WRITER_LOCK_RESOURCE_MISMATCH');
   const pool = new pg.Pool(databaseOptions(process.env));
   const client = await pool.connect();
@@ -276,34 +326,40 @@ async function execute() {
   const graph = validateExport(exported);
   const forwardReceipt = operation === 'ROLLBACK' ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') : null;
   const lock = await acquireProjectLock();
-  const workflowRepository = Container.get(WorkflowRepository);
   const dataTableService = Container.get(DataTableService);
   let workflows;
   const originalNodes = new Map();
   const mutated = [];
+  let rollbackTransaction = false;
   try {
     await verifyTargets(dataTableService, graph.targetIds);
-    workflows = await loadWorkflows(workflowRepository, graph);
+    workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
       const plan = applyForward(prestate);
-      if (plan.alreadyApplied) {
-        return { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: true, actions: prestate.map((item) => ({ reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, node_id: item.reference.node_id, canonical_table_id: item.reference.canonical_table_id })) };
+      if (!plan.alreadyApplied) {
+        for (const [workflowId] of plan.changed) {
+          originalNodes.set(workflowId, clone(workflows.get(workflowId).nodes));
+        }
+        await updateWorkflows(lock.client, plan.changed);
+        mutated.push(...plan.changed.keys());
       }
-      for (const [workflowId, nodes] of plan.changed) {
-        originalNodes.set(workflowId, clone(workflows.get(workflowId).nodes));
-        await workflowRepository.update(workflowId, { nodes });
-        mutated.push(workflowId);
-      }
-      const updated = await loadWorkflows(workflowRepository, graph, false);
-      const actions = prestate.map((item) => {
-        const workflow = updated.get(item.reference.workflow_id);
-        const node = workflow.nodes.find((candidate) => candidate.id === item.reference.node_id);
+      const updated = await loadWorkflows(lock.client, graph, false);
+      const poststate = findReferences(graph, updated);
+      const beforeById = new Map(prestate.map((item) => [item.reference.reference_id, item]));
+      const actions = poststate.map((item) => {
+        const before = beforeById.get(item.reference.reference_id);
         const expected = item.reference.canonical_table_id;
-        if (selectorId(node.parameters?.dataTableId) !== (expected || '')) throw new Error(`LIVE_REFERENCE_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
-        return { reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, post_revision_id: String(workflow.versionId || workflow.revisionId || ''), node_id: item.reference.node_id, selector: item.selector, canonical_table_id: expected };
+        if (selectorId(item.node.parameters?.dataTableId) !== (expected || '')) throw new Error(`LIVE_REFERENCE_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
+        return { reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, post_revision_id: String(updated.get(item.reference.workflow_id).versionId || updated.get(item.reference.workflow_id).revisionId || ''), node_id: item.reference.node_id, selector: before.selector, canonical_table_id: expected };
       });
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: false, actions };
+      const readback = selectorReadback(poststate);
+      const replayState = findReferences(graph, await loadWorkflows(lock.client, graph, false));
+      const replayPlan = applyForward(replayState);
+      if (!replayPlan.alreadyApplied || !sameJson(selectorReadback(replayState), readback)) {
+        throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
+      }
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), actions };
       return { ...unsigned, runtime_plan_receipt_sha256: digest(unsigned) };
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
@@ -331,19 +387,34 @@ async function execute() {
       restoreSelector(node, action.selector);
       changed.set(item.reference.workflow_id, nodes);
     }
-    for (const [workflowId, nodes] of changed) {
+    for (const [workflowId] of changed) {
       originalNodes.set(workflowId, clone(workflows.get(workflowId).nodes));
-      await workflowRepository.update(workflowId, { nodes });
-      mutated.push(workflowId);
     }
-    return { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: false, actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
+    await updateWorkflows(lock.client, changed);
+    mutated.push(...changed.keys());
+    const restored = await loadWorkflows(lock.client, graph, false);
+    const restoredState = findReferences(graph, restored);
+    for (const item of restoredState) {
+      const action = byId.get(item.reference.reference_id);
+      if (!sameJson(item.node.parameters?.dataTableId, action.selector)) {
+        throw new Error(`ROLLBACK_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
+      }
+    }
+    const readback = selectorReadback(restoredState);
+    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
+    return { ...unsignedRollback, runtime_plan_receipt_sha256: digest(unsignedRollback) };
   } catch (error) {
     for (const workflowId of mutated.reverse()) {
-      await workflowRepository.update(workflowId, { nodes: originalNodes.get(workflowId) }).catch(() => {});
+      try {
+        await updateWorkflows(lock.client, new Map([[workflowId, originalNodes.get(workflowId)]]));
+      } catch {
+        rollbackTransaction = true;
+      }
     }
     throw error;
   } finally {
-    await lock.client.query('COMMIT').catch(async () => { await lock.client.query('ROLLBACK').catch(() => {}); });
+    if (rollbackTransaction) await lock.client.query('ROLLBACK').catch(() => {});
+    else await lock.client.query('COMMIT').catch(async () => { await lock.client.query('ROLLBACK').catch(() => {}); });
     lock.client.release();
     await lock.pool.end();
   }

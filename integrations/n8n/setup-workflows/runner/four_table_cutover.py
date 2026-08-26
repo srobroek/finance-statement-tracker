@@ -46,6 +46,7 @@ LIVE_EXPORT_SCHEMA = "finance-four-table-live-export-v1"
 LOCK_RECEIPT_SCHEMA = "finance-four-table-writer-lock-v1"
 PRECONDITION_SCHEMA = "finance-four-table-precondition-v1"
 LOCK_NAME = "finance_four_table_cutover"
+LOCK_RESOURCE_PREFIX = "finance_four_table_cutover"
 LIVE_EXPORT_FILENAME = "finance-four-table-live-export.json"
 LOCK_FILENAME = "finance-four-table-cutover.lock"
 LOCK_RECEIPT_FILENAME = "finance-four-table-lock-receipt.json"
@@ -365,6 +366,7 @@ def _validate_live_export(
         raise CutoverError("COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED")
     actions: list[dict[str, Any]] = []
     target_by_name = {item["name"]: item for item in target_ids}
+    node_aliases: set[tuple[str, str]] = set()
     for expected in inventory:
         observed = by_id[expected["reference_id"]]
         for field, expected_value in (
@@ -385,6 +387,10 @@ def _validate_live_export(
             raise CutoverError(f"LIVE_REFERENCE_REVISION_MISMATCH:{expected['reference_id']}")
         _require_text(observed.get("node_id"), "LIVE_REFERENCE_NODE_ID")
         _require_text(observed.get("old_table_id"), "LIVE_REFERENCE_OLD_TABLE_ID")
+        node_key = (observed_workflow_id, observed["node_id"])
+        if node_key in node_aliases:
+            raise CutoverError(f"LIVE_REFERENCE_NODE_ALIAS_CONFLICT:{expected['reference_id']}")
+        node_aliases.add(node_key)
         if observed.get("active") is not False or observed.get("published") is not False or observed.get("in_flight") != 0:
             raise CutoverError("LIVE_REFERENCE_NOT_QUIESCENT")
         target_name = expected["canonical_table_name"]
@@ -456,7 +462,7 @@ def _lock_receipt(
             "schema_version": LOCK_RECEIPT_SCHEMA,
             "lock_name": LOCK_NAME,
             "project_id": project_id,
-            "resource_key": f"{LOCK_NAME}:{project_id}:{export['export_sha256']}:{source_backup_sha}",
+            "resource_key": f"{LOCK_RESOURCE_PREFIX}:{project_id}",
             "operation": operation,
             "export_sha256": export["export_sha256"],
             "migration_receipt_sha256": migration_receipt_sha,

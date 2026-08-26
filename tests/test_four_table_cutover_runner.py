@@ -647,6 +647,32 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             ]
             self.assertEqual(self.runner.main(args), 1)
 
+    def test_live_export_rejects_aliasing_two_references_to_one_node(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(Path(directory))
+            export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
+            export = json.loads(export_path.read_text(encoding="utf-8"))
+            export["references"][1]["node_id"] = export["references"][0]["node_id"]
+            unsigned = dict(export)
+            unsigned.pop("export_sha256", None)
+            export["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(unsigned)
+            ).hexdigest()
+            export_path.write_bytes(self.runner._canonical_bytes(export))
+            os.chmod(export_path, 0o600)
+            args = [
+                "validate-inputs",
+                "--source-backup", str(source),
+                "--migration-receipt", str(migration),
+                "--migration-receipt-sha256", receipt_sha,
+                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root", str(ROOT),
+                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root", str(workflow_root),
+            ]
+            self.assertEqual(self.runner.main(args), 1)
+
     def test_protected_inputs_require_regular_non_symlink_exact_six_hundred_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
@@ -801,6 +827,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64",
             "n8n-cli-four-table-cutover.cjs",
             "replay_noop",
+            "readback_verified",
+            "readback_digest_sha256",
+            "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
             "N8N_FINANCE_PROJECT_ID",
         ):
             self.assertIn(command, script)
@@ -809,9 +838,13 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "pg_try_advisory_xact_lock",
             "WRITER_LOCK_RECEIPT_BINDING_INVALID",
             "FORWARD_RUNTIME_RECEIPT_BINDING_INVALID",
+            "LIVE_REFERENCE_NODE_ALIAS_CONFLICT",
+            "FORWARD_REPLAY_READBACK_MISMATCH",
+            "FOR UPDATE",
+            "UPDATE workflow_entity",
             "LIVE_WORKFLOW_REVISION_MISMATCH",
             "runtime_plan_receipt_sha256",
-            "workflowRepository.update",
+            "updateWorkflows",
         ):
             self.assertIn(command, runtime)
 

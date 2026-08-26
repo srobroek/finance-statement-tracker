@@ -145,12 +145,7 @@ run_production_runtime() {
   chmod 0600 "$runtime_json"
 
   if [[ "$operation" = forward ]]; then
-    test -s "$forward_runtime_receipt"
-    runtime_env+=( -e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")" )
-    docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - < "$runtime_script" > "$receipt_dir/finance-four-table-runtime-forward-replay.raw"
-    grep '^finance four-table runtime verified:' "$receipt_dir/finance-four-table-runtime-forward-replay.raw" \
-      | tail -n 1 \
-      | grep -F '"replay_noop":true' >/dev/null
+    grep -F '"replay_noop":true' "$runtime_json" >/dev/null
   fi
 }
 
