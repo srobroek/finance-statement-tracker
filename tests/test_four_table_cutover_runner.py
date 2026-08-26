@@ -350,7 +350,11 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         (node_root / "@n8n/di/index.js").write_text(
             """const fs = require('node:fs');
 const { DataTableService } = require('n8n/dist/modules/data-table/data-table.service.js');
-function mark(stage) { fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, `${stage}\\n`); }
+function mark(stage) {
+  if (process.env.FINANCE_TEST_LIFECYCLE_LOG) {
+    fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, `${stage}\\n`);
+  }
+}
 const Container = { get: () => { mark('data-table-service:get'); return new DataTableService(); } };
 module.exports = { Container };
 """,
@@ -359,7 +363,9 @@ module.exports = { Container };
         (n8n_root / "bin/n8n").write_text(
             """const fs = require('node:fs');
 const lifecycleLog = process.env.FINANCE_TEST_LIFECYCLE_LOG;
-function mark(stage) { fs.appendFileSync(lifecycleLog, `${stage}\\n`); }
+function mark(stage) {
+  if (lifecycleLog) fs.appendFileSync(lifecycleLog, `${stage}\\n`);
+}
 const { BaseCommand } = require('../dist/commands/base-command.js');
 const { ListWorkflowCommand } = require('../dist/commands/list/workflow.js');
 (async () => {
