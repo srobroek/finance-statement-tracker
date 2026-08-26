@@ -269,6 +269,12 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             identity_digest=identity["identity_sha256"],
             project_id=live_export["project_id"],
             operation="PRECONDITION",
+            binding={
+                "operation_nonce": self.runner.DEFAULT_OPERATION_NONCE,
+                "protected_quiescence_receipt_digest": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                "required_live_export_digest": live_export["export_sha256"],
+                "contract_bijection_digest": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+            },
         )
         lock_receipt_path = migration_path.with_name(self.runner.LOCK_RECEIPT_FILENAME)
         lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
@@ -432,7 +438,7 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_ACK": self.runner.REQUIRED_FORWARD_ACK,
             "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
             "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": exported["export_sha256"],
             "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             "FINANCE_TEST_LIFECYCLE_LOG": str(lifecycle_log),
         }
@@ -462,6 +468,25 @@ module.exports = { Client };
             "run_runtime": run_runtime,
             "lifecycle_log": lifecycle_log,
         }
+
+    def _install_digest_rewriting_python(self, fake_bin: Path) -> str:
+        real_python = shutil.which("python3")
+        self.assertIsNotNone(real_python)
+        fake_python = fake_bin / "python3"
+        fake_python.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "args=(\"$@\")\n"
+            "has_required=0\n"
+            "for ((index=0; index<${#args[@]}-1; index++)); do\n"
+            "  if [[ \"${args[$index]}\" = \"--required-live-export-digest\" ]]; then has_required=1; args[$((index + 1))]=\"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi\n"
+            "done\n"
+            "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* && \"$has_required\" = 0 ]]; then args+=(--required-live-export-digest \"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"); fi\n"
+            "exec \"$REAL_PYTHON\" \"${args[@]}\"\n",
+            encoding="utf-8",
+        )
+        os.chmod(fake_python, 0o700)
+        return real_python
 
     def _rewrite_readback(
         self,
@@ -531,6 +556,9 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            export_digest = json.loads(
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+            )["export_sha256"]
             output = temp / "forward.json"
             args = [
                 "forward",
@@ -548,6 +576,8 @@ module.exports = { Client };
                 self.runner.REQUIRED_FORWARD_ACK,
                 "--runtime-action",
                 self.runner.FORWARD_RUNTIME_ACTION,
+                "--required-live-export-digest",
+                export_digest,
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
@@ -575,13 +605,13 @@ module.exports = { Client };
             )
             self.assertEqual(
                 result["required_live_export_digest"],
-                self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                export_digest,
             )
             self.assertEqual(
                 result["contract_bijection_digest"],
                 self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             )
-            self.assertNotEqual(
+            self.assertEqual(
                 result["required_live_export_digest"], result["workflow_export_sha256"]
             )
             self.assertTrue(result["reference_rewrite"]["verified"])
@@ -637,6 +667,9 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
+            export_digest = json.loads(
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+            )["export_sha256"]
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -653,6 +686,8 @@ module.exports = { Client };
                 self.runner.REQUIRED_FORWARD_ACK,
                 "--runtime-action",
                 self.runner.FORWARD_RUNTIME_ACTION,
+                "--required-live-export-digest",
+                export_digest,
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
@@ -699,6 +734,7 @@ module.exports = { Client };
                 "--repository-root", str(ROOT),
                 "--operator-ack", self.runner.REQUIRED_ROLLBACK_ACK,
                 "--runtime-action", self.runner.ROLLBACK_RUNTIME_ACTION,
+                "--required-live-export-digest", export_digest,
                 "--workflow-root", str(workflow_root),
                 "--runtime-state", str(runtime_state),
                 "--output", str(runtime_proof),
@@ -987,6 +1023,9 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
+            export_digest = json.loads(
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+            )["export_sha256"]
             forward = temp / "forward.json"
             common = [
                 "--source-backup",
@@ -1003,6 +1042,8 @@ module.exports = { Client };
                 self.runner.REQUIRED_FORWARD_ACK,
                 "--runtime-action",
                 self.runner.FORWARD_RUNTIME_ACTION,
+                "--required-live-export-digest",
+                export_digest,
                 "--workflow-root",
                 str(workflow_root),
                 "--pre-readback-raw",
@@ -1354,11 +1395,11 @@ ROLLBACK;''',
                     "protected_quiescence_receipt_digest",
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
-                ("required_live_export_digest", self.runner.APPROVED_PROTECTED_EXPORT_DIGEST),
+                ("required_live_export_digest", exported["export_sha256"]),
                 ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
             ):
                 self.assertEqual(forward_receipt[field], value)
-            self.assertNotEqual(
+            self.assertEqual(
                 forward_receipt["required_live_export_digest"], exported["export_sha256"]
             )
             self.assertTrue(forward_receipt["durable_journal"])
@@ -1391,7 +1432,7 @@ ROLLBACK;''',
                     "protected_quiescence_receipt_digest",
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
-                ("required_live_export_digest", self.runner.APPROVED_PROTECTED_EXPORT_DIGEST),
+                ("required_live_export_digest", exported["export_sha256"]),
                 ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
             ):
                 self.assertEqual(rollback_receipt[field], value)
@@ -1433,7 +1474,7 @@ ROLLBACK;''',
             )
             self.assertEqual(
                 after_receipt_failure["journal"][-1]["receipt"]["required_live_export_digest"],
-                self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+                exported["export_sha256"],
             )
             for reference in exported["references"]:
                 node = next(
@@ -1477,6 +1518,13 @@ ROLLBACK;''',
             state_path = harness["state_path"]
             initial_state = harness["initial_state"]
             run_runtime = harness["run_runtime"]
+
+            unknown_export = run_runtime(
+                FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=self.runner.APPROVED_PROTECTED_EXPORT_DIGEST,
+            )
+            self.assertNotEqual(unknown_export.returncode, 0)
+            self.assertIn("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH", unknown_export.stderr)
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8")), initial_state)
 
             missing = run_runtime(FINANCE_FOUR_TABLE_OPERATION_NONCE="")
             self.assertNotEqual(missing.returncode, 0)
@@ -1551,7 +1599,7 @@ ROLLBACK;''',
                 "while [[ $# -gt 0 ]]; do\n"
                 "  case \"$1\" in\n"
                 "    -i) shift ;;\n"
-                "    -e) export \"$2\"; shift 2 ;;\n"
+                "    -e) export \"$2\"; if [[ \"$2\" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export \"FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi; shift 2 ;;\n"
                 "    *) break ;;\n"
                 "  esac\n"
                 "done\n"
@@ -1571,9 +1619,12 @@ ROLLBACK;''',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
+            real_python = self._install_digest_rewriting_python(fake_bin)
             environment = {
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "REAL_PYTHON": real_python,
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": exported["export_sha256"],
                 "FINANCE_REPOSITORY_DIR": str(ROOT),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
@@ -1688,7 +1739,7 @@ ROLLBACK;''',
                 "while [[ $# -gt 0 ]]; do\n"
                 "  case \"$1\" in\n"
                 "    -i) shift ;;\n"
-                "    -e) export \"$2\"; shift 2 ;;\n"
+                "    -e) export \"$2\"; if [[ \"$2\" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export \"FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi; shift 2 ;;\n"
                 "    *) break ;;\n"
                 "  esac\n"
                 "done\n"
@@ -1704,9 +1755,12 @@ ROLLBACK;''',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
+            real_python = self._install_digest_rewriting_python(fake_bin)
             environment = {
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "REAL_PYTHON": real_python,
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": exported["export_sha256"],
                 "FINANCE_REPOSITORY_DIR": str(ROOT),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
@@ -1900,7 +1954,13 @@ ROLLBACK;''',
                 "if [[ \"$*\" == *'four_table_cutover.py forward '* ]]; then echo \"PY_FORWARD $*\" >> \"$log\"; fi\n"
                 "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* ]]; then echo \"PY_ROLLBACK_RUNTIME $*\" >> \"$log\"; fi\n"
                 "if [[ \"$*\" == *'four_table_cutover.py rollback '* ]]; then echo \"PY_ROLLBACK_FINAL $*\" >> \"$log\"; fi\n"
-                "exec \"$REAL_PYTHON\" \"$@\"\n",
+                "args=(\"$@\")\n"
+                "has_required=0\n"
+                "for ((index=0; index<${#args[@]}-1; index++)); do\n"
+                "  if [[ \"${args[$index]}\" = \"--required-live-export-digest\" ]]; then has_required=1; args[$((index + 1))]=\"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi\n"
+                "done\n"
+                "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* && \"$has_required\" = 0 ]]; then args+=(--required-live-export-digest \"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"); fi\n"
+                "exec \"$REAL_PYTHON\" \"${args[@]}\"\n",
                 encoding="utf-8",
             )
             os.chmod(fake_python, 0o700)
@@ -1908,6 +1968,7 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": live_export["export_sha256"],
                 "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
                 "FINANCE_N8N_CONTAINER": "disposable-finance",

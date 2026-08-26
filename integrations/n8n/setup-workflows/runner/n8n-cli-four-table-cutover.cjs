@@ -149,6 +149,9 @@ function validateExport(exported) {
   const unsigned = { ...exported };
   delete unsigned.export_sha256;
   if (digest(unsigned) !== exportDigest) throw new Error('LIVE_EXPORT_INTEGRITY_INVALID');
+  if (bindingFromEnvironment().required_live_export_digest !== exportDigest) {
+    throw new Error('LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH');
+  }
   if (exported.project_id !== projectId || exported.workflow_count !== 19 || exported.in_flight !== 0) {
     throw new Error('LIVE_EXPORT_PROJECT_OR_QUIESCENCE_MISMATCH');
   }

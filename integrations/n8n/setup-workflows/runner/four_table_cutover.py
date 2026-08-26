@@ -341,6 +341,7 @@ def _validate_live_export(
     migration_receipt_sha: str,
     source_backup_sha: str,
     identity_digest: str,
+    required_export_digest: str,
     matrix: Mapping[str, Any],
 ) -> dict[str, Any]:
     _require_protected(path, "PROTECTED_LIVE_EXPORT")
@@ -351,6 +352,8 @@ def _validate_live_export(
     export_sha = _require_digest(export_sha, "LIVE_EXPORT_SHA256")
     if hashlib.sha256(_canonical_bytes(_export_without_hash(export))).hexdigest() != export_sha:
         raise CutoverError("LIVE_EXPORT_INTEGRITY_MISMATCH")
+    if export_sha != required_export_digest:
+        raise CutoverError("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
     project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
@@ -1008,6 +1011,7 @@ def _bound_live_inputs(
     live_export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
     lock_receipt_path = getattr(args, "lock_receipt", None) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
     matrix = _load_matrix()
+    binding = _binding_inputs(args)
     export = _validate_live_export(
         live_export_path,
         source_head=source_head,
@@ -1015,10 +1019,10 @@ def _bound_live_inputs(
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        required_export_digest=binding["required_live_export_digest"],
         matrix=matrix,
     )
     project_id = export["project_id"]
-    binding = _binding_inputs(args)
     lock_receipt, lock_sha = _validate_lock_receipt(
         lock_receipt_path,
         export_sha=export["export_sha256"],
@@ -1637,6 +1641,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
     )
     if args.live_export is None:
         raise CutoverError("PROTECTED_LIVE_EXPORT_REQUIRED")
+    binding = _binding_inputs(args)
     export = _validate_live_export(
         args.live_export,
         source_head=source_head,
@@ -1644,9 +1649,9 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         migration_receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
+        required_export_digest=binding["required_live_export_digest"],
         matrix=_load_matrix(),
     )
-    binding = _binding_inputs(args)
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
