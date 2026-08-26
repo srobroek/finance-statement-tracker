@@ -1093,6 +1093,18 @@ module.exports = { Pool };
             "N8N_FINANCE_PROJECT_ID",
         ):
             self.assertIn(command, script)
+        self.assertIn(
+            'docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"',
+            script,
+        )
+        self.assertIn(
+            'if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - list:workflow < "$runtime_script" > "$runtime_output"; then',
+            script,
+        )
+        self.assertEqual(
+            script.count('node - list:workflow < "$runtime_script" > "$runtime_output"'),
+            2,
+        )
         runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
         for command in (
             "pg_try_advisory_xact_lock",
@@ -1516,6 +1528,11 @@ ROLLBACK;''',
                 "done\n"
                 "shift\n"
                 "test \"${1:-}\" = node\n"
+                "runtime_argv=(\"$@\")\n"
+                "if [[ \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" = 1 ]]; then runtime_label=RECOVERY; else runtime_label=RUNTIME; fi\n"
+                "printf '%s' \"$runtime_label\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
+                "printf '\\t%s' \"${runtime_argv[@]}\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
+                "printf '\\n' >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
                 "shift\n"
                 "export FINANCE_FOUR_TABLE_N8N_ROOT=\"$FINANCE_TEST_N8N_ROOT\"\n"
                 "if [[ \"${FINANCE_FOUR_TABLE_OPERATION:-}\" = FORWARD && \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" != 1 && \"${FINANCE_TEST_FAIL_RECEIPT:-}\" = 1 ]]; then export FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE=1; fi\n"
@@ -1539,6 +1556,7 @@ ROLLBACK;''',
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FOUR_TABLE_ROLLBACK_ACK": "",
                 "FINANCE_TEST_FAIL_RECEIPT": "1",
+                "FINANCE_TEST_DOCKER_LOG": str(temp / "docker-runtime-argv.log"),
                 "FINANCE_TEST_N8N_ROOT": str(node_root),
                 "FINANCE_TEST_DB_STATE": str(state_path),
                 "FINANCE_TEST_TARGETS_JSON": target_json,
@@ -1551,6 +1569,10 @@ ROLLBACK;''',
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(failed_forward.returncode, 0, failed_forward.stderr)
+            self.assertEqual(
+                (temp / "docker-runtime-argv.log").read_text(encoding="utf-8").splitlines(),
+                ["RUNTIME\tnode\t-\tlist:workflow", "RECOVERY\tnode\t-\tlist:workflow"],
+            )
             forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
             self.assertTrue(forward_runtime.exists())
             recovered = json.loads(forward_runtime.read_text(encoding="utf-8"))
