@@ -840,12 +840,13 @@ async function recoverForwardJournal() {
           AND receipt->>'protected_quiescence_receipt_digest' = $6
           AND receipt->>'required_live_export_digest' = $7
           AND receipt->>'contract_bijection_digest' = $8
-        ORDER BY created_at DESC
-        LIMIT 1`,
+        ORDER BY created_at DESC`,
       [projectId, resource, 'FORWARD', exported.export_sha256, binding.operation_nonce, binding.protected_quiescence_receipt_digest, binding.required_live_export_digest, binding.contract_bijection_digest],
     );
-    const row = result.rows?.[0];
-    if (!row) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
+    const rows = result.rows || [];
+    if (rows.length === 0) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
+    if (rows.length !== 1) throw new Error('FORWARD_RUNTIME_JOURNAL_AMBIGUOUS');
+    const row = rows[0];
     const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
     await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource, binding));
   } finally {

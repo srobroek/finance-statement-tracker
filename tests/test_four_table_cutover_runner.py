@@ -534,7 +534,7 @@ class Client {
         entry.receipt.required_live_export_digest === requiredExportDigest &&
         entry.receipt.contract_bijection_digest === contractDigest,
       );
-      return { rows: rows.length ? [{ receipt: clone(rows[rows.length - 1].receipt) }] : [] };
+      return { rows: rows.map((entry) => ({ receipt: clone(entry.receipt) })) };
     }
     if (statement.startsWith('SELECT w.id')) {
       return { rows: (params[1] || []).map((id) => this.current().workflows[id]).filter(Boolean).map(clone) };
