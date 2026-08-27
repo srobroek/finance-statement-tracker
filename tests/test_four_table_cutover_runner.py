@@ -1837,6 +1837,31 @@ ROLLBACK;''',
             self.assertEqual(harness["lifecycle_log"].read_text(encoding="utf-8"), "")
             self.assertEqual(len(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"]), 1)
 
+    def test_production_runtime_accepts_all_committed_credential_placeholders(self):
+        """Every committed placeholder reference validates before opaque binding."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            placeholder_leaves = 0
+            for binding in contract["bindings"]:
+                for item in binding["nodes"]:
+                    source = json.loads(
+                        (ROOT / "integrations/n8n/workflows" / item["workflow"]["file"]).read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    source_nodes = {node["id"]: node for node in source["nodes"]}
+                    workflow = state["workflows"][item["workflow"]["id"]]
+                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                    node["credentials"] = source_nodes[item["node"]["id"]]["credentials"]
+                    placeholder_leaves += 1
+            self.assertEqual(placeholder_leaves, 36)
+            harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+
+            completed = harness["run_runtime"]()
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_production_runtime_binds_mixed_credential_origins_and_restores_placeholders(self):
         """All credential leaves share selector updates and restore their origin on rollback."""
         with tempfile.TemporaryDirectory() as directory:
@@ -1904,29 +1929,52 @@ ROLLBACK;''',
             self.assertEqual(len(restored_state["journal"]), 2)
 
     def test_production_runtime_rejects_invalid_credential_tuples_before_writes(self):
-        """Foreign, mixed, and missing tuples fail before transaction updates."""
+        """Invalid placeholder, type, shape, and opaque associations fail before updates."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
             contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
             binding = contract["bindings"][0]
             item = binding["nodes"][0]
             run_runtime = harness["run_runtime"]
-            for invalid in ("foreign", "mixed", "missing"):
+            mutations = {
+                "wrong-placeholder-id": lambda credentials: credentials.update({
+                    binding["credential_type"]: {"id": "BIND_WRONG", "name": "Finance Actual"}
+                }),
+                "missing-type": lambda credentials: credentials.clear(),
+                "extra-type": lambda credentials: credentials.update({
+                    "unexpected": {"id": "unexpected-id", "name": "Unexpected"}
+                }),
+                "wrong-type": lambda credentials: (
+                    credentials.__setitem__("unexpected", credentials.pop(binding["credential_type"]))
+                ),
+                "malformed-ref": lambda credentials: credentials.__setitem__(
+                    binding["credential_type"], {"id": binding["placeholder"]}
+                ),
+                "wrong-opaque-id": lambda credentials: credentials[binding["credential_type"]].update(
+                    {"id": "wrong-opaque-id"}
+                ),
+                "wrong-opaque-name": lambda credentials: credentials[binding["credential_type"]].update(
+                    {"name": "Wrong opaque name"}
+                ),
+            }
+            for invalid, mutate in mutations.items():
                 harness["reset_state"]()
                 state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 workflow = state["workflows"][item["workflow"]["id"]]
                 node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
-                if invalid == "foreign":
-                    node["credentials"][binding["credential_type"]] = {"id": "foreign-id", "name": "foreign-name"}
-                elif invalid == "mixed":
-                    node["credentials"][binding["credential_type"]]["id"] = binding["placeholder"]
-                else:
-                    del node["credentials"]
+                mutate(node["credentials"])
                 harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+                before = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 failed = run_runtime()
                 self.assertNotEqual(failed.returncode, 0, invalid)
-                self.assertRegex(failed.stderr, r"(CREDENTIAL_BINDING_|LIVE_WORKFLOW_BODY_MISMATCH)", invalid)
-                self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"], [], invalid)
+                self.assertRegex(
+                    failed.stderr,
+                    r"CREDENTIAL_(REFERENCE_INVALID|BINDING_(TUPLE|ASSOCIATION)_MISMATCH)",
+                    invalid,
+                )
+                self.assertEqual(
+                    json.loads(harness["state_path"].read_text(encoding="utf-8")), before, invalid
+                )
 
     def test_production_runtime_rejects_foreign_or_duplicate_owner_shares_before_writes(self):
         """Every bound credential must have one owner share globally."""
