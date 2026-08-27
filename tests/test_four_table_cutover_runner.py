@@ -1790,6 +1790,72 @@ ROLLBACK;''',
             self.assertEqual(harness["lifecycle_log"].read_text(encoding="utf-8"), "")
             self.assertEqual(len(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"]), 1)
 
+    def test_production_runtime_binds_mixed_credential_origins_and_restores_placeholders(self):
+        """All credential leaves share selector updates and restore their origin on rollback."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            state_path = harness["state_path"]
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            placeholder_leaves = []
+            for binding in contract["bindings"]:
+                for item in binding["nodes"]:
+                    workflow = state["workflows"][item["workflow"]["id"]]
+                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                    if len(placeholder_leaves) < 3:
+                        node["credentials"][binding["credential_type"]] = {
+                            "id": binding["placeholder"],
+                            "name": binding["placeholder"],
+                        }
+                        placeholder_leaves.append((item["workflow"]["id"], item["node"]["id"], binding))
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            run_runtime = harness["run_runtime"]
+            forward = run_runtime()
+            self.assertEqual(forward.returncode, 0, forward.stderr)
+            marker = "finance four-table runtime verified:"
+            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            self.assertEqual(receipt["credential_leaf_count"], 36)
+            self.assertEqual(receipt["credential_origin_post_bitset"], "0" * 36)
+            self.assertIn("1", receipt["credential_origin_bitset"])
+            for credential in state["credentials"]:
+                self.assertNotIn(credential["id"], json.dumps(receipt))
+            bound_state = json.loads(state_path.read_text(encoding="utf-8"))
+            credentials_by_type = {credential["type"]: credential for credential in bound_state["credentials"]}
+            for binding in contract["bindings"]:
+                for item in binding["nodes"]:
+                    workflow = bound_state["workflows"][item["workflow"]["id"]]
+                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                    self.assertEqual(node["credentials"][binding["credential_type"]], {
+                        "id": credentials_by_type[binding["credential_type"]]["id"],
+                        "name": credentials_by_type[binding["credential_type"]]["name"],
+                    })
+            rollback = run_runtime(
+                FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
+                FINANCE_FOUR_TABLE_ACK=self.runner.REQUIRED_ROLLBACK_ACK,
+                FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=base64.b64encode(
+                    json.dumps(receipt, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii"),
+            )
+            self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            restored_state = json.loads(state_path.read_text(encoding="utf-8"))
+            for workflow_id, node_id, binding in placeholder_leaves:
+                node = next(node for node in restored_state["workflows"][workflow_id]["nodes"] if node["id"] == node_id)
+                self.assertEqual(node["credentials"][binding["credential_type"]], {
+                    "id": binding["placeholder"],
+                    "name": binding["placeholder"],
+                })
+            for binding in contract["bindings"]:
+                for item in binding["nodes"]:
+                    if (item["workflow"]["id"], item["node"]["id"], binding) in placeholder_leaves:
+                        continue
+                    workflow = restored_state["workflows"][item["workflow"]["id"]]
+                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                    self.assertEqual(node["credentials"][binding["credential_type"]], {
+                        "id": credentials_by_type[binding["credential_type"]]["id"],
+                        "name": credentials_by_type[binding["credential_type"]]["name"],
+                    })
+            self.assertEqual(len(restored_state["journal"]), 2)
+
     def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(self):
         """Run the actual CJS runtime with a disposable n8n and PostgreSQL harness."""
         with tempfile.TemporaryDirectory() as directory:

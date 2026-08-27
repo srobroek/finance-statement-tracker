@@ -755,10 +755,16 @@ function validateForwardReceipt(receipt, exported, resource, binding) {
   const unsigned = { ...receipt };
   delete unsigned.runtime_plan_receipt_sha256;
   if (digest(unsigned) !== receipt.runtime_plan_receipt_sha256 ||
+      receipt.actions.some((action) => !action || typeof action !== 'object' || Array.isArray(action)) ||
       new Map(receipt.actions.map((action) => [action.reference_id, action])).size !== 33) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
   }
   for (const action of receipt.actions) {
+    if (!action || typeof action !== 'object' || Array.isArray(action) ||
+        typeof action.workflow_id !== 'string' || typeof action.node_id !== 'string' ||
+        typeof action.credential_origin !== 'string' || typeof action.credential_tuple_digest !== 'string') {
+      throw new Error('FORWARD_RUNTIME_CREDENTIAL_ORIGIN_INTEGRITY_INVALID');
+    }
     const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`);
     const expectedOrigin = leaf
       ? receipt.credential_origin_bitset[credentialLeavesFromEnvironment().findIndex((candidate) => candidate.key === leaf.key)] === '1' ? 'placeholder' : 'opaque'
