@@ -2495,7 +2495,7 @@ ROLLBACK;''',
                 "forward",
             ]
             environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
-                "e6a226d0d7c6949e1d4263505f8bcf2405aba5f908eeb09bb7427ebb5f86f154"
+                "e233e0169eeb3b5df8f87982d9fd8224283e718f62d0829ed376332c49fd2b03"
             )
             stale = subprocess.run(
                 command,
@@ -2508,7 +2508,7 @@ ROLLBACK;''',
             self.assertNotEqual(stale.returncode, 0)
             self.assertEqual(log.read_text(encoding="utf-8"), "")
             environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
-                "e233e0169eeb3b5df8f87982d9fd8224283e718f62d0829ed376332c49fd2b03"
+                "9b49963355aa4d025e414eb1fd02abcb2891b340afa96f8d2ed4f00102301154"
             )
             completed = subprocess.run(
                 command,
