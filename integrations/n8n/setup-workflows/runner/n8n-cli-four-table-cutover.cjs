@@ -462,7 +462,7 @@ function validateCredentialBindings(workflows, credentials) {
           typeof ref.id !== 'string' || !ref.id || typeof ref.name !== 'string' || !ref.name) {
         throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISMATCH:${key}`);
       }
-      const placeholder = ref.id === binding.placeholder && ref.name === binding.placeholder;
+      const placeholder = ref.id === binding.placeholder;
       const opaque = associated && ref.id === associated.id && ref.name === associated.name;
       if (!placeholder && !opaque) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISMATCH:${key}`);
       origins.set(key, placeholder ? 'placeholder' : 'opaque');
@@ -657,7 +657,7 @@ function applyForward(prestate, credentials, workflows = new Map(prestate.map((i
     const originalNode = workflow.nodes.find((candidate) => candidate.id === leaf.node.id);
     if (!originalNode) throw new Error(`CREDENTIAL_BINDING_NODE_MISSING:${leaf.key}`);
     const ref = originalNode.credentials?.[leaf.credential_type];
-    if (ref.id !== leaf.placeholder || ref.name !== leaf.placeholder) continue;
+    if (ref.id !== leaf.placeholder) continue;
     const associated = credentials?.get(leaf.credential_type);
     if (!associated) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISSING:${leaf.key}`);
     const nodes = nodesFor(leaf.workflow.id);
