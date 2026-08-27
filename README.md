@@ -161,12 +161,21 @@ Name the forward or rollback acknowledgment. The script records a runtime journa
 
 Cutover status:
 
-- no production receipt exists here
-- the runner supports forward and rollback in production
-- the linked invocation is a disposable PR58 proof
-- retained state is out of scope
-- the acceptance ledger has no runtime evidence
-- see [`docs/actual-production.md`](docs/actual-production.md) for the ledger guide
+- Retained readback proves 19 inactive and unpublished finance workflows.
+- Retained readback proves four target tables:
+  - `finance_ingestion_state`
+  - `finance_documents`
+  - `finance_actual_batches`
+  - `finance_ai_reviews`
+- Production cutover has no receipt here.
+- Pending acceptance includes:
+  - provider authentication
+  - production ingestion
+  - replay
+  - restart
+  - ledger and Cashback readback
+  - rollback
+- See [`docs/actual-production.md`](docs/actual-production.md) for the ledger guide
 
 Before a disposable forward run, create a receipt directory with mode `0700`.
 Place these files in it:
@@ -302,6 +311,9 @@ jq -e '(.operation == "ROLLBACK") and (.project_id == env.N8N_FINANCE_PROJECT_ID
 
 ### runtime acceptance boundary
 
+The retained readback proves the 19-workflow and four-table topology. It does not
+prove runtime acceptance.
+
 `n8n` export status:
 
 - inactive
@@ -322,15 +334,31 @@ replace the ingestion, replay, or restart evidence.
 
 ### platform-owned procedures
 
-The finance checkout does not own the `n8n` platform scripts. Use pinned commit
-[`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
+The finance checkout does not own the `n8n` platform scripts. The current
+platform repository is [`srobroek/n8n-orchestrator`](https://github.com/srobroek/n8n-orchestrator).
+Dockge runs its `n8n` stack from `/opt/stacks/finance-n8n`, with the `n8n` service
+as the workflow runtime.
 
-- [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
-- [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
-- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh)
-- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
-- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md)
-- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh)
+The retained ProDex auth state is the protected host file
+`/home/ci/.codex-n8n-community/auth.json`. The Dockge `n8n` service mounts the
+host directory at `/home/node/.n8n/codex`. Direct n8n workflow W21 (`Subscription
+Agent Adapter`) consumes the mounted `auth.json` as the container `node` user.
+
+The retained host owns this file. The host owner and container `node` UID are
+different identities. The finance repository stores no auth contents or tokens.
+
+`n8n` owns the encrypted Microsoft OAuth records for `Finance Outlook`
+(`BIND_OUTLOOK`) and `Finance OneDrive` (`BIND_ONEDRIVE`). The finance repository
+stores only the binding contract. See the
+[`n8n credential checklist`](docs/n8n-credential-setup-checklist.md) and the
+orchestrator's [`Codex runtime guide`](https://github.com/srobroek/n8n-orchestrator#subscription-backed-agent-runtimes).
+
+- [`backup.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/recover-retained-n8n-key.sh)
+- [`cloudflare-publication.md`](https://github.com/srobroek/n8n-orchestrator/blob/main/docs/cloudflare-publication.md)
+- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/verify-cloudflare-routes.sh)
 
 ## recreate locally
 
@@ -351,10 +379,12 @@ extra for local parser work. Production extraction uses reviewed nodes.
 ```powershell
 python -m unittest discover -s tests -v
 python -m finance_tracker.cli demo
-python -m finance_tracker.cli actual-export --input data\poc-transactions.json --output data\actual-import.json
-python -m finance_tracker.cli month-close --input data\sample_transactions.json --month 2026-08 --statement-status data\2026-08-statement-status.json --output data\reports\2026-08.md
 python -m finance_tracker.cli browser-adapters-status --sources config\browser-sources.json --adapters-root browser_adapters
 ```
+
+The `actual-export` and `month-close` commands are not runnable from a fresh
+checkout. They need caller-provided canonical transaction and statement-status
+JSON files, and this repository does not contain those input fixtures.
 
 Browser acquisition is an alternate source. It is not a second ledger. Provider
 recipes describe the authenticated UI path. Official CSV and XLSX files enter
