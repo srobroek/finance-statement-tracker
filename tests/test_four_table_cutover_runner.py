@@ -1856,6 +1856,65 @@ ROLLBACK;''',
                     })
             self.assertEqual(len(restored_state["journal"]), 2)
 
+    def test_production_runtime_rejects_invalid_credential_tuples_before_writes(self):
+        """Foreign, mixed, and missing tuples fail before transaction updates."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            binding = contract["bindings"][0]
+            item = binding["nodes"][0]
+            run_runtime = harness["run_runtime"]
+            for invalid in ("foreign", "mixed", "missing"):
+                harness["reset_state"]()
+                state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+                workflow = state["workflows"][item["workflow"]["id"]]
+                node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                if invalid == "foreign":
+                    node["credentials"][binding["credential_type"]] = {"id": "foreign-id", "name": "foreign-name"}
+                elif invalid == "mixed":
+                    node["credentials"][binding["credential_type"]]["id"] = binding["placeholder"]
+                else:
+                    del node["credentials"]
+                harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+                failed = run_runtime()
+                self.assertNotEqual(failed.returncode, 0, invalid)
+                self.assertRegex(failed.stderr, r"(CREDENTIAL_BINDING_|LIVE_WORKFLOW_BODY_MISMATCH)", invalid)
+                self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"], [], invalid)
+
+    def test_production_runtime_rejects_credential_only_workflow_revision_drift(self):
+        """Rollback guards credential-only workflow revisions in addition to selectors."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            item = contract["bindings"][0]["nodes"][0]
+            binding = contract["bindings"][0]
+            state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            node = next(node for node in state["workflows"][item["workflow"]["id"]]["nodes"] if node["id"] == item["node"]["id"])
+            node["credentials"][binding["credential_type"]] = {
+                "id": binding["placeholder"],
+                "name": binding["placeholder"],
+            }
+            harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+            forward = harness["run_runtime"]()
+            self.assertEqual(forward.returncode, 0, forward.stderr)
+            marker = "finance four-table runtime verified:"
+            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            drifted = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            drifted["workflows"][item["workflow"]["id"]]["versionId"] = "credential-only-drift"
+            harness["state_path"].write_text(json.dumps(drifted), encoding="utf-8")
+            rollback = harness["run_runtime"](
+                FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
+                FINANCE_FOUR_TABLE_ACK=self.runner.REQUIRED_ROLLBACK_ACK,
+                FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=base64.b64encode(
+                    json.dumps(receipt, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii"),
+            )
+            self.assertNotEqual(rollback.returncode, 0)
+            self.assertIn("ROLLBACK_WORKFLOW_REVISION_STATE_DRIFT", rollback.stderr)
+            after = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            self.assertEqual(len(after["journal"]), 1)
+            self.assertEqual(after["workflows"][item["workflow"]["id"]]["versionId"], "credential-only-drift")
+
     def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(self):
         """Run the actual CJS runtime with a disposable n8n and PostgreSQL harness."""
         with tempfile.TemporaryDirectory() as directory:
