@@ -121,6 +121,7 @@ function credentialBindingsFromEnvironment() {
   const placeholders = new Set();
   const types = new Set();
   for (const binding of contract.bindings) {
+    if (Object.keys(binding).sort().join(',') !== 'credential_type,node_type,nodes,placeholder') throw new Error('CREDENTIAL_BINDING_KEYS_INVALID');
     if (!text(binding.placeholder, 'CREDENTIAL_PLACEHOLDER_INVALID') || !text(binding.credential_type, 'CREDENTIAL_TYPE_INVALID') || !text(binding.node_type, 'CREDENTIAL_NODE_TYPE_INVALID') || !Array.isArray(binding.nodes)) throw new Error('CREDENTIAL_BINDING_INVALID');
     if (placeholders.has(binding.placeholder) || types.has(binding.credential_type)) throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
     placeholders.add(binding.placeholder); types.add(binding.credential_type);
@@ -131,7 +132,7 @@ function credentialBindingsFromEnvironment() {
       leaves.set(key, { ...binding, workflow, node });
     }
   }
-  if (leaves.size === 0) throw new Error('CREDENTIAL_BINDINGS_EMPTY');
+  if (leaves.size !== 36) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
   return contract.bindings;
 }
 
@@ -410,16 +411,24 @@ async function loadWorkflows(client, graph, strict = true) {
   return loaded;
 }
 
+function credentialBindingForNode(workflow, node) {
+  const bindings = credentialBindingsFromEnvironment();
+  return bindings.flatMap((binding) => binding.nodes.map((item) => [
+    `${item.workflow.id}:${item.node.id}`, { ...binding, workflow: item.workflow, node: item.node },
+  ])).find(([key]) => key === `${workflow.id}:${node.id}`)?.[1];
+}
+
 function validateCredentialBindings(workflows, credentials) {
   const bindings = credentialBindingsFromEnvironment();
   const expected = new Map(bindings.flatMap((binding) => binding.nodes.map((item) => [
     `${item.workflow.id}:${item.node.id}`, { ...binding, workflow: item.workflow, node: item.node },
   ])));
   const seen = new Set();
+  const origins = new Map();
   for (const workflow of workflows.values()) {
     for (const node of workflow.nodes) {
       const key = `${workflow.id}:${node.id}`;
-      if (!node.credentials) continue;
+      if (!node.credentials && !expected.has(key)) continue;
       if (!expected.has(key)) throw new Error(`CREDENTIAL_BINDING_EXTRA:${key}`);
       const binding = expected.get(key);
       if (workflow.meta?.financeWorkflowCode !== binding.workflow.code ||
@@ -429,20 +438,37 @@ function validateCredentialBindings(workflows, credentials) {
       }
       const ref = node.credentials[binding.credential_type];
       const associated = credentials.get(binding.credential_type);
-      if (!ref || typeof ref.id !== 'string' || !ref.id || ref.id === binding.placeholder ||
-          typeof ref.name !== 'string' || !ref.name || !associated || ref.id !== associated.id || ref.name !== associated.name) {
+      if (!ref || Object.keys(ref).sort().join(',') !== 'id,name' || typeof ref.id !== 'string' || !ref.id ||
+          typeof ref.name !== 'string' || !ref.name) {
         throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISMATCH:${key}`);
       }
+      const placeholder = ref.id === binding.placeholder && ref.name === binding.placeholder;
+      const opaque = associated && ref.id === associated.id && ref.name === associated.name;
+      if (!placeholder && !opaque) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISMATCH:${key}`);
+      origins.set(key, placeholder ? 'placeholder' : 'opaque');
       seen.add(key);
     }
   }
   if (seen.size !== expected.size || [...expected.keys()].some((key) => !seen.has(key))) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
+  return origins;
 }
 
 function workflowCredentialObjectsDigest(workflows) {
   const objects = [];
   for (const workflow of workflows.values()) for (const node of workflow.nodes) {
     if (node.credentials) objects.push({ workflow_id: workflow.id, node_id: String(node.id), credentials: clone(node.credentials) });
+  }
+  return digest(objects.sort((a, b) => `${a.workflow_id}:${a.node_id}`.localeCompare(`${b.workflow_id}:${b.node_id}`)));
+}
+
+function workflowOpaqueCredentialObjectsDigest(workflows) {
+  const objects = [];
+  for (const workflow of workflows.values()) for (const node of workflow.nodes) {
+    const binding = credentialBindingForNode(workflow, node);
+    const ref = binding && node.credentials?.[binding.credential_type];
+    if (ref && !(ref.id === binding.placeholder && ref.name === binding.placeholder)) {
+      objects.push({ workflow_id: workflow.id, node_id: String(node.id), credentials: clone(node.credentials) });
+    }
   }
   return digest(objects.sort((a, b) => `${a.workflow_id}:${a.node_id}`.localeCompare(`${b.workflow_id}:${b.node_id}`)));
 }
@@ -541,7 +567,7 @@ function selectorReadback(prestate) {
   })).sort((left, right) => left.reference_id.localeCompare(right.reference_id));
 }
 
-function applyForward(prestate) {
+function applyForward(prestate, credentials) {
   const changed = new Map();
   let alreadyApplied = true;
   for (const item of prestate) {
@@ -549,10 +575,18 @@ function applyForward(prestate) {
     if (!item.oldMatches && !item.targetMatches) {
       throw new Error(`LIVE_REFERENCE_SELECTOR_DRIFT:${item.reference.reference_id}`);
     }
-    if (!item.targetMatches) {
+    const binding = credentialBindingForNode(item.workflow, item.node);
+    const ref = binding && item.node.credentials?.[binding.credential_type];
+    const needsCredential = binding && ref?.id === binding.placeholder && ref?.name === binding.placeholder;
+    if (!item.targetMatches || needsCredential) {
       const nodes = changed.get(item.reference.workflow_id) || clone(item.workflow.nodes);
       const node = nodes.find((candidate) => candidate.id === item.reference.node_id);
-      setSelector(node, item.reference.canonical_table_id);
+      if (!item.targetMatches) setSelector(node, item.reference.canonical_table_id);
+      if (needsCredential) {
+        const associated = credentials?.get(binding.credential_type);
+        if (!associated) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISSING:${item.reference.reference_id}`);
+        node.credentials = { [binding.credential_type]: { id: associated.id, name: associated.name } };
+      }
       changed.set(item.reference.workflow_id, nodes);
     }
   }
@@ -743,9 +777,10 @@ async function execute() {
     const workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
     validateCredentialBindings(workflows, credentialsByType);
     const workflowCredentialsBefore = workflowCredentialObjectsDigest(workflows);
+    const workflowOpaqueCredentialsBefore = workflowOpaqueCredentialObjectsDigest(workflows);
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
-      const plan = applyForward(prestate);
+      const plan = applyForward(prestate, credentialsByType);
       if (!plan.alreadyApplied) {
         await updateWorkflows(lock.client, plan.changed);
       }
@@ -755,12 +790,16 @@ async function execute() {
       const actions = poststate.map((item) => {
         const before = beforeById.get(item.reference.reference_id);
         const expected = item.reference.canonical_table_id;
+        const credentialBinding = credentialBindingForNode(item.workflow, item.node);
+        const credentialRef = credentialBinding && before.node.credentials?.[credentialBinding.credential_type];
+        const credentialOrigin = credentialRef?.id === credentialBinding?.placeholder && credentialRef?.name === credentialBinding?.placeholder
+          ? 'placeholder' : 'opaque';
         if (selectorId(item.node.parameters?.dataTableId) !== (expected || '')) throw new Error(`LIVE_REFERENCE_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
-        return { reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, post_revision_id: String(updated.get(item.reference.workflow_id).versionId || updated.get(item.reference.workflow_id).revisionId || ''), node_id: item.reference.node_id, selector: before.selector, canonical_table_id: expected };
+        return { reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, post_revision_id: String(updated.get(item.reference.workflow_id).versionId || updated.get(item.reference.workflow_id).revisionId || ''), node_id: item.reference.node_id, selector: before.selector, canonical_table_id: expected, credential_origin: credentialOrigin, credential_tuple_digest: digest({ workflow_id: item.reference.workflow_id, node_id: item.reference.node_id, credential_type: credentialBinding?.credential_type || '' }) };
       });
       const readback = selectorReadback(poststate);
       const replayState = findReferences(graph, await loadWorkflows(lock.client, graph, false));
-      const replayPlan = applyForward(replayState);
+      const replayPlan = applyForward(replayState, credentialsByType);
       if (!replayPlan.alreadyApplied || !sameJson(selectorReadback(replayState), readback)) {
         throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
       }
@@ -769,7 +808,7 @@ async function execute() {
       const postCredentials = await loadWorkflows(lock.client, graph, false);
       validateCredentialBindings(postCredentials, credentialsByType);
       const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
-      if (workflowCredentialsAfter !== workflowCredentialsBefore) throw new Error('WORKFLOW_CREDENTIAL_OBJECTS_CHANGED');
+      if (workflowOpaqueCredentialObjectsDigest(postCredentials) !== workflowOpaqueCredentialsBefore) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
       const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, credential_ids_recorded: false, secret_values_recorded: false, actions };
       return commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
     }
@@ -795,6 +834,11 @@ async function execute() {
       const node = nodes.find((candidate) => candidate.id === item.reference.node_id);
       if (selectorId(node.parameters?.dataTableId) !== (item.reference.canonical_table_id || '')) throw new Error(`ROLLBACK_REFERENCE_SELECTOR_MISMATCH:${item.reference.reference_id}`);
       restoreSelector(node, action.selector);
+      if (action.credential_origin === 'placeholder') {
+        const binding = credentialBindingForNode(item.workflow, item.node);
+        if (!binding) throw new Error(`ROLLBACK_CREDENTIAL_TUPLE_MISSING:${item.reference.reference_id}`);
+        node.credentials = { [binding.credential_type]: { id: binding.placeholder, name: binding.placeholder } };
+      }
       changed.set(item.reference.workflow_id, nodes);
     }
     await updateWorkflows(lock.client, changed);
@@ -812,7 +856,7 @@ async function execute() {
     const postCredentials = await loadWorkflows(lock.client, graph, false);
     validateCredentialBindings(postCredentials, credentialsByType);
     const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
-    if (workflowCredentialsAfter !== workflowCredentialsBefore) throw new Error('WORKFLOW_CREDENTIAL_OBJECTS_CHANGED');
+    if (workflowOpaqueCredentialObjectsDigest(postCredentials) !== workflowOpaqueCredentialsBefore) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
     const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, credential_ids_recorded: false, secret_values_recorded: false, actions: [...byId.values()].map((action) => ({ reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true })) };
     return commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
