@@ -49,10 +49,7 @@
         "resource": "execution",
         "operation": "getAll",
         "returnAll": false,
-        "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "limit": 100
       },
       "credentials": {
         "n8nApi": {
@@ -295,10 +292,7 @@
         "resource": "execution",
         "operation": "getAll",
         "returnAll": false,
-        "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "limit": 100
       },
       "credentials": {
         "n8nApi": {

@@ -240,7 +240,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "10-finance-operations-status.json": {
         "nodes": 22, "sticky": 0,
         "node_ids_sha256": "f1445a8c54733005522f5fcf996dc9b2c33d6698b3dda327e22820876f957dfc",
-        "parameters_sha256": "270f68296287010b036c5fc2089d8eb911b3ab493dd34600d72a6fe9c0e1b4f3",
+        "parameters_sha256": "201c85e1bb37cf68af69a647cb0eab3b6acdd3bef5b5c2cfc61567dcd9da1ff7",
     },
     "11-interactive-artifact-handoff.json": {
         "nodes": 22, "sticky": 0,

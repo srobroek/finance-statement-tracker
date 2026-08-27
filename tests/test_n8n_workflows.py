@@ -2141,6 +2141,22 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(set(dispatch_inputs), {"operation_code", "artifact_id"})
         self.assertNotIn("expected_sha256", dispatch_inputs)
 
+    def test_operations_status_execution_queries_omit_invalid_status_filter(self) -> None:
+        nodes = self.nodes("10-finance-operations-status.json")
+        for name in ("Get Scheduled Finance Executions", "Get MCP Finance Executions"):
+            with self.subTest(node=name):
+                node = nodes[name]
+                parameters = node["parameters"]
+                self.assertEqual(parameters["resource"], "execution")
+                self.assertEqual(parameters["operation"], "getAll")
+                self.assertFalse(parameters["returnAll"])
+                self.assertEqual(parameters["limit"], 100)
+                self.assertNotIn("filters", parameters)
+                self.assertEqual(
+                    node["credentials"],
+                    {"n8nApi": {"id": "BIND_N8N_API", "name": "Local n8n Operations"}},
+                )
+
     def test_ai_proposal_is_archived_hash_verified_and_left_pending_review(self) -> None:
         nodes = self.nodes("09-ai-proposal.json")
         self.assertEqual(nodes["Convert Proposal Artifact to File"]["type"], "n8n-nodes-base.convertToFile")
