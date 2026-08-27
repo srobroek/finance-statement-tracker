@@ -1681,6 +1681,94 @@ module.exports = { Client };
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+    def test_production_shell_success_reuses_runtime_receipt_without_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            harness = self._production_runtime_harness(temp)
+            migration = harness["migration"]
+            live_export_path = harness["live_export_path"]
+            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
+            lock_receipt_path = harness["lock_receipt_path"]
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity.pop("identity_sha256", None)
+            identity["identity_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(identity)
+            ).hexdigest()
+            identity_path.write_bytes(self.runner._canonical_bytes(identity))
+            os.chmod(identity_path, 0o600)
+            exported = json.loads(live_export_path.read_text(encoding="utf-8"))
+            exported["accepted_identity_sha256"] = identity["identity_sha256"]
+            exported.pop("export_sha256", None)
+            exported["export_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(exported)
+            ).hexdigest()
+            live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+            os.chmod(live_export_path, 0o600)
+            lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
+            lock_receipt["accepted_identity_sha256"] = identity["identity_sha256"]
+            lock_receipt["export_sha256"] = exported["export_sha256"]
+            lock_receipt.pop("lock_receipt_sha256", None)
+            lock_receipt["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+                self.runner._canonical_bytes(lock_receipt)
+            ).hexdigest()
+            lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+            os.chmod(lock_receipt_path, 0o600)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "test \"${1:-}\" = exec\n"
+                "printf '%s\\n' 'finance four-table runtime verified:{\"operation\":\"FORWARD\",\"replay_noop\":true,\"durable_journal\":true,\"commit_protocol\":\"postgresql_synchronous_wal\"}'\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_docker, 0o700)
+            real_python = self._install_digest_rewriting_python(fake_bin)
+            real_cp = shutil.which("cp")
+            self.assertIsNotNone(real_cp)
+            cp_log = temp / "cp.log"
+            fake_cp = fake_bin / "cp"
+            fake_cp.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "printf '%s\\n' \"$*\" >> \"$FINANCE_TEST_CP_LOG\"\n"
+                "exec \"$FINANCE_REAL_CP\" \"$@\"\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_cp, 0o700)
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "REAL_PYTHON": real_python,
+                "FINANCE_REAL_CP": real_cp,
+                "FINANCE_TEST_CP_LOG": str(cp_log),
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
+                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
+                "FINANCE_N8N_CONTAINER": "production-finance",
+                "N8N_FINANCE_PROJECT_ID": exported["project_id"],
+                "FINANCE_N8N_RUNTIME_MODE": "PRODUCTION_ONLY",
+                "FINANCE_FOUR_TABLE_OPERATION_NONCE": self.runner.DEFAULT_OPERATION_NONCE,
+                "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+                "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
+                "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+                "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
+                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
+                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
+            }
+            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            completed = subprocess.run(
+                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            runtime_receipt = migration.parent / "finance-four-table-runtime-forward.json"
+            self.assertTrue(runtime_receipt.exists())
+            self.assertEqual(stat.S_IMODE(runtime_receipt.stat().st_mode), 0o600)
+            self.assertFalse(cp_log.exists())
+
     def test_production_transaction_rolls_back_disposable_forced_failure(self):
         """Exercise the lock, in-flight guard, and atomic update against disposable PostgreSQL."""
         dsn = os.environ.get("FINANCE_FOUR_TABLE_TEST_DSN") or os.environ.get(

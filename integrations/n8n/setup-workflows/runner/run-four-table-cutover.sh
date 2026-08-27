@@ -219,7 +219,6 @@ run_production_runtime() {
   grep -F '"durable_journal":true' "$runtime_json" >/dev/null
   grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
   if [[ "$operation" = forward ]]; then
-    cp -- "$runtime_json" "$forward_runtime_receipt"
     chmod 0600 "$forward_runtime_receipt"
   fi
 }
