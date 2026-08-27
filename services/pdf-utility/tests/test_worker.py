@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 import pikepdf
 
@@ -58,6 +58,29 @@ class WorkerTests(unittest.TestCase):
                 self.assertEqual(len(pdf.pages), 1)
                 self.assertFalse(pdf.is_encrypted)
             self.assertFalse(Path("/tmp/finance-pdf-injection").exists())
+
+    def test_unlock_passwordless_wio_pdf_with_nonempty_ei_password(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, output, result, password_file = (root / name for name in ("source.pdf", "output.pdf", "result.json", "password"))
+            make_pdf(source)
+            password_file.write_text("ei-statement-password", encoding="utf-8")
+            completed = self.invoke("unlock", source, result, output=output, password_file=password_file)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            with pikepdf.open(output) as pdf:
+                self.assertEqual(len(pdf.pages), 1)
+                self.assertFalse(pdf.is_encrypted)
+
+    def test_unlock_rejects_encrypted_pdf_with_wrong_password(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, output, result, password_file = (root / name for name in ("source.pdf", "output.pdf", "result.json", "password"))
+            make_pdf(source, password="ei-statement-password")
+            password_file.write_text("wrong-password", encoding="utf-8")
+            completed = self.invoke("unlock", source, result, output=output, password_file=password_file)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(result.exists())
 
     def test_validate_classifies_locked_pdf_without_persisting_or_requiring_password(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
