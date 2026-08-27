@@ -60,6 +60,42 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "pinData": {},
         }
 
+    def test_credential_contract_normalization_covers_every_leaf_and_only_credential_drift_is_ignored(self):
+        contract = json.loads((ROOT / "integrations/n8n/credential-bindings.json").read_text(encoding="utf-8"))
+        by_workflow = {}
+        leaves = 0
+        for binding in contract["bindings"]:
+            for item in binding["nodes"]:
+                leaves += 1
+                workflow = item["workflow"]
+                node = item["node"]
+                by_workflow.setdefault(workflow["id"], []).append({
+                    "id": node["id"], "name": node["name"], "type": binding["node_type"],
+                    "credentials": {binding["credential_type"]: {"id": "opaque-id", "name": "opaque-name"}},
+                })
+        self.assertEqual(leaves, 36)
+        bodies = []
+        for workflow_id, nodes in by_workflow.items():
+            body = self._workflow_body(0, nodes)
+            body["id"] = workflow_id
+            bodies.append(body)
+        normalized = [self.runner._workflow_body_projection(body) for body in bodies]
+        self.assertEqual(
+            sum(1 for body in normalized for node in body["nodes"] if node.get("credentials")), leaves
+        )
+        variant = json.loads(json.dumps(bodies))
+        for body in variant:
+            for node in body["nodes"]:
+                if node.get("credentials"):
+                    next(iter(node["credentials"].values()))["id"] = "different-live-id"
+        self.assertEqual(
+            [self.runner._workflow_body_digest(body) for body in bodies],
+            [self.runner._workflow_body_digest(body) for body in variant],
+        )
+        changed = json.loads(json.dumps(bodies))
+        changed[0]["connections"]["noncredential"] = {"changed": True}
+        self.assertNotEqual(self.runner._workflow_body_digest(bodies[0]), self.runner._workflow_body_digest(changed[0]))
+
     def _fixture(self, temp: Path):
         source = {name: [] for name in self.runner._legacy_names()}
         source["finance_source_cursors"] = [{"source_code": "disposable-test-source"}]
@@ -304,6 +340,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
 
     def _production_runtime_harness(self, temp: Path):
         """Build the disposable n8n/PostgreSQL harness used by runtime tests."""
+        original_contract_path = self.runner.CREDENTIAL_BINDINGS_PATH
         _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
         live_export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
         lock_receipt_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
@@ -333,7 +370,38 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 for target in exported["targets"]
             },
             "journal": [],
+            "credentials": [],
         }
+        bindings = json.loads((ROOT / "integrations/n8n/credential-bindings.json").read_text(encoding="utf-8"))
+        workflow_codes = sorted({item["workflow"]["code"] for binding in bindings["bindings"] for item in binding["nodes"]})
+        workflow_ids_by_code = dict(zip(workflow_codes, sorted(state["workflows"])))
+        test_bindings = json.loads(json.dumps(bindings))
+        for binding in test_bindings["bindings"]:
+            for item in binding["nodes"]:
+                item["workflow"]["id"] = workflow_ids_by_code[item["workflow"]["code"]]
+        contract_path = temp / "credential-bindings.json"
+        contract_path.write_text(json.dumps(test_bindings), encoding="utf-8")
+        self.runner.CREDENTIAL_BINDINGS_PATH = contract_path
+        credential_ids = {}
+        for binding_index, binding in enumerate(bindings["bindings"]):
+            credential_id = f"credential-{binding_index}"
+            credential_ids[binding["credential_type"]] = credential_id
+            state["credentials"].append({
+                "id": credential_id, "name": f"Live {binding['placeholder']}",
+                "type": binding["credential_type"], "project_id": exported["project_id"],
+                "role": "credential:owner",
+            })
+            for item in binding["nodes"]:
+                workflow = state["workflows"][workflow_ids_by_code[item["workflow"]["code"]]]
+                workflow["meta"]["financeWorkflowCode"] = item["workflow"]["code"]
+                workflow["nodes"].append({
+                    "id": item["node"]["id"], "name": item["node"]["name"],
+                    "type": binding["node_type"], "credentials": {
+                        binding["credential_type"]: {
+                            "id": credential_id, "name": f"Live {binding['placeholder']}",
+                        }
+                    }, "parameters": {},
+                })
         for reference in exported["references"]:
             state["workflows"][reference["workflow_id"]]["nodes"].append(
                 {
@@ -409,6 +477,10 @@ class Client {
           .map(clone),
       };
     }
+    if (statement.startsWith('SELECT c.id, c.name, c.type') && statement.includes('FROM credentials_entity')) {
+      const [projectId] = params;
+      return { rows: this.current().credentials.filter((credential) => credential.project_id === projectId && credential.role === 'credential:owner').map(clone) };
+    }
     if (statement.startsWith('SELECT receipt') && statement.includes('FROM finance_four_table_cutover_journal')) {
       const [projectId, lockResource, operation, exportSha] = params;
       const rows = this.current().journal.filter((entry) =>
@@ -465,6 +537,7 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_IDENTITY_SHA256": lock_receipt["accepted_identity_sha256"],
             "FINANCE_FOUR_TABLE_EXPORT_B64": base64.b64encode(live_export_path.read_bytes()).decode("ascii"),
             "FINANCE_FOUR_TABLE_LOCK_B64": base64.b64encode(lock_receipt_path.read_bytes()).decode("ascii"),
+            "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64": base64.b64encode(contract_path.read_bytes()).decode("ascii"),
             "FINANCE_FOUR_TABLE_N8N_ROOT": str(node_root),
             "FINANCE_TEST_DB_STATE": str(state_path),
             "FINANCE_TEST_TARGETS_JSON": target_json,
@@ -480,6 +553,7 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": semantic_digest,
             "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             "FINANCE_TEST_LIFECYCLE_LOG": str(lifecycle_log),
+            "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(contract_path),
         }
 
         def run_runtime(**overrides):
@@ -493,6 +567,7 @@ module.exports = { Client };
                 check=False,
             )
 
+        self.runner.CREDENTIAL_BINDINGS_PATH = original_contract_path
         return {
             "migration": migration,
             "live_export_path": live_export_path,
@@ -502,6 +577,7 @@ module.exports = { Client };
             "initial_state": initial_state,
             "reset_state": reset_state,
             "node_root": node_root,
+            "contract_path": contract_path,
             "target_json": target_json,
             "runtime_environment": runtime_environment,
             "run_runtime": run_runtime,
@@ -1983,6 +2059,7 @@ ROLLBACK;''',
                 "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
+                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FOUR_TABLE_ROLLBACK_ACK": "",
                 "FINANCE_TEST_FAIL_RECEIPT": "1",
@@ -2121,6 +2198,7 @@ ROLLBACK;''',
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FINANCE_TEST_N8N_ROOT": str(harness["node_root"]),
+                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
                 "FINANCE_TEST_DB_STATE": str(harness["state_path"]),
                 "FINANCE_TEST_TARGETS_JSON": harness["target_json"],
             }
@@ -2156,6 +2234,7 @@ ROLLBACK;''',
                 "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs",
                 "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py",
                 "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh",
+                "integrations/n8n/credential-bindings.json",
             ):
                 destination = checkout / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
