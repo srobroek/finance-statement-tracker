@@ -58,9 +58,10 @@ runtime_proof="$receipt_dir/finance-data-table-rollback-runtime-proof.json"
 runtime_state="$receipt_dir/finance-data-table-disposable-runtime-state.json"
 adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
 runtime_script="$runner_dir/n8n-cli-four-table-cutover.cjs"
+credential_bindings="${FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-$repo_dir/integrations/n8n/credential-bindings.json}"
 readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
-for path in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_export" "$runtime_script"; do
+for path in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_export" "$runtime_script" "$credential_bindings"; do
   test -f "$path"
 done
 if [[ "$FINANCE_N8N_RUNTIME_MODE" = DISPOSABLE_ONLY ]]; then
@@ -163,9 +164,10 @@ run_production_runtime() {
   preflight "$operator_ack" "$runtime_action" "$operation"
   chmod 0600 "$lock_receipt" "$receipt_dir/finance-four-table-precondition.json"
 
-  local export_b64 lock_b64 runtime_json
+  local export_b64 lock_b64 credential_bindings_b64 runtime_json
   export_b64="$(base64 -w0 -- "$live_export")"
   lock_b64="$(base64 -w0 -- "$lock_receipt")"
+  credential_bindings_b64="$(base64 -w0 -- "$credential_bindings")"
   local -a runtime_env=(
     -e "N8N_FINANCE_PROJECT_ID=$N8N_FINANCE_PROJECT_ID"
     -e "FINANCE_FOUR_TABLE_OPERATION=${operation^^}"
@@ -182,6 +184,7 @@ run_production_runtime() {
     -e "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST=$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST"
     -e "FINANCE_FOUR_TABLE_EXPORT_B64=$export_b64"
     -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
+    -e "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=$credential_bindings_b64"
   )
   if [[ "$operation" = rollback ]]; then
     test -f "$forward_runtime_receipt"

@@ -30,6 +30,7 @@ MATRIX_PATH = N8N / "data-table-migration-matrix.json"
 DATA_TABLES_PATH = N8N / "data-tables.json"
 READBACK_PARSER_PATH = Path(__file__).with_name("parse_n8n_redacted_wrapper_output.py")
 WORKFLOW_ROOT = N8N / "workflows"
+CREDENTIAL_BINDINGS_PATH = N8N / "credential-bindings.json"
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -371,6 +372,22 @@ REFERENCE_SEMANTIC_FIELDS = (
 WORKFLOW_BODY_FIELDS = ("name", "nodes", "connections", "settings", "meta", "pinData")
 
 
+def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
+    contract, _ = _read_json(CREDENTIAL_BINDINGS_PATH)
+    leaves: dict[tuple[str, str], tuple[str, str]] = {}
+    for binding in contract.get("bindings", []):
+        for item in binding.get("nodes", []):
+            workflow = item.get("workflow", {})
+            node = item.get("node", {})
+            key = (str(workflow.get("id", "")), str(node.get("id", "")))
+            if key in leaves:
+                raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
+            leaves[key] = (str(binding.get("placeholder", "")), str(binding.get("credential_type", "")))
+    if not leaves:
+        raise CutoverError("CREDENTIAL_BINDINGS_EMPTY")
+    return leaves
+
+
 def _export_without_hash(value: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(value)
     result.pop("export_sha256", None)
@@ -379,9 +396,29 @@ def _export_without_hash(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _workflow_body_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     try:
-        return {field: value[field] for field in WORKFLOW_BODY_FIELDS}
+        body = _canonical({field: value[field] for field in WORKFLOW_BODY_FIELDS})
     except (KeyError, TypeError) as error:
         raise CutoverError("WORKFLOW_BODY_INVALID") from error
+    leaves = _credential_binding_leaves()
+    workflow_id = str(value.get("id", value.get("workflow_id", "")))
+    for node in body.get("nodes", []):
+        binding = leaves.get((workflow_id, str(node.get("id", ""))))
+        if not binding or not isinstance(node.get("credentials"), Mapping):
+            continue
+        placeholder, credential_type = binding
+        credentials = node["credentials"]
+        if set(credentials) != {credential_type}:
+            raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
+        reference = credentials[credential_type]
+        if not isinstance(reference, Mapping) or not reference.get("id") or not reference.get("name"):
+            raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
+        reference["id"] = placeholder
+        reference["name"] = placeholder
+    expected = {node_id for (bound_workflow, node_id) in leaves if bound_workflow == workflow_id}
+    observed = {str(node.get("id", "")) for node in body.get("nodes", []) if (workflow_id, str(node.get("id", ""))) in leaves}
+    if expected != observed:
+        raise CutoverError("CREDENTIAL_BINDING_COVERAGE_INVALID")
+    return body
 
 
 def _workflow_body_digest(value: Mapping[str, Any]) -> str:
