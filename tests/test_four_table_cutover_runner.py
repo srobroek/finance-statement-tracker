@@ -1947,10 +1947,11 @@ ROLLBACK;''',
                 duplicate["project_id"] = project_id
                 state["credentials"].append(duplicate)
                 harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+                before = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 failed = harness["run_runtime"]()
                 self.assertNotEqual(failed.returncode, 0, label)
                 self.assertRegex(failed.stderr, r"CREDENTIAL_OWNER_SHARE_(FOREIGN|AMBIGUOUS)", label)
-                self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8")), harness["initial_state"], label)
+                self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8")), before, label)
 
     def test_production_runtime_rejects_credential_only_workflow_revision_drift(self):
         """Rollback guards credential-only workflow revisions in addition to selectors."""
