@@ -12,6 +12,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator
 
@@ -95,6 +96,49 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         changed = json.loads(json.dumps(bodies))
         changed[0]["connections"]["noncredential"] = {"changed": True}
         self.assertNotEqual(self.runner._workflow_body_digest(bodies[0]), self.runner._workflow_body_digest(changed[0]))
+
+    def test_python_and_cjs_reject_nonexact_credential_contracts(self):
+        """Both runners fail closed when the generated contract shape drifts."""
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            harness = self._production_runtime_harness(temp)
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            mutations = (
+                ("root-extra", lambda value: value.update({"unexpected": True}), "CREDENTIAL_BINDINGS_SCHEMA_INVALID"),
+                ("binding-extra", lambda value: value["bindings"][0].update({"unexpected": True}), "CREDENTIAL_BINDING_KEYS_INVALID"),
+                ("coverage", lambda value: value["bindings"][0]["nodes"].pop(), "CREDENTIAL_BINDING_COVERAGE_INVALID"),
+            )
+            for label, mutate, expected in mutations:
+                candidate = json.loads(json.dumps(contract))
+                mutate(candidate)
+                encoded = base64.b64encode(json.dumps(candidate, separators=(",", ":")).encode("utf-8")).decode("ascii")
+                failed = harness["run_runtime"](FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=encoded)
+                self.assertNotEqual(failed.returncode, 0, label)
+                self.assertIn(expected, failed.stderr, label)
+                path = temp / f"{label}.json"
+                path.write_text(json.dumps(candidate), encoding="utf-8")
+                with patch.object(self.runner, "CREDENTIAL_BINDINGS_PATH", path):
+                    with self.assertRaisesRegex(self.runner.CutoverError, expected):
+                        self.runner._credential_binding_leaves()
+
+    def test_python_and_cjs_reject_credential_reference_extra_keys(self):
+        """Credential references remain exactly the id/name tuple in both runtimes."""
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            harness = self._production_runtime_harness(temp)
+            state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            item = contract["bindings"][0]["nodes"][0]
+            workflow = state["workflows"][item["workflow"]["id"]]
+            node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+            node["credentials"][contract["bindings"][0]["credential_type"]]["unexpected"] = "drift"
+            harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+            failed = harness["run_runtime"]()
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("CREDENTIAL_REFERENCE_INVALID", failed.stderr)
+            with patch.object(self.runner, "CREDENTIAL_BINDINGS_PATH", harness["contract_path"]):
+                with self.assertRaisesRegex(self.runner.CutoverError, "CREDENTIAL_REFERENCE_INVALID"):
+                    self.runner._workflow_body_projection(workflow)
 
     def _fixture(self, temp: Path):
         source = {name: [] for name in self.runner._legacy_names()}
@@ -478,14 +522,17 @@ class Client {
       };
     }
     if (statement.startsWith('SELECT c.id, c.name, c.type') && statement.includes('FROM credentials_entity')) {
-      const [projectId] = params;
-      return { rows: this.current().credentials.filter((credential) => credential.project_id === projectId && credential.role === 'credential:owner').map(clone) };
+      return { rows: this.current().credentials.filter((credential) => credential.role === 'credential:owner').map(clone) };
     }
     if (statement.startsWith('SELECT receipt') && statement.includes('FROM finance_four_table_cutover_journal')) {
-      const [projectId, lockResource, operation, exportSha] = params;
+      const [projectId, lockResource, operation, exportSha, operationNonce, quiescenceDigest, requiredExportDigest, contractDigest] = params;
       const rows = this.current().journal.filter((entry) =>
         entry.projectId === projectId && entry.lockResource === lockResource &&
-        entry.operation === operation && entry.receipt.export_sha256 === exportSha,
+        entry.operation === operation && entry.receipt.export_sha256 === exportSha &&
+        entry.receipt.operation_nonce === operationNonce &&
+        entry.receipt.protected_quiescence_receipt_digest === quiescenceDigest &&
+        entry.receipt.required_live_export_digest === requiredExportDigest &&
+        entry.receipt.contract_bijection_digest === contractDigest,
       );
       return { rows: rows.length ? [{ receipt: clone(rows[rows.length - 1].receipt) }] : [] };
     }
@@ -1881,6 +1928,30 @@ ROLLBACK;''',
                 self.assertRegex(failed.stderr, r"(CREDENTIAL_BINDING_|LIVE_WORKFLOW_BODY_MISMATCH)", invalid)
                 self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"], [], invalid)
 
+    def test_production_runtime_rejects_foreign_or_duplicate_owner_shares_before_writes(self):
+        """Every bound credential must have one owner share globally."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
+            credential_type = contract["bindings"][0]["credential_type"]
+            credential_id = next(
+                credential["id"]
+                for credential in harness["initial_state"]["credentials"]
+                if credential["type"] == credential_type
+            )
+            for label, project_id in (("foreign", "foreign-project"), ("duplicate", "finance-test-project")):
+                harness["reset_state"]()
+                state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+                owner = next(credential for credential in state["credentials"] if credential["id"] == credential_id)
+                duplicate = dict(owner)
+                duplicate["project_id"] = project_id
+                state["credentials"].append(duplicate)
+                harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+                failed = harness["run_runtime"]()
+                self.assertNotEqual(failed.returncode, 0, label)
+                self.assertRegex(failed.stderr, r"CREDENTIAL_OWNER_SHARE_(FOREIGN|AMBIGUOUS)", label)
+                self.assertEqual(json.loads(harness["state_path"].read_text(encoding="utf-8")), harness["initial_state"], label)
+
     def test_production_runtime_rejects_credential_only_workflow_revision_drift(self):
         """Rollback guards credential-only workflow revisions in addition to selectors."""
         with tempfile.TemporaryDirectory() as directory:
@@ -2049,6 +2120,35 @@ ROLLBACK;''',
                     if node["id"] == reference["node_id"]
                 )
                 self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+
+    def test_recovery_selects_only_a_journal_receipt_with_every_binding_field(self):
+        """A same-export receipt with a stale binding cannot shadow the committed receipt."""
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            marker = "finance four-table runtime verified:"
+            forward = harness["run_runtime"]()
+            self.assertEqual(forward.returncode, 0, forward.stderr)
+            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
+            competing = dict(receipt)
+            competing["operation_nonce"] = "competing-stale-operation"
+            state["journal"].append({
+                "receiptSha": "competing-receipt",
+                "projectId": receipt["project_id"],
+                "operation": "FORWARD",
+                "lockResource": receipt["lock_resource"],
+                "receipt": competing,
+            })
+            harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+            recovered = harness["run_runtime"](FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1")
+            self.assertEqual(recovered.returncode, 0, recovered.stderr)
+            recovered_receipt = json.loads(next(line for line in recovered.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            self.assertEqual(recovered_receipt, receipt)
+            state["journal"] = [state["journal"][-1]]
+            harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
+            failed = harness["run_runtime"](FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1")
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("FORWARD_RUNTIME_JOURNAL_NOT_FOUND", failed.stderr)
 
     def test_runtime_rejects_missing_or_mismatched_binding_before_mutation_or_recovery(self):
         """Every runtime entry point validates the shared binding before state changes."""

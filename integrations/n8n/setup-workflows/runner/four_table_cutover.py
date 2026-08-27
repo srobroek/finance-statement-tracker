@@ -374,17 +374,66 @@ WORKFLOW_BODY_FIELDS = ("name", "nodes", "connections", "settings", "meta", "pin
 
 def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
     contract, _ = _read_json(CREDENTIAL_BINDINGS_PATH)
+    if set(contract) != {"bindings", "schema_version", "source", "workflow_code_metadata_key"}:
+        raise CutoverError("CREDENTIAL_BINDINGS_SCHEMA_INVALID")
+    source = contract.get("source")
+    if (
+        not isinstance(source, Mapping)
+        or set(source) != {"file_count", "path", "sha256"}
+        or source.get("path") != "integrations/n8n/workflows"
+        or source.get("file_count") != 19
+        or HEX_DIGEST.fullmatch(str(source.get("sha256", ""))) is None
+        or contract.get("schema_version") != 1
+        or contract.get("workflow_code_metadata_key") != "financeWorkflowCode"
+        or not isinstance(contract.get("bindings"), list)
+    ):
+        raise CutoverError("CREDENTIAL_BINDINGS_SCHEMA_INVALID")
     leaves: dict[tuple[str, str], tuple[str, str]] = {}
-    for binding in contract.get("bindings", []):
-        for item in binding.get("nodes", []):
-            workflow = item.get("workflow", {})
-            node = item.get("node", {})
-            key = (str(workflow.get("id", "")), str(node.get("id", "")))
+    placeholders: set[str] = set()
+    credential_types: set[str] = set()
+    for binding in contract["bindings"]:
+        if not isinstance(binding, Mapping) or set(binding) != {"credential_type", "node_type", "nodes", "placeholder"}:
+            raise CutoverError("CREDENTIAL_BINDING_KEYS_INVALID")
+        placeholder = binding.get("placeholder")
+        credential_type = binding.get("credential_type")
+        node_type = binding.get("node_type")
+        if (
+            not isinstance(placeholder, str)
+            or re.fullmatch(r"BIND_[A-Z0-9_]+", placeholder) is None
+            or not isinstance(credential_type, str)
+            or not credential_type
+            or not isinstance(node_type, str)
+            or not node_type
+            or not isinstance(binding.get("nodes"), list)
+            or not binding["nodes"]
+        ):
+            raise CutoverError("CREDENTIAL_BINDING_INVALID")
+        if placeholder in placeholders or credential_type in credential_types:
+            raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
+        placeholders.add(placeholder)
+        credential_types.add(credential_type)
+    for binding in contract["bindings"]:
+        for item in binding["nodes"]:
+            if not isinstance(item, Mapping) or set(item) != {"node", "workflow"}:
+                raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
+            workflow = item.get("workflow")
+            node = item.get("node")
+            if (
+                not isinstance(workflow, Mapping)
+                or set(workflow) != {"code", "file", "id"}
+                or not isinstance(node, Mapping)
+                or set(node) != {"id", "name"}
+                or not all(isinstance(workflow.get(field), str) and workflow[field] for field in ("code", "file", "id"))
+                or re.fullmatch(r"\S+\.json", workflow["file"]) is None
+                or not all(isinstance(node.get(field), str) and node[field] for field in ("id", "name"))
+            ):
+                raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
+            key = (workflow["id"], node["id"])
             if key in leaves:
                 raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
-            leaves[key] = (str(binding.get("placeholder", "")), str(binding.get("credential_type", "")))
-    if not leaves:
-        raise CutoverError("CREDENTIAL_BINDINGS_EMPTY")
+            leaves[key] = (binding["placeholder"], binding["credential_type"])
+    if len(contract["bindings"]) != 8 or len(leaves) != 36:
+        raise CutoverError("CREDENTIAL_BINDING_COVERAGE_INVALID")
     return leaves
 
 
@@ -410,7 +459,14 @@ def _workflow_body_projection(value: Mapping[str, Any]) -> dict[str, Any]:
         if set(credentials) != {credential_type}:
             raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
         reference = credentials[credential_type]
-        if not isinstance(reference, Mapping) or not reference.get("id") or not reference.get("name"):
+        if (
+            not isinstance(reference, Mapping)
+            or set(reference) != {"id", "name"}
+            or not isinstance(reference.get("id"), str)
+            or not reference["id"]
+            or not isinstance(reference.get("name"), str)
+            or not reference["name"]
+        ):
             raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
         reference["id"] = placeholder
         reference["name"] = placeholder

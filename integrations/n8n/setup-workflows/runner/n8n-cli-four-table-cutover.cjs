@@ -149,7 +149,7 @@ function credentialBindingsFromEnvironment() {
       leaves.set(key, { ...binding, workflow, node });
     }
   }
-  if (leaves.size !== 36) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
+  if (contract.bindings.length !== 8 || leaves.size !== 36) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
   return contract.bindings;
 }
 
@@ -529,15 +529,28 @@ async function credentialState(client) {
     `SELECT c.id, c.name, c.type, s."projectId" AS project_id, s.role
        FROM credentials_entity c
        JOIN shared_credentials s ON s."credentialsId" = c.id
-      WHERE s."projectId" = $1 AND s.role = 'credential:owner'
-      ORDER BY c.id`, [projectId],
+      WHERE s.role = 'credential:owner'
+      ORDER BY c.id, s."projectId"`,
   );
   const rows = result.rows || [];
-  const byType = new Map();
+  const ownerShares = new Map();
   for (const row of rows) {
-    if (!row.id || !row.name || !row.type || row.project_id !== projectId || row.role !== 'credential:owner') throw new Error('CREDENTIAL_ASSOCIATION_INVALID');
-    if (byType.has(row.type)) throw new Error(`CREDENTIAL_TYPE_AMBIGUOUS:${row.type}`);
-    byType.set(row.type, { id: String(row.id), name: String(row.name), type: String(row.type), project_id: String(row.project_id), role: row.role });
+    if (!row.id || !row.name || !row.type || !row.project_id || row.role !== 'credential:owner') throw new Error('CREDENTIAL_ASSOCIATION_INVALID');
+    const normalized = { id: String(row.id), name: String(row.name), type: String(row.type), project_id: String(row.project_id), role: row.role };
+    const shares = ownerShares.get(normalized.id) || [];
+    shares.push(normalized);
+    ownerShares.set(normalized.id, shares);
+  }
+  const byType = new Map();
+  for (const row of rows.filter((candidate) => String(candidate.project_id) === projectId)) {
+    const type = String(row.type);
+    const value = { id: String(row.id), name: String(row.name), type, project_id: String(row.project_id), role: row.role };
+    const shares = ownerShares.get(value.id) || [];
+    if (shares.some((share) => share.project_id !== projectId)) throw new Error(`CREDENTIAL_OWNER_SHARE_FOREIGN:${value.id}`);
+    if (shares.length !== 1) throw new Error(`CREDENTIAL_OWNER_SHARE_AMBIGUOUS:${value.id}`);
+    if (shares[0].name !== value.name || shares[0].type !== value.type) throw new Error(`CREDENTIAL_OWNER_SHARE_AMBIGUOUS:${value.id}`);
+    if (byType.has(type)) throw new Error(`CREDENTIAL_TYPE_AMBIGUOUS:${type}`);
+    byType.set(type, value);
   }
   const bindings = credentialBindingsFromEnvironment();
   const types = new Set(bindings.map((binding) => binding.credential_type));
@@ -823,9 +836,13 @@ async function recoverForwardJournal() {
           AND lock_resource = $2
           AND operation = $3
           AND receipt->>'export_sha256' = $4
+          AND receipt->>'operation_nonce' = $5
+          AND receipt->>'protected_quiescence_receipt_digest' = $6
+          AND receipt->>'required_live_export_digest' = $7
+          AND receipt->>'contract_bijection_digest' = $8
         ORDER BY created_at DESC
         LIMIT 1`,
-      [projectId, resource, 'FORWARD', exported.export_sha256],
+      [projectId, resource, 'FORWARD', exported.export_sha256, binding.operation_nonce, binding.protected_quiescence_receipt_digest, binding.required_live_export_digest, binding.contract_bijection_digest],
     );
     const row = result.rows?.[0];
     if (!row) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
