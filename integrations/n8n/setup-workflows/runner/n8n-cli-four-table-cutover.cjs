@@ -114,7 +114,12 @@ function credentialBindingsFromEnvironment() {
   if (typeof encoded !== 'string' || encoded.length === 0) throw new Error('CREDENTIAL_BINDINGS_REQUIRED');
   let contract;
   try { contract = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')); } catch { throw new Error('CREDENTIAL_BINDINGS_INVALID'); }
-  if (!contract || contract.schema_version !== CREDENTIAL_BINDINGS_SCHEMA || !Array.isArray(contract.bindings)) {
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract) ||
+      Object.keys(contract).sort().join(',') !== 'bindings,schema_version,source,workflow_code_metadata_key' ||
+      contract.schema_version !== CREDENTIAL_BINDINGS_SCHEMA || contract.workflow_code_metadata_key !== 'financeWorkflowCode' ||
+      !contract.source || typeof contract.source !== 'object' || Array.isArray(contract.source) ||
+      Object.keys(contract.source).sort().join(',') !== 'file_count,path,sha256' || contract.source.path !== 'integrations/n8n/workflows' ||
+      contract.source.file_count !== 19 || !/^[0-9a-f]{64}$/.test(contract.source.sha256) || !Array.isArray(contract.bindings)) {
     throw new Error('CREDENTIAL_BINDINGS_SCHEMA_INVALID');
   }
   const leaves = new Map();
@@ -125,13 +130,22 @@ function credentialBindingsFromEnvironment() {
         Object.keys(binding).sort().join(',') !== 'credential_type,node_type,nodes,placeholder') {
       throw new Error('CREDENTIAL_BINDING_KEYS_INVALID');
     }
-    if (!text(binding.placeholder, 'CREDENTIAL_PLACEHOLDER_INVALID') || !text(binding.credential_type, 'CREDENTIAL_TYPE_INVALID') || !text(binding.node_type, 'CREDENTIAL_NODE_TYPE_INVALID') || !Array.isArray(binding.nodes)) throw new Error('CREDENTIAL_BINDING_INVALID');
+    if (!/^BIND_[A-Z0-9_]+$/.test(text(binding.placeholder, 'CREDENTIAL_PLACEHOLDER_INVALID')) ||
+        !text(binding.credential_type, 'CREDENTIAL_TYPE_INVALID') || !text(binding.node_type, 'CREDENTIAL_NODE_TYPE_INVALID') ||
+        !Array.isArray(binding.nodes) || binding.nodes.length === 0) throw new Error('CREDENTIAL_BINDING_INVALID');
     if (placeholders.has(binding.placeholder) || types.has(binding.credential_type)) throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
     placeholders.add(binding.placeholder); types.add(binding.credential_type);
     for (const item of binding.nodes) {
       const workflow = item?.workflow; const node = item?.node;
       const key = `${workflow?.id}:${node?.id}`;
-      if (!workflow || !node || !text(workflow.id, 'CREDENTIAL_WORKFLOW_ID_INVALID') || !text(node.id, 'CREDENTIAL_NODE_ID_INVALID') || !text(node.name, 'CREDENTIAL_NODE_NAME_INVALID') || leaves.has(key)) throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
+      if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).sort().join(',') !== 'node,workflow' ||
+          !workflow || typeof workflow !== 'object' || Array.isArray(workflow) || Object.keys(workflow).sort().join(',') !== 'code,file,id' ||
+          !node || typeof node !== 'object' || Array.isArray(node) || Object.keys(node).sort().join(',') !== 'id,name' ||
+          !text(workflow.id, 'CREDENTIAL_WORKFLOW_ID_INVALID') || !text(workflow.code, 'CREDENTIAL_WORKFLOW_CODE_INVALID') ||
+          !text(workflow.file, 'CREDENTIAL_WORKFLOW_FILE_INVALID') || !/^\S+\.json$/.test(workflow.file) ||
+          !text(node.id, 'CREDENTIAL_NODE_ID_INVALID') || !text(node.name, 'CREDENTIAL_NODE_NAME_INVALID') || leaves.has(key)) {
+        throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
+      }
       leaves.set(key, { ...binding, workflow, node });
     }
   }
