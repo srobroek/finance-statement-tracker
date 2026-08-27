@@ -339,10 +339,17 @@ platform repository is [`srobroek/n8n-orchestrator`](https://github.com/srobroek
 Dockge runs its `n8n` stack from `/opt/stacks/finance-n8n`, with the `n8n` service
 as the workflow runtime.
 
-The platform protects the subscription-backed Codex home at `/home/ci/.codex`.
-Only `codex-agent-runner` receives that mount. `n8n` owns the encrypted Microsoft
-OAuth records for `Finance Outlook` (`BIND_OUTLOOK`) and `Finance OneDrive`
-(`BIND_ONEDRIVE`). The finance repository stores only the binding contract. See the
+The retained ProDex auth state is the protected host file
+`/home/ci/.codex-n8n-community/auth.json`. The Dockge `n8n` service mounts the
+host directory at `/home/node/.n8n/codex`. Direct n8n workflow W21 (`Subscription
+Agent Adapter`) consumes the mounted `auth.json` as the container `node` user.
+
+The retained host owns this file. The host owner and container `node` UID are
+different identities. The finance repository stores no auth contents or tokens.
+
+`n8n` owns the encrypted Microsoft OAuth records for `Finance Outlook`
+(`BIND_OUTLOOK`) and `Finance OneDrive` (`BIND_ONEDRIVE`). The finance repository
+stores only the binding contract. See the
 [`n8n credential checklist`](docs/n8n-credential-setup-checklist.md) and the
 orchestrator's [`Codex runtime guide`](https://github.com/srobroek/n8n-orchestrator#subscription-backed-agent-runtimes).
 
