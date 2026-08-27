@@ -467,6 +467,14 @@ function workflowCredentialObjectsDigest(workflows) {
   return digest(objects.sort((a, b) => `${a.workflow_id}:${a.node_id}`.localeCompare(`${b.workflow_id}:${b.node_id}`)));
 }
 
+function workflowRevisionDigest(workflows) {
+  const revisions = [...workflows.values()].map((workflow) => ({
+    workflow_id: String(workflow.id),
+    revision_id: String(workflow.versionId || workflow.revisionId || ''),
+  }));
+  return digest(revisions.sort((left, right) => left.workflow_id.localeCompare(right.workflow_id)));
+}
+
 function credentialOriginBitset(origins) {
   return credentialLeavesFromEnvironment().map((leaf) => {
     const origin = origins.get(leaf.key);
@@ -735,6 +743,8 @@ function validateForwardReceipt(receipt, exported, resource, binding) {
       !/^[0-9a-f]{64}$/.test(receipt.credential_state_digest_after) ||
       !/^[0-9a-f]{64}$/.test(receipt.workflow_credential_objects_digest_before) ||
       !/^[0-9a-f]{64}$/.test(receipt.workflow_credential_objects_digest_after) ||
+      !/^[0-9a-f]{64}$/.test(receipt.workflow_revision_digest_before) ||
+      !/^[0-9a-f]{64}$/.test(receipt.workflow_revision_digest_after) ||
       !/^[0-9a-f]{64}$/.test(receipt.credential_contract_digest) ||
       !Number.isInteger(receipt.credential_binding_count) || !Number.isInteger(receipt.credential_leaf_count) ||
       receipt.credential_binding_count !== 8 || receipt.credential_leaf_count !== 36 ||
@@ -864,6 +874,7 @@ async function execute() {
     const credentialOriginsBefore = validateCredentialBindings(workflows, credentialsByType);
     const credentialOriginBitsetBefore = credentialOriginBitset(credentialOriginsBefore);
     const workflowCredentialsBefore = workflowCredentialObjectsDigest(workflows);
+    const workflowRevisionDigestBefore = workflowRevisionDigest(workflows);
     const workflowOpaqueCredentialsBefore = workflowOpaqueCredentialObjectsDigest(workflows, credentialOriginsBefore);
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
@@ -877,6 +888,7 @@ async function execute() {
       const credentialOriginsAfter = validateCredentialBindings(postCredentials, credentialsByType);
       if (!allCredentialOrigins(credentialOriginsAfter, 'opaque')) throw new Error('CREDENTIAL_BINDING_POST_STATE_NOT_OPAQUE');
       const credentialOriginBitsetAfter = credentialOriginBitset(credentialOriginsAfter);
+      const workflowRevisionDigestAfter = workflowRevisionDigest(updated);
       const beforeById = new Map(prestate.map((item) => [item.reference.reference_id, item]));
       const actions = poststate.map((item) => {
         const before = beforeById.get(item.reference.reference_id);
@@ -897,7 +909,7 @@ async function execute() {
       if (credentialsAfter.digest !== credentialsBefore.digest) throw new Error('CREDENTIAL_STATE_CHANGED');
       const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
       if (workflowOpaqueCredentialObjectsDigest(postCredentials, credentialOriginsBefore) !== workflowOpaqueCredentialsBefore) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions };
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions };
       return commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
     }
     if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
@@ -908,6 +920,7 @@ async function execute() {
     if (forwardReceipt.credential_state_digest_before !== forwardReceipt.credential_state_digest_after) throw new Error('FORWARD_CREDENTIAL_STATE_CHANGED');
     if (forwardReceipt.credential_state_digest_after !== credentialsBefore.digest) throw new Error('FORWARD_CREDENTIAL_STATE_DRIFT');
     if (forwardReceipt.workflow_credential_objects_digest_after !== workflowCredentialsBefore) throw new Error('ROLLBACK_WORKFLOW_CREDENTIAL_STATE_DRIFT');
+    if (forwardReceipt.workflow_revision_digest_after !== workflowRevisionDigestBefore) throw new Error('ROLLBACK_WORKFLOW_REVISION_STATE_DRIFT');
     if (!allCredentialOrigins(credentialOriginsBefore, 'opaque')) throw new Error('ROLLBACK_CREDENTIAL_STATE_NOT_OPAQUE');
     const expectedCredentialOrigins = credentialOriginsFromBitset(forwardReceipt.credential_origin_bitset);
     const workflowOpaqueCredentialsBeforeRollback = workflowOpaqueCredentialObjectsDigest(workflows, expectedCredentialOrigins);
@@ -947,9 +960,10 @@ async function execute() {
     if (credentialsAfter.digest !== credentialsBefore.digest) throw new Error('CREDENTIAL_STATE_CHANGED');
     const postCredentials = await loadWorkflows(lock.client, graph, false);
     const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
+    const workflowRevisionDigestAfter = workflowRevisionDigest(restored);
     if (workflowOpaqueCredentialObjectsDigest(postCredentials, expectedCredentialOrigins) !== workflowOpaqueCredentialsBeforeRollback) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
     const credentialOriginBitsetAfter = credentialOriginBitset(restoredCredentialOrigins);
-    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: [...byId.values()].map((action) => { const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`); return { reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true, credential_origin: leaf ? expectedCredentialOrigins.get(leaf.key) : 'none', credential_tuple_digest: digest({ workflow_id: action.workflow_id, node_id: action.node_id, credential_type: leaf?.credential_type || '', placeholder: leaf?.placeholder || '' }) }; }) };
+    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: [...byId.values()].map((action) => { const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`); return { reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true, credential_origin: leaf ? expectedCredentialOrigins.get(leaf.key) : 'none', credential_tuple_digest: digest({ workflow_id: action.workflow_id, node_id: action.node_id, credential_type: leaf?.credential_type || '', placeholder: leaf?.placeholder || '' }) }; }) };
     return commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
     // PostgreSQL transaction rollback is the only compensation path. A second
