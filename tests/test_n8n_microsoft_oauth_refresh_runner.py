@@ -205,6 +205,37 @@ def irun(result: dict) -> dict:
     }
 
 
+def run_node_transport_failure_scenario(
+    *,
+    execution_finished: dict[str, object],
+    execution_details: list[dict[str, object] | None],
+    stop_ok: bool,
+    reconcile_timeout_ms: int,
+) -> subprocess.CompletedProcess[str]:
+    shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
+    scenario = {
+        "executionFinished": execution_finished,
+        "executionDetails": execution_details,
+        "stopOk": stop_ok,
+        "reconcileTimeoutMs": reconcile_timeout_ms,
+    }
+    code = (
+        f"const shim=require({json.dumps(str(shim))});const scenario={json.dumps(scenario,separators=(',',':'))};"
+        "let socket;let detailReads=0;const calls=[];"
+        "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
+        "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
+        "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
+        "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
+        "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},scenario.executionFinished)})));return {data:{executionId:'123'}}}};"
+        "if(url.endsWith('/stop'))return {ok:scenario.stopOk,status:scenario.stopOk?200:500,json:async()=>({status:'error',finished:true})};"
+        "if(url.endsWith('/123')){const detail=scenario.executionDetails[Math.min(detailReads,scenario.executionDetails.length-1)];detailReads+=1;if(detail===null)return {ok:false,status:404};return {ok:true,status:200,json:async()=>detail}};"
+        "throw new Error('unexpected request')};"
+        "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:scenario.reconcileTimeoutMs})"
+        ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls,detailReads})))"
+    )
+    return subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
+
+
 class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
     def make_synthetic_preflight_runtime(self):
         temporary = tempfile.TemporaryDirectory(prefix="wf23-preflight-")
@@ -811,7 +842,6 @@ sys.exit(0)
         self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
     def test_local_transport_emits_allowlisted_auth_failure_for_parser_without_mutation(self) -> None:
-        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         parser = load_module("wf23_execution_output_e2e", RUNNER / "parse_wf23_execution_output.py")
         for failure_code in ("OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"):
             with self.subTest(failure_code=failure_code):
@@ -828,23 +858,14 @@ sys.exit(0)
                     failure_code,
                 ], separators=(",", ":"))
                 execution_detail = {"status": "error", "finished": True, "data": flatted_data}
-                code = (
-                    f"const shim=require({json.dumps(str(shim))});let socket;const calls=[];"
-                    "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
-                    "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
-                    "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-                    f"const event={json.dumps(event,separators=(',',':'))};const executionDetail={json.dumps(execution_detail,separators=(',',':'))};"
-                    "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
-                    "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
-                    "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
-                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>executionDetail};"
-                    "throw new Error('unexpected request')};"
-                    "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
-                    ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls})))"
+                completed = run_node_transport_failure_scenario(
+                    execution_finished=event,
+                    execution_details=[execution_detail],
+                    stop_ok=True,
+                    reconcile_timeout_ms=1000,
                 )
-                completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
                 observed = json.loads(completed.stdout)
-                self.assertEqual(parser.parse_timeout(observed["line"]), failure_code)
+                self.assertEqual(parser.parse_terminal_failure(observed["line"]), failure_code)
                 self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "GET", "POST", "GET"])
                 self.assertTrue(observed["calls"][0]["url"].endswith("/run"))
                 self.assertTrue(observed["calls"][1]["url"].endswith("/123"))
@@ -868,24 +889,18 @@ sys.exit(0)
                     malformed_event,
                 ], separators=(",", ":"))
                 malformed_detail = {"status": "error", "finished": True, "data": malformed_data}
-                code = (
-                    f"const shim=require({json.dumps(str(shim))});let socket;"
-                    "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
-                    "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
-                    "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-                    f"const event={{source:'workflow'}};const executionDetail={json.dumps(malformed_detail,separators=(',',':'))};"
-                    "const fetchImpl=async(url)=>{"
-                    "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
-                    "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
-                    "if(url.endsWith('/123'))return {ok:true,status:200,json:async()=>executionDetail};"
-                    "throw new Error('unexpected request')};"
-                    "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
-                    ".then(()=>process.exit(1)).catch(error=>process.stdout.write(shim.terminalLine(error,null)))"
+                completed = run_node_transport_failure_scenario(
+                    execution_finished={"source": "workflow"},
+                    execution_details=[malformed_detail],
+                    stop_ok=True,
+                    reconcile_timeout_ms=1000,
                 )
-                completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
-                with self.assertRaises(ValueError):
-                    parser.parse_timeout(completed.stdout)
-                failure_payload = json.loads(completed.stdout.split("transient WF23 execution failed:", 1)[1])
+                observed = json.loads(completed.stdout)
+                self.assertEqual(
+                    parser.parse_terminal_failure(observed["line"]),
+                    "WF23_EXECUTION_NOT_FINISHED_SUCCESS",
+                )
+                failure_payload = json.loads(observed["line"].split("transient WF23 execution failed:", 1)[1])
                 self.assertEqual(failure_payload["error_code"], "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
                 self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
                 self.assertNotIn("secret-token", completed.stdout + completed.stderr)
@@ -903,23 +918,14 @@ sys.exit(0)
             "OUTLOOK_AUTH_REQUIRED",
         ], separators=(",", ":"))
         execution_detail = {"status": "error", "finished": True, "data": flatted_data}
-        code = (
-            f"const shim=require({json.dumps(str(shim))});let socket;let detailReads=0;const calls=[];"
-            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
-            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
-            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-            f"const executionDetail={json.dumps(execution_detail,separators=(',',':'))};"
-            "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
-            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:{executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'}})));return {data:{executionId:'123'}}}};"
-            "if(url.endsWith('/stop'))return {ok:false,status:500};"
-            "if(url.endsWith('/123')){detailReads+=1;return detailReads===1?{ok:true,status:200,json:async()=>executionDetail}:{ok:true,status:200,json:async()=>({status:'running',finished:false})};}"
-            "throw new Error('unexpected request')};"
-            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:10})"
-            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls,detailReads})))"
+        completed = run_node_transport_failure_scenario(
+            execution_finished={},
+            execution_details=[execution_detail, {"status": "running", "finished": False}],
+            stop_ok=False,
+            reconcile_timeout_ms=10,
         )
-        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         observed = json.loads(completed.stdout)
-        self.assertEqual(parser.parse_timeout(observed["line"]), "OUTLOOK_AUTH_REQUIRED")
+        self.assertEqual(parser.parse_terminal_failure(observed["line"]), "OUTLOOK_AUTH_REQUIRED")
         self.assertNotIn("while (true)", shim.read_text(encoding="utf-8"))
         self.assertGreaterEqual(observed["detailReads"], 2)
         self.assertLess(observed["detailReads"], 10)
@@ -931,26 +937,18 @@ sys.exit(0)
         self.assertNotIn("secret-token", completed.stdout + completed.stderr)
 
     def test_local_transport_rejects_save_none_execution_detail_without_auth_classification(self) -> None:
-        shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         parser = load_module("wf23_execution_output_save_none", RUNNER / "parse_wf23_execution_output.py")
-        code = (
-            f"const shim=require({json.dumps(str(shim))});let socket;let detailReads=0;const calls=[];"
-            "class FakeSocket{constructor(){socket=this;this.handlers={};setImmediate(()=>this.emit('open'))}"
-            "on(name,handler){(this.handlers[name]??=[]).push(handler)}"
-            "emit(name,value){for(const handler of this.handlers[name]??[])handler(value)}close(){}}"
-            "const event={source:'workflow'};"
-            "const fetchImpl=async(url,options)=>{calls.push({url,method:options?.method||'GET'});"
-            "if(url.endsWith('/run'))return {ok:true,json:async()=>{setImmediate(()=>socket.emit('message',JSON.stringify({type:'executionFinished',data:Object.assign({executionId:'123',workflowId:shim.WORKFLOW_ID,status:'error'},event)})));return {data:{executionId:'123'}}}};"
-            "if(url.endsWith('/stop'))return {ok:true,status:200,json:async()=>({status:'error',finished:true})};"
-            "if(url.endsWith('/123')){detailReads+=1;return detailReads===1?{ok:false,status:404}:{ok:true,status:200,json:async()=>({status:'error',finished:true})};}"
-            "throw new Error('unexpected request')};"
-            "shim.runLocalWorkflow({token:'secret-token',wsModule:{WebSocket:FakeSocket},fetchImpl,timeoutMs:1000,reconcileTimeoutMs:1000})"
-            ".then(()=>process.exit(1)).catch(error=>process.stdout.write(JSON.stringify({line:shim.terminalLine(error,null),calls})))"
+        completed = run_node_transport_failure_scenario(
+            execution_finished={"source": "workflow"},
+            execution_details=[None, {"status": "error", "finished": True}],
+            stop_ok=True,
+            reconcile_timeout_ms=1000,
         )
-        completed = subprocess.run(["node", "-e", code], text=True, capture_output=True, check=True)
         observed = json.loads(completed.stdout)
-        with self.assertRaises(ValueError):
-            parser.parse_timeout(observed["line"])
+        self.assertEqual(
+            parser.parse_terminal_failure(observed["line"]),
+            "WF23_EXECUTION_NOT_FINISHED_SUCCESS",
+        )
         failure_payload = json.loads(observed["line"].split("transient WF23 execution failed:", 1)[1])
         self.assertEqual(failure_payload["error_code"], "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
         self.assertEqual([call["method"] for call in observed["calls"]], ["POST", "GET", "POST", "GET"])
@@ -1145,6 +1143,10 @@ sys.exit(0)
         self.assertEqual(parser.TIMEOUT_CODES, timeout_codes)
         auth_codes = {"OUTLOOK_AUTH_REQUIRED", "ONEDRIVE_AUTH_REQUIRED"}
         self.assertEqual(parser.AUTH_FAILURE_CODES, auth_codes)
+        self.assertEqual(
+            parser.TERMINAL_FAILURE_CODES,
+            timeout_codes | auth_codes | {parser.TERMINALITY_CODE},
+        )
         self.assertEqual(failure_builder.TIMEOUT_CODES, timeout_codes)
         self.assertEqual(failure_builder.AUTH_FAILURE_CODES, auth_codes)
         runner_source = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
@@ -1162,7 +1164,7 @@ sys.exit(0)
                     "secret_values_recorded": False,
                 }
                 raw = "transient WF23 execution failed:" + json.dumps(payload, separators=(",", ":")) + "\n"
-                self.assertEqual(parser.parse_timeout(raw), code)
+                self.assertEqual(parser.parse_terminal_failure(raw), code)
 
         for code in auth_codes:
             with self.subTest(code=code):
@@ -1174,7 +1176,7 @@ sys.exit(0)
                     "secret_values_recorded": False,
                 }
                 raw = "transient WF23 execution failed:" + json.dumps(payload, separators=(",", ":")) + "\n"
-                self.assertEqual(parser.parse_timeout(raw), code)
+                self.assertEqual(parser.parse_terminal_failure(raw), code)
                 receipt = failure_builder.build_receipt(
                     "run", "first_execution", True, True, True, True, code
                 )
@@ -1188,9 +1190,9 @@ sys.exit(0)
             "secret_values_recorded": False,
         }
         generic_raw = "transient WF23 execution failed:" + json.dumps(generic_payload, separators=(",", ":")) + "\n"
-        self.assertEqual(parser.parse_terminality(generic_raw), "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
+        self.assertEqual(parser.parse_terminal_failure(generic_raw), "WF23_EXECUTION_NOT_FINISHED_SUCCESS")
         with self.assertRaises(ValueError):
-            parser.parse_terminality(
+            parser.parse_terminal_failure(
                 generic_raw.replace("WF23_EXECUTION_NOT_FINISHED_SUCCESS", "UNKNOWN_PROVIDER_FAILURE")
             )
 
@@ -1220,7 +1222,7 @@ sys.exit(0)
         }
         for name, raw in adversarial.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
-                parser.parse_timeout(raw)
+                parser.parse_terminal_failure(raw)
 
         secret = "SECRET_ACCESS_TOKENZ"
         bad_timestamp = terminal_result()
@@ -1235,14 +1237,14 @@ sys.exit(0)
                 'transient WF23 execution verified:{"verified_at":"' + secret,
             ),
             "duplicate key": (
-                "timeout",
+                "terminal-failure",
                 valid.replace(
                     '"error_code":"WF23_TIMEOUT_COMMAND_RUN"',
                     f'"error_code":"{secret}","error_code":"WF23_TIMEOUT_COMMAND_RUN"',
                 ),
             ),
             "extra field": (
-                "timeout",
+                "terminal-failure",
                 valid[:-1] + f',"provider_value":"{secret}"}}',
             ),
         }
@@ -1623,7 +1625,7 @@ try {{
             "parse_wf23_execution_output.py",
             "execution_rows_zero_verified",
             "data_table_digest_restored",
-            "retain_execution_timeout_code",
+            "retain_execution_failure_code",
             '"${execution_failure_code}"',
             "WF23_TIMEOUT_COMMAND_RUN",
             'raw_irun_persisted":False',
@@ -1716,7 +1718,8 @@ try {{
         self.assertEqual(failure_payload["error_code"], "WF23_TIMEOUT_COMMAND_RUN")
 
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
-        execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
+        execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_failure_code")]
+        self.assertEqual(execute_probe.count('parse_wf23_execution_output.py" terminal-failure'), 1)
         cleanup = runner[runner.index("cleanup() {"):runner.index("\ntrap cleanup EXIT")]
         first_probe_start = runner.index('failure_stage="first_execution"\n')
         first_probe = runner[first_probe_start:runner.index('\n[[ "$(wf23_execution_count)', first_probe_start)]
@@ -1736,20 +1739,19 @@ try {{
                 )
                 (bin_dir / "python3").write_text(
                     "#!/bin/sh\n"
-                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = terminal ]; then\n"
+                    "if [ \"$2\" = terminal-failure ] && [ \"${WF23_PARSER_MODE}\" = terminal ]; then\n"
                     "  printf '%s' WF23_TIMEOUT_COMMAND_RUN\n"
                     "  exit 0\n"
                     "fi\n"
-                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = outlook ]; then\n"
+                    "if [ \"$2\" = terminal-failure ] && [ \"${WF23_PARSER_MODE}\" = outlook ]; then\n"
                     "  printf '%s' OUTLOOK_AUTH_REQUIRED\n"
                     "  exit 0\n"
                     "fi\n"
-                    "if [ \"$2\" = timeout ] && [ \"${WF23_PARSER_MODE}\" = onedrive ]; then\n"
+                    "if [ \"$2\" = terminal-failure ] && [ \"${WF23_PARSER_MODE}\" = onedrive ]; then\n"
                     "  printf '%s' ONEDRIVE_AUTH_REQUIRED\n"
                     "  exit 0\n"
                     "fi\n"
-                    "if [ \"$2\" = timeout ]; then exit 1; fi\n"
-                    "if [ \"$2\" = terminality ] && [ \"${WF23_PARSER_MODE}\" = unknown ]; then\n"
+                    "if [ \"$2\" = terminal-failure ] && [ \"${WF23_PARSER_MODE}\" = unknown ]; then\n"
                     "  printf '%s' WF23_EXECUTION_NOT_FINISHED_SUCCESS\n"
                     "  exit 0\n"
                     "fi\n"
@@ -1821,7 +1823,7 @@ try {{
 
     def test_bounded_execution_timeout_is_not_reparsed_as_redacted_output(self) -> None:
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
-        execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_timeout_code")]
+        execute_probe = runner[runner.index("execute_probe() {"):runner.index("\nretain_execution_failure_code")]
         with tempfile.TemporaryDirectory(prefix="wf23-timeout-classification-") as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
