@@ -546,9 +546,9 @@ async function credentialState(client) {
     const type = String(row.type);
     const value = { id: String(row.id), name: String(row.name), type, project_id: String(row.project_id), role: row.role };
     const shares = ownerShares.get(value.id) || [];
-    if (shares.some((share) => share.project_id !== projectId)) throw new Error(`CREDENTIAL_OWNER_SHARE_FOREIGN:${value.id}`);
-    if (shares.length !== 1) throw new Error(`CREDENTIAL_OWNER_SHARE_AMBIGUOUS:${value.id}`);
-    if (shares[0].name !== value.name || shares[0].type !== value.type) throw new Error(`CREDENTIAL_OWNER_SHARE_AMBIGUOUS:${value.id}`);
+    if (shares.some((share) => share.project_id !== projectId)) throw new Error('CREDENTIAL_OWNER_SHARE_FOREIGN');
+    if (shares.length !== 1) throw new Error('CREDENTIAL_OWNER_SHARE_AMBIGUOUS');
+    if (shares[0].name !== value.name || shares[0].type !== value.type) throw new Error('CREDENTIAL_OWNER_SHARE_AMBIGUOUS');
     if (byType.has(type)) throw new Error(`CREDENTIAL_TYPE_AMBIGUOUS:${type}`);
     byType.set(type, value);
   }
