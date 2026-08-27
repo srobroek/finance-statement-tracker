@@ -481,6 +481,8 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         initial_state = json.loads(json.dumps(state))
         lifecycle_log = temp / "n8n-lifecycle.log"
         lifecycle_log.write_text("", encoding="utf-8")
+        runtime_events_log = temp / "runtime-events.log"
+        runtime_events_log.write_text("", encoding="utf-8")
 
         def reset_state():
             state_path.write_text(json.dumps(initial_state), encoding="utf-8")
@@ -503,6 +505,10 @@ const fs = require('node:fs');
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function load() { return JSON.parse(fs.readFileSync(process.env.FINANCE_TEST_DB_STATE, 'utf8')); }
 function save(value) { fs.writeFileSync(process.env.FINANCE_TEST_DB_STATE, JSON.stringify(value)); }
+function record(event) {
+  const path = process.env.FINANCE_TEST_RUNTIME_EVENTS;
+  if (path) fs.appendFileSync(path, event + '\\n');
+}
 class Client {
   constructor() { this.state = load(); this.tx = null; }
   async connect() {}
@@ -551,6 +557,7 @@ class Client {
     if (statement.startsWith('INSERT INTO finance_four_table_cutover_journal')) {
       const [receiptSha, projectId, operation, lockResource, receiptJson] = params;
       this.current().journal.push({ receiptSha, projectId, operation, lockResource, receipt: JSON.parse(receiptJson) });
+      record('journal');
       return { rowCount: 1, rows: [] };
     }
     if (statement === 'COMMIT') {
@@ -558,12 +565,13 @@ class Client {
       this.state = this.tx;
       this.tx = null;
       save(this.state);
+      record('commit');
       return { rows: [] };
     }
-    if (statement === 'ROLLBACK') { this.tx = null; return { rows: [] }; }
+    if (statement === 'ROLLBACK') { this.tx = null; record('rollback'); return { rows: [] }; }
     throw new Error('UNEXPECTED_QUERY:' + statement.slice(0, 80));
   }
-  async end() {}
+  async end() { record('end'); }
 }
 module.exports = { Client };
 """,
@@ -600,6 +608,7 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": semantic_digest,
             "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             "FINANCE_TEST_LIFECYCLE_LOG": str(lifecycle_log),
+            "FINANCE_TEST_RUNTIME_EVENTS": str(runtime_events_log),
             "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(contract_path),
         }
 
@@ -629,6 +638,7 @@ module.exports = { Client };
             "runtime_environment": runtime_environment,
             "run_runtime": run_runtime,
             "lifecycle_log": lifecycle_log,
+            "runtime_events_log": runtime_events_log,
         }
 
     def _install_digest_rewriting_python(self, fake_bin: Path) -> str:
@@ -2174,6 +2184,36 @@ ROLLBACK;''',
                     if node["id"] == reference["node_id"]
                 )
                 self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+
+    def test_production_runtime_finishes_journal_before_client_end(self):
+        with tempfile.TemporaryDirectory() as directory:
+            harness = self._production_runtime_harness(Path(directory))
+            events = harness["runtime_events_log"]
+            run_runtime = harness["run_runtime"]
+            marker = "finance four-table runtime verified:"
+
+            forward = run_runtime()
+            self.assertEqual(forward.returncode, 0, forward.stderr)
+            forward_receipt = json.loads(
+                next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker)
+            )
+            self.assertEqual(events.read_text(encoding="utf-8"), "journal\ncommit\nend\n")
+
+            events.write_text("", encoding="utf-8")
+            rollback = run_runtime(
+                FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
+                FINANCE_FOUR_TABLE_ACK=self.runner.REQUIRED_ROLLBACK_ACK,
+                FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=base64.b64encode(
+                    json.dumps(forward_receipt, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii"),
+            )
+            self.assertEqual(rollback.returncode, 0, rollback.stderr)
+            self.assertEqual(events.read_text(encoding="utf-8"), "journal\ncommit\nend\n")
+
+            events.write_text("", encoding="utf-8")
+            failed = run_runtime(FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE="live-workflow-0")
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertEqual(events.read_text(encoding="utf-8"), "rollback\nend\n")
 
     def test_recovery_selects_only_a_journal_receipt_with_every_binding_field(self):
         """A same-export receipt with a stale binding cannot shadow the committed receipt."""
