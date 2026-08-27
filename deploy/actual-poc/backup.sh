@@ -138,7 +138,7 @@ resume_services() {
   local name
   local ownership
   local state
-  for name in finance-actual-poc finance-cashback-control finance-actual-proxy; do
+  for name in finance-actual finance-cashback-control finance-actual-proxy; do
     [[ -n "${paused_services[${name}]+set}" ]] || continue
     ownership="${paused_services[${name}]}"
     state="$(container_state "${name}")"
@@ -188,15 +188,15 @@ pause_service() {
   fi
 }
 
-actual_state="$(container_state finance-actual-poc)"
+actual_state="$(container_state finance-actual)"
 proxy_state="$(container_state finance-actual-proxy)"
 cashback_state="$(container_state finance-cashback-control)"
 declare -A initial_states=(
-  [finance-actual-poc]="${actual_state}"
+  [finance-actual]="${actual_state}"
   [finance-actual-proxy]="${proxy_state}"
   [finance-cashback-control]="${cashback_state}"
 )
-for name in finance-actual-poc finance-actual-proxy finance-cashback-control; do
+for name in finance-actual finance-actual-proxy finance-cashback-control; do
   state="${initial_states[${name}]}"
   if [[ "${state}" == "inspect_error" || "${state}" == "unexpected_state" ]]; then
     printf '{"level":"error","event":"backup_container_state_unknown","service":"%s","reason":"%s"}\n' "${name}" "${state}" >&2
@@ -268,7 +268,7 @@ if [[ "${proxy_state}" == "running" ]]; then
   pause_service finance-actual-proxy
 fi
 if [[ "${actual_state}" == "running" ]]; then
-  pause_service finance-actual-poc
+  pause_service finance-actual
 fi
 if [[ "${cashback_state}" == "running" ]]; then
   pause_service finance-cashback-control
@@ -307,7 +307,7 @@ rm -rf -- "${payload}"
 )
 ensure_private_file "${working}/SHA256SUMS" "backup_checksums"
 cat > "${working}/manifest.json" <<EOF
-{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3*"],"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
+{"schema_version":4,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"excluded_data":["cashback-data/cashback-events.sqlite3:push_deliveries","cashback-data/cashback-events.sqlite3:push_state","cashback-data/cashback-events.sqlite3:push_subscriptions"],"excluded_paths":["cashback-data/pre-deploy-*.sqlite3*"],"containers":{"actual":"finance-actual","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 ensure_private_file "${working}/manifest.json" "backup_manifest"
 
