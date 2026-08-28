@@ -162,15 +162,13 @@ jobs:
           stack=/opt/stacks/finance-cashback
           sudo install -d "$stack"
           sudo install -d -m 0700 /opt/stacks/finance-runtime
-          sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
+          sudo install -m 0600 deploy/cashback/cashback.env.tpl "$stack/.env.tpl"
           sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
-          sudo /opt/stacks/finance-runtime/render-env.sh
+          sudo env FINANCE_RUNTIME_DIR="$stack" /opt/stacks/finance-runtime/render-env.sh
           sudo install -m 0644 config/cashback-programs.json "$stack/cashback-profile.json"
           sudo install -m 0644 config/actual-bootstrap.json "$stack/actual-bootstrap.json"
           sudo install -m 0644 config/static-rules.seed.json "$stack/static-rules.json"
           sudo install -m 0644 config/transaction-email-sources.json "$stack/transaction-email-sources.json"
-          printf '%s\n' 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data' | \
-            sudo tee "$stack/.env" >/dev/null
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
             sudo docker exec finance-cashback-control python -c \

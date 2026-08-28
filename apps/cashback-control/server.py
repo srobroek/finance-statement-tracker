@@ -11,6 +11,7 @@ import time
 from datetime import date
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from ipaddress import ip_address
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -401,9 +402,22 @@ def datetime_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _is_loopback_host(host: str) -> bool:
+    if host.casefold() == "localhost":
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def main() -> None:
     host = os.environ.get("CASHBACK_HOST", "127.0.0.1")
     port = int(os.environ.get("CASHBACK_PORT", "5010"))
+    if not _is_loopback_host(host) and not INGEST_TOKEN.strip():
+        raise RuntimeError(
+            "CASHBACK_INGEST_TOKEN is required when CASHBACK_HOST is not loopback"
+        )
     rebuild_dashboard()
     server = ThreadingHTTPServer((host, port), CashbackHandler)
     stop_event = threading.Event()

@@ -4,10 +4,13 @@ services:
     pull_policy: always
     container_name: finance-cashback-control
     restart: unless-stopped
-    env_file:
-      - /opt/stacks/finance-runtime/.env
     environment:
       TZ: Asia/Dubai
+      CASHBACK_INGEST_TOKEN: "${CASHBACK_INGEST_TOKEN:-}"
+      CASHBACK_PUBLIC_URL: "${CASHBACK_PUBLIC_URL:-}"
+      CASHBACK_VAPID_PUBLIC_KEY: "${CASHBACK_VAPID_PUBLIC_KEY:-}"
+      CASHBACK_VAPID_PRIVATE_KEY: "${CASHBACK_VAPID_PRIVATE_KEY:-}"
+      CASHBACK_VAPID_SUBJECT: "${CASHBACK_VAPID_SUBJECT:-}"
       CASHBACK_PROGRAM_CONFIG_PATH: /etc/cashback/profile.json
       ACTUAL_BOOTSTRAP_CONFIG_PATH: /etc/cashback/actual-bootstrap.json
       STATIC_RULES_CONFIG_PATH: /etc/cashback/static-rules.json
