@@ -250,10 +250,16 @@ class AccountCompletenessTests(unittest.TestCase):
         self.assertEqual(proposed_values, expected_values)
 
     def test_fab_anchor_fails_closed_for_stale_or_future_capture(self) -> None:
-        capture = json.loads(
-            (ROOT / "runtime" / "browser-captures" / "fab-account-2001-2026-08-18.json")
-            .read_text(encoding="utf-8")
-        )
+        capture = {
+            "capture_id": "fixture-fab-current-2001",
+            "source": {"provider": "fab"},
+            "account": {
+                "account_last4": "2001",
+                "currency": "AED",
+                "balance": "0.00",
+                "balance_as_of": "2026-08-18T12:00:00Z",
+            },
+        }
         as_of = datetime.fromisoformat(
             capture["account"]["balance_as_of"].replace("Z", "+00:00")
         )

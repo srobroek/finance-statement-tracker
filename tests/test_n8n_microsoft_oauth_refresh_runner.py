@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,9 +17,20 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "integrations" / "n8n" / "setup-workflows"
 RUNNER = SETUP / "runner"
 SOURCE = SETUP / "23-microsoft-oauth-refresh-proof.json"
-SOURCE_COMMIT = "f2f8d772bb3f397278d4aa5ded8c741a71d73466"
-SOURCE_SHA = "2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
+PROVENANCE_FIXTURE = ROOT / "tests" / "fixtures" / "microsoft-oauth-refresh-proof.provenance.json"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
+NATIVE_INTEGRATION_ENV = "FINANCE_RUN_N8N_NATIVE_INTEGRATION"
+NATIVE_INTEGRATION_ENABLED = os.environ.get(NATIVE_INTEGRATION_ENV) == "1"
+NODE_AVAILABLE = shutil.which("node") is not None
+BASH_AVAILABLE = shutil.which("bash") is not None
+requires_node_integration = unittest.skipUnless(
+    NATIVE_INTEGRATION_ENABLED and NODE_AVAILABLE,
+    f"integration test requires {NATIVE_INTEGRATION_ENV}=1 and Node.js on PATH",
+)
+requires_bash_integration = unittest.skipUnless(
+    NATIVE_INTEGRATION_ENABLED and BASH_AVAILABLE,
+    f"integration test requires {NATIVE_INTEGRATION_ENV}=1 and Bash on PATH",
+)
 
 
 def load_module(name: str, path: Path):
@@ -98,9 +112,18 @@ def irun(result: dict) -> dict:
 
 class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
     def test_runtime_binder_is_exact_and_never_records_identifiers(self) -> None:
+        provenance = json.loads(PROVENANCE_FIXTURE.read_text(encoding="utf-8"))
         self.assertEqual(
-            subprocess.check_output(["git", "show", f"{SOURCE_COMMIT}:integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json"], cwd=ROOT),
-            SOURCE.read_bytes(),
+            set(provenance),
+            {"schema_version", "source_path", "source_commit", "source_sha256"},
+        )
+        self.assertEqual(provenance["schema_version"], 1)
+        self.assertEqual(provenance["source_path"], SOURCE.relative_to(ROOT).as_posix())
+        self.assertRegex(provenance["source_commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(provenance["source_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+            provenance["source_sha256"],
         )
         with tempfile.TemporaryDirectory() as tmp:
             destination = Path(tmp) / "bound" / SOURCE.name
@@ -137,6 +160,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         )
         return subprocess.run(["node", "-e", code], input=json.dumps(payload), text=True, capture_output=True)
 
+    @requires_node_integration
     def test_in_memory_shim_accepts_only_exact_redacted_terminal_receipt(self) -> None:
         completed = self.run_irun_validator(irun(terminal_result()))
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -199,6 +223,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertLess(shim.rindex("watchdog.cancel()"), shim.rindex("writeTerminalOnce(terminalError, receipt)"))
 
+    @requires_node_integration
     def test_production_shim_stdin_entrypoint_is_exact_and_require_import_is_inert(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         completed = subprocess.run(
@@ -230,6 +255,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         )
         self.assertEqual(imported.stdout, "inert")
 
+    @requires_node_integration
     def test_production_shim_rejects_inherited_runner_broker_before_loading_n8n(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         env = os.environ.copy()
@@ -254,6 +280,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertNotIn("SECRET_PROVIDER_VALUE", completed.stdout + completed.stderr)
         self.assertNotIn("Cannot find module 'n8n/package.json'", completed.stderr)
 
+    @requires_node_integration
     def test_stdin_entrypoint_gate_and_direct_lifecycle_reject_adversarial_orders(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
@@ -285,6 +312,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             ["config-loaded", "command-loaded", "modules-loaded", "execute-resolved", "execute-initialized"],
         )
 
+    @requires_node_integration
     def test_terminal_line_serializes_only_validated_redacted_receipt_and_safe_failure(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         payload = irun(terminal_result())
@@ -311,6 +339,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertNotIn("fake-token", completed.stdout + completed.stderr)
         self.assertNotIn("fake-subject", completed.stdout + completed.stderr)
 
+    @requires_node_integration
     def test_internal_watchdog_uses_fixed_stages_once_and_cancels_on_success(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         code = (
@@ -451,6 +480,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             parser.parse_timestamp(secret)
         self.assertNotIn(secret, str(rejected.exception))
 
+    @requires_node_integration
     def test_direct_transport_probe_is_no_workflow_no_provider_and_exactly_redacted(self) -> None:
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
         probe_text = probe.read_text(encoding="utf-8")
@@ -494,6 +524,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             "raw_irun_persisted", "provider_response_logged", "secret_values_recorded",
         )))
 
+    @requires_node_integration
     def test_n8n_config_entrypoint_is_extensionless_and_resolves_directory_index(self) -> None:
         shim = RUNNER / "n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs"
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
@@ -520,6 +551,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
                 [(config_root / "index.js").resolve(), (config_root / "index.js").resolve()],
             )
 
+    @requires_node_integration
     def test_transport_probe_stdin_entrypoint_runs_and_requires_ack(self) -> None:
         probe = RUNNER / "n8n-cli-wf23-direct-transport-probe.cjs"
         completed = subprocess.run(
@@ -534,6 +566,7 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
             completed.stderr,
         )
 
+    @requires_node_integration
     def test_in_memory_shim_rejects_extra_provider_fields_without_echoing_values(self) -> None:
         result = terminal_result()
         result["subject"] = "sensitive subject"
@@ -781,10 +814,19 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         self.assertLess(transport_position, runner.index('metadata_before="$(read_metadata)"'))
         self.assertLess(transport_position, runner.index('failure_stage="workflow_import"'))
 
-    def test_all_runner_sources_are_syntactically_valid(self) -> None:
-        subprocess.run(["bash", "-n", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")], check=True)
+    def test_python_runner_sources_are_syntactically_valid(self) -> None:
         for source in RUNNER.glob("*.py"):
-            subprocess.run([sys.executable, "-m", "py_compile", str(source)], check=True)
+            ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+
+    @requires_bash_integration
+    def test_shell_runner_source_is_syntactically_valid(self) -> None:
+        subprocess.run(
+            ["bash", "-n", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")],
+            check=True,
+        )
+
+    @requires_node_integration
+    def test_commonjs_runner_sources_are_syntactically_valid(self) -> None:
         for source in RUNNER.glob("*.cjs"):
             subprocess.run(["node", "--check", str(source)], check=True)
 

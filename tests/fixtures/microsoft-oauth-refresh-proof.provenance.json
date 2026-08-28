@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "source_path": "integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json",
+  "source_commit": "f2f8d772bb3f397278d4aa5ded8c741a71d73466",
+  "source_sha256": "2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
+}
