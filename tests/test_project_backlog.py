@@ -39,7 +39,6 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("From list", " ".join(tasks["N8N-008"]["contradictions"]))
         agent_text = " ".join(tasks["AGENT-005"]["contradictions"])
         self.assertIn("n8n-nodes-prodex@0.5.1", agent_text)
-        self.assertIn("@ggomez91npm/n8n-nodes-claude-code@0.8.0", agent_text)
         self.assertIn("disposable", tasks["AGENT-005"]["next_action"].lower())
 
     def test_implementation_audit_is_mapped_to_relevant_requirements(self) -> None:

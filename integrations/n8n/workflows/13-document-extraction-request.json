@@ -340,6 +340,7 @@
   },
   "nodeGroups": [
     {
+      "id": "0fa02c49-12fb-5679-8c36-aa34a568a158",
       "name": "Stage 1: Validate Narrow Tool Input to Read Back Redacted Extraction Receipt",
       "nodeIds": [
         "13002",

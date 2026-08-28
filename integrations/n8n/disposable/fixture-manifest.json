@@ -4,17 +4,17 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "28ccc990f71dd0801238046f8b413697971719f434870170d60a221faf9fa0f3",
-    "12-outlook-message-sweep.json": "fed17b2885a2d110c4793abe76146d1d7dedb9255d892d9bc14b4f1ee2c42f52",
-    "16-operations-error-handler.json": "24bcdb53e5d0cf97971ddf03288693219c47de2d60a5584006b1ccac7629d239",
-    "17-actual-outbox-recovery.json": "e2b49bf1ad869206b8f5f81372c3672d87de40c814d49b220d7a5173901ec912",
-    "18-finance-writer-lease.json": "e03e6d3defba9a30564db0b227cd0fa714a5676ba131ff0b679deeeb960abfc4"
+    "09-ai-proposal.json": "aa11f81fca6f05b9dae52c11329a9c75fb5283d3bd67eb77fa4be88e59c07418",
+    "12-outlook-message-sweep.json": "6df7dec36f1a2f2e6e45f8e9460aa171e29fec132f2581b6de537e6e434368b7",
+    "16-operations-error-handler.json": "c2b6e5a8cfc8d325889ba9659ca35a87583a8fba3459444fde23b573f26a76d0",
+    "17-actual-outbox-recovery.json": "713151704ad3b5c1d7005c76cbac23249f6ee2498c5eda01999c0f0cd000ff3d",
+    "18-finance-writer-lease.json": "43cdbb58803cfc146cfcdc5df9336cfeb85c9306539f88b162726415364a610d"
   },
   "workflows": [
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "a625c2df8c373929c5aefd9321666fe93c4ed673ec43300fdfc4b54e3e507c3c"
+      "sha256": "e6b86362df87aa3e0e67a7df2bf9ecb385ab4128ef5bd1aca2d08fbaf3ada2ec"
     },
     {
       "file": "91-sweep-zero.json",
@@ -79,12 +79,12 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "214ef01661e54c161ada47c96e7e4af32d136649c6f03c2a7686359aadcd85ef"
+      "sha256": "eb0fc9952675cbd6e1dae83a2f1c7f15730bce948eadf68acf955e42532ed1eb"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "0c837bd7fca573848ad1e6b5ac87c87c24bf6b44f63068bae1bd12a3387c5553"
+      "sha256": "49616213ccd03ec3d7e67dfed3f15f74b912a28b077a4699c8fbb1e8c213b347"
     },
     {
       "file": "103-recover-prepared.json",
@@ -159,7 +159,7 @@
       "expected_exit": 0,
       "policy_id": "classify-unresolved",
       "expected_model": "gpt-5.6-luna",
-      "expected_reasoning_effort": "max",
+      "expected_reasoning_effort": "xhigh",
       "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
       "finance_writes": 0
     },

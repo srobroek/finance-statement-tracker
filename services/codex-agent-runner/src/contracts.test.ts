@@ -121,9 +121,10 @@ test("response must preserve the envelope and proposal boundary", async () => {
   };
   const accepted = validateResponse({
     ...base,
-    proposals: [{ transaction_id: "tx-1", field: "vendor", value_json: "\"Safe Merchant\"", confidence: 0.95, reason_code: "" }],
+    proposals: [{ transaction_id: "tx-1", field: "vendor", value: "Safe Merchant", confidence: 0.95, reason_code: "" }],
   }, request, resolved);
   assert.equal(accepted.proposals.length, 1);
+  assert.equal(accepted.proposals[0]?.value, "Safe Merchant");
   assert.throws(
     () => validateResponse({
       ...base,
@@ -135,7 +136,7 @@ test("response must preserve the envelope and proposal boundary", async () => {
   assert.throws(
     () => validateResponse({
       ...base,
-      proposals: [{ transaction_id: "tx-1", field: "direction", value_json: "\"CREDIT\"", confidence: 1, reason_code: "" }],
+      proposals: [{ transaction_id: "tx-1", field: "direction", value: "CREDIT", confidence: 1, reason_code: "" }],
     }, request, resolved),
     (error: unknown) => error instanceof ContractError && error.code === "FORBIDDEN_PROPOSAL",
   );
@@ -170,7 +171,7 @@ test("allowed value constraints reject invented categories", async () => {
   assert.throws(
     () => validateResponse({
       ...response,
-      proposals: [{ transaction_id: "tx-1", field: "category", value_json: "\"Invented Category\"", confidence: 0.99, reason_code: "" }],
+      proposals: [{ transaction_id: "tx-1", field: "category", value: "Invented Category", confidence: 0.99, reason_code: "" }],
     }, constrained, resolved),
     /outside configured values/,
   );

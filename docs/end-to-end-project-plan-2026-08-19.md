@@ -131,7 +131,7 @@ statement finalizes/resets a cashback period.
 | Host/path | Audience | Authentication | Origin |
 |---|---|---|---|
 | `n8n.vxsan.com` | interactive UI/OAuth callback | AD + n8n login | existing `Home-beachhead` tunnel to `http://172.20.10.20:5678` |
-| `n8n-mcp.vxsan.com/mcp/finance-operations-v1` | bounded MCP façade | Cloudflare Service Auth + façade auth | existing `Home-beachhead` tunnel to `http://172.20.10.20:5678` |
+| `n8n-mcp.vxsan.com/mcp/finance-operations` | bounded MCP façade | Cloudflare Service Auth + façade auth | existing `Home-beachhead` tunnel to `http://172.20.10.20:5678` |
 | public webhooks | none by default | source-specific only when introduced | no blanket bypass |
 
 The existing external `Home-beachhead` tunnel has two active connector replicas

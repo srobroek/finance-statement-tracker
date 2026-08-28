@@ -1339,6 +1339,7 @@
   },
   "nodeGroups": [
     {
+      "id": "2c3080e3-f17e-5280-99a9-7d0015de8ce7",
       "name": "Stage 1: Statement Pipeline Parameters to Unresolved Fields",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000003-config",
@@ -1352,6 +1353,7 @@
       "description": "Finance stage 1. Input starts at Statement Pipeline Parameters; verified output leaves through Unresolved Fields."
     },
     {
+      "id": "5acc0409-83b1-52fc-ac64-3e22fd401851",
       "name": "Stage 2: Build Bounded AI Policy Requests to SHA-256 Canonical Delta",
       "nodeIds": [
         "3059",
@@ -1366,6 +1368,7 @@
       "description": "Finance stage 2. Input starts at Build Bounded AI Policy Requests; verified output leaves through SHA-256 Canonical Delta."
     },
     {
+      "id": "85fa405c-dd48-5551-9b8e-0ae83232671c",
       "name": "Stage 3: Archive Canonical Delta in OneDrive to Apply Prepared Outbox Safely",
       "nodeIds": [
         "3033",
@@ -1380,6 +1383,7 @@
       "description": "Finance stage 3. Input starts at Archive Canonical Delta in OneDrive; verified output leaves through Apply Prepared Outbox Safely."
     },
     {
+      "id": "441ec46e-b39d-5ac7-bdfe-d3a4a49f272b",
       "name": "Stage 4: Cashback Close Required to Mark Terminal Readback Verified",
       "nodeIds": [
         "3024",

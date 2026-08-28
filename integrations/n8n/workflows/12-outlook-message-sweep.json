@@ -1066,6 +1066,7 @@
   },
   "nodeGroups": [
     {
+      "id": "187be1cc-9257-5ae2-a744-f600f6802757",
       "name": "Stage 1: Validate Sweep or Commit to Exhaust Outlook Pagination",
       "nodeIds": [
         "12002",
@@ -1079,6 +1080,7 @@
       "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Exhaust Outlook Pagination."
     },
     {
+      "id": "429a7723-80df-5e97-88a9-32ea25320faa",
       "name": "Stage 2: Aggregate Exact Window Heartbeat to Verify Receipt and Return Sweep",
       "nodeIds": [
         "12009",
@@ -1090,6 +1092,7 @@
       "description": "Finance stage 2. Input starts at Aggregate Exact Window Heartbeat; verified output leaves through Verify Receipt and Return Sweep."
     },
     {
+      "id": "3844ba09-c3fa-5b25-b40d-003f6487fa81",
       "name": "Stage 2: Read ENUMERATED Receipt for Commit to Read Authoritative Source Cursor",
       "nodeIds": [
         "12020",
@@ -1099,6 +1102,7 @@
       "description": "Finance stage 2. Input starts at Read ENUMERATED Receipt for Commit; verified output leaves through Read Authoritative Source Cursor."
     },
     {
+      "id": "68938728-ec6f-5cdb-b32e-b000ed287062",
       "name": "Stage 3: Build Cursor CAS Update to Return Verified Cursor Commit",
       "nodeIds": [
         "12023",

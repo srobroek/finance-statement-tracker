@@ -39,9 +39,11 @@
     "id": "10000000-0000-4000-8000-000000000016"
   },
   "mcp": {
+    "contract_version": 1,
+    "trigger_path": "finance-operations",
     "instance_mcp_enabled": false,
     "facade_workflow_code": "FINANCE_MCP_FACADE",
-    "allowed_operation_codes": ["finance.status", "artifact.submit_reviewed", "document.request"],
+    "allowed_tool_names": ["finance_status", "artifact_submit_reviewed", "document_request"],
     "caller_forbidden_fields": ["folder_id", "sender", "subject", "url", "path", "provider", "credential", "actual_id", "commit", "command"]
   },
   "workflows": [
@@ -65,7 +67,7 @@
     {"code":"FINANCE_WRITER_LEASE","file":"18-finance-writer-lease.json","status":"SPEC_ONLY","schedule":null,"source":"fixed finance_ops Postgres functions","mcp_exposed":false,"intended_writes":["fenced writer lease only"]},
     {"code":"PLATFORM_DATA_TABLE_BOOTSTRAP","file":"19-platform-data-table-bootstrap.json","status":"SPEC_ONLY","schedule":null,"source":"versioned Data Table, AI policy, and config fingerprint seed contracts","mcp_exposed":false,"manual_only":true,"intended_writes":["n8n platform Data Table schema","finance_ai_policy_contracts seed","finance_config_versions seed"],"blockers":["EXACT_IMAGE_IMPORT_REQUIRED","DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED"]},
     {"code":"ACTUAL_OUTBOX_APPLY","file":"20-actual-outbox-apply.json","status":"SPEC_ONLY","schedule":null,"source":"durable PREPARED or nonterminal Actual outbox row","mcp_exposed":false,"intended_writes":["single fenced Actual import","exact Actual readback verification","Actual outbox state transitions"],"blockers":["EXACT_IMAGE_IMPORT_REQUIRED","DISPOSABLE_WRITER_REPLAY_REQUIRED"]},
-    {"code":"SUBSCRIPTION_AGENT_ADAPTER","file":"21-subscription-agent-adapter.json","status":"SPEC_ONLY","schedule":null,"source":"server-owned provider field and schema-bound proposal job","mcp_exposed":false,"intended_writes":["proposal response only"],"blockers":["CODEX_PROVIDER_RUNTIME_PROOF_REQUIRED","CLAUDE_PROVIDER_RUNNER_REQUIRED","THREE_CONSECUTIVE_SCHEMA_VALID_RECEIPTS_REQUIRED"]}
+    {"code":"SUBSCRIPTION_AGENT_ADAPTER","file":"21-subscription-agent-adapter.json","status":"SPEC_ONLY","schedule":null,"source":"server-owned provider field and schema-bound proposal job","mcp_exposed":false,"intended_writes":["proposal response only"],"blockers":["CODEX_PROVIDER_RUNTIME_PROOF_REQUIRED","THREE_CONSECUTIVE_SCHEMA_VALID_RECEIPTS_REQUIRED"]}
   ],
   "retired_or_not_migrated": [
     {"source":"ADCB_CASHBACK","reason":"closed historical card; no recurring ingestion"}

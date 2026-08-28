@@ -11,15 +11,6 @@
       "node_types": {"n8n-nodes-prodex.prodex": 2},
       "use": "CODEX_SUBSCRIPTION schema-bound proposal only",
       "blocked_until": ["EXACT_IMAGE_REGISTRATION", "DEVICE_LOGIN_READBACK", "SCHEMA_BOUND_LUNA_AND_SOL_RECEIPTS", "NO_TOOL_OR_WRITE_PROOF"]
-    },
-    {
-      "package": "@ggomez91npm/n8n-nodes-claude-code",
-      "version": "0.8.0",
-      "integrity": "sha512-0Tn5gY3ITdc3Mexz0eUuaxKq8UBp+hRVf0Wsc+zLcMQz1DHwHSszO66xXUkUyVCgewTFhyXlwXcLLstduXLLzA==",
-      "shasum": "b423e1d2c012022a5836c8312a5c9ab681870a02",
-      "node_types": {"@ggomez91npm/n8n-nodes-claude-code.claude": 1},
-      "use": "CLAUDE_SUBSCRIPTION proposal followed by strict downstream schema validation",
-      "blocked_until": ["EXACT_IMAGE_REGISTRATION", "CLAUDE_SUBSCRIPTION_LOGIN_READBACK", "NO_SESSION_PERSISTENCE_PROOF_OR_REVIEWED_FORK", "SCHEMA_VALID_RECEIPTS", "NO_TOOL_OR_WRITE_PROOF"]
     }
   ],
   "security_boundary": {

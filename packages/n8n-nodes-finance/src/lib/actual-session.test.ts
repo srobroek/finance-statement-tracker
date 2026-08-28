@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ActualApi, ActualSession, preflightOutbox } from './actual-session';
-import { assertActualMutationMode } from './contracts';
+import { assertActualImportTransactions, assertActualMutationMode } from './contracts';
 
 const future = () => new Date(Date.now() + 60_000).toISOString();
 const envelope = () => ({
@@ -35,6 +35,19 @@ test('prepared outbox rejects manual, MCP, duplicate and expired inputs', () => 
   assert.throws(() => preflightOutbox({ ...envelope(), execution_context: { trigger: 'SCHEDULE', manual: true, mcp: false } }), /forbidden/);
   assert.throws(() => preflightOutbox({ ...envelope(), transactions: [...envelope().transactions, ...envelope().transactions] }), /duplicate imported_id/);
   assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }), /expired/);
+});
+
+test('transaction clearing accepts only booleans', () => {
+  const transaction = envelope().transactions[0]!;
+  for (const cleared of [false, true]) {
+    assert.equal(assertActualImportTransactions([{ ...transaction, cleared }])[0]?.cleared, cleared);
+  }
+  for (const cleared of ['false', 0, 1, null]) {
+    assert.throws(
+      () => assertActualImportTransactions([{ ...transaction, cleared }]),
+      /cleared must be a boolean/,
+    );
+  }
 });
 
 test('import forces reimportDeleted false, syncs before and after, and shuts down', async () => {

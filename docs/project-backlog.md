@@ -37,7 +37,7 @@ Evidence commits: `b07c410`, `00491aa`, `c8d4f7c`, `3a6acc6`, `da6b0c1`, `b845cc
 
 - Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.
 - Execute Sub-workflow selectors should use **From list** when the target is available.
-- Community agent candidates are pinned to `n8n-nodes-prodex@0.5.1` and `@ggomez91npm/n8n-nodes-claude-code@0.8.0`; neither is production-approved until disposable registration, isolation, authentication and structured-output proof passes.
+- The community agent package is pinned to `n8n-nodes-prodex@0.5.1`; it is not production-approved until disposable registration, isolation, authentication and structured-output proof passes.
 - The backlog intentionally has no automatically promoted `VERIFIED` tasks.
 
 ## Ordered executable queue

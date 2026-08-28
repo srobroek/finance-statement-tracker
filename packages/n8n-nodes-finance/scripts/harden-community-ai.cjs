@@ -24,10 +24,6 @@ const files = {
     path: 'n8n-nodes-prodex/dist/lib/auth/codexEnv.js',
     sha256: '41eade527cdbc11629db6643300eee7ed12eca7166eb2cdf92441d0a4752ae96',
   },
-  claudeParameters: {
-    path: '@ggomez91npm/n8n-nodes-claude-code/dist/nodes/Claude/lib/parameters.js',
-    sha256: '340ac7c98876dce08568ae456dbb54116a405c1cdb87033a30f12b0759411dae',
-  },
 };
 
 function digest(text) {
@@ -114,20 +110,5 @@ writeReviewed(files.prodexSetup, (source) => replaceOnce(
   'prodex-setup-disabled',
 ));
 
-writeReviewed(files.claudeParameters, (source) => {
-  let next = replaceOnce(
-    source,
-    `                default: 'claude',`,
-    `                default: '/opt/finance-n8n/community-bin/claude-finance',`,
-    'claude-default-binary',
-  );
-  next = replaceOnce(
-    next,
-    `    const cliBinaryName = typeof raw.cliBinaryName === 'string' ? raw.cliBinaryName : 'claude';`,
-    `    const cliBinaryName = typeof raw.cliBinaryName === 'string' ? raw.cliBinaryName : '/opt/finance-n8n/community-bin/claude-finance';\n    if (cliBinaryName !== '/opt/finance-n8n/community-bin/claude-finance') {\n        throw new ValidationFailure('cliBinaryName', raw.cliBinaryName, 'FINANCE_CLAUDE_BINARY_BOUNDARY_REQUIRED');\n    }`,
-    'claude-fixed-binary',
-  );
-  return next;
-});
 
 process.stdout.write('community AI runtime hardening applied\n');

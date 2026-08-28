@@ -356,6 +356,7 @@
   },
   "nodeGroups": [
     {
+      "id": "60edcc52-1689-5f34-b7d5-824017123c7e",
       "name": "Stage 1: PDF Extraction Parameters to Ready for Deterministic Parser",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000014-config",

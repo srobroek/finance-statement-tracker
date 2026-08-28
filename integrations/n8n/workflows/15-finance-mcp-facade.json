@@ -25,7 +25,7 @@
     },
     {
       "id": "15002",
-      "name": "finance.status",
+      "name": "finance_status",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -44,8 +44,8 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "_mcp_request_id": "={{ $execution.id + ':finance-status' }}",
-            "operation_code": "finance.status"
+            "_mcp_request_id": "={{ $execution.id + ':finance_status' }}",
+            "operation_code": "finance_status"
           },
           "matchingColumns": [],
           "schema": []
@@ -54,7 +54,7 @@
     },
     {
       "id": "15003",
-      "name": "artifact.submit_reviewed",
+      "name": "artifact_submit_reviewed",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -73,8 +73,8 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "_mcp_request_id": "={{ $execution.id + ':artifact-submit-reviewed' }}",
-            "operation_code": "artifact.submit_reviewed",
+            "_mcp_request_id": "={{ $execution.id + ':artifact_submit_reviewed' }}",
+            "operation_code": "artifact_submit_reviewed",
             "artifact_id": "={{ $fromAI('artifact_id','Immutable reviewed artifact identifier','string') }}",
             "expected_sha256": "={{ $fromAI('expected_sha256','Expected lowercase SHA-256 hex','string') }}"
           },
@@ -85,7 +85,7 @@
     },
     {
       "id": "15004",
-      "name": "document.request",
+      "name": "document_request",
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2,
       "position": [
@@ -104,8 +104,8 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "_mcp_request_id": "={{ $execution.id + ':document-request' }}",
-            "operation_code": "document.request",
+            "_mcp_request_id": "={{ $execution.id + ':document_request' }}",
+            "operation_code": "document_request",
             "document_id": "={{ $fromAI('document_id','Immutable document identifier','string') }}",
             "expected_sha256": "={{ $fromAI('expected_sha256','Expected lowercase SHA-256 hex','string') }}",
             "document_profile": "={{ $fromAI('document_profile','Trusted configured document profile code','string') }}",
@@ -118,7 +118,7 @@
     },
     {
       "id": "10000000-0000-4000-8000-000000000015-generated-note-1",
-      "name": "Stage 1 · Finance MCP Server Trigger to document.request",
+      "name": "Stage 1 · Finance MCP Server Trigger to document_request",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -126,7 +126,7 @@
         -180
       ],
       "parameters": {
-        "content": "## Stage 1 · Finance MCP Server Trigger → document.request\n**Input:** Finance MCP Server Trigger  ·  **Output:** document.request  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
+        "content": "## Stage 1 · Finance MCP Server Trigger → document_request\n**Input:** Finance MCP Server Trigger  ·  **Output:** document_request  ·  **Nodes:** 1–4\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
         "height": 110,
         "width": 2240,
         "color": 7
@@ -138,17 +138,17 @@
       "ai_tool": [
         [
           {
-            "node": "finance.status",
+            "node": "finance_status",
             "type": "ai_tool",
             "index": 0
           },
           {
-            "node": "artifact.submit_reviewed",
+            "node": "artifact_submit_reviewed",
             "type": "ai_tool",
             "index": 0
           },
           {
-            "node": "document.request",
+            "node": "document_request",
             "type": "ai_tool",
             "index": 0
           }
@@ -169,10 +169,11 @@
     "mcpSafe": true,
     "migrationStatus": "SPEC_ONLY",
     "instanceMcpRequired": false,
-    "allowedOperationCodes": [
-      "finance.status",
-      "artifact.submit_reviewed",
-      "document.request"
+    "mcpContractVersion": 1,
+    "allowedToolNames": [
+      "finance_status",
+      "artifact_submit_reviewed",
+      "document_request"
     ],
     "auditTable": "finance_mcp_requests",
     "importTested": false,

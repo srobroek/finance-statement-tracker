@@ -1199,6 +1199,7 @@
   },
   "nodeGroups": [
     {
+      "id": "c56f720e-5d9e-5b31-a72f-2b428120304f",
       "name": "Stage 1: Actual Writer Parameters to Acquire Recovery Writer Fence",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000020-config",
@@ -1212,6 +1213,7 @@
       "description": "Finance stage 1. Input starts at Actual Writer Parameters; verified output leaves through Acquire Recovery Writer Fence."
     },
     {
+      "id": "78ee30c8-cccb-55c3-9a02-7a9fd04c529c",
       "name": "Stage 2: Build Fenced Recovery Envelope to Upsert ACTUAL OBSERVED Recovery",
       "nodeIds": [
         "17008",
@@ -1226,6 +1228,7 @@
       "description": "Finance stage 2. Input starts at Build Fenced Recovery Envelope; verified output leaves through Upsert ACTUAL OBSERVED Recovery."
     },
     {
+      "id": "878a4028-94b8-5d98-a67b-3001fd295fce",
       "name": "Stage 3: Read Back ACTUAL OBSERVED Recovery to Read Back VERIFIED Recovery",
       "nodeIds": [
         "17022",
@@ -1240,6 +1243,7 @@
       "description": "Finance stage 3. Input starts at Read Back ACTUAL OBSERVED Recovery; verified output leaves through Read Back VERIFIED Recovery."
     },
     {
+      "id": "3acdbe16-c9ba-51f6-bd5d-3601deb418be",
       "name": "Stage 4: Upsert COMMITTED Recovery to Return Verified Commit Receipt",
       "nodeIds": [
         "17013",

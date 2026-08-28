@@ -50,6 +50,10 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
     ids.add(importedId);
     const amount = row.amount;
     if (!Number.isSafeInteger(amount)) throw new Error(`${label}[${index}].amount must be integer minor units`);
+    const cleared = row.cleared;
+    if (cleared !== undefined && typeof cleared !== 'boolean') {
+      throw new Error(`${label}[${index}].cleared must be a boolean`);
+    }
     return {
       imported_id: importedId,
       date: assertIsoDate(row.date, `${label}[${index}].date`),
@@ -57,7 +61,7 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
       imported_payee: requiredString(row.imported_payee, `${label}[${index}].imported_payee`, 512),
       ...(row.notes === undefined ? {} : { notes: requiredString(row.notes, `${label}[${index}].notes`, 4000) }),
       ...(row.category === undefined ? {} : { category: requiredString(row.category, `${label}[${index}].category`, 128) }),
-      ...(row.cleared === undefined ? {} : { cleared: Boolean(row.cleared) }),
+      ...(cleared === undefined ? {} : { cleared }),
     };
   });
 }

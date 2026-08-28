@@ -463,6 +463,7 @@
   },
   "nodeGroups": [
     {
+      "id": "db576542-237b-56c5-9741-2b8ec5c7b7fc",
       "name": "Stage 1: Open Configured Cycle Window to Assemble Immutable Pipeline Input",
       "nodeIds": [
         "5002",
@@ -476,6 +477,7 @@
       "description": "Finance stage 1. Input starts at Open Configured Cycle Window; verified output leaves through Assemble Immutable Pipeline Input."
     },
     {
+      "id": "3308effe-0e80-581c-95ac-0de497069ef0",
       "name": "Stage 2: Upsert Waiting or Deadline Receipt to Read Back Waiting or Deadline Receipt",
       "nodeIds": [
         "5010",

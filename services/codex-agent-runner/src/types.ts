@@ -2,7 +2,7 @@ export const MODEL_PROFILES = {
   LUNA_MAX: {
     policyClass: "NORMAL",
     model: "gpt-5.6-luna",
-    reasoningEffort: "max",
+    reasoningEffort: "xhigh",
   },
   SOL_XHIGH: {
     policyClass: "EXCEPTION",
@@ -44,7 +44,7 @@ export interface ProposalRequest {
   job_id: string;
   idempotency_key: string;
   operation_code: "FINANCE_AI_PROPOSAL";
-  agent_provider: "CODEX_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION";
+  agent_provider: "CODEX_SUBSCRIPTION";
   policy_id: string;
   policy_class: PolicyClass;
   policy_sha256: string;
@@ -65,7 +65,7 @@ export interface ProposalResponse {
   schema_version: 1;
   job_id: string;
   idempotency_key: string;
-  agent_provider: "CODEX_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION";
+  agent_provider: "CODEX_SUBSCRIPTION";
   policy_id: string;
   policy_class: PolicyClass;
   policy_sha256: string;
@@ -73,7 +73,7 @@ export interface ProposalResponse {
   output_schema_sha256: string;
   runner_receipt_id: string;
   runner_model: "gpt-5.6-luna" | "gpt-5.6-sol";
-  runner_reasoning_effort: "max" | "xhigh";
+  runner_reasoning_effort: "xhigh";
   auth_mode: "CHATGPT_SUBSCRIPTION";
   proposals: Proposal[];
 }

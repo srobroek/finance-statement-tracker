@@ -324,6 +324,7 @@
   },
   "nodeGroups": [
     {
+      "id": "1758183e-54f9-5cb4-9471-ded4516070bb",
       "name": "Stage 1: Validate Fixed Lease Operation to Validate Lease Result",
       "nodeIds": [
         "18002",

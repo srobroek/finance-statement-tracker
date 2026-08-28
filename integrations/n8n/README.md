@@ -76,17 +76,15 @@ hash-verified, and recorded as `PENDING` review in `finance_agent_jobs`.
 
 ## Subscription-agent proposal handoff
 
-Workflow 09 uses only the bounded provider-neutral handoff contract and calls
-workflow 21. The active server-side policy selects `CODEX_SUBSCRIPTION` or
-`CLAUDE_SUBSCRIPTION`; the caller cannot select the provider. Normal Codex policies
-map server-side to `gpt-5.6-luna`/`max`; exception policies map to
-`gpt-5.6-sol`/`xhigh`. Callers cannot select a model, prompt, command, path, URL,
-credential, or write flag. Requests are redacted/idempotent and output is
-proposal-only under checked-in schemas. `community-node-lock.json` pins
-`n8n-nodes-prodex@0.5.1` and
-`@ggomez91npm/n8n-nodes-claude-code@0.8.0` by integrity. Both remain blocked
-until exact-image registration, subscription login, no-tool/no-write behavior,
-and three consecutive schema-valid receipts are verified.
+Workflow 09 uses only the bounded ProDex handoff contract and calls workflow 21.
+The server-owned policy selects `CODEX_SUBSCRIPTION`; the caller cannot select
+the provider. Normal Codex policies map to `gpt-5.6-luna`/`xhigh`; exception
+policies map to `gpt-5.6-sol`/`xhigh`. Callers cannot select a model, prompt,
+command, path, URL, credential, or write flag. Requests are redacted and
+idempotent, and output is proposal-only under checked-in schemas.
+`community-node-lock.json` pins `n8n-nodes-prodex@0.5.1` by integrity. It remains
+blocked until exact-image registration, subscription login, no-tool/no-write
+behavior, and three consecutive schema-valid receipts are verified.
 
 Callers supply only a policy ID, unresolved transaction IDs, requested fields,
 and redacted context. `finance_ai_policy_contracts` owns the single ACTIVE

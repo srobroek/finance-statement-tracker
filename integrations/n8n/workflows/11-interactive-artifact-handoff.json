@@ -333,6 +333,7 @@
   },
   "nodeGroups": [
     {
+      "id": "54af7a56-37b8-59fe-925f-f6fd2ff15835",
       "name": "Stage 1: Validate Reviewed Artifact Reference to Run Statement Pipeline",
       "nodeIds": [
         "11002",

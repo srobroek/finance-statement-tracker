@@ -583,6 +583,7 @@
   },
   "nodeGroups": [
     {
+      "id": "2b85702c-3338-555b-9aa8-ef95537a74c6",
       "name": "Stage 1: Redact and Classify Failure to Route Retryable Provider Failure",
       "nodeIds": [
         "16002",
@@ -596,6 +597,7 @@
       "description": "Finance stage 1. Input starts at Redact and Classify Failure; verified output leaves through Route Retryable Provider Failure."
     },
     {
+      "id": "afc06298-397f-5e2c-887a-584a655b4621",
       "name": "Stage 2: Read Provider Circuit after Failure to Verify OPEN Circuit Readback",
       "nodeIds": [
         "16009",

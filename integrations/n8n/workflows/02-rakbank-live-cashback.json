@@ -448,6 +448,7 @@
   },
   "nodeGroups": [
     {
+      "id": "cc54791f-78cb-57bd-acb2-d702849da8e2",
       "name": "Stage 1: Read Last Durable Cursor to Parse and Upsert Cashback Events",
       "nodeIds": [
         "2003",
@@ -461,6 +462,7 @@
       "description": "Finance stage 1. Input starts at Read Last Durable Cursor; verified output leaves through Parse and Upsert Cashback Events."
     },
     {
+      "id": "b2ebf8c7-515f-5a6b-bd41-df4f38b05ea5",
       "name": "Stage 2: Verify Service Receipt Before Cursor to Verify Exact Cursor Readback",
       "nodeIds": [
         "2008",

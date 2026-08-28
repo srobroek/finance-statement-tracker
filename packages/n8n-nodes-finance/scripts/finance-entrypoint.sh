@@ -6,12 +6,9 @@ mutable_parent=/home/node/.n8n/nodes/node_modules
 mutable_link=${mutable_parent}/n8n-nodes-finance
 prodex_immutable=/opt/finance-n8n/community-extensions/node_modules/n8n-nodes-prodex
 prodex_link=${mutable_parent}/n8n-nodes-prodex
-claude_immutable=/opt/finance-n8n/community-extensions/node_modules/@ggomez91npm/n8n-nodes-claude-code
-claude_parent=${mutable_parent}/@ggomez91npm
-claude_link=${claude_parent}/n8n-nodes-claude-code
 
 node /opt/finance-n8n/verify-immutable-extension.cjs >/dev/null
-mkdir -p "${mutable_parent}" "${claude_parent}" /tmp/finance-ai
+mkdir -p "${mutable_parent}" /tmp/finance-ai
 chmod 0700 /tmp/finance-ai
 
 ensure_link() {
@@ -36,9 +33,8 @@ ensure_link() {
 
 ensure_link "${mutable_link}" "${immutable}"
 ensure_link "${prodex_link}" "${prodex_immutable}"
-ensure_link "${claude_link}" "${claude_immutable}"
 
-for forbidden in OPENAI_API_KEY CODEX_API_KEY CODEX_ACCESS_TOKEN ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN; do
+for forbidden in OPENAI_API_KEY CODEX_API_KEY CODEX_ACCESS_TOKEN; do
   eval "present=\${${forbidden}+yes}"
   [ "${present:-}" != yes ] || {
     echo "COMMUNITY_AI_API_KEY_FORBIDDEN:${forbidden}" >&2

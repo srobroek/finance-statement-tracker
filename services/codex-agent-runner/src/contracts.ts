@@ -337,7 +337,7 @@ export function validateResponse(value: unknown, request: ProposalRequest, resol
   const pairs = new Set<string>();
   const proposals = source.proposals.map((raw) => {
     const proposalSource = record(raw, "proposal");
-    exactKeys(proposalSource, ["transaction_id", "field", "value_json", "confidence", "reason_code"], "proposal");
+    exactKeys(proposalSource, ["transaction_id", "field", "value", "confidence", "reason_code"], "proposal");
     const transactionId = text(proposalSource.transaction_id, "proposal.transaction_id");
     const field = proposalSource.field as AllowedField;
     const item = allowedById.get(transactionId);
@@ -348,13 +348,6 @@ export function validateResponse(value: unknown, request: ProposalRequest, resol
     if (typeof proposalSource.confidence !== "number" || proposalSource.confidence < 0 || proposalSource.confidence > 1) {
       throw new ContractError("INVALID_PROPOSAL", "confidence must be between zero and one");
     }
-    const valueJson = text(proposalSource.value_json, "proposal.value_json", 4096);
-    let parsedValue: unknown;
-    try {
-      parsedValue = JSON.parse(valueJson) as unknown;
-    } catch {
-      throw new ContractError("INVALID_PROPOSAL", "proposal.value_json must contain valid JSON");
-    }
     if (typeof proposalSource.reason_code !== "string" ||
         !/^[A-Z0-9_:-]{0,128}$/.test(proposalSource.reason_code)) {
       throw new ContractError("INVALID_PROPOSAL", "reason_code must be empty or an uppercase reason code");
@@ -362,7 +355,7 @@ export function validateResponse(value: unknown, request: ProposalRequest, resol
     const proposal: Proposal = {
       transaction_id: transactionId,
       field,
-      value: parsedValue,
+      value: proposalSource.value,
       confidence: proposalSource.confidence,
       ...(proposalSource.reason_code === "" ? {} : { reason_code: proposalSource.reason_code }),
     };

@@ -135,12 +135,12 @@ LATEST_OVERRIDES = {
     },
     "AGENT-005": {
         "contradictions": [
-            "The current pinned community-agent candidates are n8n-nodes-prodex@0.5.1 and "
-            "@ggomez91npm/n8n-nodes-claude-code@0.8.0; both remain unapproved for production until disposable proof."
+            "The only pinned community-agent package is n8n-nodes-prodex@0.5.1; "
+            "it remains unapproved for production until disposable proof."
         ],
         "next_action": (
-            "Build the exact pinned image, run registration/security/structured-output fixtures for ProDex 0.5.1 and "
-            "ggomez Claude 0.8.0, and retain them only if the disposable receipts pass."
+            "Build the exact pinned image, run registration/security/structured-output fixtures for ProDex 0.5.1, "
+            "and retain it only if the disposable receipts pass."
         ),
     },
     "AGENT-001": {
@@ -666,7 +666,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         "- Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.",
         "- Execute Sub-workflow selectors should use **From list** when the target is available.",
-        "- Community agent candidates are pinned to `n8n-nodes-prodex@0.5.1` and `@ggomez91npm/n8n-nodes-claude-code@0.8.0`; neither is production-approved until disposable registration, isolation, authentication and structured-output proof passes.",
+        "- The community agent package is pinned to `n8n-nodes-prodex@0.5.1`; it is not production-approved until disposable registration, isolation, authentication and structured-output proof passes.",
         "- The backlog intentionally has no automatically promoted `VERIFIED` tasks.",
         "",
         "## Ordered executable queue",

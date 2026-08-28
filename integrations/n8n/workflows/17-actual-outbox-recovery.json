@@ -159,6 +159,7 @@
   },
   "nodeGroups": [
     {
+      "id": "0f7de60b-be35-5aeb-a863-71121b823d4c",
       "name": "Stage 1: Read Nonterminal Actual Outbox to Apply Nonterminal Outbox Safely",
       "nodeIds": [
         "17002",

@@ -10,7 +10,7 @@
     "job_id":{"type":"string","pattern":"^finance-ai:[a-f0-9]{64}$"},
     "idempotency_key":{"type":"string","pattern":"^[a-f0-9]{64}$"},
     "operation_code":{"const":"FINANCE_AI_PROPOSAL"},
-    "agent_provider":{"enum":["CODEX_SUBSCRIPTION","CLAUDE_SUBSCRIPTION"]},
+    "agent_provider":{"enum":["CODEX_SUBSCRIPTION"]},
     "policy_id":{"type":"string","pattern":"^[a-z0-9][a-z0-9:_-]{0,127}$"},
     "policy_class":{"enum":["NORMAL","EXCEPTION"]},
     "policy_sha256":{"$ref":"#/$defs/sha256"},

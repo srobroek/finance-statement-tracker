@@ -8,15 +8,9 @@
     "CODEX_SUBSCRIPTION": {
       "adapter_package": "n8n-nodes-prodex@0.5.1",
       "normal_model": "gpt-5.6-luna",
-      "normal_reasoning_effort": "max",
+      "normal_reasoning_effort": "xhigh",
       "exception_model": "gpt-5.6-sol",
       "exception_reasoning_effort": "xhigh"
-    },
-    "CLAUDE_SUBSCRIPTION": {
-      "adapter_package": "@ggomez91npm/n8n-nodes-claude-code@0.8.0",
-      "normal_model": "claude-sonnet-4-6",
-      "exception_model": "claude-sonnet-4-6",
-      "downstream_schema_validation_required": true
     }
   }
 }

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import re
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -73,12 +74,16 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def test_mcp_is_disabled_instance_wide_and_facade_is_bounded(self) -> None:
         mcp = self.registry["mcp"]
+        expected_tool_names = [
+            "finance_status",
+            "artifact_submit_reviewed",
+            "document_request",
+        ]
         self.assertFalse(mcp["instance_mcp_enabled"])
         self.assertEqual(mcp["facade_workflow_code"], "FINANCE_MCP_FACADE")
-        self.assertEqual(
-            set(mcp["allowed_operation_codes"]),
-            {"finance.status", "artifact.submit_reviewed", "document.request"},
-        )
+        self.assertEqual(mcp["contract_version"], 1)
+        self.assertEqual(mcp["trigger_path"], "finance-operations")
+        self.assertEqual(mcp["allowed_tool_names"], expected_tool_names)
         exposed = [row for row in self.registry["workflows"] if row["mcp_exposed"]]
         self.assertEqual([row["code"] for row in exposed], ["FINANCE_MCP_FACADE"])
         facade = self.workflow("15-finance-mcp-facade.json")
@@ -90,9 +95,36 @@ class N8nWorkflowTests(unittest.TestCase):
                 "n8n-nodes-base.stickyNote",
             },
         )
+        trigger = next(
+            node
+            for node in facade["nodes"]
+            if node["type"] == "@n8n/n8n-nodes-langchain.mcpTrigger"
+        )
+        self.assertEqual(trigger["parameters"]["path"], mcp["trigger_path"])
+        tools = [
+            node
+            for node in facade["nodes"]
+            if node["type"] == "@n8n/n8n-nodes-langchain.toolWorkflow"
+        ]
+        self.assertEqual([node["name"] for node in tools], expected_tool_names)
         self.assertEqual(
-            set(facade["meta"]["allowedOperationCodes"]),
-            set(mcp["allowed_operation_codes"]),
+            [node["parameters"]["name"] for node in tools],
+            expected_tool_names,
+        )
+        self.assertEqual(
+            [
+                node["parameters"]["workflowInputs"]["value"]["operation_code"]
+                for node in tools
+            ],
+            expected_tool_names,
+        )
+        self.assertEqual(
+            facade["meta"]["mcpContractVersion"],
+            mcp["contract_version"],
+        )
+        self.assertEqual(
+            facade["meta"]["allowedToolNames"],
+            mcp["allowed_tool_names"],
         )
         raw = json.dumps(facade).casefold()
         for field in mcp["caller_forbidden_fields"]:
@@ -398,11 +430,23 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(runner["forced_login_method"], "chatgpt")
         self.assertTrue(runner["api_key_fallback_forbidden"])
         self.assertEqual(runner["server_model_policy"], {
-            "NORMAL": {"model": "gpt-5.6-luna", "reasoning_effort": "max"},
+            "NORMAL": {"model": "gpt-5.6-luna", "reasoning_effort": "xhigh"},
             "EXCEPTION": {"model": "gpt-5.6-sol", "reasoning_effort": "xhigh"},
         })
         handoff = load_json(N8N / contract["request_schema"])
         proposal = load_json(N8N / contract["output_schema"])
+        self.assertEqual(
+            set(handoff["required"]),
+            {
+                "schema_version", "job_id", "idempotency_key", "operation_code",
+                "agent_provider", "policy_id", "policy_class", "policy_sha256",
+                "config_sha256", "output_schema_sha256", "unresolved",
+            },
+        )
+        self.assertEqual(
+            set(handoff["$defs"]["unresolved"]["required"]),
+            {"transaction_id", "allowed_fields", "allowed_values", "redacted_context"},
+        )
         try:
             import jsonschema
         except ImportError:
@@ -410,6 +454,30 @@ class N8nWorkflowTests(unittest.TestCase):
         if jsonschema:
             jsonschema.validators.validator_for(handoff).check_schema(handoff)
             jsonschema.validators.validator_for(proposal).check_schema(proposal)
+            handoff_fixture = {
+                "schema_version": 1,
+                "job_id": f"finance-ai:{'a' * 64}",
+                "idempotency_key": "a" * 64,
+                "operation_code": "FINANCE_AI_PROPOSAL",
+                "agent_provider": "CODEX_SUBSCRIPTION",
+                "policy_id": "classify-unresolved",
+                "policy_class": "NORMAL",
+                "policy_sha256": "b" * 64,
+                "config_sha256": "c" * 64,
+                "output_schema_sha256": "d" * 64,
+                "unresolved": [{
+                    "transaction_id": "actual:fixture:1",
+                    "allowed_fields": ["vendor"],
+                    "allowed_values": {"vendor": ["Carrefour"]},
+                    "redacted_context": {"merchant_raw": "Carrefour"},
+                }],
+            }
+            jsonschema.validate(handoff_fixture, handoff)
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(
+                    {**handoff_fixture, "email_evidence": "forbidden"},
+                    handoff,
+                )
             base = {
                 "schema_version": 1,
                 "job_id": f"finance-ai:{'a' * 64}",
@@ -422,7 +490,7 @@ class N8nWorkflowTests(unittest.TestCase):
                 "output_schema_sha256": "d" * 64,
                 "runner_receipt_id": "receipt-1",
                 "runner_model": "gpt-5.6-luna",
-                "runner_reasoning_effort": "max",
+                "runner_reasoning_effort": "xhigh",
                 "auth_mode": "CHATGPT_SUBSCRIPTION",
             }
             typed_values = {
@@ -457,17 +525,6 @@ class N8nWorkflowTests(unittest.TestCase):
                         "reason_code": "TYPE_MISMATCH",
                     }],
                 }, proposal)
-            claude = {
-                **base,
-                "agent_provider": "CLAUDE_SUBSCRIPTION",
-                "runner_model": "claude-sonnet-4-6",
-                "runner_reasoning_effort": "default",
-                "auth_mode": "CLAUDE_SUBSCRIPTION",
-                "proposals": [],
-            }
-            jsonschema.validate(claude, proposal)
-            with self.assertRaises(jsonschema.ValidationError):
-                jsonschema.validate({**claude, "auth_mode": "CHATGPT_SUBSCRIPTION"}, proposal)
         proposal_item = proposal["properties"]["proposals"]["items"]
         self.assertIn("value", proposal_item["required"])
         self.assertNotIn("value_json", json.dumps(proposal_item))
@@ -476,12 +533,20 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertIn("allowed_values", unresolved["required"])
         self.assertEqual(unresolved["properties"]["allowed_values"]["maxProperties"], 10)
         self.assertEqual(
-            set(proposal["properties"]["auth_mode"]["enum"]),
-            {"CHATGPT_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
+            proposal["properties"]["auth_mode"]["enum"],
+            ["CHATGPT_SUBSCRIPTION"],
         )
         self.assertEqual(
-            set(handoff["properties"]["agent_provider"]["enum"]),
-            {"CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"},
+            proposal["properties"]["runner_reasoning_effort"]["enum"],
+            ["xhigh"],
+        )
+        self.assertEqual(
+            proposal["properties"]["runner_model"]["enum"],
+            ["gpt-5.6-luna", "gpt-5.6-sol"],
+        )
+        self.assertEqual(
+            handoff["properties"]["agent_provider"]["enum"],
+            ["CODEX_SUBSCRIPTION"],
         )
 
     def test_ai_workflow_derives_profile_enforces_domains_and_omits_internal_hash(self) -> None:
@@ -501,11 +566,18 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertIn("Proposal outside configured domain", response)
         self.assertIn("Duplicate proposal field", response)
         self.assertIn("Agent proposal envelope mismatch", response)
-        self.assertIn("CLAUDE_SUBSCRIPTION", response)
-        self.assertIn("claude-sonnet-4-6", response)
-        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", response)
+        self.assertNotIn("'default'", response)
         handoff_code = nodes["Build Idempotent Agent Handoff"]["parameters"]["jsCode"]
         self.assertIn("agent_provider: request.agent_provider", handoff_code)
+        self.assertIn("request.agent_provider !== 'CODEX_SUBSCRIPTION'", handoff_code)
+        self.assertEqual(
+            self.workflow("09-ai-proposal.json")["meta"]["supportedProviders"],
+            ["CODEX_SUBSCRIPTION"],
+        )
+        self.assertEqual(
+            self.workflow("09-ai-proposal.json")["meta"]["providerBranchesEnabled"],
+            ["CODEX_SUBSCRIPTION"],
+        )
         adapter = nodes["Invoke Subscription Agent Adapter"]
         self.assertEqual(adapter["type"], "n8n-nodes-base.executeWorkflow")
         self.assertEqual(
@@ -717,11 +789,19 @@ class N8nWorkflowTests(unittest.TestCase):
 
     def test_mcp_facade_dispatch_is_durably_audited_and_read_back(self) -> None:
         facade = self.nodes("15-finance-mcp-facade.json")
-        for name in ("finance.status", "artifact.submit_reviewed", "document.request"):
+        for name in ("finance_status", "artifact_submit_reviewed", "document_request"):
             params = facade[name]["parameters"]
             self.assertEqual(params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010")
             self.assertIn("_mcp_request_id", params["workflowInputs"]["value"])
         nodes = self.nodes("10-finance-operations-status.json")
+        branches = nodes["Route Audited MCP Operation"]["parameters"]["rules"]["values"]
+        self.assertEqual(
+            [
+                branch["conditions"]["conditions"][0]["rightValue"]
+                for branch in branches
+            ],
+            ["finance_status", "artifact_submit_reviewed", "document_request"],
+        )
         for name in (
             "Upsert ACCEPTED MCP Request", "Read Back ACCEPTED MCP Request",
             "Upsert Terminal MCP Request", "Read Back Terminal MCP Request",
@@ -808,7 +888,7 @@ class N8nWorkflowTests(unittest.TestCase):
                 "expected_exit": 0,
                 "policy_id": "classify-unresolved",
                 "expected_model": "gpt-5.6-luna",
-                "expected_reasoning_effort": "max",
+                "expected_reasoning_effort": "xhigh",
                 "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
                 "finance_writes": 0,
             },
@@ -905,13 +985,33 @@ class N8nWorkflowTests(unittest.TestCase):
             "@n8n/n8n-nodes-langchain.mcpTrigger",
         }
         grouped_workflows = 0
+        group_ids: set[str] = set()
         for filename, workflow in self.workflows.items():
             by_id = {node["id"]: node for node in workflow["nodes"]}
             groups = workflow.get("nodeGroups", [])
             grouped_workflows += bool(groups)
             seen: set[str] = set()
-            for group in groups:
-                self.assertEqual(set(group), {"name", "nodeIds", "description"})
+            for group_index, group in enumerate(groups):
+                self.assertEqual(set(group), {"id", "name", "nodeIds", "description"})
+                self.assertTrue(group["id"])
+                parsed_group_id = uuid.UUID(group["id"])
+                self.assertEqual(parsed_group_id.version, 5)
+                self.assertEqual(str(parsed_group_id), group["id"])
+                group_id_source = json.dumps(
+                    {
+                        "workflowId": workflow["id"],
+                        "groupIndex": group_index,
+                        "nodeIds": group["nodeIds"],
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                self.assertEqual(
+                    group["id"],
+                    str(uuid.uuid5(uuid.NAMESPACE_URL, group_id_source)),
+                )
+                self.assertNotIn(group["id"], group_ids, f"duplicate canvas group ID {filename}")
+                group_ids.add(group["id"])
                 self.assertGreaterEqual(len(group["nodeIds"]), 2)
                 self.assertTrue(group["description"].startswith("Finance stage"))
                 for node_id in group["nodeIds"]:
@@ -920,6 +1020,7 @@ class N8nWorkflowTests(unittest.TestCase):
                     self.assertNotIn(node_id, seen, f"duplicate canvas group membership {filename}")
                     seen.add(node_id)
         self.assertGreaterEqual(grouped_workflows, 15)
+        self.assertTrue(self.workflow("21-subscription-agent-adapter.json")["nodeGroups"])
 
     def test_workflow_folder_manifest_is_complete_and_post_import_guarded(self) -> None:
         contract = load_json(N8N / "workflow-folders.json")
@@ -1034,12 +1135,19 @@ class N8nWorkflowTests(unittest.TestCase):
         lock = load_json(N8N / "community-node-lock.json")
         self.assertEqual(
             {(row["package"], row["version"]) for row in lock["packages"]},
-            {
-                ("n8n-nodes-prodex", "0.5.1"),
-                ("@ggomez91npm/n8n-nodes-claude-code", "0.8.0"),
-            },
+            {("n8n-nodes-prodex", "0.5.1")},
         )
+        workflow = self.workflow("21-subscription-agent-adapter.json")
         nodes = self.nodes("21-subscription-agent-adapter.json")
+        executable_nodes = [
+            node for node in workflow["nodes"]
+            if node["type"] != "n8n-nodes-base.stickyNote"
+        ]
+        self.assertEqual(
+            [node["id"] for node in executable_nodes],
+            ["21001", "21002", "21003", "21005", "21007"],
+        )
+        self.assertEqual(len(workflow["nodes"]), 6)
         codex = nodes["Run Codex Subscription Provider"]
         self.assertEqual((codex["type"], codex["typeVersion"]), ("n8n-nodes-prodex.prodex", 2))
         self.assertEqual(
@@ -1057,15 +1165,6 @@ class N8nWorkflowTests(unittest.TestCase):
             set(codex["parameters"]["options"]),
             {"outputSchema", "streamProgress", "timeoutSeconds"},
         )
-        self.assertTrue(codex["parameters"]["options"]["outputSchema"])
-        claude = nodes["Run Claude Subscription Provider"]
-        self.assertEqual(
-            (claude["type"], claude["typeVersion"]),
-            ("@ggomez91npm/n8n-nodes-claude-code.claude", 1),
-        )
-        self.assertEqual(claude["parameters"]["responseFormat"], "json")
-        self.assertFalse(claude["parameters"]["options"]["useCache"])
-        self.assertEqual(claude["parameters"]["model"], "={{ $json.provider_model }}")
         proposal_schema = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         self.assertEqual(
             json.loads(codex["parameters"]["options"]["outputSchema"]),
@@ -1075,41 +1174,60 @@ class N8nWorkflowTests(unittest.TestCase):
             row["name"]: row["value"]
             for row in nodes["Subscription Provider Parameters"]["parameters"]["assignments"]["assignments"]
         }
+        self.assertEqual(
+            set(assignments),
+            {
+                "adapter_contract", "codex_package", "codex_normal_model",
+                "codex_normal_reasoning_effort", "codex_exception_model",
+                "codex_exception_reasoning_effort", "codex_auth_mode",
+                "proposal_output_schema",
+            },
+        )
+        self.assertEqual(assignments["codex_package"], "n8n-nodes-prodex@0.5.1")
+        self.assertEqual(assignments["codex_normal_reasoning_effort"], "xhigh")
+        self.assertEqual(assignments["codex_exception_reasoning_effort"], "xhigh")
         self.assertEqual(json.loads(assignments["proposal_output_schema"]), proposal_schema)
         build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"]["jsCode"]
         for forbidden in ("command", "working_directory", "sandbox", "prompt"):
             self.assertIn(forbidden, build)
+        self.assertIn("job.agent_provider !== 'CODEX_SUBSCRIPTION'", build)
         for expected in (
-            "CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION", "provider_model",
-            "provider_reasoning_effort", "provider_auth_mode", "Output JSON Schema",
+            "provider_model", "provider_reasoning_effort", "provider_auth_mode",
+            "Output JSON Schema",
         ):
             self.assertIn(expected, build)
-        validator_name = "Validate Claude Proposal Schema and Normalize Provider Output"
-        normalizer = nodes[validator_name]["parameters"]["jsCode"]
+        normalizer = nodes["Normalize ProDex Provider Output"]["parameters"]["jsCode"]
         self.assertIn("FINANCE_AI_SCHEMA_V1", normalizer)
-        claude_targets = self.workflow("21-subscription-agent-adapter.json")["connections"][
-            "Run Claude Subscription Provider"
-        ]["main"]
-        self.assertEqual(claude_targets[0][0]["node"], validator_name)
         for expected in (
             "runner_model: invocation.provider_model",
             "runner_reasoning_effort: invocation.provider_reasoning_effort",
             "auth_mode: invocation.provider_auth_mode",
         ):
             self.assertIn(expected, normalizer)
-        adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
-        self.assertNotIn("CLAUDE_SUBSCRIPTION_RUNNER_NOT_ACTIVATED", adapter_json)
         self.assertEqual(
-            self.workflow("21-subscription-agent-adapter.json")["meta"]["providerBranchesEnabled"],
-            ["CODEX_SUBSCRIPTION", "CLAUDE_SUBSCRIPTION"],
+            workflow["connections"],
+            {
+                "Schema-Bound Proposal Job": {
+                    "main": [[{"node": "Subscription Provider Parameters", "type": "main", "index": 0}]],
+                },
+                "Subscription Provider Parameters": {
+                    "main": [[{"node": "Validate and Build Fixed Provider Invocation", "type": "main", "index": 0}]],
+                },
+                "Validate and Build Fixed Provider Invocation": {
+                    "main": [[{"node": "Run Codex Subscription Provider", "type": "main", "index": 0}]],
+                },
+                "Run Codex Subscription Provider": {
+                    "main": [[{"node": "Normalize ProDex Provider Output", "type": "main", "index": 0}]],
+                },
+            },
         )
-        route = self.workflow("21-subscription-agent-adapter.json")["connections"]["Provider Route"]["main"]
+        self.assertEqual(len(workflow["nodeGroups"]), 1)
         self.assertEqual(
-            [branch[0]["node"] for branch in route[:2]],
-            ["Run Codex Subscription Provider", "Run Claude Subscription Provider"],
+            workflow["nodeGroups"][0]["nodeIds"],
+            ["21002", "21003", "21005", "21007"],
         )
-        self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
-        self.assertIn("gpt-5.6-sol", json.dumps(nodes["Subscription Provider Parameters"]))
+        self.assertEqual(workflow["meta"]["supportedProviders"], ["CODEX_SUBSCRIPTION"])
+        self.assertEqual(workflow["meta"]["providerBranchesEnabled"], ["CODEX_SUBSCRIPTION"])
 
     def test_custom_node_registry_uses_exact_full_types_and_versions(self) -> None:
         contract = self.registry["custom_nodes"]

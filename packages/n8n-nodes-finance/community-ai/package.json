@@ -4,8 +4,6 @@
   "private": true,
   "description": "Exact disposable runtime closure for reviewed subscription-backed n8n community nodes.",
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.235",
-    "@ggomez91npm/n8n-nodes-claude-code": "0.8.0",
     "n8n-nodes-prodex": "0.5.1"
   },
   "overrides": {

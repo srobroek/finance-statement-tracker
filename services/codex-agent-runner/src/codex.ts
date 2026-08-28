@@ -111,7 +111,7 @@ function buildPrompt(request: ProposalRequest, resolved: ResolvedPolicy, receipt
     "You are a bounded finance proposal engine. Return only the JSON object required by the supplied output schema.",
     "Never change source facts, amounts, dates, direction, transaction topic, deduplication identity, reconciliation state, or cashback arithmetic.",
     "Propose at most one value for each requested transaction_id and allowed field. Omit uncertain proposals. Do not add fields or prose.",
-    "For every proposal, put the proposed value in value_json as canonical JSON text (for example, a string is quoted JSON, a boolean is true/false, and arrays/objects are JSON). Use an empty reason_code when no reason code applies.",
+    "For every proposal, put the proposed JSON value directly in value; do not JSON-encode it as text. Use an empty reason_code when no reason code applies.",
     `Policy instruction: ${resolved.policy.instruction}`,
     `The response envelope must exactly equal: ${JSON.stringify(envelope)}`,
     `Proposal input: ${JSON.stringify(request.unresolved)}`,

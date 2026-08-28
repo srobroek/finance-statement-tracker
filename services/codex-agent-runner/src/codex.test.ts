@@ -24,7 +24,7 @@ test("Codex arguments are fixed, ephemeral, read-only, and schema constrained", 
   assert.deepEqual(luna, [
     "exec", "--ephemeral", "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
     "--disable", "code_mode", "--disable", "code_mode_host", "--sandbox", "read-only", "--model", "gpt-5.6-luna",
-    "-c", "model_reasoning_effort=\"max\"", "--output-schema", "/schema.json",
+    "-c", "model_reasoning_effort=\"xhigh\"", "--output-schema", "/schema.json",
     "--output-last-message", "/tmp/final.json", "--json", "-",
   ]);
   const sol = buildCodexExecArgs(resolved("SOL_XHIGH"), { outputSchemaPath: "/schema.json" }, "/tmp/final.json");

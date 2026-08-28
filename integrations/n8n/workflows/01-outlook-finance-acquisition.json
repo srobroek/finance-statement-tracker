@@ -1113,6 +1113,7 @@
   },
   "nodeGroups": [
     {
+      "id": "929e36a1-ab0b-5c18-8f64-b17efcb2de23",
       "name": "Stage 1: Acquisition Parameters to Close Microsoft Graph Circuit",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000001-config",
@@ -1126,6 +1127,7 @@
       "description": "Finance stage 1. Input starts at Acquisition Parameters; verified output leaves through Close Microsoft Graph Circuit."
     },
     {
+      "id": "e13fe66f-a571-5ec5-a908-51f49ebc4724",
       "name": "Stage 2: Exact Sender Subject and Window Filter to Download Archived Original Readback",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000105",
@@ -1140,6 +1142,7 @@
       "description": "Finance stage 2. Input starts at Exact Sender Subject and Window Filter; verified output leaves through Download Archived Original Readback."
     },
     {
+      "id": "1e508381-bf58-5bc5-acd2-a085c37c87d3",
       "name": "Stage 3: SHA-256 Archived Original Readback to Read Back Archive Receipt",
       "nodeIds": [
         "10119",
@@ -1150,6 +1153,7 @@
       "description": "Finance stage 3. Input starts at SHA-256 Archived Original Readback; verified output leaves through Read Back Archive Receipt."
     },
     {
+      "id": "ea1d0ef7-fe78-5e73-9dae-3dada6c0610d",
       "name": "Stage 3: Build Original Email Evidence to Archive Email Evidence in OneDrive",
       "nodeIds": [
         "10121",
@@ -1160,6 +1164,7 @@
       "description": "Finance stage 3. Input starts at Build Original Email Evidence; verified output leaves through Archive Email Evidence in OneDrive."
     },
     {
+      "id": "17b7be50-15f1-5684-9f55-89c23621b25e",
       "name": "Stage 4: Download Email Evidence Readback to Record Email PDF Render Requirement",
       "nodeIds": [
         "10125",
