@@ -76,7 +76,24 @@ class CashbackWorkflowReleaseTests(unittest.TestCase):
             self.deploy,
         )
         self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', self.deploy)
-        self.assertIn('sudo docker --config "$auth_dir" pull "$IMAGE_REF"', self.deploy)
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '            docker pull "$IMAGE_REF"',
+                ]
+            ),
+            self.deploy,
+        )
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '              docker logout ghcr.io >/dev/null 2>&1 || true',
+                ]
+            ),
+            self.deploy,
+        )
         self.assertIn('image="$(sudo docker inspect finance-cashback-control --format \'{{.Config.Image}}\')"', self.deploy)
         self.assertIn('test "$image" = "$IMAGE_REF"', self.deploy)
         self.assertIn('test "$resolved" = "$IMAGE_REF"', self.deploy)

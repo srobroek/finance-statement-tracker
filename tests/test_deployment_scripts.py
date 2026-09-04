@@ -760,8 +760,33 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', deploy)
         self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
-        self.assertIn('sudo docker --config "$auth_dir" pull "$IMAGE_REF"', deploy)
-        self.assertIn('sudo docker --config "$auth_dir" login', deploy)
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '            docker pull "$IMAGE_REF"',
+                ]
+            ),
+            deploy,
+        )
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '            docker login',
+                ]
+            ),
+            deploy,
+        )
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '              docker logout ghcr.io >/dev/null 2>&1 || true',
+                ]
+            ),
+            deploy,
+        )
         self.assertIn('trap cleanup_auth EXIT', deploy)
         self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
         self.assertIn("{{range .RepoDigests}}{{println .}}{{end}}", deploy)

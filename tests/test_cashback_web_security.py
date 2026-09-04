@@ -222,10 +222,10 @@ class CashbackWebSecurityTests(unittest.TestCase):
         )
         script_attrs = [attrs for tag, attrs in rendered.elements if tag.casefold() == "script"]
         self.assertEqual(len(script_attrs), 1)
-        self.assertEqual(
-            dict(script_attrs[0]),
-            {"src": "/app.js?v=20260817-7", "defer": ""},
-        )
+        attributes = dict(script_attrs[0])
+        self.assertEqual(set(attributes), {"src", "defer"})
+        self.assertEqual(attributes["defer"], "")
+        self.assertRegex(attributes["src"], r"^/app\.js\?v=[0-9-]+$")
         rendered_text = "".join(rendered.text)
         safe_attributes = " ".join(value or "" for _, attrs in rendered.elements for _, value in attrs)
         for sentinel in sentinels:

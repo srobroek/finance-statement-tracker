@@ -137,6 +137,16 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("finance extension registration verified: 7 nodes, 3 credentials", workflow)
         self.assertIn("--entrypoint node", workflow)
         self.assertIn('-v "$state_dir:/home/node/.n8n"', workflow)
+        self.assertIn("cleanup_state_dir()", workflow)
+        self.assertIn("trap cleanup_state_dir EXIT", workflow)
+        self.assertIn("--entrypoint sh", workflow)
+        self.assertIn("rm /home/node/.n8n/nodes/node_modules/n8n-nodes-finance", workflow)
+        self.assertIn(
+            "FINANCE_EXTENSION_MUTABLE_PATH_REJECTED: expected absent path or exact symlink",
+            workflow,
+        )
+        self.assertIn('sudo rm -rf -- "$state_dir"', workflow)
+        self.assertNotIn('rm "$state_dir/nodes/node_modules/n8n-nodes-finance"', workflow)
         self.assertLess(workflow.index(first_start), workflow.index(registration))
 
     def test_ci_image_smoke_imports_prodex_sdk_from_n8n_process_context(self):

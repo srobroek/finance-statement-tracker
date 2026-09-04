@@ -292,15 +292,18 @@ jobs:
           rm -rf -- "$auth_dir"
           install -d -m 0700 "$auth_dir"
           cleanup_auth() {
-            sudo docker --config "$auth_dir" logout ghcr.io >/dev/null 2>&1 || true
+            sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+              docker logout ghcr.io >/dev/null 2>&1 || true
             rm -rf -- "$auth_dir"
           }
           trap cleanup_auth EXIT
-          printf '%s' "$GHCR_TOKEN" | sudo docker --config "$auth_dir" login \
+          printf '%s' "$GHCR_TOKEN" | sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+            docker login \
             ghcr.io \
             --username "${{ github.actor }}" \
             --password-stdin
-          sudo docker --config "$auth_dir" pull "$IMAGE_REF"
+          sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+            docker pull "$IMAGE_REF"
           sudo install -m 0644 deploy/cashback/compose.yaml /opt/stacks/finance-cashback/compose.yaml
           cd /opt/stacks/finance-cashback
           # This project owns only cashback; it cannot touch Actual or its
