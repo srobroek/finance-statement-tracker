@@ -137,9 +137,9 @@ Nodemailer 9.0.1 replacement, and finance/community extensions in the
 same build, so CI needs no separate private platform-image package permission.
 The signed Alpine package versions, Nodemailer tarball hash, exact replaced pnpm
 path, historical reviewed recipe, and executable SMTP/security smoke test are
-recorded in `packages/n8n-nodes-finance/base-image-provenance.json`. The Alpine
-packages are fetched in an immutable matching builder and installed with a
-temporary static `apk`; the package manager is not retained in the runtime.
+recorded in `packages/n8n-nodes-finance/base-image-provenance.json`. A temporary
+static `apk` and its trust keys come from the immutable matching builder; it
+installs the exact signed packages into the runtime and is then removed.
 The JavaScript overlay smoke compiles an AJV schema through fast-uri and parses
 a representative Snowflake connection profile while checking TOML's prototype
 isolation and malicious nesting limit.

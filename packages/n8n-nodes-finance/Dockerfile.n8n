@@ -54,25 +54,14 @@ RUN node /tmp/javascript-security-overlay-smoke.cjs \
       /tmp/javascript-security-overlay/toml \
     && npm cache clean --force
 
-# The official n8n runtime deliberately omits apk-tools. Fetch Alpine-signed,
-# exact-version fixes in a matching Alpine 3.24 builder and carry only the APKs
-# plus the temporary static installer into the runtime stage.
+# The official n8n runtime deliberately omits apk-tools. Carry the static
+# installer and trust keys from the immutable matching Alpine 3.24 builder;
+# the runtime stage installs only exact-version, repository-signed fixes.
 FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS alpine-security-overlay
 
 USER root
-RUN apk add --no-cache apk-tools-static \
+RUN apk add --no-cache apk-tools-static=3.0.8-r0 \
     && mkdir -p /tmp/security-apks \
-    && apk --no-cache fetch --output /tmp/security-apks \
-      libcrypto3=3.5.8-r0 \
-      libssl3=3.5.8-r0 \
-      libexpat=2.8.4-r0 \
-      openssh=10.3_p1-r1 \
-      openssh-client-common=10.3_p1-r1 \
-      openssh-client-default=10.3_p1-r1 \
-      openssh-keygen=10.3_p1-r1 \
-      openssh-server=10.3_p1-r1 \
-      openssh-server-common=10.3_p1-r1 \
-      openssh-sftp-server=10.3_p1-r1 \
     && cp /sbin/apk.static /tmp/security-apks/apk.static \
     && cp -R /etc/apk/keys /tmp/security-apks/keys
 
@@ -89,7 +78,19 @@ LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-state
 
 USER root
 COPY --from=alpine-security-overlay /tmp/security-apks /tmp/security-apks
-RUN /tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache --no-network /tmp/security-apks/*.apk \
+RUN case "$(cat /etc/alpine-release)" in 3.24.*) ;; *) echo 'FINANCE_ALPINE_RELEASE_MISMATCH' >&2; exit 1 ;; esac \
+    && /tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache \
+      --repository https://dl-cdn.alpinelinux.org/alpine/v3.24/main \
+      libcrypto3=3.5.8-r0 \
+      libssl3=3.5.8-r0 \
+      libexpat=2.8.4-r0 \
+      openssh=10.3_p1-r1 \
+      openssh-client-common=10.3_p1-r1 \
+      openssh-client-default=10.3_p1-r1 \
+      openssh-keygen=10.3_p1-r1 \
+      openssh-server=10.3_p1-r1 \
+      openssh-server-common=10.3_p1-r1 \
+      openssh-sftp-server=10.3_p1-r1 \
     && test "$(/tmp/security-apks/apk.static info -v libcrypto3)" = "libcrypto3-3.5.8-r0" \
     && test "$(/tmp/security-apks/apk.static info -v libssl3)" = "libssl3-3.5.8-r0" \
     && test "$(/tmp/security-apks/apk.static info -v libexpat)" = "libexpat-2.8.4-r0" \

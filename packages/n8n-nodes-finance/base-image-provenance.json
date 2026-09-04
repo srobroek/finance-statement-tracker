@@ -7,6 +7,7 @@
   "os_security_overlay": {
     "distribution": "Alpine Linux 3.24",
     "builder_image": "public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43",
+    "installer": "apk-tools-static=3.0.8-r0",
     "repository": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main",
     "verification": "Alpine repository signature via apk.static",
     "packages": {

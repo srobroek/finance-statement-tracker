@@ -80,17 +80,19 @@ class N8nCustomImageTests(unittest.TestCase):
             overlay["builder_image"],
             "public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43",
         )
+        self.assertEqual(overlay["installer"], "apk-tools-static=3.0.8-r0")
         self.assertEqual(overlay["repository"], "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
         self.assertEqual(overlay["verification"], "Alpine repository signature via apk.static")
         self.assertEqual(overlay["packages"], ALPINE_SECURITY_PACKAGES)
         self.assertIn("AS alpine-security-overlay", dockerfile)
-        self.assertIn("apk add --no-cache apk-tools-static", dockerfile)
-        self.assertIn("apk --no-cache fetch --output /tmp/security-apks", dockerfile)
+        self.assertIn("apk add --no-cache apk-tools-static=3.0.8-r0", dockerfile)
         self.assertIn("cp -R /etc/apk/keys /tmp/security-apks/keys", dockerfile)
         self.assertIn(
-            "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache --no-network",
+            "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache",
             dockerfile,
         )
+        self.assertIn("--repository https://dl-cdn.alpinelinux.org/alpine/v3.24/main", dockerfile)
+        self.assertIn("FINANCE_ALPINE_RELEASE_MISMATCH", dockerfile)
         self.assertNotIn("--allow-untrusted", dockerfile)
         for package, version in ALPINE_SECURITY_PACKAGES.items():
             self.assertIn(f"{package}={version}", dockerfile)
