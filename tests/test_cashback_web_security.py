@@ -243,23 +243,36 @@ class CashbackWebSecurityTests(unittest.TestCase):
         self.assertIsNotNone(browser)
         try:
             with tempfile.TemporaryDirectory(prefix="cashback-web-chrome-") as profile:
-                result = subprocess.run(
-                    [
-                        browser,
-                        "--headless=new",
-                        "--no-sandbox",
-                        "--disable-gpu",
-                        "--disable-dev-shm-usage",
-                        f"--user-data-dir={profile}",
-                        "--dump-dom",
-                        "--virtual-time-budget=2500",
-                        f"http://127.0.0.1:{server.server_port}/index.html?fixture={mode}",
-                    ],
-                    check=False,
-                    capture_output=True,
+                command = [
+                    browser,
+                    "--headless=new",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-extensions",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    f"--user-data-dir={profile}",
+                    "--dump-dom",
+                    "--virtual-time-budget=2500",
+                    f"http://127.0.0.1:{server.server_port}/index.html?fixture={mode}",
+                ]
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
-                    timeout=15,
                 )
+                try:
+                    stdout, stderr = process.communicate(timeout=30)
+                except subprocess.TimeoutExpired as error:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    detail = stderr.strip() or "no browser diagnostics"
+                    raise AssertionError(f"Chrome did not finish the DOM dump: {detail}") from error
+                result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
             self.assertEqual(result.returncode, 0, result.stderr)
             return result.stdout
         finally:

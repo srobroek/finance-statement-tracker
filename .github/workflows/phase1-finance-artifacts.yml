@@ -59,17 +59,41 @@ jobs:
           GHCR_USER: ${{ github.actor }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build exact custom n8n image
+        id: build_custom_image
         run: docker build --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}" --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
       - name: Smoke custom node image
         run: |
+          echo "custom smoke checkpoint: inspect image and version"
           test "$(docker image inspect finance-n8n:${{ github.sha }} --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "${{ github.sha }}"
           test "$(docker run --rm --entrypoint n8n finance-n8n:${{ github.sha }} --version)" = "2.36.2"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const root='/opt/finance-n8n/custom-extensions/n8n-nodes-finance'; const p=require(root+'/package.json'); if(p.version!=='0.1.0'||process.env.N8N_CUSTOM_EXTENSIONS!==undefined) process.exit(1); for(const f of ['ActualBudget/ActualBudget.node.js','FinancePdf/FinancePdf.node.js','FinanceRules/FinanceRules.node.js','FinanceStatement/FinanceStatement.node.js']) require(root+'/dist/nodes/'+f); for(const f of ['ActualBudgetApi.credentials.js','FinanceStatementPassword.credentials.js']) require(root+'/dist/credentials/'+f);"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} --input-type=module -e "if (process.cwd() !== '/home/node') process.exit(1); import { Codex } from '@openai/codex-sdk'; if (typeof Codex !== 'function') process.exit(1);"
-          if docker run --rm --user root --entrypoint sh finance-n8n:${{ github.sha }} -c "rm /home/node/node_modules && ln -s /tmp /home/node/node_modules && /opt/finance-n8n/finance-entrypoint.sh --version"; then
-            echo "Mutated ProDex SDK resolution path unexpectedly passed startup validation" >&2
-            exit 1
-          fi
+          echo "custom smoke checkpoint: reclaim builder cache"
+          docker image inspect finance-n8n:${{ github.sha }} --format 'image size={{.Size}} bytes'
+          df -h / "$RUNNER_TEMP"
+          docker system df
+          docker builder prune --all --force
+          df -h / "$RUNNER_TEMP"
+          docker system df
+          assert_rejected() {
+            expected_message="$1"
+            shift
+            set +e
+            output="$("$@" 2>&1)"
+            status=$?
+            set -e
+            if [ "$status" -ne 1 ]; then
+              echo "Expected rejection exit code 1, got $status" >&2
+              printf '%s\n' "$output" >&2
+              return 1
+            fi
+            printf '%s\n' "$output" | grep -Fqx "$expected_message"
+          }
+          echo "custom smoke checkpoint: reject mutable ProDex SDK path"
+          assert_rejected \
+            'FINANCE_EXTENSION_MUTABLE_PATH_REJECTED: unexpected symlink target' \
+            docker run --rm --entrypoint sh finance-n8n:${{ github.sha }} \
+            -c 'rm /home/node/node_modules && ln -s /tmp /home/node/node_modules && /opt/finance-n8n/finance-entrypoint.sh --version'
           state_dir="$(mktemp -d)"
           cleanup_state_dir() {
             if [ -n "${state_dir:-}" ]; then
@@ -89,22 +113,23 @@ jobs:
             finance-n8n:${{ github.sha }} \
             /opt/finance-n8n/assert-runtime-registration.cjs export:nodes --output=/tmp/node-types.json | \
             grep -Fx 'finance extension registration verified: 7 nodes, 3 credentials'
-          if docker run --rm -e OPENAI_API_KEY=forbidden -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version; then
-            echo "API-key-bearing community runtime unexpectedly passed" >&2
-            exit 1
-          fi
+          echo "custom smoke checkpoint: reject API-key-bearing community runtime"
+          assert_rejected \
+            'COMMUNITY_AI_API_KEY_FORBIDDEN:OPENAI_API_KEY' \
+            docker run --rm -e OPENAI_API_KEY=forbidden -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
           docker run --rm \
             -v "$state_dir:/home/node/.n8n" \
             --entrypoint sh \
             finance-n8n:${{ github.sha }} \
             -c "rm /home/node/.n8n/nodes/node_modules/n8n-nodes-finance && mkdir /home/node/.n8n/nodes/node_modules/n8n-nodes-finance"
-          if output="$(docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version 2>&1)"; then
-            echo "Mutable finance package substitution unexpectedly passed" >&2
-            exit 1
-          fi
-          printf '%s\n' "$output" | grep -Fqx 'FINANCE_EXTENSION_MUTABLE_PATH_REJECTED: expected absent path or exact symlink'
+          echo "custom smoke checkpoint: reject mutable finance package path"
+          assert_rejected \
+            'FINANCE_EXTENSION_MUTABLE_PATH_REJECTED: expected absent path or exact symlink' \
+            docker run --rm -v "$state_dir:/home/node/.n8n" finance-n8n:${{ github.sha }} --version
+          echo "custom smoke checkpoint: verify nodemailer overlay"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const n=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer'); const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); if(p.version!=='9.0.1'||typeof n.createTransport({jsonTransport:true}).sendMail!=='function') process.exit(1);"
       - name: Scan custom n8n image
+        if: ${{ !cancelled() && steps.build_custom_image.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: finance-n8n:${{ github.sha }}

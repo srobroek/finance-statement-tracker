@@ -1,5 +1,9 @@
 import json
+import hashlib
+import os
 import pathlib
+import subprocess
+import tempfile
 import unittest
 
 
@@ -129,6 +133,9 @@ class N8nCustomImageTests(unittest.TestCase):
         verifier = (ROOT / "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs").read_text(encoding="utf-8")
         self.assertIn("FINANCE_EXTENSION_VERSION_MISMATCH", verifier)
         self.assertIn("FINANCE_EXTENSION_TREE_HASH_MISMATCH", verifier)
+        self.assertIn("HASH_CHUNK_SIZE = 64 * 1024", verifier)
+        self.assertIn("fs.readSync", verifier)
+        self.assertNotIn("fs.readFileSync(absolute)", verifier)
 
     def test_ci_registration_smoke_uses_initialized_persistent_state(self):
         workflow = (ROOT / ".github/workflows/phase1-finance-artifacts.yml").read_text(encoding="utf-8")
@@ -155,7 +162,71 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("process.cwd() !== '/home/node'", workflow)
         self.assertIn("import { Codex } from '@openai/codex-sdk'", workflow)
         self.assertIn("typeof Codex !== 'function'", workflow)
-        self.assertIn("Mutated ProDex SDK resolution path unexpectedly passed startup validation", workflow)
+        self.assertIn("custom smoke checkpoint: reject mutable ProDex SDK path", workflow)
+        self.assertIn("Expected rejection exit code 1, got $status", workflow)
+        self.assertIn("docker builder prune --all --force", workflow)
+        self.assertIn("FINANCE_EXTENSION_MUTABLE_PATH_REJECTED: unexpected symlink target", workflow)
+        self.assertIn("COMMUNITY_AI_API_KEY_FORBIDDEN:OPENAI_API_KEY", workflow)
+        self.assertIn("assert_rejected()", workflow)
+        self.assertIn('if [ "$status" -ne 1 ]; then', workflow)
+        self.assertIn("id: build_custom_image", workflow)
+        self.assertIn("!cancelled() && steps.build_custom_image.outcome == 'success'", workflow)
+
+    def test_bounded_extension_tree_hash_matches_legacy_digest(self):
+        """The streaming implementation must preserve the old tree digest byte-for-byte."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            finance = root / "finance"
+            community = root / "community"
+            (finance / "dist" / "nodes").mkdir(parents=True)
+            (community / "node_modules" / "n8n-nodes-prodex").mkdir(parents=True)
+            (finance / "package.json").write_bytes(b'{"name":"n8n-nodes-finance"}\n')
+            # Cross multiple 64 KiB reads and include every byte value so the
+            # comparison covers binary data rather than just UTF-8 text.
+            (finance / "dist" / "nodes" / "vendor.bin").write_bytes(bytes(range(256)) * 1025)
+            (community / "package.json").write_bytes(b'{"dependencies":{"n8n-nodes-prodex":"0.5.1"}}\n')
+            (community / "node_modules" / "n8n-nodes-prodex" / "package.json").write_bytes(
+                b'{"version":"0.5.1"}\n'
+            )
+            (community / "node_modules" / "n8n-nodes-prodex" / "link-target.txt").write_text(
+                "target\n", encoding="utf-8"
+            )
+            os.symlink("link-target.txt", community / "node_modules" / "n8n-nodes-prodex" / "link.txt")
+
+            def legacy_update(digest, directory, relative=""):
+                for entry in sorted(directory.iterdir(), key=lambda item: item.name):
+                    rel = f"{relative}/{entry.name}" if relative else entry.name
+                    stat = entry.lstat()
+                    if stat.st_mode & 0o170000 == 0o040000:
+                        digest.update(f"d\0{rel}\0".encode())
+                        legacy_update(digest, entry, rel)
+                    elif stat.st_mode & 0o170000 == 0o120000:
+                        digest.update(f"l\0{rel}\0{os.readlink(entry)}\0".encode())
+                    elif stat.st_mode & 0o170000 == 0o100000:
+                        digest.update(f"f\0{rel}\0".encode())
+                        digest.update(entry.read_bytes())
+                        digest.update(b"\0")
+                    else:
+                        self.fail(f"unexpected fixture entry: {entry}")
+
+            expected = hashlib.sha256()
+            expected.update(b"finance\0")
+            legacy_update(expected, finance)
+            expected.update(b"community\0")
+            legacy_update(expected, community)
+            script = ROOT / "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs"
+            observed = subprocess.check_output(
+                [
+                    "node",
+                    "-e",
+                    "const v=require(process.argv[1]); process.stdout.write(v.hashExtensionTrees(process.argv[2], process.argv[3]));",
+                    str(script),
+                    str(finance),
+                    str(community),
+                ],
+                text=True,
+            )
+            self.assertEqual(observed, expected.hexdigest())
 
     def test_community_ai_closure_is_exact_audited_and_hardened(self):
         package = json.loads(
