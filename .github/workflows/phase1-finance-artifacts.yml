@@ -53,10 +53,16 @@ jobs:
           npm ci --omit=dev --ignore-scripts --legacy-peer-deps
           npm audit --omit=dev --audit-level=high
           test "$(node -p "require('./node_modules/n8n-nodes-prodex/package.json').version")" = "0.5.1"
+      - name: Authenticate pinned base image pull
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build exact custom n8n image
-        run: docker build --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
+        run: docker build --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}" --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
       - name: Smoke custom node image
         run: |
+          test "$(docker image inspect finance-n8n:${{ github.sha }} --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "${{ github.sha }}"
           test "$(docker run --rm --entrypoint n8n finance-n8n:${{ github.sha }} --version)" = "2.36.2"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} -e "const root='/opt/finance-n8n/custom-extensions/n8n-nodes-finance'; const p=require(root+'/package.json'); if(p.version!=='0.1.0'||process.env.N8N_CUSTOM_EXTENSIONS!==undefined) process.exit(1); for(const f of ['ActualBudget/ActualBudget.node.js','FinancePdf/FinancePdf.node.js','FinanceRules/FinanceRules.node.js','FinanceStatement/FinanceStatement.node.js']) require(root+'/dist/nodes/'+f); for(const f of ['ActualBudgetApi.credentials.js','FinanceStatementPassword.credentials.js']) require(root+'/dist/credentials/'+f);"
           docker run --rm --entrypoint node finance-n8n:${{ github.sha }} --input-type=module -e "if (process.cwd() !== '/home/node') process.exit(1); import { Codex } from '@openai/codex-sdk'; if (typeof Codex !== 'function') process.exit(1);"
