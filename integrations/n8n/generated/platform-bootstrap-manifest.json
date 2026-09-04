@@ -8,11 +8,11 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "c74a8eb30ed016fff3c6619cf608fdae6e0c468c2ac3405b9101ac3eccf2922a",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "c7ba3a1217252c67be73169ab6ea4a56a21d8e8becd09fe38a39eac70da5c905",
+    "config_version_seed_sha256": "95b8565c71a19f21f033f33e7b4c9629b670e4504e95bb41fdc9504b9ab12b1f",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
-    "application_contract_bundle_sha256": "d618bd4eaa285ef244e8bf231ef434a0e3c02feeec731ef3efdd22bdc467c58a",
+    "application_contract_bundle_sha256": "622fe8b25ea9f1465e755445462d940817465d0fc8c039626d7f78541ef2b92b",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
-    "application_contract_bundle_schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
+    "application_contract_bundle_schema_sha256": "0830e631e6ac2d4b12fc07b73a8e87d0a8e296394d7c6df97227e20ca80c0eb1",
     "data_table_migration_matrix": "integrations/n8n/data-table-migration-matrix.json"
   },
   "native_data_table_create_contract": {
@@ -25,6 +25,475 @@
     "official_docs": "https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.datatable/tables/"
   },
   "table_create_operations": [
+    {
+      "table_name": "finance_archive_receipts",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_archive_receipts",
+        "columns": {
+          "column": [
+            {
+              "name": "archive_receipt_id",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "source_message_id",
+              "type": "string"
+            },
+            {
+              "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_sha256",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_item_id",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_etag",
+              "type": "string"
+            },
+            {
+              "name": "archive_state",
+              "type": "string"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_document_operations",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_document_operations",
+        "columns": {
+          "column": [
+            {
+              "name": "document_id",
+              "type": "string"
+            },
+            {
+              "name": "source_sha256",
+              "type": "string"
+            },
+            {
+              "name": "document_profile",
+              "type": "string"
+            },
+            {
+              "name": "requested_schema_version",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_item_id",
+              "type": "string"
+            },
+            {
+              "name": "source_message_id",
+              "type": "string"
+            },
+            {
+              "name": "source_attachment_id",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "attempt_count",
+              "type": "number"
+            },
+            {
+              "name": "last_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "parser_version",
+              "type": "string"
+            },
+            {
+              "name": "output_sha256",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_detail_redacted",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_mcp_requests",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_mcp_requests",
+        "columns": {
+          "column": [
+            {
+              "name": "request_id",
+              "type": "string"
+            },
+            {
+              "name": "request_sha256",
+              "type": "string"
+            },
+            {
+              "name": "operation_code",
+              "type": "string"
+            },
+            {
+              "name": "caller_subject_hash",
+              "type": "string"
+            },
+            {
+              "name": "target_workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "result_sha256",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_message_redacted",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "created_at",
+              "type": "date"
+            },
+            {
+              "name": "completed_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_pipeline_runs",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_pipeline_runs",
+        "columns": {
+          "column": [
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "trigger_kind",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "receipt_sha256",
+              "type": "string"
+            },
+            {
+              "name": "terminal_readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "started_at",
+              "type": "date"
+            },
+            {
+              "name": "completed_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_reconciliations",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_reconciliations",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "period_key",
+              "type": "string"
+            },
+            {
+              "name": "reconciliation_version",
+              "type": "number"
+            },
+            {
+              "name": "statement_sha256",
+              "type": "string"
+            },
+            {
+              "name": "actual_verification_sha256",
+              "type": "string"
+            },
+            {
+              "name": "cashback_close_id",
+              "type": "string"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "difference_minor",
+              "type": "number"
+            },
+            {
+              "name": "verified_at",
+              "type": "date"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_source_contracts",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_source_contracts",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "config_version",
+              "type": "string"
+            },
+            {
+              "name": "folder_id",
+              "type": "string"
+            },
+            {
+              "name": "senders_json",
+              "type": "string"
+            },
+            {
+              "name": "subjects_json",
+              "type": "string"
+            },
+            {
+              "name": "onedrive_parent_id",
+              "type": "string"
+            },
+            {
+              "name": "manifest_onedrive_parent_id",
+              "type": "string"
+            },
+            {
+              "name": "overlap_seconds",
+              "type": "number"
+            },
+            {
+              "name": "cycle_day",
+              "type": "number"
+            },
+            {
+              "name": "deadline_days",
+              "type": "number"
+            },
+            {
+              "name": "actual_file_id",
+              "type": "string"
+            },
+            {
+              "name": "account_id",
+              "type": "string"
+            },
+            {
+              "name": "card_code",
+              "type": "string"
+            },
+            {
+              "name": "cashback_close_required",
+              "type": "boolean"
+            },
+            {
+              "name": "enabled",
+              "type": "boolean"
+            },
+            {
+              "name": "content_sha256",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "table_name": "finance_source_cursors",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_source_cursors",
+        "columns": {
+          "column": [
+            {
+              "name": "source_code",
+              "type": "string"
+            },
+            {
+              "name": "cursor_value",
+              "type": "date"
+            },
+            {
+              "name": "committed_run_id",
+              "type": "string"
+            },
+            {
+              "name": "run_upper_bound",
+              "type": "date"
+            },
+            {
+              "name": "overlap_seconds",
+              "type": "number"
+            },
+            {
+              "name": "scanned_count",
+              "type": "number"
+            },
+            {
+              "name": "matched_count",
+              "type": "number"
+            },
+            {
+              "name": "cursor_version",
+              "type": "number"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            },
+            {
+              "name": "updated_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
     {
       "table_name": "finance_ingestion_state",
       "parameters": {
@@ -578,7 +1047,7 @@
     "path": "integrations/n8n/generated/application-contract-bundle.json",
     "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
     "schema_version": 1,
-    "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
+    "bundle_content_sha256": "b403bcda8b77b4d5022e4cf0b68bc9caf90dce1dce85a8dcb4e178ab602fdcb5",
     "resolver_order": [
       "W02",
       "W04",
@@ -600,7 +1069,8 @@
   "activation_blockers": [
     "EXACT_IMAGE_IMPORT_REQUIRED",
     "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
-    "SOURCE_MIGRATION_GATE_REQUIRED"
+    "SOURCE_MIGRATION_GATE_REQUIRED",
+    "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED"
   ],
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {
@@ -614,7 +1084,166 @@
     ],
     "readback_operation": "list",
     "readback_required": true,
-    "legacy_table_creation_forbidden": true,
-    "row_seed_writes_forbidden": true
+    "legacy_table_creation_forbidden": false,
+    "legacy_compatibility_tables": [
+      "finance_archive_receipts",
+      "finance_document_operations",
+      "finance_mcp_requests",
+      "finance_pipeline_runs",
+      "finance_reconciliations",
+      "finance_source_contracts",
+      "finance_source_cursors"
+    ],
+    "legacy_tables_not_provisioned": [
+      "finance_execution_failures",
+      "finance_acquisition_receipts",
+      "finance_actual_outbox",
+      "finance_actual_verifications",
+      "finance_agent_jobs",
+      "finance_ai_policy_contracts",
+      "finance_config_versions",
+      "finance_provider_circuits"
+    ],
+    "existing_table_deletion_forbidden": true,
+    "row_seed_writes_forbidden": false
+  },
+  "source_contract_templates": {
+    "table_name": "finance_source_contracts",
+    "rows": [
+      {
+        "source_code": "ADCB_CASHBACK",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[\"estatement@adcb.com\"]",
+        "subjects_json": "[\"ADCB Credit card e-Statement\"]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "ADCB_CASHBACK",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      },
+      {
+        "source_code": "EI_AMAZON",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[\"estatement@emiratesislamic.ae\"]",
+        "subjects_json": "[\"Statement of your Emirates Islamic Credit Card\"]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "EI_AMAZON",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      },
+      {
+        "source_code": "WIO_CREDIT",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[\"communications@email.wio.io\", \"communications@mail.wio.io\"]",
+        "subjects_json": "[\"Your Wio Credit statement for this month\"]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "WIO_CREDIT",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      },
+      {
+        "source_code": "RAK_WORLD",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[]",
+        "subjects_json": "[]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "RAK_WORLD",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      },
+      {
+        "source_code": "SC_PLATINUM_X",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[]",
+        "subjects_json": "[]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "SC_PLATINUM_X",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      },
+      {
+        "source_code": "RAKBANK_CARD_TRANSACTION",
+        "config_version": "template:1",
+        "folder_id": "Inbox/Rakbank",
+        "senders_json": "[\"alerts@rakbank.ae\"]",
+        "subjects_json": "[\"An update on your Card transaction\"]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "RAK_WORLD",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+      },
+      {
+        "source_code": "STANDARD_CHARTERED_CARD_TRANSACTION",
+        "config_version": "template:1",
+        "folder_id": "",
+        "senders_json": "[]",
+        "subjects_json": "[]",
+        "onedrive_parent_id": "",
+        "manifest_onedrive_parent_id": "",
+        "overlap_seconds": 21600,
+        "cycle_day": 0,
+        "deadline_days": 0,
+        "actual_file_id": "",
+        "account_id": "",
+        "card_code": "SC_PLATINUM_X",
+        "cashback_close_required": false,
+        "enabled": false,
+        "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d"
+      }
+    ],
+    "all_disabled": true,
+    "version_prefix": "template:",
+    "deployment_values_required": [
+      "onedrive_parent_id",
+      "manifest_onedrive_parent_id",
+      "actual_file_id",
+      "account_id"
+    ]
   }
 }

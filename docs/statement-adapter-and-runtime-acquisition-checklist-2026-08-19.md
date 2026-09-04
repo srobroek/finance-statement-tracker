@@ -20,7 +20,10 @@ statement.
 The TypeScript package test now requires its packaged issuer profiles to equal
 the `ACTIVE` adapters in `config/statement-sources.json`. A placeholder with an
 adapter name fails the test. This prevents a speculative parser from becoming
-callable merely because a workflow exists.
+callable merely because a workflow exists. `PLACEHOLDER` is an intentional,
+card-scoped interim state: RAKBANK and Standard Chartered statement close and
+finalization remain paused until their first real fixtures pass, while RAK live
+notification cashback and ACTIVE sources such as ADCB continue independently.
 
 ## Evidence required for each missing statement adapter
 
@@ -118,6 +121,9 @@ Until the missing issuer evidence and disposable receipts above exist:
 
 - RAKBANK and Standard Chartered statement workflows remain blocked and cannot
   reconcile or close cashback periods;
+- that block is scoped to those two statement sources and does not block RAK
+  live notification cashback, ADCB historical statement ingestion, or other
+  ACTIVE source workflows;
 - the PDF utility and custom Actual node remain `IMPLEMENTED_NOT_DEPLOYED`; and
 - historical bridge/tooling receipts cannot be relabelled as n8n custom-node
   evidence.

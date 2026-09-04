@@ -5,6 +5,7 @@ on:
     paths:
       - "integrations/n8n/**"
       - "packages/n8n-nodes-finance/**"
+      - "scripts/generate-n8n-bootstrap-runtime-fixture.py"
       - "scripts/run-n8n-disposable-runtime.py"
       - ".github/workflows/n8n-container-validation.yml"
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - "integrations/n8n/**"
       - "packages/n8n-nodes-finance/**"
+      - "scripts/generate-n8n-bootstrap-runtime-fixture.py"
       - "scripts/run-n8n-disposable-runtime.py"
       - ".github/workflows/n8n-container-validation.yml"
   workflow_dispatch:
@@ -49,18 +51,22 @@ jobs:
           DISPOSABLE_ONLY_ACK: DISPOSABLE_ONLY
         run: |
           container="finance-n8n-disposable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          state_volume="${container}-state"
           cleanup() {
+            docker logs "$container" 2>/dev/null || true
             docker rm -f "$container" >/dev/null 2>&1 || true
+            docker volume rm "$state_volume" >/dev/null 2>&1 || true
             rm -rf "$RUNNER_TEMP/n8n-disposable"
           }
           trap cleanup EXIT
+          docker volume create "$state_volume" >/dev/null
           docker run --detach \
             --name "$container" \
             --network none \
             --read-only \
             --entrypoint sleep \
             --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
-            --tmpfs /home/node/.n8n:uid=1000,gid=1000,mode=0700 \
+            --volume "$state_volume:/home/node/.n8n" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --env N8N_ENCRYPTION_KEY=disposable-runtime-only-key-000001 \
             --env N8N_DIAGNOSTICS_ENABLED=false \
@@ -77,3 +83,77 @@ jobs:
           python scripts/run-n8n-disposable-runtime.py \
             --n8n "$wrapper" \
             --runtime-fixture-root /workspace/integrations/n8n/disposable
+
+          python scripts/generate-n8n-bootstrap-runtime-fixture.py
+          docker exec "$container" n8n import:workflow \
+            --input /workspace/runtime/n8n-disposable/19-bootstrap-webhook.json
+          docker exec "$container" n8n publish:workflow \
+            --id 90000000-0000-4000-8000-000000001019
+
+          docker rm -f "$container" >/dev/null
+          docker run --detach \
+            --name "$container" \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
+            --volume "$state_volume:/home/node/.n8n" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --env N8N_ENCRYPTION_KEY=disposable-runtime-only-key-000001 \
+            --env N8N_DIAGNOSTICS_ENABLED=false \
+            --env N8N_VERSION_NOTIFICATIONS_ENABLED=false \
+            --env N8N_RUNNERS_ENABLED=false \
+            "$N8N_IMAGE" start
+
+          docker exec -i "$container" node <<'NODE'
+          const url = 'http://127.0.0.1:5678/webhook/disposable-w19-bootstrap';
+          const expectedTables = [
+            'finance_actual_batches',
+            'finance_ai_reviews',
+            'finance_documents',
+            'finance_ingestion_state',
+          ];
+          const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function executeBootstrap(run) {
+            let response;
+            for (let attempt = 1; attempt <= 180; attempt += 1) {
+              try {
+                response = await fetch(url, {
+                  method: 'POST',
+                  headers: {'content-type': 'application/json'},
+                  body: JSON.stringify({disposable_only: true, run}),
+                });
+                if (response.status !== 404) break;
+              } catch (error) {
+                if (attempt === 180) throw error;
+              }
+              await delay(500);
+            }
+            if (!response || !response.ok) {
+              const body = response ? await response.text() : 'server did not become ready';
+              throw new Error(`W19 bootstrap run ${run} failed: ${response?.status || 0} ${body}`);
+            }
+            const raw = await response.json();
+            const receipt = Array.isArray(raw) ? raw[0] : raw;
+            const tables = [...(receipt.target_tables || [])].sort();
+            if (
+              receipt.schema_version !== 'data-table-migration-receipt-v1' ||
+              receipt.status !== 'SCHEMA_CONTRACT_READY' ||
+              receipt.target_schema_digest !== '655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515' ||
+              JSON.stringify(tables) !== JSON.stringify(expectedTables) ||
+              receipt.runtime_cutover !== false ||
+              receipt.deletion_authorized !== false ||
+              receipt.second_run_noop !== true ||
+              receipt.old_tables_preserved !== true ||
+              receipt.redacted !== true
+            ) throw new Error(`W19 bootstrap run ${run} returned an invalid receipt: ${JSON.stringify(receipt)}`);
+            return receipt;
+          }
+
+          const first = await executeBootstrap(1);
+          const second = await executeBootstrap(2);
+          if (JSON.stringify(first) !== JSON.stringify(second)) {
+            throw new Error('W19 bootstrap receipt changed on the second run');
+          }
+          console.log('W19 server runtime: 11 tables, disabled templates, schema readback, and second run verified');
+          NODE

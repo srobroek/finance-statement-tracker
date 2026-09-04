@@ -43,7 +43,7 @@ Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schem
 
 `finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the n8n Actual node consume only those normalized objects.
 
-The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered remain explicitly non-importing placeholders until real fixtures pass parser and arithmetic tests. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
+The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered are explicit interim, non-importing placeholders pending their first real statement fixtures. Their statement close and finalization paths stay paused until parser and arithmetic tests pass; this card-scoped gap does not block RAK live notification cashback, ADCB history, or other ACTIVE source ingestion. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
 
 `finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
 
@@ -128,14 +128,14 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pen
 
 ### platform-owned procedures
 
-The finance checkout does not own the n8n platform scripts. Use pinned commit [`a3fa5487b250dc46c14ee460a4dc2d34a22c3867`](https://github.com/srobroek/n8n/tree/a3fa5487b250dc46c14ee460a4dc2d34a22c3867).
+The finance checkout does not own the n8n platform scripts. Use [`srobroek/n8n-orchestrator`](https://github.com/srobroek/n8n-orchestrator) for platform procedures. The deployed Dockge stack is `/opt/stacks/finance-n8n`; finance workflows execute in its `n8n` service.
 
-- [`backup.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/backup.sh)
-- [`doctor.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/doctor.sh)
-- [`restore-disposable.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/restore-disposable.sh)
-- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/recover-retained-n8n-key.sh)
-- [`cloudflare-publication.md`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/docs/cloudflare-publication.md)
-- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n/blob/a3fa5487b250dc46c14ee460a4dc2d34a22c3867/scripts/verify-cloudflare-routes.sh)
+- [`backup.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/backup.sh)
+- [`doctor.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/doctor.sh)
+- [`restore-disposable.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/restore-disposable.sh)
+- [`recover-retained-n8n-key.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/recover-retained-n8n-key.sh)
+- [`cloudflare-publication.md`](https://github.com/srobroek/n8n-orchestrator/blob/main/docs/cloudflare-publication.md)
+- [`verify-cloudflare-routes.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/verify-cloudflare-routes.sh)
 
 ## Recreate locally
 
@@ -171,18 +171,11 @@ node writes through `@actual-app/api` only after validation and review gates.
 
 ## Runtime model
 
-The target adapter writes ordinary finance records to Actual Budget through its official Node API. Outlook messages are retrieved by bank-specific scheduled Codex tasks. The companion SQLite store owns each durable mailbox cursor and live cashback state; OneDrive owns evidence originals and its JSON catalogue. Individual notifications update cashback pace, bucket headroom, warnings, and routing recommendations immediately. Each card has an independent statement job that reconciles the live state, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
+The target adapter writes ordinary finance records to Actual Budget through its official Node API. Outlook messages are retrieved by the bank-specific n8n workflows. The companion SQLite store owns each durable mailbox cursor and live cashback state; OneDrive owns evidence originals and its JSON catalogue. Individual notifications update cashback pace, bucket headroom, warnings, and routing recommendations immediately. Each card has an independent statement job that reconciles the live state, finalizes that card's cashback cycle, opens the next configured period, and extracts the actual payment due date.
 
-Four Codex automations are active: a daily RAKBANK live scan at 08:05 plus monthly statement jobs for RAKBANK, Emirates Islamic, and Wio. A separate Standard Chartered live job at 08:25 and its monthly job retain complete activation prompts but are paused until their source contracts are verified. Emirates Islamic, ADCB, and Wio are absent from live scanning; EI is represented as unlimited 6% Amazon cashback with statement-only totals. The ADCB statement task was removed and the former daily aggregate gate is paused. The RAKBANK job resumes from its durable source cursor, so a missed morning run is recovered on the next successful run rather than creating a data gap. Evidence search and full-budget classification run only in monthly statement jobs.
+Production scheduling belongs to n8n. `config/codex-automations.json` and the launcher runbooks under `agents/automations/` are local audit and development contracts, not evidence that production jobs are running. Repository workflows remain inactive and write-disabled until disposable replay, provider authentication, and destination readback pass. See the runtime acceptance boundary above.
 
-The expected schedules, models, statuses, and exact launcher prompts are versioned in `config/codex-automations.json`. The launcher prompts delegate to reusable runbooks under `agents/automations/`, so operational logic is reviewed in Git rather than copied between six local tasks. Audit a Codex installation with:
-
-```powershell
-python -m finance_tracker.cli automation-audit `
-  --manifest .\config\codex-automations.json `
-  --project-root . `
-  --automation-root "$env:USERPROFILE\.codex\automations"
-```
+RAKBANK and Standard Chartered statement sources are interim placeholders pending their first real statements. They do not block active ADCB, Emirates Islamic, or Wio statement ingestion, or the separately configured RAKBANK live notification cashback path. Historical ADCB statements must pass the same archive, parser, duplicate, and Actual readback checks as a new statement; a closed card retains its historical ledger.
 
 The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual and Cashback Control, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails. n8n and its Postgres database use their own stack health checks.
 

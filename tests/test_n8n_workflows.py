@@ -155,9 +155,16 @@ try {{
         node = shutil.which("node")
         self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
         environment = os.environ.copy()
-        ajv_modules = Path("/home/sjors/.cache/typescript/5.9/node_modules")
-        if ajv_modules.is_dir():
-            environment["NODE_PATH"] = str(ajv_modules)
+        # W11 executes the same Ajv-backed validator as the exported n8n code.
+        # Prefer the reviewed package dependency installed by CI, retaining
+        # the workstation cache as a compatibility fallback.
+        ajv_module_roots = [
+            ROOT / "packages/n8n-nodes-finance/node_modules",
+            Path("/home/sjors/.cache/typescript/5.9/node_modules"),
+        ]
+        available_roots = [str(path) for path in ajv_module_roots if (path / "ajv").is_dir()]
+        if available_roots:
+            environment["NODE_PATH"] = os.pathsep.join(available_roots)
         result = subprocess.run(
             [node, "-e", script],
             cwd=ROOT,
@@ -1698,6 +1705,61 @@ try {{
             self.workflow("21-subscription-agent-adapter.json")["id"],
         )
 
+    def test_ai_submitted_readback_matches_the_canonical_table_schema(self) -> None:
+        workflow = self.workflow("09-ai-proposal.json")
+        digest = "a" * 64
+        expected = {
+            "job_id": f"finance-ai:{digest}",
+            "idempotency_key": digest,
+            "policy_id": "classify-unresolved",
+            "policy_sha256": "b" * 64,
+            "config_sha256": "c" * 64,
+            "output_schema_sha256": "d" * 64,
+            "request_sha256": digest,
+        }
+        # finance_ai_reviews intentionally has no job_id column. The transport
+        # job id is deterministically derived from the persisted idempotency key.
+        observed = {key: value for key, value in expected.items() if key != "job_id"}
+        result = self.run_exported_workflow_node(
+            "09-ai-proposal.json",
+            "Compare SUBMITTED Agent Job Readback",
+            observed,
+            {"Build Idempotent Agent Handoff": {"json": expected}},
+        )
+        self.assertTrue(result["ok"], result)
+
+    def test_ai_redacted_context_is_small_useful_and_excludes_identifiers(self) -> None:
+        workflow = self.workflow("09-ai-proposal.json")
+        result = self.run_exported_workflow_node(
+            "09-ai-proposal.json",
+            "Validate Untrusted Proposal Request",
+            {
+                "policy_id": "classify-unresolved",
+                "unresolved": [{
+                    "transaction_id": "actual:fixture:1",
+                    "allowed_fields": ["category"],
+                    "redacted_context": {
+                        "merchant": "  Grocery Store  ",
+                        "currency": "AED",
+                        "source_message_id": "mailbox-secret",
+                        "email": "person@example.test",
+                        "description": "card 4111 1111 1111 1111",
+                    },
+                }],
+            },
+            {},
+        )
+        self.assertTrue(result["ok"], result)
+        context = result["output"][0]["json"]["unresolved"][0]["redacted_context"]
+        self.assertEqual(context, {"merchant": "Grocery Store", "currency": "AED"})
+
+        adapter = self.nodes("21-subscription-agent-adapter.json")[
+            "Validate and Build Fixed Provider Invocation"
+        ]["parameters"]["jsCode"]
+        request_source = adapter[adapter.index("const request = {"):adapter.index("const prompt = [")]
+        for private_field in ("archive_sha256", "evidence_replay_keys", "archive_identity_keys", "archive_item_ids"):
+            self.assertNotIn(f"{private_field}:", request_source)
+
     def test_ai_policy_targets_are_complete_and_profile_owned(self) -> None:
         policies = load_json(ROOT / "config" / "ai-policies.json")["policies"]
         target_contract = load_json(N8N / "ai-policy-targets.json")
@@ -1739,8 +1801,13 @@ try {{
         self.assertEqual(manifest["n8n_version"], "2.36.2")
         self.assertEqual(set(manifest["execution_evidence"].values()), {False})
         self.assertIn("SOURCE_MIGRATION_GATE_REQUIRED", manifest["activation_blockers"])
+        self.assertIn("LEGACY_SOURCE_ROWS_RESTORE_REQUIRED", manifest["activation_blockers"])
         self.assertIn(
             "SOURCE_MIGRATION_GATE_REQUIRED",
+            self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
+        )
+        self.assertIn(
+            "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED",
             self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
         )
         self.assertEqual(
@@ -1979,6 +2046,19 @@ try {{
             ]
             for target, schema in matrix["target_schemas"].items()
         }
+        referenced_legacy = {
+            table["source_table"]
+            for table in matrix["tables"]
+            if table.get("node_references")
+        }
+        expected.update({
+            table["name"]: [
+                {"name": field, "type": column_type}
+                for field, column_type in table["columns"].items()
+            ]
+            for table in self.tables["tables"]
+            if table["name"] in referenced_legacy
+        })
         creates = [
             node for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.dataTable"
@@ -1994,29 +2074,48 @@ try {{
             self.assertEqual(parameters["columns"]["column"], expected[name])
         self.assertEqual(
             [node["parameters"]["tableName"] for node in creates],
-            matrix["targets"],
+            [
+                table["name"]
+                for table in load_bootstrap_generator().compatibility_table_rows(self.tables, matrix)
+            ] + matrix["targets"],
         )
-        self.assertFalse(
-            any(
-                node["type"] == "n8n-nodes-base.dataTable"
-                and node["parameters"].get("resource") == "row"
-                for node in workflow["nodes"]
-            )
-        )
+        row_nodes = [
+            node for node in workflow["nodes"]
+            if node["type"] == "n8n-nodes-base.dataTable"
+            and node["parameters"].get("resource") == "row"
+        ]
+        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
         self.assertEqual(workflow["meta"]["targetTables"], matrix["targets"])
-        self.assertTrue(workflow["meta"]["legacyTableCreationForbidden"])
-        self.assertTrue(workflow["meta"]["seedWritesForbidden"])
+        self.assertFalse(workflow["meta"]["legacyTableCreationForbidden"])
+        self.assertEqual(
+            set(workflow["meta"]["legacyCompatibilityTables"]),
+            referenced_legacy,
+        )
+        self.assertEqual(
+            set(workflow["meta"]["legacyTablesNotProvisioned"]),
+            {table["name"] for table in self.tables["tables"]} - referenced_legacy,
+        )
+        self.assertTrue(workflow["meta"]["existingTableDeletionForbidden"])
+        self.assertFalse(workflow["meta"]["seedWritesForbidden"])
+        self.assertTrue(workflow["meta"]["sourceContractTemplatesSeededDisabled"])
 
-    def test_platform_bootstrap_has_no_legacy_row_seeds(self) -> None:
+    def test_platform_bootstrap_seeds_only_disabled_legacy_templates(self) -> None:
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         data_nodes = [
             node for node in nodes.values()
             if node["type"] == "n8n-nodes-base.dataTable"
         ]
         self.assertTrue(data_nodes)
-        self.assertTrue(all(node["parameters"].get("resource") == "table" for node in data_nodes))
-        self.assertFalse(any("finance_ai_policy_contracts" in json.dumps(node) for node in data_nodes))
-        self.assertFalse(any("finance_config_versions" in json.dumps(node) for node in data_nodes))
+        row_nodes = [node for node in data_nodes if node["parameters"].get("resource") == "row"]
+        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
+        self.assertEqual(row_nodes[0]["parameters"]["dataTableId"]["value"], "finance_source_contracts")
+        # Declared-but-unreferenced legacy schemas are preserved when already
+        # present, but a fresh compatibility bootstrap does not create them.
+        self.assertFalse(any(node["parameters"].get("tableName") == "finance_ai_policy_contracts" for node in data_nodes))
+        self.assertFalse(any(node["parameters"].get("tableName") == "finance_config_versions" for node in data_nodes))
+        template_code = nodes["Emit Disabled Source Contract Templates"]["parameters"]["jsCode"]
+        self.assertIn("enabled: false", template_code)
+        self.assertIn("template:", template_code)
         self.assertEqual(
             nodes["Verify Application Contract Bundle Digest and Maps"]["type"],
             "n8n-nodes-base.code",

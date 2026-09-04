@@ -161,13 +161,20 @@ regular import exclude those files.
 
 ## data table bootstrap
 
-Workflow 19 is inactive and manual-only. It creates or reuses each table in
-`data-tables.json` with the native Data Table `Table → Create` operation.
+Workflow 19 is inactive and manual-only. It creates or reuses the seven legacy
+operational tables that current workflow nodes still reference and the four
+canonical migration targets. Existing installations keep any of the other
+eight declared legacy tables; the bootstrap neither creates nor deletes them.
+This side-by-side state lets
+current workflows retain their exact run-history, MCP-audit, source-contract,
+and document-identity semantics while the canonical projection is rehearsed.
 
-The workflow reads `generated/ai-policy-contracts.seed.json`. It upserts rows
-into `finance_ai_policy_contracts`. It reads every ACTIVE policy.
-It compares the policy identity and profile. It compares hashes.
-It compares allowed fields. It compares value domains and state.
+The workflow seeds seven non-secret source-contract templates under distinct
+`template:*` versions. Every template is disabled so it cannot overwrite or
+activate a deployment's existing rows. An operator must fill the deployment
+IDs and enable the reviewed rows before acquisition runs. The four-table
+cutover remains incomplete; `analyze_data_table_cutover.py` reports the exact
+references that need semantic adapters and rejects selector-only rewrites.
 
 The workflow has no custom finance node. It cannot write ledger transactions.
 It has no Actual node. It has no cashback node. It has no Outlook node.
@@ -175,7 +182,7 @@ It has no OneDrive, HTTP, or Postgres node.
 
 `generate_platform_bootstrap.py` generates the workflow and
 `generated/platform-bootstrap-manifest.json` from versioned contracts. When the
-table or seed contract drifts, tests fail.
+table, template, or target contract drifts, tests fail.
 
 The export has not passed the pinned 2.36.2 image. This manifest and export are
 specifications, not runtime evidence.

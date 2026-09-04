@@ -42,7 +42,7 @@
       "config_name": "statement-sources",
       "version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

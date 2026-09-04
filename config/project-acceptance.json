@@ -113,7 +113,7 @@
       "status": "PARTIAL",
       "production_gate": true,
       "verifier": {"kind": "TEST", "command": "python -m unittest tests.test_n8n_workflows -v", "expected": "The exact image imports and executes every non-placeholder flow with no unknown nodes or bridge dependencies."},
-      "dependencies": ["mail-cursor-completeness", "actual-outbox-recovery", "n8n-secrets"], "evidence": [], "blockers": ["RAK_SC_STATEMENT_ADAPTERS_REQUIRED", "DISPOSABLE_N8N_REQUIRED"]
+      "dependencies": ["mail-cursor-completeness", "actual-outbox-recovery", "n8n-secrets"], "evidence": [], "blockers": ["DISPOSABLE_N8N_REQUIRED"]
     },
     {
       "id": "bounded-subscription-agent-handoff",

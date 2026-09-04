@@ -273,15 +273,18 @@ def node_by_name(workflow: dict, name: str) -> dict:
 
 
 def assert_four_table_bootstrap(workflows: list[dict]) -> None:
-    """Keep W19 limited to the reviewed target-schema bootstrap contract.
-
-    The migration matrix inventories the preserved legacy tables separately;
-    W19 must never recreate that source layout or seed rows into it.  Target
-    create nodes are checked here as part of the deterministic UI render so a
-    stale hand-edited export cannot silently reintroduce the fifteen-table
-    bootstrap.
-    """
+    """Validate the side-by-side compatibility and target bootstrap."""
     matrix = json.loads(DATA_TABLE_MIGRATION_MATRIX_PATH.read_text(encoding="utf-8"))
+    legacy_contract = json.loads((N8N / "data-tables.json").read_text(encoding="utf-8"))
+    referenced_legacy = {
+        table["source_table"]
+        for table in matrix["tables"]
+        if table.get("node_references")
+    }
+    legacy = sorted(
+        (table for table in legacy_contract["tables"] if table["name"] in referenced_legacy),
+        key=lambda row: (row["name"] != "finance_execution_failures", row["name"]),
+    )
     targets = list(matrix["targets"])
     schemas = matrix["target_schemas"]
     bootstrap = next(
@@ -297,9 +300,18 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         and node.get("parameters", {}).get("operation") == "create"
     ]
     observed = [node["parameters"].get("tableName") for node in creates]
-    if observed != targets:
-        raise ValueError(f"W19 target table order differs from migration matrix: {observed!r}")
-    for node, target in zip(creates, targets, strict=True):
+    expected_order = [table["name"] for table in legacy] + targets
+    if observed != expected_order:
+        raise ValueError(f"W19 side-by-side table order differs from contracts: {observed!r}")
+    for node, table in zip(creates[:len(legacy)], legacy, strict=True):
+        parameters = node["parameters"]
+        if parameters.get("options") != {"createIfNotExists": True}:
+            raise ValueError(f"W19 {table['name']} must use idempotent createIfNotExists")
+        expected = [{"name": field, "type": kind} for field, kind in table["columns"].items()]
+        if parameters.get("columns", {}).get("column") != expected:
+            raise ValueError(f"W19 {table['name']} schema differs from data-tables.json")
+    target_creates = creates[len(legacy):]
+    for node, target in zip(target_creates, targets, strict=True):
         parameters = node["parameters"]
         if parameters.get("options") != {"createIfNotExists": True}:
             raise ValueError(f"W19 {target} must use idempotent createIfNotExists")
@@ -309,12 +321,12 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         ]
         if parameters.get("columns", {}).get("column") != expected:
             raise ValueError(f"W19 {target} schema differs from migration matrix")
-    if any(
+    row_nodes = [node for node in bootstrap["nodes"] if (
         node.get("type") == "n8n-nodes-base.dataTable"
         and node.get("parameters", {}).get("resource") == "row"
-        for node in bootstrap["nodes"]
-    ):
-        raise ValueError("W19 must not seed rows while creating the four migration targets")
+    )]
+    if len(row_nodes) != 1 or row_nodes[0].get("name") != "Upsert Disabled Source Contract Templates":
+        raise ValueError("W19 may only seed disabled source-contract templates")
     lists = [
         node
         for node in bootstrap["nodes"]
@@ -352,8 +364,22 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
     metadata = bootstrap.get("meta", {})
     if metadata.get("targetTables") != targets:
         raise ValueError("W19 metadata targetTables differs from migration matrix")
-    if metadata.get("legacyTableCreationForbidden") is not True:
-        raise ValueError("W19 must forbid legacy source-table creation")
+    if metadata.get("legacyTableCreationForbidden") is not False:
+        raise ValueError("W19 must retain legacy compatibility-table creation")
+    if metadata.get("legacyCompatibilityTables") != [table["name"] for table in legacy]:
+        raise ValueError("W19 compatibility table metadata differs from live workflow references")
+    omitted = [
+        table["name"]
+        for table in sorted(
+            legacy_contract["tables"],
+            key=lambda row: (row["name"] != "finance_execution_failures", row["name"]),
+        )
+        if table["name"] not in referenced_legacy
+    ]
+    if metadata.get("legacyTablesNotProvisioned") != omitted:
+        raise ValueError("W19 omitted legacy-table metadata differs from live workflow references")
+    if metadata.get("existingTableDeletionForbidden") is not True:
+        raise ValueError("W19 must forbid deletion of existing legacy tables")
 
 
 def rename_node(workflow: dict, old: str, new: str) -> None:
@@ -2330,6 +2356,10 @@ const locked = new Set([
   'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',
   'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',
 ]);
+const contextFields = new Set([
+  'merchant', 'vendor', 'description', 'category', 'subcategory',
+  'transaction_type', 'currency', 'country', 'city', 'channel',
+]);
 const ids = new Set();
 const unresolved = r.unresolved.map(item => {
   const id = String(item.transaction_id || '');
@@ -2342,15 +2372,15 @@ const unresolved = r.unresolved.map(item => {
     || item.allowed_fields.some(field => locked.has(field) || !allowed.has(field))
   ) throw new Error('Forbidden proposal field');
   const context = item.redacted_context || {};
-  if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).length > 24) {
+  if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).length > 10) {
     throw new Error('Invalid redacted context');
   }
   const redactedContext = {};
   for (const [key, value] of Object.entries(context)) {
-    if (locked.has(key) || /message|email|account|card_number|password|token/i.test(key)) continue;
-    if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
-      redactedContext[key] = typeof value === 'string' ? value.slice(0, 500) : value;
-    }
+    if (!contextFields.has(key) || typeof value !== 'string') continue;
+    const text = value.trim();
+    if (!text || text.length > 128 || /@/.test(text) || /(?:\d[ -]?){12,}/.test(text)) continue;
+    redactedContext[key] = text;
   }
   return {
     transaction_id: id,
@@ -3277,10 +3307,6 @@ const request = {
   idempotency_key: job.idempotency_key,
   operation_code: job.operation_code,
   email_evidence: job.email_evidence === true,
-  archive_sha256: job.archive_sha256,
-  evidence_replay_keys: job.evidence_replay_keys,
-  archive_identity_keys: job.archive_identity_keys,
-  archive_item_ids: job.archive_item_ids,
   unresolved: job.unresolved,
 };
 const prompt = [

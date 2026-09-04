@@ -45,7 +45,7 @@
       "email_status": "PLACEHOLDER",
       "email_senders": [],
       "email_subjects": [],
-      "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+      "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block RAK live notification cashback or any ACTIVE source ingestion/history, including ADCB."
     },
     {
       "card_code": "SC_PLATINUM_X",
@@ -55,7 +55,7 @@
       "email_status": "PLACEHOLDER",
       "email_senders": [],
       "email_subjects": [],
-      "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+      "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block any ACTIVE source ingestion/history, including ADCB; Standard Chartered statement close remains paused."
     }
   ]
 }
