@@ -12,6 +12,30 @@ OFFICIAL_BASE_DIGEST = "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3
 OFFICIAL_SOURCE_COMMIT = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
 OVERLAY_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 NODEMAILER_TARBALL_SHA256 = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3"
+ALPINE_SECURITY_PACKAGES = {
+    "libcrypto3": "3.5.8-r0",
+    "libssl3": "3.5.8-r0",
+    "libexpat": "2.8.4-r0",
+    "openssh": "10.3_p1-r1",
+    "openssh-client-common": "10.3_p1-r1",
+    "openssh-client-default": "10.3_p1-r1",
+    "openssh-keygen": "10.3_p1-r1",
+    "openssh-server": "10.3_p1-r1",
+    "openssh-server-common": "10.3_p1-r1",
+    "openssh-sftp-server": "10.3_p1-r1",
+}
+JAVASCRIPT_SECURITY_PACKAGES = {
+    "fast-uri": {
+        "version": "3.1.6",
+        "integrity": "sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/fast-uri@3.1.5/node_modules/fast-uri",
+    },
+    "toml": {
+        "version": "4.2.0",
+        "integrity": "sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml",
+    },
+}
 
 
 class N8nCustomImageTests(unittest.TestCase):
@@ -44,6 +68,64 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("AS node-builder", dockerfile)
         self.assertIn("/opt/finance-n8n/custom-extensions/n8n-nodes-finance", dockerfile)
         self.assertIn("/opt/finance-n8n/community-extensions", dockerfile)
+
+    def test_finance_image_applies_exact_signed_alpine_security_overlay(self):
+        dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
+        provenance = json.loads(
+            (ROOT / "packages/n8n-nodes-finance/base-image-provenance.json").read_text(encoding="utf-8")
+        )
+        overlay = provenance["os_security_overlay"]
+        self.assertEqual(overlay["distribution"], "Alpine Linux 3.24")
+        self.assertEqual(
+            overlay["builder_image"],
+            "public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43",
+        )
+        self.assertEqual(overlay["repository"], "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
+        self.assertEqual(overlay["verification"], "Alpine repository signature via apk.static")
+        self.assertEqual(overlay["packages"], ALPINE_SECURITY_PACKAGES)
+        self.assertIn("AS alpine-security-overlay", dockerfile)
+        self.assertIn("apk add --no-cache apk-tools-static", dockerfile)
+        self.assertIn("apk fetch --output /tmp/security-apks", dockerfile)
+        self.assertIn("cp -R /etc/apk/keys /tmp/security-apks/keys", dockerfile)
+        self.assertIn(
+            "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache --no-network",
+            dockerfile,
+        )
+        self.assertNotIn("--allow-untrusted", dockerfile)
+        for package, version in ALPINE_SECURITY_PACKAGES.items():
+            self.assertIn(f"{package}={version}", dockerfile)
+            self.assertIn(
+                f'info -v {package})" = "{package}-{version}"',
+                dockerfile,
+            )
+        self.assertIn("rm -rf /tmp/security-apks", dockerfile)
+        self.assertIn(
+            'io.finance.n8n.os-security-overlay="alpine-v3.24:openssl-3.5.8-r0,expat-2.8.4-r0,openssh-10.3_p1-r1"',
+            dockerfile,
+        )
+
+    def test_finance_image_applies_integrity_pinned_javascript_security_overlay(self):
+        dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
+        provenance = json.loads(
+            (ROOT / "packages/n8n-nodes-finance/base-image-provenance.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(provenance["javascript_security_overlay"]["packages"], JAVASCRIPT_SECURITY_PACKAGES)
+        self.assertIn("AS javascript-security-overlay", dockerfile)
+        for package, details in JAVASCRIPT_SECURITY_PACKAGES.items():
+            self.assertIn(f"npm pack {package}@{details['version']}", dockerfile)
+            self.assertIn(details["integrity"].removeprefix("sha512-"), dockerfile)
+            self.assertIn(details["replaced_path"], dockerfile)
+        smoke_path = ROOT / "packages/n8n-nodes-finance/scripts/javascript-security-overlay-smoke.cjs"
+        smoke = smoke_path.read_text(encoding="utf-8")
+        self.assertIn("Maximum nesting depth of 500 exceeded", smoke)
+        self.assertIn("Object.getPrototypeOf", smoke)
+        self.assertIn("ajv.compile", smoke)
+        self.assertIn("require.resolve('fast-uri/package.json'", smoke)
+        self.assertIn("require.resolve('toml/package.json'", smoke)
+        self.assertIn("snowflake-sdk@2.1.0_", smoke)
+        self.assertIn("FINANCE_WH", smoke)
+        self.assertGreaterEqual(dockerfile.count("node /tmp/javascript-security-overlay-smoke.cjs"), 2)
+        self.assertIn(".pnpm/ajv@8.20.0/node_modules/ajv", dockerfile)
 
     def test_finance_extension_is_immutable_and_outside_persistent_state(self):
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")

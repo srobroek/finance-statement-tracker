@@ -131,11 +131,18 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pen
 The finance checkout does not own the n8n platform scripts. Use [`srobroek/n8n-orchestrator`](https://github.com/srobroek/n8n-orchestrator) for platform procedures. The deployed Dockge stack is `/opt/stacks/finance-n8n`; finance workflows execute in its `n8n` service.
 
 The finance n8n image builds directly from the official immutable n8n 2.36.2
-digest. Its Dockerfile applies the reviewed Nodemailer 9.0.1 replacement and
-finance/community extensions in the same build, so CI needs no separate private
-platform-image package permission. The Nodemailer tarball hash, exact replaced
-pnpm path, historical reviewed recipe, and executable SMTP/security smoke test
-are recorded in `packages/n8n-nodes-finance/base-image-provenance.json`.
+digest. Its Dockerfile applies exact Alpine 3.24 security package updates,
+integrity-pinned fast-uri 3.1.6 and TOML 4.2.0 replacements, the reviewed
+Nodemailer 9.0.1 replacement, and finance/community extensions in the
+same build, so CI needs no separate private platform-image package permission.
+The signed Alpine package versions, Nodemailer tarball hash, exact replaced pnpm
+path, historical reviewed recipe, and executable SMTP/security smoke test are
+recorded in `packages/n8n-nodes-finance/base-image-provenance.json`. The Alpine
+packages are fetched in an immutable matching builder and installed with a
+temporary static `apk`; the package manager is not retained in the runtime.
+The JavaScript overlay smoke compiles an AJV schema through fast-uri and parses
+a representative Snowflake connection profile while checking TOML's prototype
+isolation and malicious nesting limit.
 
 - [`backup.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/backup.sh)
 - [`doctor.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/doctor.sh)
