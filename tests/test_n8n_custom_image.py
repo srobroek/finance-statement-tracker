@@ -4,33 +4,39 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-GENERIC_BASE_DIGEST = "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
-GENERIC_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+OFFICIAL_BASE_DIGEST = "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+OFFICIAL_SOURCE_COMMIT = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
+OVERLAY_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+NODEMAILER_TARBALL_SHA256 = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3"
 
 
 class N8nCustomImageTests(unittest.TestCase):
-    def test_finance_inherits_approved_generic_platform_image_without_duplicate_patch(self):
+    def test_finance_builds_reviewed_nodemailer_overlay_on_official_immutable_base(self):
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
         base_reference = (ROOT / "packages/n8n-nodes-finance/base-image.txt").read_text(encoding="utf-8").strip()
         provenance = json.loads(
             (ROOT / "packages/n8n-nodes-finance/base-image-provenance.json").read_text(encoding="utf-8")
         )
         self.assertEqual(base_reference, provenance["reference"])
-        self.assertEqual(provenance["digest"], GENERIC_BASE_DIGEST)
-        self.assertEqual(provenance["source_repository"], "https://github.com/srobroek/n8n")
-        self.assertEqual(provenance["source_commit"], GENERIC_SOURCE_COMMIT)
-        self.assertEqual(base_reference.rsplit("@", 1)[1], GENERIC_BASE_DIGEST)
+        self.assertEqual(provenance["digest"], OFFICIAL_BASE_DIGEST)
+        self.assertEqual(provenance["source_repository"], "https://github.com/n8n-io/n8n")
+        self.assertEqual(provenance["source_commit"], OFFICIAL_SOURCE_COMMIT)
+        self.assertEqual(base_reference.rsplit("@", 1)[1], OFFICIAL_BASE_DIGEST)
         self.assertIn("ARG N8N_BASE_IMAGE=" + base_reference, dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
-        self.assertIn('io.finance.n8n.base-source="https://github.com/srobroek/n8n@' + GENERIC_SOURCE_COMMIT, dockerfile)
-        for duplicate_marker in (
-            "nodemailer-security-patch",
-            "npm pack nodemailer",
-            "nodemailer@8.0.10",
-            "nodemailer@9.0.1",
-            "nodemailer-smoke",
-        ):
-            self.assertNotIn(duplicate_marker, dockerfile)
+        self.assertIn('org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker"', dockerfile)
+        self.assertIn('io.finance.n8n.base-source="https://github.com/n8n-io/n8n@' + OFFICIAL_SOURCE_COMMIT, dockerfile)
+        overlay = provenance["nodemailer_overlay"]
+        self.assertEqual(overlay["source_commit"], OVERLAY_SOURCE_COMMIT)
+        self.assertEqual(overlay["tarball_sha256"], NODEMAILER_TARBALL_SHA256)
+        self.assertEqual(overlay["smoke_blob"], "cdb2c9c08500e798ab7881818707fdf710709213")
+        self.assertIn("npm pack nodemailer@9.0.1", dockerfile)
+        self.assertIn(NODEMAILER_TARBALL_SHA256, dockerfile)
+        self.assertIn(".pnpm/nodemailer@8.0.10/node_modules/nodemailer", dockerfile)
+        self.assertIn("node /tmp/nodemailer-smoke.cjs", dockerfile)
+        smoke = ROOT / "packages/n8n-nodes-finance/scripts/nodemailer-smoke.cjs"
+        import subprocess
+        self.assertEqual(subprocess.check_output(["git", "hash-object", smoke], text=True).strip(), overlay["smoke_blob"])
         self.assertIn("AS node-builder", dockerfile)
         self.assertIn("/opt/finance-n8n/custom-extensions/n8n-nodes-finance", dockerfile)
         self.assertIn("/opt/finance-n8n/community-extensions", dockerfile)
@@ -69,20 +75,18 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertNotIn("docker push", builder)
         self.assertEqual(receipt["status"], "SPEC_ONLY")
         self.assertIsNone(receipt["image"]["image_digest"])
-        self.assertEqual(
-            receipt["image"]["local_image_id"],
-            "sha256:4b44e25305c0ee39aada1993ca57dc24e4f3198245ef1347fb8d3e23ad084bb6",
-        )
-        self.assertEqual(receipt["base_image"]["digest"], GENERIC_BASE_DIGEST)
-        self.assertEqual(receipt["base_image"]["source_commit"], GENERIC_SOURCE_COMMIT)
+        self.assertIsNone(receipt["image"]["local_image_id"])
+        self.assertEqual(receipt["base_image"]["digest"], OFFICIAL_BASE_DIGEST)
+        self.assertEqual(receipt["base_image"]["source_commit"], OFFICIAL_SOURCE_COMMIT)
         self.assertEqual(
             receipt["base_image"]["source_repository"],
-            "https://github.com/srobroek/n8n",
+            "https://github.com/n8n-io/n8n",
         )
-        self.assertEqual(receipt["attestation"]["status"], "VERIFIED")
+        self.assertEqual(receipt["base_image"]["nodemailer_overlay"]["tarball_sha256"], NODEMAILER_TARBALL_SHA256)
+        self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
         self.assertEqual(
             receipt["blockers"],
-            ["LIVE_REGISTRY_DIGEST_REQUIRED", "DISPOSABLE_IMAGE_IMPORT_REQUIRED"],
+            ["LIVE_REGISTRY_DIGEST_REQUIRED", "SBOM_SCAN_ATTESTATION_REQUIRED", "DISPOSABLE_IMAGE_IMPORT_REQUIRED"],
         )
 
     def test_package_test_does_not_rebuild_production_output(self):

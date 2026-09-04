@@ -130,6 +130,13 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pen
 
 The finance checkout does not own the n8n platform scripts. Use [`srobroek/n8n-orchestrator`](https://github.com/srobroek/n8n-orchestrator) for platform procedures. The deployed Dockge stack is `/opt/stacks/finance-n8n`; finance workflows execute in its `n8n` service.
 
+The finance n8n image builds directly from the official immutable n8n 2.36.2
+digest. Its Dockerfile applies the reviewed Nodemailer 9.0.1 replacement and
+finance/community extensions in the same build, so CI needs no separate private
+platform-image package permission. The Nodemailer tarball hash, exact replaced
+pnpm path, historical reviewed recipe, and executable SMTP/security smoke test
+are recorded in `packages/n8n-nodes-finance/base-image-provenance.json`.
+
 - [`backup.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/backup.sh)
 - [`doctor.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/doctor.sh)
 - [`restore-disposable.sh`](https://github.com/srobroek/n8n-orchestrator/blob/main/scripts/restore-disposable.sh)

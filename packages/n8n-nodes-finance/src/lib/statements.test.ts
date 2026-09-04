@@ -79,6 +79,25 @@ Card No : XXXXXXXXXXXX8833 - TEST USER
   assert.equal(statement.balance_tied, true);
 });
 
+test('ADCB treats coffee as a purchase or refund and whole-word fee labels as fees', () => {
+  const statement = parseStatement(`15/08/26
+15/09/26
+PREVIOUS BALANCE OUTSTANDING 0.00
+Card No : XXXXXXXXXXXX8833 - TEST USER
+10/08/2026 COFFEE SHOP DUBAI ARE 10.00
+11/08/2026 COFFEE SHOP REFUND DUBAI ARE 2.00 CR
+12/08/2026 ANNUAL FEE 5.00
+13/08/2026 SERVICE FEES 3.00
+14/08/2026 VAT ON ANNUAL CHARGE 1.00
+15/08/2026 NEW BALANCE OUTSTANDING 17.00`, 'adcb_v1');
+
+  assert.deepEqual(
+    statement.transactions.map(transaction => transaction.transaction_type),
+    ['PURCHASE', 'REFUND', 'FEE', 'FEE', 'FEE'],
+  );
+  assert.equal(statement.balance_tied, true);
+});
+
 test('Wio parses signed rows and payment topics', () => {
   const statement = parseStatement(`CREDIT STATEMENT
 FROM 01/07/2026 TO 01/08/2026

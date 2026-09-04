@@ -3472,7 +3472,7 @@ return [{
             ("actual_writer_workflow", "string", "ACTUAL_OUTBOX_APPLY"),
             ("source_mutation_forbidden", "boolean", True),
         ],
-        [("run_id", "string"), ("source_code", "string"), ("message_id", "string"), ("document_sha256", "string"), ("onedrive_item_id", "string"), ("manifest_onedrive_parent_id", "string"), ("config_version", "string"), ("actual_file_id", "string"), ("account_id", "string"), ("card_code", "string"), ("cashback_close_required", "boolean"), ("period_key", "string"), ("trigger_kind", "string"), ("attachment_id", "string"), ("source_attachment_id", "string")],
+        [("run_id", "string"), ("source_code", "string"), ("message_id", "string"), ("document_sha256", "string"), ("onedrive_item_id", "string"), ("manifest_onedrive_parent_id", "string"), ("config_version", "string"), ("actual_file_id", "string"), ("account_id", "string"), ("card_code", "string"), ("cashback_close_required", "boolean"), ("period_key", "string"), ("trigger_kind", "string"), ("attachment_id", "string"), ("source_attachment_id", "string"), ("historical_import", "boolean"), ("historical_account_id", "string")],
     )
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     insert_config(

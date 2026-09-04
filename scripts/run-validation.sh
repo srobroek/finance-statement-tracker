@@ -12,6 +12,12 @@ uv sync --frozen --extra statements --extra test
 
 npm --prefix packages/n8n-nodes-finance ci --ignore-scripts
 npm --prefix integrations/actual ci
+# Both integration proofs exercise Actual's SQLite engine.  Keep the broad
+# install script-free, then explicitly build the one native dependency they
+# require so a clean CI checkout cannot report unit-test success while the
+# end-to-end ingestion checks are unusable.
+npm --prefix packages/n8n-nodes-finance rebuild better-sqlite3
+npm --prefix integrations/actual rebuild better-sqlite3
 node integrations/n8n/generate_browser_capture_validator.mjs --check
 
 uv run --frozen python -m unittest discover -s tests -v

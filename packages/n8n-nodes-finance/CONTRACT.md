@@ -10,6 +10,16 @@ Build target: `n8n@2.36.2` (RC) with its bundled
 for disposable validation; promotion remains `NO-GO` until the RC is accepted
 or an equally patched stable release is available.
 
+The image build starts from the official immutable n8n 2.36.2 digest. In the
+same Dockerfile it replaces only n8n's existing pnpm Nodemailer 8.0.10 payload
+with the reviewed Nodemailer 9.0.1 tarball, whose SHA-256 is pinned in the build
+and provenance record. The build fails if the upstream pnpm path changes, then
+runs the reviewed SMTP behavior and file/URL access denial smoke test against
+both the unpacked payload and its final runtime resolution. This keeps the
+security overlay reproducible without depending on a separately published
+private platform image. SBOM, vulnerability scan, and attestation remain
+required before promotion.
+
 ## Frozen node types
 
 | Type | Version | Operations | Boundary |

@@ -386,7 +386,8 @@ class ActualRestoreTests(unittest.TestCase):
             check=False,
         )
         payload = json.loads(receipt.read_text(encoding="utf-8"))
-        if payload.get("error", {}).get("code") == "runtime_namespace_identity_failed":
+        error = payload.get("error")
+        if isinstance(error, dict) and error.get("code") == "runtime_namespace_identity_failed":
             limitation = _namespace_probe_error()
             if limitation is not None:
                 required = os.environ.get("CI", "").lower() == "true" or os.environ.get(
@@ -1342,7 +1343,8 @@ print(json.dumps({'api': payload, 'ui': payload}))
             if process.stderr:
                 process.stderr.close()
             payload = json.loads(receipt.read_text(encoding="utf-8"))
-            if payload.get("error", {}).get("code") == "runtime_namespace_identity_failed":
+            error = payload.get("error")
+            if isinstance(error, dict) and error.get("code") == "runtime_namespace_identity_failed":
                 limitation = _namespace_probe_error()
                 if limitation is not None:
                     required = os.environ.get("CI", "").lower() == "true" or os.environ.get(

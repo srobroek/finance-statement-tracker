@@ -73,6 +73,8 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Acquire Recovery Writer Fence", "FINANCE_WRITER_LEASE"),
         ("Assert Recovery Fence Before Import", "FINANCE_WRITER_LEASE"),
         ("Release Recovery Writer Fence", "FINANCE_WRITER_LEASE"),
+        ("Assert Recovery Fence After Import", "FINANCE_WRITER_LEASE"),
+        ("Assert Recovery Fence Before Commit", "FINANCE_WRITER_LEASE"),
     ),
 }
 
@@ -399,6 +401,10 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         "FINANCE_WRITER_LEASE",
         LEASE_ASSERT,
         LEASE_ASSERT,
+        aliases=(
+            ("ACTUAL_OUTBOX_APPLY", "Assert Recovery Fence After Import"),
+            ("ACTUAL_OUTBOX_APPLY", "Assert Recovery Fence Before Commit"),
+        ),
     ),
     boundary_case(
         "writer lease release",

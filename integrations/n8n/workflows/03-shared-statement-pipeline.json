@@ -1154,18 +1154,30 @@
             },
             {
               "id": "config-16",
+              "name": "historical_import",
+              "type": "boolean",
+              "value": "={{ $json.historical_import }}"
+            },
+            {
+              "id": "config-17",
+              "name": "historical_account_id",
+              "type": "string",
+              "value": "={{ $json.historical_account_id }}"
+            },
+            {
+              "id": "config-18",
               "name": "pipeline_contract",
               "type": "string",
               "value": "STATEMENT_PIPELINE_V1"
             },
             {
-              "id": "config-17",
+              "id": "config-19",
               "name": "actual_writer_workflow",
               "type": "string",
               "value": "ACTUAL_OUTBOX_APPLY"
             },
             {
-              "id": "config-18",
+              "id": "config-20",
               "name": "source_mutation_forbidden",
               "type": "boolean",
               "value": true

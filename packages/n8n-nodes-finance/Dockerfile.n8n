@@ -1,4 +1,4 @@
-ARG N8N_BASE_IMAGE=ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6
+ARG N8N_BASE_IMAGE=ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
 FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
 
 USER root
@@ -25,6 +25,17 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
+FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS nodemailer-builder
+
+RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt \
+    && test "$(cat /tmp/nodemailer-pack.txt)" = "nodemailer-9.0.1.tgz" \
+    && echo "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3  /tmp/nodemailer-9.0.1.tgz" | sha256sum -c - \
+    && mkdir -p /tmp/nodemailer-9.0.1 \
+    && tar -xzf /tmp/nodemailer-9.0.1.tgz -C /tmp/nodemailer-9.0.1 --strip-components=1 \
+    && node -e "const p=require('/tmp/nodemailer-9.0.1/package.json'); if(p.name!=='nodemailer'||p.version!=='9.0.1') process.exit(1)"
+COPY packages/n8n-nodes-finance/scripts/nodemailer-smoke.cjs /tmp/nodemailer-smoke.cjs
+RUN node /tmp/nodemailer-smoke.cjs /tmp/nodemailer-9.0.1
+
 FROM ${N8N_BASE_IMAGE}
 
 ARG N8N_BASE_IMAGE
@@ -32,9 +43,19 @@ ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
       org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
       io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
-      io.finance.n8n.base-source="https://github.com/srobroek/n8n@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+      io.finance.n8n.base-source="https://github.com/n8n-io/n8n@bc9090e8c61d0dc84aa85528e62142dfb7001243" \
+      io.finance.n8n.nodemailer-recipe="https://github.com/srobroek/n8n-orchestrator@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 
 USER root
+RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
+    && rm -rf /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer \
+    && mkdir -p /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer
+COPY --from=nodemailer-builder /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
+COPY --from=nodemailer-builder /tmp/nodemailer-smoke.cjs /tmp/nodemailer-smoke.cjs
+RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); if(p.name!=='nodemailer'||p.version!=='9.0.1'||typeof require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer').createTransport!=='function') process.exit(1)" \
+    && test "$(n8n --version)" = "2.36.2" \
+    && node /tmp/nodemailer-smoke.cjs /usr/local/lib/node_modules/n8n/node_modules/nodemailer \
+    && rm -f /tmp/nodemailer-smoke.cjs
 RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/package.json /opt/finance-n8n/custom-extensions/n8n-nodes-finance/package.json
 COPY --from=node-builder --chown=node:node /tmp/n8n-nodes-finance/CONTRACT.md /opt/finance-n8n/custom-extensions/n8n-nodes-finance/CONTRACT.md

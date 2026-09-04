@@ -9,7 +9,7 @@
 
 This repository owns the complete finance application, including every finance-specific n8n workflow, workflow generator, application configuration, source contract, rule set, Data Table schema and migration, fixture, custom finance node, Actual integration, cashback companion, document/evidence integration, AI contract, test, and finance-facing runbook.
 
-It does not own the base n8n Compose stack, generic container/network/secrets bootstrap, n8n image locking, or generic platform backup and restore. Those belong to `srobroek/n8n`.
+It does not own the base n8n Compose stack, generic container/network/secrets bootstrap, deployment image locking, or generic platform backup and restore. Those belong to `srobroek/n8n-orchestrator`. The finance repository does own its derived n8n image recipe: it starts from the official digest and applies the reviewed Nodemailer security overlay plus finance extensions in one reproducible build.
 
 ## 2. Product boundaries and sources of truth
 

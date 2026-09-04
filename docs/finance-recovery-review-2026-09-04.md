@@ -21,6 +21,11 @@ evidence tracked in [issue 87](https://github.com/srobroek/finance-statement-tra
   canonical row. Readback now uses the persisted request identity.
 - Deployment contracts disagreed about finance network membership, the PDF
   socket path, Actual container identity, and the Cashback listener.
+- The shared statement workflow dropped the caller's historical-import
+  authorization and account binding. It now carries both through validation.
+- The browser handoff validator depended on runtime module loading and code
+  generation forbidden by the task runner. Its schema validator is now
+  precompiled, embedded, and checked against the schema during the build.
 
 These are code and configuration findings. They do not establish which error
 the production host most recently encountered; that requires authenticated
@@ -34,6 +39,10 @@ execution logs and destination readback.
   unused legacy stores or perform a destructive selector-only cutover.
 - Use bounded AI input fields and deterministic validation. Provider prompts
   do not need mailbox or archive identifiers to propose classifications.
+- Serialize Cashback read-modify-write operations before their first database
+  read, so concurrent requests cannot decide from stale reconciliation state.
+- Match bank fee descriptions as whole words: a coffee purchase or refund
+  must not become a fee merely because its description contains `FEE`.
 - Preserve manual rule locks and classifications. Reject malformed dates,
   non-finite money, ambiguous booleans, duplicate message IDs, and inconsistent
   receipts before advancing state.
@@ -44,6 +53,13 @@ execution logs and destination readback.
   alert updates and overlapping refresh requests.
 - Run the same comprehensive validation entry point locally and in CI:
   `./scripts/run-validation.sh`. Container workflow replay is a separate CI job.
+- Preserve existing Actual splits, transfers, manual fields, and deleted rows
+  during replay. Verify historical imports using the observed before/after
+  balance and genuinely added rows, rather than comparing an old statement's
+  closing balance with today's account balance.
+- Run one production n8n process with writer concurrency one. Lease checks
+  and in-process serialization do not make Actual's API a distributed atomic
+  transaction or provide distributed fencing at the ledger itself.
 
 ## Historical evidence
 

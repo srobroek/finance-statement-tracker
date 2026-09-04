@@ -8,20 +8,20 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "306f3af1b4e1595ddef0a6a4bcfe6c78f3d76c20db396b0bf1c29c4af6b193fe"
+    "sha256": "5f14feadd9beac38714f2a62a3e762500943da25ca145a271d937ea346001cf9"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
-    "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-    "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6"
+    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
   },
   "extension_image": {
     "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
     "digest": null,
-    "base_digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+    "base_digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "603b38cc25145ffd33d845e1c5e04ad1f52dc14e709fcfa9e606b9376291f7d2"
+      "sha256": "95fe48d9176039ea1ebefbb6a107d7753404bea6f5c5d975b6355e432a0688ff"
     }
   },
   "workflow_manifest": {
@@ -30,12 +30,12 @@
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "ad96821554e51f9a6314c9caceaef527079f4e941768e6a3ee80d40a39991cc1"
+    "sha256": "b69dfe4d1d89ddb8691eef2fb64a9dfcd5bb710e490a5b0286a39f98d88946bb"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-    "sha256": "fe90bafe3c7930b2e7c2e636d7f967a5e11f907fe5855f5fac7ede2b9efd0575",
+    "sha256": "d383adae27ea5bb0deabc280af0de6a45f0453b5caba48a5ef48d8c1ff7b7e1c",
     "required_state": {
       "active": false,
       "published": false,
@@ -88,7 +88,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "653a39cbbf66cc25d44c83a708286a4524832182fa9db997b23f937af8883c65"
+      "sha256": "243556548a07f6725be5ea5b3277973936e890bbbd29a174ecfcf8a6f34f287f"
     },
     "values_included": false,
     "forbidden_fields": [

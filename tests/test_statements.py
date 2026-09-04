@@ -98,6 +98,27 @@ Card No : XXXXXXXXXXXX8833 - TEST USER
         )
         self.assertEqual(first.transactions[0].transaction_id, second.transactions[0].transaction_id)
 
+    def test_adcb_coffee_is_not_a_fee_but_whole_word_fee_labels_are(self) -> None:
+        text = """15/08/26
+15/09/26
+PREVIOUS BALANCE OUTSTANDING 0.00
+Card No : XXXXXXXXXXXX8833 - TEST USER
+10/08/2026 COFFEE SHOP DUBAI ARE 10.00
+11/08/2026 COFFEE SHOP REFUND DUBAI ARE 2.00 CR
+12/08/2026 ANNUAL FEE 5.00
+13/08/2026 SERVICE FEES 3.00
+14/08/2026 VAT ON ANNUAL CHARGE 1.00
+15/08/2026 NEW BALANCE OUTSTANDING 17.00
+"""
+
+        statement = parse_statement_text(text, "adcb-coffee-and-fees.pdf", "adcb_v1")
+
+        self.assertEqual(
+            [transaction.transaction_type for transaction in statement.transactions],
+            ["PURCHASE", "REFUND", "FEE", "FEE", "FEE"],
+        )
+        self.assertTrue(statement.balance_tied)
+
     def test_registry_is_the_bank_extension_boundary(self) -> None:
         adapters = (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())
         registry = StatementAdapterRegistry(adapters)

@@ -911,6 +911,7 @@ class CashbackEventStore:
         duplicates = 0
         with closing(self._connect()) as connection:
             with connection:
+                connection.execute("BEGIN IMMEDIATE")
                 for event in normalized:
                     existing = connection.execute(
                         "SELECT * FROM cashback_events WHERE source_event_id = ?",
@@ -1295,6 +1296,7 @@ class CashbackEventStore:
         range_start, range_end = _date_range_bounds(period_start, period_end)
         with closing(self._connect()) as connection:
             with connection:
+                connection.execute("BEGIN IMMEDIATE")
                 prior = connection.execute(
                     "SELECT * FROM reconciliation_runs WHERE statement_reference = ?",
                     (statement_reference,),
@@ -1506,6 +1508,7 @@ class CashbackEventStore:
         canonical_changes = json.dumps(changes, sort_keys=True)
         with closing(self._connect()) as connection:
             with connection:
+                connection.execute("BEGIN IMMEDIATE")
                 prior = connection.execute(
                     "SELECT * FROM event_corrections WHERE correction_id = ?",
                     (correction_id,),
@@ -1631,6 +1634,7 @@ class CashbackEventStore:
         now = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
+                connection.execute("BEGIN IMMEDIATE")
                 run = connection.execute(
                     "SELECT * FROM reconciliation_runs WHERE statement_reference = ?",
                     (statement_reference,),

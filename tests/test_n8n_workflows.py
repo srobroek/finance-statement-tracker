@@ -165,14 +165,17 @@ try {{
         available_roots = [str(path) for path in ajv_module_roots if (path / "ajv").is_dir()]
         if available_roots:
             environment["NODE_PATH"] = os.pathsep.join(available_roots)
-        result = subprocess.run(
-            [node, "-e", script],
-            cwd=ROOT,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            script_path = Path(temporary) / "exported-node.cjs"
+            script_path.write_text(script, encoding="utf-8")
+            result = subprocess.run(
+                [node, str(script_path)],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
@@ -203,14 +206,17 @@ try {{
 """
         node = shutil.which("node")
         self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
-        result = subprocess.run(
-            [node, "--disallow-code-generation-from-strings", "--disable-proto=delete", "-e", script],
-            cwd=ROOT,
-            env=os.environ.copy(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            script_path = Path(temporary) / "restricted-exported-node.cjs"
+            script_path.write_text(script, encoding="utf-8")
+            result = subprocess.run(
+                [node, "--disallow-code-generation-from-strings", "--disable-proto=delete", str(script_path)],
+                cwd=ROOT,
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)

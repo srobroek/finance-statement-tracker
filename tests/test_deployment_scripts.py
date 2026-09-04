@@ -211,7 +211,7 @@ class DeploymentScriptTests(unittest.TestCase):
             (bin_dir / "readlink").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "path=\"${3}\"\n"
+                "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
                 f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
@@ -581,7 +581,7 @@ class DeploymentScriptTests(unittest.TestCase):
             (bin_dir / "readlink").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "path=\"${3}\"\n"
+                "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
                 f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
@@ -655,7 +655,7 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("actual-session-offline-integration.mjs", runner)
         self.assertNotIn("pip install", workflow + runner)
 
-    def test_promotion_workflows_exclude_pull_requests_and_codex_pushes(self) -> None:
+    def test_promotion_workflows_run_checks_without_promoting_from_pull_requests(self) -> None:
         phase1 = Path(".github/workflows/phase1-finance-artifacts.yml").read_text(
             encoding="utf-8"
         )
@@ -668,12 +668,20 @@ class DeploymentScriptTests(unittest.TestCase):
 
         cashback = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
         cashback_triggers = cashback.split("\npermissions:", 1)[0]
-        self.assertNotIn("\n  pull_request:", cashback_triggers)
+        self.assertIn("\n  pull_request:", cashback_triggers)
         self.assertNotIn("codex/**", cashback_triggers)
         self.assertIn("      - main\n", cashback_triggers)
         self.assertIn('      - "v*"\n', cashback_triggers)
         self.assertIn("  workflow_dispatch:\n", cashback_triggers)
         self.assertIn('      - "uv.lock"\n', cashback_triggers)
+        self.assertIn(
+            "if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')",
+            cashback,
+        )
+        self.assertIn(
+            "if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy == true",
+            cashback,
+        )
 
     def test_global_ci_uses_the_reviewed_uv_lock(self) -> None:
         workflow = Path(".github/workflows/validate.yml").read_text(encoding="utf-8")
@@ -745,7 +753,9 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', deploy)
         self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
-        self.assertIn('sudo podman pull --authfile "$auth_file" "$IMAGE_REF"', deploy)
+        self.assertIn('sudo docker --config "$auth_dir" pull "$IMAGE_REF"', deploy)
+        self.assertIn('sudo docker --config "$auth_dir" login', deploy)
+        self.assertIn('trap cleanup_auth EXIT', deploy)
         self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
         self.assertIn("{{range .RepoDigests}}{{println .}}{{end}}", deploy)
         self.assertIn('awk -v expected="$IMAGE_REF"', deploy)
@@ -756,11 +766,10 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
         self.assertIn('"$stack/.env.rollback-${stamp}"', deploy)
         self.assertIn('running_image_id="$(sudo docker inspect finance-cashback-control --format \'{{.Image}}\')"', deploy)
-        self.assertIn('running_image_digest="$(sudo docker image inspect "$running_image_id" --format \'{{.Digest}}\')"', deploy)
-        self.assertIn('rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"', deploy)
-        self.assertIn('rollback_image_ref="$(\n', deploy)
-        self.assertIn('awk -v expected="$rollback_image_ref"', deploy)
-        self.assertIn("$0 == expected", deploy)
+        self.assertIn("mapfile -t rollback_candidates", deploy)
+        self.assertIn('awk -v prefix="${IMAGE_NAME}@sha256:"', deploy)
+        self.assertIn('rollback_image_ref="${rollback_candidates[0]}"', deploy)
+        self.assertIn('rollback_image_ref', deploy)
         self.assertIn('CASHBACK_IMAGE=%s\\n', deploy)
         self.assertNotIn("$IMAGE_NAME:main", deploy)
 

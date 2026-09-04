@@ -33,6 +33,17 @@ const exportMatch = generated.match(/^"use strict";module\.exports = ([A-Za-z0-9
 if (!exportMatch) throw new Error('AJV_STANDALONE_EXPORT_SHAPE_CHANGED');
 const functionName = exportMatch[1];
 generated = generated.slice(exportMatch[0].length);
+const schemaDeclaration = generated.match(/const (schema[A-Za-z0-9_$]+) = /);
+if (!schemaDeclaration || schemaDeclaration.index === undefined) {
+  throw new Error('AJV_STANDALONE_SCHEMA_SHAPE_CHANGED');
+}
+const schemaValueStart = schemaDeclaration.index + schemaDeclaration[0].length;
+const schemaValueEnd = generated.indexOf(';', schemaValueStart);
+if (schemaValueEnd < 0) throw new Error('AJV_STANDALONE_SCHEMA_TERMINATOR_MISSING');
+const embeddedSchema = JSON.parse(generated.slice(schemaValueStart, schemaValueEnd));
+generated = generated.slice(0, schemaValueStart)
+  + JSON.stringify(embeddedSchema, null, 2)
+  + generated.slice(schemaValueEnd);
 generated = generated.replace(
   /const ([A-Za-z0-9_$]+) = require\("ajv\/dist\/runtime\/ucs2length"\)\.default;/,
   `const $1 = value => {\n  let length = 0;\n  for (let index = 0; index < value.length; length += 1, index += 1) {\n    const first = value.charCodeAt(index);\n    if (first >= 0xd800 && first <= 0xdbff && index + 1 < value.length) {\n      const second = value.charCodeAt(index + 1);\n      if (second >= 0xdc00 && second <= 0xdfff) index += 1;\n    }\n  }\n  return length;\n};`,
