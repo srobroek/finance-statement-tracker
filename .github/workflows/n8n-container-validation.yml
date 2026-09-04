@@ -115,6 +115,28 @@ jobs:
           ];
           const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+          // The normal HTTP listener can return a 200 startup message before
+          // migrations and workflow registration finish. Use n8n's readiness
+          // contract before submitting any bootstrap request.
+          const readyDeadline = Date.now() + 90_000;
+          let ready = false;
+          while (Date.now() < readyDeadline) {
+            try {
+              const health = await fetch('http://127.0.0.1:5678/healthz/readiness', {
+                signal: AbortSignal.timeout(2000),
+              });
+              const body = await health.json();
+              if (health.ok && body.status === 'ok') {
+                ready = true;
+                break;
+              }
+            } catch (error) {
+              // A refused connection is expected while the process starts.
+            }
+            await delay(500);
+          }
+          if (!ready) throw new Error('n8n did not become ready within 90 seconds');
+
           async function executeBootstrap(run) {
             let response;
             for (let attempt = 1; attempt <= 180; attempt += 1) {
