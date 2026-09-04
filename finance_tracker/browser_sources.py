@@ -19,9 +19,12 @@ def load_browser_sources(path: str | Path) -> dict[str, Any]:
         if not isinstance(row, dict):
             raise ValueError("Browser source account entries must be objects")
         name = str(row.get("actual_account") or "").strip()
-        if not name or name in names:
+        normalized_name = name.casefold()
+        if not name or normalized_name in names:
             raise ValueError(f"Browser source actual_account is missing or duplicated: {name}")
-        names.add(name)
+        names.add(normalized_name)
+        if not str(row.get("label") or "").strip():
+            raise ValueError(f"Browser source label is required: {name}")
         last4 = str(row.get("account_last4") or "")
         if last4 and (not last4.isdigit() or len(last4) != 4):
             raise ValueError(f"Browser source account_last4 must contain exactly four digits: {name}")

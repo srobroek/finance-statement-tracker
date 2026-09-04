@@ -192,6 +192,8 @@ def validate_rule(rule: StaticRule) -> None:
             errors.append(f"condition {index} group must be at least 1")
         if operator in {"between", "date_between"} and condition.second_value is None:
             errors.append(f"condition {index} {operator} requires second_value")
+        if operator == "polarity" and str(condition.value).casefold() not in {"positive", "negative", "zero"}:
+            errors.append(f"condition {index} polarity must be positive, negative, or zero")
         if operator == "regex":
             try:
                 re.compile(str(condition.value))
@@ -263,13 +265,15 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
     elif op == "not_in":
         result = actual_text not in {_text(item, condition.case_sensitive) for item in _values(expected)}
     elif op == "numeric_equals":
-        result = money(actual) == money(expected)
+        result = actual not in (None, "") and money(actual) == money(expected)
     elif op in {"gt", "gte", "lt", "lte"}:
-        left, right = money(actual), money(expected)
-        result = {"gt": left > right, "gte": left >= right, "lt": left < right, "lte": left <= right}[op]
+        if actual in (None, ""):
+            result = False
+        else:
+            left, right = money(actual), money(expected)
+            result = {"gt": left > right, "gte": left >= right, "lt": left < right, "lte": left <= right}[op]
     elif op == "between":
-        left = money(actual)
-        result = money(expected) <= left <= money(condition.second_value)
+        result = actual not in (None, "") and money(expected) <= money(actual) <= money(condition.second_value)
     elif op == "date_on":
         result = _date(actual) == _date(expected)
     elif op == "date_before":
@@ -279,8 +283,16 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
     elif op == "date_between":
         result = _date(expected) <= _date(actual) <= _date(condition.second_value)
     elif op == "polarity":
-        amount = money(actual)
-        result = amount >= 0 if expected_text == "positive" else amount < 0
+        if actual in (None, ""):
+            result = False
+        else:
+            amount = money(actual)
+            if expected_text == "positive":
+                result = amount > 0
+            elif expected_text == "negative":
+                result = amount < 0
+            else:
+                result = amount == 0
     elif op == "is_empty":
         result = actual is None or actual == "" or actual == [] or actual == set()
     elif op == "not_empty":
@@ -308,6 +320,7 @@ def rule_matches(transaction: Transaction, rule: StaticRule) -> bool:
 
 def apply_action(transaction: Transaction, action: RuleAction) -> str:
     name = action.action.casefold()
+    locked = set(transaction.metadata.get("locked_fields", []))
     if name in {"set", "set_if_empty"}:
         if not action.field:
             raise ValueError(f"{name} action requires a field")
@@ -318,20 +331,30 @@ def apply_action(transaction: Transaction, action: RuleAction) -> str:
         transaction.set_value(action.field, action.value)
         return f"{name}:{action.field}"
     if name == "add_tag":
+        if "tags" in locked:
+            return "skipped_locked:tags"
         transaction.tags.add(str(action.value))
         return f"add_tag:{action.value}"
     if name == "remove_tag":
+        if "tags" in locked:
+            return "skipped_locked:tags"
         transaction.tags.discard(str(action.value))
         return f"remove_tag:{action.value}"
     if name == "add_tags":
+        if "tags" in locked:
+            return "skipped_locked:tags"
         values = tuple(str(value) for value in _values(action.value))
         transaction.tags.update(values)
         return "add_tags:" + ",".join(values)
     if name == "request_evidence":
+        if {"evidence_policy", "evidence_status"} & locked:
+            return "skipped_locked:evidence"
         transaction.evidence_policy = str(action.value or "ON_DEMAND")
         transaction.evidence_status = "REQUESTED"
         return "request_evidence"
     if name == "require_review":
+        if "review_required" in locked:
+            return "skipped_locked:review_required"
         transaction.review_required = True
         return "require_review"
     raise ValueError(f"Unsupported rule action: {action.action}")

@@ -185,6 +185,66 @@ class WealthSnapshotTests(unittest.TestCase):
         self.assertEqual(personal["valuation_strategy"], "AGGREGATE_BALANCE_ADJUSTMENT")
         self.assertTrue(personal["valuation_imported_id"].startswith("wealth:sarwa:"))
 
+    def test_future_fx_observation_is_not_fresh_for_earlier_valuation(self) -> None:
+        fx = FXSnapshot(
+            schema_version=1,
+            snapshot_id="future",
+            provider="test",
+            base_currency="USD",
+            quote_currency="AED",
+            observed_at=datetime(2026, 8, 18, tzinfo=timezone.utc),
+            rate=Decimal("3.6725"),
+            precision=4,
+            max_age_seconds=172800,
+            source_identity="fixture",
+        )
+
+        self.assertFalse(fx.is_fresh_for(datetime(2026, 8, 17, tzinfo=timezone.utc)))
+
+    def test_non_object_invest_account_is_rejected_instead_of_dropped(self) -> None:
+        raw = json.loads(CAPTURE.read_text(encoding="utf-8"))
+        raw["invest_accounts"].append("malformed")
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+
+        with self.assertRaisesRegex(ValueError, "must be an object"):
+            SarwaProvider(config["providers"]["sarwa"]).parse_capture(raw)
+
+    def test_duplicate_stable_portfolio_identity_is_rejected(self) -> None:
+        raw = json.loads(CAPTURE.read_text(encoding="utf-8"))
+        duplicate = dict(raw["invest_accounts"][0])
+        duplicate["label"] = "Personal alias"
+        raw["invest_accounts"].append(duplicate)
+        raw["overall"]["balance_usd"] = str(
+            Decimal(raw["overall"]["balance_usd"]) + Decimal(duplicate["balance_usd"])
+        )
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+        config["providers"]["sarwa"]["accounts"][0]["capture_labels"].append("Personal alias")
+
+        with self.assertRaisesRegex(ValueError, "duplicate stable portfolio"):
+            SarwaProvider(config["providers"]["sarwa"]).parse_capture(raw)
+
+    def test_missing_configured_portfolio_is_rejected_even_if_total_is_adjusted(self) -> None:
+        raw = json.loads(CAPTURE.read_text(encoding="utf-8"))
+        removed = raw["invest_accounts"].pop(0)
+        raw["overall"]["balance_usd"] = str(
+            Decimal(raw["overall"]["balance_usd"]) - Decimal(removed["balance_usd"])
+        )
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+
+        with self.assertRaisesRegex(ValueError, "portfolio coverage mismatch"):
+            SarwaProvider(config["providers"]["sarwa"]).parse_capture(raw)
+
+    def test_cent_level_portfolio_rounding_reconciles(self) -> None:
+        raw = json.loads(CAPTURE.read_text(encoding="utf-8"))
+        raw["overall"]["balance_usd"] = str(
+            Decimal(raw["overall"]["balance_usd"]) + Decimal("0.01")
+        )
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+
+        snapshot = SarwaProvider(config["providers"]["sarwa"]).parse_capture(raw)
+
+        self.assertEqual(snapshot.reconciliation.status, "RECONCILED")
+
 
 if __name__ == "__main__":
     unittest.main()

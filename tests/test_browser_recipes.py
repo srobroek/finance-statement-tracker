@@ -139,6 +139,19 @@ class BrowserRecipeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly four"):
                 load_browser_sources(path)
 
+    def test_account_names_are_unique_case_insensitively(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sources.json"
+            path.write_text(json.dumps({
+                "schema_version": 1,
+                "accounts": [
+                    {"actual_account": "Card", "label": "One"},
+                    {"actual_account": "card", "label": "Two"},
+                ],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicated"):
+                load_browser_sources(path)
+
     def test_read_recipe_names_the_visible_value_and_output_field(self) -> None:
         rendered = render_recipe(
             "fab",

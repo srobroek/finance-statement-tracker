@@ -209,7 +209,7 @@ def _fab_csv(path: Path) -> tuple[list[dict[str, object]], list[str]]:
             continue
         when = _parse_date(raw[0])
         if not when:
-            continue
+            raise ValueError(f"FAB browser CSV row has an invalid posting date: {raw}")
         candidates += 1
         debit = raw[3] if len(raw) > 3 else ""
         credit = raw[4] if len(raw) > 4 else ""
@@ -262,7 +262,7 @@ def _generic_csv(path: Path) -> tuple[list[dict[str, object]], list[str]]:
             continue
         when = _parse_date(raw[date_index])
         if not when:
-            continue
+            raise ValueError(f"Generic browser CSV row has an invalid date: {raw}")
         candidates += 1
         direction: str
         amount_value: str

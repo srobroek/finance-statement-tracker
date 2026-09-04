@@ -131,6 +131,37 @@ class BrowserExportTests(unittest.TestCase):
         self.assertEqual("Amazon", capture["rows"][0]["description"])
         self.assertEqual("DEBIT", capture["rows"][0]["direction"])
 
+    def test_generic_csv_rejects_nonblank_rows_with_invalid_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "generic.csv"
+            path.write_text(
+                "Transaction Date,Description,Amount,Direction\n"
+                "2026-07-31,Amazon,250.00,DR\n"
+                "not-a-date,Lost row,10.00,DR\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid date"):
+                build_capture_from_export(
+                    "generic-csv", "csv-transactions", path, ACCOUNT,
+                    adapters_root=ROOT / "browser_adapters",
+                )
+
+    def test_fab_csv_rejects_nonblank_rows_with_invalid_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fab.csv"
+            path.write_text(
+                "Account Number,AE001234567890123456789\nCurrency,AED\n\n"
+                "Posting Date,Value date,Description,Debit Amount,Credit Amount,Running Balance\n"
+                "31/07/2026,31/07/2026,DEWA,450.00,,1000.00\n"
+                "not-a-date,,Lost row,10.00,,990.00\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid posting date"):
+                build_capture_from_export(
+                    "fab", "current-account-transactions", path, ACCOUNT,
+                    adapters_root=ROOT / "browser_adapters",
+                )
+
     def test_emirates_islamic_xlsx_retains_pending_status_for_review(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ei.xlsx"

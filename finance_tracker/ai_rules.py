@@ -152,7 +152,7 @@ class AIEnrichmentEngine:
             unresolved = [
                 field
                 for field in policy.target_fields
-                if field == "tags" or (field not in locked and _unresolved(transaction, field))
+                if field not in locked and (field == "tags" or _unresolved(transaction, field))
             ]
             if not unresolved:
                 continue
@@ -181,7 +181,12 @@ class AIEnrichmentEngine:
                 )
                 traces.append(trace)
                 if not trace.accepted:
-                    transaction.review_required = True
+                    transaction.set_value("review_required", True)
+                elif trace.field in unresolved and trace.field != "tags":
+                    # A response may contain a field more than once. Once an
+                    # accepted proposal resolves it, later proposals must not
+                    # overwrite the first accepted value.
+                    unresolved.remove(trace.field)
         transaction.metadata.setdefault("ai_trace", []).extend(
             {
                 "policy_id": trace.policy_id,
@@ -283,6 +288,10 @@ class AIEnrichmentEngine:
             accepted, reason = False, "below_confidence_threshold"
         elif policy.allowed_values and field in policy.allowed_values and value not in policy.allowed_values[field]:
             accepted, reason = False, "value_not_allowed"
+        elif field == "is_subscription" and not isinstance(value, bool):
+            accepted, reason = False, "boolean_value_required"
+        elif field not in {"is_subscription", "tags", "category_recommendation", "rule_recommendation"} and value in (None, ""):
+            accepted, reason = False, "empty_value"
         elif field == "tags":
             values = value if isinstance(value, list) else [value]
             allowed = set(policy.allowed_tags)
@@ -292,7 +301,7 @@ class AIEnrichmentEngine:
                 transaction.tags.update(str(item) for item in values)
         elif field == "evidence_policy":
             transaction.evidence_policy = str(value)
-            transaction.evidence_status = "REQUESTED"
+            transaction.set_value("evidence_status", "REQUESTED")
         elif field == "rule_recommendation":
             if not isinstance(value, dict):
                 accepted, reason = False, "rule_recommendation_must_be_object"
@@ -308,8 +317,9 @@ class AIEnrichmentEngine:
                     "reason": str(value.get("reason") or rationale).strip(),
                 }
                 transaction.metadata.setdefault("category_recommendations", []).append(recommendation)
-                transaction.tags.add("category-review")
-                transaction.review_required = True
+                if "tags" not in set(transaction.metadata.get("locked_fields", [])):
+                    transaction.tags.add("category-review")
+                transaction.set_value("review_required", True)
         else:
             transaction.set_value(field, value)
         return AITrace(
@@ -449,6 +459,10 @@ def record_ai_review(
         if not isinstance(final_value, list):
             raise ValueError("Reviewed tags must be a list")
         transaction.tags = {str(tag) for tag in final_value}
+    elif field == "is_subscription":
+        if not isinstance(final_value, bool):
+            raise ValueError("Reviewed is_subscription must be a boolean")
+        transaction.is_subscription = final_value
     elif field == "evidence_policy":
         transaction.evidence_policy = str(final_value)
         transaction.evidence_status = "REQUESTED"

@@ -2,7 +2,7 @@ from datetime import datetime
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
-from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule, validate_rule
+from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule, condition_matches, validate_rule
 
 
 class RuleEngineTests(TestCase):
@@ -46,6 +46,64 @@ class RuleEngineTests(TestCase):
         transaction.metadata["locked_fields"] = ["category"]
         RuleEngine([rule]).apply(transaction)
         self.assertEqual(transaction.category, "MANUAL")
+
+    def test_manual_locks_cover_tag_evidence_and_review_actions(self) -> None:
+        rule = StaticRule(
+            "locked-derived",
+            "Locked derived fields",
+            "EVIDENCE",
+            10,
+            [RuleCondition("amount_aed", "gt", "0")],
+            [
+                RuleAction("add_tag", value="automatic"),
+                RuleAction("request_evidence", value="IF_MISSING"),
+                RuleAction("require_review"),
+            ],
+        )
+        transaction = self.transaction()
+        transaction.tags = {"manual"}
+        transaction.evidence_policy = "NEVER"
+        transaction.metadata["locked_fields"] = [
+            "tags", "evidence_policy", "evidence_status", "review_required"
+        ]
+
+        RuleEngine([rule]).apply(transaction)
+
+        self.assertEqual(transaction.tags, {"manual"})
+        self.assertEqual(transaction.evidence_policy, "NEVER")
+        self.assertEqual(transaction.evidence_status, "NOT_REQUESTED")
+        self.assertFalse(transaction.review_required)
+
+    def test_missing_numeric_field_does_not_match_zero(self) -> None:
+        transaction = self.transaction()
+        self.assertFalse(condition_matches(
+            transaction, RuleCondition("history_count", "numeric_equals", 0)
+        ))
+        self.assertFalse(condition_matches(
+            transaction, RuleCondition("history_count", "between", -1, 1)
+        ))
+        self.assertFalse(condition_matches(
+            transaction, RuleCondition("history_count", "polarity", "positive")
+        ))
+        transaction.metadata["history_count"] = 0
+        self.assertFalse(condition_matches(
+            transaction, RuleCondition("history_count", "polarity", "positive")
+        ))
+        self.assertTrue(condition_matches(
+            transaction, RuleCondition("history_count", "polarity", "zero")
+        ))
+
+    def test_polarity_rejects_unknown_direction(self) -> None:
+        rule = StaticRule(
+            "bad-polarity",
+            "Bad polarity",
+            "CLASSIFICATION",
+            10,
+            [RuleCondition("amount_aed", "polarity", "nonnegative")],
+            [RuleAction("set", "category", "Bad")],
+        )
+        with self.assertRaisesRegex(ValueError, "positive, negative, or zero"):
+            validate_rule(rule)
 
     def test_invalid_field_is_rejected_before_evaluation(self) -> None:
         rule = StaticRule(

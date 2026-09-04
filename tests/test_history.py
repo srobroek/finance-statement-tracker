@@ -47,3 +47,15 @@ class HistoryMatchingTests(TestCase):
             Transaction("2", datetime(2026, 7, 2), "CARD", "EXAMPLE 2", "10", category="Groceries"),
         ]
         self.assertNotIn("EXAMPLE", build_history_index(rows))
+
+    def test_history_does_not_modify_manually_locked_tags(self) -> None:
+        rows = [
+            Transaction(str(index), datetime(2026, 7, index), "CARD", "EXAMPLE", "10", tags={"auto"})
+            for index in (1, 2)
+        ]
+        target = Transaction("new", datetime(2026, 8, 1), "CARD", "EXAMPLE", "10", tags={"manual"})
+        target.metadata["locked_fields"] = ["tags"]
+
+        apply_history_match(target, build_history_index(rows))
+
+        self.assertEqual(target.tags, {"manual"})
