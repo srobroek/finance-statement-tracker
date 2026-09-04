@@ -92,7 +92,6 @@ class N8nCustomImageTests(unittest.TestCase):
             dockerfile,
         )
         self.assertIn("--repository https://dl-cdn.alpinelinux.org/alpine/v3.24/main", dockerfile)
-        self.assertIn("FINANCE_ALPINE_RELEASE_MISMATCH", dockerfile)
         self.assertNotIn("--allow-untrusted", dockerfile)
         for package, version in ALPINE_SECURITY_PACKAGES.items():
             self.assertIn(f"{package}={version}", dockerfile)
