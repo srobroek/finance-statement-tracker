@@ -1,0 +1,78 @@
+name: n8n disposable container validation
+
+on:
+  pull_request:
+    paths:
+      - "integrations/n8n/**"
+      - "packages/n8n-nodes-finance/**"
+      - "scripts/run-n8n-disposable-runtime.py"
+      - ".github/workflows/n8n-container-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/n8n/**"
+      - "packages/n8n-nodes-finance/**"
+      - "scripts/run-n8n-disposable-runtime.py"
+      - ".github/workflows/n8n-container-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n8n-disposable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  disposable-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify source-derived fixture drift
+        run: |
+          python integrations/n8n/disposable/generate_fixture_workflows.py --write
+          git diff --exit-code -- integrations/n8n/disposable
+          python scripts/run-n8n-disposable-runtime.py --validate-only
+
+      - name: Pull pinned n8n 2.36.2 runtime
+        run: |
+          docker pull n8nio/n8n:2.36.2
+          test "$(docker run --rm --entrypoint n8n n8nio/n8n:2.36.2 --version)" = "2.36.2"
+
+      - name: Execute replay and failure routes in disposable n8n
+        env:
+          DISPOSABLE_ONLY_ACK: DISPOSABLE_ONLY
+        run: |
+          state_dir="$(mktemp -d)"
+          chmod 0777 "$state_dir"
+          container="finance-n8n-disposable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            rm -rf "$state_dir" "$RUNNER_TEMP/n8n-disposable"
+          }
+          trap cleanup EXIT
+          docker run --detach \
+            --name "$container" \
+            --network none \
+            --read-only \
+            --entrypoint sleep \
+            --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
+            --volume "$state_dir:/home/node/.n8n" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --env N8N_ENCRYPTION_KEY=disposable-runtime-only-key-000001 \
+            --env N8N_DIAGNOSTICS_ENABLED=false \
+            --env N8N_VERSION_NOTIFICATIONS_ENABLED=false \
+            --env N8N_RUNNERS_ENABLED=false \
+            n8nio/n8n:2.36.2 infinity
+          mkdir -p "$RUNNER_TEMP/n8n-disposable"
+          wrapper="$RUNNER_TEMP/n8n-disposable/n8n"
+          cat > "$wrapper" <<EOF
+          #!/bin/sh
+          exec docker exec "$container" n8n "\$@"
+          EOF
+          chmod 0700 "$wrapper"
+          python scripts/run-n8n-disposable-runtime.py \
+            --n8n "$wrapper" \
+            --runtime-fixture-root /workspace/integrations/n8n/disposable
