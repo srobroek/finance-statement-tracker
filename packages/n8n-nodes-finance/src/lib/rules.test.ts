@@ -81,3 +81,34 @@ test('unsafe regular expressions are rejected', () => {
   assert.ok(performance.now() - started < 1000, 'RE2-compatible hostile input must remain linear-time');
   assert.throws(() => validateNonRepresentableRule({ ...rule, match: { any: [{ all: [{ field: 'merchant_raw', operator: 'regex', value: '[' }] }] } }), /regular expression/);
 });
+
+test('manual locks survive normalization and every rule action', () => {
+  const input = { merchant_raw: 'AMZN UAE', vendor: '  My vendor ', currency: 'aed', tags: ['#B', '#A'], review_required: false, evidence_status: 'VERIFIED', transaction_type: 'REFUND', transaction_type_locked: true, locked_fields: ['vendor', 'currency', 'tags', 'review_required', 'evidence_status'] };
+  const result = applyNonRepresentableRules(input, [{ ...rule, stage: 'TRANSACTION_NORMALIZATION', actions: [
+    { action: 'set', field: 'vendor', value: 'Amazon' },
+    { action: 'set', field: 'transaction_type', value: 'PURCHASE' },
+    { action: 'require_review' }, { action: 'request_evidence' },
+  ] }]);
+  assert.deepEqual(result, input);
+  assert.throws(() => normalizeTransaction({ locked_fields: 'vendor' }), /locked_fields/);
+});
+
+test('missing numeric values never become zero in rule matching', () => {
+  for (const amount of [undefined, null, '', ' ', false, [], 'invalid', Infinity]) {
+    const result = applyNonRepresentableRules({ amount_aed: amount }, [{ ...rule, match: { any: [{ all: [{ field: 'amount_aed', operator: 'numeric_equals', value: 0 }] }] } }]);
+    assert.equal(result.vendor, undefined);
+  }
+  for (const amount of [0, '0']) {
+    assert.equal(applyNonRepresentableRules({ amount_aed: amount }, [{ ...rule, match: { any: [{ all: [{ field: 'amount_aed', operator: 'numeric_equals', value: 0 }] }] } }]).vendor, 'Amazon');
+  }
+  assert.throws(() => validateNonRepresentableRule({ ...rule, match: { any: [{ all: [{ field: 'amount_aed', operator: 'lt', value: null }] }] } }), /finite/);
+});
+
+test('date rules use the source calendar date and tags obey case sensitivity', () => {
+  const dateRule = { ...rule, match: { any: [{ all: [{ field: 'transaction_at', operator: 'date_on', value: '2026-08-01' }] }] } };
+  assert.equal(applyNonRepresentableRules({ transaction_at: '2026-08-01T23:30:00-04:00' }, [dateRule]).vendor, 'Amazon');
+  assert.equal(applyNonRepresentableRules({ transaction_at: '2026-02-30' }, [dateRule]).vendor, undefined);
+  const tagRule = { ...rule, match: { any: [{ all: [{ field: 'tags', operator: 'has_tag', value: '#SHARED' }] }] } };
+  assert.equal(applyNonRepresentableRules({ tags: ['#shared'] }, [tagRule]).vendor, 'Amazon');
+  assert.equal(applyNonRepresentableRules({ tags: ['#shared'] }, [{ ...tagRule, match: { any: [{ all: [{ ...tagRule.match.any[0].all[0], case_sensitive: true }] }] } }]).vendor, undefined);
+});

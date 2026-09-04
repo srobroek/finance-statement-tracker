@@ -23,6 +23,8 @@ export async function callPdfUtility(operation: PdfOperation, pdf: Buffer, passw
     }, response => {
       const chunks: Buffer[] = [];
       let size = 0;
+      response.on('error', reject);
+      response.on('aborted', () => reject(new Error('PDF utility response was interrupted')));
       response.on('data', chunk => {
         size += chunk.length;
         if (size > 26 * 1024 * 1024) response.destroy(new Error('PDF utility response exceeded limit'));

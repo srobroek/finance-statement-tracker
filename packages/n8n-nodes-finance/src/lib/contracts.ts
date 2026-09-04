@@ -50,6 +50,7 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
     ids.add(importedId);
     const amount = row.amount;
     if (!Number.isSafeInteger(amount)) throw new Error(`${label}[${index}].amount must be integer minor units`);
+    if (row.cleared !== undefined && typeof row.cleared !== 'boolean') throw new Error(`${label}[${index}].cleared must be boolean`);
     return {
       imported_id: importedId,
       date: assertIsoDate(row.date, `${label}[${index}].date`),
@@ -77,7 +78,8 @@ export function requiredString(value: unknown, label: string, max = 512): string
 
 export function assertIsoDate(value: unknown, label: string): string {
   const result = requiredString(value, label, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || Number.isNaN(Date.parse(`${result}T00:00:00Z`))) {
+  const timestamp = Date.parse(`${result}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || !Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== result) {
     throw new Error(`${label} must be YYYY-MM-DD`);
   }
   return result;
