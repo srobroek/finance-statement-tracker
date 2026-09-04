@@ -19,6 +19,9 @@ on:
 permissions:
   contents: read
 
+env:
+  N8N_IMAGE: n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401
+
 concurrency:
   group: n8n-disposable-${{ github.ref }}
   cancel-in-progress: true
@@ -38,19 +41,17 @@ jobs:
 
       - name: Pull pinned n8n 2.36.2 runtime
         run: |
-          docker pull n8nio/n8n:2.36.2
-          test "$(docker run --rm --entrypoint n8n n8nio/n8n:2.36.2 --version)" = "2.36.2"
+          docker pull "$N8N_IMAGE"
+          test "$(docker run --rm --entrypoint n8n "$N8N_IMAGE" --version)" = "2.36.2"
 
       - name: Execute replay and failure routes in disposable n8n
         env:
           DISPOSABLE_ONLY_ACK: DISPOSABLE_ONLY
         run: |
-          state_dir="$(mktemp -d)"
-          chmod 0777 "$state_dir"
           container="finance-n8n-disposable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           cleanup() {
             docker rm -f "$container" >/dev/null 2>&1 || true
-            rm -rf "$state_dir" "$RUNNER_TEMP/n8n-disposable"
+            rm -rf "$RUNNER_TEMP/n8n-disposable"
           }
           trap cleanup EXIT
           docker run --detach \
@@ -59,13 +60,13 @@ jobs:
             --read-only \
             --entrypoint sleep \
             --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
-            --volume "$state_dir:/home/node/.n8n" \
+            --tmpfs /home/node/.n8n:uid=1000,gid=1000,mode=0700 \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --env N8N_ENCRYPTION_KEY=disposable-runtime-only-key-000001 \
             --env N8N_DIAGNOSTICS_ENABLED=false \
             --env N8N_VERSION_NOTIFICATIONS_ENABLED=false \
             --env N8N_RUNNERS_ENABLED=false \
-            n8nio/n8n:2.36.2 infinity
+            "$N8N_IMAGE" infinity
           mkdir -p "$RUNNER_TEMP/n8n-disposable"
           wrapper="$RUNNER_TEMP/n8n-disposable/n8n"
           cat > "$wrapper" <<EOF

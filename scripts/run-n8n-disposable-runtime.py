@@ -75,6 +75,20 @@ def run(command: list[str], env: dict[str, str], *, expect_success: bool) -> str
     return result.stdout
 
 
+def terminal_redaction_receipt(output: str) -> dict:
+    marker = "Execution was successful:"
+    try:
+        payload_start = output.index("{", output.index(marker) + len(marker))
+        execution = json.loads(output[payload_start:])
+        runs = execution["data"]["resultData"]["runData"]
+        terminal = runs["Read Back Verified Failure Receipt"][-1]["data"]["main"][0][0]["json"]
+    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError("n8n output omitted the terminal redaction receipt") from error
+    if not isinstance(terminal, dict):
+        raise RuntimeError("n8n terminal redaction receipt is malformed")
+    return terminal
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture-root", type=Path, default=DEFAULT_FIXTURES)
@@ -115,17 +129,31 @@ def main() -> int:
         success_id = next(
             row["id"] for row in manifest["workflows"] if row["file"] == SUCCESS_FILE
         )
-        outputs = [
-            run([executable, "execute", "--id", success_id], env, expect_success=True)
+        receipts = [
+            terminal_redaction_receipt(
+                run([executable, "execute", "--id", success_id], env, expect_success=True)
+            )
             for _ in range(2)
         ]
         forbidden = manifest["scenario_contract"]["error_redaction"]["forbidden_readback"]
-        for index, output in enumerate(outputs, start=1):
-            if any(secret in output for secret in forbidden):
+        for index, receipt in enumerate(receipts, start=1):
+            rendered = json.dumps(receipt, sort_keys=True)
+            if any(secret in rendered for secret in forbidden):
                 raise RuntimeError(f"redaction fixture replay {index} exposed forbidden data")
-            for marker in ("[REDACTED]", "n8n_execution_history", "readback_verified"):
-                if marker not in output:
-                    raise RuntimeError(f"redaction fixture replay {index} omitted {marker}")
+            if (
+                receipt.get("error_message_redacted")
+                != "password:[REDACTED] token:[REDACTED] card:[REDACTED]"
+                or receipt.get("terminal_receipt_sink") != "n8n_execution_history"
+                or receipt.get("readback_verified") is not True
+            ):
+                raise RuntimeError(f"redaction fixture replay {index} failed terminal assertions")
+        stable_fields = (
+            "execution_id", "workflow_id", "workflow_code", "provider_code",
+            "error_class", "error_message_redacted", "terminal_receipt_sink",
+            "readback_verified",
+        )
+        if any(receipts[0].get(field) != receipts[1].get(field) for field in stable_fields):
+            raise RuntimeError("redaction fixture replay changed stable terminal fields")
 
         failure_id = next(
             row["id"] for row in manifest["workflows"] if row["file"] == FAILURE_FILE
