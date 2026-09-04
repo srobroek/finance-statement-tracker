@@ -35,6 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Reclaim unused hosted toolchains for image export
+        run: |
+          df -h /
+          # This disposable job needs Node and Docker, not Android or .NET.
+          # Leave the hosted tool cache intact for actions/setup-node.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h /
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
@@ -60,7 +67,13 @@ jobs:
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build exact custom n8n image
         id: build_custom_image
-        run: docker build --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}" --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
+        run: |
+          # These host installs have already passed tests and audits. Docker
+          # installs the locked dependencies inside its own builder stage.
+          rm -rf packages/n8n-nodes-finance/node_modules packages/n8n-nodes-finance/community-ai/node_modules
+          df -h /
+          docker system df
+          docker build --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}" --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
       - name: Smoke custom node image
         run: |
           echo "custom smoke checkpoint: inspect image and version"
