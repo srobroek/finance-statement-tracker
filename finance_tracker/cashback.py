@@ -152,6 +152,8 @@ class CardProgram:
     position_mode: str = "SPEND"
     position_headline: str | None = None
     position_detail: str | None = None
+    provenance_authority: str = "NON_AUTHORITATIVE"
+    provenance_reason: str | None = None
     pace_policy: PacePolicy = PacePolicy()
     alert_policy: AlertPolicy = AlertPolicy()
     base_currency: str = "AED"
@@ -1166,6 +1168,7 @@ def programs_from_config(
         pace = _merged_policy(source, item, "pace")
         alerts = _merged_policy(source, item, "alerts")
         tracking = item.get("tracking") or {}
+        provenance = item.get("provenance") or {}
         if not isinstance(tracking, dict):
             raise ValueError(f"Cashback program {item.get('card')} tracking must be an object")
         tracking_mode = str(tracking.get("mode") or "LIVE").upper()
@@ -1206,6 +1209,8 @@ def programs_from_config(
                 position_mode=position_mode,
                 position_headline=str(tracking.get("headline") or "") or None,
                 position_detail=str(tracking.get("detail") or "") or None,
+                provenance_authority=str(provenance.get("authority") or "NON_AUTHORITATIVE"),
+                provenance_reason=str(provenance.get("reason") or "") or None,
                 pace_policy=PacePolicy(
                     basis=str(pace.get("basis") or "WEEKLY").upper(),
                     routing_basis=str(pace.get("routing_basis") or "CYCLE").upper(),

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
-    def _root_bash_command(self, script: Path) -> list[str]:
+    def _root_bash_command(self, script: Path, environment: dict[str, str]) -> list[str]:
         """Run root-only fixtures wherever the runner permits it.
 
         Local sandboxes and hosted runners often disable user namespaces.  A
@@ -33,10 +33,33 @@ class DeploymentScriptTests(unittest.TestCase):
                 check=False,
             )
             if probe.returncode == 0:
-                return ["sudo", "-n", "-E", "bash", str(script)]
+                # sudo's secure_path replaces PATH even with -E. Restore the
+                # fixture's tool directory after elevation so these tests
+                # cannot accidentally invoke the host's real Docker client.
+                return ["sudo", "-n", "-E", "env", f"PATH={environment['PATH']}", "bash", str(script)]
         raise unittest.SkipTest(
             "root-only fixture unavailable: user namespaces and passwordless sudo are disabled"
         )
+
+    def _run_root_fixture(
+        self, script: Path, root: Path, environment: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        command = self._root_bash_command(script, environment)
+        try:
+            return subprocess.run(
+                command, cwd=Path.cwd(), env=environment,
+                text=True, capture_output=True, check=False,
+            )
+        finally:
+            if command[0] == "sudo":
+                # The real root-only script correctly creates private files.
+                # Return this disposable fixture to the test user for readback
+                # assertions and TemporaryDirectory cleanup.
+                subprocess.run(
+                    ["sudo", "-n", "chown", "-R", "--no-dereference", "--",
+                     f"{os.getuid()}:{os.getgid()}", str(root)],
+                    check=True, capture_output=True, text=True,
+                )
 
     def _run_render_env_fixture(
         self,
@@ -278,15 +301,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "DOCKER_MODE": docker_mode,
                 }
             )
-            command = self._root_bash_command(script)
-            result = subprocess.run(
-                command,
-                cwd=Path.cwd(),
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = self._run_root_fixture(script, root, environment)
             self.assertIn(
                 probe_mode,
                 ("success", "missing_probe", "runtime_exec_failed", "probe_unhealthy"),
@@ -617,15 +632,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "STUB_FD_LOG": str(fd_log),
                 }
             )
-            command = self._root_bash_command(script)
-            result = subprocess.run(
-                command,
-                cwd=Path.cwd(),
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = self._run_root_fixture(script, root, environment)
             self.assertEqual(result.returncode, 0, result.stderr)
             fd_observations = fd_log.read_text(encoding="utf-8")
             self.assertIn("closed\n", fd_observations)

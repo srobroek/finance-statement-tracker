@@ -659,6 +659,14 @@ function renderStatus(status) {
   root.title = `Last successful ingest: ${new Date(lastIngest).toLocaleString()}`;
 }
 
+function renderRewardDisclosure(estimate) {
+  const root = document.querySelector("#reward-disclosure");
+  const label = estimate?.label || "Estimated rewards based on configured terms";
+  const authority = estimate?.authority || "NON_AUTHORITATIVE";
+  const evidenceLabel = authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified";
+  root.textContent = `${label} · ${evidenceLabel}`;
+}
+
 let dashboardLoadSequence = 0;
 
 function renderDashboardError(error) {
@@ -688,6 +696,7 @@ async function loadDashboard() {
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
   if (sequence !== dashboardLoadSequence) return;
   configureDisplay(payload);
+  renderRewardDisclosure(payload.reward_estimate);
   renderStatus(payload.data_status);
   const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
   renderRecommendations(routing);

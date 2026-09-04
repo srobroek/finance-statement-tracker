@@ -169,7 +169,7 @@
         "mode": "STATEMENT_ONLY",
         "position_mode": "UNLIMITED",
         "headline": "Unlimited",
-        "detail": "6% Amazon cashback · statement only"
+        "detail": "Configured estimate: up to 6% in Amazon Reward Points on eligible Amazon.ae spend with qualifying Prime membership · statement only"
       },
       "programme_version": "confirmed-2026-08-v1",
       "effective_start": "2026-08-01",
@@ -184,7 +184,7 @@
       "source_references": [],
       "provenance": {
         "authority": "NON_AUTHORITATIVE",
-        "reason": "Cardholder-confirmed seed; issuer evidence is unavailable for claim-level verification.",
+        "reason": "Cardholder-confirmed seed; issuer evidence is unavailable for claim-level verification. The configured 6% is conditional on qualifying Prime membership and eligible Amazon.ae spend, and the reward is issued as Amazon Reward Points rather than cash.",
         "claims": []
       },
       "safety_target_aed": null,

@@ -3,7 +3,8 @@
 This is a source verification record for the three seed programmes in
 [`config/cashback-programs.json`](../config/cashback-programs.json). It uses
 issuer-published pages and issuer PDFs retrieved on 2026-09-04. The seed JSON
-was deliberately left unchanged: all three programmes remain
+keeps its cardholder-confirmed rates and routing unchanged; only the visible
+estimate/provenance wording was clarified. All three programmes remain
 `NON_AUTHORITATIVE` until claim-level evidence, effective dates, and content
 digests are recorded in configuration.
 
@@ -17,7 +18,7 @@ review or the active ADCB history path.
 | --- | --- | --- | --- |
 | **RAKBANK World** | AED 10,000 tier; 10% on grocery, dining, and travel; caps AED 300/300/400; 1% standard retail capped AED 100; 3% e-wallet retail capped AED 150. | RAKBANK’s current World leaflet confirms the AED 10,000 minimum per statement cycle, the three 10% categories and those caps, plus 1% standard retail and 3% e-wallet retail. It also states that charity, government, bill, school/education, transit/transport, telecom, real-estate, and petrol/gas categories earn 0.25%; cashback has a AED 15,000 annual maximum divided into AED 400 travel, AED 300 grocery, AED 300 dining, and AED 250 other retail per month; redemption requires AED 300; qualifying category treatment is based on issuer-selected Mastercard MCCs. | **Partial match.** The headline rates, threshold, and monthly caps match. The seed does not model the 0.25% category band, AED 300 redemption minimum, explicit annual cap, or the issuer’s MCC list. Its broad text exclusions also do not encode the 0.25% exceptions. |
 | **Standard Chartered Platinum X** | Spend tiers at AED 0/2,500/7,500/15,000; 3%/5%/10% on AED online, AED mobile-wallet POS, and foreign-currency buckets; caps at each tier of online 100/200/400, wallet 100/200/200, foreign 100/200/400. | Standard Chartered’s Platinum X page confirms the same four thresholds, rates, and bucket caps. Its programme terms define qualifying spend as AED online, non-AED foreign-currency, and AED mobile-wallet POS spend, and list exclusions including balance/payment plans, cash advances, card cheques, finance charges, all bank fees, and reversed merchant transactions. The terms also say transactions posted by the bank are used, with billing-date and merchant-claim timing that can move a transaction to the next statement. | **Rates/caps match; eligibility semantics are incomplete.** The seed lists only “issuer-designated ineligible transactions” and has no machine-readable treatment for the named exclusions, posting/billing cutover, or the bank’s card-status eligibility rules. |
-| **Emirates Islamic Amazon** | A single uncapped AED 6% `EI_AMAZON` bucket for online Amazon transactions; tracking is labelled “6% Amazon cashback · statement only”; no exclusions. | Emirates Islamic’s Amazon card page and reward-points guide state that rewards are Amazon Reward Points, not a statement cash credit. For Prime cardholders the published rates are 6% on-Amazon, 2% Amazon Ultra-Fast Grocery/gift cards, 2.5% international, 2% EEA/UK, up to 2% domestic off-Amazon, and 0.25% on listed specific categories. Non-Prime rates are 3%, 1%, 1%, 0.25%, up to 1%, and 0.25% respectively. Prime status is evaluated daily on the primary Amazon account. The page says there is no earning limit, while the guide limits monthly qualifying transactions to the assigned credit limit. | **Not sufficient for production accuracy.** The 6% on-Amazon Prime rate and no-earning-cap headline match, but the seed has no Prime-status dimension, treats rewards as generic cashback, and omits the other published spend categories/rates and the credit-limit/monthly qualification rule. |
+| **Emirates Islamic Amazon** | A single uncapped configured 6% `EI_AMAZON` estimate for online Amazon transactions; tracking now identifies qualifying Prime membership, eligible Amazon.ae spend, Amazon Reward Points, and statement-only confirmation. | Emirates Islamic’s Amazon card page and reward-points guide state that rewards are Amazon Reward Points, not a statement cash credit. For Prime cardholders the published rates are 6% on-Amazon, 2% Amazon Ultra-Fast Grocery/gift cards, 2.5% international, 2% EEA/UK, up to 2% domestic off-Amazon, and 0.25% on listed specific categories. Non-Prime rates are 3%, 1%, 1%, 0.25%, up to 1%, and 0.25% respectively. Prime status is evaluated daily on the primary Amazon account. The page says there is no earning limit, while the guide limits monthly qualifying transactions to the assigned credit limit. | **Not sufficient for production accuracy.** The configured rate remains useful only as a cardholder-confirmed estimate. The engine has no Prime-status dimension and omits the other published spend categories/rates and the credit-limit/monthly qualification rule. |
 
 ## Official sources
 
@@ -60,7 +61,7 @@ threshold is computed from `CASHBACK_TOPICS` (purchase/refund/reversal), so it
 must be reconciled with each issuer’s definition of “total spend” before any
 programme is promoted to authoritative.
 
-## Required before promotion
+## Issue #87 production blockers
 
 1. Obtain dated issuer evidence for each configured effective interval and
    attach claim paths and SHA-256 digests in `source_references`/`provenance`.
@@ -72,4 +73,3 @@ programme is promoted to authoritative.
    the programme’s documented scope explicitly to Prime on-Amazon tracking.
 4. Encode or enforce named Standard Chartered and RAKBANK exclusions before
    allowing those programmes to drive production cashback decisions.
-

@@ -564,7 +564,10 @@ class BrowserMutationServerTests(unittest.TestCase):
                         self.assertNotIn("subscription_count", serialized)
                         self.assertNotIn("sent_count", serialized)
                         self.assertNotIn("p256dh", serialized)
-                        self.assertNotIn("auth", serialized)
+                        # Match the exact push-key field.  Public cashback
+                        # evidence legitimately contains the word
+                        # ``authority`` in its provenance metadata.
+                        self.assertNotIn('"auth":', serialized)
 
                 status, body = self._get(
                     port,
