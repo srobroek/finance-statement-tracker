@@ -17,8 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "integrations" / "n8n" / "setup-workflows"
 RUNNER = SETUP / "runner"
 SOURCE = SETUP / "23-microsoft-oauth-refresh-proof.json"
-SOURCE_COMMIT = "b3bce6e197c6603d3e8708156bed987f26ac8513"
-SOURCE_SHA = "879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
+PROVENANCE_FIXTURE = ROOT / "tests" / "fixtures" / "microsoft-oauth-refresh-proof.provenance.json"
 DATA_TABLE_OUTPUT_FIXTURE = ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
 
 
@@ -211,13 +210,35 @@ class MicrosoftOAuthRefreshRunnerTests(unittest.TestCase):
         root = Path(temporary.name)
         finance_repo = root / "finance"
         subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(finance_repo)], check=True)
-        subprocess.run(["git", "fetch", "--quiet", str(ROOT), SOURCE_COMMIT], cwd=finance_repo, check=True)
-        subprocess.run(["git", "checkout", "--quiet", SOURCE_COMMIT], cwd=finance_repo, check=True)
+        subprocess.run(["git", "config", "user.email", "synthetic@example.test"], cwd=finance_repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Synthetic Preflight"], cwd=finance_repo, check=True)
+        # The source is pinned by a checked-in provenance fixture. Build a
+        # local promoted anchor instead of fetching an old commit: CI uses a
+        # shallow checkout and this synthetic test must remain offline.
+        provenance = json.loads(PROVENANCE_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(provenance["source_path"], SOURCE.relative_to(ROOT).as_posix())
+        self.assertEqual(hashlib.sha256(SOURCE.read_bytes()).hexdigest(), provenance["source_sha256"])
+        subprocess.run(
+            ["git", "commit", "--quiet", "--allow-empty", "-m", "synthetic promoted anchor"],
+            cwd=finance_repo,
+            check=True,
+        )
+        synthetic_anchor = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=finance_repo, text=True
+        ).strip()
         shutil.copytree(
             RUNNER,
             finance_repo / "integrations" / "n8n" / "setup-workflows" / "runner",
             dirs_exist_ok=True,
         )
+        synthetic_runner = finance_repo / "integrations" / "n8n" / "setup-workflows" / "runner" / "run-transient-microsoft-oauth-refresh-proof.sh"
+        runner_source = synthetic_runner.read_text(encoding="utf-8")
+        runner_source = runner_source.replace(
+            'readonly prior_promoted_commit="00491aae2ab43c486f3a9b4a62ce3ba5e63032f6"',
+            f'readonly prior_promoted_commit="{synthetic_anchor}"',
+            1,
+        )
+        synthetic_runner.write_text(runner_source, encoding="utf-8")
         subprocess.run(
             ["git", "add", "integrations/n8n/setup-workflows/runner"],
             cwd=finance_repo,
@@ -447,8 +468,9 @@ sys.exit(0)
         return temporary, environment, log_path, receipt
 
     def run_synthetic_preflight(self, environment):
+        synthetic_runner = Path(environment["FINANCE_REPOSITORY_DIR"]) / "integrations" / "n8n" / "setup-workflows" / "runner"
         return subprocess.run(
-            ["bash", str(RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh")],
+            ["bash", str(synthetic_runner / "run-transient-microsoft-oauth-refresh-proof.sh")],
             cwd=ROOT,
             env=environment,
             text=True,
@@ -519,11 +541,19 @@ sys.exit(0)
                     assert_synthetic_docker_allowlist(log_path)
 
     def test_runtime_binder_is_exact_and_never_records_identifiers(self) -> None:
+        provenance = json.loads(PROVENANCE_FIXTURE.read_text(encoding="utf-8"))
         self.assertEqual(
-            subprocess.check_output(["git", "show", f"{SOURCE_COMMIT}:integrations/n8n/setup-workflows/23-microsoft-oauth-refresh-proof.json"], cwd=ROOT),
-            SOURCE.read_bytes(),
+            set(provenance),
+            {"schema_version", "source_path", "source_commit", "source_sha256"},
         )
-        self.assertEqual(hashlib.sha256(SOURCE.read_bytes()).hexdigest(), SOURCE_SHA)
+        self.assertEqual(provenance["schema_version"], 1)
+        self.assertEqual(provenance["source_path"], SOURCE.relative_to(ROOT).as_posix())
+        self.assertRegex(provenance["source_commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(provenance["source_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+            provenance["source_sha256"],
+        )
         with tempfile.TemporaryDirectory() as tmp:
             destination = Path(tmp) / "bound" / SOURCE.name
             env = os.environ.copy()

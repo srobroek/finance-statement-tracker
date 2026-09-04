@@ -12,6 +12,7 @@ uv sync --frozen --extra statements --extra test
 
 npm --prefix packages/n8n-nodes-finance ci --ignore-scripts
 npm --prefix integrations/actual ci
+node integrations/n8n/generate_browser_capture_validator.mjs --check
 
 uv run --frozen python -m unittest discover -s tests -v
 uv run --frozen python -m compileall -q finance_tracker apps scripts deploy services
@@ -37,6 +38,7 @@ PY
 
 npm --prefix integrations/actual test
 npm --prefix packages/n8n-nodes-finance test
+node packages/n8n-nodes-finance/scripts/actual-session-offline-integration.mjs
 npm --prefix integrations/actual run integration
 
 # The PDF utility intentionally has an independent pinned runtime.  Sync it

@@ -32,9 +32,36 @@ and is followed by the separate `verify` operation.
 to the installed `@actual-app/api` `TransactionEntity` declaration, and compares
 account, imported ID, date, integer amount, imported payee, category, notes, and
 cleared state before returning canonical expected/observed hashes and account
-balance. Unit mocks do not prove a particular deployed Actual server preserves
-those fields; a disposable real-server import/readback remains a promotion
-blocker.
+balance. After preflight, a caller may pass the returned `already_observed` IDs
+as `verification.preserve_manual_fields_for_ids`; only those existing rows are
+allowed to retain Actual's user-owned payee, category, notes, cleared state, and
+transfer links. New rows continue to be checked against the expected mutable
+fields. Before either preflight or import, an existing imported ID with changed
+account, date, amount, or imported payee is rejected because Actual otherwise
+keeps the old economics. Import then sends only previously unseen IDs to the
+Actual reconciler, so replay cannot propagate cleared state into split children
+or disturb transfer links. It reads the post-import IDs and derives the account
+balance delta only from Actual's `added` IDs; fuzzy matches reported as
+`updated` must leave the balance unchanged, and missing or ambiguous result IDs
+fail closed. Unit mocks do not
+prove a particular deployed Actual server preserves those fields; a disposable
+real-server import/readback remains a promotion blocker.
+
+Historical ADCB replay has a deliberately narrow account-bound exception. Its
+prepared outbox must carry `historical_import: true`,
+`historical_source: "ADCB_CASHBACK"`, `card_code: "ADCB_CASHBACK"`, and a
+`historical_account_id` equal to the configured Actual `account_id`. Every row
+must be cleared and use the `statement:adcb_v1:` imported-ID prefix, and the
+resolved Actual account must be the configured bound account. A closed account
+requires this explicit opt-in, while a valid open account may also receive the
+bound historical backfill. Closed accounts from other sources, unmarked
+outboxes, browser rows, and uncleared rows remain rejected. This route preserves
+the account's existing lifecycle and does not create a balancing transaction;
+the trusted statement workflow supplies the account UUID/source mapping rather
+than relying on a display name. Historical verification omits comparison with
+the statement closing balance because Actual's current full balance also
+contains later transactions; the parser's statement arithmetic and the import's
+exact-ID/balance-delta checks provide the evidence instead.
 
 Issuer profiles initially include only the already verified repository
 adapters: `adcb_v1`, `emirates_islamic_v1`, and `wio_credit_v1`. Placeholder

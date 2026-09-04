@@ -50,7 +50,16 @@ ENV NODE_ENV=production \
     SHELL=/bin/sh \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN apk add --no-cache ca-certificates tini libstdc++ libgcc \
+# Keep the runtime's Alpine security fixes explicit.  These revisions contain
+# the fixes for CVE-2026-14456, CVE-2026-11822, and CVE-2026-11824.
+RUN apk add --no-cache \
+        ca-certificates \
+        tini \
+        libstdc++ \
+        libgcc \
+        libcrypto3=3.5.8-r0 \
+        libssl3=3.5.8-r0 \
+        sqlite-libs=3.53.4-r0 \
     && python -m pip uninstall --yes pip setuptools \
     && apk del apk-tools \
     && addgroup -g 1000 -S runner \

@@ -78,6 +78,26 @@ Card No : XXXXXXXXXXXX8833 - TEST USER
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("-50.00"))
         self.assertTrue(statement.balance_tied)
 
+    def test_adcb_replay_ids_are_stable_and_same_day_duplicates_are_distinct(self) -> None:
+        text = """15/08/26
+15/09/26
+PREVIOUS BALANCE OUTSTANDING 100.00
+Card No : XXXXXXXXXXXX8833 - TEST USER
+14/08/2026 COFFEE SHOP DUBAI ARE 10.00
+14/08/2026 COFFEE SHOP DUBAI ARE 10.00
+15/08/2026 NEW BALANCE OUTSTANDING 120.00
+"""
+
+        first = parse_statement_text(text, "adcb-replay.pdf")
+        second = parse_statement_text(text, "adcb-replay-again.pdf")
+
+        self.assertEqual(len({row.transaction_id for row in first.transactions}), 2)
+        self.assertEqual(
+            [row.transaction_id for row in first.transactions],
+            [row.transaction_id for row in second.transactions],
+        )
+        self.assertEqual(first.transactions[0].transaction_id, second.transactions[0].transaction_id)
+
     def test_registry_is_the_bank_extension_boundary(self) -> None:
         adapters = (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())
         registry = StatementAdapterRegistry(adapters)

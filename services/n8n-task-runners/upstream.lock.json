@@ -25,6 +25,17 @@
     "python": "docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1",
     "golang": "docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69"
   },
+  "security_packages": {
+    "alpine_branch": "v3.23",
+    "libcrypto3": "3.5.8-r0",
+    "libssl3": "3.5.8-r0",
+    "sqlite-libs": "3.53.4-r0",
+    "fixed_cves": [
+      "CVE-2026-14456",
+      "CVE-2026-11822",
+      "CVE-2026-11824"
+    ]
+  },
   "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
   "official_runner_comparison": {
     "reference": "docker.io/n8nio/runners:2.36.2@sha256:db070aa0a7a294335680dbc33a66acfa076ce1dd3fca5e51414c5bdfce8b2119",

@@ -177,6 +177,8 @@ Production scheduling belongs to n8n. `config/codex-automations.json` and the la
 
 RAKBANK and Standard Chartered statement sources are interim placeholders pending their first real statements. They do not block active ADCB, Emirates Islamic, or Wio statement ingestion, or the separately configured RAKBANK live notification cashback path. Historical ADCB statements must pass the same archive, parser, duplicate, and Actual readback checks as a new statement; a closed card retains its historical ledger.
 
+The historical ADCB mailbox inventory contains 31 unique statement PDFs from February 2024 through August 2026. A OneDrive catalogue review found 599 ADCB rows among 604 catalogue rows and three exact duplicate groups (six rows); equal rendered values are retained for provenance and review rather than being treated as proof that purchases are duplicates.
+
 The companion also recalculates its time-sensitive dashboard every minute. This advances weekly pace and final-week warnings without requiring a new transaction, and emits one deduplicated push warning per stale-ingestion episode. A separate five-minute host timer probes Actual and Cashback Control, skips cleanly while the quiesced backup owns its lock, restarts only the exact unhealthy container, and fails visibly if recovery or the 48-hour backup-age gate fails. n8n and its Postgres database use their own stack health checks.
 
 Statement adapters emit normalized, reviewable rows and an exact balance reconciliation check. Passwords are loaded from runtime secrets or supplied interactively; they are never stored in source files or logs. A successful parse is not a successful close: a card period is finalized only after the staged statement rows have been matched to the live transaction ledger.

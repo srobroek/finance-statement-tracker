@@ -1549,13 +1549,13 @@
     "applicationContractBundleContentSha256": "b403bcda8b77b4d5022e4cf0b68bc9caf90dce1dce85a8dcb4e178ab602fdcb5",
     "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
     "activationBlockers": [
-      "EXACT_IMAGE_IMPORT_REQUIRED",
-      "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
       "SOURCE_MIGRATION_GATE_REQUIRED",
       "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED"
     ],
     "importTested": false,
-    "fixtureExecuted": false,
+    "fixtureExecuted": true,
+    "pinnedImageDerivedImportTested": true,
+    "runtimeEvidence": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917",
     "credentialBindings": [],
     "setupRequired": true,
     "targetSchemaContract": "integrations/n8n/data-table-migration-matrix.json",

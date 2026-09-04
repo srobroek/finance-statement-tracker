@@ -8,7 +8,7 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "aebaddc02963d818bbd96b25fc44359c104a29496a1de8368bed1a0cd746bdd4"
+    "sha256": "306f3af1b4e1595ddef0a6a4bcfe6c78f3d76c20db396b0bf1c29c4af6b193fe"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -30,12 +30,12 @@
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "7de9c33ae1c5e4c6b54f7671e5e5fd3193cb6ddba7b73cc353b939e6323e11ef"
+    "sha256": "ad96821554e51f9a6314c9caceaef527079f4e941768e6a3ee80d40a39991cc1"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-    "sha256": "9b93930ced822f7a665690e95e586f0481a46ba0dfa8fc211d09c9ddb732ca76",
+    "sha256": "fe90bafe3c7930b2e7c2e636d7f967a5e11f907fe5855f5fac7ede2b9efd0575",
     "required_state": {
       "active": false,
       "published": false,
@@ -45,21 +45,60 @@
   },
   "credentials": {
     "placeholders": [
-      {"name": "Finance Outlook", "binding": "BIND_OUTLOOK", "type": "microsoftOutlookOAuth2Api"},
-      {"name": "Finance OneDrive", "binding": "BIND_ONEDRIVE", "type": "microsoftOneDriveOAuth2Api"},
-      {"name": "Cashback Ingest Bearer", "binding": "BIND_CASHBACK_INGEST", "type": "httpHeaderAuth"},
-      {"name": "Local n8n Operations", "binding": "BIND_N8N_API", "type": "n8nApi"},
-      {"name": "Issuer Statement Password", "binding": "BIND_CARD_PASSWORD", "type": "financeStatementPassword"},
-      {"name": "Finance MCP Trigger Bearer", "binding": "BIND_FINANCE_MCP_FACADE", "type": "httpBearerAuth"},
-      {"name": "Finance Operations Postgres", "binding": "BIND_FINANCE_OPS_DB", "type": "postgres"},
-      {"name": "Finance Actual", "binding": "BIND_ACTUAL", "type": "actualBudgetApi"}
+      {
+        "name": "Finance Outlook",
+        "binding": "BIND_OUTLOOK",
+        "type": "microsoftOutlookOAuth2Api"
+      },
+      {
+        "name": "Finance OneDrive",
+        "binding": "BIND_ONEDRIVE",
+        "type": "microsoftOneDriveOAuth2Api"
+      },
+      {
+        "name": "Cashback Ingest Bearer",
+        "binding": "BIND_CASHBACK_INGEST",
+        "type": "httpHeaderAuth"
+      },
+      {
+        "name": "Local n8n Operations",
+        "binding": "BIND_N8N_API",
+        "type": "n8nApi"
+      },
+      {
+        "name": "Issuer Statement Password",
+        "binding": "BIND_CARD_PASSWORD",
+        "type": "financeStatementPassword"
+      },
+      {
+        "name": "Finance MCP Trigger Bearer",
+        "binding": "BIND_FINANCE_MCP_FACADE",
+        "type": "httpBearerAuth"
+      },
+      {
+        "name": "Finance Operations Postgres",
+        "binding": "BIND_FINANCE_OPS_DB",
+        "type": "postgres"
+      },
+      {
+        "name": "Finance Actual",
+        "binding": "BIND_ACTUAL",
+        "type": "actualBudgetApi"
+      }
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "de2695074f33415e718fdde603bd19bbdd1118e5c0211e911946aada9eb75565"
+      "sha256": "653a39cbbf66cc25d44c83a708286a4524832182fa9db997b23f937af8883c65"
     },
     "values_included": false,
-    "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
+    "forbidden_fields": [
+      "id",
+      "value",
+      "token",
+      "secret",
+      "password",
+      "client_secret"
+    ]
   },
   "mcp": {
     "contract": {
@@ -79,13 +118,41 @@
     ]
   },
   "validators": [
-    {"kind": "BUILD", "path": "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh", "command": "bash packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh"},
-    {"kind": "RUNTIME_ASSERTION", "path": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs", "command": "node /opt/finance-n8n/assert-runtime-registration.cjs export:nodes"},
-    {"kind": "RUNTIME_ASSERTION", "path": "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs", "command": "node /opt/finance-n8n/verify-immutable-extension.cjs"},
-    {"kind": "TEST", "path": "tests/test_n8n_custom_image.py", "command": "python -m unittest tests.test_n8n_custom_image -v"},
-    {"kind": "TEST", "path": "tests/test_n8n_application_manifest.py", "command": "python -m unittest tests.test_n8n_application_manifest -v"},
-    {"kind": "TEST", "path": "integrations/n8n/generate_credential_bindings.py", "command": "python integrations/n8n/generate_credential_bindings.py --check"},
-    {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
+    {
+      "kind": "BUILD",
+      "path": "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh",
+      "command": "bash packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh"
+    },
+    {
+      "kind": "RUNTIME_ASSERTION",
+      "path": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs",
+      "command": "node /opt/finance-n8n/assert-runtime-registration.cjs export:nodes"
+    },
+    {
+      "kind": "RUNTIME_ASSERTION",
+      "path": "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs",
+      "command": "node /opt/finance-n8n/verify-immutable-extension.cjs"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_custom_image.py",
+      "command": "python -m unittest tests.test_n8n_custom_image -v"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_application_manifest.py",
+      "command": "python -m unittest tests.test_n8n_application_manifest -v"
+    },
+    {
+      "kind": "TEST",
+      "path": "integrations/n8n/generate_credential_bindings.py",
+      "command": "python integrations/n8n/generate_credential_bindings.py --check"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_workflows.py",
+      "command": "python -m unittest tests.test_n8n_workflows -v"
+    }
   ],
   "blockers": [
     "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",

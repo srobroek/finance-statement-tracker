@@ -184,6 +184,24 @@ class PaymentIntent:
     channel: str = "UNKNOWN"
     conditional: bool = False
 
+    def __post_init__(self) -> None:
+        amount = money(self.amount_aed)
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError("Payment intent amount must be a finite positive value")
+        category = str(self.category or "").strip().upper()
+        currency = str(self.currency or "").strip().upper()
+        channel = str(self.channel or "").strip().upper()
+        if not category:
+            raise ValueError("Payment intent category is required")
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("Payment intent currency must be a three-letter code")
+        if not channel:
+            raise ValueError("Payment intent channel is required")
+        object.__setattr__(self, "amount_aed", amount)
+        object.__setattr__(self, "category", category)
+        object.__setattr__(self, "currency", currency)
+        object.__setattr__(self, "channel", channel)
+
 
 @dataclass(frozen=True, slots=True)
 class CardValue:

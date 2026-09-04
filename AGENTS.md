@@ -9,7 +9,7 @@ Maintain a portable Actual-first finance tracker with a dedicated live cashback 
 - Posted transactions, accounts, payees, categories, budgets, schedules, and ordinary reports: Actual Budget in the target POC.
 - Live cashback events, internal reconciliation state, period state, recommendations, alerts, and ingestion cursors: the cashback companion SQLite store.
 - Card programmes, live rule-set membership, ingestion settings, AI policies, and deployable schema: versioned repository configuration until a dedicated admin UI replaces it.
-- Codex schedule, model, status, notification policy, and prompt contracts: `config/codex-automations.json`; reusable execution logic lives under `agents/automations/`.
+- Production acquisition schedules and execution state: the versioned n8n workflows and their durable receipts. `config/codex-automations.json` retains retired ingestion task identities in `PAUSED` state for migration auditing; `agents/automations/` contains bounded review handoff instructions.
 - Receipts, bills, warranties, statements, and extracted documents: OneDrive, indexed by `Finance Evidence/catalogue.json`.
 - Python and TypeScript: deterministic behaviour and adapters only. Do not hard-code user categories, vendors, or classification rules in executable code.
 - Card programme seed data is a POC assumption and must be verified/versioned before production use.

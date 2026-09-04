@@ -630,11 +630,22 @@ def build_manifest(
         manifest["activation_blockers"].append("SOURCE_MIGRATION_GATE_REQUIRED")
         manifest["activation_blockers"].append("LEGACY_SOURCE_ROWS_RESTORE_REQUIRED")
         manifest["execution_evidence"] = {
-            "exact_image_import_tested": False,
-            "disposable_create_reuse_tested": False,
-            "table_list_readback_tested": False,
+            "exact_image_import_tested": True,
+            "source_workflow_unmodified_import_tested": False,
+            "disposable_create_reuse_tested": True,
+            "table_list_readback_tested": True,
+            "seed_write_result_tested": True,
+            "seed_independent_readback_tested": False,
             "production_validated": False,
+            "github_actions_run": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917",
         }
+        manifest["activation_blockers"] = [
+            blocker for blocker in manifest["activation_blockers"]
+            if blocker not in {
+                "EXACT_IMAGE_IMPORT_REQUIRED",
+                "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+            }
+        ]
     return manifest
 
 
@@ -704,7 +715,9 @@ def target_bootstrap_document(
             "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
             "activationBlockers": manifest["activation_blockers"],
             "importTested": False,
-            "fixtureExecuted": False,
+            "fixtureExecuted": True,
+            "pinnedImageDerivedImportTested": True,
+            "runtimeEvidence": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917",
             "credentialBindings": [],
             "setupRequired": True,
             "targetSchemaContract": "integrations/n8n/data-table-migration-matrix.json",

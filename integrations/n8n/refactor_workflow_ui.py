@@ -8,6 +8,7 @@ layout. It never activates workflows or creates credentials.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -138,11 +139,16 @@ FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding=
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
 )
-BROWSER_CAPTURE_SCHEMA = json.loads(
-    (N8N.parent.parent / "config" / "browser-capture-schema-v1.json").read_text(
-        encoding="utf-8"
+BROWSER_CAPTURE_SCHEMA_PATH = N8N.parent.parent / "config" / "browser-capture-schema-v1.json"
+BROWSER_CAPTURE_SCHEMA_BYTES = BROWSER_CAPTURE_SCHEMA_PATH.read_bytes()
+BROWSER_CAPTURE_SCHEMA = json.loads(BROWSER_CAPTURE_SCHEMA_BYTES)
+BROWSER_CAPTURE_VALIDATOR_PATH = N8N / "generated" / "browser-capture-validator-v1.js"
+BROWSER_CAPTURE_VALIDATOR = BROWSER_CAPTURE_VALIDATOR_PATH.read_text(encoding="utf-8")
+BROWSER_CAPTURE_SCHEMA_SHA256 = hashlib.sha256(BROWSER_CAPTURE_SCHEMA_BYTES).hexdigest()
+if f"browser-capture-schema-v1.json sha256:{BROWSER_CAPTURE_SCHEMA_SHA256}" not in BROWSER_CAPTURE_VALIDATOR:
+    raise RuntimeError(
+        "browser capture validator is stale; run generate_browser_capture_validator.mjs"
     )
-)
 FOLDER_BY_ID = {folder["id"]: folder for folder in FOLDER_CONTRACT["folders"]}
 FOLDER_BY_CODE = {
     workflow["code"]: workflow["folder_id"]
@@ -778,6 +784,18 @@ return [{ json: { ...w, ...c, operation: 'ENUMERATE', onedrive_parent_id: c.mani
     validate = node_by_name(acquisition, "Validate Bounded Source Request")
     validate["parameters"]["jsCode"] = r"""
 const request = $json;
+const historicalImport = request.historical_import;
+if (historicalImport !== undefined && typeof historicalImport !== 'boolean') {
+  throw new Error('historical_import must be boolean');
+}
+if (historicalImport === true && (
+  request.source_code !== 'ADCB_CASHBACK'
+  || !request.historical_account_id
+  || !request.account_id
+  || String(request.historical_account_id) !== String(request.account_id)
+)) {
+  throw new Error('ADCB historical import requires the configured account binding');
+}
 const required = [
   'run_id',
   'source_code',
@@ -842,6 +860,9 @@ return [{
     attachment_ids_verified: request.attachment_ids_verified,
     attachment_identity_keys: request.attachment_identity_keys,
     empty_inventory: request.empty_inventory,
+    historical_import: historicalImport === true,
+    historical_source: historicalImport === true ? 'ADCB_CASHBACK' : undefined,
+    historical_account_id: historicalImport === true ? String(request.historical_account_id) : undefined,
     server_filter: `(${senderFilter}) and (${subjectFilter})`,
   },
 }];
@@ -1335,6 +1356,18 @@ return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', ac
     verify_context = node_by_name(statement, "Verify Archive and Execution Context")
     verify_context["parameters"]["jsCode"] = r"""
 const r = $json;
+const historicalImport = r.historical_import;
+if (historicalImport !== undefined && typeof historicalImport !== 'boolean') {
+  throw new Error('historical_import must be boolean');
+}
+if (historicalImport === true && (
+  r.source_code !== 'ADCB_CASHBACK'
+  || !r.historical_account_id
+  || !r.account_id
+  || String(r.historical_account_id) !== String(r.account_id)
+)) {
+  throw new Error('ADCB historical import requires the configured account binding');
+}
 const sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();
 const attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();
 if (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {
@@ -1370,6 +1403,9 @@ return [{
     pipeline_contract: r.pipeline_contract,
     actual_writer_workflow: r.actual_writer_workflow,
     source_mutation_forbidden: r.source_mutation_forbidden,
+    historical_import: historicalImport === true,
+    historical_source: historicalImport === true ? 'ADCB_CASHBACK' : undefined,
+    historical_account_id: historicalImport === true ? String(r.historical_account_id) : undefined,
   },
   binary: $binary,
 }];
@@ -2036,12 +2072,6 @@ return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.
             "typeVersion": 2,
             "position": [1500, 0],
             "parameters": {"jsCode": (r"""
-let Ajv;
-try {
-  Ajv = require('ajv');
-} catch (error) {
-  throw new Error('BROWSER_CAPTURE_SCHEMA_VALIDATOR_UNAVAILABLE');
-}
 const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
   type: 'object',
   additionalProperties: false,
@@ -2129,14 +2159,7 @@ const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
     },
   },
 }; */
-const AjvCtor = Ajv.default || Ajv;
-const validatorEngine = new AjvCtor({ allErrors: true, strict: true });
-delete schema.$schema;
-delete schema.$id;
-validatorEngine.addFormat('date', value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)));
-validatorEngine.addFormat('date-time', value => !Number.isNaN(Date.parse(value)) && /T/.test(value));
-validatorEngine.addFormat('uri', value => { try { new URL(value); return true; } catch { return false; } });
-const validator = validatorEngine.compile(schema);
+__BROWSER_CAPTURE_PRECOMPILED_VALIDATOR__
 const capture = $json;
 const inputHash = String($('SHA-256 Browser Capture Input').first().json.input_sha256 || '').toLowerCase();
 const forbidden = new Set(['access_token', 'authorization', 'cookie', 'cookies', 'cvv', 'full_card_number', 'mfa_code', 'otp', 'passcode', 'password', 'pin', 'recovery_code', 'refresh_token', 'secret', 'session', 'session_token']);
@@ -2159,8 +2182,36 @@ if (capture.source?.url) {
   if (parsedUrl.username || parsedUrl.password) throw new Error('BROWSER_CAPTURE_SOURCE_URL_CREDENTIALS_FORBIDDEN');
   if (parsedUrl.search || parsedUrl.hash) throw new Error('BROWSER_CAPTURE_SOURCE_URL_QUERY_FORBIDDEN');
 }
-if (!validator(capture)) {
-  throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validator.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
+if (!validateBrowserCapture(capture)) {
+  throw new Error(`BROWSER_CAPTURE_SCHEMA_INVALID:${validateBrowserCapture.errors?.map(error => error.instancePath || error.keyword).join(',') || 'unknown'}`);
+}
+const validDate = value => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1])
+    && date.getUTCMonth() === Number(match[2]) - 1
+    && date.getUTCDate() === Number(match[3]);
+};
+const validDateTime = value => typeof value === 'string'
+  && value.includes('T')
+  && !Number.isNaN(Date.parse(value));
+const dateValues = [
+  capture.source?.date_range?.start,
+  capture.source?.date_range?.end,
+  capture.statement?.period_start,
+  capture.statement?.period_end,
+  capture.statement?.payment_due_date,
+  ...(capture.rows || []).flatMap(row => [row.transaction_date, row.post_date]),
+].filter(value => value !== undefined);
+const dateTimeValues = [
+  capture.provenance?.captured_at,
+  capture.approval?.approved_at,
+  capture.source?.captured_at,
+  capture.account?.balance_as_of,
+].filter(value => value !== undefined);
+if (dateValues.some(value => !validDate(value)) || dateTimeValues.some(value => !validDateTime(value))) {
+  throw new Error('BROWSER_CAPTURE_SCHEMA_INVALID:format');
 }
 const request = $('Resolve Capture Hash Contract').first().json;
 if (inputHash !== request.expected_capture_sha256) {
@@ -2172,7 +2223,10 @@ if (capture.capture_id !== capture.provenance.capture_id
   throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');
 }
 return [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];
-""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal).strip())},
+""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal).replace(
+                "__BROWSER_CAPTURE_PRECOMPILED_VALIDATOR__",
+                BROWSER_CAPTURE_VALIDATOR,
+            ).strip())},
         },
         {
             "id": "11012",
@@ -2677,6 +2731,42 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         "$('Read Nonterminal Actual Outbox').item.json",
         "$('Prepared Outbox Input').first().json",
     )
+    recovery_verification = node_by_name(existing, "Build Recovery Verification Contract")
+    recovery_verification["parameters"]["jsCode"] = r"""
+// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.
+const root = $('Verify Recovery Contract').first().json;
+const manifest = root.manifest;
+const verification = root.verification;
+const expectedVerification = Object.fromEntries(
+  Object.entries(verification).filter(([key]) => key !== 'expected_account_balance'),
+);
+const actualFrom = name => {
+  try { return $(name).first().json.actual || {}; } catch { return {}; }
+};
+const preflight = actualFrom('Recovery Actual Preflight');
+const resumedPreflight = actualFrom('Recovery Existing Actual Preflight');
+const importObserved = actualFrom('Recovery Import PREPARED');
+const observedState = $('Read Back ACTUAL OBSERVED Recovery').first().json;
+const existingIds = [
+  ...(Array.isArray(preflight.already_observed) ? preflight.already_observed : []),
+  ...(Array.isArray(resumedPreflight.already_observed) ? resumedPreflight.already_observed : []),
+  ...(Array.isArray(importObserved.reconciled_imported_ids) ? importObserved.reconciled_imported_ids : []),
+];
+if (!verification.card_code)
+  throw new Error('RECOVERY_CARD_CODE_MISSING');
+if (!Array.isArray(existingIds) || existingIds.some(id => typeof id !== 'string'))
+  throw new Error('RECOVERY_PREFLIGHT_EXISTING_IDS_MISSING');
+const expectedBalance = observedState.expected_account_balance;
+const observedBalance = observedState.observed_account_balance;
+if (typeof expectedBalance !== 'number' || typeof observedBalance !== 'number'
+    || !Number.isSafeInteger(expectedBalance) || !Number.isSafeInteger(observedBalance)
+    || expectedBalance !== observedBalance)
+  throw new Error('RECOVERY_IMPORT_BALANCE_DELTA_EVIDENCE_MISSING');
+return [{ json: {
+  verification: { ...expectedVerification, preserve_manual_fields_for_ids: [...new Set(existingIds)].sort() },
+  balance_evidence: { expected: expectedBalance, observed: observedBalance },
+} }];
+""".strip()
 
     verification_receipt_nodes = [
         {
@@ -2710,8 +2800,8 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
                         "observed_count": "={{ $json.transaction_count }}",
                         "expected_amount_sum_minor": "={{ $json.amount_sum }}",
                         "observed_amount_sum_minor": "={{ $json.amount_sum }}",
-                        "expected_account_balance": "={{ $('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor }}",
-                        "observed_account_balance": "={{ $json.account_balance }}",
+                        "expected_account_balance": "={{ $json.balance_evidence.expected }}",
+                        "observed_account_balance": "={{ $json.balance_evidence.observed }}",
                         "invariants_passed": True,
                         "verified_at": "={{ $now.toISO() }}",
                     },
@@ -2759,8 +2849,20 @@ if (
   || observed.expected_payload_sha256 !== result.expected_sha256
   || observed.observed_payload_sha256 !== result.observed_sha256
   || observed.expected_payload_sha256 !== observed.observed_payload_sha256
-  || Number(observed.expected_account_balance) !== Number($('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor)
-  || Number(observed.observed_account_balance) !== Number(result.account_balance)
+  || typeof observed.expected_count !== 'number'
+  || typeof observed.observed_count !== 'number'
+  || !Number.isSafeInteger(observed.expected_count) || observed.expected_count < 0
+  || observed.expected_count !== observed.observed_count
+  || observed.expected_count !== result.transaction_count
+  || typeof observed.expected_amount_sum_minor !== 'number'
+  || typeof observed.observed_amount_sum_minor !== 'number'
+  || !Number.isSafeInteger(observed.expected_amount_sum_minor)
+  || observed.expected_amount_sum_minor !== observed.observed_amount_sum_minor
+  || observed.expected_amount_sum_minor !== result.amount_sum
+  || typeof observed.expected_account_balance !== 'number'
+  || typeof observed.observed_account_balance !== 'number'
+  || !Number.isSafeInteger(observed.expected_account_balance)
+  || observed.observed_account_balance !== observed.expected_account_balance
   || observed.invariants_passed !== true
 ) {
   throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');
@@ -2781,15 +2883,18 @@ return [{ json: observed }];
         "lease_owner": "={{ $('Acquire Recovery Writer Fence').first().json.lease_owner }}",
         "lease_fence": "={{ $('Acquire Recovery Writer Fence').first().json.fencing_token }}",
     })
-    replay_release = by_name["Read Back Released Recovery Writer Fence Replay"]
-    replay_release["parameters"]["options"]["queryReplacement"] = (
-        "={{ [`actual:${$('Read Back COMMITTED Recovery Replay').first().json.actual_file_id}`, "
-        "$('Read Back COMMITTED Recovery Replay').first().json.lease_owner, "
-        "$('Read Back COMMITTED Recovery Replay').first().json.lease_fence] }}"
-    )
-
     commit_receipt = by_name["Return Verified Commit Receipt"]
     commit_code = commit_receipt["parameters"]["jsCode"]
+    commit_code = commit_code.replace(
+        "const verification = $('Recovery Verify Actual').first().json.actual;\n",
+        "",
+    ).replace(
+        "const receipt = $('Compare Exact Actual Verification Receipt').first().json;",
+        "const receipt = $('Validate Stored Verification Receipt for Commit').first().json;",
+    ).replace(
+        "receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED'",
+        "receipt.invariants_passed !== true || committed.state !== 'COMMITTED'",
+    )
     if "ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK" not in commit_code:
         correlation_guard = """if (String(committed.lease_owner) !== String(lease.lease_owner)
   || Number(committed.lease_fence) !== Number(lease.fencing_token))
@@ -2816,20 +2921,265 @@ return [{ json: observed }];
         ("lease_owner: text(committed.lease_owner)", "lease_owner: expectedOwner"),
     ):
         replay_code = replay_code.replace(old, new)
-    balance_guard = (
-        "    || Number(receipt.expected_account_balance) !== "
-        "Number(manifest.expected_statement_balance_minor)\n"
-        "    || Number(receipt.observed_account_balance) !== "
-        "Number(receipt.expected_account_balance)\n"
+    replay_code = re.sub(
+        r"const historical = manifest\.historical_import === true;\n"
+        r"const expectedBalanceBlank = receipt\.expected_account_balance === null\n"
+        r"    \|\| receipt\.expected_account_balance === undefined\n"
+        r"    \|\| receipt\.expected_account_balance === '';\n",
+        "",
+        replay_code,
     )
-    if balance_guard not in replay_code:
-        replay_code = replay_code.replace(
-            "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
-            balance_guard
-            + "    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))",
-        )
-    replay_code = replay_code.replace(balance_guard + balance_guard, balance_guard)
+    replay_code = re.sub(
+        r"    \|\| \(historical \? !expectedBalanceBlank : Number\(receipt\.expected_account_balance\) !== Number\(manifest\.expected_statement_balance_minor\)\)\n"
+        r"    \|\| \(!historical && Number\(receipt\.observed_account_balance\) !== Number\(receipt\.expected_account_balance\)\)\n"
+        r"    \|\| !Number\.isSafeInteger\(Number\(receipt\.observed_account_balance\)\)\n",
+        "    || !Number.isSafeInteger(Number(receipt.expected_account_balance))\n"
+        "    || Number(receipt.observed_account_balance) !== Number(receipt.expected_account_balance)\n",
+        replay_code,
+    )
     replay_receipt["parameters"]["jsCode"] = replay_code
+
+    # ACTUAL_OBSERVED recovery has already crossed the mutation boundary, so
+    # capture its existing imported IDs before verification. The PREPARED
+    # branch continues to use Recovery Actual Preflight before the import.
+    if "Recovery Existing Actual Preflight" not in by_name:
+        existing["nodes"].append({
+            "id": "20007",
+            "name": "Recovery Existing Actual Preflight",
+            "type": "n8n-nodes-finance.actualBudget",
+            "typeVersion": 1,
+            "position": [-820, 520],
+            "parameters": {"operation": "preflight"},
+            "credentials": {
+                "actualBudgetApi": {"id": "BIND_ACTUAL", "name": "Finance Actual"},
+            },
+        })
+        existing["connections"]["Recovery State"]["main"][1] = [[{
+            "node": "Recovery Existing Actual Preflight", "type": "main", "index": 0,
+        }]]
+        existing["connections"]["Recovery Existing Actual Preflight"] = {
+            "main": [[{"node": "Read Back ACTUAL OBSERVED Recovery", "type": "main", "index": 0}]],
+        }
+    by_name = {node["name"]: node for node in existing["nodes"]}
+
+    # Persist the balance-delta proof produced by the Actual import session.
+    # This is deliberately independent of a historical statement's closing
+    # balance because the account may already contain later transactions.
+    observed_values = by_name["Upsert ACTUAL OBSERVED Recovery"]["parameters"]["columns"]["value"]
+    observed_values.update({
+        "actual_transaction_id": "={{ $json.actual.actual_result.added?.[0] || $json.actual.actual_result.updated?.[0] || $('Verify Recovery Contract').first().json.outbox_row.actual_transaction_id || '' }}",
+        "expected_account_balance": "={{ $json.actual.expected_balance_after }}",
+        "observed_account_balance": "={{ $json.actual.balance_after }}",
+    })
+
+    lease_workflow = {
+        "workflowId": {
+            "__rl": True,
+            "value": "10000000-0000-4000-8000-000000000018",
+            "mode": "list",
+            "cachedResultName": "Finance · Fenced Actual Writer Lease",
+        },
+        "options": {"waitForSubWorkflow": True},
+    }
+    extra_nodes = [
+        {
+            "id": "20008", "name": "Build Post-Import Fence Assert",
+            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [880, 380],
+            "parameters": {"jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
+return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""},
+        },
+        {
+            "id": "20009", "name": "Assert Recovery Fence After Import",
+            "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [1080, 380],
+            "parameters": lease_workflow,
+        },
+        {
+            "id": "20010", "name": "Restore Post-Import Result",
+            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1280, 380],
+            "parameters": {"jsCode": """if ($json.valid !== true)
+  throw new Error('RECOVERY_POST_IMPORT_FENCE_ASSERTION_FAILED');
+return [{ json: $('Recovery Import PREPARED').first().json }];"""},
+        },
+        {
+            "id": "20011", "name": "Read Verification Receipt for Commit",
+            "type": "n8n-nodes-base.dataTable", "typeVersion": 1.1,
+            "alwaysOutputData": True, "position": [1180, 760],
+            "parameters": json.loads(json.dumps(by_name["Read Back Exact Actual Verification Receipt"]["parameters"])),
+        },
+        {
+            "id": "20012", "name": "Validate Stored Verification Receipt for Commit",
+            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1380, 760],
+            "parameters": {"jsCode": """const receipt = $json;
+const root = $('Verify Recovery Contract').first().json;
+const text = value => String(value ?? '').trim();
+if (!receipt || receipt.invariants_passed !== true
+    || text(receipt.idempotency_key) !== text(root.outbox_row.idempotency_key)
+    || text(receipt.batch_id) !== text(root.outbox_row.batch_id)
+    || text(receipt.actual_file_id) !== text(root.manifest.actual_file_id)
+    || text(receipt.account_id).toUpperCase() !== text(root.manifest.account_id).toUpperCase()
+    || text(receipt.card_code).toUpperCase() !== text(root.manifest.card_code).toUpperCase()
+    || text(receipt.period_start) !== text(root.manifest.period_start)
+    || text(receipt.period_end) !== text(root.manifest.period_end)
+    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256))
+    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()
+    || typeof receipt.expected_count !== 'number'
+    || typeof receipt.observed_count !== 'number'
+    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0
+    || receipt.expected_count !== receipt.observed_count
+    || typeof receipt.expected_amount_sum_minor !== 'number'
+    || typeof receipt.observed_amount_sum_minor !== 'number'
+    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)
+    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor
+    || typeof receipt.expected_account_balance !== 'number'
+    || typeof receipt.observed_account_balance !== 'number'
+    || !Number.isSafeInteger(receipt.expected_account_balance)
+    || receipt.expected_account_balance !== receipt.observed_account_balance)
+  throw new Error('ACTUAL_STORED_VERIFICATION_RECEIPT_MISMATCH');
+return [{ json: receipt }];"""},
+        },
+        {
+            "id": "20013", "name": "Build Pre-Commit Fence Assert",
+            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1580, 760],
+            "parameters": {"jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
+return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""},
+        },
+        {
+            "id": "20014", "name": "Assert Recovery Fence Before Commit",
+            "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [1780, 760],
+            "parameters": lease_workflow,
+        },
+    ]
+    existing_names = {node["name"] for node in existing["nodes"]}
+    existing["nodes"].extend(node for node in extra_nodes if node["name"] not in existing_names)
+    by_name = {node["name"]: node for node in existing["nodes"]}
+    for template in extra_nodes:
+        current = by_name[template["name"]]
+        current["parameters"] = json.loads(json.dumps(template["parameters"]))
+
+    existing["connections"]["Recovery Import PREPARED"] = {
+        "main": [[{"node": "Build Post-Import Fence Assert", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Build Post-Import Fence Assert"] = {
+        "main": [[{"node": "Assert Recovery Fence After Import", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Assert Recovery Fence After Import"] = {
+        "main": [[{"node": "Restore Post-Import Result", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Restore Post-Import Result"] = {
+        "main": [[{"node": "Upsert ACTUAL OBSERVED Recovery", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Back VERIFIED Recovery"] = {
+        "main": [[{"node": "Read Verification Receipt for Commit", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Verification Receipt for Commit"] = {
+        "main": [[{"node": "Validate Stored Verification Receipt for Commit", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Validate Stored Verification Receipt for Commit"] = {
+        "main": [[{"node": "Build Pre-Commit Fence Assert", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Build Pre-Commit Fence Assert"] = {
+        "main": [[{"node": "Assert Recovery Fence Before Commit", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Assert Recovery Fence Before Commit"] = {
+        "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Committed Writer Fence Replay"] = {
+        "main": [[{"node": "Build Committed Replay Fence Release", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Build Committed Replay Fence Release"] = {
+        "main": [[{"node": "Release Committed Replay Writer Fence", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Release Committed Replay Writer Fence"] = {
+        "main": [[{"node": "Read Back Released Recovery Writer Fence Replay", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Back Released Recovery Writer Fence Replay"] = {
+        "main": [[{"node": "Return Verified Commit Receipt Replay", "type": "main", "index": 0}]],
+    }
+
+    # The lease table keeps only the current row per Actual file, so an old
+    # released lease cannot serve as durable COMMITTED replay evidence after a
+    # later acquire. Release and read it back before the final COMMITTED write;
+    # the durable state transition then proves the release ordering.
+    obsolete_replay_release = {
+        "Read Committed Writer Fence Replay",
+        "Build Committed Replay Fence Release",
+        "Release Committed Replay Writer Fence",
+        "Read Back Released Recovery Writer Fence Replay",
+    }
+    existing["nodes"] = [
+        node for node in existing["nodes"] if node["name"] not in obsolete_replay_release
+    ]
+    for name in obsolete_replay_release:
+        existing["connections"].pop(name, None)
+    existing["connections"]["Read Back Exact Actual Verification Receipt Replay"] = {
+        "main": [[{"node": "Return Verified Commit Receipt Replay", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Assert Recovery Fence Before Commit"] = {
+        "main": [[{"node": "Build Recovery Fence Release", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Back Released Recovery Writer Fence"] = {
+        "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Back COMMITTED Recovery"] = {
+        "main": [[{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]],
+    }
+    node_by_name(existing, "Return Verified Commit Receipt Replay")["parameters"]["jsCode"] = r"""
+// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.
+const committed = $('Read Back COMMITTED Recovery Replay').first().json;
+const receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;
+const manifest = $('Verify Recovery Contract').first().json.manifest;
+const text = value => String(value ?? '').trim();
+const expectedOwner = text(committed.lease_owner);
+const expectedFence = Number(committed.lease_fence);
+if (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true
+    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)
+  throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');
+if (text(receipt.batch_id) !== text(committed.batch_id)
+    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)
+    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()
+    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()
+    || text(receipt.period_start) !== text(manifest.period_start)
+    || text(receipt.period_end) !== text(manifest.period_end)
+    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()
+    || typeof receipt.expected_count !== 'number'
+    || typeof receipt.observed_count !== 'number'
+    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0
+    || receipt.expected_count !== receipt.observed_count
+    || typeof receipt.expected_amount_sum_minor !== 'number'
+    || typeof receipt.observed_amount_sum_minor !== 'number'
+    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)
+    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor
+    || typeof receipt.expected_account_balance !== 'number'
+    || typeof receipt.observed_account_balance !== 'number'
+    || !Number.isSafeInteger(receipt.expected_account_balance)
+    || receipt.observed_account_balance !== receipt.expected_account_balance
+    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))
+  throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');
+return [{ json: {
+  batch_id: committed.batch_id,
+  actual_file_id: receipt.actual_file_id,
+  account_id: receipt.account_id,
+  card_code: receipt.card_code,
+  state: 'COMMITTED',
+  verification_version: Number(receipt.verification_version),
+  period_start: receipt.period_start,
+  period_end: receipt.period_end,
+  expected_payload_sha256: receipt.expected_payload_sha256,
+  observed_payload_sha256: receipt.observed_payload_sha256,
+  expected_count: receipt.expected_count,
+  observed_count: receipt.observed_count,
+  expected_amount_sum_minor: receipt.expected_amount_sum_minor,
+  observed_amount_sum_minor: receipt.observed_amount_sum_minor,
+  expected_account_balance: receipt.expected_account_balance,
+  observed_account_balance: receipt.observed_account_balance,
+  invariants_passed: true,
+  verified_at: receipt.verified_at,
+  lease_owner: expectedOwner,
+  lease_fence: expectedFence,
+  writer_release_verified: true,
+  replay_readback_only: true,
+} }];
+""".strip()
     existing["connections"]["Recovery Verify Actual"] = {
         "main": [[{"node": "Upsert Exact Actual Verification Receipt", "type": "main", "index": 0}]]
     }
@@ -3110,7 +3460,7 @@ return [{
             ("subject_match", "string", "PARTIAL_CASE_INSENSITIVE"),
             ("archive_readback_required", "boolean", True),
         ],
-        [("run_id", "string"), ("source_code", "string"), ("folder_id", "string"), ("senders", "array"), ("subjects", "array"), ("window_start", "string"), ("run_upper_bound", "string"), ("onedrive_parent_id", "string"), ("max_messages", "number")],
+        [("run_id", "string"), ("source_code", "string"), ("folder_id", "string"), ("senders", "array"), ("subjects", "array"), ("window_start", "string"), ("run_upper_bound", "string"), ("onedrive_parent_id", "string"), ("max_messages", "number"), ("messages", "array"), ("immutable_inventory", "boolean"), ("attachment_ids_verified", "boolean"), ("attachment_identity_keys", "array"), ("empty_inventory", "boolean"), ("account_id", "string"), ("historical_import", "boolean"), ("historical_account_id", "string")],
     )
     insert_config(
         statement,
@@ -3556,6 +3906,9 @@ return [{
     email_evidence_archive_proof: emailArchiveProof,
     archive_ready: true,
     cursor_commit_eligible: false,
+    historical_import: request.historical_import === true,
+    historical_source: request.historical_import === true ? 'ADCB_CASHBACK' : undefined,
+    historical_account_id: request.historical_import === true ? String(request.historical_account_id) : undefined,
   },
 }];
 """.strip()

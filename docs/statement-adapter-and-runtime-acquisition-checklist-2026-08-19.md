@@ -25,6 +25,17 @@ card-scoped interim state: RAKBANK and Standard Chartered statement close and
 finalization remain paused until their first real fixtures pass, while RAK live
 notification cashback and ACTIVE sources such as ADCB continue independently.
 
+## ADCB historical backfill inventory
+
+The connected mailbox inventory currently contains 31 unique ADCB statement
+PDFs covering every month from February 2024 through August 2026. The OneDrive
+catalogue contains 604 rows dated January 4 through May 8, 2026; 599 are ADCB
+rows. It also contains three exact duplicate groups (six rows total) sharing
+page, date, amount, and merchant values. These catalogue rows remain raw
+evidence for review. The backfill must deduplicate by immutable document and
+transaction identity while retaining legitimate identical purchases; it must
+not discard rows solely because their rendered values are equal.
+
 ## Evidence required for each missing statement adapter
 
 Acquire the following separately for RAKBANK World and Standard Chartered
@@ -97,15 +108,22 @@ fresh disposable Actual server and budget demonstrate all of the following:
 2. `doctor` reads the expected open account, categories, and initial integer
    balance through `@actual-app/api`.
 3. `preflight` accepts one immutable `PREPARED` outbox only after authoritative
-   lease acquisition/readback and rejects a closed account or unknown category.
+   lease acquisition/readback and rejects an unbound or unknown account and
+   unknown category. An explicitly source-bound ADCB historical outbox may
+   target either its open account or its already closed account; other closed
+   account imports remain rejected.
 4. `import` is executed through a scheduled/subworkflow/recovery context with a
    live positive fencing token and `reimportDeleted:false`. Capture returned
    errors and balance before/after.
 5. `verify` observes exactly equal account, imported ID, date, integer amount,
    imported payee, category, notes, and cleared state, with equal canonical
-   expected/observed SHA-256 values and the expected account balance.
+   expected/observed SHA-256 values. For a historical ADCB outbox it does not
+   compare the old statement closing balance with the account's current full
+   balance; the parser reconciliation and the import's exact-ID balance-delta
+   check remain the evidence.
 6. Replay of the identical outbox creates no duplicate and preserves the same
-   observed fields and balance.
+   observed fields. Import derives the balance delta only from Actual's `added`
+   IDs, so a fuzzy `updated` match does not count as new ledger money.
 7. An existing imported ID with one altered field fails verification. Expired
    lease, mutation-disabled credential, manual/MCP mode, unknown category,
    duplicate ID, and returned Actual error are negative fixtures.

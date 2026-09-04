@@ -21,6 +21,30 @@ test('packaged issuer profiles exactly match ACTIVE repository source contracts'
   }
 });
 
+test('statement placeholders are explicit interim card-scoped gaps', () => {
+  const registryPath = path.resolve(process.cwd(), '../../config/statement-sources.json');
+  const registry = JSON.parse(readFileSync(registryPath, 'utf8')) as {
+    sources: Array<{ adapter_status: string; adapter: string | null; card_code: string; notes: string }>;
+  };
+  const placeholders = registry.sources.filter(source => source.adapter_status === 'PLACEHOLDER');
+  assert.deepEqual(placeholders.map(source => source.card_code).sort(), ['RAK_WORLD', 'SC_PLATINUM_X']);
+  for (const source of placeholders) {
+    assert.match(source.notes, /interim placeholder/i);
+    assert.match(source.notes, /first real statement fixture/i);
+    assert.match(source.notes, /ACTIVE source ingestion\/history/i);
+  }
+  assert.equal(registry.sources.find(source => source.card_code === 'ADCB_CASHBACK')?.adapter_status, 'ACTIVE');
+
+  const acceptancePath = path.resolve(process.cwd(), '../../config/project-acceptance.json');
+  const acceptance = JSON.parse(readFileSync(acceptancePath, 'utf8')) as {
+    requirements: Array<{ id: string; blockers: string[] }>;
+  };
+  const orchestration = acceptance.requirements.find(requirement => requirement.id === 'deterministic-n8n-orchestration');
+  assert.ok(orchestration, 'deterministic n8n acceptance requirement must exist');
+  assert.equal(orchestration.blockers.includes('RAK_SC_STATEMENT_ADAPTERS_REQUIRED'), false,
+    'placeholder statement adapters must not globally block active workflows');
+});
+
 test('EI credits are typed as payment and refund and statement ties', () => {
   const statement = parseStatement(`Statement of Card Account
 From: 1st Jul 2026

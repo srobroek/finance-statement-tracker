@@ -1,3 +1,4 @@
+ARG N8N_BASE_IMAGE=ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6
 FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
 
 USER root
@@ -24,7 +25,6 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
-ARG N8N_BASE_IMAGE=ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6
 FROM ${N8N_BASE_IMAGE}
 
 ARG N8N_BASE_IMAGE

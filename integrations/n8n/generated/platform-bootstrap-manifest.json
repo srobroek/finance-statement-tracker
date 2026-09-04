@@ -1061,14 +1061,16 @@
     ]
   },
   "execution_evidence": {
-    "exact_image_import_tested": false,
-    "disposable_create_reuse_tested": false,
-    "table_list_readback_tested": false,
-    "production_validated": false
+    "exact_image_import_tested": true,
+    "source_workflow_unmodified_import_tested": false,
+    "disposable_create_reuse_tested": true,
+    "table_list_readback_tested": true,
+    "seed_write_result_tested": true,
+    "seed_independent_readback_tested": false,
+    "production_validated": false,
+    "github_actions_run": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917"
   },
   "activation_blockers": [
-    "EXACT_IMAGE_IMPORT_REQUIRED",
-    "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
     "SOURCE_MIGRATION_GATE_REQUIRED",
     "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED"
   ],

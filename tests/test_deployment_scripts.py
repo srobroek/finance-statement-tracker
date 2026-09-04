@@ -652,6 +652,7 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("scripts/run-validation.sh", workflow)
         self.assertIn("uv sync --frozen --extra statements --extra test", runner)
         self.assertIn("uv run --frozen python -m unittest", runner)
+        self.assertIn("actual-session-offline-integration.mjs", runner)
         self.assertNotIn("pip install", workflow + runner)
 
     def test_promotion_workflows_exclude_pull_requests_and_codex_pushes(self) -> None:

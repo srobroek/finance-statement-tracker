@@ -120,7 +120,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             )
             bindings = load_json(N8N / "credential-bindings.json")["bindings"]
             self.assertEqual(len(bindings), 8)
-            self.assertEqual(sum(len(row["nodes"]) for row in bindings), 36)
+            self.assertEqual(sum(len(row["nodes"]) for row in bindings), 37)
             self.assertEqual(
                 manifest["route"],
                 {

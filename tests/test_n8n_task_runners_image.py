@@ -21,6 +21,24 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         for image in lock["base_images"].values():
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$")
         self.assertRegex(lock["compatible_n8n_image"], r"@sha256:[0-9a-f]{64}$")
+        self.assertEqual(
+            lock["security_packages"],
+            {
+                "alpine_branch": "v3.23",
+                "libcrypto3": "3.5.8-r0",
+                "libssl3": "3.5.8-r0",
+                "sqlite-libs": "3.53.4-r0",
+                "fixed_cves": [
+                    "CVE-2026-14456",
+                    "CVE-2026-11822",
+                    "CVE-2026-11824",
+                ],
+            },
+        )
+
+        dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
+        for package in ("libcrypto3=3.5.8-r0", "libssl3=3.5.8-r0", "sqlite-libs=3.53.4-r0"):
+            self.assertIn(package, dockerfile)
 
     def test_launcher_is_source_built_with_a_narrow_auditable_patch(self):
         dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
@@ -40,6 +58,9 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("SOURCE_SHA256", patcher)
         self.assertIn("PATCHED_SHA256", patcher)
         self.assertNotIn("subprocess", patcher)
+        self.assertIn("CVE-2026-14456", dockerfile)
+        self.assertIn("CVE-2026-11822", dockerfile)
+        self.assertIn("CVE-2026-11824", dockerfile)
         self.assertIn(
             "!.upstream/n8n/dist/task-runner-javascript/node_modules/**",
             dockerignore.splitlines(),

@@ -112,7 +112,15 @@
             "window_start": "string",
             "run_upper_bound": "string",
             "onedrive_parent_id": "string",
-            "max_messages": "number"
+            "max_messages": "number",
+            "messages": "array",
+            "immutable_inventory": "boolean",
+            "attachment_ids_verified": "boolean",
+            "attachment_identity_keys": "array",
+            "empty_inventory": "boolean",
+            "account_id": "string",
+            "historical_import": "boolean",
+            "historical_account_id": "string"
           },
           "fields": {
             "archive_readback_required": {
@@ -150,7 +158,9 @@
             "period_key": "string",
             "trigger_kind": "string",
             "attachment_id": "string",
-            "source_attachment_id": "string"
+            "source_attachment_id": "string",
+            "historical_import": "boolean",
+            "historical_account_id": "string"
           },
           "fields": {
             "actual_writer_workflow": {

@@ -78,6 +78,14 @@ The Outlook sweep has two phases:
 - `COMMIT` requires a downstream receipt SHA-256.
 - `COMMIT` performs an exact cursor readback.
 
+An ADCB historical backfill uses the same bounded `W12` immutable inventory
+handoff into `W01`, followed by `W03` with `historical_import: true`,
+`historical_source: ADCB_CASHBACK`, and the configured Actual account UUID.
+The explicit parameter projections preserve the inventory and those binding
+fields across the workflow boundaries. ADCB has no recurring schedule in this
+repository; each statement remains subject to archive, parser, reconciliation,
+outbox, and Actual readback gates.
+
 The cashback workflows commit their own SQLite cursor. They do not use the n8n
 cursor commit operation.
 
@@ -184,5 +192,12 @@ It has no OneDrive, HTTP, or Postgres node.
 `generated/platform-bootstrap-manifest.json` from versioned contracts. When the
 table, template, or target contract drifts, tests fail.
 
-The export has not passed the pinned 2.36.2 image. This manifest and export are
+The source-derived disposable W19 graph passed two executions in the pinned
+n8n 2.36.2 image, including all 11 creates, seven disabled template writes,
+four-target schema/ID readback, and second-run no-op behavior ([run
+33915709749](https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917)).
+The fixture replaced the manual trigger with an isolated webhook and removed
+the external error-workflow binding, so this is not an unmodified production
+import or production-host validation. It checked returned upsert rows but did
+not independently read the seeded rows back. This manifest and export are
 specifications, not runtime evidence.
