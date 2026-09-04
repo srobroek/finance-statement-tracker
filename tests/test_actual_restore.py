@@ -22,6 +22,15 @@ SCHEMA = ROOT / "config/actual-restore-receipt.schema.json"
 READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
 
 
+def _namespace_probe_error() -> OSError | None:
+    """Return the local runner's namespace-inspection limitation, if any."""
+    try:
+        os.stat(f"/proc/{os.getpid()}/ns/net")
+    except OSError as exc:
+        return exc
+    return None
+
+
 def _sqlite(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
@@ -376,7 +385,17 @@ class ActualRestoreTests(unittest.TestCase):
             text=True,
             check=False,
         )
-        return result, json.loads(receipt.read_text(encoding="utf-8"))
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        if payload.get("error", {}).get("code") == "runtime_namespace_identity_failed":
+            limitation = _namespace_probe_error()
+            if limitation is not None:
+                required = os.environ.get("CI", "").lower() == "true" or os.environ.get(
+                    "FINANCE_ACTUAL_RESTORE_REQUIRE_NAMESPACE", ""
+                ).lower() == "true"
+                if required:
+                    self.fail(f"namespace identity probe unavailable in required runner: {limitation}")
+                self.skipTest(f"namespace identity probe unavailable in this runner: {limitation}")
+        return result, payload
 
     def test_source_contract_has_exact_cleanup_and_signal_guards(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
@@ -1323,6 +1342,15 @@ print(json.dumps({'api': payload, 'ui': payload}))
             if process.stderr:
                 process.stderr.close()
             payload = json.loads(receipt.read_text(encoding="utf-8"))
+            if payload.get("error", {}).get("code") == "runtime_namespace_identity_failed":
+                limitation = _namespace_probe_error()
+                if limitation is not None:
+                    required = os.environ.get("CI", "").lower() == "true" or os.environ.get(
+                        "FINANCE_ACTUAL_RESTORE_REQUIRE_NAMESPACE", ""
+                    ).lower() == "true"
+                    if required:
+                        self.fail(f"namespace identity probe unavailable in required runner: {limitation}")
+                    self.skipTest(f"namespace identity probe unavailable in this runner: {limitation}")
             self.assertEqual(process.returncode, 143)
             self.assertEqual(payload["error"]["code"], "signal_interrupted")
             self.assertTrue(payload["cleanup_verified"])

@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "22.15.3",
+    "ajv": "8.17.1",
     "n8n-workflow": "2.36.1",
     "typescript": "5.8.3"
   },

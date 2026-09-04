@@ -17,8 +17,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      # Cloudflare Tunnel is the only public entry point; keep the origin off the LAN.
-      - "127.0.0.1:5010:5010"
+      # Cloudflare Tunnel reaches this private host origin.
+      - "172.20.10.20:5010:5010"
     networks:
       finance-runtime:
         aliases:

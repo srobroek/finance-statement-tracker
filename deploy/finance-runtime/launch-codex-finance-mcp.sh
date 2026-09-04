@@ -56,8 +56,8 @@ resolve_trusted_binary() {
   case "${label}" in
     OP_BIN)
       [[ "${canonical}" == /usr/bin/op || "${canonical}" == /usr/local/bin/op ]] ||
-        [[ "${canonical}" =~ ^/home/[^/]+/\.local/bin/op$ ]] ||
-        [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/[^/]+/bin/op(\.exe)?$ ]] ||
+        [[ "${canonical}" =~ ^/(home/[^/]+|root)/\.local/bin/op$ ]] ||
+        [[ "${canonical}" =~ ^/(home/[^/]+|root)/\.local/share/mise/installs/[^/]+/bin/op(\.exe)?$ ]] ||
         [[ "${canonical}" =~ ^/mnt/c/Users/[^/]+/AppData/Local/Microsoft/WinGet/Packages/AgileBits[.]1Password[.]CLI_Microsoft[.]Winget[.]Source_8wekyb3d8bbwe/op[.]exe$ ]] || {
           echo "${label} must identify a trusted executable path" >&2
           return 1
@@ -65,8 +65,8 @@ resolve_trusted_binary() {
       ;;
     CODEX_BIN)
       [[ "${canonical}" == /usr/bin/codex || "${canonical}" == /usr/local/bin/codex ]] ||
-        [[ "${canonical}" =~ ^/home/[^/]+/\.local/bin/(codex|codex-cli)$ ]] ||
-        [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/[^/]+/bin/(codex|codex-cli)$ ]] ||
+        [[ "${canonical}" =~ ^/(home/[^/]+|root)/\.local/bin/(codex|codex-cli)$ ]] ||
+        [[ "${canonical}" =~ ^/(home/[^/]+|root)/\.local/share/mise/installs/[^/]+/bin/(codex|codex-cli)$ ]] ||
         [[ "${canonical}" =~ ^/home/[^/]+/\.local/share/mise/installs/npm-openai-codex/[^/]+/lib/node_modules/@openai/codex/bin/codex[.]js$ ]] || {
           echo "${label} must identify a trusted executable path" >&2
           return 1

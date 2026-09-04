@@ -44,7 +44,11 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("ARG N8N_BASE_IMAGE", dockerfile)
         self.assertIn(f"ARG N8N_BASE_IMAGE={base_image}", dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
-        self.assertIn("WORKDIR /opt/finance-n8n/community-extensions\nUSER node", dockerfile)
+        self.assertIn("WORKDIR /home/node\nUSER node", dockerfile)
+        self.assertIn(
+            "ln -s /opt/finance-n8n/community-extensions/node_modules /home/node/node_modules",
+            dockerfile,
+        )
         self.assertIn('ENTRYPOINT ["tini", "--", "/opt/finance-n8n/finance-entrypoint.sh"]', dockerfile)
 
     def test_finance_image_builder_uses_only_immutable_base_and_writes_external_receipt(self):
@@ -113,6 +117,9 @@ class N8nCustomImageTests(unittest.TestCase):
         entrypoint = (ROOT / "packages/n8n-nodes-finance/scripts/finance-entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn("ln -s", entrypoint)
         self.assertIn("readlink", entrypoint)
+        self.assertIn("sdk_link=/home/node/node_modules", entrypoint)
+        self.assertIn("sdk_immutable=/opt/finance-n8n/community-extensions/node_modules", entrypoint)
+        self.assertIn('ensure_link "${sdk_link}" "${sdk_immutable}"', entrypoint)
         self.assertIn("FINANCE_EXTENSION_MUTABLE_PATH_REJECTED", entrypoint)
         self.assertNotIn("cp ", entrypoint)
         verifier = (ROOT / "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs").read_text(encoding="utf-8")
@@ -127,6 +134,14 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("--entrypoint node", workflow)
         self.assertIn('-v "$state_dir:/home/node/.n8n"', workflow)
         self.assertLess(workflow.index(first_start), workflow.index(registration))
+
+    def test_ci_image_smoke_imports_prodex_sdk_from_n8n_process_context(self):
+        workflow = (ROOT / ".github/workflows/phase1-finance-artifacts.yml").read_text(encoding="utf-8")
+        self.assertIn("--input-type=module", workflow)
+        self.assertIn("process.cwd() !== '/home/node'", workflow)
+        self.assertIn("import { Codex } from '@openai/codex-sdk'", workflow)
+        self.assertIn("typeof Codex !== 'function'", workflow)
+        self.assertIn("Mutated ProDex SDK resolution path unexpectedly passed startup validation", workflow)
 
     def test_community_ai_closure_is_exact_audited_and_hardened(self):
         package = json.loads(

@@ -106,14 +106,14 @@ failed=0
 
 # The public Actual port is owned by the proxy. Recovering the upstream first
 # prevents a cached 502 from being mistaken for a healthy application.
-if ! container_running finance-actual-poc; then
-  recover_container finance-actual-poc "${ACTUAL_STACK_DIR}" finance-actual-poc actual || failed=1
+if ! container_running finance-actual; then
+  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual || failed=1
 fi
 if ! ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy \
   http://127.0.0.1:5006/; then
   # A running but unhealthy upstream can leave the proxy alive and returning
   # errors. Restart only these two containers, in dependency order.
-  recover_container finance-actual-poc "${ACTUAL_STACK_DIR}" finance-actual-poc actual || true
+  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual || true
   recover_container finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy || true
   probe_twice http://127.0.0.1:5006/ || failed=1
 fi

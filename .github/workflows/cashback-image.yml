@@ -43,6 +43,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      FINANCE_ACTUAL_RESTORE_REQUIRE_NAMESPACE: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -58,11 +60,15 @@ jobs:
           version: "0.12.5"
           enable-cache: true
 
-      - name: Install package
-        run: uv sync --frozen --extra statements --extra test
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/n8n-nodes-finance/package-lock.json
 
-      - name: Run regression suite
-        run: uv run --frozen python -m unittest discover -s tests -v
+      - name: Run comprehensive validation
+        run: ./scripts/run-validation.sh
 
       - name: Deploy fictional profile matrix
         shell: bash
