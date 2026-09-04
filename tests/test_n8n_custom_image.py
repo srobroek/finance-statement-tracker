@@ -95,10 +95,11 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertNotIn("--allow-untrusted", dockerfile)
         for package, version in ALPINE_SECURITY_PACKAGES.items():
             self.assertIn(f"{package}={version}", dockerfile)
-            self.assertIn(
-                f'info -v {package})" = "{package}-{version}"',
-                dockerfile,
-            )
+            self.assertIn(f"info --exists {package}={version}", dockerfile)
+        self.assertIn("test ! -e /sbin/apk", dockerfile)
+        self.assertIn("ln -s /tmp/security-apks/apk.static /sbin/apk", dockerfile)
+        self.assertIn("! /tmp/security-apks/apk.static info --exists libcrypto3=3.5.7-r1", dockerfile)
+        self.assertIn("rm -f /sbin/apk", dockerfile)
         self.assertIn("rm -rf /tmp/security-apks", dockerfile)
         self.assertIn(
             'io.finance.n8n.os-security-overlay="alpine-v3.24:openssl-3.5.8-r0,expat-2.8.4-r0,openssh-10.3_p1-r1"',

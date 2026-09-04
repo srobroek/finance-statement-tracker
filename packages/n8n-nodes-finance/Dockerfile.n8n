@@ -78,7 +78,9 @@ LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-state
 
 USER root
 COPY --from=alpine-security-overlay /tmp/security-apks /tmp/security-apks
-RUN /tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache \
+RUN test ! -e /sbin/apk \
+    && ln -s /tmp/security-apks/apk.static /sbin/apk \
+    && /tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache \
       --repository https://dl-cdn.alpinelinux.org/alpine/v3.24/main \
       libcrypto3=3.5.8-r0 \
       libssl3=3.5.8-r0 \
@@ -90,17 +92,20 @@ RUN /tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-ca
       openssh-server=10.3_p1-r1 \
       openssh-server-common=10.3_p1-r1 \
       openssh-sftp-server=10.3_p1-r1 \
-    && test "$(/tmp/security-apks/apk.static info -v libcrypto3)" = "libcrypto3-3.5.8-r0" \
-    && test "$(/tmp/security-apks/apk.static info -v libssl3)" = "libssl3-3.5.8-r0" \
-    && test "$(/tmp/security-apks/apk.static info -v libexpat)" = "libexpat-2.8.4-r0" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh)" = "openssh-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-client-common)" = "openssh-client-common-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-client-default)" = "openssh-client-default-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-keygen)" = "openssh-keygen-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-server)" = "openssh-server-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-server-common)" = "openssh-server-common-10.3_p1-r1" \
-    && test "$(/tmp/security-apks/apk.static info -v openssh-sftp-server)" = "openssh-sftp-server-10.3_p1-r1" \
-    && rm -rf /tmp/security-apks
+    && /tmp/security-apks/apk.static info --exists libcrypto3=3.5.8-r0 \
+    && /tmp/security-apks/apk.static info --exists libssl3=3.5.8-r0 \
+    && /tmp/security-apks/apk.static info --exists libexpat=2.8.4-r0 \
+    && /tmp/security-apks/apk.static info --exists openssh=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-client-common=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-client-default=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-keygen=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-server=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-server-common=10.3_p1-r1 \
+    && /tmp/security-apks/apk.static info --exists openssh-sftp-server=10.3_p1-r1 \
+    && ! /tmp/security-apks/apk.static info --exists libcrypto3=3.5.7-r1 \
+    && rm -f /sbin/apk \
+    && rm -rf /tmp/security-apks \
+    && test ! -e /sbin/apk
 RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/fast-uri@3.1.5/node_modules/fast-uri \
     && test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml \
     && rm -rf /usr/local/lib/node_modules/n8n/node_modules/.pnpm/fast-uri@3.1.5/node_modules/fast-uri \
