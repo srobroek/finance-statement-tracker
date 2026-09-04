@@ -96,6 +96,7 @@ jobs:
             --network none \
             --read-only \
             --tmpfs /tmp:uid=1000,gid=1000,mode=1777 \
+            --tmpfs /home/node/.cache:uid=1000,gid=1000,mode=0700 \
             --volume "$state_volume:/home/node/.n8n" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --env N8N_ENCRYPTION_KEY=disposable-runtime-only-key-000001 \
