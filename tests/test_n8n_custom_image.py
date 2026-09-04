@@ -85,7 +85,7 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(overlay["packages"], ALPINE_SECURITY_PACKAGES)
         self.assertIn("AS alpine-security-overlay", dockerfile)
         self.assertIn("apk add --no-cache apk-tools-static", dockerfile)
-        self.assertIn("apk fetch --output /tmp/security-apks", dockerfile)
+        self.assertIn("apk --no-cache fetch --output /tmp/security-apks", dockerfile)
         self.assertIn("cp -R /etc/apk/keys /tmp/security-apks/keys", dockerfile)
         self.assertIn(
             "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache --no-network",

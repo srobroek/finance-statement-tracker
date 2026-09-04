@@ -62,7 +62,7 @@ FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c170
 USER root
 RUN apk add --no-cache apk-tools-static \
     && mkdir -p /tmp/security-apks \
-    && apk fetch --output /tmp/security-apks \
+    && apk --no-cache fetch --output /tmp/security-apks \
       libcrypto3=3.5.8-r0 \
       libssl3=3.5.8-r0 \
       libexpat=2.8.4-r0 \
