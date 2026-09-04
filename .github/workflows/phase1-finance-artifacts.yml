@@ -33,6 +33,7 @@ permissions:
 jobs:
   custom-nodes:
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
       - name: Reclaim unused hosted toolchains for image export
@@ -42,6 +43,17 @@ jobs:
           # Leave the hosted tool cache intact for actions/setup-node.
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet
           df -h /
+      - name: Configure ephemeral swap for image export
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          swap_file="$(mktemp "$RUNNER_TEMP/finance-nodes-swap.XXXXXX")"
+          chmod 600 "$swap_file"
+          fallocate -l 8G "$swap_file"
+          mkswap "$swap_file"
+          sudo swapon "$swap_file"
+          sudo swapon --show=NAME --noheadings | grep -Fx "$swap_file"
+          free -h
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
@@ -67,12 +79,36 @@ jobs:
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build exact custom n8n image
         id: build_custom_image
+        timeout-minutes: 25
         run: |
           # These host installs have already passed tests and audits. Docker
           # installs the locked dependencies inside its own builder stage.
           rm -rf packages/n8n-nodes-finance/node_modules packages/n8n-nodes-finance/community-ai/node_modules
           df -h /
           docker system df
+          heartbeat_pid=""
+          stop_resource_heartbeat() {
+            if [ -n "${heartbeat_pid:-}" ]; then
+              kill "$heartbeat_pid" 2>/dev/null || true
+              wait "$heartbeat_pid" 2>/dev/null || true
+            fi
+            echo "final resource diagnostics: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            free -h || true
+            df -h / || true
+            ps -eo pid,ppid,stat,%cpu,%mem,rss,comm --sort=-rss | sed -n '1,20p' || true
+            echo "final kernel OOM diagnostics"
+            sudo dmesg --ctime 2>/dev/null | grep -Ei 'out of memory|oom-kill|killed process' | tail -n 20 || true
+          }
+          trap stop_resource_heartbeat EXIT
+          (
+            while sleep 30; do
+              echo "resource heartbeat: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+              free -h
+              df -h /
+              ps -eo pid,ppid,stat,%cpu,%mem,rss,comm --sort=-rss | sed -n '1,20p'
+            done
+          ) &
+          heartbeat_pid=$!
           docker build --build-arg FINANCE_SOURCE_COMMIT="${{ github.sha }}" --file packages/n8n-nodes-finance/Dockerfile.n8n --tag finance-n8n:${{ github.sha }} .
       - name: Smoke custom node image
         run: |
