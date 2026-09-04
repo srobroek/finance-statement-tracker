@@ -88,6 +88,19 @@ def _message_text(message: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _received_datetime(message: dict[str, Any]) -> datetime:
+    raw = str(message.get("receivedDateTime") or "").strip()
+    if not raw:
+        raise ValueError("Outlook receivedDateTime is required")
+    try:
+        received = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("Outlook receivedDateTime must be an ISO timestamp") from error
+    if received.tzinfo is None:
+        raise ValueError("Outlook receivedDateTime must include a timezone")
+    return received
+
+
 class ADCBOTPNotificationAdapter:
     """Parse amount-bearing ADCB authorization emails conservatively.
 
@@ -110,10 +123,7 @@ class ADCBOTPNotificationAdapter:
         match = _ADCB_OTP.search(_message_text(message))
         if not match:
             raise ValueError("ADCB authorization email does not expose merchant, amount, currency, and card suffix")
-        received = str(message.get("receivedDateTime") or "").strip()
-        if not received:
-            raise ValueError("Outlook receivedDateTime is required")
-        occurred = datetime.fromisoformat(received.replace("Z", "+00:00"))
+        occurred = _received_datetime(message)
         return NotificationFact(
             adapter=self.code,
             institution="ADCB",
@@ -162,10 +172,7 @@ class RakbankCardTransactionNotificationAdapter:
             raise ValueError(
                 "RAKBANK transaction email does not expose merchant, amount, currency, card suffix, and date"
             )
-        received_raw = str(message.get("receivedDateTime") or "").strip()
-        if not received_raw:
-            raise ValueError("Outlook receivedDateTime is required")
-        received = datetime.fromisoformat(received_raw.replace("Z", "+00:00"))
+        received = _received_datetime(message)
         occurred = _resolve_notification_date(
             int(match.group("day")),
             int(match.group("month")),
@@ -212,11 +219,17 @@ def parse_outlook_notifications(
     events: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
     rows = list(messages)
+    seen_message_ids: set[str] = set()
     for message in rows:
+        if not isinstance(message, dict):
+            raise ValueError("Outlook messages must be objects")
         message_id = str(message.get("id") or "").strip()
         if not message_id:
             skipped.append({"message_id": "", "reason": "MISSING_MESSAGE_ID"})
             continue
+        if message_id in seen_message_ids:
+            raise ValueError(f"Duplicate Outlook message id in scan batch: {message_id}")
+        seen_message_ids.add(message_id)
         adapter = next((item for item in adapter_list if item.detect(message)), None)
         if adapter is None:
             skipped.append({"message_id": message_id, "reason": "UNSUPPORTED_NOTIFICATION"})

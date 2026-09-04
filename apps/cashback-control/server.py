@@ -9,11 +9,12 @@ import signal
 import sys
 import threading
 import time
-from datetime import date
+from datetime import UTC, date, datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from access_auth import (
     ACCESS_ASSERTION_HEADER,
@@ -45,6 +46,7 @@ from finance_tracker.notification_sources import (
     load_notification_sources,
     validate_notification_adapter_coverage,
 )
+from finance_tracker.mail_ingestion import OutlookScanPlan, build_outlook_envelope
 from finance_tracker.notifications import (
     DEFAULT_NOTIFICATION_ADAPTERS,
     parse_outlook_notifications,
@@ -80,6 +82,13 @@ WRITE_LOCK = threading.Lock()
 PUSH_LOCK = threading.Lock()
 STALE_AFTER_MINUTES = int(os.environ.get("CASHBACK_STALE_AFTER_MINUTES", "90"))
 REFRESH_SECONDS = max(0, int(os.environ.get("CASHBACK_REFRESH_SECONDS", "60")))
+INGEST_SOURCE = os.environ.get("CASHBACK_INGEST_SOURCE", "outlook:rakbank").strip()
+if not INGEST_SOURCE:
+    raise ValueError("CASHBACK_INGEST_SOURCE must not be empty")
+try:
+    OPERATIONAL_TIMEZONE = ZoneInfo(os.environ.get("CASHBACK_TIMEZONE", "Asia/Dubai"))
+except ZoneInfoNotFoundError as error:
+    raise ValueError("CASHBACK_TIMEZONE must be a valid IANA timezone") from error
 PROGRAM_CONFIG_PATH = Path(
     os.environ.get(
         "CASHBACK_PROGRAM_CONFIG_PATH",
@@ -113,15 +122,94 @@ PUSH_DISPATCHER = WebPushDispatcher(
 )
 
 
+def _strict_timestamp(value: object, field: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError(f"{field} is required")
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(f"{field} must be an ISO timestamp") from error
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field} must include a timezone")
+    return parsed.isoformat()
+
+
+def _strict_count(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field} must be an integer")
+    return value
+
+
+def _validate_outlook_envelope(
+    source: dict[str, object],
+    *,
+    source_name: str,
+    completed_at: str,
+    cursor: str,
+    messages: list[dict[str, object]],
+) -> None:
+    schema_version = source.get("schema_version")
+    if schema_version is not None and (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version != 1
+    ):
+        raise ValueError("Unsupported Outlook envelope schema version")
+    if datetime.fromisoformat(_strict_timestamp(cursor, "cursor")) != datetime.fromisoformat(completed_at):
+        raise ValueError("cursor must equal completed_at for a frozen Outlook envelope")
+    if "scanned_count" in source and _strict_count(source["scanned_count"], "scanned_count") != len(messages):
+        raise ValueError("scanned_count must match the number of Outlook messages")
+    if "matched_count" in source:
+        matched_count = _strict_count(source["matched_count"], "matched_count")
+        if matched_count < 0 or matched_count > len(messages):
+            raise ValueError("matched_count must be within the scanned message count")
+    window_start = source.get("window_start")
+    if window_start not in (None, ""):
+        start = _strict_timestamp(window_start, "window_start")
+        if datetime.fromisoformat(start) > datetime.fromisoformat(completed_at):
+            raise ValueError("window_start cannot be after completed_at")
+        plan = OutlookScanPlan(
+            source=source_name,
+            window_start=start,
+            window_end=completed_at,
+            cursor_before=None,
+            overlap_hours=0,
+            initial_scan=False,
+        )
+        build_outlook_envelope(plan, messages)
+        return
+    # Older local submitters omitted window_start. Keep that compatibility and
+    # enforce message bounds when the frozen window is supplied above.
+    seen: set[str] = set()
+    for message in messages:
+        message_id = str(message.get("id") or "").strip()
+        if not message_id:
+            raise ValueError("Every Outlook message requires its exact id")
+        if message_id in seen:
+            raise ValueError(f"Duplicate Outlook message id in scan batch: {message_id}")
+        seen.add(message_id)
+        _strict_timestamp(message.get("receivedDateTime"), f"message {message_id} receivedDateTime")
+
+
 def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
     source_name = str(source.get("source") or "outlook").strip()
-    completed_at = _iso_datetime(source.get("completed_at"))
+    if not source_name:
+        raise ValueError("source is required")
+    completed_at = _strict_timestamp(source.get("completed_at"), "completed_at")
     cursor = str(source.get("cursor") or "").strip()
     if not cursor:
         raise ValueError("cursor is required")
     messages = source.get("messages")
     if not isinstance(messages, list) or any(not isinstance(message, dict) for message in messages):
         raise ValueError("messages must be a list of Outlook message objects")
+    _validate_outlook_envelope(
+        source,
+        source_name=source_name,
+        completed_at=completed_at,
+        cursor=cursor,
+        messages=messages,
+    )
 
     actual_config = load_actual_config(ACTUAL_CONFIG_PATH)
     card_by_last4, _ = account_maps(actual_config)
@@ -155,7 +243,7 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
     persistence = (
         STORE.upsert(list(batch.events))
         if batch.events
-        else {"inserted": 0, "updated": 0, "event_count": 0}
+        else {"inserted": 0, "updated": 0, "unchanged": 0, "duplicates": 0}
     )
     service_receipt = STORE.create_ingest_receipt(
         {
@@ -181,9 +269,10 @@ def rebuild_dashboard() -> dict[str, object]:
     with WRITE_LOCK:
         payload = build_live_dashboard(
             STORE,
-            date.today(),
+            datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date(),
             stale_after_minutes=STALE_AFTER_MINUTES,
             program_config_path=PROGRAM_CONFIG_PATH,
+            ingest_source=INGEST_SOURCE,
         )
         write_dashboard(DASHBOARD_PATH, payload)
     with PUSH_LOCK:
@@ -264,7 +353,7 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                 {
                     "status": "ok",
                     "dashboard_available": DASHBOARD_PATH.is_file(),
-                    "event_store": STORE.stats(),
+                    "event_store": STORE.stats(INGEST_SOURCE),
                 },
             )
             return

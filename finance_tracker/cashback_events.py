@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sqlite3
 from contextlib import closing
@@ -74,8 +75,24 @@ AI_CORRECTABLE_EVENT_FIELDS = frozenset(
         "ai_trace",
     }
 )
+# Once a statement has established authoritative evidence for an event, its
+# matching facts cannot be edited in place.  A new statement reconciliation is
+# required so the receipt and rows continue to describe the same economics.
+RECONCILIATION_FACT_FIELDS = frozenset(
+    {
+        "occurred_at",
+        "card_code",
+        "amount_aed",
+        "currency",
+        "merchant",
+        "event_type",
+        "status",
+    }
+)
 _MERCHANT_TOKEN = re.compile(r"[^A-Z0-9]+")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
+_MINOR_UNIT = Decimal("0.01")
 _STATEMENT_DIGEST_FIELDS = (
     "statement_sha256",
     "statement_digest",
@@ -105,6 +122,13 @@ _ACTUAL_RECEIPT_DIGEST_KEYS = frozenset(
 
 class IngestCursorConflict(ValueError):
     """Raised when a cursor commit cannot be proven to be the next commit."""
+
+
+def _date_range_bounds(start: date, end: date) -> tuple[str, str]:
+    """Return lexically indexable bounds for ISO timestamps preserving local dates."""
+    if end < start:
+        raise ValueError("date range end cannot be before start")
+    return f"{start.isoformat()}T00:00:00", f"{(end + timedelta(days=1)).isoformat()}T00:00:00"
 
 
 def _json_digest(value: object) -> str:
@@ -200,9 +224,11 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
     if not isinstance(verified_at, str) or not verified_at.strip():
         raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp")
     try:
-        datetime.fromisoformat(verified_at)
+        parsed_verified_at = datetime.fromisoformat(verified_at.replace("Z", "+00:00"))
     except ValueError as error:
         raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp") from error
+    if parsed_verified_at.tzinfo is None:
+        raise ValueError("actual_import_receipt.verified_at must include a timezone")
 
     expected_values = {
         _sha256_field(receipt[field], field)
@@ -455,18 +481,25 @@ def _iso_datetime(value: object) -> str:
         raise ValueError("occurred_at is required")
     parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
+        raise ValueError("occurred_at must include a timezone")
     return parsed.isoformat()
 
 
 def _amount_minor(value: object) -> int:
     try:
         amount = Decimal(str(value))
-    except (InvalidOperation, ValueError) as error:
+    except (InvalidOperation, TypeError, ValueError) as error:
         raise ValueError("amount must be numeric") from error
+    if not amount.is_finite():
+        raise ValueError("amount must be finite")
     if amount <= 0:
         raise ValueError("amount must be greater than zero; use event_type REFUND for credits")
-    return int((amount * Decimal("100")).quantize(Decimal("1")))
+    try:
+        if amount != amount.quantize(_MINOR_UNIT):
+            raise ValueError("amount must have no more than two decimal places")
+    except InvalidOperation as error:
+        raise ValueError("amount must have no more than two decimal places") from error
+    return int(amount * 100)
 
 
 def _event_amount(source: dict[str, Any]) -> object:
@@ -492,7 +525,7 @@ def _confidence(value: object) -> float:
         confidence = float(value)
     except (TypeError, ValueError) as error:
         raise ValueError("confidence must be numeric") from error
-    if confidence < 0 or confidence > 1:
+    if not math.isfinite(confidence) or confidence < 0 or confidence > 1:
         raise ValueError("confidence must be between 0 and 1")
     return confidence
 
@@ -525,19 +558,19 @@ def _normalize_event(source: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("source_event_id is required")
     if not card_code:
         raise ValueError("card_code is required")
-    status = str(source.get("status") or "ACTIVE").upper()
+    status = str(source.get("status") or "ACTIVE").strip().upper()
     # Accept legacy envelopes while storing one user-facing transaction state.
     if status in {"PROVISIONAL", "CONFIRMED"}:
         status = "ACTIVE"
     if status not in VALID_STATUSES:
         raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}")
-    event_type = str(source.get("event_type") or "PURCHASE").upper()
+    event_type = str(source.get("event_type") or "PURCHASE").strip().upper()
     if event_type not in VALID_EVENT_TYPES:
         raise ValueError(f"event_type must be one of {sorted(VALID_EVENT_TYPES)}")
     reversal_of = str(source.get("reversal_of") or "").strip() or None
     if event_type == "REVERSAL" and not reversal_of:
         raise ValueError("reversal_of is required for REVERSAL events")
-    reconciliation_status = str(source.get("reconciliation_status") or "UNMATCHED").upper()
+    reconciliation_status = str(source.get("reconciliation_status") or "UNMATCHED").strip().upper()
     if reconciliation_status not in VALID_RECONCILIATION_STATUSES:
         raise ValueError(
             f"reconciliation_status must be one of {sorted(VALID_RECONCILIATION_STATUSES)}"
@@ -547,18 +580,21 @@ def _normalize_event(source: dict[str, Any]) -> dict[str, Any]:
     tags = source.get("tags") or []
     if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
         raise ValueError("tags must be a list of strings")
+    currency = str(source.get("currency") or "AED").strip().upper()
+    if not _CURRENCY_CODE.fullmatch(currency):
+        raise ValueError("currency must be a three-letter ISO code")
     normalized = {
         "source_event_id": source_event_id,
         "occurred_at": _iso_datetime(source.get("occurred_at")),
         "card_code": card_code,
         "amount_aed_minor": _amount_minor(_event_amount(source)),
-        "currency": str(source.get("currency") or "AED").strip().upper(),
-        "purchase_type": str(source.get("purchase_type") or "GENERAL").strip().upper(),
-        "channel": str(source.get("channel") or "UNKNOWN").strip().upper(),
-        "merchant": str(source.get("merchant") or "Unknown").strip(),
+        "currency": currency,
+        "purchase_type": str(source.get("purchase_type") or "GENERAL").strip().upper() or "GENERAL",
+        "channel": str(source.get("channel") or "UNKNOWN").strip().upper() or "UNKNOWN",
+        "merchant": str(source.get("merchant") or "Unknown").strip() or "Unknown",
         "bucket_code": str(source.get("bucket_code") or "").strip().upper() or None,
         "event_type": event_type,
-        "source": str(source.get("source") or "email").strip(),
+        "source": str(source.get("source") or "email").strip() or "email",
         "status": status,
         "tags_json": json.dumps(sorted(set(tags))),
         "confidence": confidence,
@@ -754,6 +790,12 @@ class CashbackEventStore:
                 connection.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_cashback_events_identity ON cashback_events(identity_key) WHERE identity_key IS NOT NULL"
                 )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_cashback_events_status_occurred ON cashback_events(status, occurred_at, source_event_id)"
+                )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_cashback_events_reconcile ON cashback_events(card_code, status, source, occurred_at, source_event_id)"
+                )
 
     @staticmethod
     def _migrate_event_columns(connection: sqlite3.Connection) -> None:
@@ -928,11 +970,17 @@ class CashbackEventStore:
         if not source_name:
             raise ValueError("source is required")
         completed_at = _iso_datetime(source.get("completed_at"))
-        try:
-            scanned_count = int(source.get("scanned_count"))
-            accepted_count = int(source.get("accepted_count"))
-        except (TypeError, ValueError) as error:
-            raise ValueError("scanned_count and accepted_count must be integers") from error
+        scanned_value = source.get("scanned_count")
+        accepted_value = source.get("accepted_count")
+        if (
+            isinstance(scanned_value, bool)
+            or not isinstance(scanned_value, int)
+            or isinstance(accepted_value, bool)
+            or not isinstance(accepted_value, int)
+        ):
+            raise ValueError("scanned_count and accepted_count must be integers")
+        scanned_count = scanned_value
+        accepted_count = accepted_value
         if scanned_count < 0 or accepted_count < 0 or accepted_count > scanned_count:
             raise ValueError("ingest counts must be non-negative and accepted cannot exceed scanned")
         cursor = str(source.get("cursor") or "").strip()
@@ -949,10 +997,19 @@ class CashbackEventStore:
     ) -> dict[str, Any]:
         """Persist the exact service result that is eligible for one cursor commit."""
         source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
-        ids = sorted({str(event_id).strip() for event_id in event_ids if str(event_id).strip()})
-        digests = sorted({str(digest).strip() for digest in event_digests if str(digest).strip()})
-        if len(ids) != len(digests):
+        raw_ids = [str(event_id).strip() for event_id in event_ids]
+        raw_digests = [str(digest).strip() for digest in event_digests]
+        if len(raw_ids) != len(raw_digests):
             raise ValueError("event ids and event digests must have equal cardinality")
+        if any(not event_id for event_id in raw_ids) or any(not digest for digest in raw_digests):
+            raise ValueError("event ids and event digests must be non-empty")
+        if len(set(raw_ids)) != len(raw_ids):
+            raise ValueError("event ids must be unique within an ingest receipt")
+        if len(raw_ids) != accepted_count:
+            raise ValueError("accepted_count must equal the number of event ids in the receipt")
+        pairs = sorted(zip(raw_ids, raw_digests), key=lambda pair: pair[0])
+        ids = [event_id for event_id, _ in pairs]
+        digests = [digest for _, digest in pairs]
         payload = {
             "source": source_name,
             "completed_at": completed_at,
@@ -1235,6 +1292,7 @@ class CashbackEventStore:
             if supplied_content_sha256 != statement_content_sha256:
                 raise ValueError("statement content digest does not match canonical content")
 
+        range_start, range_end = _date_range_bounds(period_start, period_end)
         with closing(self._connect()) as connection:
             with connection:
                 prior = connection.execute(
@@ -1326,10 +1384,10 @@ class CashbackEventStore:
                         """
                         SELECT * FROM cashback_events
                         WHERE card_code = ? AND status = 'ACTIVE' AND source != 'statement'
-                          AND substr(occurred_at, 1, 10) BETWEEN ? AND ?
+                          AND occurred_at >= ? AND occurred_at < ?
                         ORDER BY occurred_at, source_event_id
                         """,
-                        (card_code, period_start.isoformat(), period_end.isoformat()),
+                        (card_code, range_start, range_end),
                     ).fetchall()
                 ]
                 remaining = {row["source_event_id"]: row for row in candidates}
@@ -1363,8 +1421,8 @@ class CashbackEventStore:
                         # collision.
                         if existing and not ranked:
                             connection.execute(
-                                "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
-                                (existing["source_event_id"],),
+                                "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', statement_reference=?, updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
+                                (statement_reference, existing["source_event_id"]),
                             )
                             matched += 1
                             continue
@@ -1466,6 +1524,17 @@ class CashbackEventStore:
                 ).fetchone()
                 if row is None:
                     raise ValueError(f"Unknown source_event_id: {source_event_id}")
+                if (
+                    (
+                        row["statement_reference"]
+                        or row["reconciliation_status"] in {"MATCHED", "RECONCILED"}
+                    )
+                    and set(changes) & RECONCILIATION_FACT_FIELDS
+                ):
+                    raise ValueError(
+                        "authoritative reconciliation facts cannot be corrected in place; "
+                        "submit a new statement reconciliation"
+                    )
                 source = {
                     "source_event_id": source_event_id,
                     "occurred_at": row["occurred_at"],
@@ -1724,15 +1793,16 @@ class CashbackEventStore:
         return [dict(row) for row in rows]
 
     def rows(self, start: date, end: date) -> list[dict[str, Any]]:
+        range_start, range_end = _date_range_bounds(start, end)
         with closing(self._connect()) as connection:
             records = connection.execute(
                 """
                 SELECT * FROM cashback_events
-                WHERE substr(occurred_at, 1, 10) BETWEEN ? AND ?
+                WHERE occurred_at >= ? AND occurred_at < ?
                   AND status = 'ACTIVE'
                 ORDER BY occurred_at, source_event_id
                 """,
-                (start.isoformat(), end.isoformat()),
+                (range_start, range_end),
             ).fetchall()
         return [dict(row) for row in records]
 
@@ -1774,28 +1844,39 @@ class CashbackEventStore:
             for row in records
         ]
 
-    def stats(self) -> dict[str, Any]:
+    def stats(self, source: str | None = None) -> dict[str, Any]:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT COUNT(*) AS event_count, MAX(occurred_at) AS last_event_at,
+                SELECT COUNT(*) AS event_count,
                        SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS live_event_count,
                        SUM(CASE WHEN reconciliation_status = 'VARIANCE' THEN 1 ELSE 0 END) AS variance_count
                 FROM cashback_events
                 """
             ).fetchone()
-            ingest = connection.execute(
+            last_event = connection.execute(
                 """
-                SELECT source, last_success_at, scanned_count, accepted_count, cursor
-                FROM ingest_state
-                ORDER BY last_success_at DESC
+                SELECT occurred_at
+                FROM cashback_events
+                ORDER BY julianday(occurred_at) DESC, occurred_at DESC
                 LIMIT 1
                 """
             ).fetchone()
+            ingest_query = """
+                SELECT source, last_success_at, scanned_count, accepted_count, cursor
+                FROM ingest_state
+            """
+            ingest_parameters: tuple[object, ...] = ()
+            if source:
+                ingest_query += " WHERE source = ?"
+                ingest_parameters = (source,)
+            ingest_query += " ORDER BY julianday(last_success_at) DESC, last_success_at DESC LIMIT 1"
+            ingest = connection.execute(ingest_query, ingest_parameters).fetchone()
             correction_count = connection.execute(
                 "SELECT COUNT(*) AS count FROM event_corrections"
             ).fetchone()["count"]
         result = dict(row)
+        result["last_event_at"] = last_event["occurred_at"] if last_event else None
         result["live_event_count"] = result["live_event_count"] or 0
         result["variance_count"] = result["variance_count"] or 0
         result["last_successful_ingest_at"] = ingest["last_success_at"] if ingest else None
@@ -1866,7 +1947,10 @@ def build_live_dashboard(
     *,
     stale_after_minutes: int = 90,
     program_config_path: Path | None = None,
+    ingest_source: str | None = None,
 ) -> dict[str, Any]:
+    if stale_after_minutes <= 0:
+        raise ValueError("stale_after_minutes must be positive")
     configuration = load_program_configuration(program_config_path, as_of=as_of)
     programs = programs_from_config(configuration, as_of, as_of=as_of)
     periods = {
@@ -1892,7 +1976,7 @@ def build_live_dashboard(
         base_currency=str(configuration.get("currency") or "AED"),
     )
     result["profile"] = configuration.get("profile") or {}
-    stats = store.stats()
+    stats = store.stats(ingest_source)
     last_ingest = stats.get("last_successful_ingest_at")
     stale = True
     if last_ingest:
