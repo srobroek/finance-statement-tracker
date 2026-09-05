@@ -58,6 +58,9 @@ function cardEvidenceLabel(card) {
 function cardEvidenceNode(card) {
   const node = createNode("div", "source-state");
   node.append(createNode("span", "", cardEvidenceLabel(card)));
+  if (card?.position_mode !== "UNLIMITED" && card?.position_detail) {
+    node.append(createNode("span", "", card.position_detail));
+  }
   if (card?.provenance_reason) node.title = String(card.provenance_reason);
   return node;
 }
@@ -460,7 +463,7 @@ function renderCards(cards) {
           const values = createNode("div");
           values.append(
             createNode("span", "", bucket.code.replaceAll("_", " ")),
-            createNode("b", "", `${money.format(bucket.spend_aed)} · uncapped`),
+            createNode("b", "", `${money.format(bucket.spend_aed)} · ${card.reward_eligibility_verified === false ? "eligible limit unverified" : "uncapped"}`),
           );
           row.append(values);
           bucketList.append(row);

@@ -5,7 +5,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
 from typing import Iterable
 
@@ -145,6 +145,7 @@ class CardProgram:
     payment_due_forecast_days: int = 30
     refund_behavior: str = "REDUCE_CURRENT_CYCLE"
     rounding_behavior: str = "CURRENCY_MINOR_UNIT"
+    reward_eligibility_verified: bool = True
     routing_priority: int = 100
     exclusions: tuple[str, ...] = ()
     short_name: str | None = None
@@ -305,6 +306,8 @@ def bucket_spend(transactions: Iterable[Transaction], card: str) -> dict[str, De
 
 
 def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decimal]) -> Decimal:
+    if not program.reward_eligibility_verified:
+        raise ValueError("Reward eligibility is unverified; a numeric reward would be misleading")
     tier = program.tier_for(total, buckets)
     bucket_defs = {bucket.code: bucket for bucket in program.buckets}
     reward = Decimal("0")
@@ -314,6 +317,8 @@ def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decima
         fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
         cap = tier.cashback_cap(code, fallback_cap)
         reward += min(earned, cap) if cap is not None else earned
+    if program.rounding_behavior == "WHOLE_CURRENCY_UNIT_FLOOR":
+        return reward.quantize(Decimal("1"), rounding=ROUND_FLOOR).quantize(Decimal("0.01"))
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
     if program.rounding_behavior != "NONE":
@@ -328,6 +333,8 @@ def evaluate_card(
     *,
     bucket_code: str | None = None,
 ) -> CardValue | None:
+    if not program.reward_eligibility_verified:
+        return None
     existing = list(transactions)
     current_total = total_spend(existing, program.card)
     current_buckets = bucket_spend(existing, program.card)
@@ -1082,6 +1089,7 @@ def programs_from_config(
     as_of: date | datetime | None = None,
 ) -> tuple[CardProgram, ...]:
     validate_program_configuration(source, as_of=as_of)
+    period_date = period_date or _as_of_date(as_of)
     base_currency = str(source.get("currency") or "AED").upper()
     programs = []
     for item in source.get("programs", []):
@@ -1210,6 +1218,7 @@ def programs_from_config(
                 ),
                 refund_behavior=str(item.get("refund_behavior") or "REDUCE_CURRENT_CYCLE").upper(),
                 rounding_behavior=str(item.get("rounding_behavior") or "CURRENCY_MINOR_UNIT").upper(),
+                reward_eligibility_verified=item.get("reward_eligibility_verified", True),
                 routing_priority=int(item.get("routing_priority", 100)),
                 exclusions=tuple(str(value) for value in item.get("exclusions", [])),
                 short_name=str(item.get("short_name") or item["name"]),
