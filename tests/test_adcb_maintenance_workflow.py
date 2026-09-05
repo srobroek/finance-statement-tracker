@@ -27,6 +27,9 @@ class MaintenanceWorkflowTests(unittest.TestCase):
         convert=next(n for n in w['nodes'] if n['name']=='Convert Redacted Maintenance Receipt')
         self.assertEqual(convert['parameters']['mode'],'each')
         self.assertNotIn('sourceProperty',convert['parameters'])
+        upload=next(n for n in w['nodes'] if n['name']=='Archive Redacted Maintenance Receipt')
+        self.assertEqual(upload['typeVersion'],1.1)  # v1 silently prefers binary filename
+        self.assertIn('$execution.id',upload['parameters']['fileName'])
         names=[n['name'] for n in w['nodes']]
         for a,b in zip(names,names[1:]): self.assertEqual(w['connections'][a]['main'],[[{'node':b,'type':'main','index':0}]])
         self.assertLess(names.index('Verify Approved Plan Bytes and Identity'),names.index('Apply Bounded Reviewed Maintenance'))

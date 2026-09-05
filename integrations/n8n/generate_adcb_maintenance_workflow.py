@@ -113,7 +113,7 @@ def build():
     code('Build Redacted Maintenance Receipt',RECEIPT)
     add('Convert Redacted Maintenance Receipt','convertToFile',{'operation':'toJson','mode':'each','binaryPropertyName':'data','options':{'fileName':'maintenance-receipt.json'}},1.1)
     add('Hash Redacted Maintenance Receipt','crypto',{'action':'hash','type':'SHA256','binaryData':True,'binaryPropertyName':'data','dataPropertyName':'receipt_sha256'})
-    add('Archive Redacted Maintenance Receipt','microsoftOneDrive',{'resource':'file','operation':'upload','binaryData':True,'binaryPropertyName':'data','fileName':"={{ $('Validate Reviewed Bindings').first().json.approved_plan_sha256 + '-' + $execution.id + '-' + $json.receipt_sha256 + '.maintenance-receipt.json' }}",'parentId':"={{ $('Validate Reviewed Bindings').first().json.receipt_parent_id }}"},1,onedrive)
+    add('Archive Redacted Maintenance Receipt','microsoftOneDrive',{'resource':'file','operation':'upload','binaryData':True,'binaryPropertyName':'data','fileName':"={{ $('Validate Reviewed Bindings').first().json.approved_plan_sha256 + '-' + $execution.id + '-' + $json.receipt_sha256 + '.maintenance-receipt.json' }}",'parentId':"={{ $('Validate Reviewed Bindings').first().json.receipt_parent_id }}"},1.1,onedrive)
     add('Download Maintenance Receipt Readback','microsoftOneDrive',{'resource':'file','operation':'download','fileId':"={{ $json.id }}",'binaryPropertyName':'data'},1,onedrive)
     add('Hash Maintenance Receipt Readback','crypto',{'action':'hash','type':'SHA256','binaryData':True,'binaryPropertyName':'data','dataPropertyName':'receipt_readback_sha256'})
     code('Verify Durable Maintenance Receipt',VERIFY_ARCHIVE)
