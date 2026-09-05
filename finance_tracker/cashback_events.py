@@ -829,6 +829,10 @@ class CashbackEventStore:
                 )
                 if "receipt_kind" not in {row["name"] for row in connection.execute("PRAGMA table_info(ingest_receipts)")}:
                     connection.execute("ALTER TABLE ingest_receipts ADD COLUMN receipt_kind TEXT NOT NULL DEFAULT 'BATCH'")
+                if "receipt_payload_json" not in {row["name"] for row in connection.execute("PRAGMA table_info(ingest_receipts)")}:
+                    # Preserve historical receipts. Their digest alone cannot reconstruct
+                    # held REVIEW identities; exact source replay can safely restore them.
+                    connection.execute("ALTER TABLE ingest_receipts ADD COLUMN receipt_payload_json TEXT")
                 self._migrate_event_columns(connection)
                 self._migrate_ingest_state_columns(connection)
                 self._migrate_period_columns(connection)
@@ -1162,8 +1166,9 @@ class CashbackEventStore:
                         """
                         INSERT INTO ingest_receipts (
                             receipt_id, receipt_sha256, source, completed_at, cursor,
-                            scanned_count, accepted_count, event_ids_json, event_digests_json, receipt_kind
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            scanned_count, accepted_count, event_ids_json, event_digests_json, receipt_kind,
+                            receipt_payload_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             receipt_id,
@@ -1176,23 +1181,62 @@ class CashbackEventStore:
                             json.dumps(ids, separators=(",", ":")),
                             json.dumps(digests, separators=(",", ":")),
                             receipt_kind,
+                            json.dumps(payload, sort_keys=True, separators=(",", ":")),
                         ),
                     )
-                    state = "READY"
                 else:
                     if existing["receipt_sha256"] != receipt_sha256:
                         raise IngestCursorConflict("service receipt identity collision")
-                    state = str(existing["state"])
+                    if existing["receipt_payload_json"] is None:
+                        # The exact content reproduces the existing immutable digest.
+                        # Never synthesize or discard historical review dispositions.
+                        connection.execute(
+                            "UPDATE ingest_receipts SET receipt_payload_json=? WHERE receipt_id=? AND receipt_payload_json IS NULL",
+                            (json.dumps(payload, sort_keys=True, separators=(",", ":")), receipt_id),
+                        )
                 connection.commit()
             except Exception:
                 connection.rollback()
                 raise
-        return {
-            "receipt_id": receipt_id,
-            "receipt_sha256": receipt_sha256,
-            **payload,
-            "state": state,
+        # Return independently read durable content, not the request held in memory.
+        return self.ingest_receipt(receipt_id, receipt_sha256)
+
+    @staticmethod
+    def _durable_receipt_payload(row: sqlite3.Row) -> dict[str, Any]:
+        raw = row["receipt_payload_json"]
+        if raw is None:
+            raise IngestCursorConflict("historical receipt requires exact source replay before cursor commit")
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError) as error:
+            raise IngestCursorConflict("durable receipt payload is unreadable") from error
+        if not isinstance(payload, dict) or _json_digest(payload) != row["receipt_sha256"]:
+            raise IngestCursorConflict("durable receipt payload digest mismatch")
+        expected = {
+            "source": row["source"], "completed_at": row["completed_at"], "cursor": row["cursor"],
+            "scanned_count": int(row["scanned_count"]), "accepted_count": int(row["accepted_count"]),
+            "event_ids": json.loads(row["event_ids_json"]),
+            "event_digests": json.loads(row["event_digests_json"]),
         }
+        if any(payload.get(key) != value for key, value in expected.items()):
+            raise IngestCursorConflict("durable receipt row binding mismatch")
+        if payload.get("receipt_kind", "BATCH") != row["receipt_kind"]:
+            raise IngestCursorConflict("durable receipt kind mismatch")
+        return payload
+
+    def ingest_receipt(self, receipt_id: str, receipt_sha256: str) -> dict[str, Any]:
+        """Read the exact durable receipt, including held source dispositions.
+
+        Source and message identity link each REVIEW disposition to the immutable
+        acquisition archive; raw mail and credentials never belong in this receipt.
+        """
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT * FROM ingest_receipts WHERE receipt_id=?", (receipt_id,)).fetchone()
+            if row is None or row["receipt_sha256"] != receipt_sha256:
+                raise IngestCursorConflict("service receipt is unknown or mismatched")
+            payload = self._durable_receipt_payload(row)
+            return {"receipt_id": receipt_id, "receipt_sha256": receipt_sha256,
+                    **payload, "state": str(row["state"])}
 
     def ingest_transaction(self, source: dict[str, Any]) -> dict[str, Any]:
         """Persist one normalized transaction; never advance an acquisition cursor."""
@@ -1325,6 +1369,7 @@ class CashbackEventStore:
                     raise IngestCursorConflict("service receipt is unknown or mismatched")
                 if receipt["receipt_kind"] != "BATCH":
                     raise IngestCursorConflict("transaction receipts cannot commit a scan cursor")
+                payload = self._durable_receipt_payload(receipt)
                 expected = {
                     "source": receipt["source"],
                     "completed_at": receipt["completed_at"],
@@ -1372,6 +1417,17 @@ class CashbackEventStore:
                     next_version = int(current["cursor_version"]) + 1
                 else:
                     next_version = 1
+
+                # Recheck accepted persistence under the same write lock as cursor
+                # advancement. Corrections/deletions after aggregation must not
+                # turn a stale downstream acknowledgement into a successful scan.
+                # Older mailbox API receipts hash input events, not stored rows.
+                # The compact scan contract explicitly carries scan_dispositions.
+                if "scan_dispositions" in payload:
+                    for event_id, digest in zip(payload["event_ids"], payload["event_digests"], strict=True):
+                        event = connection.execute("SELECT * FROM cashback_events WHERE source_event_id=?", (event_id,)).fetchone()
+                        if event is None or self._stored_transaction_digest(event) != digest:
+                            raise IngestCursorConflict("receipt transaction is missing or changed before cursor commit")
 
                 connection.execute(
                     """
