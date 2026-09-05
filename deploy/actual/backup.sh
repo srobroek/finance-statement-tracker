@@ -10,6 +10,7 @@ PRIVATE_FILE_MODE=600
 PRIVATE_OWNER_UID="${EUID}"
 
 ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual}"
+ACTUAL_HEALTH_URL="${FINANCE_ACTUAL_HEALTH_URL:-http://172.20.10.20:5006/}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
 BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual}"
 RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
@@ -313,7 +314,7 @@ ensure_private_file "${working}/manifest.json" "backup_manifest"
 
 resume_services
 if [[ "${actual_state}" == "running" && "${proxy_state}" == "running" ]]; then
-  wait_for_url "actual" "http://127.0.0.1:5006/"
+  wait_for_url "actual" "${ACTUAL_HEALTH_URL}"
 fi
 if [[ "${cashback_state}" == "running" ]]; then
   wait_for_url "cashback" "http://127.0.0.1:5010/api/health"
