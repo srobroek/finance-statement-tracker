@@ -223,11 +223,16 @@ test("native regex classes preserve canonical case-insensitive vendor boundaries
   const patterns = [
     "(?:^|[^A-Z0-9])AWS(?:[^A-Z0-9]|$)",
     "^[A-C]+$",
+    "^[a-]+$",
+    "^[^a-]+$",
+    "^[-a]+$",
+    String.raw`^[a\-]+$`,
+    String.raw`^[a\\-]+$`,
     "^[^a-c]+$",
     String.raw`^[\x41-\x43]+$`,
     String.raw`^[A-Z\]0-9]+$`,
   ];
-  const samples = ["AWS", "aws", " AWS ", "claws", "clAWS", "AWSome", "aBc", "ABC", "abc", "XYZ", "xyz", "]", "0"];
+  const samples = ["AWS", "aws", " AWS ", "claws", "clAWS", "AWSome", "aBc", "ABC", "abc", "XYZ", "xyz", "]", "0", "-", "A-", "a-", "\\", "A\\-"];
   for (const pattern of patterns) {
     const compiled = compileCanonicalRules([{
       rule_id: "case-classes",

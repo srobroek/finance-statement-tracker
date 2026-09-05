@@ -63,6 +63,15 @@ function caseInsensitiveRegex(pattern) {
           additions += positive.test(upper) ? lower : upper;
         }
       }
+      // A hyphen at the original class end is literal. Appending folded
+      // letters would turn it into a range (for example [a-] -> [a-A]).
+      // Count escapes so an already escaped hyphen stays untouched.
+      if (additions && characterClass.endsWith("-")) {
+        const backslashes = characterClass.slice(0, -1).match(/\\*$/)[0].length;
+        if (backslashes % 2 === 0) {
+          characterClass = `${characterClass.slice(0, -1)}\\x2d`;
+        }
+      }
       output += `${characterClass}${additions}]`;
       inCharacterClass = false;
       continue;
