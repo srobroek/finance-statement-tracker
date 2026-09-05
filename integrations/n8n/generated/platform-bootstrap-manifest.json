@@ -1041,6 +1041,69 @@
           "createIfNotExists": true
         }
       }
+    },
+    {
+      "table_name": "finance_execution_failures",
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_execution_failures",
+        "columns": {
+          "column": [
+            {
+              "name": "execution_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_name",
+              "type": "string"
+            },
+            {
+              "name": "workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "provider_code",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_message_redacted",
+              "type": "string"
+            },
+            {
+              "name": "first_seen_at",
+              "type": "date"
+            },
+            {
+              "name": "acknowledged_at",
+              "type": "date"
+            },
+            {
+              "name": "replay_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
     }
   ],
   "application_contract": {
@@ -1077,12 +1140,13 @@
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {
     "path": "integrations/n8n/data-table-migration-matrix.json",
-    "digest": "655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515",
+    "digest": "3f1a6b89327efb7227e19450786fb8d6576ef22752ea3a2e7e7c93cdfbb0fc83",
     "target_tables": [
       "finance_ingestion_state",
       "finance_documents",
       "finance_actual_batches",
-      "finance_ai_reviews"
+      "finance_ai_reviews",
+      "finance_execution_failures"
     ],
     "readback_operation": "list",
     "readback_required": true,

@@ -150,8 +150,9 @@ error class.
   failures or balance mismatches without a changed input/configuration.
 - Enforce byte, page, decompression, dimension and execution-time limits before
   OCR or external calls.
-- Maintain a per-provider circuit breaker; after repeated transient failures,
-  skip to the next approved provider or quarantine.
+- Preserve bounded provider retries and quarantine after exhaustion. Shared
+  circuit state is retired until a real durable circuit-breaker requirement and
+  runtime proof exist; a synthetic CLOSED row is not circuit protection.
 - Store raw binaries in OneDrive and only minimal transient binary data in n8n.
   Do not save PDF bytes, statement text or credentials in successful execution
   outputs.

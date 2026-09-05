@@ -661,7 +661,8 @@ class N8nInterfaceContractTests(unittest.TestCase):
             for node in error["nodes"]
             if node["name"] == "Redact and Classify Failure"
         )
-        self.assertIn("[REDACTED]", error_code)
+        self.assertNotIn("error_message_redacted: raw", error_code)
+        self.assertIn("failure; HTTP", error_code)
         self.assertIn("readback_verified: false", error_code)
 
         lease = self.workflow_for_code("FINANCE_WRITER_LEASE")

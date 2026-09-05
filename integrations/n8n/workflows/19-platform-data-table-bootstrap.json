@@ -58,7 +58,7 @@
     },
     {
       "id": "19000-target-guard",
-      "name": "Verify Four-Table Target Contract",
+      "name": "Verify Canonical Target Contract",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -66,7 +66,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Four-Table Target Contract. Keep this deterministic and fail closed.\nconst contract = {\n    \"finance_actual_batches\": {\n        \"columns\": [\n            {\n                \"name\": \"batch_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"idempotency_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"actual_file_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"parser_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"lease_owner\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"lease_fence\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"actual_transaction_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attempt_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_error_class\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"verification_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"account_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"card_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_start\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"period_end\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"expected_payload_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"observed_payload_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"expected_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"expected_amount_sum_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_amount_sum_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"expected_account_balance\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_account_balance\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"invariants_passed\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"statement_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_difference_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"reconciliation_verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"verification_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_path\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_length_bytes\",\n                \"type\": \"number\"\n            }\n        ],\n        \"logical_key\": [\n            \"idempotency_key\"\n        ]\n    },\n    \"finance_ai_reviews\": {\n        \"columns\": [\n            {\n                \"name\": \"idempotency_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"policy_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"policy_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"output_schema_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"request_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"runner_receipt_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_schema\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"review_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"review_decision\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reviewed_by_hash\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reviewed_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"terminal_readback_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            }\n        ],\n        \"logical_key\": [\n            \"idempotency_key\"\n        ]\n    },\n    \"finance_documents\": {\n        \"columns\": [\n            {\n                \"name\": \"document_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_receipt_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_message_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_attachment_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"onedrive_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"onedrive_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"document_profile\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"requested_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"actual_file_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"account_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attempt_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_execution_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"parser_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"output_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_class\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_detail_redacted\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            }\n        ],\n        \"logical_key\": [\n            \"document_id\"\n        ]\n    },\n    \"finance_ingestion_state\": {\n        \"columns\": [\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"receipt_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"receipt_run_upper_bound\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"cursor_value\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"committed_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_upper_bound\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"overlap_seconds\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"scanned_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"matched_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"cursor_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"readback_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"last_window_start\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"last_pages_fetched\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_pagination_exhausted\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"last_heartbeat\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"last_terminal_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"last_receipt_created_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"downstream_receipt_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachment_verification_barrier\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachment_ids_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"attachment_identity_keys_json\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachments_verified\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"email_evidence_receipt_barrier\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"email_evidence_receipts_verified\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"email_evidence_identity_keys_json\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_ready\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"inventory_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_fence\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"inventory_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_path\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_length_bytes\",\n                \"type\": \"number\"\n            }\n        ],\n        \"logical_key\": [\n            \"source_code\"\n        ]\n    }\n};\nconst expected = [\"finance_ingestion_state\", \"finance_documents\", \"finance_actual_batches\", \"finance_ai_reviews\"];\nconst names = Object.keys(contract);\nif (names.length !== expected.length || expected.some(name => !names.includes(name)))\n    throw new Error('TARGET_TABLE_SET_MISMATCH');\nfor (const name of expected) {\n    const table = contract[name];\n    if (!table.logical_key.length || !table.columns.length)\n        throw new Error(`TARGET_SCHEMA_EMPTY:${name}`);\n    if (table.columns.some(column => !['string', 'number', 'boolean', 'date'].includes(column.type)))\n        throw new Error(`TARGET_SCHEMA_TYPE_UNSUPPORTED:${name}`);\n}\nreturn [{ json: { status: 'TARGET_SCHEMA_CONTRACT_VERIFIED', target_tables: expected, target_schemas: contract, target_schema_digest: '655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515', runtime_cutover: false, deletion_authorized: false } }];\n"
+        "jsCode": "// Purpose: Verify Canonical Target Contract. Keep this deterministic and fail closed.\nconst contract = {\n    \"finance_actual_batches\": {\n        \"columns\": [\n            {\n                \"name\": \"batch_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"idempotency_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"actual_file_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"delta_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"parser_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"lease_owner\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"lease_fence\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"actual_transaction_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attempt_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_error_class\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"verification_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"account_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"card_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_start\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"period_end\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"expected_payload_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"observed_payload_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"expected_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"expected_amount_sum_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_amount_sum_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"expected_account_balance\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"observed_account_balance\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"invariants_passed\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"statement_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reconciliation_difference_minor\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"reconciliation_verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"verification_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_path\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"verification_artifact_length_bytes\",\n                \"type\": \"number\"\n            }\n        ],\n        \"logical_key\": [\n            \"idempotency_key\"\n        ]\n    },\n    \"finance_ai_reviews\": {\n        \"columns\": [\n            {\n                \"name\": \"idempotency_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"policy_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"policy_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"output_schema_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"request_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"runner_receipt_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"proposal_artifact_schema\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"review_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"review_decision\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reviewed_by_hash\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"reviewed_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"terminal_readback_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            }\n        ],\n        \"logical_key\": [\n            \"idempotency_key\"\n        ]\n    },\n    \"finance_documents\": {\n        \"columns\": [\n            {\n                \"name\": \"document_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_receipt_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_message_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_attachment_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"source_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"onedrive_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"onedrive_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_verified_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"document_profile\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"requested_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"config_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"actual_file_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"account_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"period_key\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attempt_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_execution_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"parser_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"output_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_class\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_detail_redacted\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            }\n        ],\n        \"logical_key\": [\n            \"document_id\"\n        ]\n    },\n    \"finance_execution_failures\": {\n        \"columns\": [\n            {\n                \"name\": \"execution_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"workflow_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"workflow_name\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"workflow_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"provider_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_class\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"error_message_redacted\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"first_seen_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"acknowledged_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"replay_execution_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"readback_verified\",\n                \"type\": \"boolean\"\n            }\n        ],\n        \"logical_key\": [\n            \"execution_id\"\n        ]\n    },\n    \"finance_ingestion_state\": {\n        \"columns\": [\n            {\n                \"name\": \"source_code\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"receipt_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"receipt_run_upper_bound\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"cursor_value\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"committed_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"run_upper_bound\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"overlap_seconds\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"scanned_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"matched_count\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"cursor_version\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"readback_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"updated_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"last_window_start\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"last_pages_fetched\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"last_pagination_exhausted\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"last_heartbeat\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"last_terminal_state\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"last_receipt_created_at\",\n                \"type\": \"date\"\n            },\n            {\n                \"name\": \"downstream_receipt_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachment_verification_barrier\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachment_ids_verified\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"attachment_identity_keys_json\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"attachments_verified\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"email_evidence_receipt_barrier\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"email_evidence_receipts_verified\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"email_evidence_identity_keys_json\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"archive_ready\",\n                \"type\": \"boolean\"\n            },\n            {\n                \"name\": \"inventory_run_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_fence\",\n                \"type\": \"number\"\n            },\n            {\n                \"name\": \"inventory_sha256\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_item_id\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_path\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_etag\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_schema_version\",\n                \"type\": \"string\"\n            },\n            {\n                \"name\": \"inventory_length_bytes\",\n                \"type\": \"number\"\n            }\n        ],\n        \"logical_key\": [\n            \"source_code\"\n        ]\n    }\n};\nconst expected = [\"finance_ingestion_state\", \"finance_documents\", \"finance_actual_batches\", \"finance_ai_reviews\", \"finance_execution_failures\"];\nconst names = Object.keys(contract);\nif (names.length !== expected.length || expected.some(name => !names.includes(name)))\n    throw new Error('TARGET_TABLE_SET_MISMATCH');\nfor (const name of expected) {\n    const table = contract[name];\n    if (!table.logical_key.length || !table.columns.length)\n        throw new Error(`TARGET_SCHEMA_EMPTY:${name}`);\n    if (table.columns.some(column => !['string', 'number', 'boolean', 'date'].includes(column.type)))\n        throw new Error(`TARGET_SCHEMA_TYPE_UNSUPPORTED:${name}`);\n}\nreturn [{ json: { status: 'TARGET_SCHEMA_CONTRACT_VERIFIED', target_tables: expected, target_schemas: contract, target_schema_digest: '3f1a6b89327efb7227e19450786fb8d6576ef22752ea3a2e7e7c93cdfbb0fc83', runtime_cutover: false, deletion_authorized: false } }];\n"
       }
     },
     {
@@ -1164,12 +1164,82 @@
       }
     },
     {
+      "id": "19013",
+      "name": "Create or Reuse finance_execution_failures",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "finance_execution_failures",
+        "columns": {
+          "column": [
+            {
+              "name": "execution_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_name",
+              "type": "string"
+            },
+            {
+              "name": "workflow_code",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "provider_code",
+              "type": "string"
+            },
+            {
+              "name": "error_class",
+              "type": "string"
+            },
+            {
+              "name": "error_message_redacted",
+              "type": "string"
+            },
+            {
+              "name": "first_seen_at",
+              "type": "date"
+            },
+            {
+              "name": "acknowledged_at",
+              "type": "date"
+            },
+            {
+              "name": "replay_execution_id",
+              "type": "string"
+            },
+            {
+              "name": "readback_verified",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
       "id": "19070",
       "name": "Emit Disabled Source Contract Templates",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         760
       ],
       "parameters": {
@@ -1182,7 +1252,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -520,
         760
       ],
       "parameters": {
@@ -1245,7 +1315,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        -220,
         760
       ],
       "parameters": {
@@ -1254,11 +1324,11 @@
     },
     {
       "id": "19090",
-      "name": "List Four Target Tables",
+      "name": "List Canonical Target Tables",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        80,
         760
       ],
       "parameters": {
@@ -1270,15 +1340,15 @@
     },
     {
       "id": "19091",
-      "name": "Verify Four Target Table Readback",
+      "name": "Verify Canonical Target Table Readback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        380,
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Four Target Table Readback. Keep this deterministic and fail closed.\nconst contract = $('Verify Four-Table Target Contract').first().json;\nconst expected = contract.target_tables;\nconst rows = $input.all().map(item => item.json || {});\nif (!Array.isArray(expected) || expected.length !== 4)\n    throw new Error('TARGET_TABLE_SET_MISMATCH');\nconst names = rows.map(row => String(row.name || ''));\nconst duplicateNames = names.filter((name, index) => name && names.indexOf(name) !== index);\nif (duplicateNames.length)\n    throw new Error('TARGET_TABLE_DUPLICATE:' + duplicateNames[0]);\nconst unexpectedTarget = rows.find(row => {\n    const name = String(row.name || '');\n    return /^finance_(ingestion_state|documents|actual_batches|ai_reviews)(?:[_-]|$)/.test(name) && !expected.includes(name);\n});\nif (unexpectedTarget)\n    throw new Error('TARGET_TABLE_EXTRA:' + String(unexpectedTarget.name));\nconst observed = new Map(rows.filter(row => expected.includes(String(row.name || ''))).map(row => [String(row.name), row]));\nif (observed.size !== expected.length) {\n    const missing = expected.find(name => !observed.has(name));\n    throw new Error('TARGET_TABLE_MISSING:' + missing);\n}\nfor (const target of expected) {\n    const row = observed.get(target);\n    const schemaColumns = contract.target_schemas?.[target]?.columns;\n    const canonicalColumns = columns => columns.map(column => ({ name: String(column.name || ''), type: String(column.type || '').toLowerCase() })).sort((left, right) => left.name.localeCompare(right.name));\n    const expectedColumns = canonicalColumns(Array.isArray(schemaColumns) ? schemaColumns : Object.entries(schemaColumns || {}).map(([name, spec]) => ({ name, type: spec.type })));\n    const columns = canonicalColumns(Array.isArray(row.columns) ? row.columns : []);\n    if (columns.length !== expectedColumns.length)\n        throw new Error('TARGET_SCHEMA_MISMATCH:' + target);\n    if (new Set(columns.map(column => column.name)).size !== columns.length)\n        throw new Error('TARGET_SCHEMA_DUPLICATE:' + target);\n    for (let index = 0; index < columns.length; index += 1) {\n        const wanted = expectedColumns[index];\n        const actual = columns[index];\n        if (actual.name !== wanted.name || actual.type !== wanted.type)\n            throw new Error('TARGET_SCHEMA_MISMATCH:' + target + ':' + (actual.name || index));\n    }\n    const createRow = $('Create or Reuse ' + target).first().json || {};\n    const createdId = String(createRow.id || createRow.dataTableId || createRow.tableId || '');\n    const observedId = String(row.id || row.dataTableId || row.tableId || '');\n    if (!createdId || !observedId)\n        throw new Error('TARGET_TABLE_ID_MISSING:' + target);\n    if (createdId !== observedId)\n        throw new Error('TARGET_TABLE_ID_MISMATCH:' + target);\n}\nreturn [{ json: {\n            status: 'TARGET_SCHEMA_READBACK_VERIFIED',\n            target_tables: expected,\n            target_schema_digest: contract.target_schema_digest,\n            observed_table_count: observed.size,\n            observed_schema_verified: true,\n            observed_ids_verified: true,\n            runtime_cutover: false,\n            deletion_authorized: false,\n            second_run_noop: true,\n            old_tables_preserved: true,\n            redacted: true,\n            mode: '0600',\n        } }];\n"
+        "jsCode": "// Purpose: Verify Canonical Target Table Readback. Keep this deterministic and fail closed.\nconst contract = $('Verify Canonical Target Contract').first().json;\nconst expected = contract.target_tables;\nconst rows = $input.all().map(item => item.json || {});\nif (!Array.isArray(expected) || expected.length !== Object.keys(contract.target_schemas || {}).length || expected.length === 0)\n    throw new Error('TARGET_TABLE_SET_MISMATCH');\nconst names = rows.map(row => String(row.name || ''));\nconst duplicateNames = names.filter((name, index) => name && names.indexOf(name) !== index);\nif (duplicateNames.length)\n    throw new Error('TARGET_TABLE_DUPLICATE:' + duplicateNames[0]);\nconst unexpectedTarget = rows.find(row => {\n    const name = String(row.name || '');\n    return /^finance_(ingestion_state|documents|actual_batches|ai_reviews|execution_failures)(?:[_-]|$)/.test(name) && !expected.includes(name);\n});\nif (unexpectedTarget)\n    throw new Error('TARGET_TABLE_EXTRA:' + String(unexpectedTarget.name));\nconst observed = new Map(rows.filter(row => expected.includes(String(row.name || ''))).map(row => [String(row.name), row]));\nif (observed.size !== expected.length) {\n    const missing = expected.find(name => !observed.has(name));\n    throw new Error('TARGET_TABLE_MISSING:' + missing);\n}\nfor (const target of expected) {\n    const row = observed.get(target);\n    const schemaColumns = contract.target_schemas?.[target]?.columns;\n    const canonicalColumns = columns => columns.map(column => ({ name: String(column.name || ''), type: String(column.type || '').toLowerCase() })).sort((left, right) => left.name.localeCompare(right.name));\n    const expectedColumns = canonicalColumns(Array.isArray(schemaColumns) ? schemaColumns : Object.entries(schemaColumns || {}).map(([name, spec]) => ({ name, type: spec.type })));\n    const columns = canonicalColumns(Array.isArray(row.columns) ? row.columns : []);\n    if (columns.length !== expectedColumns.length)\n        throw new Error('TARGET_SCHEMA_MISMATCH:' + target);\n    if (new Set(columns.map(column => column.name)).size !== columns.length)\n        throw new Error('TARGET_SCHEMA_DUPLICATE:' + target);\n    for (let index = 0; index < columns.length; index += 1) {\n        const wanted = expectedColumns[index];\n        const actual = columns[index];\n        if (actual.name !== wanted.name || actual.type !== wanted.type)\n            throw new Error('TARGET_SCHEMA_MISMATCH:' + target + ':' + (actual.name || index));\n    }\n    const createRow = $('Create or Reuse ' + target).first().json || {};\n    const createdId = String(createRow.id || createRow.dataTableId || createRow.tableId || '');\n    const observedId = String(row.id || row.dataTableId || row.tableId || '');\n    if (!createdId || !observedId)\n        throw new Error('TARGET_TABLE_ID_MISSING:' + target);\n    if (createdId !== observedId)\n        throw new Error('TARGET_TABLE_ID_MISMATCH:' + target);\n}\nreturn [{ json: {\n            status: 'TARGET_SCHEMA_READBACK_VERIFIED',\n            target_tables: expected,\n            target_schema_digest: contract.target_schema_digest,\n            observed_table_count: observed.size,\n            observed_schema_verified: true,\n            observed_ids_verified: true,\n            runtime_cutover: false,\n            deletion_authorized: false,\n            second_run_noop: true,\n            old_tables_preserved: true,\n            redacted: true,\n            mode: '0600',\n        } }];\n"
       }
     },
     {
@@ -1287,11 +1357,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        680,
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Emit Redacted Bootstrap Receipt. Keep this deterministic and fail closed.\nconst targetTables = [\"finance_ingestion_state\", \"finance_documents\", \"finance_actual_batches\", \"finance_ai_reviews\"];\nreturn [{ json: { schema_version: 'data-table-migration-receipt-v1', status: 'SCHEMA_CONTRACT_READY', target_tables: targetTables, target_schema_digest: '655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515', runtime_cutover: false, deletion_authorized: false, second_run_noop: true, old_tables_preserved: true, redacted: true, mode: '0600' } }];\n"
+        "jsCode": "// Purpose: Emit Redacted Bootstrap Receipt. Keep this deterministic and fail closed.\nconst targetTables = [\"finance_ingestion_state\", \"finance_documents\", \"finance_actual_batches\", \"finance_ai_reviews\", \"finance_execution_failures\"];\nreturn [{ json: { schema_version: 'data-table-migration-receipt-v1', status: 'SCHEMA_CONTRACT_READY', target_tables: targetTables, target_schema_digest: '3f1a6b89327efb7227e19450786fb8d6576ef22752ea3a2e7e7c93cdfbb0fc83', runtime_cutover: false, deletion_authorized: false, second_run_noop: true, old_tables_preserved: true, redacted: true, mode: '0600' } }];\n"
       }
     }
   ],
@@ -1333,14 +1403,14 @@
       "main": [
         [
           {
-            "node": "Verify Four-Table Target Contract",
+            "node": "Verify Canonical Target Contract",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify Four-Table Target Contract": {
+    "Verify Canonical Target Contract": {
       "main": [
         [
           {
@@ -1465,6 +1535,17 @@
       "main": [
         [
           {
+            "node": "Create or Reuse finance_execution_failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Reuse finance_execution_failures": {
+      "main": [
+        [
+          {
             "node": "Emit Disabled Source Contract Templates",
             "type": "main",
             "index": 0
@@ -1498,25 +1579,25 @@
       "main": [
         [
           {
-            "node": "List Four Target Tables",
+            "node": "List Canonical Target Tables",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "List Four Target Tables": {
+    "List Canonical Target Tables": {
       "main": [
         [
           {
-            "node": "Verify Four Target Table Readback",
+            "node": "Verify Canonical Target Table Readback",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify Four Target Table Readback": {
+    "Verify Canonical Target Table Readback": {
       "main": [
         [
           {
@@ -1559,12 +1640,13 @@
     "credentialBindings": [],
     "setupRequired": true,
     "targetSchemaContract": "integrations/n8n/data-table-migration-matrix.json",
-    "targetSchemaDigest": "655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515",
+    "targetSchemaDigest": "3f1a6b89327efb7227e19450786fb8d6576ef22752ea3a2e7e7c93cdfbb0fc83",
     "targetTables": [
       "finance_ingestion_state",
       "finance_documents",
       "finance_actual_batches",
-      "finance_ai_reviews"
+      "finance_ai_reviews",
+      "finance_execution_failures"
     ],
     "sourceTablesPreserved": true,
     "legacyCompatibilityTables": [
@@ -1633,8 +1715,9 @@
       "description": "Finance stage 2. Input starts at Create or Reuse finance_pipeline_runs; verified output leaves through Create or Reuse finance_ai_reviews."
     },
     {
-      "name": "Stage 3: Emit Disabled Source Contract Templates to Emit Redacted Bootstrap Receipt",
+      "name": "Stage 3: Create or Reuse finance_execution_failures to Emit Redacted Bootstrap Receipt",
       "nodeIds": [
+        "19013",
         "19070",
         "19071",
         "19072",
@@ -1642,7 +1725,7 @@
         "19091",
         "19092"
       ],
-      "description": "Finance stage 3. Input starts at Emit Disabled Source Contract Templates; verified output leaves through Emit Redacted Bootstrap Receipt."
+      "description": "Finance stage 3. Input starts at Create or Reuse finance_execution_failures; verified output leaves through Emit Redacted Bootstrap Receipt."
     }
   ],
   "tags": [

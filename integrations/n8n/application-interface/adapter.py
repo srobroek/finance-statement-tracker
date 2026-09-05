@@ -15,7 +15,7 @@ from pathlib import Path
 
 APPLICATION_ID = "finance-statement-tracker"
 WORKFLOW_COUNT = 19
-FIXTURE_WORKFLOW_COUNT = 18
+FIXTURE_WORKFLOW_COUNT = 19
 MCP_ROUTE = "/mcp/finance-operations-v1"
 BOOTSTRAP_WORKFLOW_ID = "10000000-0000-4000-8000-000000000019"
 CANONICAL_FORBIDDEN_FIELDS = ["id", "value", "token", "secret", "password", "client_secret"]

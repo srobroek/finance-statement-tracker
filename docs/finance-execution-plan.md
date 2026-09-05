@@ -169,7 +169,7 @@ Do not treat a successful unit test or workflow import as ingestion proof. Requi
 - Prove no duplicate Actual row on every replay path.
 - Only after disposable double replay and post-replay audit may a reviewed production batch be submitted.
 
-### P5 — Simplify application state from 15 Data Tables to 4
+### P5 — Simplify application state to four finance tables and one failure sink
 
 Target only these human-visible n8n Data Tables:
 
@@ -177,11 +177,19 @@ Target only these human-visible n8n Data Tables:
 2. `finance_documents` — archive proof and processing state as separate axes, with source/OneDrive/Actual linkage but no message body, extracted text, binary, or error stack.
 3. `finance_actual_batches` — prepared/observed/verified/committed batch state plus immutable delta and verification-artifact pointers.
 4. `finance_ai_reviews` — proposal artifact identity and human review state only, created after proposal upload and hash verification.
+5. `finance_execution_failures` — bounded, redacted operational failure receipts keyed by source execution ID, with native write/readback verification.
+
+The failure sink is an explicit exception to the four finance-state tables.
+With raw execution persistence disabled, n8n deletes the execution before saving
+its custom metadata, so execution history cannot provide durable failure receipts.
+Provision and verify the failure table before deploying W16. Disposable server
+validation must prove a real Error Trigger write and independent receipt readback
+after restart; an in-memory echo or execution metadata read is insufficient.
 
 Remove or replace:
 
 - `source_contracts`, `config_versions`, and `ai_policy_contracts` with generated repository-owned resolver workflows;
-- `pipeline_runs` and `execution_failures` with n8n execution history and an observability service when needed;
+- `pipeline_runs` with n8n execution history; retain the redacted failure sink described above without retaining raw execution data;
 - `mcp_requests` with n8n execution evidence and edge/access logging;
 - `provider_circuits` unless a real shared circuit-breaker requirement is demonstrated;
 - historical acquisition receipts by folding the last committed boundary into ingestion state;

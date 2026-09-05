@@ -37,6 +37,7 @@ TARGET_TABLE_NAMES = {
     "finance_documents",
     "finance_actual_batches",
     "finance_ai_reviews",
+    "finance_execution_failures",
 }
 
 
@@ -100,7 +101,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             self.assertTrue(manifest["workflows"]["inactive"])
             self.assertFalse(manifest["workflows"]["published"])
             self.assertEqual(manifest["bootstrap"]["workflow_id"], "10000000-0000-4000-8000-000000000019")
-            self.assertEqual(len(manifest["bootstrap"]["tables"]), 4)
+            self.assertEqual(len(manifest["bootstrap"]["tables"]), 5)
             self.assertEqual(
                 {row["name"] for row in manifest["bootstrap"]["tables"]},
                 TARGET_TABLE_NAMES,
@@ -334,7 +335,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         self.assertEqual(fixture["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(fixture["production_import_forbidden"])
         self.assertEqual(fixture["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(fixture["workflows"]), 18)
+        self.assertEqual(len(fixture["workflows"]), 19)
         for filename, digest in fixture["source_workflow_sha256"].items():
             self.assertEqual(digest, sha256(WORKFLOWS / filename))
         self.assertEqual(fixture["scenario_contract"]["sweep_zero"]["expected"], {"scanned_count": 0, "heartbeat": True})

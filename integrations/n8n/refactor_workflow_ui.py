@@ -177,7 +177,7 @@ OPERATOR_WARNING_NOTE_IDS = {
     "10000000-0000-4000-8000-000000000015-generated-note-1",
 }
 
-# Legacy field aliases are incompatible with the canonical four-table runtime:
+# Legacy field aliases are incompatible with the canonical canonical-table runtime:
 # each workflow must consume and emit the target schema directly.  Strip stale
 # blocks left by an interrupted migration before formatting generated exports.
 STATE_ALIAS_BLOCK = """if ($json && typeof $json === 'object') {
@@ -340,13 +340,13 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         and node.get("parameters", {}).get("resource") == "table"
         and node.get("parameters", {}).get("operation") == "list"
     ]
-    if len(lists) != 1 or lists[0]["name"] != "List Four Target Tables":
+    if len(lists) != 1 or lists[0]["name"] != "List Canonical Target Tables":
         raise ValueError("W19 must use one canonical native table-list readback")
     list_parameters = lists[0]["parameters"]
     if list_parameters.get("returnAll") is not True or list_parameters.get("options") != {}:
         raise ValueError("W19 table-list readback must return all table schemas")
-    guard = node_by_name(bootstrap, "Verify Four-Table Target Contract")
-    readback = node_by_name(bootstrap, "Verify Four Target Table Readback")
+    guard = node_by_name(bootstrap, "Verify Canonical Target Contract")
+    readback = node_by_name(bootstrap, "Verify Canonical Target Table Readback")
     receipt = node_by_name(bootstrap, "Emit Redacted Bootstrap Receipt")
     guard_code = guard.get("parameters", {}).get("jsCode", "")
     readback_code = readback.get("parameters", {}).get("jsCode", "")
