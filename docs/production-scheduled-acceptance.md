@@ -33,7 +33,12 @@ python integrations/n8n/setup-workflows/runner/generate-production-acceptance-wo
 ```
 
 Deployment must first verify backups, immutable matching images, mounted profile,
-typed credential bindings, enabled source contracts and account mappings. Bind
+typed credential bindings, enabled source contracts and account mappings. In
+pinned n8n 2.37.10, scheduled calls by workflow ID require a published child
+version even when that child has only an Execute Workflow Trigger. Publish each
+reviewed scheduleless dependency after its binding/readback gate; do not confuse
+that publication with enabling an acquisition schedule. W25 must likewise be
+published before maintenance acceptance. Bind
 generated credential/table placeholders against the same verified live inventory
 as the canonical corpus. Preserve its generated ID and exact bound file hash.
 Keep the corresponding canonical schedule inactive while acceptance is published.
