@@ -220,8 +220,21 @@ export class ActualSession {
       try {
         await this.api.init({ dataDir: directory, serverURL: credential.serverUrl, password: credential.password, verbose: false });
         initialized = true;
-        await this.api.downloadBudget(credential.syncId, credential.encryptionPassword ? { password: credential.encryptionPassword } : undefined);
-        await this.api.sync();
+        // Actual serializes transient socket failures (including EPIPE during
+        // initial CRDT catch-up) as network-failure. Retry only preparation;
+        // the caller's operation and every write remain outside this loop.
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await this.api.downloadBudget(credential.syncId, credential.encryptionPassword ? { password: credential.encryptionPassword } : undefined);
+            await this.api.sync();
+            break;
+          } catch (error) {
+            const failure = error as { code?: string; cause?: { code?: string } };
+            const transient = failure?.code === 'network-failure' || failure?.code === 'EPIPE' || failure?.cause?.code === 'EPIPE';
+            if (!transient || attempt >= 3) throw error;
+            await new Promise(resolve => setTimeout(resolve, attempt * 250));
+          }
+        }
         const result = await operation(this.api, credential);
         await this.api.sync();
         return result;
