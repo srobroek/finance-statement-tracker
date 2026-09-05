@@ -5,7 +5,7 @@
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
     "09-ai-proposal.json": "899a2115c96195f911c06c3269348e67aec10768bbb2d5aec9de0efe09777df8",
-    "12-outlook-message-sweep.json": "bea0f7d42108f7bab9ac3c1c6a5068c1cae707d26599a4cd70f6f86fbb8eb00a",
+    "12-outlook-message-sweep.json": "f49436c06e8ef6d507e051b20c191d60fb764233f73959212327dd7c237c8c86",
     "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
@@ -14,27 +14,27 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "ec0e6846425c562cc5faee462974651141edc35cc5c0d737a684c67aa0e31280"
+      "sha256": "ae7075a5435be7beff9b9e7d3e26fbfd054d37f55bc92afe64a3fc58e03343dd"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "4f92e5780fd9063b9f1c67cbb0012588854e13aa8781b3cf6295d8b728ad0a16"
+      "sha256": "d601714cb38d07e799e9d5799e84abee8c5eddccf33bb00ce2839928d5fb3178"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "5c48e81d436f099c3573c5251e0a5ccc7628b1581d9640e8c95e038bbeea4319"
+      "sha256": "90244e7a67168481a17622ec2bffb4ad49e6e806c17e559b8b17f2969c840409"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "62dcd9513cf3773119943b30310241ae7a59ba57e30a02e3a8f16dd9f2a137e7"
+      "sha256": "ebbf1dc4dc730f98b606205ebda0fc01b6a38899a12e41b79450aa1241049448"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "2a8cb738264474136dccf06c65f80e5f1f544f9f2a28268a6714e5a245cbbafc"
+      "sha256": "b3ed7a4e40e6b6eb1fd0b5d9fca08916d50f747e9a2372672f015baed65ef278"
     },
     {
       "file": "95-lease-acquire-a.json",

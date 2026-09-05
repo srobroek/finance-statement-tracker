@@ -48,8 +48,9 @@ def derive_workflow(root: Path, day: datetime) -> dict:
         elif name == "Sweep Exact Outlook Messages":
             node.update(type="n8n-nodes-base.code", typeVersion=2, parameters={"jsCode":
                 "const window = $('Freeze Cursor Minus Overlap Window').first().json;\n"
-                f"const messages = {json.dumps([message])};\n"
-                "return [{json:{...window,messages,pagination_exhausted:true,scanned_count:1,matched_count:1}}];"})
+                f"const message = {json.dumps(message)};\n"
+                "const messages = [{message_id:message.id,message,attachment_inventory:[],attachment_ids:[],attachment_identity_keys:[]}];\n"
+                "return [{json:{...window,messages,immutable_inventory:true,archive_ready:true,receipt_readback_verified:true,pagination_exhausted:true,scanned_count:1,matched_count:1}}];"})
             node.pop("credentials", None)
         elif node["type"] == "n8n-nodes-base.httpRequest":
             url = node["parameters"]["url"]

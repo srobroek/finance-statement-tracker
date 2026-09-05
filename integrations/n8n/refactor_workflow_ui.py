@@ -745,6 +745,38 @@ return [{ json: {
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
     """Regenerate exact fail-closed node contracts before formatting."""
     by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    cashback = by_code["RAKBANK_LIVE_CASHBACK"]
+    node_by_name(cashback, "Load Trusted Mail Contract")["alwaysOutputData"] = True
+    node_by_name(cashback, "Assemble Trusted Sweep Contract")["parameters"]["jsCode"] = r"""
+const w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;
+if (c.source_code !== w.source_code || c.enabled !== true || !String(c.folder_id || '').trim())
+  throw new Error('CASHBACK_MAIL_CONTRACT_MISSING_OR_DISABLED');
+if (!String(c.onedrive_parent_id || '').trim()) throw new Error('CASHBACK_ARCHIVE_FOLDER_REQUIRED');
+const senders = JSON.parse(c.senders_json), subjects = JSON.parse(c.subjects_json);
+if (![senders, subjects].every(values => Array.isArray(values) && values.length > 0 && values.every(value => typeof value === 'string' && value.trim())))
+  throw new Error('CASHBACK_MAIL_CONTRACT_FILTERS_INVALID');
+return [{ json: { ...w, folder_id: c.folder_id, onedrive_parent_id: c.onedrive_parent_id, senders, subjects } }];
+""".strip()
+    node_by_name(cashback, "Build Frozen Mailbox Envelope")["parameters"]["jsCode"] = r"""
+const p = $('Freeze Cursor Minus Overlap Window').first().json, sweep = $input.first().json;
+if (sweep.pagination_exhausted !== true || sweep.run_upper_bound !== p.run_upper_bound)
+  throw new Error('Sweep did not exhaust the frozen window');
+if (sweep.immutable_inventory !== true || sweep.archive_ready !== true || sweep.receipt_readback_verified !== true)
+  throw new Error('CASHBACK_ARCHIVED_INVENTORY_REQUIRED');
+if (!Array.isArray(sweep.messages)) throw new Error('CASHBACK_MESSAGE_INVENTORY_REQUIRED');
+const messages = sweep.messages.map(entry => {
+  if (!entry || typeof entry !== 'object' || !entry.message || typeof entry.message !== 'object'
+      || typeof entry.message_id !== 'string' || !entry.message_id.trim() || entry.message_id !== entry.message.id)
+    throw new Error('CASHBACK_INVENTORY_MESSAGE_ID_MISMATCH');
+  return entry.message;
+});
+const ids = new Set(messages.map(m => m.id));
+if (ids.size !== messages.length || Number(sweep.matched_count) !== messages.length)
+  throw new Error('CASHBACK_INVENTORY_COUNT_OR_ID_MISMATCH');
+return [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, source_code: p.source_code,
+  window_start: p.window_start, completed_at: p.run_upper_bound, cursor: p.run_upper_bound,
+  scanned_count: sweep.scanned_count, matched_count: sweep.matched_count, heartbeat: messages.length === 0, messages } }];
+""".strip()
     build_commit_request = r"""
 const source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;
 const receiptHash = String(pipeline.receipt_sha256 || '');
@@ -947,6 +979,23 @@ return candidates
             acquisition["connections"].pop(name, None)
 
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    node_by_name(sweep, "Return Verified ARCHIVED Receipt")["parameters"]["jsCode"] = r"""
+const expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;
+const inventory = $('Attach Immutable Inventory to Sweep').first().json;
+for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])
+  if (String(observed[field] ?? '') !== String(expected[field] ?? ''))
+    throw new Error('ARCHIVED_RECEIPT_TERMINAL_READBACK_MISMATCH:' + field);
+for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])
+  if (String(observed[field] ?? '') !== String(inventory[field] ?? ''))
+    throw new Error('ARCHIVED_RECEIPT_INVENTORY_BINDING_MISMATCH:' + field);
+if (observed.readback_verified !== true || observed.archive_ready !== true)
+  throw new Error('ARCHIVED_RECEIPT_TERMINAL_STATE_MISMATCH');
+for (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])
+  if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))
+    throw new Error('ARCHIVED_RECEIPT_TERMINAL_BARRIER_MISMATCH:' + field);
+return [{ json: { ...inventory, ...expected, ...observed, messages: inventory.messages,
+  immutable_inventory: true, readback_verified: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];
+""".strip()
     receipt_projection = r"""
 const receipt = $json;
 for (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {
@@ -968,7 +1017,11 @@ return [{ json: {
 """.strip()
     for node in sweep["nodes"]:
         if node["name"].startswith("Project Enumeration Receipt Fields"):
-            node["parameters"]["jsCode"] = receipt_projection
+            node["parameters"]["jsCode"] = (
+                "if (Object.keys($json).length === 0) return [{ json: {} }];\n"
+                if node["name"] == "Project Enumeration Receipt Fields for Existing Gate"
+                else ""
+            ) + receipt_projection
     freeze = node_by_name(sweep, "Freeze Trusted Cursor Window")
     freeze["parameters"]["jsCode"] = r"""
 const request = $json;

@@ -99,7 +99,8 @@
           ]
         },
         "options": {}
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "2012",
@@ -111,7 +112,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Sweep Contract. Keep this deterministic and fail closed.\nconst w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;\nreturn [{ json: { ...w, folder_id: c.folder_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Sweep Contract. Keep this deterministic and fail closed.\nconst w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;\nif (c.source_code !== w.source_code || c.enabled !== true || !String(c.folder_id || '').trim())\n    throw new Error('CASHBACK_MAIL_CONTRACT_MISSING_OR_DISABLED');\nif (!String(c.onedrive_parent_id || '').trim())\n    throw new Error('CASHBACK_ARCHIVE_FOLDER_REQUIRED');\nconst senders = JSON.parse(c.senders_json), subjects = JSON.parse(c.subjects_json);\nif (![senders, subjects].every(values => Array.isArray(values) && values.length > 0 && values.every(value => typeof value === 'string' && value.trim())))\n    throw new Error('CASHBACK_MAIL_CONTRACT_FILTERS_INVALID');\nreturn [{ json: { ...w, folder_id: c.folder_id, onedrive_parent_id: c.onedrive_parent_id, senders, subjects } }];\n"
       }
     },
     {
@@ -145,7 +146,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Frozen Mailbox Envelope. Keep this deterministic and fail closed.\nconst p = $('Freeze Cursor Minus Overlap Window').first().json, sweep = $input.first().json;\nif (sweep.pagination_exhausted !== true || sweep.run_upper_bound !== p.run_upper_bound)\n    throw new Error('Sweep did not exhaust the frozen window');\nconst messages = Array.isArray(sweep.messages) ? sweep.messages : [];\nconst ids = new Set(messages.map(m => String(m.id || '')));\nif (ids.has('') || ids.size !== messages.length)\n    throw new Error('Every swept message needs a unique exact id');\nreturn [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, source_code: p.source_code, window_start: p.window_start, completed_at: p.run_upper_bound, cursor: p.run_upper_bound, scanned_count: sweep.scanned_count, matched_count: sweep.matched_count, heartbeat: messages.length === 0, messages } }];\n"
+        "jsCode": "// Purpose: Build Frozen Mailbox Envelope. Keep this deterministic and fail closed.\nconst p = $('Freeze Cursor Minus Overlap Window').first().json, sweep = $input.first().json;\nif (sweep.pagination_exhausted !== true || sweep.run_upper_bound !== p.run_upper_bound)\n    throw new Error('Sweep did not exhaust the frozen window');\nif (sweep.immutable_inventory !== true || sweep.archive_ready !== true || sweep.receipt_readback_verified !== true)\n    throw new Error('CASHBACK_ARCHIVED_INVENTORY_REQUIRED');\nif (!Array.isArray(sweep.messages))\n    throw new Error('CASHBACK_MESSAGE_INVENTORY_REQUIRED');\nconst messages = sweep.messages.map(entry => {\n    if (!entry || typeof entry !== 'object' || !entry.message || typeof entry.message !== 'object'\n        || typeof entry.message_id !== 'string' || !entry.message_id.trim() || entry.message_id !== entry.message.id)\n        throw new Error('CASHBACK_INVENTORY_MESSAGE_ID_MISMATCH');\n    return entry.message;\n});\nconst ids = new Set(messages.map(m => m.id));\nif (ids.size !== messages.length || Number(sweep.matched_count) !== messages.length)\n    throw new Error('CASHBACK_INVENTORY_COUNT_OR_ID_MISMATCH');\nreturn [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, source_code: p.source_code,\n            window_start: p.window_start, completed_at: p.run_upper_bound, cursor: p.run_upper_bound,\n            scanned_count: sweep.scanned_count, matched_count: sweep.matched_count, heartbeat: messages.length === 0, messages } }];\n"
       }
     },
     {
