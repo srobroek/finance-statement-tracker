@@ -55,7 +55,7 @@ class CashbackRoutingMatrixTests(TestCase):
         return result
 
     def test_confirmed_program_cycles_and_sc_fx_cost(self) -> None:
-        programs = {program.card: program for program in configured_programs()}
+        programs = {program.card: program for program in configured_programs(date(2026, 8, 16))}
 
         self.assertEqual(self.config["status"], "USER_CONFIRMED")
         self.assertEqual(programs["RAK_WORLD"].statement_close_day, 5)
@@ -124,7 +124,7 @@ class CashbackRoutingMatrixTests(TestCase):
                 )
                 self.assertEqual(
                     [candidate["card"] for candidate in amazon["ranked_cards"]],
-                    ["SC_PLATINUM_X", "RAK_WORLD", "EI_AMAZON"],
+                    ["SC_PLATINUM_X", "RAK_WORLD"],
                 )
                 self.assertEqual(
                     [candidate["purpose"] for candidate in amazon["ranked_cards"][:2]],
@@ -175,10 +175,10 @@ class CashbackRoutingMatrixTests(TestCase):
         )
         self.assertEqual(
             [candidate["card"] for candidate in amazon["ranked_cards"]],
-            ["RAK_WORLD", "EI_AMAZON"],
+            ["RAK_WORLD"],
         )
 
-    def test_amazon_falls_back_to_specialist_after_targets_and_caps_are_secured(self) -> None:
+    def test_amazon_withholds_unverified_specialist_after_targets_and_caps_are_secured(self) -> None:
         rows = [
             Transaction("sc-online-full", datetime(2026, 9, 2), "SC_PLATINUM_X", "Online", "4000", category="GENERAL", channel="ONLINE", reward_bucket="SC_ONLINE"),
             Transaction("sc-target-secured", datetime(2026, 9, 3), "SC_PLATINUM_X", "Filler", "11300", category="FILLER", channel="PHYSICAL_POS", reward_bucket="SC_FILLER"),
@@ -191,7 +191,7 @@ class CashbackRoutingMatrixTests(TestCase):
         )
         self.assertEqual(
             [(candidate["card"], candidate["purpose"]) for candidate in amazon["ranked_cards"]],
-            [("EI_AMAZON", "SPECIALIST")],
+            [],
         )
 
     def test_rak_over_and_sc_under_moves_discretionary_spend_to_sc(self) -> None:

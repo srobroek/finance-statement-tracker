@@ -208,6 +208,7 @@
         "payment_due": {"type": "object"},
         "refund_behavior": {"type": "string"},
         "rounding_behavior": {"type": "string"},
+        "reward_eligibility_verified": {"type": "boolean"},
         "routing_priority": {"type": "integer"},
         "target_tier": {"type": "string"},
         "exclusions": {"type": "array", "items": {"type": "string"}},

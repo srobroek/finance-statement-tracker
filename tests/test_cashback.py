@@ -28,7 +28,7 @@ class CashbackTests(TestCase):
         )
 
     def test_empty_period_routes_match_portfolio_strategy(self) -> None:
-        programs = configured_programs()
+        programs = configured_programs(date(2026, 8, 16))
         cases = (
             (PaymentIntent("GROCERY", Decimal("100"), "AED", "PHYSICAL_POS"), "RAK_WORLD"),
             (PaymentIntent("DINING", Decimal("100"), "AED", "PHYSICAL_POS"), "RAK_WORLD"),
@@ -49,7 +49,7 @@ class CashbackTests(TestCase):
             Transaction("f", datetime(2026, 8, 3), "SC_PLATINUM_X", "Foreign", "4000", currency="USD", category="GENERAL", reward_bucket="SC_FOREIGN"),
             Transaction("x", datetime(2026, 8, 4), "SC_PLATINUM_X", "Other online", "3000", channel="ONLINE", category="GENERAL", reward_bucket="SC_ONLINE"),
         ]
-        result = recommend(configured_programs(), transactions, PaymentIntent("GENERAL", Decimal("2000"), "AED", "ONLINE"))
+        result = recommend(configured_programs(date(2026, 8, 16)), transactions, PaymentIntent("GENERAL", Decimal("2000"), "AED", "ONLINE"))
         sc = next(value for value in result.ranked if value.card == "SC_PLATINUM_X")
         self.assertEqual(sc.tier_before, "TIER_5")
         self.assertEqual(sc.tier_after, "TIER_10")
@@ -59,7 +59,7 @@ class CashbackTests(TestCase):
         self.assertIn("Standard Chartered Platinum X", result.guidance)
 
     def test_refund_reduces_reward(self) -> None:
-        program = next(program for program in configured_programs() if program.card == "SC_PLATINUM_X")
+        program = next(program for program in configured_programs(date(2026, 8, 16)) if program.card == "SC_PLATINUM_X")
         before = reward_total(program, Decimal("15000"), {"SC_ONLINE": Decimal("4000")})
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
@@ -91,14 +91,14 @@ class CashbackTests(TestCase):
         self.assertEqual(bucket_spend(rows, "SC_PLATINUM_X"), {"SC_ONLINE": Decimal("75")})
 
     def test_rak_cashback_is_zero_below_monthly_minimum(self) -> None:
-        program = next(program for program in configured_programs() if program.card == "RAK_WORLD")
+        program = next(program for program in configured_programs(date(2026, 8, 16)) if program.card == "RAK_WORLD")
         self.assertEqual(
             reward_total(program, Decimal("57.49"), {"RAK_STANDARD": Decimal("41.49")}),
             Decimal("0.00"),
         )
 
     def test_sc_uses_tier_specific_bucket_caps(self) -> None:
-        program = next(program for program in configured_programs() if program.card == "SC_PLATINUM_X")
+        program = next(program for program in configured_programs(date(2026, 8, 16)) if program.card == "SC_PLATINUM_X")
         self.assertEqual(
             reward_total(program, Decimal("5000"), {"SC_WALLET": Decimal("4000")}),
             Decimal("100.00"),
@@ -123,7 +123,7 @@ class CashbackTests(TestCase):
             Transaction("f", datetime(2026, 8, 3), "SC_PLATINUM_X", "Foreign", "4000", currency="USD", category="GENERAL", reward_bucket="SC_FOREIGN"),
             Transaction("x", datetime(2026, 8, 4), "SC_PLATINUM_X", "Filler", "5000", channel="ONLINE", category="GENERAL", reward_bucket="SC_ONLINE"),
         ]
-        result = recommend(configured_programs(), transactions, PaymentIntent("AMAZON", Decimal("100"), "AED", "ONLINE"))
+        result = recommend(configured_programs(date(2026, 8, 16)), transactions, PaymentIntent("AMAZON", Decimal("100"), "AED", "ONLINE"))
         self.assertEqual(result.primary_card, "EI_AMAZON")
 
     def test_pace_status(self) -> None:

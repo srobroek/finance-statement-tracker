@@ -410,7 +410,8 @@ def _build_card_state(
             "total_spend_aed": _plain(spend),
             "safety_target_aed": None if program.safety_target is None else _plain(program.safety_target),
             "tier": program.tier_for(spend, buckets).code,
-            "expected_cashback_aed": _plain(reward_total(program, spend, buckets)),
+            "reward_eligibility_verified": program.reward_eligibility_verified,
+            "expected_cashback_aed": (_plain(reward_total(program, spend, buckets)) if program.reward_eligibility_verified else None),
             "tiers": [
                 {
                     "code": tier.code,

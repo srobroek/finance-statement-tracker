@@ -76,7 +76,7 @@ class CashbackDashboardPhaseTests(TestCase):
             PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS"),
             PaymentIntent("AMAZON", money("250"), "AED", "ONLINE"),
         ]
-        programs = configured_programs()
+        programs = configured_programs(date(2026, 8, 16))
         cards, routing_programs, alerts = _build_card_state(
             programs,
             rows,
@@ -106,7 +106,7 @@ class CashbackDashboardPhaseTests(TestCase):
             "alerts": alerts,
         }
         public = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             as_of,
             intents,
@@ -125,12 +125,12 @@ class CashbackDashboardPhaseTests(TestCase):
         ).hexdigest()
         self.assertEqual(
             digest,
-            "00b6db442f4f04e38d88fe7cd2ee13b30e60e26477184703b60db1df38420495",
+            "51aa6be4179cbb2aa19566101996eeec3f3e1337e4f7be68ae617178814463df",
         )
 
     def test_routes_disclose_configured_fx_fee_only_for_foreign_currency(self) -> None:
         rows = self.rows()
-        cards, programs, _ = _build_card_state(configured_programs(), rows, date(2026, 8, 16), None, "AED")
+        cards, programs, _ = _build_card_state(configured_programs(date(2026, 8, 16)), rows, date(2026, 8, 16), None, "AED")
         graphs = _build_routing_graphs(programs, cards, rows, self.config["routing_profiles"], self.config["route_policies"])
         foreign = next(graph for graph in graphs if graph["code"] == "FOREIGN")
         sc = next(candidate for candidate in foreign["ranked_cards"] if candidate["card"] == "SC_PLATINUM_X")
@@ -182,7 +182,7 @@ class CashbackDashboardPhaseTests(TestCase):
     def test_routing_graph_phase_keeps_policy_errors(self) -> None:
         rows = self.rows()
         cards, routing_programs, _ = _build_card_state(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             date(2026, 8, 16),
             None,
