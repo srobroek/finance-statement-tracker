@@ -170,13 +170,18 @@ class CashbackWebSecurityTests(unittest.TestCase):
         dom = self._dump_dom("success")
         self.assertIn("route-row", dom)
         self.assertIn("position-card", dom)
-        self.assertIn("tier-ladder", dom)
+        self.assertIn("card-details", dom)
         self.assertIn("bucket-row", dom)
         self.assertIn("alert-card", dom)
         self.assertIn("&lt;img", dom)
         self.assertIn("&lt;svg", dom)
         self.assertNotIn('data-xss="', dom)
-        self._assert_safe_render(dom, _fixture_sentinels())
+        # The lean view intentionally omits old headlines, rule codes and
+        # redundant long names. Every field still displayed must remain text.
+        self._assert_safe_render(dom, {
+            "profile", "card-short", "limited-short", "rule-label",
+            "alert-title", "alert-detail",
+        })
 
     @unittest.skipUnless(_browser_command(), "Chrome/Chromium is required for executable browser fixtures")
     def test_malicious_api_error_renders_as_text(self) -> None:
