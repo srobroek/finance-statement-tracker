@@ -23,6 +23,8 @@ on:
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "tests/test_cashback_workflow_release.py"
+      - "tests/test_cashback_mobile_browser.py"
+      - "tests/browser/cashback-mobile.mjs"
       - "pyproject.toml"
       - "uv.lock"
       - "README.md"
@@ -50,6 +52,8 @@ on:
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "tests/test_cashback_workflow_release.py"
+      - "tests/test_cashback_mobile_browser.py"
+      - "tests/browser/cashback-mobile.mjs"
       - "pyproject.toml"
       - "uv.lock"
       - "README.md"
@@ -101,6 +105,15 @@ jobs:
 
       - name: Run comprehensive validation
         run: ./scripts/run-validation.sh
+
+      - name: Upload fictional mobile browser screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cashback-mobile-${{ github.sha }}
+          path: artifacts/cashback-mobile/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Deploy fictional profile matrix
         shell: bash

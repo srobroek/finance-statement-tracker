@@ -157,15 +157,73 @@ function renderRecommendations(items) {
       summary.append(usage);
     }
     node.append(summary);
-    const list = createNode("ol", "route-options");
-    routes.forEach(candidate => {
-      const row = createNode("li");
-      row.append(createNode("strong", "", routeHeading(item, candidate, true)), createNode("span", "", candidateValueLabel(candidate)));
-      if (candidate.bucket_remaining_aed != null) row.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} left`));
-      if (Number(candidate.tier_remaining_aed) > 0) row.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
-      list.append(row);
+    const detail = createNode("div", "bucket-detail");
+    const facts = createNode("section", "bucket-facts");
+    if (preferred) {
+      facts.append(createNode("h3", "", `${compactCardLabel(preferred.card)} · ${bucketLabel(preferred.bucket || "Shared")} bucket`));
+      const metrics = createNode("div", "bucket-metrics");
+      [["Spent", preferred.bucket_spend_aed], ["Limit", preferred.bucket_cap_aed], ["Remaining", preferred.bucket_remaining_aed]].forEach(([label, value]) => {
+        const metric = createNode("div");
+        metric.append(createNode("span", "", label), createNode("strong", "", value == null ? (label === "Spent" ? "Unknown" : "No cap") : exactMoney(value)));
+        metrics.append(metric);
+      });
+      facts.append(metrics, createNode("p", "bucket-rate", candidateValueLabel(preferred)));
+      if (Number(preferred.tier_threshold_aed) > 0) facts.append(createNode("p", "tier-progress", `Card tier spend ${exactMoney(preferred.card_spend_aed || 0)} / ${exactMoney(preferred.tier_threshold_aed)}`));
+    }
+    const tree = renderRoutingTree(item, routes);
+    const tabs = createNode("nav", "detail-tabs");
+    tabs.setAttribute("aria-label", `${typeLabel(item)} details`);
+    ["Bucket", "Routing"].forEach(label => {
+      const button = createNode("button", "", label);
+      button.dataset.detailView = label.toLowerCase();
+      button.setAttribute("aria-pressed", String(label === "Bucket"));
+      button.addEventListener("click", () => {
+        facts.hidden = label !== "Bucket";
+        tree.hidden = label !== "Routing";
+        [...tabs.children].forEach(tab => tab.setAttribute("aria-pressed", String(tab === button)));
+      });
+      tabs.append(button);
     });
-    node.append(list);
+    tree.hidden = true;
+    detail.append(tabs, facts, tree);
+    node.append(detail);
+    return node;
+  }));
+}
+
+function renderRoutingTree(item, routes) {
+  const tree = createNode("section", "routing-tree");
+  tree.append(createNode("h3", "", "Routing"));
+  const list = createNode("ol", "route-options");
+  routes.forEach((candidate, index) => {
+    const row = createNode("li", `routing-step${index === 0 ? " preferred" : ""}`);
+    row.append(createNode("span", "route-order", index === 0 ? "Use first" : "Then"), createNode("strong", "", routeHeading(item, candidate, true)), createNode("span", "", candidateValueLabel(candidate)));
+    if (candidate.bucket_remaining_aed != null) row.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} available · ${bucketLabel(candidate.bucket || "Shared")} bucket`));
+    if (Number(candidate.tier_remaining_aed) > 0) row.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
+    list.append(row);
+  });
+  tree.append(list);
+  if (!routes.length) tree.append(createNode("span", "", "No eligible route"));
+  return tree;
+}
+
+function selectScreen(value) {
+  document.body.dataset.screenActive = value;
+  document.querySelectorAll("[data-screen-view]").forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
+}
+
+function renderCardSummary(cards) {
+  const root = document.querySelector("#card-summary");
+  root.replaceChildren(...(cards || []).filter(card => card.card !== "EI_AMAZON").map(card => {
+    const node = createNode("button", "card-total");
+    const next = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
+    node.append(createNode("strong", "", card.short_name || card.name), createNode("span", "", exactMoney(card.total_spend_aed || 0)));
+    node.append(createNode("small", "", next ? `of ${exactMoney(next.minimum_spend_aed)} · ${tierName(next.code)}` : tierName(card.tier || "STANDARD")));
+    node.addEventListener("click", () => {
+      selectScreen("cards");
+      const detail = [...document.querySelectorAll(".position-card")].find(item => item.dataset.card === card.card)?.querySelector("details");
+      if (detail) { detail.open = true; detail.scrollIntoView({block: "nearest"}); }
+    });
     return node;
   }));
 }
@@ -193,12 +251,8 @@ function categoryIcon(item) {
 
 function setupScreenViews() {
   const buttons = [...document.querySelectorAll("[data-screen-view]")];
-  const select = value => {
-    document.body.dataset.screenActive = value;
-    buttons.forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
-  };
-  buttons.forEach(button => button.addEventListener("click", () => select(button.dataset.screenView)));
-  select("routing");
+  buttons.forEach(button => button.addEventListener("click", () => selectScreen(button.dataset.screenView)));
+  selectScreen("routing");
 }
 
 function applicationServerKey(value) {
@@ -284,6 +338,7 @@ function renderCards(cards) {
   const root = document.querySelector("#cards");
   root.replaceChildren(...(cards || []).filter(card => card.card !== "EI_AMAZON").map(card => {
     const node = createNode("article", "position-card");
+    node.dataset.card = card.card;
     const details = createNode("details", "card-details");
     const header = createNode("summary", "card-header");
     const nextTier = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
@@ -477,6 +532,7 @@ function renderDashboardError(error) {
   status.className = "as-of stale";
   status.textContent = "Unavailable";
   status.title = detail;
+  document.querySelector("#card-summary").replaceChildren();
 
   document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
 
@@ -505,6 +561,7 @@ async function loadDashboard() {
 
   renderAttention(payload);
   renderCards(payload.cards);
+  renderCardSummary(payload.cards);
   renderPeriodHistory(periodsPayload.periods || []);
 }
 
