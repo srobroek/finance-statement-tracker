@@ -728,9 +728,9 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("uv run --frozen python -m unittest", runner)
         self.assertNotIn("pip install", workflow + runner)
 
-    def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
+    def test_cashback_daily_check_uses_ninety_minute_schedule_grace(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
-        self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "1560"', compose)
+        self.assertIn('CASHBACK_STALE_AFTER_MINUTES: "90"', compose)
         self.assertIn(
             'test: ["CMD", "python", "apps/cashback-control/probe_health.py"]',
             compose,

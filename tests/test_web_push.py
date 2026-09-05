@@ -158,16 +158,30 @@ class WebPushStoreTests(unittest.TestCase):
             "acknowledged_alerts": [],
             "is_stale": True,
             "stale_after_minutes": 90,
+            "check_status": "OVERDUE",
+            "check_timezone": "UTC",
+            "expected_due_at": "2026-08-18T08:05:00+00:00",
             "last_successful_ingest_at": "2026-08-17T13:06:03+00:00",
         }
         candidates, _ = notification_candidates(dashboard, None)
-        stale = next(item for item in candidates if item.title == "Cashback feed is stale")
+        stale = next(item for item in candidates if item.title == "Cashback check overdue")
         self.assertEqual(stale.key, "feed:stale:2026-08-17T13:06:03+00:00")
-        self.assertIn("90 minutes", stale.body)
+        self.assertEqual(stale.body, "Due 18 Aug, 08:05; last checked 17 Aug, 13:06 (UTC).")
 
         dashboard["data_status"]["acknowledged_alerts"] = ["feed:stale"]
         candidates, _ = notification_candidates(dashboard, None)
-        self.assertNotIn("Cashback feed is stale", {item.title for item in candidates})
+        self.assertNotIn("Cashback check overdue", {item.title for item in candidates})
+
+    def test_schedule_and_clock_errors_do_not_claim_a_missed_run(self) -> None:
+        for status, expected in (("SCHEDULE_UNCONFIGURED", "No active check schedule is configured."), ("INVALID_CHECK_TIMESTAMP", "The last check time is invalid.")):
+            dashboard = _dashboard()
+            dashboard["alerts"] = []
+            dashboard["data_status"] = {"is_stale": True, "check_status": status}
+            candidates, _ = notification_candidates(dashboard, None)
+            check = next(item for item in candidates if item.key.startswith("feed:stale:"))
+            self.assertEqual(check.title, "Cashback sync needs attention")
+            self.assertEqual(check.body, expected)
+            self.assertNotIn("overdue", check.body)
 
 
 if __name__ == "__main__":

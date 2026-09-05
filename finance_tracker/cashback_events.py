@@ -21,6 +21,7 @@ from .cashback import (
     statement_period,
 )
 from .models import Transaction, money
+from .sync_health import scheduled_sync_health
 from .transaction_semantics import CASHBACK_TOPICS
 
 ACTIVE_STATUSES = frozenset({"ACTIVE"})
@@ -2144,6 +2145,8 @@ def build_live_dashboard(
     stale_after_minutes: int = 90,
     program_config_path: Path | None = None,
     ingest_source: str | None = None,
+    check_schedule_config_path: Path | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     if stale_after_minutes <= 0:
         raise ValueError("stale_after_minutes must be positive")
@@ -2173,20 +2176,20 @@ def build_live_dashboard(
     )
     result["profile"] = configuration.get("profile") or {}
     stats = store.stats(ingest_source)
-    last_ingest = stats.get("last_successful_ingest_at")
-    stale = True
-    if last_ingest:
-        parsed = datetime.fromisoformat(str(last_ingest).replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
-        age_seconds = (datetime.now(UTC) - parsed.astimezone(UTC)).total_seconds()
-        stale = age_seconds > stale_after_minutes * 60
+    checked_at = now or datetime.now(UTC)
+    health = scheduled_sync_health(
+        stats.get("last_successful_ingest_at"),
+        now=checked_at,
+        grace_minutes=stale_after_minutes,
+        ingest_source=ingest_source,
+        config_path=check_schedule_config_path,
+    )
     result["data_status"] = {
         "mode": "LIVE_TRANSACTION_EVENTS",
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": checked_at.isoformat(),
         "stale_after_minutes": stale_after_minutes,
-        "is_stale": stale,
         **stats,
+        **health,
     }
     return result
 
