@@ -493,7 +493,7 @@ function renderCards(cards) {
       name.title = card.name;
       summary.append(
         name,
-        createNode("span", "", `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
+        createNode("span", "", card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
       );
       const total = createNode("div", "position-total");
       total.append(createNode("strong", "", money.format(actual)), createNode("span", "", tierPosition.next));
@@ -501,7 +501,7 @@ function renderCards(cards) {
       node.append(header);
       if (tierPosition.ladder) {
         node.append(tierPosition.ladder);
-      } else {
+      } else if (Number(card.safety_target_aed) > 0) {
         const track = createNode("div", "track primary");
         const progress = createNode("i");
         setWidth(progress, percentage);
