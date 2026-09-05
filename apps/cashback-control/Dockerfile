@@ -19,6 +19,7 @@ COPY config/cashback-profile-schema-v2.json ./config/cashback-profile-schema-v2.
 COPY config/actual-bootstrap.json ./config/actual-bootstrap.json
 COPY config/static-rules.seed.json ./config/static-rules.seed.json
 COPY config/transaction-email-sources.json ./config/transaction-email-sources.json
+COPY config/ingestion.json ./config/ingestion.json
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
         util-linux=2.41.5-0+deb13u1 \
