@@ -7,7 +7,7 @@ import type { IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { FinanceStatement } from '../nodes/FinanceStatement/FinanceStatement.node';
 import { FinanceRules } from '../nodes/FinanceRules/FinanceRules.node';
 import { ActualSession, type ActualApi } from './actual-session';
-import { projectStatementToActual, type NormalizedStatement } from './statements';
+import { projectStatementToActual, type ActualClassificationReadback, type NormalizedStatement } from './statements';
 
 const text = `Statement of Card Account
 From: 1st Jul 2026
@@ -160,4 +160,47 @@ Closing balance (Total to pay) 0.00
   assert.equal(stored.length,3); // The existing opening credit is never manufactured as an import.
   assert.throws(()=>projectStatementToActual({...statement,balance_tied:false}),/outside the statement period/);
   assert.throws(()=>projectStatementToActual({...statement,transactions:[{...statement.transactions[0],post_date:'2026-07-31'}]}),/outside the statement period/);
+});
+
+
+async function classificationFixture(): Promise<NormalizedStatement> {
+  const [parsed] = await new FinanceStatement().execute.call(context([{json:{extracted_text:text, card_code:'EI_AMAZON',actual_file_id:'budget',account_id:'account'}}], 'parse'));
+  const [normalized] = await new FinanceRules().execute.call(context(parsed, 'normalize'));
+  const [classified] = await new FinanceRules().execute.call(context(normalized, 'applyNonRepresentableRules'));
+  const statement = classified[0].json as unknown as NormalizedStatement;
+  statement.transactions[0].category = 'Online Shopping';
+  statement.transactions[0].subcategory = 'Online Shopping';
+  return statement;
+}
+const classificationReadback = (): ActualClassificationReadback => ({shape:'categories',actual_file_id:'budget',
+  rows:[{id:'existing-category',name:' online SHOPPING '}],payees:[{id:'existing-payee',name:' AMAZON '}]});
+
+test('classification identity follows bootstrap normalization and preserves existing IDs and names', async () => {
+  const statement = await classificationFixture(), readback = classificationReadback();
+  const before = structuredClone(readback);
+  const [row] = projectStatementToActual(statement, readback, 'budget');
+  assert.equal(row.payee, 'existing-payee');assert.equal(row.category, 'existing-category');
+  assert.deepEqual(readback, before);
+  assert.throws(() => projectStatementToActual(statement, {...readback,actual_file_id:'other-budget'}, 'budget'), /READBACK_BINDING_REQUIRED/);
+});
+
+test('normalized classification ambiguities fail even when one resource name matches exactly', async () => {
+  const statement = await classificationFixture();
+  for (const kind of ['payees','rows'] as const) {
+    const readback = classificationReadback();
+    readback[kind].push({id:'duplicate-resource',name:kind === 'payees' ? 'Amazon' : 'Online Shopping'});
+    assert.throws(() => projectStatementToActual(statement, readback, 'budget'), /CLASSIFICATION_NAME_NOT_UNIQUE/);
+  }
+});
+
+test('tombstoned classification resources cannot satisfy or make an active identity ambiguous', async () => {
+  const statement = await classificationFixture();
+  for (const kind of ['payees','rows'] as const) {
+    const readback = classificationReadback();
+    readback[kind].push({id:'deleted-resource',name:kind === 'payees' ? 'Amazon' : 'Online Shopping',tombstone:true});
+    const [row] = projectStatementToActual(statement, readback, 'budget');
+    assert.equal(row.payee,'existing-payee');assert.equal(row.category,'existing-category');
+    readback[kind] = readback[kind].filter(resource => resource.tombstone === true);
+    assert.throws(() => projectStatementToActual(statement, readback, 'budget'), /CLASSIFICATION_NAME_NOT_UNIQUE/);
+  }
 });

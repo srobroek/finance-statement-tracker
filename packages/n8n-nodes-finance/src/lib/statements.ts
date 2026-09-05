@@ -322,7 +322,11 @@ export function projectStatementToActual(statement: NormalizedStatement, readbac
       throw new Error('ACTUAL_CLASSIFICATION_READBACK_BINDING_REQUIRED');
     const rows = kind === 'category' ? readback.rows : readback.payees;
     if (!Array.isArray(rows)) throw new Error('ACTUAL_CLASSIFICATION_READBACK_ROWS_REQUIRED');
-    const matches = rows.filter(row => row.name === name && row.tombstone !== true);
+    // Match actualctl bootstrap identity semantics without renaming user resources.
+    // Ambiguity is checked across every active normalized match, even if one is exact.
+    const normalized = (value: string): string => value.trim().toLocaleLowerCase();
+    const wanted = normalized(name);
+    const matches = rows.filter(row => wanted && row.tombstone !== true && normalized(row.name) === wanted);
     if (matches.length !== 1 || !matches[0].id) throw new Error(`ACTUAL_CLASSIFICATION_NAME_NOT_UNIQUE:${kind}:${name}`);
     return matches[0].id;
   };
