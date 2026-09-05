@@ -50,9 +50,7 @@
         "operation": "getAll",
         "returnAll": false,
         "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "filters": {}
       },
       "credentials": {
         "n8nApi": {
@@ -296,9 +294,7 @@
         "operation": "getAll",
         "returnAll": false,
         "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "filters": {}
       },
       "credentials": {
         "n8nApi": {
