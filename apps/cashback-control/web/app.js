@@ -96,7 +96,7 @@ function renderTierPosition(card, actual) {
     ladder.append(marker);
   });
   return {
-    next: nextTier ? `Next ${tierLabel(nextTier)} at ${compactMoney(nextTier.minimum_spend_aed)}` : `${tierLabel(tiers.at(-1))} secured`,
+    next: nextTier ? `Next ${tierLabel(nextTier)} at ${compactMoney(nextTier.minimum_spend_aed)}` : `${tierLabel(tiers.at(-1))} spend target reached`,
     ladder,
   };
 }
@@ -111,27 +111,10 @@ function typeLabel(item) {
 
 function compactReason(item) {
   const preferred = item.ranked_cards?.[0];
-  if (preferred?.position_mode === "UNLIMITED") {
-    return `${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% cashback · unlimited · statement only`;
-  }
-  if (preferred?.purpose === "THRESHOLD_FILLER" && Number(preferred.target_rate_percent) === 0) {
-    return `Tier filler · ${compactMoney(preferred.card_target_remaining_aed)} remaining · no direct cashback`;
-  }
-  if (preferred?.estimate_basis === "CONDITIONAL_TARGET_TIER") {
-    const rate = Number(preferred.conditional_target_rate_percent ?? preferred.target_rate_percent);
-    const reward = preferred.conditional_target_reward_aed == null ? Number.NaN : Number(preferred.conditional_target_reward_aed);
-    const rewardText = Number.isFinite(reward) ? ` · est. ${compactMoney(reward)} if tier reached` : " if tier reached";
-    return `Conditional target ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%${rewardText}`;
-  }
-  if (preferred && preferred.tier_before !== preferred.tier_after) {
-    return `Tier unlock · ${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · ${compactMoney(preferred.estimated_net_value_aed)} cycle value`;
-  }
-  if (preferred && preferred.tier_before !== preferred.target_tier) {
-    return `Target-tier ${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% · building ${compactMoney(preferred.tier_threshold_aed)}`;
-  }
-  const rate = Number(item.estimated_net_return_percent);
-  if (Number.isFinite(rate)) return `Est. ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% return`;
-  return item.reason;
+  if (!preferred) return item.reason || "No eligible card route";
+  const remaining = Number(preferred.tier_remaining_aed);
+  const gap = remaining > 0 ? ` · ${compactMoney(remaining)} more qualifying spend needed` : "";
+  return candidateValueLabel(preferred) + gap;
 }
 
 function routeHeading(item, candidate, compact = false) {
@@ -147,38 +130,28 @@ function shortPaymentMethod(channel) {
   }[channel] || channel?.replaceAll("_", " ").toLowerCase() || "";
 }
 
-function treeSwitchReason(candidate) {
-  if (candidate.status === "PREFERRED") {
-    return "Use now · fits the purchase and ranks first by tier, pace and return.";
-  }
-  if (candidate.purpose === "THRESHOLD_FILLER") {
-    return "Use only after reward routes when this card still needs tier spend.";
-  }
-  return "Switch here when higher routes cap or lose their tier or pace priority.";
-}
-
 function candidateValueLabel(candidate) {
-  const bucketRate = Number(candidate.target_rate_percent);
+  const target = Number(candidate.target_rate_percent);
+  const current = candidate.current_tier_rate_percent == null
+    ? Number.NaN : Number(candidate.current_tier_rate_percent);
+  const formatRate = value => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
   if (candidate.position_mode === "UNLIMITED") {
-    return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% cashback · unlimited`;
+    return Number.isFinite(target) ? `${formatRate(target)} cashback` : "Rate unavailable";
   }
-  if (candidate.purpose === "THRESHOLD_FILLER" && bucketRate === 0) {
-    return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} left · 0% direct`;
+  if (candidate.purpose === "THRESHOLD_FILLER" && target === 0) {
+    return "No direct cashback · counts toward minimum spend";
   }
-  if (candidate.estimate_basis === "CONDITIONAL_TARGET_TIER") {
-    const rate = Number(candidate.conditional_target_rate_percent ?? candidate.target_rate_percent);
-    const reward = candidate.conditional_target_reward_aed == null ? Number.NaN : Number(candidate.conditional_target_reward_aed);
-    const rewardText = Number.isFinite(reward) ? ` · est. ${compactMoney(reward)} if tier reached` : " if tier reached";
-    return `Conditional target ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%${rewardText}`;
+  // Routing values simulate a configured purchase amount and can include
+  // rewards unlocked on earlier spend. Show rates, never those amounts as
+  // cashback earned. A simulated tier crossing is still conditional today.
+  const targetUnmet = candidate.estimate_basis === "CONDITIONAL_TARGET_TIER"
+    || (candidate.target_tier && candidate.tier_before !== candidate.target_tier);
+  if (targetUnmet && Number.isFinite(target)) {
+    const currentText = Number.isFinite(current) ? ` · current tier ${formatRate(current)}` : "";
+    return `${formatRate(target)} if tier requirements are met${currentText}`;
   }
-  if (candidate.tier_before !== candidate.tier_after) {
-    return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · unlocks ${compactMoney(candidate.estimated_net_value_aed)} cycle value`;
-  }
-  if (candidate.tier_before !== candidate.target_tier) {
-    return `Target-tier ${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
-  }
-  const rate = Number(candidate.estimated_net_return_percent);
-  return `Est. ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% return`;
+  const rate = Number.isFinite(current) ? current : target;
+  return Number.isFinite(rate) ? `${formatRate(rate)} cashback` : "Rate unavailable";
 }
 
 function bucketLabel(code) {
@@ -203,8 +176,6 @@ function renderRecommendations(items) {
       const preferred = item.ranked_cards?.[0];
       const hasRoute = item.active !== false && Boolean(preferred);
       node.classList.toggle("unavailable", !hasRoute);
-      const avoidCodes = item.avoid_cards || [];
-      const avoid = avoidCodes.map(cardLabel);
       const useLabel = hasRoute ? routeHeading(item, preferred, true) : "No eligible route";
       const fullUseLabel = hasRoute ? routeHeading(item, preferred) : "No eligible card route";
       const summary = createNode("summary", "route-main");
@@ -220,23 +191,13 @@ function renderRecommendations(items) {
       use.title = fullUseLabel;
       cards.append(use);
 
-      const avoidList = createNode("span", "avoid-list");
-      avoidList.title = `Avoid ${avoid.length ? avoid.join(", ") : "none"}`;
-      avoidCodes.forEach((code) => {
-        const choice = createNode("span", "card-choice avoid", compactCardLabel(code));
-        choice.dataset.short = compactCardLabel(code);
-        avoidList.append(choice);
-      });
-      cards.append(avoidList);
       summary.append(cards);
 
       const reason = createNode("div", "route-reason");
       reason.append(createNode("span", "", "Why"));
       const reasonText = createNode("p");
       if (hasRoute) {
-        reasonText.append(createNode("b", "", `Use ${routeHeading(item, preferred)}`));
-        if (avoid.length) reasonText.append(document.createTextNode(` · avoid ${avoid.join(", ")}`));
-        reasonText.append(document.createTextNode(`. ${compactReason(item)}`));
+        reasonText.append(document.createTextNode(compactReason(item)));
       } else {
         reasonText.append(createNode("b", "", "No eligible card route"));
         reasonText.append(document.createTextNode(". This spend type currently has no card that satisfies the configured rules."));
@@ -282,16 +243,15 @@ function renderDecisionTree(items) {
       const threshold = Number(candidate.tier_threshold_aed);
       const method = shortPaymentMethod(candidate.payment_channel);
       const bucketText = candidate.position_mode === "UNLIMITED"
-        ? `${method} · unlimited cashback · no cap`
+        ? `${method} · no cashback cap`
         : cap == null
         ? `${method} · ${bucketLabel(candidate.bucket)} · ${compactMoney(candidate.bucket_spend_aed)} · uncapped`
         : `${method} · ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)}/${compactMoney(cap)} · ${compactMoney(remaining)} left`;
       const tierText = candidate.position_mode === "UNLIMITED"
         ? "No minimum spend · statement-only totals"
         : threshold > 0
-        ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(threshold)} · ${compactMoney(candidate.tier_remaining_aed)} to tier`
+        ? `${compactMoney(candidate.card_spend_aed)} / ${compactMoney(threshold)} qualifying spend · ${compactMoney(candidate.tier_remaining_aed)} to go`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
-      const switchText = treeSwitchReason(candidate);
       const candidateNode = createNode("li", `candidate-node ${candidate.status.toLowerCase()}`);
       const rank = createNode("div", "candidate-rank");
       rank.append(createNode("b", "", candidate.order));
@@ -303,7 +263,6 @@ function renderDecisionTree(items) {
       logic.append(
         createNode("b", "", candidateValueLabel(candidate)),
         createNode("span", "", tierText),
-        createNode("small", "", switchText),
       );
       candidateNode.append(rank, candidateCard, logic);
       return candidateNode;
@@ -313,7 +272,7 @@ function renderDecisionTree(items) {
     header.append(
       createNode("span", "", methods ? `${methods} · ${item.currency}` : `${item.currency}`),
       createNode("strong", "", `${typeLabel(item)} routing order`),
-      createNode("small", "", "Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics."),
+      createNode("small", "", "Use the first card while it has room in this bucket. Check remaining spend capacity before a larger purchase."),
     );
     if (!candidates.length) {
       graph.replaceChildren(header, emptyState("No eligible card route", "This spend type currently has no card that satisfies the configured rules."));
@@ -514,7 +473,7 @@ function renderCards(cards) {
       name.title = card.name;
       summary.append(
         name,
-        createNode("span", "", `${card.tier.replaceAll("_", " ")} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
+        createNode("span", "", `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
       );
       const total = createNode("div", "position-total");
       total.append(createNode("strong", "", money.format(actual)), createNode("span", "", tierPosition.next));
@@ -592,7 +551,7 @@ function renderPeriodHistory(periods) {
     [
       ["Spend", money.format(card.total_spend_aed)],
       ["Expected cashback", money.format(card.expected_cashback_aed)],
-      ["Tier", card.tier.replaceAll("_", " ")],
+      ["Tier", tierName(card.tier)],
     ].forEach(([label, value]) => {
       const metric = createNode("div");
       metric.append(createNode("span", "", label), createNode("strong", "", value));
