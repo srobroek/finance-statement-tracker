@@ -701,6 +701,20 @@ return [{ json: {
         workflow_code = code
         schedule = node_by_name(caller, "Daily 20:40 Cycle Poll")
         open_window = node_by_name(caller, "Open Configured Cycle Window")
+        cycle_day = int(caller["meta"]["cycleDay"])
+        deadline_days = int(caller["meta"].get("deadlineDays", 5))
+        open_window["parameters"]["jsCode"] = f"""// Poll the delivery month in Asia/Dubai.
+const now = new Date();
+const cycleDay = {cycle_day}, deadlineDays = {deadline_days};
+const dubai = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+const year = dubai.getUTCFullYear(), month = dubai.getUTCMonth(), day = dubai.getUTCDate();
+if (day < cycleDay || day > cycleDay + deadlineDays) return [];
+const upper = now.toISOString();
+// Delivery starts on day 1 even when polling starts later (Wio arrives on day 1/2).
+const start = new Date(Date.UTC(year, month, 1) - 4 * 60 * 60 * 1000);
+const deadline = new Date(Date.UTC(year, month, cycleDay + deadlineDays, 23, 59, 59) - 4 * 60 * 60 * 1000);
+return [{{json:{{run_id:'{source_code}:'+upper,source_code:'{source_code}',window_start:start.toISOString(),run_upper_bound:upper,cycle_day:cycleDay,deadline_at:deadline.toISOString(),period_key:String(year)+'-'+String(month+1).padStart(2,'0'),trigger_kind:'SCHEDULE'}}}}];
+"""
         execute = {
             "id": "4003" if code == "EI_MONTHLY_STATEMENT" else "5003",
             "name": "Run Shared Monthly Statement Cycle",
