@@ -7,6 +7,8 @@ on:
       - "packages/n8n-nodes-finance/**"
       - "scripts/generate-n8n-bootstrap-runtime-fixture.py"
       - "scripts/run-n8n-disposable-runtime.py"
+      - "scripts/generate-n8n-error-runtime-fixture.py"
+      - "scripts/verify-n8n-error-runtime.cjs"
       - ".github/workflows/n8n-container-validation.yml"
   push:
     branches: [main]
@@ -15,6 +17,8 @@ on:
       - "packages/n8n-nodes-finance/**"
       - "scripts/generate-n8n-bootstrap-runtime-fixture.py"
       - "scripts/run-n8n-disposable-runtime.py"
+      - "scripts/generate-n8n-error-runtime-fixture.py"
+      - "scripts/verify-n8n-error-runtime.cjs"
       - ".github/workflows/n8n-container-validation.yml"
   workflow_dispatch:
 
@@ -90,6 +94,15 @@ jobs:
           docker exec "$container" n8n publish:workflow \
             --id 90000000-0000-4000-8000-000000001019
 
+          python scripts/generate-n8n-error-runtime-fixture.py
+          docker exec "$container" n8n import:credentials --input /workspace/runtime/n8n-disposable/16-error-credential.json
+          for fixture in 16-real-error-handler 16-error-writer-webhook 16-error-reader-webhook 16-error-throw-webhook 16-real-error-reader-webhook; do
+            docker exec "$container" n8n import:workflow --input "/workspace/runtime/n8n-disposable/${fixture}.json"
+          done
+          for workflow_id in 90000000-0000-4000-8000-000000001016 90000000-0000-4000-8000-000000000916 90000000-0000-4000-8000-000000000921 90000000-0000-4000-8000-000000001017 90000000-0000-4000-8000-000000001018; do
+            docker exec "$container" n8n publish:workflow --id "$workflow_id"
+          done
+
           docker rm -f "$container" >/dev/null
           docker run --detach \
             --name "$container" \
@@ -107,10 +120,12 @@ jobs:
 
           docker exec -i "$container" node <<'NODE'
           const url = 'http://127.0.0.1:5678/webhook/disposable-w19-bootstrap';
+          const bootstrapContract = require('/workspace/integrations/n8n/generated/platform-bootstrap-manifest.json').target_schema_contract;
           const expectedTables = [
             'finance_actual_batches',
             'finance_ai_reviews',
             'finance_documents',
+            'finance_execution_failures',
             'finance_ingestion_state',
           ];
           const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -162,7 +177,7 @@ jobs:
             if (
               receipt.schema_version !== 'data-table-migration-receipt-v1' ||
               receipt.status !== 'SCHEMA_CONTRACT_READY' ||
-              receipt.target_schema_digest !== '655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515' ||
+              receipt.target_schema_digest !== bootstrapContract.digest ||
               JSON.stringify(tables) !== JSON.stringify(expectedTables) ||
               receipt.runtime_cutover !== false ||
               receipt.deletion_authorized !== false ||
@@ -178,5 +193,9 @@ jobs:
           if (JSON.stringify(first) !== JSON.stringify(second)) {
             throw new Error('W19 bootstrap receipt changed on the second run');
           }
-          console.log('W19 server runtime: 11 tables, disabled templates, schema readback, and second run verified');
+          console.log('W19 server runtime: canonical tables, disabled templates, schema readback, and second run verified');
           NODE
+
+          docker exec "$container" node /workspace/scripts/verify-n8n-error-runtime.cjs before
+          docker restart "$container" >/dev/null
+          docker exec "$container" node /workspace/scripts/verify-n8n-error-runtime.cjs after

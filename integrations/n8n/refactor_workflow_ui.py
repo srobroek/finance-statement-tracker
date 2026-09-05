@@ -979,6 +979,112 @@ return candidates
             acquisition["connections"].pop(name, None)
 
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
+    node_by_name(sweep, "Stamp Immutable Attachment IDs")["parameters"]["jsCode"] = r"""
+const inputs = $input.all();
+const parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory);
+if (inputs.every(item => Object.keys(item.json || {}).length === 0)) {
+  return parents.length ? parents.map(parent => ({ json: { message_id: parent.json.message_id, attachment: null }, pairedItem: { item: 0 } }))
+    : [{ json: { attachment: null }, pairedItem: { item: 0 } }];
+}
+return inputs.map((item, index) => {
+  const attachment = item.json || {}, attachmentId = String(attachment.id || '').trim();
+  if (!attachmentId) throw new Error('IMMUTABLE_ATTACHMENT_ID_MISSING');
+  const parent = $('Shape Immutable Message Inventory').itemMatching(index).json;
+  if (!parent.message_id) throw new Error('IMMUTABLE_ATTACHMENT_PARENT_MISSING');
+  return { json: { message_id: parent.message_id, source_code: parent.source_code,
+    attachment: { id: attachmentId, attachment_identity: parent.message_id + ':' + attachmentId,
+      name: attachment.name || 'attachment.bin', contentType: attachment.contentType || null,
+      size: attachment.size ?? null, isInline: Boolean(attachment.isInline) } }, pairedItem: { item: index } };
+});
+""".strip()
+    archive_code = {
+        "Split Immutable Messages for Archive": r"""
+const contract = $json;
+if (contract.immutable_inventory !== true || !Array.isArray(contract.messages))
+  throw new Error('IMMUTABLE_ARCHIVE_MESSAGES_REQUIRED');
+if (contract.historical_import !== undefined && contract.historical_import !== null && typeof contract.historical_import !== 'boolean')
+  throw new Error('historical_import must be boolean');
+const archiveContext = { ...contract, historical_import: contract.historical_import === true };
+if (!contract.messages.length) return [{ json: { ...archiveContext, messages: [], matched_count: 0 }, pairedItem: { item: 0 } }];
+return contract.messages.map(entry => ({ json: { ...archiveContext, messages: [entry], matched_count: 1,
+  attachment_identity_keys: entry.attachment_identity_keys || [], empty_inventory: false }, pairedItem: { item: 0 } }));
+""".strip(),
+        "Aggregate Verified Message Archives": r"""
+const contract = $('Attach Immutable Inventory to Sweep').first().json;
+const results = $input.all().map(item => item.json);
+const expectedEmails = contract.messages.map(entry => entry.message_id + ':INLINE_BODY').sort();
+const expectedAttachments = (contract.attachment_identity_keys || []).slice().sort();
+if (results.length !== Math.max(1, contract.messages.length)) throw new Error('MESSAGE_ARCHIVE_RESULT_COUNT_MISMATCH');
+for (const row of results) {
+  for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])
+    if (row[field] !== contract[field]) throw new Error('MESSAGE_ARCHIVE_CONTEXT_MISMATCH:' + field);
+  if (row.archive_ready !== true || row.attachment_ids_verified !== true
+      || row.attachment_verification_barrier !== 'VERIFIED' || row.email_evidence_receipt_barrier !== 'VERIFIED')
+    throw new Error('MESSAGE_ARCHIVE_PROOF_REQUIRED');
+}
+const emails = results.flatMap(row => row.email_evidence_identity_keys || []).sort();
+const attachments = results.flatMap(row => row.attachment_identity_keys || []).sort();
+if (JSON.stringify(emails) !== JSON.stringify(expectedEmails) || JSON.stringify(attachments) !== JSON.stringify(expectedAttachments)
+    || results.reduce((sum, row) => sum + Number(row.email_evidence_receipts_verified), 0) !== emails.length
+    || results.reduce((sum, row) => sum + Number(row.attachments_verified), 0) !== attachments.length)
+  throw new Error('MESSAGE_ARCHIVE_IDENTITIES_OR_COUNTS_MISMATCH');
+return [{ json: { ...contract, status: 'ARCHIVED', archive_ready: true,
+  attachment_ids_verified: true, attachment_verification_barrier: 'VERIFIED', attachment_identity_keys: attachments,
+  attachments_verified: attachments.length, email_evidence_receipt_barrier: 'VERIFIED',
+  email_evidence_identity_keys: emails, email_evidence_receipts_verified: emails.length,
+  email_evidence_archive_proof: results.flatMap(row => row.email_evidence_archive_proof || []),
+  archive_identity_keys: [...attachments, ...emails].sort(),
+  archive_item_ids: [...new Set(results.flatMap(row => row.archive_item_ids || []))].sort(),
+  cursor_commit_eligible: false } }];
+""".strip(),
+    }
+    for index, (name, code) in enumerate(archive_code.items()):
+        if not any(node["name"] == name for node in sweep["nodes"]):
+            sweep["nodes"].append({"id": f"12080-{index}", "name": name, "type": "n8n-nodes-base.code", "typeVersion": 2,
+                                   "position": [0, 0], "parameters": {}})
+        node_by_name(sweep, name)["parameters"]["jsCode"] = code
+    node_by_name(sweep, "Archive Enumerated Messages in W01")["parameters"]["mode"] = "each"
+    existing_lookup = node_by_name(sweep, "Read Existing ENUMERATED Receipt")
+    existing_lookup["parameters"]["filters"]["conditions"] = [
+        {"keyName": "source_code", "condition": "eq", "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.source_code }}"},
+        {"keyName": "last_terminal_state", "condition": "eq", "keyValue": "ENUMERATED"},
+        *({"keyName": column, "condition": "eq", "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json." + source + " }}"}
+          for column, source in (("receipt_run_id", "run_id"), ("receipt_run_upper_bound", "run_upper_bound"), ("last_window_start", "window_start"))),
+    ]
+    node_by_name(sweep, "Return Existing ENUMERATED Receipt")["parameters"]["jsCode"] = r"""
+const trusted = $('Freeze Trusted Cursor Window').first().json, receipt = $json;
+for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])
+  if (String(receipt[field] ?? '') !== String(trusted[field] ?? ''))
+    throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);
+if (receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.attachment_ids_verified !== true)
+  throw new Error('ENUMERATED_RECEIPT_REPLAY_NOT_SAFE');
+// Durable state stores receipt identities, not the full message bodies. Re-list
+// this same frozen window; W01 reuses exact hash-verified per-message receipts.
+return [{ json: { ...trusted, resume_enumeration: true, replay_noop: false, cursor_commit_eligible: false } }];
+""".strip()
+    for source, target in (("Attach Immutable Inventory to Sweep", "Split Immutable Messages for Archive"),
+                           ("Return Existing ENUMERATED Receipt", "Read Outlook Circuit"),
+                           ("Split Immutable Messages for Archive", "Archive Enumerated Messages in W01"),
+                           ("Archive Enumerated Messages in W01", "Aggregate Verified Message Archives"),
+                           ("Aggregate Verified Message Archives", "Build Durable Archive Barrier Receipt")):
+        sweep["connections"][source] = {"main": [[{"node": target, "type": "main", "index": 0}]]}
+    acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
+    acquisition["connections"]["Archive Inventory Present"]["main"][0] = [
+        {"node": "Expand Enumerated Attachment Items", "type": "main", "index": 0},
+        {"node": "Build Original Email Evidence", "type": "main", "index": 0},
+    ]
+    acquisition["connections"]["Record Email PDF Render Requirement"] = {
+        "main": [[{"node": "Merge Archive Verification Inputs", "type": "main", "index": 1}]]}
+    node_by_name(acquisition, "Record Email PDF Render Requirement")["parameters"]["columns"]["value"]["onedrive_item_id"] = "={{ $json.onedrive_item_id }}"
+    for workflow in (by_code["OUTLOOK_FINANCE_ACQUISITION"], sweep):
+        for node in workflow["nodes"]:
+            if (node["type"] == "n8n-nodes-base.dataTable"
+                    and node["parameters"].get("operation") == "get"
+                    and (node["name"].startswith("Read Back ")
+                         or node["name"] in {"Read Authoritative Source Cursor", "Read Acquisition Receipt for Commit Resume"})):
+                # A missing mandatory durable row must reach its verifier and
+                # raise; zero output must never silently complete a workflow.
+                node["alwaysOutputData"] = True
     node_by_name(sweep, "Return Verified ARCHIVED Receipt")["parameters"]["jsCode"] = r"""
 const expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;
 const inventory = $('Attach Immutable Inventory to Sweep').first().json;

@@ -47,7 +47,7 @@ const item = json => ({json});
 const $ = name => {
   if (!(name in refs)) throw new Error(`UNEXECUTED:${name}`);
   const values = rows(refs[name]);
-  return {first: () => item(values[0]), all: () => values.map(item), item: item(values[0])};
+  return {first: () => item(values[0]), all: () => values.map(item), item: item(values[0]), itemMatching: index => item(values[index])};
 };
 const input = (payload.input_items || []).map(item);
 const $input = {all: () => input, first: () => input[0], item: input[0]};
@@ -81,6 +81,92 @@ try {
         self.assertIn(message, result["error"])
         return result
 
+    def test_w01_attachmentless_first_run_and_replay_graph_reaches_barrier(self):
+        workflow = self.workflow("01-outlook-finance-acquisition.json")
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        connections = workflow["connections"]
+        self.assertEqual({edge["node"] for edge in connections["Archive Inventory Present"]["main"][0]},
+                         {"Expand Enumerated Attachment Items", "Build Original Email Evidence"})
+        self.assertEqual(connections["Expand Enumerated Attachment Items"]["main"][0][0]["node"], "Enumerated Attachment Present")
+        self.assertEqual(connections["Enumerated Attachment Present"]["main"][1][0]["node"], "Empty Enumerated Attachment Verification")
+        self.assertEqual(connections["Record Email PDF Render Requirement"]["main"][0][0]["index"], 1)
+        self.assertEqual(connections["Empty Enumerated Attachment Verification"]["main"][0][0]["index"], 0)
+        mapping = nodes["Record Email PDF Render Requirement"]["parameters"]["columns"]["value"]
+        self.assertEqual(mapping["onedrive_item_id"], "={{ $json.onedrive_item_id }}")
+        message = {"id": "message-empty", "message_id": "message-empty", "attachment_inventory": []}
+        expanded = self.execute_code_node(workflow, "Expand Enumerated Attachment Items", json_value=message)
+        self.assertTrue(expanded["ok"], expanded)
+        empty = self.execute_code_node(workflow, "Empty Enumerated Attachment Verification",
+                                       json_value=expanded["output"][0]["json"],
+                                       refs={"Expand Enumerated Attachment Items": expanded["output"][0]["json"]})
+        self.assertTrue(empty["ok"], empty)
+        receipt = {"archive_state": "HASH_VERIFIED", "source_message_id": "message-empty",
+                   "source_attachment_id": "INLINE_BODY", "source_sha256": "a" * 64, "onedrive_item_id": "drive-proof"}
+        expected = {"source_message_id": "message-empty", "email_evidence_sha256": "a" * 64}
+        for replay in (False, True):
+            with self.subTest(replay=replay):
+                name = "Verify Existing Email Evidence Receipt" if replay else "Verify Durable Email Evidence Receipt"
+                verified = self.execute_code_node(workflow, name,
+                    json_value={**expected, "existing_email_receipt": receipt} if replay else receipt,
+                    refs={} if replay else {"Verify Email Evidence Readback": expected})
+                self.assertTrue(verified["ok"], verified)
+                self.assertEqual(verified["output"][0]["json"]["onedrive_item_id"], "drive-proof")
+                result = self.execute_code_node(workflow, "Attachment Verification Barrier", refs={
+                    "Validate Bounded Source Request": {"messages": [{"message_id": "message-empty", "message": message, "attachment_inventory": []}]},
+                    name: verified["output"][0]["json"],
+                    "Empty Enumerated Attachment Verification": empty["output"][0]["json"],
+                })
+                self.assertTrue(result["ok"], result)
+                self.assertTrue(result["output"][0]["json"]["archive_ready"])
+
+    def test_64_attachmentless_messages_archive_individually_and_aggregate_exactly(self):
+        w12 = self.workflow("12-outlook-message-sweep.json")
+        w01 = self.workflow("01-outlook-finance-acquisition.json")
+        base = {"run_id": "fixture-64", "source_code": "RAKBANK_CARD_TRANSACTION", "folder_id": "folder",
+                "onedrive_parent_id": "archive", "senders": ["alerts@rakbank.ae"], "subjects": ["transaction"],
+                "window_start": "2026-08-17T00:00:00Z", "run_upper_bound": "2026-08-18T00:00:00Z",
+                "matched_count": 64, "scanned_count": 64, "immutable_inventory": True}
+        parents = [{**base, "id": f"message-{i}", "message_id": f"message-{i}", "body": {"content": f"body-{i}"}} for i in range(64)]
+        stamped = self.execute_code_node(w12, "Stamp Immutable Attachment IDs", input_items=[{}],
+                                        refs={"Shape Immutable Message Inventory": parents})
+        self.assertTrue(stamped["ok"], stamped)
+        self.assertEqual([x["json"]["message_id"] for x in stamped["output"]], [p["id"] for p in parents])
+        aggregated = self.execute_code_node(w12, "Aggregate Immutable Archive Inventory",
+                                           input_items=[x["json"] for x in stamped["output"]],
+                                           refs={"Shape Immutable Message Inventory": parents,
+                                                 "Aggregate Exact Window Heartbeat": base})["output"][0]["json"]
+        split = self.execute_code_node(w12, "Split Immutable Messages for Archive", json_value=aggregated)["output"]
+        self.assertEqual(len(split), 64)
+        self.assertTrue(all(len(row["json"]["messages"]) == 1 for row in split))
+        self.assertTrue(all(row["json"]["historical_import"] is False for row in split))
+        validated = self.execute_code_node(w01, "Validate Bounded Source Request", json_value=split[0]["json"])
+        self.assertTrue(validated["ok"], validated)
+        for flag in (None, False, True):
+            result = self.execute_code_node(w12, "Split Immutable Messages for Archive", json_value={**aggregated, "historical_import": flag})
+            self.assertTrue(result["ok"], result)
+            self.assertIs(result["output"][0]["json"]["historical_import"], flag is True)
+        self.assert_code_error(w12, "Split Immutable Messages for Archive", "historical_import must be boolean",
+                               json_value={**aggregated, "historical_import": "false"})
+        caller = next(n for n in w12["nodes"] if n["name"] == "Archive Enumerated Messages in W01")
+        self.assertEqual(caller["parameters"]["mode"], "each")
+        receipts = []
+        for index, row in enumerate(split):
+            message = row["json"]["messages"][0]["message"]
+            evidence = self.execute_code_node(w01, "Build Original Email Evidence", json_value=message)["output"][0]["json"]
+            self.assertEqual(evidence["archive_payload"]["message_id"], f"message-{index}")
+            self.assertEqual(evidence["archive_payload"]["body"], f"body-{index}")
+            receipts.append({**base, "matched_count": 1, "archive_ready": True, "attachment_ids_verified": True,
+                             "attachment_verification_barrier": "VERIFIED", "attachment_identity_keys": [], "attachments_verified": 0,
+                             "email_evidence_receipt_barrier": "VERIFIED", "email_evidence_receipts_verified": 1,
+                             "email_evidence_identity_keys": [f"message-{index}:INLINE_BODY"]})
+        refs = {"Attach Immutable Inventory to Sweep": aggregated}
+        result = self.execute_code_node(w12, "Aggregate Verified Message Archives", input_items=receipts, refs=refs)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["output"][0]["json"]["email_evidence_receipts_verified"], 64)
+        self.assertEqual(len(result["output"][0]["json"]["messages"]), 64)
+        for invalid in (receipts[:-1], [receipts[0], *receipts[0:63]], [{**receipts[0], "run_id": "wrong"}, *receipts[1:]]):
+            self.assertFalse(self.execute_code_node(w12, "Aggregate Verified Message Archives", input_items=invalid, refs=refs)["ok"])
+
     def test_fresh_enumeration_reaches_absent_receipt_gate_only(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         gate = "Project Enumeration Receipt Fields for Existing Gate"
@@ -91,6 +177,23 @@ try {
         for node in workflow["nodes"]:
             if node["name"].startswith("Project Enumeration Receipt Fields") and node["name"] != gate:
                 self.assert_code_error(workflow, node["name"], "ENUMERATION_RECEIPT_FIELD_MISSING:receipt_run_id")
+
+    def test_mandatory_archive_and_cursor_readbacks_cannot_end_on_zero_rows(self):
+        names = []
+        for filename in ("01-outlook-finance-acquisition.json", "12-outlook-message-sweep.json"):
+            workflow = self.workflow(filename)
+            for node in workflow["nodes"]:
+                if (node["type"] == "n8n-nodes-base.dataTable" and node["parameters"].get("operation") == "get"
+                        and (node["name"].startswith("Read Back ") or node["name"] in
+                             {"Read Authoritative Source Cursor", "Read Acquisition Receipt for Commit Resume"})):
+                    self.assertTrue(node.get("alwaysOutputData"), node["name"])
+                    names.append(node["name"])
+        self.assertGreaterEqual(len(names), 10)
+        archive = self.workflow("01-outlook-finance-acquisition.json")
+        self.assert_code_error(archive, "Verify Enumerated Archive Receipt", "ARCHIVE_RECEIPT_READBACK_MISMATCH",
+                               refs={"Verify Enumerated Attachment Archive": {"source_message_id": "m", "source_attachment_id": "a"}})
+        self.assert_code_error(archive, "Verify Durable Email Evidence Receipt", "EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH",
+                               refs={"Verify Email Evidence Readback": {"source_message_id": "m", "email_evidence_sha256": "a" * 64}})
 
     def test_cashback_missing_or_disabled_contract_fails_explicitly(self):
         workflow = self.workflow("02-rakbank-live-cashback.json")
@@ -411,7 +514,7 @@ try {
         )
         self.assertEqual(
             workflow["connections"]["Attach Immutable Inventory to Sweep"]["main"][0][0]["node"],
-            "Archive Enumerated Messages in W01",
+            "Split Immutable Messages for Archive",
         )
 
     def test_statement_cycles_delegate_one_immutable_inventory_to_w01(self):
@@ -767,12 +870,15 @@ try {
                 )
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
-                self.assertTrue(replay_request["replay_noop"])
-                self.assertEqual(replay_request["messages"], [])
+                self.assertFalse(replay_request["replay_noop"])
+                self.assertTrue(replay_request["resume_enumeration"])
+                self.assertNotIn("messages", replay_request)
+                # The receipt has no bodies: W12 re-enumerates the same frozen
+                # window before W01 can reuse hash-verified archive receipts.
                 replay_validated = self.execute_code_node(
                     w01,
                     "Validate Bounded Source Request",
-                    json_value=replay_request,
+                    json_value={**replay_request, **replay_inventory},
                 )
                 self.assertTrue(replay_validated["ok"], replay_validated)
 
@@ -1271,11 +1377,14 @@ try {
                 )
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
-                # Replay reads canonical identity/barrier fields from the
-                # ingestion-state row; it does not reconstruct message bodies
-                # for a second W01 archive pass.
+                # Re-enumeration and W01 receipt reuse must restore the full
+                # verified archive proof before a resumed run can commit.
+                self.assertTrue(replay_request["resume_enumeration"])
+                self.assertNotIn("messages", replay_request)
                 replay_downstream = {
                     **replay_request,
+                    "matched_count": len(email_rows),
+                    "attachment_ids_verified": True,
                     "attachment_verification_barrier": "VERIFIED",
                     "attachments_verified": len(archive_rows),
                     "attachment_identity_keys": persisted["attachment_identity_keys"],
@@ -1929,15 +2038,18 @@ try {
         )
         self.assertTrue(result["ok"], result)
         replay = result["output"][0]["json"]
-        # The canonical ingestion-state row persists identity and archive
-        # pointers; replay deliberately returns no in-memory message payload.
-        self.assertEqual(replay["messages"], [])
-        self.assertEqual(replay["attachment_identity_keys"], identities)
-        self.assertTrue(replay["replay_noop"])
+        # Receipts do not persist complete message bodies. A retry re-lists the
+        # same frozen window, then reuses W01's exact per-message archive proofs.
+        self.assertNotIn("messages", replay)
+        self.assertTrue(replay["resume_enumeration"])
+        self.assertFalse(replay["replay_noop"])
+        lookup = next(n for n in w12["nodes"] if n["name"] == "Read Existing ENUMERATED Receipt")
+        fields = {c["keyName"] for c in lookup["parameters"]["filters"]["conditions"]}
+        self.assertEqual(fields, {"source_code", "last_terminal_state", "receipt_run_id", "receipt_run_upper_bound", "last_window_start"})
         self.assertFalse(replay["cursor_commit_eligible"])
         self.assertEqual(
             w12["connections"]["Return Existing ENUMERATED Receipt"]["main"][0][0]["node"],
-            "Archive Enumerated Messages in W01",
+            "Read Outlook Circuit",
         )
 
     def test_executable_faults_fail_closed_and_cursor_cas_holds(self):

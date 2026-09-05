@@ -196,7 +196,7 @@
             "source_sha256": "={{ $json.email_evidence_sha256 }}",
             "document_profile": "EMAIL_BODY_JSON_TO_PDF_V1",
             "requested_schema_version": "1",
-            "onedrive_item_id": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
+            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
             "source_message_id": "={{ $('Build Original Email Evidence').item.json.source_message_id }}",
             "source_attachment_id": "INLINE_BODY",
             "state": "UNSUPPORTED",
@@ -689,7 +689,7 @@
         980,
         760
       ],
-      "alwaysOutputData": false,
+      "alwaysOutputData": true,
       "parameters": {
         "resource": "row",
         "operation": "get",
@@ -1142,7 +1142,8 @@
           ]
         },
         "options": {}
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "10143",
@@ -1214,7 +1215,7 @@
       "main": [
         [
           {
-            "node": "Enumerated Attachment Present",
+            "node": "Expand Enumerated Attachment Items",
             "type": "main",
             "index": 0
           },
@@ -1462,7 +1463,7 @@
           {
             "node": "Merge Archive Verification Inputs",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]

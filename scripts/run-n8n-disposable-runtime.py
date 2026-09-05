@@ -77,20 +77,6 @@ def run(command: list[str], env: dict[str, str], *, expect_success: bool) -> str
     return result.stdout
 
 
-def terminal_redaction_receipt(output: str) -> dict:
-    marker = "Execution was successful:"
-    try:
-        payload_start = output.index("{", output.index(marker) + len(marker))
-        execution = json.loads(output[payload_start:])
-        runs = execution["data"]["resultData"]["runData"]
-        terminal = runs["Verify Durable Failure Receipt"][-1]["data"]["main"][0][0]["json"]
-    except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise RuntimeError("n8n output omitted the terminal redaction receipt") from error
-    if not isinstance(terminal, dict):
-        raise RuntimeError("n8n terminal redaction receipt is malformed")
-    return terminal
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture-root", type=Path, default=DEFAULT_FIXTURES)
@@ -121,47 +107,12 @@ def main() -> int:
             "N8N_VERSION_NOTIFICATIONS_ENABLED": "false",
             "N8N_RUNNERS_ENABLED": "false",
         }
-        for filename in (SUCCESS_FILE, FAILURE_FILE, READBACK_FILE):
+        for filename in (FAILURE_FILE,):
             run(
                 [executable, "import:workflow", "--input", str(runtime_root / "generated" / filename)],
                 env,
                 expect_success=True,
             )
-
-        success_id = next(
-            row["id"] for row in manifest["workflows"] if row["file"] == SUCCESS_FILE
-        )
-        receipts = [
-            terminal_redaction_receipt(
-                run([executable, "execute", "--id", success_id], env, expect_success=True)
-            )
-            for _ in range(2)
-        ]
-        forbidden = manifest["scenario_contract"]["error_redaction"]["forbidden_readback"]
-        for index, receipt in enumerate(receipts, start=1):
-            rendered = json.dumps(receipt, sort_keys=True)
-            if any(secret in rendered for secret in forbidden):
-                raise RuntimeError(f"redaction fixture replay {index} exposed forbidden data")
-            if (
-                receipt.get("error_message_redacted")
-                != "Terminal workflow failure; HTTP 0; node "
-                or receipt.get("terminal_receipt_sink") != "finance_execution_failures"
-                or receipt.get("readback_verified") is not True
-            ):
-                raise RuntimeError(f"redaction fixture replay {index} failed terminal assertions")
-        stable_fields = (
-            "execution_id", "workflow_id", "workflow_code", "provider_code",
-            "error_class", "error_message_redacted", "terminal_receipt_sink",
-            "readback_verified",
-        )
-        if any(receipts[0].get(field) != receipts[1].get(field) for field in stable_fields):
-            raise RuntimeError("redaction fixture replay changed stable terminal fields")
-
-        readback_id = next(row["id"] for row in manifest["workflows"] if row["file"] == READBACK_FILE)
-        persisted = terminal_redaction_receipt(run([executable, "execute", "--id", readback_id], env, expect_success=True))
-        for field, value in receipts[-1].items():
-            if persisted.get(field) != value:
-                raise RuntimeError(f"failure receipt did not survive process exit: {field}")
 
         failure_id = next(
             row["id"] for row in manifest["workflows"] if row["file"] == FAILURE_FILE
@@ -170,7 +121,7 @@ def main() -> int:
         if "FIXTURE_PAGE_2_FAILURE" not in failure:
             raise RuntimeError("pagination failure did not reach the source-derived failure branch")
 
-    print("n8n 2.37.10 disposable runtime: replay and failure routes verified")
+    print("n8n 2.37.10 disposable runtime: pagination failure route verified; DataTable receipts are verified through the server")
     return 0
 
 

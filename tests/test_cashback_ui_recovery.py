@@ -221,6 +221,10 @@ assert.equal(context.candidateValueLabel({ target_rate_percent: null }), 'Rate u
 assert.match(context.candidateValueLabel(candidate('ACTIVE_CARD', {
   purpose: 'THRESHOLD_FILLER', target_rate_percent: '0',
 })), /No direct cashback/);
+assert.doesNotMatch(context.candidateValueLabel(candidate('ACTIVE_CARD', {
+  purpose: 'THRESHOLD_FILLER', target_rate_percent: '0',
+})), /minimum spend/);
+assert.match(conditionalText, /toward target tier/);
 ''';
         result = subprocess.run([shutil.which("node"), "-e", script], cwd=ROOT, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
