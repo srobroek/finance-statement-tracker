@@ -1179,7 +1179,10 @@ class MigrationRunner:
             if row.get("batch_id") not in existing_ids:
                 actual.append(row)
         targets = {
-            "finance_execution_failures": [dict(row) for row in self.source_tables.get("finance_execution_failures", [])],
+            "finance_execution_failures": [
+                {key: value for key, value in row.items() if key in self.source_schemas["finance_execution_failures"]["columns"]}
+                for row in self.source_tables.get("finance_execution_failures", [])
+            ],
             "finance_ingestion_state": _map_ingestion(self.source_tables),
             "finance_documents": _map_documents(self.source_tables, alias_resolver),
             "finance_actual_batches": [

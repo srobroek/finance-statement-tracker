@@ -120,7 +120,8 @@ jobs:
 
           docker exec -i "$container" node <<'NODE'
           const url = 'http://127.0.0.1:5678/webhook/disposable-w19-bootstrap';
-          const bootstrapContract = require('/workspace/integrations/n8n/generated/platform-bootstrap-manifest.json').target_schema_contract;
+          const { readFileSync } = await import('node:fs');
+          const bootstrapContract = JSON.parse(readFileSync('/workspace/integrations/n8n/generated/platform-bootstrap-manifest.json', 'utf8')).target_schema_contract;
           const expectedTables = [
             'finance_actual_batches',
             'finance_ai_reviews',

@@ -28,7 +28,7 @@ class DataTableMigrationTests(unittest.TestCase):
 
     def test_failure_receipts_survive_migration_and_duplicate_identity_fails(self) -> None:
         receipt = {"execution_id": "exec-1", "workflow_id": "workflow-1", "error_class": "TERMINAL", "error_message_redacted": "safe summary", "readback_verified": True}
-        source = {"finance_execution_failures": [receipt]}
+        source = {"finance_execution_failures": [{**receipt, "id": 99, "createdAt": "native-system-column"}]}
         result = self.migration.MigrationRunner(source).build_targets()
         self.assertEqual(result["finance_execution_failures"], [receipt])
         self.assertIsNot(result["finance_execution_failures"][0], receipt)

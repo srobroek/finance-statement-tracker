@@ -1,6 +1,8 @@
 'use strict';
 // Runs inside the isolated no-network container. Only its loopback is used.
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const checkpoint = '/home/node/.n8n/disposable-failure-receipt-proof.json';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const base = 'http://127.0.0.1:5678';
 const forbidden = ['DontLeak', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', '4111111111111111'];
@@ -47,5 +49,7 @@ function verify(result) {
   const real = verify(await post('disposable-real-error-read'));
   assert.equal(synthetic.execution_id, 'fixture-error-redaction');
   assert.equal(real.workflow_id, '90000000-0000-4000-8000-000000001017');
+  if (process.argv[2] === 'before') fs.writeFileSync(checkpoint, JSON.stringify({synthetic, real}), {mode: 0o600});
+  else assert.deepEqual({synthetic, real}, JSON.parse(fs.readFileSync(checkpoint, 'utf8')), 'failure receipts changed across restart');
   console.log(`W16 ${process.argv[2]} restart: redaction, idempotency, protected webhook, real Error Trigger and durable readback verified`);
 })().catch(error => { console.error(error.message);process.exitCode=1; });
