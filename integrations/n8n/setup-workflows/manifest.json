@@ -23,9 +23,31 @@
       "folder_id": "f1000000-0000-4000-8000-000000000191",
       "folder_name": "Shared",
       "project_name": "Global",
-      "credential_placeholders": ["BIND_OUTLOOK", "BIND_ONEDRIVE"],
+      "credential_placeholders": [
+        "BIND_OUTLOOK",
+        "BIND_ONEDRIVE"
+      ],
       "allowed_provider_mutation": "NONE",
       "receipt": "REDACTED",
+      "restart_proof_required": true
+    },
+    {
+      "code": "ADCB_REVIEWED_MAINTENANCE",
+      "file": "25-reviewed-adcb-maintenance.json",
+      "manual_only": false,
+      "reviewed_integrated_invocation_required": true,
+      "activation_forbidden": true,
+      "folder_id": "f1000000-0000-4000-8000-000000000191",
+      "folder_name": "Shared",
+      "project_name": "Global",
+      "credential_placeholders": [
+        "BIND_ONEDRIVE",
+        "BIND_ACTUAL",
+        "BIND_FINANCE_OPS_DB"
+      ],
+      "allowed_provider_mutation": "APPEND_REDACTED_MAINTENANCE_RECEIPT",
+      "allowed_actual_mutation": "APPROVED_HASH_BOUND_ADCB_RECONSTRUCTION_MAX_100_ACTIONS",
+      "receipt": "REDACTED_HASH_READBACK_REQUIRED",
       "restart_proof_required": true
     }
   ]

@@ -1,0 +1,798 @@
+{
+  "id": "10000000-0000-4000-8000-000000000025",
+  "name": "Finance · Reviewed ADCB Maintenance",
+  "active": false,
+  "nodes": [
+    {
+      "id": "25000",
+      "name": "Reviewed Integrated Maintenance Request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "25001",
+      "name": "Fixed Reviewed Maintenance Bindings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "approved_plan_sha256",
+              "name": "approved_plan_sha256",
+              "type": "string",
+              "value": "BIND_APPROVED_PLAN_SHA256"
+            },
+            {
+              "id": "plan_file_sha256",
+              "name": "plan_file_sha256",
+              "type": "string",
+              "value": "BIND_PLAN_FILE_SHA256"
+            },
+            {
+              "id": "backup_receipt_sha256",
+              "name": "backup_receipt_sha256",
+              "type": "string",
+              "value": "BIND_BACKUP_RECEIPT_SHA256"
+            },
+            {
+              "id": "plan_item_id",
+              "name": "plan_item_id",
+              "type": "string",
+              "value": "BIND_PLAN_ITEM_ID"
+            },
+            {
+              "id": "receipt_parent_id",
+              "name": "receipt_parent_id",
+              "type": "string",
+              "value": "BIND_RECEIPT_PARENT_ID"
+            },
+            {
+              "id": "actual_file_id",
+              "name": "actual_file_id",
+              "type": "string",
+              "value": "BIND_ACTUAL_FILE_ID"
+            },
+            {
+              "id": "account_id",
+              "name": "account_id",
+              "type": "string",
+              "value": "BIND_ACCOUNT_ID"
+            },
+            {
+              "id": "expected_after_count",
+              "name": "expected_after_count",
+              "type": "number",
+              "value": -1
+            },
+            {
+              "id": "expected_after_balance_minor",
+              "name": "expected_after_balance_minor",
+              "type": "number",
+              "value": -1
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "25002",
+      "name": "Validate Reviewed Bindings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Reviewed Bindings. Keep this deterministic and fail closed.\nconst b = $json;\nfor (const key of ['approved_plan_sha256', 'plan_file_sha256', 'backup_receipt_sha256']) {\n  if (!/^[a-f0-9]{64}$/.test(String(b[key] || ''))) throw new Error('MAINTENANCE_REVIEW_BINDING_REQUIRED');\n}\nfor (const key of ['plan_item_id', 'receipt_parent_id', 'actual_file_id', 'account_id']) {\n  if (!String(b[key] || '').trim() || String(b[key]).startsWith('BIND_')) throw new Error('MAINTENANCE_RESOURCE_BINDING_REQUIRED');\n}\nif (!/^[A-Za-z0-9_-]{1,128}$/.test(b.actual_file_id)) throw new Error('MAINTENANCE_INVALID_SYNC_BINDING');\nif (!Number.isSafeInteger(b.expected_after_count) || b.expected_after_count < 0 || !Number.isSafeInteger(b.expected_after_balance_minor)) throw new Error('MAINTENANCE_EXPECTED_STATE_BINDING_REQUIRED');\nreturn [{json:b}];\n"
+      }
+    },
+    {
+      "id": "25003",
+      "name": "Download Immutable Maintenance Plan",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.plan_item_id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "25004",
+      "name": "Hash Immutable Maintenance Plan",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "plan_file_sha256"
+      }
+    },
+    {
+      "id": "25005",
+      "name": "Extract Immutable Maintenance Plan",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        0
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "destinationKey": "maintenance_plan",
+        "options": {}
+      }
+    },
+    {
+      "id": "25006",
+      "name": "Verify Approved Plan Bytes and Identity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Approved Plan Bytes and Identity. Keep this deterministic and fail closed.\nconst b = $('Validate Reviewed Bindings').first().json;\nconst p = $json.maintenance_plan;\nif (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('MAINTENANCE_PLAN_OBJECT_REQUIRED');\nif ($('Hash Immutable Maintenance Plan').first().json.plan_file_sha256 !== b.plan_file_sha256) throw new Error('MAINTENANCE_PLAN_FILE_HASH_MISMATCH');\nif (p.schema_version !== 'actual-adcb-reconstruction-v1' || p.plan_sha256 !== b.approved_plan_sha256 || p.actual_file_id !== b.actual_file_id || p.account_id !== b.account_id) throw new Error('MAINTENANCE_APPROVED_PLAN_BINDING_MISMATCH');\nif (!p.after || p.after.count !== b.expected_after_count || p.after.balance !== b.expected_after_balance_minor || p.backup?.receipt_sha256 !== b.backup_receipt_sha256) throw new Error('MAINTENANCE_EXPECTED_PLAN_STATE_MISMATCH');\nreturn [{json:{maintenance_plan:p}}];\n"
+      }
+    },
+    {
+      "id": "25007",
+      "name": "Build Global Maintenance Lease Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Global Maintenance Lease Request. Keep this deterministic and fail closed.\nconst b = $('Validate Reviewed Bindings').first().json;\nreturn [{json:{operation:'ACQUIRE', resource_key:'actual:'+b.actual_file_id, lease_owner:'n8n:maintenance:'+String($execution.id), ttl_seconds:600}}];\n"
+      }
+    },
+    {
+      "id": "25008",
+      "name": "Acquire Global Actual Writer Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2080,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "25009",
+      "name": "Build Maintenance Fence Assert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+      }
+    },
+    {
+      "id": "25010",
+      "name": "Assert Global Fence Before Maintenance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2600,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "25011",
+      "name": "Build Asserted Maintenance Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Asserted Maintenance Envelope. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nif ($json.valid !== true || $json.resource_key !== l.resource_key || $json.lease_id !== l.lease_id || $json.fencing_token !== l.fencing_token) throw new Error('MAINTENANCE_FENCE_ASSERTION_FAILED');\nreturn [{json:{maintenance_plan:$('Verify Approved Plan Bytes and Identity').first().json.maintenance_plan,writer_lease:l}}];\n"
+      }
+    },
+    {
+      "id": "25012",
+      "name": "Apply Bounded Reviewed Maintenance",
+      "type": "n8n-nodes-finance.actualBudget",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        0
+      ],
+      "parameters": {
+        "operation": "maintenanceApply",
+        "approvedPlanSha256": "BIND_APPROVED_PLAN_SHA256"
+      },
+      "credentials": {
+        "actualBudgetApi": {
+          "id": "BIND_ACTUAL",
+          "name": "Finance Actual"
+        }
+      }
+    },
+    {
+      "id": "25013",
+      "name": "Build Post-Maintenance Fence Assert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Post-Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+      }
+    },
+    {
+      "id": "25014",
+      "name": "Assert Global Fence After Maintenance",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3640,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "25015",
+      "name": "Build Redacted Maintenance Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3900,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Redacted Maintenance Receipt. Keep this deterministic and fail closed.\nconst fence = $json, l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst r = $('Apply Bounded Reviewed Maintenance').first().json.actual;\nif (fence.valid !== true || fence.resource_key !== l.resource_key || fence.lease_id !== l.lease_id || fence.fencing_token !== l.fencing_token) throw new Error('MAINTENANCE_POST_WRITE_FENCE_FAILED');\nif (!r || r.plan_sha256 !== b.approved_plan_sha256 || r.actual_file_id !== b.actual_file_id || r.account_id !== b.account_id || r.backup_receipt_sha256 !== b.backup_receipt_sha256 || r.writer_fencing_token !== l.fencing_token) throw new Error('MAINTENANCE_RESULT_BINDING_MISMATCH');\nfor (const k of ['count','remaining_actions','added','updated','deleted']) if (!Number.isSafeInteger(r[k]) || r[k] < 0) throw new Error('MAINTENANCE_RESULT_COUNT_INVALID');\nif (r.target_count !== b.expected_after_count || r.target_balance_minor !== b.expected_after_balance_minor) throw new Error('MAINTENANCE_RESULT_TARGET_MISMATCH');\nif (r.added+r.updated+r.deleted > 100 || !Number.isSafeInteger(r.balance_minor) || typeof r.replay !== 'boolean') throw new Error('MAINTENANCE_RESULT_BOUND_EXCEEDED');\nfor (const k of ['before_rows_sha256','after_rows_sha256']) if (!/^[a-f0-9]{64}$/.test(String(r[k] || ''))) throw new Error('MAINTENANCE_RESULT_HASH_REQUIRED');\nif (r.state === 'VERIFIED') {\n  if (r.status !== 'ACTUAL_MAINTENANCE_VERIFIED' || r.remaining_actions !== 0 || r.count !== b.expected_after_count || r.balance_minor !== b.expected_after_balance_minor) throw new Error('MAINTENANCE_FINAL_READBACK_MISMATCH');\n} else if (r.state !== 'PARTIAL' || r.status !== 'ACTUAL_MAINTENANCE_PARTIAL' || r.remaining_actions <= 0) throw new Error('MAINTENANCE_RESULT_STATE_INVALID');\nconst keys = ['status','state','plan_sha256','account_id','actual_file_id','backup_receipt_sha256','before_rows_sha256','after_rows_sha256','count','balance_minor','remaining_actions','target_count','target_balance_minor','updated','deleted','added','replay','writer_fencing_token'];\nconst receipt = {schema_version:'actual-maintenance-receipt-v1'};\nfor (const k of keys) receipt[k] = r[k];\nreturn [{json:{receipt}}];\n"
+      }
+    },
+    {
+      "id": "25016",
+      "name": "Convert Redacted Maintenance Receipt",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        4160,
+        0
+      ],
+      "parameters": {
+        "operation": "toJson",
+        "mode": "each",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "maintenance-receipt.json"
+        }
+      }
+    },
+    {
+      "id": "25017",
+      "name": "Hash Redacted Maintenance Receipt",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        4420,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "receipt_sha256"
+      }
+    },
+    {
+      "id": "25018",
+      "name": "Archive Redacted Maintenance Receipt",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        4680,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "fileName": "={{ $('Validate Reviewed Bindings').first().json.approved_plan_sha256 + '-' + $execution.id + '-' + $json.receipt_sha256 + '.maintenance-receipt.json' }}",
+        "parentId": "={{ $('Validate Reviewed Bindings').first().json.receipt_parent_id }}"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "25019",
+      "name": "Download Maintenance Receipt Readback",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        4940,
+        0
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      }
+    },
+    {
+      "id": "25020",
+      "name": "Hash Maintenance Receipt Readback",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        5200,
+        0
+      ],
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "receipt_readback_sha256"
+      }
+    },
+    {
+      "id": "25021",
+      "name": "Verify Durable Maintenance Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5460,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Durable Maintenance Receipt. Keep this deterministic and fail closed.\nconst before = $('Hash Redacted Maintenance Receipt').first().json.receipt_sha256;\nconst after = $json.receipt_readback_sha256;\nconst item = $('Archive Redacted Maintenance Receipt').first().json;\nif (!/^[a-f0-9]{64}$/.test(String(before || '')) || before !== after || !item.id) throw new Error('MAINTENANCE_RECEIPT_ARCHIVE_READBACK_FAILED');\nreturn [{json:{receipt_sha256:before,receipt_item_id:item.id,receipt_archive_verified:true}}];\n"
+      }
+    },
+    {
+      "id": "25022",
+      "name": "Build Exact Maintenance Lease Release",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build Exact Maintenance Lease Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nif ($json.receipt_archive_verified !== true) throw new Error('MAINTENANCE_RECEIPT_REQUIRED_BEFORE_RELEASE');\nreturn [{json:{operation:'RELEASE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+      }
+    },
+    {
+      "id": "25023",
+      "name": "Release Exact Maintenance Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5980,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "25024",
+      "name": "Read Back Released Maintenance Fence",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.writer_leases WHERE resource_key=$1::text AND lease_id=$2::uuid AND fencing_token=$3::bigint;",
+        "options": {
+          "queryReplacement": "={{ [$('Acquire Global Actual Writer Fence').first().json.resource_key, $('Acquire Global Actual Writer Fence').first().json.lease_id, $('Acquire Global Actual Writer Fence').first().json.fencing_token] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "25025",
+      "name": "Return Verified Maintenance Chunk Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6500,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Verified Maintenance Chunk Receipt. Keep this deterministic and fail closed.\nconst row = $json, lease = $('Acquire Global Actual Writer Fence').first().json;\nconst released = $('Release Exact Maintenance Fence').first().json;\nif (released.released !== true || row.released !== true || row.resource_key !== lease.resource_key || row.lease_id !== lease.lease_id || row.lease_owner !== lease.lease_owner || Number(row.fencing_token) !== lease.fencing_token) throw new Error('MAINTENANCE_RELEASE_READBACK_FAILED');\nconst artifact = $('Verify Durable Maintenance Receipt').first().json;\nreturn [{json:{...$('Build Redacted Maintenance Receipt').first().json.receipt,...artifact,writer_release_verified:true,complete:$('Build Redacted Maintenance Receipt').first().json.receipt.state==='VERIFIED'}}];\n"
+      }
+    }
+  ],
+  "connections": {
+    "Reviewed Integrated Maintenance Request": {
+      "main": [
+        [
+          {
+            "node": "Fixed Reviewed Maintenance Bindings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fixed Reviewed Maintenance Bindings": {
+      "main": [
+        [
+          {
+            "node": "Validate Reviewed Bindings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reviewed Bindings": {
+      "main": [
+        [
+          {
+            "node": "Download Immutable Maintenance Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Immutable Maintenance Plan": {
+      "main": [
+        [
+          {
+            "node": "Hash Immutable Maintenance Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Immutable Maintenance Plan": {
+      "main": [
+        [
+          {
+            "node": "Extract Immutable Maintenance Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Immutable Maintenance Plan": {
+      "main": [
+        [
+          {
+            "node": "Verify Approved Plan Bytes and Identity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Approved Plan Bytes and Identity": {
+      "main": [
+        [
+          {
+            "node": "Build Global Maintenance Lease Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Global Maintenance Lease Request": {
+      "main": [
+        [
+          {
+            "node": "Acquire Global Actual Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Global Actual Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Build Maintenance Fence Assert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Maintenance Fence Assert": {
+      "main": [
+        [
+          {
+            "node": "Assert Global Fence Before Maintenance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Global Fence Before Maintenance": {
+      "main": [
+        [
+          {
+            "node": "Build Asserted Maintenance Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Asserted Maintenance Envelope": {
+      "main": [
+        [
+          {
+            "node": "Apply Bounded Reviewed Maintenance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Bounded Reviewed Maintenance": {
+      "main": [
+        [
+          {
+            "node": "Build Post-Maintenance Fence Assert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Post-Maintenance Fence Assert": {
+      "main": [
+        [
+          {
+            "node": "Assert Global Fence After Maintenance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Global Fence After Maintenance": {
+      "main": [
+        [
+          {
+            "node": "Build Redacted Maintenance Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Redacted Maintenance Receipt": {
+      "main": [
+        [
+          {
+            "node": "Convert Redacted Maintenance Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Redacted Maintenance Receipt": {
+      "main": [
+        [
+          {
+            "node": "Hash Redacted Maintenance Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Redacted Maintenance Receipt": {
+      "main": [
+        [
+          {
+            "node": "Archive Redacted Maintenance Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Redacted Maintenance Receipt": {
+      "main": [
+        [
+          {
+            "node": "Download Maintenance Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Maintenance Receipt Readback": {
+      "main": [
+        [
+          {
+            "node": "Hash Maintenance Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Maintenance Receipt Readback": {
+      "main": [
+        [
+          {
+            "node": "Verify Durable Maintenance Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Durable Maintenance Receipt": {
+      "main": [
+        [
+          {
+            "node": "Build Exact Maintenance Lease Release",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Exact Maintenance Lease Release": {
+      "main": [
+        [
+          {
+            "node": "Release Exact Maintenance Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Exact Maintenance Fence": {
+      "main": [
+        [
+          {
+            "node": "Read Back Released Maintenance Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Released Maintenance Fence": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Maintenance Chunk Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+  },
+  "pinData": {},
+  "meta": {
+    "financeWorkflowCode": "ADCB_REVIEWED_MAINTENANCE",
+    "setupOnly": true,
+    "activationForbidden": true,
+    "scheduleForbidden": true,
+    "reviewedIntegratedInvocationRequired": true,
+    "mutationScope": "APPROVED_HASH_BOUND_ADCB_RECONSTRUCTION_MAX_100_ACTIONS",
+    "cursorMutationForbidden": true,
+    "cashbackMutationForbidden": true
+  }
+}
