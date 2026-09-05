@@ -26,7 +26,16 @@ class DataTableMigrationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.migration = load_module()
 
-    def test_target_schema_has_four_tables_and_thirteen_locator_fields(self) -> None:
+    def test_failure_receipts_survive_migration_and_duplicate_identity_fails(self) -> None:
+        receipt = {"execution_id": "exec-1", "workflow_id": "workflow-1", "error_class": "TERMINAL", "error_message_redacted": "safe summary", "readback_verified": True}
+        source = {"finance_execution_failures": [receipt]}
+        result = self.migration.MigrationRunner(source).build_targets()
+        self.assertEqual(result["finance_execution_failures"], [receipt])
+        self.assertIsNot(result["finance_execution_failures"][0], receipt)
+        with self.assertRaises(self.migration.MigrationError):
+            self.migration.MigrationRunner({"finance_execution_failures": [receipt, receipt]}).build_targets()
+
+    def test_target_schema_retains_failure_receipts_and_thirteen_locator_fields(self) -> None:
         matrix = json.loads(
             (ROOT / "integrations/n8n/data-table-migration-matrix.json").read_text(encoding="utf-8")
         )

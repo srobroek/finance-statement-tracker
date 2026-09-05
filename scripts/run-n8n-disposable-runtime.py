@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = ROOT / "integrations" / "n8n" / "disposable"
 SUCCESS_FILE = "101-error-redaction.json"
 FAILURE_FILE = "94-sweep-pagination-failure.json"
+READBACK_FILE = "108-error-persistence-readback.json"
 
 
 def sha256(path: Path) -> str:
@@ -44,6 +45,7 @@ def validate_fixtures(fixture_root: Path) -> dict:
     for filename, source in (
         (SUCCESS_FILE, "16-operations-error-handler.json"),
         (FAILURE_FILE, "12-outlook-message-sweep.json"),
+        (READBACK_FILE, "16-operations-error-handler.json"),
     ):
         path = fixture_root / "generated" / filename
         row = by_file.get(filename)
@@ -81,7 +83,7 @@ def terminal_redaction_receipt(output: str) -> dict:
         payload_start = output.index("{", output.index(marker) + len(marker))
         execution = json.loads(output[payload_start:])
         runs = execution["data"]["resultData"]["runData"]
-        terminal = runs["Read Back Verified Failure Receipt"][-1]["data"]["main"][0][0]["json"]
+        terminal = runs["Verify Durable Failure Receipt"][-1]["data"]["main"][0][0]["json"]
     except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise RuntimeError("n8n output omitted the terminal redaction receipt") from error
     if not isinstance(terminal, dict):
@@ -119,7 +121,7 @@ def main() -> int:
             "N8N_VERSION_NOTIFICATIONS_ENABLED": "false",
             "N8N_RUNNERS_ENABLED": "false",
         }
-        for filename in (SUCCESS_FILE, FAILURE_FILE):
+        for filename in (SUCCESS_FILE, FAILURE_FILE, READBACK_FILE):
             run(
                 [executable, "import:workflow", "--input", str(runtime_root / "generated" / filename)],
                 env,
@@ -142,8 +144,8 @@ def main() -> int:
                 raise RuntimeError(f"redaction fixture replay {index} exposed forbidden data")
             if (
                 receipt.get("error_message_redacted")
-                != "password:[REDACTED] token:[REDACTED] card:[REDACTED]"
-                or receipt.get("terminal_receipt_sink") != "n8n_execution_history"
+                != "Terminal workflow failure; HTTP 0; node "
+                or receipt.get("terminal_receipt_sink") != "finance_execution_failures"
                 or receipt.get("readback_verified") is not True
             ):
                 raise RuntimeError(f"redaction fixture replay {index} failed terminal assertions")
@@ -154,6 +156,12 @@ def main() -> int:
         )
         if any(receipts[0].get(field) != receipts[1].get(field) for field in stable_fields):
             raise RuntimeError("redaction fixture replay changed stable terminal fields")
+
+        readback_id = next(row["id"] for row in manifest["workflows"] if row["file"] == READBACK_FILE)
+        persisted = terminal_redaction_receipt(run([executable, "execute", "--id", readback_id], env, expect_success=True))
+        for field, value in receipts[-1].items():
+            if persisted.get(field) != value:
+                raise RuntimeError(f"failure receipt did not survive process exit: {field}")
 
         failure_id = next(
             row["id"] for row in manifest["workflows"] if row["file"] == FAILURE_FILE

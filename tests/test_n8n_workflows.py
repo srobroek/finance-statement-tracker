@@ -255,93 +255,6 @@ try {{
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
 
-    def run_failure_receipt_lifecycle(
-        self,
-        json_input: dict,
-        *,
-        drop_terminal_marker: bool = False,
-        key_prefix: str | None = None,
-        extra_field: bool = False,
-    ) -> dict:
-        nodes = self.nodes("16-operations-error-handler.json")
-        codes = {
-            name: nodes[name]["parameters"]["jsCode"]
-            for name in (
-                "Upsert Durable Failure Receipt",
-                "Read Back Failure Receipt",
-                "Mark Failure Readback Verified",
-                "Read Back Verified Failure Receipt",
-            )
-        }
-        if key_prefix is not None:
-            codes = {
-                name: code.replace("finance_failure_receipt_v1_", key_prefix)
-                for name, code in codes.items()
-            }
-        if extra_field:
-            codes["Upsert Durable Failure Receipt"] = codes["Upsert Durable Failure Receipt"].replace(
-                "'readback_verified'];",
-                "'readback_verified', 'extra'];",
-            )
-        script = f"""
-const codes = {json.dumps(codes)};
-const jsonInput = {json.dumps(json_input)};
-const values = new Map();
-const execution = {{
-  customData: {{
-    set: (key, value) => {{
-      if (typeof key !== 'string' || key.length > 50)
-        throw new Error('CUSTOM_DATA_KEY_LIMIT');
-      if (values.size >= 10 && !values.has(key))
-        throw new Error('CUSTOM_DATA_KEY_COUNT_LIMIT');
-      if (typeof value !== 'string' || value.length > 255)
-        throw new Error('CUSTOM_DATA_VALUE_LIMIT');
-      values.set(key, value);
-    }},
-    get: key => values.get(key),
-  }},
-}};
-const refs = {{
-  'Redact and Classify Failure': {{ json: jsonInput }},
-  'Mark Failure Readback Verified': {{ json: null }},
-}};
-const lookup = name => ({{ first: () => refs[name] }});
-const run = (name, input) => {{
-  const output = new Function('$json', '$execution', '$', 'require', codes[name])(
-    input,
-    execution,
-    lookup,
-    require,
-  );
-  return output[0].json;
-}};
-try {{
-  const persisted = run('Upsert Durable Failure Receipt', jsonInput);
-  const read = run('Read Back Failure Receipt', persisted);
-  const marked = run('Mark Failure Readback Verified', read);
-  refs['Mark Failure Readback Verified'] = {{ json: marked }};
-  if ({str(drop_terminal_marker).lower()})
-    values.delete('finance_failure_receipt_v1_readback_verified');
-  const terminal = run('Read Back Verified Failure Receipt', marked);
-  process.stdout.write(JSON.stringify({{ ok: true, terminal, values: Object.fromEntries(values) }}));
-}} catch (error) {{
-  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error), values: Object.fromEntries(values) }}));
-}}
-"""
-        node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
-        result = subprocess.run(
-            [node, "-e", script],
-            cwd=ROOT,
-            env=os.environ.copy(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(result.stdout, result.stderr)
-        return json.loads(result.stdout)
-
     def run_exported_workflow_node_with_items(
         self,
         workflow_filename: str,
@@ -724,7 +637,7 @@ try {{
         self.assertIn("finance_ai_reviews", referenced)
         self.assertNotIn("finance_acquisition_receipts", referenced)
         self.assertNotIn("finance_actual_outbox", referenced)
-        self.assertNotIn("finance_execution_failures", referenced)
+        self.assertIn("finance_execution_failures", referenced)
         self.assertNotIn("finance_ai_policy_contracts", referenced)
 
     def test_outbox_holds_only_pointer_hash_and_state_metadata(self) -> None:
@@ -1704,68 +1617,39 @@ try {{
         self.assertIn("IF changed = 1 THEN", release_body)
         self.assertIn("AND released_at IS NOT NULL", release_body)
 
-    def test_error_workflow_redacts_then_upserts_reads_compares_and_marks(self) -> None:
-        workflow = self.workflow("16-operations-error-handler.json")
-        names = [
-            node["name"] for node in workflow["nodes"]
-            if node["type"] != "n8n-nodes-base.stickyNote"
-        ]
-        self.assertEqual(names[:7], [
-            "Finance Workflow Failed", "Redact and Classify Failure",
-            "Upsert Durable Failure Receipt", "Read Back Failure Receipt",
-            "Compare Failure Receipt Readback", "Mark Failure Readback Verified",
-            "Read Back Verified Failure Receipt",
-        ])
-        self.assertEqual(names[7:], [
-            "Route Retryable Provider Failure", "Read Provider Circuit after Failure",
-            "Build OPEN Provider Circuit", "Upsert OPEN Provider Circuit",
-            "Read Back OPEN Provider Circuit", "Verify OPEN Circuit Readback",
-        ])
-        code = self.nodes("16-operations-error-handler.json")["Redact and Classify Failure"]["parameters"]["jsCode"]
-        self.assertIn("[REDACTED]", code)
-        self.assertIn("provider_code", code)
-        sink = self.nodes("16-operations-error-handler.json")["Upsert Durable Failure Receipt"]["parameters"]["jsCode"]
-        readback = self.nodes("16-operations-error-handler.json")["Read Back Failure Receipt"]["parameters"]["jsCode"]
-        self.assertIn("customData", sink)
-        self.assertIn("customData", readback)
-        self.assertIn("finance_failure_receipt_v1_", sink)
-        self.assertIn("KEY_COUNT_TOO_LARGE", sink)
-        self.assertIn("KEY_TOO_LARGE", sink)
-        self.assertIn("length > 255", sink)
-        self.assertIn("finance_failure_receipt_v1_readback_verified", self.nodes("16-operations-error-handler.json")["Mark Failure Readback Verified"]["parameters"]["jsCode"])
-        self.assertIn("FAILURE_RECEIPT_EXECUTION_LOG_READBACK_MISMATCH", readback)
-        self.assertIn("PROVIDER_CIRCUIT_READBACK_MISMATCH", self.nodes("16-operations-error-handler.json")["Verify OPEN Circuit Readback"]["parameters"]["jsCode"])
-        receipt = {
-            "execution_id": "exec-1",
-            "workflow_id": "workflow-1",
-            "workflow_name": "Finance Failure Handler",
-            "workflow_code": "OPERATIONS_ERROR_HANDLER",
-            "run_id": "exec-1",
-            "provider_code": "N8N_API",
-            "error_class": "TERMINAL",
-            "error_message_redacted": "safe failure [REDACTED]",
-            "first_seen_at": "2026-08-23T00:00:00.000Z",
-        }
-        lifecycle = self.run_failure_receipt_lifecycle(receipt)
-        self.assertTrue(lifecycle["ok"], lifecycle)
-        self.assertTrue(lifecycle["terminal"]["readback_verified"])
-        self.assertEqual(lifecycle["values"]["finance_failure_receipt_v1_readback_verified"], "true")
-        self.assertEqual(len(lifecycle["values"]), 10)
-        self.assertTrue(all(len(key) <= 50 for key in lifecycle["values"]))
-        self.assertTrue(all(len(value) <= 255 for value in lifecycle["values"].values()))
-        at_value_boundary = self.run_failure_receipt_lifecycle({**receipt, "workflow_name": "x" * 255})
-        self.assertTrue(at_value_boundary["ok"], at_value_boundary)
-        missing_marker = self.run_failure_receipt_lifecycle(receipt, drop_terminal_marker=True)
-        self.assertFalse(missing_marker["ok"])
-        oversized = self.run_failure_receipt_lifecycle({**receipt, "workflow_name": "x" * 256})
-        self.assertFalse(oversized["ok"])
-        self.assertIn("FIELD_TOO_LARGE:workflow_name", oversized["error"])
-        key_overflow = self.run_failure_receipt_lifecycle(receipt, key_prefix="k" * 51)
-        self.assertFalse(key_overflow["ok"])
-        self.assertIn("KEY_TOO_LARGE", key_overflow["error"])
-        key_count_overflow = self.run_failure_receipt_lifecycle(receipt, extra_field=True)
-        self.assertFalse(key_count_overflow["ok"])
-        self.assertIn("KEY_COUNT_TOO_LARGE", key_count_overflow["error"])
+    def test_error_workflow_persists_only_redacted_receipts_with_real_readback(self) -> None:
+        filename = "16-operations-error-handler.json"
+        workflow = self.workflow(filename)
+        nodes = self.nodes(filename)
+        self.assertFalse(workflow["meta"]["sharedCircuitBreaker"])
+        self.assertEqual(workflow["meta"]["failureReceiptTable"], "finance_execution_failures")
+        self.assertEqual(workflow["settings"]["saveDataSuccessExecution"], "none")
+        self.assertEqual(workflow["settings"]["saveDataErrorExecution"], "none")
+        self.assertNotIn("Circuit", json.dumps(workflow["connections"]))
+        for name, operation in [("Upsert Durable Failure Receipt", "upsert"), ("Read Back Failure Receipt", "get"), ("Mark Failure Readback Verified", "update"), ("Read Back Verified Failure Receipt", "get")]:
+            node = nodes[name]
+            self.assertEqual(node["type"], "n8n-nodes-base.dataTable")
+            self.assertEqual(node["parameters"]["operation"], operation)
+            self.assertEqual(node["parameters"]["dataTableId"]["value"], "finance_execution_failures")
+            self.assertEqual(node["parameters"]["filters"]["conditions"][0]["keyName"], "execution_id")
+            self.assertTrue(node["alwaysOutputData"])
+        raw = {"execution": {"id": "exec-1", "lastNodeExecuted": "Fetch Outlook", "error": {"message": "password: super-secret; jane@example.com 1234567890123456", "httpCode": 503}}, "workflow": {"id": "workflow-1", "name": "Finance acquisition"}}
+        redaction = self.run_exported_workflow_node(filename, "Redact and Classify Failure", raw, {})
+        self.assertTrue(redaction["ok"], redaction)
+        receipt = redaction["output"][0]["json"]
+        for sensitive in ["super-secret", "jane@example.com", "1234567890123456"]:
+            self.assertNotIn(sensitive, json.dumps(receipt))
+        self.assertEqual(receipt["error_class"], "TRANSIENT")
+        references = {"Redact and Classify Failure": {"json": receipt}}
+        for name, verified in [("Compare Failure Receipt Readback", False), ("Verify Durable Failure Receipt", True)]:
+            observed = {**receipt, "readback_verified": verified}
+            result = self.run_exported_workflow_node_with_items(filename, name, [observed], references)
+            self.assertTrue(result["ok"], result)
+            for invalid in [[], [{}], [observed, observed], [{**observed, "workflow_id": "other"}], [{**observed, "readback_verified": not verified}], [{**observed, "error_message_redacted": "tampered"}]]:
+                result = self.run_exported_workflow_node_with_items(filename, name, invalid, references)
+                self.assertFalse(result["ok"], result)
+        missing_identity = self.run_exported_workflow_node(filename, "Redact and Classify Failure", {"execution": {}, "workflow": {}}, {})
+        self.assertFalse(missing_identity["ok"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
         handoff = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")
@@ -2019,7 +1903,7 @@ try {{
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         self.assertEqual(manifest["target_schema_contract"]["digest"], canonical_digest)
         self.assertEqual(workflow["meta"]["targetSchemaDigest"], canonical_digest)
-        self.assertIn(canonical_digest, nodes["Verify Four-Table Target Contract"]["parameters"]["jsCode"])
+        self.assertIn(canonical_digest, nodes["Verify Canonical Target Contract"]["parameters"]["jsCode"])
         self.assertIn(canonical_digest, nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"])
 
     def test_retained_four_table_readback_receipt_schema_accepts_redacted_fixture(self) -> None:
@@ -2287,7 +2171,7 @@ try {{
             nodes["Verify Application Contract Bundle Digest and Maps"]["type"],
             "n8n-nodes-base.code",
         )
-        target_guard = nodes["Verify Four-Table Target Contract"]["parameters"]["jsCode"]
+        target_guard = nodes["Verify Canonical Target Contract"]["parameters"]["jsCode"]
         self.assertIn("TARGET_TABLE_SET_MISMATCH", target_guard)
         self.assertIn("TARGET_SCHEMA_TYPE_UNSUPPORTED", target_guard)
         receipt = nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"]
@@ -2298,7 +2182,7 @@ try {{
     def test_platform_bootstrap_readback_rejects_partial_extra_type_and_id_drift(self) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
-        verifier = nodes["Verify Four Target Table Readback"]["parameters"]["jsCode"]
+        verifier = nodes["Verify Canonical Target Table Readback"]["parameters"]["jsCode"]
         matrix = load_json(N8N / "data-table-migration-matrix.json")
         contract = {
             "target_tables": matrix["targets"],
@@ -2347,7 +2231,7 @@ const contract = {json.dumps(contract)};
 const created = {json.dumps(created)};
 const inputRows = {json.dumps(rows)};
 function $(name) {{
-  if (name === 'Verify Four-Table Target Contract') return {{ first: () => ({{ json: contract }}) }};
+  if (name === 'Verify Canonical Target Contract') return {{ first: () => ({{ json: contract }}) }};
   return {{ first: () => ({{ json: created[name.replace('Create or Reuse ', '')] || {{}} }}) }};
 }}
 const $input = {{ all: () => inputRows.map(json => ({{ json }})) }};
@@ -2429,7 +2313,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 18)
+        self.assertEqual(len(manifest["workflows"]), 19)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
@@ -2661,7 +2545,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(sol["default_execution_forbidden"])
         self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
         self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
-        self.assertEqual(scenarios["error_redaction"]["receipt_sink"], "n8n_execution_history")
+        self.assertEqual(scenarios["error_redaction"]["receipt_sink"], "finance_execution_failures")
         self.assertEqual(
             set(manifest["blocked_runtime_scenarios"]),
             {

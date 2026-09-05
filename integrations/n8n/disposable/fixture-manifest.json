@@ -6,7 +6,7 @@
   "source_workflow_sha256": {
     "09-ai-proposal.json": "899a2115c96195f911c06c3269348e67aec10768bbb2d5aec9de0efe09777df8",
     "12-outlook-message-sweep.json": "f49436c06e8ef6d507e051b20c191d60fb764233f73959212327dd7c237c8c86",
-    "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
+    "16-operations-error-handler.json": "41a0b48c97d7cc658c59714f73da5916a28863389aef48ca732023e79c507672",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
   },
@@ -79,7 +79,12 @@
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "fef6a536a8ded59ee177dc542c4be7b9cf062b9781c618859e9873091634c15d"
+      "sha256": "babff85ac9408e43ea73b89e1df1f6f4b02576c1def011979ad15b76f2cd9fd7"
+    },
+    {
+      "file": "108-error-persistence-readback.json",
+      "id": "90000000-0000-4000-8000-000000000921",
+      "sha256": "0045ac2ea1a4cc7d511e27f6e20cfe1107f82006bc1eb2b5127be68552d6e13d"
     },
     {
       "file": "102-derived-recovery-core.json",
@@ -187,12 +192,17 @@
     "error_redaction": {
       "workflow_id": "90000000-0000-4000-8000-000000000916",
       "expected_exit": 0,
-      "receipt_sink": "n8n_execution_history",
+      "receipt_sink": "finance_execution_failures",
       "forbidden_readback": [
         "DontLeak",
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
         "4111111111111111"
       ]
+    },
+    "error_persistence_readback": {
+      "workflow_id": "90000000-0000-4000-8000-000000000921",
+      "expected_exit": 0,
+      "read_only": true
     },
     "outbox_recovery": {
       "workflow_ids": [

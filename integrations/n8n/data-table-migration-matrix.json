@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "81e90a29803bd4de7d6974cc5d072aa768529968",
+    "finance_commit": "b60c714392c7770082af20a1fb076ba8ecee98db",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "ee2e92f5977e2653f17c45f87a7801cff68f596307823f3a25021e149088dbda",
+    "node_scan_corpus_sha256": "066746843ab5efc7cf90dacbb9ea241563e22eef8b35c22b9e2ae1ead5b5c9b1",
     "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -19,9 +19,101 @@
     "finance_ingestion_state",
     "finance_documents",
     "finance_actual_batches",
-    "finance_ai_reviews"
+    "finance_ai_reviews",
+    "finance_execution_failures"
   ],
   "target_schemas": {
+    "finance_execution_failures": {
+      "logical_key": [
+        "execution_id"
+      ],
+      "identity_derivations": [
+        {
+          "source_table": "finance_execution_failures",
+          "strategy": "direct",
+          "target_key": [
+            "execution_id"
+          ],
+          "source_fields": [
+            "execution_id"
+          ]
+        }
+      ],
+      "columns": {
+        "execution_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.execution_id"
+          ]
+        },
+        "workflow_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.workflow_id"
+          ]
+        },
+        "workflow_name": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.workflow_name"
+          ]
+        },
+        "workflow_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.workflow_code"
+          ]
+        },
+        "run_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.run_id"
+          ]
+        },
+        "provider_code": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.provider_code"
+          ]
+        },
+        "error_class": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.error_class"
+          ]
+        },
+        "error_message_redacted": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.error_message_redacted"
+          ]
+        },
+        "first_seen_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_execution_failures.first_seen_at"
+          ]
+        },
+        "acknowledged_at": {
+          "type": "date",
+          "source_bindings": [
+            "finance_execution_failures.acknowledged_at"
+          ]
+        },
+        "replay_execution_id": {
+          "type": "string",
+          "source_bindings": [
+            "finance_execution_failures.replay_execution_id"
+          ]
+        },
+        "readback_verified": {
+          "type": "boolean",
+          "source_bindings": [
+            "finance_execution_failures.readback_verified"
+          ]
+        }
+      }
+    },
     "finance_ingestion_state": {
       "logical_key": [
         "source_code"
@@ -996,9 +1088,9 @@
     "producer_nodes_equal_write_mapping_plus_schema_creation": true,
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
-      "keep": 104,
+      "keep": 116,
       "transform": 59,
-      "remove": 52
+      "remove": 40
     }
   },
   "tables": [
@@ -4951,218 +5043,218 @@
       ],
       "allowed_states": [],
       "allowed_review_states": [],
-      "target_table": null,
+      "target_table": "finance_execution_failures",
       "target_artifact": null,
-      "owner": "n8n execution history and observability",
+      "owner": "redacted operations failure workflow",
       "retention": "400 days",
       "privacy": "internal redacted telemetry",
-      "rationale": "Use execution history and external observability.",
+      "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup.",
       "node_references": [],
       "columns": [
         {
           "source_column": "execution_id",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "execution_id",
           "constraints": [
             "type:string",
             "logical-key-member"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "workflow_id",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "workflow_id",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "workflow_name",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "workflow_name",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "workflow_code",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "workflow_code",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "run_id",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "run_id",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "provider_code",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "provider_code",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "error_class",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "error_class",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "error_message_redacted",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "error_message_redacted",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "first_seen_at",
           "source_type": "date",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "first_seen_at",
           "constraints": [
             "type:date"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "acknowledged_at",
           "source_type": "date",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "acknowledged_at",
           "constraints": [
             "type:date"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "replay_execution_id",
           "source_type": "string",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "replay_execution_id",
           "constraints": [
             "type:string"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         },
         {
           "source_column": "readback_verified",
           "source_type": "boolean",
-          "disposition": "remove",
-          "target_table": null,
+          "disposition": "keep",
+          "target_table": "finance_execution_failures",
           "target_artifact": null,
-          "target_field": null,
+          "target_field": "readback_verified",
           "constraints": [
             "type:boolean"
           ],
-          "owner": "n8n execution history and observability",
+          "owner": "redacted operations failure workflow",
           "retention": "400 days",
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup."
         }
       ]
     },

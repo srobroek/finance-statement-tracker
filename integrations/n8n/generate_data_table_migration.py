@@ -30,6 +30,7 @@ TARGETS = (
     "finance_documents",
     "finance_actual_batches",
     "finance_ai_reviews",
+    "finance_execution_failures",
 )
 INVENTORY_SCHEMA = "inventory-v1"
 VERIFICATION_SCHEMA = "actual-verification-v2"
@@ -1178,6 +1179,7 @@ class MigrationRunner:
             if row.get("batch_id") not in existing_ids:
                 actual.append(row)
         targets = {
+            "finance_execution_failures": [dict(row) for row in self.source_tables.get("finance_execution_failures", [])],
             "finance_ingestion_state": _map_ingestion(self.source_tables),
             "finance_documents": _map_documents(self.source_tables, alias_resolver),
             "finance_actual_batches": [
@@ -1192,6 +1194,7 @@ class MigrationRunner:
             ],
         }
         logical_keys = {
+            "finance_execution_failures": ("execution_id",),
             "finance_ingestion_state": ("source_code",),
             "finance_documents": ("document_id",),
             "finance_actual_batches": ("idempotency_key",),

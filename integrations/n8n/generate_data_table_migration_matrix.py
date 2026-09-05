@@ -31,6 +31,7 @@ TARGETS = (
     "finance_documents",
     "finance_actual_batches",
     "finance_ai_reviews",
+    "finance_execution_failures",
 )
 DOCUMENT_IDENTITY_FIELDS = {
     "MAIL_LINKED": ("source_sha256", "source_message_id", "source_attachment_id"),
@@ -49,10 +50,28 @@ def _resolver_column(source_type: str, artifact: str, field: str) -> dict[str, A
     return _target_column(source_type, f"{artifact}.{field}")
 
 
-# These are the four executable target contracts.  Source columns may merge
+# These are the executable target contracts.  Source columns may merge
 # only when their target field and type are explicitly listed here; this keeps
 # a migration review from silently collapsing unrelated values into one field.
 TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
+    "finance_execution_failures": {
+        "logical_key": ["execution_id"],
+        "identity_derivations": [{"source_table": "finance_execution_failures", "strategy": "direct", "target_key": ["execution_id"], "source_fields": ["execution_id"]}],
+        "columns": {
+            "execution_id": _target_column("string", "finance_execution_failures.execution_id"),
+            "workflow_id": _target_column("string", "finance_execution_failures.workflow_id"),
+            "workflow_name": _target_column("string", "finance_execution_failures.workflow_name"),
+            "workflow_code": _target_column("string", "finance_execution_failures.workflow_code"),
+            "run_id": _target_column("string", "finance_execution_failures.run_id"),
+            "provider_code": _target_column("string", "finance_execution_failures.provider_code"),
+            "error_class": _target_column("string", "finance_execution_failures.error_class"),
+            "error_message_redacted": _target_column("string", "finance_execution_failures.error_message_redacted"),
+            "first_seen_at": _target_column("date", "finance_execution_failures.first_seen_at"),
+            "acknowledged_at": _target_column("date", "finance_execution_failures.acknowledged_at"),
+            "replay_execution_id": _target_column("string", "finance_execution_failures.replay_execution_id"),
+            "readback_verified": _target_column("boolean", "finance_execution_failures.readback_verified"),
+        },
+    },
     "finance_ingestion_state": {
         "logical_key": ["source_code"],
         "identity_derivations": [
@@ -575,10 +594,11 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
     },
     "finance_execution_failures": {
         "logical_key": ["execution_id"],
-        "owner": "n8n execution history and observability",
+        "target_table": "finance_execution_failures",
+        "owner": "redacted operations failure workflow",
         "retention": "400 days",
         "privacy": "internal redacted telemetry",
-        "rationale": "Use execution history and external observability.",
+        "rationale": "Retain redacted failure receipts: disabled raw execution persistence deletes customData before its metadata save hook; native table readback survives execution cleanup.",
     },
     "finance_mcp_requests": {
         "logical_key": ["request_id"],
@@ -608,7 +628,6 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
 REMOVE_TABLES = {
     "finance_pipeline_runs",
     "finance_provider_circuits",
-    "finance_execution_failures",
     "finance_mcp_requests",
 }
 
@@ -880,6 +899,8 @@ def ref_key(reference: dict[str, Any]) -> str:
 
 def target_for(table_name: str, column: str) -> dict[str, Any]:
     metadata = TABLE_METADATA[table_name]
+    if table_name == "finance_execution_failures":
+        return {"disposition": "keep", "target_table": table_name, "target_artifact": None, "target_field": column}
     if table_name in REMOVE_TABLES:
         return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
     if table_name in ARTIFACT_PREFIXES:
@@ -1247,7 +1268,7 @@ def validate_target_mappings(
 ) -> None:
     """Reject unknown targets, type drift, and undeclared source coalescing."""
     if set(target_schemas) != set(TARGETS):
-        raise MatrixError("target schemas must contain exactly the four approved targets")
+        raise MatrixError("target schemas must contain exactly the approved targets")
     if target_schemas != TARGET_SCHEMAS:
         raise MatrixError("target schema payload differs from the generator contract")
     validate_identity_derivations(tables, target_schemas)

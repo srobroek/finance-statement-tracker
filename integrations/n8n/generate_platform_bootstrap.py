@@ -669,7 +669,7 @@ def target_bootstrap_document(
     schema_digest: str,
     legacy_tables: list[str],
 ) -> dict:
-    """Build the manual-only W19 document after its four-table readback."""
+    """Build the manual-only W19 document after its canonical-table readback."""
     nodes.append({
         "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
         "name": "Stage 1 · Manual Platform Bootstrap Only to Emit Redacted Bootstrap Receipt",
@@ -678,7 +678,7 @@ def target_bootstrap_document(
         "position": [-1160, -180],
         "parameters": {
             "content": (
-                "## Stage 1 · Four-table schema bootstrap\\n"
+                "## Stage 1 · Canonical schema bootstrap\\n"
                 "**Input:** Manual Platform Bootstrap Only  ·  **Output:** canonical native table-list "
                 "readback and redacted receipt\\nPartial, extra, mismatched, or ID-drifting schemas fail closed."
             ),
@@ -865,7 +865,7 @@ def build_workflow(
 
     if matrix is not None:
         targets, target_schemas, target_schema_digest = target_schema_contract(matrix)
-        target_guard_name = "Verify Four-Table Target Contract"
+        target_guard_name = "Verify Canonical Target Contract"
         nodes.append({
             "id": "19000-target-guard",
             "name": target_guard_name,
@@ -951,7 +951,7 @@ def build_workflow(
         })
         connections[upsert_templates] = {"main": [[{"node": collapse_templates, "type": "main", "index": 0}]]}
         previous = collapse_templates
-        list_name = "List Four Target Tables"
+        list_name = "List Canonical Target Tables"
         nodes.append(data_table_node(
             "19090",
             list_name,
@@ -963,7 +963,7 @@ def build_workflow(
         }
         previous = list_name
 
-        readback_name = "Verify Four Target Table Readback"
+        readback_name = "Verify Canonical Target Table Readback"
         nodes.append({
             "id": "19091",
             "name": readback_name,
@@ -972,16 +972,16 @@ def build_workflow(
             "position": [1680, 0],
             "parameters": {
                 "jsCode": r"""
-const contract = $('Verify Four-Table Target Contract').first().json;
+const contract = $('Verify Canonical Target Contract').first().json;
 const expected = contract.target_tables;
 const rows = $input.all().map(item => item.json || {});
-if (!Array.isArray(expected) || expected.length !== 4) throw new Error('TARGET_TABLE_SET_MISMATCH');
+if (!Array.isArray(expected) || expected.length !== Object.keys(contract.target_schemas || {}).length || expected.length === 0) throw new Error('TARGET_TABLE_SET_MISMATCH');
 const names = rows.map(row => String(row.name || ''));
 const duplicateNames = names.filter((name, index) => name && names.indexOf(name) !== index);
 if (duplicateNames.length) throw new Error('TARGET_TABLE_DUPLICATE:' + duplicateNames[0]);
 const unexpectedTarget = rows.find(row => {
   const name = String(row.name || '');
-  return /^finance_(ingestion_state|documents|actual_batches|ai_reviews)(?:[_-]|$)/.test(name) && !expected.includes(name);
+  return /^finance_(ingestion_state|documents|actual_batches|ai_reviews|execution_failures)(?:[_-]|$)/.test(name) && !expected.includes(name);
 });
 if (unexpectedTarget) throw new Error('TARGET_TABLE_EXTRA:' + String(unexpectedTarget.name));
 const observed = new Map(rows.filter(row => expected.includes(String(row.name || ''))).map(row => [String(row.name), row]));

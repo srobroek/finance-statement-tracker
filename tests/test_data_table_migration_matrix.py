@@ -84,7 +84,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
                 "producer_node_edges": 121,
             },
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 104, "transform": 59, "remove": 52})
+        self.assertEqual(invariants["dispositions"], {"keep": 116, "transform": 59, "remove": 40})
         tables = load_json(N8N / "data-tables.json")["tables"]
         self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
         self.assertEqual(
@@ -238,6 +238,7 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             "finance_documents",
             "finance_actual_batches",
             "finance_ai_reviews",
+            "finance_execution_failures",
         }
         self.assertEqual(set(self.matrix["target_schemas"]), expected_targets)
         for target, schema in self.matrix["target_schemas"].items():

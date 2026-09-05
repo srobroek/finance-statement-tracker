@@ -382,14 +382,25 @@ def build_error_redaction_fixture() -> dict:
         [-600, 0],
     )
     workflow["nodes"].insert(1, emit)
+    schema = next(table for table in read_json(PRODUCTION.parent / "data-tables.json")["tables"] if table["name"] == "finance_execution_failures")
+    create = {"id": "fixture-failure-table", "name": "Create Disposable Failure Table", "type": "n8n-nodes-base.dataTable", "typeVersion": 1.1, "position": [-900, 0], "parameters": {"resource": "table", "operation": "create", "tableName": "finance_execution_failures", "columns": {"column": [{"name": key, "type": value} for key, value in schema["columns"].items()]}, "options": {"createIfNotExists": True}}}
+    workflow["nodes"].insert(1, create)
     workflow["connections"].pop(old_name, None)
-    workflow["connections"][trigger["name"]] = {
-        "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
-    }
+    workflow["connections"][trigger["name"]] = {"main": [[{"node": create["name"], "type": "main", "index": 0}]]}
+    workflow["connections"][create["name"]] = {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}
     workflow["connections"][emit["name"]] = {
         "main": [[{"node": "Redact and Classify Failure", "type": "main", "index": 0}]]
     }
     return workflow
+
+
+def build_failure_persistence_readback() -> dict:
+    production = read_json(PRODUCTION / "16-operations-error-handler.json")
+    read = copy.deepcopy(next(node for node in production["nodes"] if node["name"] == "Read Back Verified Failure Receipt"))
+    read["parameters"]["filters"]["conditions"][0]["keyValue"] = "fixture-error-redaction"
+    trigger = manual_node("failure-readback-trigger")
+    terminal = code_node("failure-readback-terminal", "Verify Durable Failure Receipt", "const rows=$input.all().map(item=>item.json); if(rows.length!==1 || rows[0].execution_id!=='fixture-error-redaction' || rows[0].readback_verified!==true) throw new Error('PERSISTED_FAILURE_RECEIPT_MISSING'); return [{json:{...rows[0],terminal_receipt_sink:'finance_execution_failures'}}];", [600,0])
+    return {"id":"90000000-0000-4000-8000-000000000921", "name":"DISPOSABLE ONLY · Read Persisted Failure Receipt", "active":False, "nodes":[trigger,read,terminal], "connections":{trigger["name"]:{"main":[[{"node":read["name"],"type":"main","index":0}]]},read["name"]:{"main":[[{"node":terminal["name"],"type":"main","index":0}]]}}, "settings":fixture_settings(), "meta":{"disposableOnly":True,"productionImportForbidden":True,"derivedFrom":"16-operations-error-handler.json"}}
 
 
 def build_recovery_core() -> dict:
@@ -522,6 +533,7 @@ def build_all() -> dict[str, dict]:
         "106-ai-positive-luna.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000911", "luna"),
         "107-ai-positive-sol-gated.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000912", "sol"),
         "101-error-redaction.json": build_error_redaction_fixture(),
+        "108-error-persistence-readback.json": build_failure_persistence_readback(),
         "102-derived-recovery-core.json": build_recovery_core(),
         "103-recover-prepared.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000918", "PREPARED"),
         "104-recover-actual-observed.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"),
@@ -666,7 +678,8 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
             "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
             "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "n8n_execution_history", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
+            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
+            "error_persistence_readback": {"workflow_id": "90000000-0000-4000-8000-000000000921", "expected_exit": 0, "read_only": True},
             "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
         }
     fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}

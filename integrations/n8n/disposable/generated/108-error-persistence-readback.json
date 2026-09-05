@@ -1,0 +1,97 @@
+{
+  "id": "90000000-0000-4000-8000-000000000921",
+  "name": "DISPOSABLE ONLY · Read Persisted Failure Receipt",
+  "active": false,
+  "nodes": [
+    {
+      "id": "failure-readback-trigger",
+      "name": "Run Disposable Fixture",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "16007",
+      "name": "Read Back Verified Failure Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_execution_failures",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "fixture-error-redaction"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "failure-readback-terminal",
+      "name": "Verify Durable Failure Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const rows=$input.all().map(item=>item.json); if(rows.length!==1 || rows[0].execution_id!=='fixture-error-redaction' || rows[0].readback_verified!==true) throw new Error('PERSISTED_FAILURE_RECEIPT_MISSING'); return [{json:{...rows[0],terminal_receipt_sink:'finance_execution_failures'}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Run Disposable Fixture": {
+      "main": [
+        [
+          {
+            "node": "Read Back Verified Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Failure Receipt": {
+      "main": [
+        [
+          {
+            "node": "Verify Durable Failure Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
+  },
+  "meta": {
+    "disposableOnly": true,
+    "productionImportForbidden": true,
+    "derivedFrom": "16-operations-error-handler.json"
+  }
+}

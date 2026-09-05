@@ -53,7 +53,8 @@
         "finance_ingestion_state",
         "finance_documents",
         "finance_actual_batches",
-        "finance_ai_reviews"
+        "finance_ai_reviews",
+        "finance_execution_failures"
       ]
     },
     "target_schemas": {
@@ -63,13 +64,15 @@
         "finance_ingestion_state",
         "finance_documents",
         "finance_actual_batches",
-        "finance_ai_reviews"
+        "finance_ai_reviews",
+        "finance_execution_failures"
       ],
       "properties": {
         "finance_ingestion_state": {"$ref": "#/$defs/target_schema"},
         "finance_documents": {"$ref": "#/$defs/target_schema"},
         "finance_actual_batches": {"$ref": "#/$defs/target_schema"},
-        "finance_ai_reviews": {"$ref": "#/$defs/target_schema"}
+        "finance_ai_reviews": {"$ref": "#/$defs/target_schema"},
+        "finance_execution_failures": {"$ref": "#/$defs/target_schema"}
       }
     },
     "invariants": {
