@@ -411,7 +411,8 @@ try {
             "source": "outlook:rakbank",
             "completed_at": "2026-08-20T00:00:00.000Z",
             "cursor": "2026-08-20T00:00:00.000Z",
-            "messages": [],
+            "scanned_count": 0, "accepted_count": 0,
+            "ignored_count": 0, "review_count": 0, "message_dispositions": [],
         }
         verified = self.execute_code_node(
             workflow,
@@ -420,22 +421,22 @@ try {
                 "cursor_candidate": envelope["cursor"],
                 "cursor_committed": False,
                 "parse": {"scanned_count": 0, "accepted_count": 0},
-                "service_receipt": receipt,
+                "service_receipt": {**receipt, **envelope, "scan_dispositions": {"ignored_count": 0, "review_count": 0, "message_dispositions": []}},
             },
-            refs={"Build Frozen Mailbox Envelope": envelope},
+            refs={"Assemble Complete Scan Receipt": envelope},
         )
         self.assertTrue(verified["ok"], verified)
         self.assertEqual(verified["output"][0]["json"]["service_receipt"], receipt)
         self.assert_code_error(
             workflow,
             "Verify Service Receipt Before Cursor",
-            "service receipt identity is required",
+            "COMPLETE_SCAN_RECEIPT_REQUIRED",
             json_value={
                 "cursor_candidate": envelope["cursor"],
                 "cursor_committed": False,
                 "parse": {"scanned_count": 0, "accepted_count": 0},
             },
-            refs={"Build Frozen Mailbox Envelope": envelope},
+            refs={"Assemble Complete Scan Receipt": envelope},
         )
 
     def test_partial_service_result_cannot_create_commit_payload(self):

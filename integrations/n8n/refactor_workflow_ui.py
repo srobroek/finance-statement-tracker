@@ -226,7 +226,7 @@ def format_code_nodes(workflows: list[dict]) -> None:
         node
         for workflow in workflows
         for node in workflow["nodes"]
-        if node["type"] == "n8n-nodes-base.code"
+        if node["type"] == "n8n-nodes-base.code" and "jsCode" in node["parameters"]
     ]
     payload = []
     for node in nodes:
@@ -776,6 +776,109 @@ if (ids.size !== messages.length || Number(sweep.matched_count) !== messages.len
 return [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, source_code: p.source_code,
   window_start: p.window_start, completed_at: p.run_upper_bound, cursor: p.run_upper_bound,
   scanned_count: sweep.scanned_count, matched_count: sweep.matched_count, heartbeat: messages.length === 0, messages } }];
+""".strip()
+    # Normalize inside the task runner; only compact individual events cross
+    # the companion API boundary. A zero-event scan still traverses the loop
+    # once as an explicit marker and commits a verified heartbeat receipt.
+    if any(node["name"] == "Parse and Upsert Cashback Events" for node in cashback["nodes"]):
+        rename_node(cashback, "Parse and Upsert Cashback Events", "Upsert One Cashback Transaction")
+    upsert = node_by_name(cashback, "Upsert One Cashback Transaction")
+    upsert["parameters"]["url"] = "http://cashback:5010/api/ingest/transaction"
+    upsert["parameters"]["jsonBody"] = "={{ {source:$json.source,completed_at:$json.completed_at,cursor:$json.cursor,event:$json.event} }}"
+    additions = [
+        ("w02-normalize-notifications", "Normalize Archived Notifications", "n8n-nodes-base.code", 2, {
+            "language": "pythonNative", "mode": "runOnceForAllItems",
+            "pythonCode": "from finance_tracker.n8n_notifications import normalize_archived_mailbox\nreturn [{'json': normalize_archived_mailbox(_items[0]['json'])}]"}),
+        ("w02-split-transactions", "Split Compact Cashback Transactions", "n8n-nodes-base.code", 2, {"jsCode": r"""
+const batch = $json;
+if (!Array.isArray(batch.events) || batch.events.length !== batch.accepted_count)
+  throw new Error('NORMALIZED_TRANSACTION_COUNT_MISMATCH');
+const context = {source:batch.source,completed_at:batch.completed_at,cursor:batch.cursor};
+return batch.events.length ? batch.events.map(event => ({json:{...context,event},pairedItem:{item:0}}))
+  : [{json:{...context,empty_scan:true},pairedItem:{item:0}}];
+""".strip()}),
+        ("w02-loop-transactions", "Ingest One Transaction at a Time", "n8n-nodes-base.splitInBatches", 3, {"batchSize": 1, "options": {}}),
+        ("w02-transaction-present", "Compact Transaction Present", "n8n-nodes-base.if", 2.2, {
+            "conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"}, "combinator": "and", "conditions": [
+                {"leftValue": "={{ $json.empty_scan !== true }}", "rightValue": True, "operator": {"type": "boolean", "operation": "true", "singleValue": True}}]}}),
+        ("w02-verify-transaction", "Verify Individual Transaction Receipt", "n8n-nodes-base.code", 2, {"jsCode": r"""
+const expected = $('Ingest One Transaction at a Time').item.json, response = $json, receipt = response.service_receipt;
+if (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt
+    || receipt.receipt_kind !== 'TRANSACTION' || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))
+  throw new Error('TRANSACTION_RECEIPT_REQUIRED');
+for (const field of ['source','completed_at','cursor']) if (field === 'completed_at'
+    ? !Number.isFinite(Date.parse(receipt[field])) || Date.parse(receipt[field]) !== Date.parse(expected[field])
+    : receipt[field] !== expected[field])
+  throw new Error('TRANSACTION_RECEIPT_CONTEXT_MISMATCH:' + field);
+if (receipt.scanned_count !== 1 || receipt.accepted_count !== 1 || !Array.isArray(receipt.event_ids)
+    || receipt.event_ids.length !== 1 || receipt.event_ids[0] !== expected.event.source_event_id)
+  throw new Error('TRANSACTION_RECEIPT_EVENT_MISMATCH');
+return [{json:{source_event_id:expected.event.source_event_id,receipt_id:receipt.receipt_id,receipt_sha256:receipt.receipt_sha256}}];
+""".strip()}),
+        ("w02-aggregate-transactions", "Assemble Complete Scan Receipt", "n8n-nodes-base.code", 2, {"jsCode": r"""
+const batch = $('Normalize Archived Notifications').first().json, rows = $input.all().map(item => item.json);
+const expectedIds = batch.events.map(event => event.source_event_id).sort();
+const receipts = rows.filter(row => row.empty_scan !== true);
+const observedIds = receipts.map(row => row.source_event_id).sort();
+if (JSON.stringify(observedIds) !== JSON.stringify(expectedIds) || new Set(observedIds).size !== observedIds.length)
+  throw new Error('SCAN_TRANSACTION_RECEIPT_COVERAGE_MISMATCH');
+if (!expectedIds.length && (rows.length !== 1 || rows[0].empty_scan !== true))
+  throw new Error('EMPTY_SCAN_MARKER_REQUIRED');
+if (batch.scanned_count !== batch.accepted_count + batch.ignored_count + batch.review_count
+    || batch.message_dispositions.length !== batch.scanned_count)
+  throw new Error('SCAN_DISPOSITION_COUNTS_MISMATCH');
+const {events, ...manifest} = batch;
+return [{json:{...manifest,receipts:receipts.map(({receipt_id,receipt_sha256}) => ({receipt_id,receipt_sha256}))}}];
+""".strip()}),
+    ]
+    for node_id, name, kind, version, parameters in additions:
+        existing = next((node for node in cashback["nodes"] if node["name"] == name), None)
+        if existing is None:
+            cashback["nodes"].append({"id":node_id,"name":name,"type":kind,"typeVersion":version,"position":[0,0],"parameters":parameters})
+        else:
+            existing["parameters"] = parameters
+    if not any(node["name"] == "Persist Aggregate Scan Receipt" for node in cashback["nodes"]):
+        aggregate_http = json.loads(json.dumps(upsert))
+        aggregate_http.update(id="w02-persist-scan-receipt", name="Persist Aggregate Scan Receipt")
+        cashback["nodes"].append(aggregate_http)
+    aggregate_http = node_by_name(cashback, "Persist Aggregate Scan Receipt")
+    aggregate_http["parameters"]["url"] = "http://cashback:5010/api/ingest/receipt"
+    aggregate_http["parameters"]["jsonBody"] = "={{ $json }}"
+    for source, target in [
+        ("Build Frozen Mailbox Envelope", "Normalize Archived Notifications"),
+        ("Normalize Archived Notifications", "Split Compact Cashback Transactions"),
+        ("Split Compact Cashback Transactions", "Ingest One Transaction at a Time"),
+        ("Upsert One Cashback Transaction", "Verify Individual Transaction Receipt"),
+        ("Verify Individual Transaction Receipt", "Ingest One Transaction at a Time"),
+        ("Assemble Complete Scan Receipt", "Persist Aggregate Scan Receipt"),
+        ("Persist Aggregate Scan Receipt", "Verify Service Receipt Before Cursor"),
+    ]:
+        cashback["connections"][source] = {"main":[[{"node":target,"type":"main","index":0}]]}
+    cashback["connections"]["Ingest One Transaction at a Time"] = {"main":[
+        [{"node":"Assemble Complete Scan Receipt","type":"main","index":0}],
+        [{"node":"Compact Transaction Present","type":"main","index":0}],
+    ]}
+    cashback["connections"]["Compact Transaction Present"] = {"main":[
+        [{"node":"Upsert One Cashback Transaction","type":"main","index":0}],
+        [{"node":"Ingest One Transaction at a Time","type":"main","index":0}],
+    ]}
+    node_by_name(cashback, "Verify Service Receipt Before Cursor")["parameters"]["jsCode"] = r"""
+const expected = $('Assemble Complete Scan Receipt').first().json, response = $json, receipt = response.service_receipt;
+if (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt
+    || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))
+  throw new Error('COMPLETE_SCAN_RECEIPT_REQUIRED');
+for (const field of ['source','completed_at','cursor','scanned_count','accepted_count'])
+  if (field === 'completed_at'
+      ? !Number.isFinite(Date.parse(receipt[field])) || Date.parse(receipt[field]) !== Date.parse(expected[field])
+      : receipt[field] !== expected[field]) throw new Error('COMPLETE_SCAN_RECEIPT_MISMATCH:' + field);
+const proof = receipt.scan_dispositions;
+const dispositions = rows => Array.isArray(rows) ? rows.map(row => [row.message_id,row.status,row.source_event_id ?? null,row.reason ?? null]) : null;
+if (!proof || proof.ignored_count !== expected.ignored_count || proof.review_count !== expected.review_count
+    || JSON.stringify(dispositions(proof.message_dispositions)) !== JSON.stringify(dispositions(expected.message_dispositions)))
+  throw new Error('COMPLETE_SCAN_DISPOSITION_PROOF_MISMATCH');
+return [{json:{source:expected.source,completed_at:expected.completed_at,cursor:expected.cursor,
+ scanned_count:expected.scanned_count,accepted_count:expected.accepted_count,
+ service_receipt:{receipt_id:receipt.receipt_id,receipt_sha256:receipt.receipt_sha256}}}];
 """.strip()
     build_commit_request = r"""
 const source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;

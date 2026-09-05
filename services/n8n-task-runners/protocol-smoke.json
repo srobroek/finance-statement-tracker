@@ -2,14 +2,19 @@
   "id": "finance-task-runners-protocol-smoke",
   "name": "Finance task runners protocol smoke",
   "active": false,
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "nodes": [
     {
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "finance-task-runners-protocol-smoke",
@@ -23,7 +28,10 @@
       "name": "JavaScript Runner",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0],
+      "position": [
+        240,
+        0
+      ],
       "parameters": {
         "language": "javaScript",
         "mode": "runOnceForAllItems",
@@ -35,20 +43,39 @@
       "name": "Python Runner",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0],
+      "position": [
+        480,
+        0
+      ],
       "parameters": {
         "language": "pythonNative",
         "mode": "runOnceForAllItems",
-        "pythonCode": "return [{'json': {'js_runner': _items[0]['json']['js_runner'], 'python_runner': 'ok', 'value': _items[0]['json']['value'] * 2}}]"
+        "pythonCode": "from finance_tracker.n8n_notifications import normalize_archived_mailbox\nbatch = normalize_archived_mailbox({'source':'outlook:rakbank','source_code':'RAKBANK_CARD_TRANSACTION','completed_at':'2026-08-18T00:00:00Z','cursor':'2026-08-18T00:00:00Z','window_start':'2026-08-17T00:00:00Z','matched_count':0,'messages':[]})\nreturn [{'json': {'js_runner': _items[0]['json']['js_runner'], 'python_runner': 'ok', 'value': _items[0]['json']['value'] * 2, 'finance_parser':'ok', 'quiet_scan_count':batch['scanned_count']}}]"
       }
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "JavaScript Runner", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "JavaScript Runner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "JavaScript Runner": {
-      "main": [[{ "node": "Python Runner", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Python Runner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   }
 }

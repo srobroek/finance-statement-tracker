@@ -20,3 +20,22 @@ older vulnerable base-layer package.
 
 The image contains no finance credentials or writable finance data. Production
 deployment is outside this repository-only phase.
+
+### Canonical notification normalization
+
+The Python runner image includes the repository's `finance_tracker` package,
+versioned configuration and provenance fixtures under `/opt/finance`. A venv
+`.pth` entry loads that immutable package even with Python isolated mode (`-I`).
+Only `finance_tracker,jsonschema_specifications` is added to `N8N_RUNNERS_EXTERNAL_ALLOW`; the second package contains the schema resources loaded by jsonschema. Transitive imports remain disabled and existing runner
+security settings remain in effect. If deployment mounts a launcher JSON file,
+set the Python runner's `env-overrides.N8N_RUNNERS_EXTERNAL_ALLOW` to the same
+`finance_tracker,jsonschema_specifications` value before using W02.
+
+W02 imports `normalize_archived_mailbox` and emits compact transaction records
+plus one disposition per archived message. It sends each accepted event to the
+Cashback API separately, verifies every child receipt, then persists an aggregate
+scan receipt before committing the cursor. A quiet scan follows an explicit
+zero-event path and records the same durable heartbeat. The protocol smoke now
+requires the canonical parser import and a successful zero-event normalization;
+the disposable Cashback harness separately verifies individual HTTP ingestion,
+replay, restart and a quiet heartbeat without changing stored buckets.
