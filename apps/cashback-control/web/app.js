@@ -68,6 +68,12 @@ function compactMoney(value) {
   return money.format(amount);
 }
 
+function exactMoney(value) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency", currency: baseCurrency, maximumFractionDigits: 2,
+  }).format(Number(value));
+}
+
 function tierLabel(tier) {
   const percentage = tier.code.match(/^TIER_(\d+)$/)?.[1];
   return percentage ? `${percentage}%` : tier.code.replaceAll("_", " ");
@@ -113,13 +119,15 @@ function compactReason(item) {
   const preferred = item.ranked_cards?.[0];
   if (!preferred) return item.reason || "No eligible card route";
   const remaining = Number(preferred.tier_remaining_aed);
-  const gap = remaining > 0 ? ` · ${compactMoney(remaining)} more qualifying spend needed` : "";
+  const gap = remaining > 0 ? ` · ${exactMoney(remaining)} more qualifying spend needed` : "";
   return candidateValueLabel(preferred) + gap;
 }
 
 function routeHeading(item, candidate, compact = false) {
   const code = candidate?.card || item.use_card;
-  return compact ? compactCardLabel(code) : cardLabel(code);
+  const name = compact ? compactCardLabel(code) : cardLabel(code);
+  const method = shortPaymentMethod(candidate?.payment_channel);
+  return method && candidate?.payment_channel !== "UNKNOWN" ? `${name} · ${method}` : name;
 }
 
 function shortPaymentMethod(channel) {
@@ -131,6 +139,14 @@ function shortPaymentMethod(channel) {
 }
 
 function candidateValueLabel(candidate) {
+  const rate = candidateRewardRateLabel(candidate);
+  const fee = Number(candidate.configured_fx_fee_percent);
+  return Number.isFinite(fee) && fee > 0
+    ? `Gross ${rate} · configured FX fee ${fee.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`
+    : rate;
+}
+
+function candidateRewardRateLabel(candidate) {
   const target = candidate.target_rate_percent == null
     ? Number.NaN : Number(candidate.target_rate_percent);
   const current = candidate.current_tier_rate_percent == null
@@ -246,12 +262,12 @@ function renderDecisionTree(items) {
       const bucketText = candidate.position_mode === "UNLIMITED"
         ? `${method} · no cashback cap`
         : cap == null
-        ? `${method} · ${bucketLabel(candidate.bucket)} · ${compactMoney(candidate.bucket_spend_aed)} · uncapped`
-        : `${method} · ${bucketLabel(candidate.bucket)} ${compactMoney(candidate.bucket_spend_aed)}/${compactMoney(cap)} · ${compactMoney(remaining)} left`;
+        ? `${method} · ${bucketLabel(candidate.bucket)} · ${exactMoney(candidate.bucket_spend_aed)} · uncapped`
+        : `${method} · ${bucketLabel(candidate.bucket)} ${exactMoney(candidate.bucket_spend_aed)}/${exactMoney(cap)} · ${exactMoney(remaining)} left`;
       const tierText = candidate.position_mode === "UNLIMITED"
         ? "No minimum spend · statement-only totals"
         : threshold > 0
-        ? `${compactMoney(candidate.card_spend_aed)} / ${compactMoney(threshold)} qualifying spend · ${compactMoney(candidate.tier_remaining_aed)} to go`
+        ? `${exactMoney(candidate.card_spend_aed)} / ${exactMoney(threshold)} qualifying spend · ${exactMoney(candidate.tier_remaining_aed)} to go`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
       const candidateNode = createNode("li", `candidate-node ${candidate.status.toLowerCase()}`);
       const rank = createNode("div", "candidate-rank");

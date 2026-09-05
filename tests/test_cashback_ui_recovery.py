@@ -203,6 +203,19 @@ assert.equal(context.candidateValueLabel(candidate('ACTIVE_CARD', {
 assert.doesNotMatch(context.candidateValueLabel(candidate('ACTIVE_CARD', {
   current_tier_rate_percent: '10',
 })), /current tier/);
+assert.match(context.routeHeading({}, {card: 'ACTIVE_CARD', payment_channel: 'APPLE_PAY_POS'}, true), /Apple Pay/);
+assert.match(context.routeHeading({}, {card: 'ACTIVE_CARD', payment_channel: 'ONLINE'}), /Online/);
+assert.match(context.exactMoney('49.50'), /49[.,]50/);
+assert.doesNotMatch(context.exactMoney('1050'), /1[.,]1k/);
+assert.match(context.exactMoney('1050'), /1.?050/);
+const foreign = context.candidateValueLabel(candidate('ACTIVE_CARD', {
+  tier_before: 'TIER_1', target_rate_percent: '3', current_tier_rate_percent: '3',
+  configured_fx_fee_percent: '2.99',
+}));
+assert.match(foreign, /Gross 3% cashback/);
+assert.match(foreign, /configured FX fee 2[.,]99%/);
+assert.doesNotMatch(foreign, /net|AED|cycle value/);
+assert.doesNotMatch(context.candidateValueLabel(candidate('ACTIVE_CARD', {configured_fx_fee_percent: '0'})), /fee/);
 assert.equal(context.candidateValueLabel({}), 'Rate unavailable');
 assert.equal(context.candidateValueLabel({ target_rate_percent: null }), 'Rate unavailable');
 assert.match(context.candidateValueLabel(candidate('ACTIVE_CARD', {

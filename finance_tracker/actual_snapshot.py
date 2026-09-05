@@ -485,6 +485,10 @@ def _build_recommendations(
                 "current_tier_rate_percent": _plain(
                     current_tier_rate * Decimal("100")
                 ),
+                "configured_fx_fee_percent": _plain(
+                    program.fx_cost_rate * Decimal("100")
+                    if intent.currency.upper() != program.base_currency else Decimal("0")
+                ),
                 "conditional_target_reward_aed": _plain(
                     candidate.strategic_reward_aed
                 ),
@@ -650,6 +654,10 @@ def _build_routing_graphs(
                 ),
                 "current_tier_rate_percent": _plain(
                     current_tier_rate * Decimal("100")
+                ),
+                "configured_fx_fee_percent": _plain(
+                    program.fx_cost_rate * Decimal("100")
+                    if currency.upper() != program.base_currency else Decimal("0")
                 ),
                 "conditional_target_reward_aed": _plain(
                     candidate.strategic_reward_aed

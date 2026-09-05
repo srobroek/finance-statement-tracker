@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from unittest import TestCase
 
@@ -124,8 +125,23 @@ class CashbackDashboardPhaseTests(TestCase):
         ).hexdigest()
         self.assertEqual(
             digest,
-            "746d883abef5367c106a9cccd94846c1adfdf34049c2b2105a5c9d74beb68f72",
+            "00b6db442f4f04e38d88fe7cd2ee13b30e60e26477184703b60db1df38420495",
         )
+
+    def test_routes_disclose_configured_fx_fee_only_for_foreign_currency(self) -> None:
+        rows = self.rows()
+        cards, programs, _ = _build_card_state(configured_programs(), rows, date(2026, 8, 16), None, "AED")
+        graphs = _build_routing_graphs(programs, cards, rows, self.config["routing_profiles"], self.config["route_policies"])
+        foreign = next(graph for graph in graphs if graph["code"] == "FOREIGN")
+        sc = next(candidate for candidate in foreign["ranked_cards"] if candidate["card"] == "SC_PLATINUM_X")
+        self.assertEqual(Decimal(sc["configured_fx_fee_percent"]), Decimal("2.99"))
+        for graph in graphs:
+            if graph["currency"] == "AED":
+                for candidate in graph["ranked_cards"]:
+                    self.assertEqual(candidate["configured_fx_fee_percent"], "0")
+        recommendations = _build_recommendations(programs, rows, [PaymentIntent("GENERAL", money("100"), "USD", "ONLINE")])
+        sc_quote = next(candidate for candidate in recommendations[0]["ranked_cards"] if candidate["card"] == "SC_PLATINUM_X")
+        self.assertEqual(Decimal(sc_quote["configured_fx_fee_percent"]), Decimal("2.99"))
 
     def test_web_discloses_estimate_and_evidence_status(self) -> None:
         root = Path("apps/cashback-control/web")

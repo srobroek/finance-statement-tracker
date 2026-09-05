@@ -100,7 +100,7 @@ section { margin-top: 14px; }
 .route-main .route-type { overflow: hidden; color: #f4f7f5; font-size: .68rem; font-weight: 800; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
 .route-cards { min-width: 0; display: grid; grid-template-rows: auto auto; gap: 2px; align-content: center; overflow: hidden; }
 .card-choice { min-width: 0; line-height: 1.05; white-space: nowrap; }
-.card-choice.use { overflow: hidden; color: var(--green); font-size: .64rem; text-overflow: ellipsis; }
+.card-choice.use { color: var(--green); font-size: .64rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 .card-choice.unavailable { overflow: hidden; color: var(--amber); font-size: .64rem; font-weight: 700; text-overflow: ellipsis; }
 .avoid-list { min-width: 0; display: flex; justify-content: flex-start; gap: 6px; overflow: hidden; }
 .card-choice.avoid { flex: 0 1 auto; overflow: hidden; color: var(--red); font-size: .56rem; font-weight: 700; text-overflow: ellipsis; }
