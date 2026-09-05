@@ -59,11 +59,13 @@ const roots=new Map(['#cards','#recommendations','#as-of'].map(k=>[k,new Element
 const context=vm.createContext({document:{querySelector:k=>roots.get(k),createElement:t=>new Element(t),createTextNode:t=>t},Intl});
 vm.runInContext(source.slice(0, source.lastIndexOf('\nsetupScreenViews();')),context);
 context.configureDisplay({currency:'AED',cards:[{card:'SC',short_name:'SC Platinum'}]});
-context.renderCards([{name:'RAK World',total_spend_aed:'2450.50',safety_target_aed:'10300',tier:'BASE',buckets:[{code:'RAK_GROCERY',spend_aed:'2450.50',spend_cap_aed:'3000'}]},{name:'EI Amazon',reward_eligibility_verified:false,position_mode:'SPEND',buckets:[{code:'EI_AMAZON',spend_aed:'0',spend_cap_aed:null}]}]);
+context.renderCards([{name:'RAK World',total_spend_aed:'2450.50',safety_target_aed:'10300',tier:'BASE',pace:{status:'UNDER'},buckets:[{code:'RAK_GROCERY',spend_aed:'2450.50',spend_cap_aed:'3000'}]},{name:'EI Amazon',reward_eligibility_verified:false,position_mode:'SPEND',buckets:[{code:'EI_AMAZON',spend_aed:'0',spend_cap_aed:null}]}]);
 const cards=roots.get('#cards');
 assert.equal(cards.children[0].children[0].tag,'details');
 assert.equal(cards.children[0].children[1].tag,'div','buckets remain outside collapsed card details');
 assert.match(cards.textContent,/549[.,]50/);assert.match(cards.textContent,/grocery/);assert.doesNotMatch(cards.textContent,/RAK_GROCERY/);
+assert.match(cards.textContent,/7,849\.50 to AED\s10,300\.00 target/);assert.doesNotMatch(cards.textContent,/under/i);
+assert.equal(context.bucketLabel('SC_FILLER'),'Other spend');assert.equal(context.typeLabel({label:'Ewallet'}),'E-wallet');
 assert.match(cards.textContent,/Reward eligibility unknown/);assert.match(cards.textContent,/Limit unknown/);assert.doesNotMatch(cards.textContent,/No cap/);
 context.renderRecommendations([{label:'Groceries',active:true,ranked_cards:[{card:'SC',payment_channel:'APPLE_PAY_POS',target_rate_percent:'10',current_tier_rate_percent:'3',target_tier:'TOP',tier_before:'LOW',tier_remaining_aed:'1000.50',bucket_remaining_aed:'49.50'}]}]);
 const routes=roots.get('#recommendations');assert.match(routes.textContent,/Apple Pay/);assert.match(routes.textContent,/49[.,]50/);assert.equal(routes.children[0].tag,'details');
