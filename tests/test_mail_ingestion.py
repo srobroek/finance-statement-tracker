@@ -87,7 +87,8 @@ try {
         connections = workflow["connections"]
         self.assertEqual({edge["node"] for edge in connections["Archive Inventory Present"]["main"][0]},
                          {"Expand Enumerated Attachment Items", "Build Original Email Evidence"})
-        self.assertEqual(connections["Expand Enumerated Attachment Items"]["main"][0][0]["node"], "Enumerated Attachment Present")
+        self.assertEqual(connections["Expand Enumerated Attachment Items"]["main"][0][0]["node"], "Archive One Attachment at a Time")
+        self.assertEqual(connections["Archive One Attachment at a Time"]["main"][1][0]["node"], "Enumerated Attachment Present")
         self.assertEqual(connections["Enumerated Attachment Present"]["main"][1][0]["node"], "Empty Enumerated Attachment Verification")
         self.assertEqual(connections["Record Email PDF Render Requirement"]["main"][0][0]["index"], 1)
         self.assertEqual(connections["Empty Enumerated Attachment Verification"]["main"][0][0]["index"], 0)
@@ -1215,6 +1216,7 @@ try {
                         barrier = self.execute_code_node(
                             w01,
                             "Attachment Verification Barrier",
+                            input_items=(archive_rows),
                             refs={
                                 "Validate Bounded Source Request": validated["output"][0]["json"],
                                 "Verify Enumerated Attachment Archive": archive_rows,
@@ -1541,7 +1543,7 @@ try {
         self.assertIn("ATTACHMENT_ARCHIVE_COUNT_MISMATCH", barrier_code)
         self.assertEqual(
             connections["Record Enumerated Attachment Disposition"]["main"][0][0]["node"],
-            "Merge Archive Verification Inputs",
+            "Return Verified Attachment to Loop",
         )
         self.assertEqual(
             connections["Record Email PDF Render Requirement"]["main"][0][0]["node"],
@@ -2301,6 +2303,12 @@ try {
         result = self.execute_code_node(
             w01,
             "Attachment Verification Barrier",
+            input_items=[{
+                    "attachment_verified": True,
+                    "attachment_identity": "message-1:attachment-001",
+                    "source_message_id": "message-1",
+                    "source_attachment_id": "attachment-001",
+                }],
             refs={
                 "Validate Bounded Source Request": request,
                 "Verify Enumerated Attachment Archive": {
@@ -2370,6 +2378,15 @@ try {
         barrier = self.execute_code_node(
             w01,
             "Attachment Verification Barrier",
+            input_items=([
+                    {
+                        "attachment_verified": True,
+                        "attachment_identity": f"message-mixed:{attachment_id}",
+                        "source_message_id": "message-mixed",
+                        "source_attachment_id": attachment_id,
+                    }
+                    for attachment_id in ("inline-image", "receipt-csv")
+                ]),
             refs={
                 "Validate Bounded Source Request": request,
                 "Verify Enumerated Attachment Archive": [
@@ -3040,6 +3057,7 @@ try {
             barrier = self.execute_code_node(
                 w01,
                 "Attachment Verification Barrier",
+                input_items=(attachment_rows if mode == "all-new" else []) + (attachment_rows if mode == "all-replay" else []),
                 refs={
                     "Validate Bounded Source Request": request(),
                     "Verify Enumerated Attachment Archive": (

@@ -48,14 +48,14 @@ RETAINED_OPERATOR_WARNING_NOTE_IDS = {
 
 # These are the reviewed regular-export fingerprints.  A deliberate workflow
 # edit must update this snapshot in the same review as the export change.
-CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 42,
-                                         'edges': 46,
+CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 44,
+                                         'edges': 49,
                                          'sticky': 0,
-                                         'groups': 7,
-                                         'node_ids_sha256': '6a0ef6d52743499bac9c51b27a761b32dee24c0af24d7d69bd147a1458e94915',
-                                         'connections_sha256': 'e1effc687d4d0118964ffbb6557329ede32cbb0cdd26820f33f77fd583063540',
-                                         'parameters_sha256': '540d57b89c412f7332e05708b6ca302972d53f59cf34fc10b3ae8ad88eeb3857',
-                                         'groups_sha256': '4664caa773a2aab6e3bbcef3039ff003c2db47d29fb990a56e1ceb867b42f43c'},
+                                         'groups': 8,
+                                         'node_ids_sha256': 'd040e0655d333887b5676b2bb6c4cf270ba4e055f02f8803df9b4c74888532f1',
+                                         'connections_sha256': '6bfd4e8108b7959b46fc45edb5f1e85e7a0a3784076edc8e0b81f8371e7fa9c9',
+                                         'parameters_sha256': '230efdbb00e27dcbeccf5b868331c66c8e420fa6a890f3026ded5074338486b9',
+                                         'groups_sha256': '675242f060577b1a0529e1f46fee924c7b65c6d8fd6fac2429547f9dd83c1601'},
  '02-rakbank-live-cashback.json': {'nodes': 12,
                                    'edges': 11,
                                    'sticky': 0,
