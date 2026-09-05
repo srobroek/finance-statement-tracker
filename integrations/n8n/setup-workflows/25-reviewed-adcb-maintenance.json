@@ -788,7 +788,7 @@
   "meta": {
     "financeWorkflowCode": "ADCB_REVIEWED_MAINTENANCE",
     "setupOnly": true,
-    "activationForbidden": true,
+    "publicationRequiresReview": true,
     "scheduleForbidden": true,
     "reviewedIntegratedInvocationRequired": true,
     "mutationScope": "APPROVED_HASH_BOUND_ADCB_RECONSTRUCTION_MAX_100_ACTIONS",

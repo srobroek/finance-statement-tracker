@@ -46,7 +46,9 @@ class OneDriveRootSetupWorkflowTests(unittest.TestCase):
             any(node["type"] == "n8n-nodes-base.scheduleTrigger" for node in self.workflow["nodes"])
         )
         self.assertEqual(self.manifest["import_policy"], "EXPLICIT_SINGLE_FILE_ONLY")
-        self.assertTrue(self.manifest["activation_forbidden"])
+        self.assertEqual(self.manifest["publication_policy"], "PER_WORKFLOW_REVIEWED_DEPENDENCY_ONLY")
+        entry = next(w for w in self.manifest["workflows"] if w["code"] == "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP")
+        self.assertTrue(entry["activation_forbidden"])
 
     def test_onedrive_nodes_use_only_the_bound_oauth_credential(self) -> None:
         provider_nodes = [
