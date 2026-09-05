@@ -390,6 +390,120 @@ async function main() {
     assert.equal((await rowsFor(deletedAccount)).some(row => row.imported_id === deletedRow.imported_id), false);
     assert.equal(await actual.getAccountBalance(deletedAccount), 0);
 
+    // Source-backed maintenance uses real SQLite identity updates and tombstones.
+    const { buildMaintenancePlan, applyMaintenancePlan, rowsHash } = require('../dist/lib/actual-maintenance.js');
+    const maintenanceAccount = await createAccount('Offline historical reconstruction');
+    const mid = n => 'statement:adcb_v1:' + String(n).padStart(24, '0');
+    const desired = [
+      { imported_id: mid(1), date: '2026-01-05', amount: -100, imported_payee: 'Maintenance original', category: categoryId, notes: 'source', cleared: true },
+      { imported_id: mid(2), date: '2026-02-05', amount: 70, imported_payee: 'Maintenance payment', cleared: true },
+      { imported_id: mid(3), date: '2026-02-07', amount: -30, imported_payee: 'Maintenance new', category: categoryId, cleared: true },
+    ];
+    await actual.addTransactions(maintenanceAccount, [
+      { ...desired[0], notes: 'canonical human note' },
+      { ...desired[0], imported_id: 'browser:adcb-personal-internet-banking:duplicate', notes: 'legacy human note', cleared: false },
+      { ...desired[1], imported_id: 'browser:adcb-personal-internet-banking:alias', imported_payee: 'MAINTENANCE PAYMENT', notes: 'alias human note', category: categoryId, cleared: false },
+      { imported_id: 'reconcile:adcb:offline-closed', date: '2026-02-10', amount: 130, imported_payee: 'Maintenance reconcile', cleared: true },
+    ], { learnCategories: false, runTransfers: false });
+    await actual.closeAccount(maintenanceAccount);
+    await settleActual();
+    const initialMaintenance = await rowsFor(maintenanceAccount);
+    const aliasRow = initialMaintenance.find(r => r.imported_id.endsWith(':alias'));
+    const duplicateRow = initialMaintenance.find(r => r.imported_id.endsWith(':duplicate'));
+    const reconcileRow = initialMaintenance.find(r => r.imported_id.startsWith('reconcile:'));
+    const digest = n => String(n).repeat(64);
+    const maintenancePlan = buildMaintenancePlan({ schema_version: 1, account_id: maintenanceAccount, actual_file_id: credential.syncId,
+      source_documents: [
+        { sha256: digest(1), archive_receipt_sha256: digest(2), statement_date: '2026-01-15', opening_minor: 0, closing_minor: 100, transactions: [desired[0]] },
+        { sha256: digest(3), archive_receipt_sha256: digest(4), statement_date: '2026-02-15', opening_minor: 100, closing_minor: 60, transactions: desired.slice(1) },
+      ], aliases: [{ transaction_id: aliasRow.id, source_imported_id: mid(2), proof_sha256: digest(5) }],
+      deletions: [
+        { transaction_id: duplicateRow.id, kind: 'DUPLICATE_BROWSER_PROJECTION', source_imported_ids: [mid(1)], proof_sha256: digest(5) },
+        { transaction_id: reconcileRow.id, kind: 'OBSOLETE_RECONCILIATION', source_imported_ids: [], proof_sha256: digest(6) },
+      ], backup: { receipt_sha256: digest(7), restore_reference: 'disposable verified source fixture' },
+      expected_before: { count: 4, balance: 0, rows_sha256: rowsHash(initialMaintenance) }, expected_after: { count: 3, balance: -60 },
+    }, (await actual.getAccounts()).find(a => a.id === maintenanceAccount), initialMaintenance, credential.syncId);
+    const maintenanceApi = { ...actual, sync: settleActual };
+    const maintenanceLease = { resource_key: 'actual:' + credential.syncId, lease_id: 'offline-maintenance', fencing_token: 1, expires_at: new Date(Date.now() + 120000).toISOString() };
+    const maintenanceResult = await applyMaintenancePlan(maintenanceApi, maintenancePlan, maintenanceLease, credential.syncId);
+    assert.equal(maintenanceResult.state, 'VERIFIED');
+    const maintainedAlias = await rowFor(maintenanceAccount, mid(2));
+    assert.equal(maintainedAlias.id, aliasRow.id);
+    assert.equal(maintainedAlias.category, aliasRow.category);
+    assert.equal(maintainedAlias.notes, aliasRow.notes);
+    assert.equal(maintainedAlias.payee, aliasRow.payee);
+    assert.equal(maintainedAlias.cleared, aliasRow.cleared);
+    assert.equal((await applyMaintenancePlan(maintenanceApi, maintenancePlan, maintenanceLease, credential.syncId)).replay, true);
+
+    assert.equal((await rowFor(maintenanceAccount, mid(3))).category, categoryId);
+    assert.equal(maintainedAlias.imported_payee, desired[1].imported_payee);
+    async function additionsPlan(accountId, sourceRows) {
+      const current = await rowsFor(accountId);
+      const balance = sourceRows.reduce((sum, row) => sum + row.amount, 0);
+      return buildMaintenancePlan({ schema_version: 1, account_id: accountId, actual_file_id: credential.syncId,
+        source_documents: [{ sha256: digest(1), archive_receipt_sha256: digest(2), statement_date: '2026-03-31',
+          opening_minor: 0, closing_minor: -balance, transactions: sourceRows }],
+        aliases: [], deletions: [], backup: { receipt_sha256: digest(7), restore_reference: 'disposable fixture' },
+        expected_before: { count: current.length, balance: current.reduce((sum, row) => sum + row.amount, 0), rows_sha256: rowsHash(current) },
+        expected_after: { count: sourceRows.length, balance },
+      }, (await actual.getAccounts()).find(account => account.id === accountId), current, credential.syncId);
+    }
+    // Actual tombstones must prevent resurrection before any maintenance write.
+    const tombstoneAccount = await createAccount('Offline maintenance tombstone');
+    const tombstoneSource = { imported_id: mid(1000), date: '2026-03-01', amount: -141, imported_payee: 'Deleted source', cleared: true };
+    await actual.importTransactions(tombstoneAccount, [tombstoneSource]);
+    await settleActual();
+    await actual.deleteTransaction((await rowFor(tombstoneAccount, tombstoneSource.imported_id)).id);
+    await settleActual();
+    await actual.updateAccount(tombstoneAccount, { closed: true });
+    await settleActual();
+    const tombstonePlan = await additionsPlan(tombstoneAccount, [tombstoneSource]);
+    await assert.rejects(applyMaintenancePlan(maintenanceApi, tombstonePlan, maintenanceLease, credential.syncId), /MAINTENANCE_IMPORT_NOT_EXACT_ADDITIONS/);
+    assert.equal((await rowsFor(tombstoneAccount)).length, 0);
+    assert.equal(await actual.getAccountBalance(tombstoneAccount), 0);
+
+    // Identity drift to a manual row creates a native fuzzy-match candidate.
+    // Maintenance must reject the drift before the native reconciler can mutate it.
+    const fuzzyAccount = await createAccount('Offline maintenance fuzzy rejection');
+    const fuzzySource = { imported_id: mid(1001), date: '2026-03-02', amount: -142, imported_payee: 'Fuzzy source', cleared: true };
+    await actual.addTransactions(fuzzyAccount, [{ ...fuzzySource, cleared: false }], { learnCategories: false, runTransfers: false });
+    await actual.updateAccount(fuzzyAccount, { closed: true });
+    await settleActual();
+    const fuzzyMissing = { ...fuzzySource, imported_id: mid(1002) };
+    const fuzzyPlan = await additionsPlan(fuzzyAccount, [fuzzySource, fuzzyMissing]);
+    const fuzzyRow = (await rowsFor(fuzzyAccount))[0];
+    await actual.updateTransaction(fuzzyRow.id, { imported_id: null });
+    await settleActual();
+    const fuzzyBefore = rowsHash(await rowsFor(fuzzyAccount));
+    const fuzzyPreview = await actual.importTransactions(fuzzyAccount, [fuzzyMissing], { dryRun: true, defaultCleared: true, reimportDeleted: false });
+    assert.ok(fuzzyPreview.updatedPreview.length > 0, 'fixture must exercise native fuzzy-match preview');
+    await assert.rejects(applyMaintenancePlan(maintenanceApi, fuzzyPlan, maintenanceLease, credential.syncId), /MAINTENANCE_PRESERVED_ROW_DRIFT/);
+    assert.equal(rowsHash(await rowsFor(fuzzyAccount)), fuzzyBefore);
+
+    // Three bounded chunks retain the entire projection, then replay is a no-op.
+    const chunkAccount = await createAccount('Offline maintenance bounded chunks');
+    await actual.updateAccount(chunkAccount, { closed: true });
+    await settleActual();
+    const chunkSources = Array.from({ length: 205 }, (_, index) => ({ imported_id: mid(2000 + index),
+      date: '2026-03-03', amount: -(200 + index), imported_payee: 'Chunk merchant ' + index,
+      payee: knownPayeeId, category: categoryId, notes: 'Source note ' + index, cleared: true }));
+    const chunkPlan = await additionsPlan(chunkAccount, chunkSources);
+    for (const [added, remaining] of [[100, 105], [100, 5], [5, 0]]) {
+      const result = await applyMaintenancePlan(maintenanceApi, chunkPlan, maintenanceLease, credential.syncId);
+      assert.equal(result.added, added);
+      assert.equal(result.remaining_actions, remaining);
+      assert.equal(result.state, remaining ? 'PARTIAL' : 'VERIFIED');
+    }
+    const chunkRows = await rowsFor(chunkAccount);
+    assert.equal(chunkRows.length, 205);
+    for (const source of chunkSources) {
+      const row = chunkRows.find(candidate => candidate.imported_id === source.imported_id);
+      for (const [field, value] of Object.entries(source)) assert.equal(row[field], value);
+    }
+    const chunkHash = rowsHash(chunkRows);
+    assert.equal((await applyMaintenancePlan(maintenanceApi, chunkPlan, maintenanceLease, credential.syncId)).replay, true);
+    assert.equal(rowsHash(await rowsFor(chunkAccount)), chunkHash);
+
     console.log(JSON.stringify({
       status: 'PASS',
       checks: [
@@ -401,6 +515,9 @@ async function main() {
         'statement end-date balance excludes later rows and trusted classification IDs read back',
         'full ledger projection verifies with active native Actual classification and preserves manual replay',
         'deleted row was not resurrected (session failed closed)',
+        'source-bound maintenance preserved human fields, migrated identity, deleted duplicates and replayed without mutation',
+        'maintenance rejects native tombstones and fuzzy matches before mutation',
+        'maintenance resumes three bounded chunks with exact full projections and zero-mutation replay',
       ],
     }, null, 2));
   } finally {
