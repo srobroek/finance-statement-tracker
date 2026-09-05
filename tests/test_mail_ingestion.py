@@ -81,6 +81,65 @@ try {
         self.assertIn(message, result["error"])
         return result
 
+    def test_fresh_enumeration_reaches_absent_receipt_gate_only(self):
+        workflow = self.workflow("12-outlook-message-sweep.json")
+        gate = "Project Enumeration Receipt Fields for Existing Gate"
+        self.assertEqual(self.execute_code_node(workflow, gate), {"ok": True, "output": [{"json": {}}]})
+        # An existing malformed row is corruption, not an absent receipt.
+        self.assert_code_error(workflow, gate, "ENUMERATION_RECEIPT_FIELD_MISSING:receipt_run_id",
+                               json_value={"source_code": "RAKBANK_CARD_TRANSACTION"})
+        for node in workflow["nodes"]:
+            if node["name"].startswith("Project Enumeration Receipt Fields") and node["name"] != gate:
+                self.assert_code_error(workflow, node["name"], "ENUMERATION_RECEIPT_FIELD_MISSING:receipt_run_id")
+
+    def test_cashback_missing_or_disabled_contract_fails_explicitly(self):
+        workflow = self.workflow("02-rakbank-live-cashback.json")
+        lookup = next(n for n in workflow["nodes"] if n["name"] == "Load Trusted Mail Contract")
+        self.assertTrue(lookup["alwaysOutputData"])
+        refs = {"Freeze Cursor Minus Overlap Window": {"source_code": "RAKBANK_CARD_TRANSACTION"}}
+        valid = {"source_code": "RAKBANK_CARD_TRANSACTION", "enabled": True, "folder_id": "fixture-folder", "onedrive_parent_id": "fixture-archive",
+                 "senders_json": '["alerts@rakbank.ae"]', "subjects_json": '["An update on your Card transaction"]'}
+        for value in ({}, {**valid, "enabled": False}, {**valid, "folder_id": ""}):
+            self.assert_code_error(workflow, "Assemble Trusted Sweep Contract", "CASHBACK_MAIL_CONTRACT_MISSING_OR_DISABLED",
+                                   json_value=value, refs=refs)
+        for field in ("senders_json", "subjects_json"):
+            self.assert_code_error(workflow, "Assemble Trusted Sweep Contract", "CASHBACK_MAIL_CONTRACT_FILTERS_INVALID",
+                                   json_value={**valid, field: "[]"}, refs=refs)
+        self.assertTrue(self.execute_code_node(workflow, "Assemble Trusted Sweep Contract", json_value=valid, refs=refs)["ok"])
+
+    def test_w12_archived_inventory_reaches_w02_without_losing_messages(self):
+        sweep_workflow = self.workflow("12-outlook-message-sweep.json")
+        cashback = self.workflow("02-rakbank-live-cashback.json")
+        message = json.loads((self.ROOT / "tests/fixtures/rakbank-card-transaction.json").read_text())
+        window = {"run_id": "fixture-run", "source_code": "RAKBANK_CARD_TRANSACTION", "cursor_key": "outlook:rakbank",
+                  "window_start": "2026-08-17T00:00:00.000Z", "run_upper_bound": "2026-08-18T00:00:00.000Z"}
+        sweep = {**window, "messages": [message], "scanned_count": 1, "matched_count": 1, "immutable_inventory": True,
+                 "pagination_exhausted": True, "folder_id": "fixture-folder", "onedrive_parent_id": "fixture-archive"}
+        refs = {"Aggregate Exact Window Heartbeat": sweep}
+        shaped = self.execute_code_node(sweep_workflow, "Shape Immutable Message Inventory", refs=refs)
+        self.assertTrue(shaped["ok"])
+        refs["Shape Immutable Message Inventory"] = [item["json"] for item in shaped["output"]]
+        inventory = self.execute_code_node(sweep_workflow, "Aggregate Immutable Archive Inventory", refs=refs)["output"][0]["json"]
+        attached = self.execute_code_node(sweep_workflow, "Attach Immutable Inventory to Sweep", json_value=sweep,
+                                         refs={"Aggregate Immutable Archive Inventory": inventory})["output"][0]["json"]
+        observed = {**window, "scanned_count": 1, "matched_count": 1, "terminal_state": "ARCHIVED",
+                    "downstream_receipt_sha256": "a" * 64, "readback_verified": True, "archive_ready": True}
+        archived = self.execute_code_node(sweep_workflow, "Return Verified ARCHIVED Receipt", json_value=observed,
+                                         refs={"Verify ARCHIVED Acquisition Receipt": observed,
+                                               "Attach Immutable Inventory to Sweep": attached})
+        self.assertTrue(archived["ok"], archived)
+        terminal = archived["output"][0]["json"]
+        self.assertEqual(terminal["messages"][0]["message_id"], message["id"])
+        envelope = self.execute_code_node(cashback, "Build Frozen Mailbox Envelope", input_items=[terminal],
+                                         refs={"Freeze Cursor Minus Overlap Window": window})
+        self.assertTrue(envelope["ok"], envelope)
+        self.assertEqual(envelope["output"][0]["json"]["messages"][0]["id"], message["id"])
+        self.assertEqual(envelope["output"][0]["json"]["messages"][0]["bodyPreview"], message["bodyPreview"])
+        for invalid in ({**terminal, "messages": [message]}, {**terminal, "matched_count": 2},
+                        {**terminal, "messages": []}, {**terminal, "archive_ready": False}):
+            self.assertFalse(self.execute_code_node(cashback, "Build Frozen Mailbox Envelope", input_items=[invalid],
+                                                   refs={"Freeze Cursor Minus Overlap Window": window})["ok"])
+
     def test_missed_daily_runs_scan_entire_cursor_gap_plus_overlap(self):
         plan = plan_outlook_scan(
             self.config(),
