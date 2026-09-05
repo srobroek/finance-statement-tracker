@@ -88,7 +88,7 @@
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "ac2eb0a07785ef36d569ec82a0ef746926642b55366e2eff0925a8371589677d"
+      "sha256": "866687b09cc1a3c7ae2cb48f989fadae663b3d69af62dd23cf9357e4ffc6dd13"
     },
     "values_included": false,
     "forbidden_fields": [
