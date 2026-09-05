@@ -12,7 +12,7 @@ from finance_tracker.actual_snapshot import (
     _build_routing_graphs,
     cashback_dashboard,
 )
-from finance_tracker.cashback import PaymentIntent, poc_programs
+from finance_tracker.cashback import PaymentIntent, configured_programs
 from finance_tracker.models import Transaction, money
 
 
@@ -75,7 +75,7 @@ class CashbackDashboardPhaseTests(TestCase):
             PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS"),
             PaymentIntent("AMAZON", money("250"), "AED", "ONLINE"),
         ]
-        programs = poc_programs()
+        programs = configured_programs()
         cards, routing_programs, alerts = _build_card_state(
             programs,
             rows,
@@ -105,7 +105,7 @@ class CashbackDashboardPhaseTests(TestCase):
             "alerts": alerts,
         }
         public = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             rows,
             as_of,
             intents,
@@ -124,23 +124,39 @@ class CashbackDashboardPhaseTests(TestCase):
         ).hexdigest()
         self.assertEqual(
             digest,
-            "adf91ffce49b2bb9e413785502d4136982209eb146fdd69446fa6c0387cb0e25",
+            "746d883abef5367c106a9cccd94846c1adfdf34049c2b2105a5c9d74beb68f72",
         )
 
     def test_web_discloses_estimate_and_evidence_status(self) -> None:
         root = Path("apps/cashback-control/web")
         shell = (root / "index.html").read_text(encoding="utf-8")
         app = (root / "app.js").read_text(encoding="utf-8")
+        styles = (root / "styles.css").read_text(encoding="utf-8")
         self.assertIn('id="reward-disclosure"', shell)
         self.assertIn("Estimates based on configured rewards · Card terms not fully verified", shell)
         self.assertIn('authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified"', app)
         self.assertNotIn("Evidence: ${authority}", app)
         self.assertIn("renderRewardDisclosure(payload.reward_estimate)", app)
+        self.assertIn("const routeItems = Array.isArray(items) ? items : [];", app)
+        self.assertEqual(app.count("const routeItems = Array.isArray(items) ? items : [];"), 2)
+        self.assertIn('"No eligible card route"', app)
+        self.assertIn("cardEvidenceNode(card)", app)
+        self.assertIn("provenance_authority", app)
+        self.assertIn("provenance_reason", app)
+        self.assertIn("grid-auto-rows: minmax(78px, auto);", styles)
+        self.assertIn("#decision-tree", styles)
+        self.assertIn("flex: 0 0 auto;", styles)
+
+    def test_web_labels_conditional_target_estimates(self) -> None:
+        app = Path("apps/cashback-control/web/app.js").read_text(encoding="utf-8")
+        self.assertIn('candidate.estimate_basis === "CONDITIONAL_TARGET_TIER"', app)
+        self.assertIn("Conditional target ${rate.toLocaleString", app)
+        self.assertIn("if tier reached", app)
 
     def test_routing_graph_phase_keeps_policy_errors(self) -> None:
         rows = self.rows()
         cards, routing_programs, _ = _build_card_state(
-            poc_programs(),
+            configured_programs(),
             rows,
             date(2026, 8, 16),
             None,

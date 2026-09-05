@@ -284,7 +284,7 @@ def _write_receipt(backup: Path, result: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backup-root", type=Path, default=Path("/opt/backups/finance-actual-poc"))
+    parser.add_argument("--backup-root", type=Path, default=Path("/opt/backups/finance-actual"))
     parser.add_argument("--backup-path", type=Path)
     parser.add_argument("--work-root", type=Path)
     parser.add_argument("--write-receipt", action="store_true")

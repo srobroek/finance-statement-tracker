@@ -209,7 +209,7 @@ class DeploymentScriptTests(unittest.TestCase):
     def _run_backup_fixture(
         self, probe_mode: str, docker_mode: str = "normal"
     ) -> subprocess.CompletedProcess[str]:
-        script = Path("deploy/actual-poc/backup.sh")
+        script = Path("deploy/actual/backup.sh")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             bin_dir = root / "bin"
@@ -236,9 +236,9 @@ class DeploymentScriptTests(unittest.TestCase):
                 "set -euo pipefail\n"
                 "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
-                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
+                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
-                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual-poc ;;\n"
+                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual ;;\n"
                 "  *) printf '%s\\n' \"${path}\" ;;\n"
                 "esac\n",
                 encoding="utf-8",
@@ -363,7 +363,7 @@ class DeploymentScriptTests(unittest.TestCase):
         self._run_backup_fixture("success", docker_mode="partial_pause_failure")
 
     def test_backup_resume_helpers_are_exactly_once_and_state_aware(self) -> None:
-        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        script = Path("deploy/actual/backup.sh").read_text(encoding="utf-8")
         helpers = script[
             script.index("declare -A paused_services=()"):script.index("actual_state=")
         ]
@@ -413,7 +413,7 @@ class DeploymentScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_backup_resume_retains_unknown_ownership_for_uncertain_states(self) -> None:
-        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        script = Path("deploy/actual/backup.sh").read_text(encoding="utf-8")
         helpers = script[
             script.index("declare -A paused_services=()"):script.index("actual_state=")
         ]
@@ -494,7 +494,7 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertNotIn("actual_ingestion", tracked)
 
     def test_backup_quiesces_only_authoritative_data_services(self) -> None:
-        script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+        script = Path("deploy/actual/backup.sh").read_text(encoding="utf-8")
         self.assertNotIn("docker compose", script)
         self.assertIn("pause_service finance-actual", script)
         self.assertIn("pause_service finance-cashback-control", script)
@@ -516,24 +516,47 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("excluded_data", script)
         self.assertIn("--write-receipt", script)
 
-        service = Path("deploy/actual-poc/finance-backup.service").read_text(
+        service = Path("deploy/actual/finance-backup.service").read_text(
             encoding="utf-8"
         )
         self.assertIn("KillMode=process", service)
 
-    def test_actual_runtime_identity_preserves_poc_stack_contracts(self) -> None:
-        compose = Path("deploy/actual-poc/compose.yaml").read_text(encoding="utf-8")
-        backup = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+    def test_actual_runtime_identity_uses_current_storage_contracts(self) -> None:
+        compose = Path("deploy/actual/compose.yaml").read_text(encoding="utf-8")
+        backup = Path("deploy/actual/backup.sh").read_text(encoding="utf-8")
 
         self.assertIn("container_name: finance-actual\n", compose)
-        self.assertNotIn("container_name: finance-actual-poc\n", compose)
         self.assertIn('"actual":"finance-actual"', backup)
-        self.assertIn("/opt/stacks/finance-actual-poc", backup)
-        self.assertIn("/opt/backups/finance-actual-poc", backup)
+        self.assertIn("/opt/stacks/finance-actual", backup)
+        self.assertIn("/opt/backups/finance-actual", backup)
+
+    def test_authored_deployment_files_use_current_actual_identity(self) -> None:
+        # Build the superseded name without embedding it in the source so a
+        # repository-wide stale-identity scan can remain a useful guard.
+        old_suffix = "".join(("p", "o", "c"))
+        old_project = "-".join(("finance", "actual", old_suffix))
+        old_stack = f"/opt/stacks/{old_project}"
+        old_backup = f"/opt/backups/{old_project}"
+        authored_roots = (Path(".github"), Path("deploy"), Path("config"), Path("docs"))
+        authored_files = [
+            path
+            for root in authored_roots
+            for path in root.rglob("*")
+            if path.is_file()
+            and path.suffix.lower()
+            in {".json", ".md", ".mjs", ".py", ".sh", ".txt", ".yml", ".yaml"}
+        ]
+        authored_files.extend((Path("README.md"), Path("AGENTS.md")))
+        for path in authored_files:
+            with self.subTest(path=path):
+                contents = path.read_text(encoding="utf-8")
+                self.assertNotIn(old_project, contents)
+                self.assertNotIn(old_stack, contents)
+                self.assertNotIn(old_backup, contents)
 
     def test_finance_services_follow_podman_boot_restart(self) -> None:
         expected_ordering = {
-            Path("deploy/actual-poc/finance-backup.service"):
+            Path("deploy/actual/finance-backup.service"):
                 "After=podman-restart.service",
             Path("deploy/finance-monitor/finance-health-monitor.service"):
                 "After=podman-restart.service network-online.target",
@@ -554,11 +577,11 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn("flock -n 9", script)
         self.assertIn(
-            'recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual',
+            'recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual actual',
             script,
         )
         self.assertIn(
-            'ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy',
+            'ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual actual-proxy',
             script,
         )
         self.assertIn("finance-cashback cashback-control", script)
@@ -598,9 +621,9 @@ class DeploymentScriptTests(unittest.TestCase):
                 "set -euo pipefail\n"
                 "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
-                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
+                f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
-                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual-poc ;;\n"
+                f"  {backup_root}) printf '%s\\n' /opt/backups/finance-actual ;;\n"
                 "  *) printf '%s\\n' \"${path}\" ;;\n"
                 "esac\n",
                 encoding="utf-8",
@@ -735,8 +758,8 @@ class DeploymentScriptTests(unittest.TestCase):
     def test_cashback_deployment_uses_container_local_probes_and_installs_sanitizer(self) -> None:
         workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
         self.assertIn("apps/cashback-control/probe_health.py", workflow)
-        self.assertIn("deploy/actual-poc/sanitize-cashback-backup.py", workflow)
-        self.assertIn("sudo install -m 0750 deploy/actual-poc/sanitize-cashback-backup.py", workflow)
+        self.assertIn("deploy/actual/sanitize-cashback-backup.py", workflow)
+        self.assertIn("sudo install -m 0750 deploy/actual/sanitize-cashback-backup.py", workflow)
         self.assertIn("sudo test -x \"$sanitizer\"", workflow)
         self.assertIn("/var/lib/cashback-control/cashback-dashboard.json", workflow)
         self.assertNotIn("curl -fsS http://127.0.0.1:5010/api/health", workflow)

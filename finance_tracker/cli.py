@@ -35,7 +35,7 @@ from .cashback import (
     PaymentIntent,
     load_program_configuration,
     payment_intents_from_config,
-    poc_programs,
+    configured_programs,
     programs_from_config,
     recommend,
 )
@@ -96,7 +96,7 @@ def _load_transactions(path: Path) -> list[Transaction]:
 
 def _demo() -> int:
     intent = PaymentIntent("AMAZON", money("500"), "AED", "ONLINE")
-    result = recommend(poc_programs(), [], intent)
+    result = recommend(configured_programs(), [], intent)
     print(json.dumps({
         "category": result.category,
         "primary_card": result.primary_card,

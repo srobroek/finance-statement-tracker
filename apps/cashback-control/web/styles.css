@@ -93,6 +93,7 @@ section { margin-top: 14px; }
 .route-row, .position-card { overflow: hidden; }
 .route-row { padding: 0; }
 .route-row:nth-child(even) { background: #151d18; }
+.route-row.unavailable { background: #111713; }
 .route-main { min-height: 34px; padding: 0 7px; cursor: pointer; list-style: none; }
 .route-main::-webkit-details-marker { display: none; }
 .route-main::marker { content: ""; }
@@ -100,6 +101,7 @@ section { margin-top: 14px; }
 .route-cards { min-width: 0; display: grid; grid-template-rows: auto auto; gap: 2px; align-content: center; overflow: hidden; }
 .card-choice { min-width: 0; line-height: 1.05; white-space: nowrap; }
 .card-choice.use { overflow: hidden; color: var(--green); font-size: .64rem; text-overflow: ellipsis; }
+.card-choice.unavailable { overflow: hidden; color: var(--amber); font-size: .64rem; font-weight: 700; text-overflow: ellipsis; }
 .avoid-list { min-width: 0; display: flex; justify-content: flex-start; gap: 6px; overflow: hidden; }
 .card-choice.avoid { flex: 0 1 auto; overflow: hidden; color: var(--red); font-size: .56rem; font-weight: 700; text-overflow: ellipsis; }
 .route-reason { padding: 6px 7px 7px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; border-top: 1px solid var(--line); background: #0b100d; }
@@ -286,6 +288,7 @@ section { margin-top: 14px; }
     white-space: normal;
   }
   .card-choice.use { font-size: 1.16rem; }
+  .card-choice.unavailable { font-size: 1rem; }
   .card-choice.avoid { font-size: .76rem; }
   .avoid-list { gap: 9px; }
   .route-reason { padding: 8px 9px 9px; gap: 9px; }
@@ -294,7 +297,7 @@ section { margin-top: 14px; }
 
   #decision-tree {
     min-height: 0;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     flex-direction: column;
   }
   #decision-tree:not([hidden]) { display: flex; }
@@ -309,19 +312,19 @@ section { margin-top: 14px; }
     min-height: 0;
     padding: 10px;
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     flex-direction: column;
   }
   .spend-graph header > span { display: none; }
   .spend-graph header > strong { margin-top: 0; font-size: .95rem; }
   .spend-graph header > small { display: none; }
   .spend-graph ol {
-    min-height: 0;
+    min-height: 78px;
     margin: 9px 0 0 10px;
     padding-left: 15px;
     display: grid;
-    flex: 1 1 auto;
-    grid-auto-rows: minmax(78px, 1fr);
+    flex: 0 0 auto;
+    grid-auto-rows: minmax(78px, auto);
     gap: 7px;
   }
   .candidate-node {

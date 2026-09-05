@@ -297,7 +297,7 @@
       "acceptance_criteria": ["Every posted source identity exists exactly once in Actual", "Operational stores contain no authoritative duplicate row", "Actual readback is part of every write receipt"],
       "claimed_evidence": ["AGENTS.md", "docs/full-project-gap-audit-and-recovery-plan-2026-08-19.md calls architecture verified complete"],
       "contradictions": ["All Notion data/rule/dashboard requirements were explicitly superseded by 'remove dependency on notion entirely. No migration.'"],
-      "source_turn_summary": "The project moved from Notion POC to Actual after platform evaluation; the user explicitly told the agent to drop Notion entirely."
+      "source_turn_summary": "The project moved from the early Notion implementation to Actual after platform evaluation; the user explicitly told the agent to drop Notion entirely."
     },
     {
       "id": "ACTUAL-002",
@@ -841,7 +841,7 @@
       "priority": "P0",
       "dependencies": ["PLATFORM-002", "PLATFORM-006"],
       "acceptance_criteria": ["Independent restart/health checks", "No host-local development dependency", "Persistent volumes and exact image digests", "Only approved listeners published"],
-      "claimed_evidence": ["deploy/actual-poc and deploy/cashback are separate", "phase0 baseline reported Actual/proxy/cashback healthy and bridge retired"],
+      "claimed_evidence": ["deploy/actual and deploy/cashback are separate", "phase0 baseline reported Actual/proxy/cashback healthy and bridge retired"],
       "contradictions": ["Earlier work ran locally on Windows and combined services; the user explicitly rejected both"],
       "source_turn_summary": "The user asked why code was not on the CI host and why cashback and Actual shared compose."
     },
@@ -893,7 +893,7 @@
       "priority": "P1",
       "dependencies": ["PLATFORM-004"],
       "acceptance_criteria": ["crossOriginIsolated true", "COOP/COEP response headers", "Actual multi-tab smoke test", "No proxy cache of stale app shell during outage"],
-      "claimed_evidence": ["User said 'its working. actual.vxsan.com' after reverse-proxy/Cloudflare setup", "deploy/actual-poc/nginx/actual.conf"],
+      "claimed_evidence": ["User said 'its working. actual.vxsan.com' after reverse-proxy/Cloudflare setup", "deploy/actual/nginx/actual.conf"],
       "contradictions": ["Later 502s were service availability/cache incidents, so ongoing health monitoring remains required"],
       "source_turn_summary": "The user supplied Actual's SharedArrayBuffer error and requested an in-container nginx-style proxy."
     },
@@ -966,7 +966,7 @@
       "id": "DOCS-004",
       "title": "Notion architecture and UI work are explicitly superseded",
       "requirement": "Do not resume Notion databases, dashboards, Mermaid charts, rules/config storage, reconciliation or migration work.",
-      "expected_state": "Notion is absent from runtime dependencies and completion backlog; historical Notion work is treated as abandoned POC context only.",
+      "expected_state": "Notion is absent from runtime dependencies and completion backlog; historical Notion work is treated as abandoned early-implementation context only.",
       "status_from_transcript": "SUPERSEDED",
       "priority": "P0",
       "dependencies": ["ACTUAL-001"],

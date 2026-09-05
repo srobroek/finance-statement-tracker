@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
+ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
-BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
+BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual}"
 MAX_BACKUP_AGE_HOURS="${FINANCE_MAX_BACKUP_AGE_HOURS:-48}"
 
 log() {
@@ -24,9 +24,9 @@ resolved() {
 }
 
 if [[ "${EUID}" -ne 0 ]]; then fail root_required; fi
-[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual-poc" ]] || fail unexpected_actual_stack_path
+[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual" ]] || fail unexpected_actual_stack_path
 [[ "$(resolved "${CASHBACK_STACK_DIR}")" == "/opt/stacks/finance-cashback" ]] || fail unexpected_cashback_stack_path
-[[ "$(resolved "${BACKUP_ROOT}")" == "/opt/backups/finance-actual-poc" ]] || fail unexpected_backup_root
+[[ "$(resolved "${BACKUP_ROOT}")" == "/opt/backups/finance-actual" ]] || fail unexpected_backup_root
 [[ "${MAX_BACKUP_AGE_HOURS}" =~ ^[0-9]+$ ]] || fail invalid_backup_age
 
 mkdir -p "${BACKUP_ROOT}"
@@ -107,14 +107,14 @@ failed=0
 # The public Actual port is owned by the proxy. Recovering the upstream first
 # prevents a cached 502 from being mistaken for a healthy application.
 if ! container_running finance-actual; then
-  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual || failed=1
+  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual actual || failed=1
 fi
-if ! ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy \
+if ! ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual actual-proxy \
   http://127.0.0.1:5006/; then
   # A running but unhealthy upstream can leave the proxy alive and returning
   # errors. Restart only these two containers, in dependency order.
-  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual || true
-  recover_container finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy || true
+  recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual actual || true
+  recover_container finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual actual-proxy || true
   probe_twice http://127.0.0.1:5006/ || failed=1
 fi
 

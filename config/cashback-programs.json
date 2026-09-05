@@ -68,6 +68,11 @@
       "ranking": {"groups_by_pace": {"UNDER": 1, "ON_PACE": 2, "OVER": 3, "SECURED": 3, "OPEN": 3, "*": 3}},
       "reasons": {"*": "Eligible positive-value specialist remains available."}
     },
+    "AMAZON_THRESHOLD_FILLER": {
+      "when": {"bucket_open": true, "bucket_fits_purchase": true, "target_unmet": true},
+      "ranking": {"groups_by_pace": {"*": 1}},
+      "reasons": {"*": "Route eligible Amazon spend to this card while its minimum-spend target is unmet and the configured reward bucket has room for the whole purchase."}
+    },
     "THRESHOLD_FILLER": {
       "when": {"bucket_open": true, "bucket_fits_purchase": true, "target_unmet": true},
       "ranking": {"groups_by_pace": {"UNDER": 2, "ON_PACE": 4, "OVER": 5, "SECURED": 5, "*": 5}},
@@ -247,9 +252,10 @@
     {
       "code": "AMAZON", "label": "Amazon", "category": "AMAZON", "currency": "AED", "decision_amount_aed": "100",
       "routes": [
+        {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "THRESHOLD_FILLER", "policy": "AMAZON_THRESHOLD_FILLER", "priority": 5},
         {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 10},
         {"card": "EI_AMAZON", "channel": "ONLINE", "bucket": "EI_AMAZON", "purpose": "SPECIALIST", "priority": 20},
-        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "priority": 30},
+        {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "policy": "AMAZON_THRESHOLD_FILLER", "priority": 30},
         {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 40}
       ]
     },

@@ -49,6 +49,19 @@ function compactCardLabel(code) {
   return shortCardNames.get(code) || cardLabel(code);
 }
 
+function cardEvidenceLabel(card) {
+  return String(card?.provenance_authority || "").toUpperCase() === "AUTHORITATIVE"
+    ? "Issuer terms verified"
+    : "Card terms not fully verified";
+}
+
+function cardEvidenceNode(card) {
+  const node = createNode("div", "source-state");
+  node.append(createNode("span", "", cardEvidenceLabel(card)));
+  if (card?.provenance_reason) node.title = String(card.provenance_reason);
+  return node;
+}
+
 function compactMoney(value) {
   const amount = Number(value);
   if (amount >= 1000) return `${baseCurrency} ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
@@ -104,6 +117,12 @@ function compactReason(item) {
   if (preferred?.purpose === "THRESHOLD_FILLER" && Number(preferred.target_rate_percent) === 0) {
     return `Tier filler · ${compactMoney(preferred.card_target_remaining_aed)} remaining · no direct cashback`;
   }
+  if (preferred?.estimate_basis === "CONDITIONAL_TARGET_TIER") {
+    const rate = Number(preferred.conditional_target_rate_percent ?? preferred.target_rate_percent);
+    const reward = preferred.conditional_target_reward_aed == null ? Number.NaN : Number(preferred.conditional_target_reward_aed);
+    const rewardText = Number.isFinite(reward) ? ` · est. ${compactMoney(reward)} if tier reached` : " if tier reached";
+    return `Conditional target ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%${rewardText}`;
+  }
   if (preferred && preferred.tier_before !== preferred.tier_after) {
     return `Tier unlock · ${Number(preferred.target_rate_percent).toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · ${compactMoney(preferred.estimated_net_value_aed)} cycle value`;
   }
@@ -146,6 +165,12 @@ function candidateValueLabel(candidate) {
   if (candidate.purpose === "THRESHOLD_FILLER" && bucketRate === 0) {
     return `Tier filler · ${compactMoney(candidate.card_target_remaining_aed)} left · 0% direct`;
   }
+  if (candidate.estimate_basis === "CONDITIONAL_TARGET_TIER") {
+    const rate = Number(candidate.conditional_target_rate_percent ?? candidate.target_rate_percent);
+    const reward = candidate.conditional_target_reward_aed == null ? Number.NaN : Number(candidate.conditional_target_reward_aed);
+    const rewardText = Number.isFinite(reward) ? ` · est. ${compactMoney(reward)} if tier reached` : " if tier reached";
+    return `Conditional target ${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}%${rewardText}`;
+  }
   if (candidate.tier_before !== candidate.tier_after) {
     return `${bucketRate.toLocaleString(undefined, { maximumFractionDigits: 2 })}% bucket · unlocks ${compactMoney(candidate.estimated_net_value_aed)} cycle value`;
   }
@@ -166,30 +191,33 @@ function tierName(code) {
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
-  const activeItems = (Array.isArray(items) ? items : []).filter((item) => item.active !== false);
-  if (!activeItems.length) {
-    root.replaceChildren(emptyState("No routing recommendations yet", "No active card routes are available."));
+  const routeItems = Array.isArray(items) ? items : [];
+  if (!routeItems.length) {
+    root.replaceChildren(emptyState("No routing recommendations yet", "No configured card routes are available."));
     return;
   }
   root.replaceChildren(
-    ...activeItems.map((item) => {
+    ...routeItems.map((item) => {
       const node = document.createElement("details");
       node.className = "route-row";
       const preferred = item.ranked_cards?.[0];
-      const preferredCode = preferred?.card || item.use_card;
+      const hasRoute = item.active !== false && Boolean(preferred);
+      node.classList.toggle("unavailable", !hasRoute);
       const avoidCodes = item.avoid_cards || [];
       const avoid = avoidCodes.map(cardLabel);
+      const useLabel = hasRoute ? routeHeading(item, preferred, true) : "No eligible route";
+      const fullUseLabel = hasRoute ? routeHeading(item, preferred) : "No eligible card route";
       const summary = createNode("summary", "route-main");
       summary.setAttribute(
         "aria-label",
-        `${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.`,
+        `${typeLabel(item)}: ${fullUseLabel}. Tap for routing details.`,
       );
       summary.append(createNode("span", "route-type", typeLabel(item)));
 
       const cards = createNode("span", "route-cards");
-      const use = createNode("strong", "card-choice use", routeHeading(item, preferred, true));
-      use.dataset.short = compactCardLabel(preferredCode);
-      use.title = `Use ${routeHeading(item, preferred)}`;
+      const use = createNode("strong", `card-choice ${hasRoute ? "use" : "unavailable"}`, useLabel);
+      use.dataset.short = useLabel;
+      use.title = fullUseLabel;
       cards.append(use);
 
       const avoidList = createNode("span", "avoid-list");
@@ -205,9 +233,14 @@ function renderRecommendations(items) {
       const reason = createNode("div", "route-reason");
       reason.append(createNode("span", "", "Why"));
       const reasonText = createNode("p");
-      reasonText.append(createNode("b", "", `Use ${routeHeading(item, preferred)}`));
-      if (avoid.length) reasonText.append(document.createTextNode(` · avoid ${avoid.join(", ")}`));
-      reasonText.append(document.createTextNode(`. ${compactReason(item)}`));
+      if (hasRoute) {
+        reasonText.append(createNode("b", "", `Use ${routeHeading(item, preferred)}`));
+        if (avoid.length) reasonText.append(document.createTextNode(` · avoid ${avoid.join(", ")}`));
+        reasonText.append(document.createTextNode(`. ${compactReason(item)}`));
+      } else {
+        reasonText.append(createNode("b", "", "No eligible card route"));
+        reasonText.append(document.createTextNode(". This spend type currently has no card that satisfies the configured rules."));
+      }
       reason.append(reasonText);
       node.append(summary, reason);
       return node;
@@ -217,7 +250,7 @@ function renderRecommendations(items) {
 
 function renderDecisionTree(items) {
   const root = document.querySelector("#decision-tree");
-  const active = (Array.isArray(items) ? items : []).filter((item) => item.active !== false);
+  const routeItems = Array.isArray(items) ? items : [];
   const key = (item) => item.code || `${item.purchase_type}:${item.channel}:${item.currency}`;
   const previous = root.dataset.selectedKey;
   root.replaceChildren();
@@ -225,7 +258,7 @@ function renderDecisionTree(items) {
   selectorLabel.append(createNode("span", "", "Spend type"));
   const selector = createNode("select");
   selector.setAttribute("aria-label", "Decision-tree spend type");
-  active.forEach((item) => {
+  routeItems.forEach((item) => {
     const option = createNode("option", "", typeLabel(item));
     option.value = key(item);
     selector.append(option);
@@ -233,17 +266,17 @@ function renderDecisionTree(items) {
   selectorLabel.append(selector);
   const graph = createNode("div", "spend-graph");
   root.append(selectorLabel, graph);
-  if (!active.length) {
-    root.replaceChildren(emptyState("Decision tree unavailable", "There are no active routing rules to display."));
+  if (!routeItems.length) {
+    root.replaceChildren(emptyState("Decision tree unavailable", "There are no configured routing rules to display."));
     return;
   }
-  if (active.some((item) => key(item) === previous)) selector.value = previous;
+  if (routeItems.some((item) => key(item) === previous)) selector.value = previous;
 
   const show = () => {
-    const item = active.find((candidate) => key(candidate) === selector.value) || active[0];
+    const item = routeItems.find((candidate) => key(candidate) === selector.value) || routeItems[0];
     if (!item) return;
     root.dataset.selectedKey = key(item);
-    const candidates = (item.ranked_cards || []).map((candidate) => {
+    const candidates = item.active === false ? [] : (item.ranked_cards || []).map((candidate) => {
       const cap = candidate.bucket_cap_aed == null ? null : Number(candidate.bucket_cap_aed);
       const remaining = candidate.bucket_remaining_aed == null ? null : Number(candidate.bucket_remaining_aed);
       const threshold = Number(candidate.tier_threshold_aed);
@@ -278,7 +311,7 @@ function renderDecisionTree(items) {
     const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
     const header = createNode("header");
     header.append(
-      createNode("span", "", `${methods} · ${item.currency}`),
+      createNode("span", "", methods ? `${methods} · ${item.currency}` : `${item.currency}`),
       createNode("strong", "", `${typeLabel(item)} routing order`),
       createNode("small", "", "Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics."),
     );
@@ -437,7 +470,7 @@ function renderCards(cards) {
           createNode("span", "", card.position_detail || "No minimum or cap"),
         );
         header.append(summary, total);
-        node.append(header);
+        node.append(header, cardEvidenceNode(card));
         return node;
       }
       const target = Number(card.safety_target_aed || card.total_spend_aed || 1);
@@ -497,6 +530,7 @@ function renderCards(cards) {
         node.append(track);
       }
       node.append(bucketList);
+      node.append(cardEvidenceNode(card));
       if (Number(card.refund_effect_aed || 0)) {
         const sourceState = createNode("div", "source-state");
         sourceState.append(createNode("span", "", `${money.format(card.refund_effect_aed)} refunded this cycle`));

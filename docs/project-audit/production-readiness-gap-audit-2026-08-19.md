@@ -47,7 +47,7 @@ against later issuer evidence without a synthetic balancing row.
 | Classification/review queue | **Implemented-unverified** | Static/history/scoped-AI ownership and locked-field tests pass | No current full disposable and production exception report proving every unresolved row appears exactly once and every manual override survives |
 | Live cashback event store and arithmetic | **Implemented + verified (unit/retained fixture scope)** | Provisional events, dedupe, cursor heartbeat, refunds/reversals, reconciliation/finalization guards, alerts, routing, and push-store tests pass | Current deployed service health/state and n8n cutover were not read back in this audit; statement-only finalization still depends on missing RAK/SC statement sources |
 | Live notification sources | **Partial** | RAK is `ACTIVE`; historical cursor receipts show accepted RAK messages; unsupported formats fail closed | SC remains a placeholder; no current source-to-n8n-to-companion execution receipt; EI is intentionally statement-only and Wio is outside live cashback |
-| Portable/public cashback profiles | **Implemented + verified (code)** | Versioned schema plus four non-AED example profiles; profile/routing tests pass; CI defines a container matrix | UAE card programme seed remains a POC assumption; no current CI run or deployed fictional-profile receipt proves the current commit |
+| Portable/public cashback profiles | **Implemented + verified (code)** | Versioned schema plus four non-AED example profiles; profile/routing tests pass; CI defines a container matrix | UAE card programme seed remains an early-implementation assumption; no current CI run or deployed fictional-profile receipt proves the current commit |
 | PWA/mobile web push | **Implemented-unverified** | Manifest/UI assets and idempotent subscription/candidate/delivery tests exist | No real iPhone install/permission, VAPID delivery, background/lock-screen, stale-feed, weekly pace, history, or close/reset acceptance receipt |
 | FAB non-credit inventory | **Implemented-unverified (source and older API receipt)** | Owner-evidenced 2026-08-19 portal inventory lists six accounts/loan; retained receipt says five accounts created and API readback passed | Receipt is from `76cab8d`, UI readback is explicitly pending, and current live API/UI/source balance parity was not independently established |
 | Sarwa wealth accounts | **Implemented-unverified** | 2026-08-18 user-assisted capture contains four active Invest/Trade accounts plus a closed account; parsers, stable identities, ownership constraints, and position sidecar tests pass | No FX snapshot, no current Actual accounts/balances, no T1/T2 historical delta, no immutable acceptance bundle, and no UI/API net-worth equation |
@@ -112,7 +112,8 @@ predate the n8n design and cannot prove the current n8n acquisition path.
 The profile abstraction is genuinely portable at code level: four non-AED
 examples exercise flat, tiered, rotating, and requirements-driven portfolios.
 The deployment workflow defines a container matrix for them. Live programme
-values in `config/cashback-programs.json` remain explicitly unverified POC seed
+values in `config/cashback-programs.json` remain explicitly unverified
+early-implementation seed
 data under `AGENTS.md`, so they cannot be promoted merely because routing tests
 pass.
 

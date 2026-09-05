@@ -193,7 +193,7 @@
       "id": "deployment.ci-containers-cloudflare",
       "implemented_state": "PARTIAL",
       "verification_state": "CI_DEFINED_LIVE_STATE_UNVERIFIED",
-      "evidence_paths": [".github/workflows/cashback-image.yml", ".github/workflows/phase1-finance-artifacts.yml", "deploy/actual-poc/compose.yaml", "deploy/cashback/compose.yaml", "config/deployment.json"],
+      "evidence_paths": [".github/workflows/cashback-image.yml", ".github/workflows/phase1-finance-artifacts.yml", "deploy/actual/compose.yaml", "deploy/cashback/compose.yaml", "config/deployment.json"],
       "tests": ["Actual Node suite 48/48 passing", "Deployment script tests pass in full-suite run"],
       "live_readback": "Cashback and Actual are separate compose projects in repository. Exact current container digests, restart state, Cloudflare route security, backup restore, and n8n deployment are not independently proven in this audit.",
       "last_verified": "2026-08-19",

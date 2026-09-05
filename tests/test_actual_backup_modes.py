@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-BACKUP = ROOT / "deploy/actual-poc/backup.sh"
-SERVICE = ROOT / "deploy/actual-poc/finance-backup.service"
+BACKUP = ROOT / "deploy/actual/backup.sh"
+SERVICE = ROOT / "deploy/actual/finance-backup.service"
 
 
 class ActualBackupModeTests(unittest.TestCase):

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import TestCase
 
 from finance_tracker.actual_snapshot import cashback_dashboard
-from finance_tracker.cashback import PaymentIntent, poc_programs
+from finance_tracker.cashback import PaymentIntent, configured_programs, statement_period
 from finance_tracker.models import Transaction, money
 
 
@@ -19,12 +19,27 @@ class CashbackRoutingMatrixTests(TestCase):
     def setUpClass(cls) -> None:
         cls.config = json.loads((ROOT / "config" / "cashback-programs.json").read_text(encoding="utf-8"))
 
-    def dashboard(self, rows: list[Transaction]) -> dict[str, object]:
+    def dashboard(
+        self,
+        rows: list[Transaction],
+        as_of: date = date(2026, 8, 16),
+        *,
+        card_periods: bool = False,
+    ) -> dict[str, object]:
+        programs = configured_programs(as_of)
         return cashback_dashboard(
-            poc_programs(),
+            programs,
             rows,
-            date(2026, 8, 16),
+            as_of,
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
+            periods_by_card=(
+                {
+                    program.card: statement_period(as_of, program.statement_close_day)
+                    for program in programs
+                }
+                if card_periods
+                else None
+            ),
             routing_profiles=self.config["routing_profiles"],
             route_policies=self.config["route_policies"],
         )
@@ -40,7 +55,7 @@ class CashbackRoutingMatrixTests(TestCase):
         return result
 
     def test_confirmed_program_cycles_and_sc_fx_cost(self) -> None:
-        programs = {program.card: program for program in poc_programs()}
+        programs = {program.card: program for program in configured_programs()}
 
         self.assertEqual(self.config["status"], "USER_CONFIRMED")
         self.assertEqual(programs["RAK_WORLD"].statement_close_day, 5)
@@ -98,6 +113,87 @@ class CashbackRoutingMatrixTests(TestCase):
         }
         self.assertEqual(preferred, expected)
 
+    def test_amazon_keeps_unmet_thresholds_on_close_day_and_new_cycle(self) -> None:
+        for as_of in (date(2026, 9, 5), date(2026, 9, 6)):
+            with self.subTest(as_of=as_of):
+                dashboard = self.dashboard([], as_of, card_periods=True)
+                amazon = next(
+                    graph
+                    for graph in dashboard["routing_graphs"]
+                    if graph["code"] == "AMAZON"
+                )
+                self.assertEqual(
+                    [candidate["card"] for candidate in amazon["ranked_cards"]],
+                    ["SC_PLATINUM_X", "RAK_WORLD", "EI_AMAZON"],
+                )
+                self.assertEqual(
+                    [candidate["purpose"] for candidate in amazon["ranked_cards"][:2]],
+                    ["THRESHOLD_FILLER", "THRESHOLD_FILLER"],
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["estimate_basis"],
+                    "CONDITIONAL_TARGET_TIER",
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["current_state_marginal_reward_aed"],
+                    "0.00",
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["conditional_target_reward_aed"],
+                    "10.00",
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["current_state_marginal_return_percent"],
+                    "0.00",
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["current_tier_rate_percent"],
+                    "0",
+                )
+                self.assertEqual(
+                    amazon["ranked_cards"][0]["conditional_target_rate_percent"],
+                    "10.00",
+                )
+
+    def test_amazon_threshold_routing_respects_whole_purchase_headroom(self) -> None:
+        rows = [
+            Transaction(
+                "sc-online-near-cap",
+                datetime(2026, 9, 4),
+                "SC_PLATINUM_X",
+                "Online",
+                "3950",
+                category="GENERAL",
+                channel="ONLINE",
+                reward_bucket="SC_ONLINE",
+            )
+        ]
+        amazon = next(
+            graph
+            for graph in self.dashboard(rows, date(2026, 9, 5), card_periods=True)["routing_graphs"]
+            if graph["code"] == "AMAZON"
+        )
+        self.assertEqual(
+            [candidate["card"] for candidate in amazon["ranked_cards"]],
+            ["RAK_WORLD", "EI_AMAZON"],
+        )
+
+    def test_amazon_falls_back_to_specialist_after_targets_and_caps_are_secured(self) -> None:
+        rows = [
+            Transaction("sc-online-full", datetime(2026, 9, 2), "SC_PLATINUM_X", "Online", "4000", category="GENERAL", channel="ONLINE", reward_bucket="SC_ONLINE"),
+            Transaction("sc-target-secured", datetime(2026, 9, 3), "SC_PLATINUM_X", "Filler", "11300", category="FILLER", channel="PHYSICAL_POS", reward_bucket="SC_FILLER"),
+            Transaction("rak-target-secured", datetime(2026, 9, 3), "RAK_WORLD", "Filler", "10300", category="FILLER", channel="PHYSICAL_POS", reward_bucket="RAK_STANDARD"),
+        ]
+        amazon = next(
+            graph
+            for graph in self.dashboard(rows, date(2026, 9, 5), card_periods=True)["routing_graphs"]
+            if graph["code"] == "AMAZON"
+        )
+        self.assertEqual(
+            [(candidate["card"], candidate["purpose"]) for candidate in amazon["ranked_cards"]],
+            [("EI_AMAZON", "SPECIALIST")],
+        )
+
     def test_rak_over_and_sc_under_moves_discretionary_spend_to_sc(self) -> None:
         preferred = self.preferred_by_code(self.dashboard(self.rak_near_target()))
         for code in ("GROCERY", "DINING", "TRAVEL", "ONLINE", "APPLE_PAY", "PHYSICAL", "FOREIGN", "FILLER"):
@@ -105,7 +201,7 @@ class CashbackRoutingMatrixTests(TestCase):
                 self.assertEqual(preferred[code][0], "SC_PLATINUM_X")
         self.assertEqual(preferred["AMAZON"], ("SC_PLATINUM_X", "SC_ONLINE"))
 
-    def test_sc_online_full_rolls_to_wallet_filler_and_amazon_specialist(self) -> None:
+    def test_sc_online_full_keeps_rak_amazon_threshold_ahead_of_specialist(self) -> None:
         rows = self.rak_near_target() + self.sc_reward_buckets(wallet=False)
         preferred = self.preferred_by_code(self.dashboard(rows))
         for code in ("GROCERY", "DINING", "TRAVEL", "APPLE_PAY", "FILLER"):
@@ -113,7 +209,7 @@ class CashbackRoutingMatrixTests(TestCase):
                 self.assertEqual(preferred[code], ("SC_PLATINUM_X", "SC_WALLET"))
         self.assertEqual(preferred["ONLINE"], ("SC_PLATINUM_X", "SC_FILLER"))
         self.assertEqual(preferred["PHYSICAL"], ("SC_PLATINUM_X", "SC_FILLER"))
-        self.assertEqual(preferred["AMAZON"], ("EI_AMAZON", "EI_AMAZON"))
+        self.assertEqual(preferred["AMAZON"], ("RAK_WORLD", "RAK_STANDARD"))
 
     def test_sc_reward_buckets_full_roll_to_tier_filler(self) -> None:
         rows = self.rak_near_target() + self.sc_reward_buckets()
@@ -122,7 +218,7 @@ class CashbackRoutingMatrixTests(TestCase):
             with self.subTest(code=code):
                 self.assertEqual(preferred[code], ("SC_PLATINUM_X", "SC_FILLER"))
         self.assertEqual(preferred["FOREIGN"], ("SC_PLATINUM_X", "SC_FOREIGN"))
-        self.assertEqual(preferred["AMAZON"], ("EI_AMAZON", "EI_AMAZON"))
+        self.assertEqual(preferred["AMAZON"], ("RAK_WORLD", "RAK_STANDARD"))
 
     def test_sc_target_secured_removes_filler_but_keeps_open_reward_buckets(self) -> None:
         rows = self.rak_near_target() + self.sc_reward_buckets() + [
@@ -134,7 +230,7 @@ class CashbackRoutingMatrixTests(TestCase):
         self.assertEqual(preferred["ONLINE"], ("RAK_WORLD", "RAK_STANDARD"))
         self.assertEqual(preferred["APPLE_PAY"], ("RAK_WORLD", "RAK_EWALLET"))
         self.assertEqual(preferred["FOREIGN"], ("SC_PLATINUM_X", "SC_FOREIGN"))
-        self.assertEqual(preferred["AMAZON"], ("EI_AMAZON", "EI_AMAZON"))
+        self.assertEqual(preferred["AMAZON"], ("RAK_WORLD", "RAK_STANDARD"))
         for graph in dashboard["routing_graphs"]:
             self.assertNotIn(
                 "SC_FILLER",

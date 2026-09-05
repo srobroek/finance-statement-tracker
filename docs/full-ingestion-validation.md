@@ -3,7 +3,7 @@
 The final migration gate is a clean rebuild, not an in-place assumption that the
 current ledger is complete. The versioned inventory in
 `config/full-ingestion-validation.json` names every authoritative statement and
-browser-capture manifest included in the POC ledger.
+browser-capture manifest included in the validation ledger.
 
 Run the read-only audit against a fresh full-period Actual snapshot:
 

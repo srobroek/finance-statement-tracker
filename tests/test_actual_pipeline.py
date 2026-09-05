@@ -14,7 +14,7 @@ from finance_tracker.actual_pipeline import (
     runtime_secret,
 )
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
-from finance_tracker.cashback import PaymentIntent, poc_programs
+from finance_tracker.cashback import PaymentIntent, configured_programs
 from finance_tracker.models import Transaction, money
 from finance_tracker.statements import parse_statement_text
 
@@ -258,7 +258,7 @@ Closing balance (Total to pay) -25.00
         }
         rows = transactions_from_actual_snapshot(snapshot, self.config())
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             rows,
             date(2026, 7, 31),
             [PaymentIntent("AMAZON", money("100"), "AED", "ONLINE")],
@@ -267,15 +267,19 @@ Closing balance (Total to pay) -25.00
         self.assertEqual(rows[0].reward_bucket, "EI_AMAZON")
         self.assertEqual(rows[0].owner, "Owner A")
         self.assertEqual(dashboard["cards"][2]["total_spend_aed"], "100")
-        self.assertEqual(dashboard["recommendations"][0]["use_card"], "EI_AMAZON")
+        self.assertEqual(dashboard["recommendations"][0]["use_card"], "SC_PLATINUM_X")
         self.assertEqual(dashboard["recommendations"][0]["decision_amount_aed"], "100")
-        self.assertEqual(dashboard["recommendations"][0]["estimated_net_return_percent"], "6.00")
+        self.assertEqual(dashboard["recommendations"][0]["estimated_net_return_percent"], "10.00")
         preferred = dashboard["recommendations"][0]["ranked_cards"][0]
         self.assertEqual(preferred["status"], "PREFERRED")
-        self.assertEqual(preferred["bucket"], "EI_AMAZON")
-        self.assertIsNone(preferred["bucket_cap_aed"])
-        self.assertEqual(preferred["target_rate_percent"], "6.00")
-        self.assertEqual(dashboard["cards"][0]["routing_mode"], "CURRENT_TIER")
+        self.assertEqual(preferred["bucket"], "SC_ONLINE")
+        self.assertEqual(preferred["bucket_cap_aed"], "4000")
+        self.assertEqual(preferred["target_rate_percent"], "10.00")
+        self.assertEqual(preferred["current_state_marginal_return_percent"], "0.00")
+        self.assertEqual(preferred["current_tier_rate_percent"], "0")
+        self.assertEqual(preferred["conditional_target_rate_percent"], "10.00")
+        self.assertEqual(preferred["estimate_basis"], "CONDITIONAL_TARGET_TIER")
+        self.assertEqual(dashboard["cards"][0]["routing_mode"], "TARGET_TIER")
 
     def test_snapshot_rejects_conflicting_cashback_bucket_tags_deterministically(self) -> None:
         snapshot = {
@@ -385,7 +389,7 @@ Closing balance (Total to pay) -25.00
         ]
 
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             rows,
             date(2026, 8, 16),
             [PaymentIntent("FILLER", money("100"), "AED", "PHYSICAL_POS", conditional=True)],
@@ -400,7 +404,7 @@ Closing balance (Total to pay) -25.00
     def test_grocery_graph_considers_channels_and_reorders_after_rak_cap(self) -> None:
         profiles = self.cashback_config()["routing_profiles"]
         empty = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [],
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
@@ -415,7 +419,7 @@ Closing balance (Total to pay) -25.00
         )
 
         capped = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY")],
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
@@ -432,7 +436,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_prioritizes_under_pace_sc_over_rak_tier_unlock(self) -> None:
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -471,7 +475,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_uses_sc_filler_when_reward_buckets_are_full(self) -> None:
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -492,7 +496,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_returns_to_rak_after_sc_target_is_secured(self) -> None:
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -516,7 +520,7 @@ Closing balance (Total to pay) -25.00
 
     def test_sc_online_cap_routes_wallet_amazon_and_filler_to_open_buckets(self) -> None:
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -535,7 +539,7 @@ Closing balance (Total to pay) -25.00
             ("SC_PLATINUM_X", "SC_WALLET"),
         )
         self.assertNotIn("SC_ONLINE", {candidate["bucket"] for candidate in graphs["GROCERY"]["ranked_cards"]})
-        self.assertEqual(graphs["AMAZON"]["ranked_cards"][0]["card"], "EI_AMAZON")
+        self.assertEqual(graphs["AMAZON"]["ranked_cards"][0]["card"], "RAK_WORLD")
         self.assertEqual(
             (graphs["FILLER"]["ranked_cards"][0]["card"], graphs["FILLER"]["ranked_cards"][0]["bucket"]),
             ("SC_PLATINUM_X", "SC_WALLET"),
@@ -590,14 +594,18 @@ Closing balance (Total to pay) -25.00
         self.assertEqual(row.transaction_type, "REVERSAL")
         self.assertTrue(row.is_refund)
 
-    def test_late_cycle_does_not_assume_an_unreachable_target_tier(self) -> None:
+    def test_late_cycle_keeps_target_for_routing_unavoidable_spend(self) -> None:
         dashboard = cashback_dashboard(
-            poc_programs(),
+            configured_programs(),
             [],
             date(2026, 8, 28),
             [PaymentIntent("GENERAL", money("100"), "AED", "ONLINE")],
         )
 
         sc = next(card for card in dashboard["cards"] if card["card"] == "SC_PLATINUM_X")
-        self.assertEqual(sc["routing_mode"], "CURRENT_TIER")
+        self.assertEqual(sc["routing_mode"], "TARGET_TIER")
         self.assertEqual(dashboard["recommendations"][0]["use_card"], "SC_PLATINUM_X")
+        preferred = dashboard["recommendations"][0]["ranked_cards"][0]
+        self.assertEqual(preferred["current_state_marginal_reward_aed"], "0.00")
+        self.assertEqual(preferred["conditional_target_reward_aed"], "10.00")
+        self.assertEqual(preferred["estimate_basis"], "CONDITIONAL_TARGET_TIER")
