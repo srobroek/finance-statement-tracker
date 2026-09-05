@@ -277,13 +277,16 @@ def notification_candidates(
 
     data_status = dashboard.get("data_status") or {}
     if data_status.get("is_stale") and "feed:stale" not in acknowledged:
-        last_success = str(data_status.get("last_successful_ingest_at") or "never")
+        last_success = str(data_status.get("last_successful_check_at") or data_status.get("last_successful_ingest_at") or "never")
         stale_after = int(data_status.get("stale_after_minutes") or 90)
         candidates.append(PushCandidate(
             key=f"feed:stale:{last_success}",
             title="Cashback feed is stale",
             body=(
-                f"No successful transaction scan was recorded within {stale_after} minutes. "
+                (f"The scheduled transaction check is overdue after its {stale_after}-minute grace period. "
+                 if data_status.get("freshness_basis") == "SCHEDULE"
+                 else f"No successful transaction scan was recorded within {stale_after} minutes. ")
+                +
                 "Live card routing may be incomplete."
             ),
             screen="routing",
