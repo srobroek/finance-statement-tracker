@@ -45,7 +45,10 @@ def fixture_dashboard() -> dict:
         routes.append({"code": code, "label": label, "purchase_type": code, "active": True,
                        "use_card": "RAK", "ranked_cards": candidates})
     return {"currency": "AED", "profile": {"name": "Fictional mobile QA"}, "cards": cards,
-            "routing_graphs": routes, "alerts": [], "data_status": {
+            "routing_graphs": routes, "alerts": [{
+                "key": "minimum:RAK:2026-09-01:2026-09-30",
+                "title": "Fictional configured target risk", "detail": "Fixture only",
+            }], "data_status": {
                 "last_successful_check_at": "2026-09-05T04:05:00Z", "is_stale": False,
                 "variance_count": 0, "acknowledged_alerts": []}}
 

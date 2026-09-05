@@ -92,6 +92,9 @@ try {
     await cdp('Page.navigate', {url});
     await until(() => evaluate('document.querySelectorAll("#recommendations .route-row").length === 6'), 'Dashboard did not render six fixture categories');
     assert.equal(await evaluate('document.body.dataset.screenActive'), 'routing');
+    assert.equal(await evaluate('document.querySelector("#attention .alert-card").checkVisibility()'), true);
+    assert.match(await evaluate('document.querySelector("#attention").innerText'), /1,249.75/);
+    assert.match(await evaluate('document.querySelector("#as-of").innerText'), /Checked/);
     assert.match(await evaluate('document.querySelector("#card-summary").textContent'), /4,250.25/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /Groceries/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /RAK/);
