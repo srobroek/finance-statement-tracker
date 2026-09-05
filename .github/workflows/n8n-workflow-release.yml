@@ -1,0 +1,38 @@
+name: External n8n workflow bundle
+
+on:
+  pull_request:
+    paths:
+      - "integrations/n8n/**"
+      - "scripts/stage-n8n-workflow-release.py"
+      - "tests/test_n8n_workflow_release.py"
+      - ".github/workflows/n8n-workflow-release.yml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/n8n/**"
+      - "scripts/stage-n8n-workflow-release.py"
+      - "tests/test_n8n_workflow_release.py"
+      - ".github/workflows/n8n-workflow-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests -p test_n8n_workflow_release.py -v
+      - name: Stage exact external application and runtime compatibility inputs
+        run: python scripts/stage-n8n-workflow-release.py --source-commit "$GITHUB_SHA" --destination "$RUNNER_TEMP/workflow-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: n8n-workflow-release-${{ github.sha }}
+          path: ${{ runner.temp }}/workflow-release/
+          if-no-files-found: error
+          retention-days: 30
