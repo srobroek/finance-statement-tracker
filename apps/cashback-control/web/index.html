@@ -27,6 +27,8 @@
       </header>
       <p id="reward-disclosure" class="reward-disclosure">Estimates based on configured rewards · Card terms not fully verified</p>
 
+      <p id="feed-warning" class="reward-disclosure" role="status" hidden></p>
+
       <nav class="screen-tabs" aria-label="Cashback dashboard screen">
         <button type="button" data-screen-view="routing" data-screen-title="Which card?" aria-selected="true">Routing</button>
         <button type="button" data-screen-view="cards" data-screen-title="Card position" aria-selected="false">Cards</button>
@@ -42,7 +44,7 @@
           </div>
         </div>
         <div id="recommendations-view" class="route-table" role="table" aria-label="Card routing recommendations">
-          <div class="route-table-head" role="row"><span role="columnheader">Spend</span><span role="columnheader">Cards</span></div>
+          <div class="route-table-head" role="row"><span role="columnheader">Spend</span><span role="columnheader">Use</span></div>
           <div id="recommendations"></div>
         </div>
         <div id="decision-tree" hidden></div>
@@ -75,6 +77,6 @@
         <div id="period-history"></div>
       </section>
     </main>
-    <script src="/app.js?v=20260904-1" defer></script>
+    <script src="/app.js?v=20260905-1" defer></script>
   </body>
 </html>
