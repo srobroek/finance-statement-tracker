@@ -332,6 +332,7 @@ def evaluate_card(
     intent: PaymentIntent,
     *,
     bucket_code: str | None = None,
+    amount_agnostic: bool = False,
 ) -> CardValue | None:
     if not program.reward_eligibility_verified:
         return None
@@ -350,8 +351,11 @@ def evaluate_card(
     best: CardValue | None = None
     for bucket in eligible:
         after_buckets = dict(current_buckets)
-        after_buckets[bucket.code] = after_buckets.get(bucket.code, Decimal("0")) + money(intent.amount_aed)
-        after_total = current_total + money(intent.amount_aed)
+        # Capacity routing ranks rates at the present state; it never assumes
+        # a purchase, crosses a tier, or requires room for an arbitrary amount.
+        delta = Decimal("0") if amount_agnostic else money(intent.amount_aed)
+        after_buckets[bucket.code] = after_buckets.get(bucket.code, Decimal("0")) + delta
+        after_total = current_total + delta
         after_reward = reward_total(program, after_total, after_buckets)
         target_total = program.safety_target if program.safety_target is not None else after_total
         target_tier = program.target_tier(target_total, after_buckets)
@@ -384,11 +388,14 @@ def evaluate_card(
             if spend_capacity is None
             else max(spend_capacity - current_bucket_spend, Decimal("0"))
         )
+        if amount_agnostic:
+            # A unit coefficient expresses rate, not a simulated transaction.
+            eligible_progress_spend = Decimal("1") if bucket_remaining is None or bucket_remaining > 0 else Decimal("0")
         strategic_reward = eligible_progress_spend * target_rate
         actual_marginal_reward = after_reward - before_reward
         decision_reward = max(actual_marginal_reward, strategic_reward)
         cost = (
-            money(intent.amount_aed) * program.fx_cost_rate
+            (Decimal("1") if amount_agnostic else money(intent.amount_aed)) * program.fx_cost_rate
             if intent.currency.upper() != program.base_currency
             else Decimal("0")
         )

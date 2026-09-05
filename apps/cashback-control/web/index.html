@@ -13,76 +13,15 @@
     <link rel="apple-touch-icon" href="/app-icon.svg?v=20260817-1" />
     <link rel="stylesheet" href="/styles.css?v=20260905-2" />
   </head>
-  <body data-screen-active="routing">
+  <body data-screen-active="cards">
     <main class="shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Live card routing</p>
-          <h1 id="screen-title">Which card?</h1>
-        </div>
-        <div class="top-actions">
-          <button id="push-toggle" class="push-toggle" type="button" hidden>Enable alerts</button>
-          <div id="as-of" class="as-of loading">Loading…</div>
-        </div>
-      </header>
-      <p id="reward-disclosure" class="reward-disclosure">Estimates based on configured rewards · Card terms not fully verified</p>
-
-      <p id="feed-warning" class="reward-disclosure" role="status" hidden></p>
-
-      <nav class="screen-tabs" aria-label="Cashback dashboard screen">
-        <button type="button" data-screen-view="routing" data-screen-title="Which card?" aria-selected="true">Routing</button>
-        <button type="button" data-screen-view="cards" data-screen-title="Card position" aria-selected="false">Cards</button>
-        <button type="button" data-screen-view="history" data-screen-title="Previous cycles" aria-selected="false">History</button>
-      </nav>
-
-      <section class="priority-section" data-app-screen="routing" aria-labelledby="routing-heading">
-        <div class="section-heading">
-          <h2 id="routing-heading">Card routing</h2>
-          <div class="routing-tabs" role="tablist" aria-label="Routing view">
-            <button type="button" data-routing-view="list" aria-selected="true">List</button>
-            <button type="button" data-routing-view="tree" aria-selected="false">Decision tree</button>
-          </div>
-        </div>
-        <form id="routing-amount-form" class="routing-amount">
-          <label for="routing-amount">Purchase amount (<span id="routing-currency">base currency</span> equivalent)</label>
-          <input id="routing-amount" type="number" inputmode="decimal" min="0.01" max="1000000" step="0.01" value="100" required />
-          <button type="submit">Check cards</button>
-          <p id="routing-amount-status" role="status">Checking routes for the amount shown.</p>
-        </form>
-        <div id="recommendations-view" class="route-table" role="table" aria-label="Card routing recommendations">
-          <div class="route-table-head" role="row"><span role="columnheader">Spend</span><span role="columnheader">Use</span></div>
-          <div id="recommendations"></div>
-        </div>
-        <div id="decision-tree" hidden></div>
+      <header class="topbar"><h1>Cashback</h1><div class="top-actions"><button id="push-toggle" hidden>Alerts</button><span id="as-of">Syncing…</span></div></header>
+      <nav class="screen-tabs" aria-label="View"><button data-screen-view="cards" aria-selected="true">Buckets</button><button data-screen-view="routing" aria-selected="false">Routing</button></nav>
+      <section data-app-screen="cards"><div id="cards"></div>
+        <details id="attention-section"><summary>Alerts</summary><div id="attention"></div></details>
+        <details id="history-section"><summary>History</summary><select id="period-selector" aria-label="Previous cycle"></select><div id="period-history"></div></details>
       </section>
-
-      <section class="detail-section" data-app-screen="cards" aria-labelledby="cards-heading">
-        <div class="section-heading">
-          <h2 id="cards-heading">Card position</h2>
-          <span>Cycle pace and bucket headroom</span>
-        </div>
-        <div id="cards" class="card-grid"></div>
-      </section>
-
-      <section id="attention-section" data-app-screen="cards" aria-labelledby="attention-heading">
-        <div class="section-heading">
-          <h2 id="attention-heading">Needs attention</h2>
-          <span>Items that may affect routing accuracy</span>
-        </div>
-        <div id="attention" class="attention-list"></div>
-      </section>
-
-      <section id="history-section" data-app-screen="history" aria-labelledby="history-heading">
-        <div class="section-heading history-heading">
-          <div>
-            <h2 id="history-heading">Previous cycles</h2>
-            <span>Finalized statement periods and expected cashback</span>
-          </div>
-          <select id="period-selector" aria-label="Previous cashback period"></select>
-        </div>
-        <div id="period-history"></div>
-      </section>
-    </main>
-    <script src="/app.js?v=20260905-4" defer></script>
+      <section data-app-screen="routing"><div id="recommendations"></div></section>
+    </main><script src="/app.js?v=20260905-3" defer></script>
   </body>
 </html>

@@ -13,7 +13,6 @@ from finance_tracker.cashback_events import (
     _json_digest,
     _legacy_recovery_digest,
     build_live_dashboard,
-    routing_purchase_amount,
 )
 
 
@@ -56,40 +55,6 @@ def actual_receipt_digest(receipt: dict[str, object]) -> str:
 
 
 class CashbackEventStoreTests(unittest.TestCase):
-    def test_purchase_quote_uses_real_amount_without_changing_spend(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
-            store.upsert([{
-                "source_event_id": "travel-near-cap",
-                "occurred_at": "2026-08-16T12:00:00+04:00",
-                "card_code": "RAK_WORLD",
-                "amount_aed": "3950",
-                "merchant": "Travel",
-                "purchase_type": "TRAVEL",
-                "channel": "PHYSICAL_POS",
-                "bucket_code": "RAK_TRAVEL",
-            }])
-            before = store.stats()
-            def travel(amount):
-                dashboard = build_live_dashboard(store, date(2026, 8, 16), purchase_amount=amount)
-                graph = next(row for row in dashboard["routing_graphs"] if row["code"] == "TRAVEL")
-                return dashboard, graph
-            default, large = travel("100")
-            quoted, small = travel("25")
-            self.assertNotIn("RAK_TRAVEL", [row["bucket"] for row in large["ranked_cards"]])
-            route = next(row for row in small["ranked_cards"] if row["bucket"] == "RAK_TRAVEL")
-            self.assertEqual(route["bucket_remaining_aed"], "50")
-            self.assertEqual(default["cards"], quoted["cards"])
-            self.assertEqual(store.stats(), before)
-            self.assertEqual(travel("100")[1], large)
-
-    def test_purchase_quote_rejects_invalid_amounts(self) -> None:
-        for value in ("", "0", "-1", "NaN", "Infinity", "1e2", "1.001", "1000000.01", "1&x=2"):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                routing_purchase_amount(value)
-        self.assertEqual(str(routing_purchase_amount("0.01")), "0.01")
-        self.assertEqual(str(routing_purchase_amount("1000000")), "1000000")
-
     def test_currency_neutral_amount_alias_is_supported_and_conflicts_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
