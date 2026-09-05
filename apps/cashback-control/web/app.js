@@ -171,13 +171,13 @@ function renderRecommendations(items) {
 }
 
 function categoryIcon(item) {
-  const category = String(item.purchase_type || item.code || item.label || "").toUpperCase();
+  const category = String(item.code || item.purchase_type || item.label || "").toUpperCase();
   const paths = [
     [/GROCER|SUPERMARKET/, "M3 4h2l2 11h11l3-8H6 M9 20h.01 M18 20h.01"],
     [/DINING|RESTAURANT/, "M5 3v7m3-7v7M5 7h3m-1.5 3v11M17 3v18m0-18c-5 3-5 9 0 9"],
     [/TRAVEL|FLIGHT/, "M3 11l7 2 5 8 2-1-2-8 6-6c2-2 0-4-2-2l-6 6-8-2z"],
     [/FUEL|PETROL/, "M4 21V5h10v16M4 10h10M2 21h14m-2-14 4 3v7c0 3 3 3 3 0V8l-3-3"],
-    [/WALLET/, "M3 6h17v14H3zM3 6V4h14m3 7h-6v5h6m-3-2h.01"],
+    [/WALLET|APPLE_PAY/, "M3 6h17v14H3zM3 6V4h14m3 7h-6v5h6m-3-2h.01"],
     [/FOREIGN|INTERNATIONAL/, "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18"],
     [/ONLINE|AMAZON/, "M3 4h18v13H3zM8 21h8m-4-4v4"],
   ];
