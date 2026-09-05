@@ -798,6 +798,9 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 expected_schema = list(columns_by_table.get(table_name, {}).items())
                 if actual_schema != expected_schema:
                     raise MatrixError(f"{relative}#{name} create schema differs from data-tables.json")
+                # Idempotent provisioning is schema validation, not a runtime
+                # producer edge and must not be rewritten during cutover.
+                continue
             else:
                 table_id = parameters.get("dataTableId")
                 if not isinstance(table_id, dict) or table_id.get("mode") != "name":
@@ -850,6 +853,11 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                     filter_keys.append(key)
             if table_name not in references:
                 raise MatrixError(f"{relative}#{name} references unknown Data Table {table_name!r}")
+            if relative.endswith("/19-platform-data-table-bootstrap.json"):
+                # W19 provisions disabled compatibility templates. Validate
+                # their parameters above, but do not treat bootstrap writes as
+                # production consumers/producers or cutover candidates.
+                continue
             references[table_name].append(
                 {
                     "table": table_name,

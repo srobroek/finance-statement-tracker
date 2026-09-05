@@ -7,37 +7,37 @@
       "id": "rakbank-morning-cashback-scan",
       "name": "RAKBANK morning cashback scan",
       "kind": "cron",
-      "status": "ACTIVE",
+      "status": "PAUSED",
       "rrule": "FREQ=DAILY;BYHOUR=8;BYMINUTE=5",
       "model": "gpt-5.6-luna",
       "reasoning_effort": "max",
       "notification_policy": "failed_runs_only",
       "runbook": "agents/automations/live-cashback-scan.md",
-      "prompt": "Run the live cashback scan for source RAKBANK_CARD_TRANSACTION with durable cursor outlook:rakbank. Follow agents/automations/live-cashback-scan.md exactly. If and only if the run succeeds completely, archive this task; never archive a failed or partial run."
+      "prompt": "Retired ingestion schedule: n8n owns acquisition and persistence. Do not run mailbox searches, submit ingestion, or advance cursors from this Codex task. For an explicitly supplied n8n review handoff only, follow agents/automations/live-cashback-scan.md."
     },
     {
       "id": "emirates-islamic-amazon-monthly-statement-reconciliation",
       "name": "Emirates Islamic Amazon monthly statement reconciliation",
       "kind": "cron",
-      "status": "ACTIVE",
+      "status": "PAUSED",
       "rrule": "FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=20;BYMINUTE=40",
       "model": "gpt-5.6-sol",
       "reasoning_effort": "medium",
       "notification_policy": "failed_runs_only",
       "runbook": "agents/automations/statement-cycle.md",
-      "prompt": "Run the authoritative monthly statement cycle for EI_AMAZON on day 1 after its month-end close. Follow agents/automations/statement-cycle.md exactly. EI is statement-only for live totals and uses its statement for cashback close."
+      "prompt": "Retired ingestion schedule: n8n owns acquisition and persistence. Do not run mailbox searches, submit ingestion, or advance cursors from this Codex task. For an explicitly supplied n8n review handoff only, follow agents/automations/statement-cycle.md."
     },
     {
       "id": "wio-monthly-statement-ingestion",
       "name": "Wio monthly statement ingestion",
       "kind": "cron",
-      "status": "ACTIVE",
+      "status": "PAUSED",
       "rrule": "FREQ=MONTHLY;BYMONTHDAY=3;BYHOUR=20;BYMINUTE=40",
       "model": "gpt-5.6-sol",
       "reasoning_effort": "medium",
       "notification_policy": "failed_runs_only",
       "runbook": "agents/automations/statement-cycle.md",
-      "prompt": "Run the authoritative monthly statement cycle for WIO_CREDIT on day 3 because statements arrive on day 1 or 2. Follow agents/automations/statement-cycle.md exactly. Map card suffix 4113 and account suffix 5009 to the single Actual account Wio Credit Card · 4113 / 5009; never split this credit product into separate accounts. Wio is outside the live cashback companion."
+      "prompt": "Retired ingestion schedule: n8n owns acquisition and persistence. Do not run mailbox searches, submit ingestion, or advance cursors from this Codex task. For an explicitly supplied n8n review handoff only, follow agents/automations/statement-cycle.md."
     }
   ]
 }

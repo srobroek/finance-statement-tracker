@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "18fe1412b805b0c76d6d7e95d41f2cedb08b8ed1",
+    "finance_commit": "2c0bb8502973392afcb3cc867664366b0140cc24",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "29045145204a8e7f926db36b8549c23ef45a96a300de32df51feca5a493eaad9",
+    "node_scan_corpus_sha256": "d37f0073e07dbdfe2511800147e2f9072567aaf9da57b44ce04289fb2cc9c3f4",
     "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },

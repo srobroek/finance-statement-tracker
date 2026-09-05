@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import errno
 from pathlib import Path
 import socket
 import socketserver
@@ -44,6 +45,24 @@ def pdf_bytes(password: str | None = None) -> bytes:
 
 @unittest.skipUnless(hasattr(socketserver, "UnixStreamServer"), "Unix-domain socket server is validated in Linux container CI")
 class ServerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Report a restricted runner instead of turning every case into an error.
+
+        Some sandboxed development runners expose ``socketserver.UnixStreamServer``
+        but deny the underlying AF_UNIX socket operation.  The server tests still
+        run on normal Linux and CI runners; this probe only marks the suite
+        unavailable when the kernel itself rejects AF_UNIX sockets.
+        """
+        try:
+            probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        except OSError as exc:
+            if exc.errno in {errno.EPERM, errno.ENOSYS}:
+                raise unittest.SkipTest(f"AF_UNIX unavailable in this runner: {exc}")
+            raise
+        else:
+            probe.close()
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.socket_path = str(Path(self.temp.name) / "pdf.sock")

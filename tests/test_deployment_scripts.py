@@ -1,4 +1,6 @@
+import errno
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -6,6 +8,59 @@ from pathlib import Path
 
 
 class DeploymentScriptTests(unittest.TestCase):
+    def _root_bash_command(self, script: Path, environment: dict[str, str]) -> list[str]:
+        """Run root-only fixtures wherever the runner permits it.
+
+        Local sandboxes and hosted runners often disable user namespaces.  A
+        passwordless sudo path keeps these checks running on ordinary CI; when
+        neither mechanism is available, only the root-dependent fixture is
+        reported as unavailable instead of producing a misleading assertion.
+        """
+        if os.geteuid() == 0:
+            return ["bash", str(script)]
+        if shutil.which("unshare"):
+            probe = subprocess.run(
+                ["unshare", "-Ur", "true"],
+                capture_output=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                return ["unshare", "-Ur", "bash", str(script)]
+        if shutil.which("sudo"):
+            probe = subprocess.run(
+                ["sudo", "-n", "true"],
+                capture_output=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                # sudo's secure_path replaces PATH even with -E. Restore the
+                # fixture's tool directory after elevation so these tests
+                # cannot accidentally invoke the host's real Docker client.
+                return ["sudo", "-n", "-E", "env", f"PATH={environment['PATH']}", "bash", str(script)]
+        raise unittest.SkipTest(
+            "root-only fixture unavailable: user namespaces and passwordless sudo are disabled"
+        )
+
+    def _run_root_fixture(
+        self, script: Path, root: Path, environment: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        command = self._root_bash_command(script, environment)
+        try:
+            return subprocess.run(
+                command, cwd=Path.cwd(), env=environment,
+                text=True, capture_output=True, check=False,
+            )
+        finally:
+            if command[0] == "sudo":
+                # The real root-only script correctly creates private files.
+                # Return this disposable fixture to the test user for readback
+                # assertions and TemporaryDirectory cleanup.
+                subprocess.run(
+                    ["sudo", "-n", "chown", "-R", "--no-dereference", "--",
+                     f"{os.getuid()}:{os.getgid()}", str(root)],
+                    check=True, capture_output=True, text=True,
+                )
+
     def _run_render_env_fixture(
         self,
         bootstrap: str | bytes,
@@ -32,7 +87,12 @@ class DeploymentScriptTests(unittest.TestCase):
             else:
                 bootstrap_file = bootstrap_target
             if owner is not None:
-                os.chown(bootstrap_target, owner, owner)
+                try:
+                    os.chown(bootstrap_target, owner, owner)
+                except OSError as exc:
+                    if exc.errno in {errno.EPERM, errno.EINVAL, errno.ENOSYS}:
+                        self.skipTest(f"foreign-owner fixture unavailable: {exc}")
+                    raise
             (runtime / ".env.tpl").write_text("APP_ENV=fixture\n", encoding="utf-8")
             bin_dir = root / "bin"
             bin_dir.mkdir()
@@ -174,7 +234,7 @@ class DeploymentScriptTests(unittest.TestCase):
             (bin_dir / "readlink").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "path=\"${3}\"\n"
+                "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
                 f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
@@ -193,8 +253,8 @@ class DeploymentScriptTests(unittest.TestCase):
                 "if [[ -e /proc/self/fd/9 ]]; then printf 'inherited\\n' >> \"${STUB_FD_LOG}\"; else printf 'closed\\n' >> \"${STUB_FD_LOG}\"; fi\n"
                 "case \"${1}\" in\n"
                 "  inspect)\n"
-                "    if [[ \"${DOCKER_MODE}\" == inspect_error && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual-poc ]]; then exit 1; fi\n"
-                "    if [[ \"${DOCKER_MODE}\" == unexpected_state && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual-poc ]]; then printf 'mystery\\n'; exit 0; fi\n"
+                "    if [[ \"${DOCKER_MODE}\" == inspect_error && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual ]]; then exit 1; fi\n"
+                "    if [[ \"${DOCKER_MODE}\" == unexpected_state && \"${3}\" == *'.State.Status'* && \"${name}\" == finance-actual ]]; then printf 'mystery\\n'; exit 0; fi\n"
                 "    if [[ \"${3}\" == *'.State.Paused'* ]]; then\n"
                 "      [[ -e \"${state}/${name}.paused\" ]] && printf 'true\\n' || printf 'false\\n'\n"
                 "    elif [[ -e \"${state}/${name}.paused\" ]]; then\n"
@@ -203,7 +263,7 @@ class DeploymentScriptTests(unittest.TestCase):
                 "      printf 'running\\n'\n"
                 "    fi\n"
                 "    ;;\n"
-                "  pause) printf 'pause:%s\\n' \"${2}\" >> \"${log}\"; touch \"${state}/${2}.paused\"; if [[ \"${DOCKER_MODE}\" == partial_pause_failure && \"${2}\" == finance-actual-poc ]]; then exit 1; fi ;;\n"
+                "  pause) printf 'pause:%s\\n' \"${2}\" >> \"${log}\"; touch \"${state}/${2}.paused\"; if [[ \"${DOCKER_MODE}\" == partial_pause_failure && \"${2}\" == finance-actual ]]; then exit 1; fi ;;\n"
                 "  unpause) printf 'unpause:%s\\n' \"${2}\" >> \"${log}\"; rm -f \"${state}/${2}.paused\" ;;\n"
                 "  exec)\n"
                 "    case \"${PROBE_MODE}\" in\n"
@@ -241,15 +301,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "DOCKER_MODE": docker_mode,
                 }
             )
-            command = ["bash", str(script)] if os.geteuid() == 0 else ["unshare", "-Ur", "bash", str(script)]
-            result = subprocess.run(
-                command,
-                cwd=Path.cwd(),
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = self._run_root_fixture(script, root, environment)
             self.assertIn(
                 probe_mode,
                 ("success", "missing_probe", "runtime_exec_failed", "probe_unhealthy"),
@@ -279,12 +331,12 @@ class DeploymentScriptTests(unittest.TestCase):
                     log.read_text(encoding="utf-8").splitlines(),
                     [
                         "pause:finance-actual-proxy",
-                        "pause:finance-actual-poc",
-                        "unpause:finance-actual-poc",
+                        "pause:finance-actual",
+                        "unpause:finance-actual",
                         "unpause:finance-actual-proxy",
                     ],
                 )
-                self.assertFalse((state / "finance-actual-poc.paused").exists())
+                self.assertFalse((state / "finance-actual.paused").exists())
                 self.assertFalse((state / "finance-actual-proxy.paused").exists())
             if docker_mode == "normal":
                 self.assertEqual(
@@ -343,8 +395,8 @@ class DeploymentScriptTests(unittest.TestCase):
                 "set -euo pipefail\n"
                 f"export PATH={bin_dir}:$PATH STUB_STATE={state} STUB_LOG={log} STUB_MODE=normal\n"
                 f"{helpers}\n"
-                "touch \"${STUB_STATE}/finance-actual-poc.paused\"\n"
-                "paused_services[finance-actual-poc]=paused\n"
+                "touch \"${STUB_STATE}/finance-actual.paused\"\n"
+                "paused_services[finance-actual]=paused\n"
                 "resume_services\n"
                 "resume_services\n"
                 "[[ $(wc -l < \"${STUB_LOG}\") -eq 1 ]]\n"
@@ -400,9 +452,9 @@ class DeploymentScriptTests(unittest.TestCase):
                     "set -euo pipefail\n"
                     f"export PATH={bin_dir}:$PATH STUB_MODE={mode} STUB_LOG={log}\n"
                     f"{helpers}\n"
-                    "paused_services[finance-actual-poc]=paused\n"
+                    "paused_services[finance-actual]=paused\n"
                     "if resume_services; then exit 1; fi\n"
-                    "[[ \"${paused_services[finance-actual-poc]}\" == unknown ]]\n"
+                    "[[ \"${paused_services[finance-actual]}\" == unknown ]]\n"
                 )
                 result = subprocess.run(
                     ["bash", "-c", harness],
@@ -415,7 +467,7 @@ class DeploymentScriptTests(unittest.TestCase):
                 if mode == "partial_unpause":
                     self.assertEqual(
                         log.read_text(encoding="utf-8").splitlines(),
-                        ["unpause:finance-actual-poc"],
+                        ["unpause:finance-actual"],
                     )
                 else:
                     self.assertFalse(log.exists())
@@ -444,7 +496,7 @@ class DeploymentScriptTests(unittest.TestCase):
     def test_backup_quiesces_only_authoritative_data_services(self) -> None:
         script = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
         self.assertNotIn("docker compose", script)
-        self.assertIn("pause_service finance-actual-poc", script)
+        self.assertIn("pause_service finance-actual", script)
         self.assertIn("pause_service finance-cashback-control", script)
         self.assertNotIn("finance-actual-ingestion", script)
         self.assertNotIn("ingestion-data", script)
@@ -469,6 +521,16 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn("KillMode=process", service)
 
+    def test_actual_runtime_identity_preserves_poc_stack_contracts(self) -> None:
+        compose = Path("deploy/actual-poc/compose.yaml").read_text(encoding="utf-8")
+        backup = Path("deploy/actual-poc/backup.sh").read_text(encoding="utf-8")
+
+        self.assertIn("container_name: finance-actual\n", compose)
+        self.assertNotIn("container_name: finance-actual-poc\n", compose)
+        self.assertIn('"actual":"finance-actual"', backup)
+        self.assertIn("/opt/stacks/finance-actual-poc", backup)
+        self.assertIn("/opt/backups/finance-actual-poc", backup)
+
     def test_finance_services_follow_podman_boot_restart(self) -> None:
         expected_ordering = {
             Path("deploy/actual-poc/finance-backup.service"):
@@ -491,8 +553,14 @@ class DeploymentScriptTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("flock -n 9", script)
-        self.assertIn("finance-actual-poc actual", script)
-        self.assertIn("finance-actual-poc actual-proxy", script)
+        self.assertIn(
+            'recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual-poc actual',
+            script,
+        )
+        self.assertIn(
+            'ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual-poc actual-proxy',
+            script,
+        )
         self.assertIn("finance-cashback cashback-control", script)
         self.assertNotIn("finance-ingestion", script)
         self.assertNotIn("finance-actual-ingestion", script)
@@ -528,7 +596,7 @@ class DeploymentScriptTests(unittest.TestCase):
             (bin_dir / "readlink").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "path=\"${3}\"\n"
+                "path=\"${@: -1}\"\n"
                 "case \"${path}\" in\n"
                 f"  {actual_stack}) printf '%s\\n' /opt/stacks/finance-actual-poc ;;\n"
                 f"  {cashback_stack}) printf '%s\\n' /opt/stacks/finance-cashback ;;\n"
@@ -564,20 +632,7 @@ class DeploymentScriptTests(unittest.TestCase):
                     "STUB_FD_LOG": str(fd_log),
                 }
             )
-            command = ["bash", str(script)] if os.geteuid() == 0 else [
-                "unshare",
-                "-Ur",
-                "bash",
-                str(script),
-            ]
-            result = subprocess.run(
-                command,
-                cwd=Path.cwd(),
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            result = self._run_root_fixture(script, root, environment)
             self.assertEqual(result.returncode, 0, result.stderr)
             fd_observations = fd_log.read_text(encoding="utf-8")
             self.assertIn("closed\n", fd_observations)
@@ -599,16 +654,20 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("uv sync --frozen --no-dev --no-cache", dockerfile)
         self.assertNotIn("pip install", dockerfile)
         workflow = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
+        runner = Path("scripts/run-validation.sh").read_text(encoding="utf-8")
         self.assertIn('"uv.lock"', workflow)
-        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
-        self.assertIn("uv run --frozen python -m unittest", workflow)
+        self.assertIn("scripts/run-validation.sh", workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", runner)
+        self.assertIn("uv run --frozen python -m unittest", runner)
+        self.assertIn("actual-session-offline-integration.mjs", runner)
+        self.assertNotIn("pip install", workflow + runner)
 
-    def test_promotion_workflows_exclude_pull_requests_and_codex_pushes(self) -> None:
+    def test_promotion_workflows_run_checks_without_promoting_from_pull_requests(self) -> None:
         phase1 = Path(".github/workflows/phase1-finance-artifacts.yml").read_text(
             encoding="utf-8"
         )
         phase1_triggers = phase1.split("\npermissions:", 1)[0]
-        self.assertNotIn("\n  pull_request:", phase1_triggers)
+        self.assertIn("\n  pull_request:", phase1_triggers)
         self.assertNotIn('"codex/**"', phase1_triggers)
         self.assertIn("branches: [main]", phase1_triggers)
         self.assertIn("  workflow_dispatch:\n", phase1_triggers)
@@ -616,20 +675,30 @@ class DeploymentScriptTests(unittest.TestCase):
 
         cashback = Path(".github/workflows/cashback-image.yml").read_text(encoding="utf-8")
         cashback_triggers = cashback.split("\npermissions:", 1)[0]
-        self.assertNotIn("\n  pull_request:", cashback_triggers)
+        self.assertIn("\n  pull_request:", cashback_triggers)
         self.assertNotIn("codex/**", cashback_triggers)
         self.assertIn("      - main\n", cashback_triggers)
         self.assertIn('      - "v*"\n', cashback_triggers)
         self.assertIn("  workflow_dispatch:\n", cashback_triggers)
         self.assertIn('      - "uv.lock"\n', cashback_triggers)
+        self.assertIn(
+            "if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')",
+            cashback,
+        )
+        self.assertIn(
+            "if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy == true",
+            cashback,
+        )
 
     def test_global_ci_uses_the_reviewed_uv_lock(self) -> None:
         workflow = Path(".github/workflows/validate.yml").read_text(encoding="utf-8")
+        runner = Path("scripts/run-validation.sh").read_text(encoding="utf-8")
         self.assertIn("astral-sh/setup-uv@v6", workflow)
         self.assertIn('version: "0.12.5"', workflow)
-        self.assertIn("uv sync --frozen --extra statements --extra test", workflow)
-        self.assertIn("uv run --frozen python -m unittest", workflow)
-        self.assertNotIn("pip install", workflow)
+        self.assertIn("scripts/run-validation.sh", workflow)
+        self.assertIn("uv sync --frozen --extra statements --extra test", runner)
+        self.assertIn("uv run --frozen python -m unittest", runner)
+        self.assertNotIn("pip install", workflow + runner)
 
     def test_cashback_stale_window_allows_daily_morning_ingestion(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
@@ -642,7 +711,8 @@ class DeploymentScriptTests(unittest.TestCase):
 
     def test_cashback_browser_access_uses_private_origin_contract(self) -> None:
         compose = Path("deploy/cashback/compose.yaml").read_text(encoding="utf-8")
-        self.assertIn('"127.0.0.1:5010:5010"', compose)
+        self.assertIn('"172.20.10.20:5010:5010"', compose)
+        self.assertNotIn('"127.0.0.1:5010:5010"', compose)
         self.assertIn(
             "    networks:\n"
             "      finance-runtime:\n"
@@ -690,7 +760,34 @@ class DeploymentScriptTests(unittest.TestCase):
         )
         self.assertIn('image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"', deploy)
         self.assertIn('printf \'IMAGE_REF=%s\\n\' "$image_ref" >> "$GITHUB_ENV"', deploy)
-        self.assertIn('sudo podman pull --authfile "$auth_file" "$IMAGE_REF"', deploy)
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '            docker pull "$IMAGE_REF"',
+                ]
+            ),
+            deploy,
+        )
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '            docker login',
+                ]
+            ),
+            deploy,
+        )
+        self.assertIn(
+            "\n".join(
+                [
+                    'sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \\',
+                    '              docker logout ghcr.io >/dev/null 2>&1 || true',
+                ]
+            ),
+            deploy,
+        )
+        self.assertIn('trap cleanup_auth EXIT', deploy)
         self.assertIn('test "$image" = "$IMAGE_REF"', deploy)
         self.assertIn("{{range .RepoDigests}}{{println .}}{{end}}", deploy)
         self.assertIn('awk -v expected="$IMAGE_REF"', deploy)
@@ -701,11 +798,10 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn('"$stack/compose.yaml.pre-${stamp}"', deploy)
         self.assertIn('"$stack/.env.rollback-${stamp}"', deploy)
         self.assertIn('running_image_id="$(sudo docker inspect finance-cashback-control --format \'{{.Image}}\')"', deploy)
-        self.assertIn('running_image_digest="$(sudo docker image inspect "$running_image_id" --format \'{{.Digest}}\')"', deploy)
-        self.assertIn('rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"', deploy)
-        self.assertIn('rollback_image_ref="$(\n', deploy)
-        self.assertIn('awk -v expected="$rollback_image_ref"', deploy)
-        self.assertIn("$0 == expected", deploy)
+        self.assertIn("mapfile -t rollback_candidates", deploy)
+        self.assertIn('awk -v prefix="${IMAGE_NAME}@sha256:"', deploy)
+        self.assertIn('rollback_image_ref="${rollback_candidates[0]}"', deploy)
+        self.assertIn('rollback_image_ref', deploy)
         self.assertIn('CASHBACK_IMAGE=%s\\n', deploy)
         self.assertNotIn("$IMAGE_NAME:main", deploy)
 

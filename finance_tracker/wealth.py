@@ -218,7 +218,9 @@ class FXSnapshot:
             object.__setattr__(self, "observed_at", self.observed_at.replace(tzinfo=timezone.utc))
 
     def is_fresh_for(self, as_of: datetime) -> bool:
-        return abs((self.observed_at - as_of).total_seconds()) <= self.max_age_seconds
+        checked = as_of if as_of.tzinfo else as_of.replace(tzinfo=timezone.utc)
+        age = (checked - self.observed_at).total_seconds()
+        return 0 <= age <= self.max_age_seconds
 
     def convert_minor(self, value: Decimal) -> int:
         return int(
@@ -393,11 +395,14 @@ class SarwaProvider:
         as_of = _as_of(overall.get("as_of"), "overall.as_of")
         total = _decimal(overall.get("balance_usd"), "overall.balance_usd")
 
-        portfolios = [
-            self._invest(row, currency)
-            for row in capture.get("invest_accounts") or []
-            if isinstance(row, Mapping)
-        ]
+        raw_invest_accounts = capture.get("invest_accounts")
+        if not isinstance(raw_invest_accounts, list):
+            raise ValueError("Sarwa capture requires invest_accounts as a list")
+        portfolios: list[PortfolioSnapshot] = []
+        for index, row in enumerate(raw_invest_accounts):
+            if not isinstance(row, Mapping):
+                raise ValueError(f"invest_accounts[{index}] must be an object")
+            portfolios.append(self._invest(row, currency))
         other = capture.get("other_products")
         if not isinstance(other, Mapping) or not isinstance(other.get("trade"), Mapping):
             raise ValueError("Sarwa capture requires other_products.trade")
@@ -432,9 +437,28 @@ class SarwaProvider:
             limitations=("Position-level Trade holdings were not present in the capture",),
         ))
 
+        portfolio_ids = [row.provider_account_id for row in portfolios]
+        if len(set(portfolio_ids)) != len(portfolio_ids):
+            raise ValueError("Sarwa capture contains a duplicate stable portfolio identity")
+        configured_ids = {
+            str(row["provider_account_id"])
+            for row in self.config["accounts"]
+        }
+        missing_ids = sorted(configured_ids - set(portfolio_ids))
+        unexpected_ids = sorted(set(portfolio_ids) - configured_ids)
+        if missing_ids or unexpected_ids:
+            raise ValueError(
+                "Sarwa capture portfolio coverage mismatch: "
+                f"missing={missing_ids} unexpected={unexpected_ids}"
+            )
+
         portfolio_total = sum((row.total_value for row in portfolios), Decimal("0"))
         portfolio_difference = portfolio_total - total
-        portfolio_status = "RECONCILED" if portfolio_difference == 0 else "MISMATCH"
+        portfolio_status = (
+            "RECONCILED"
+            if abs(portfolio_difference) <= Decimal("0.01")
+            else "MISMATCH"
+        )
 
         exclusions: list[WealthExclusion] = []
         protection = other.get("protection")

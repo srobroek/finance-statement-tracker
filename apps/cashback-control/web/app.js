@@ -10,6 +10,12 @@ function createNode(tagName, className, text) {
   return node;
 }
 
+function emptyState(title, detail, className = "empty-state") {
+  const node = createNode("article", className);
+  node.append(createNode("strong", "", title), createNode("span", "", detail));
+  return node;
+}
+
 function setWidth(node, percentage) {
   node.style.width = `${percentage}%`;
 }
@@ -35,7 +41,8 @@ function configureDisplay(payload) {
 }
 
 function cardLabel(code) {
-  return cardNames.get(code) || code.replaceAll("_", " ");
+  const normalized = String(code || "").trim();
+  return cardNames.get(normalized) || (normalized ? normalized.replaceAll("_", " ") : "No card");
 }
 
 function compactCardLabel(code) {
@@ -159,8 +166,13 @@ function tierName(code) {
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
+  const activeItems = (Array.isArray(items) ? items : []).filter((item) => item.active !== false);
+  if (!activeItems.length) {
+    root.replaceChildren(emptyState("No routing recommendations yet", "No active card routes are available."));
+    return;
+  }
   root.replaceChildren(
-    ...items.filter((item) => item.active !== false).map((item) => {
+    ...activeItems.map((item) => {
       const node = document.createElement("details");
       node.className = "route-row";
       const preferred = item.ranked_cards?.[0];
@@ -205,7 +217,7 @@ function renderRecommendations(items) {
 
 function renderDecisionTree(items) {
   const root = document.querySelector("#decision-tree");
-  const active = items.filter((item) => item.active !== false);
+  const active = (Array.isArray(items) ? items : []).filter((item) => item.active !== false);
   const key = (item) => item.code || `${item.purchase_type}:${item.channel}:${item.currency}`;
   const previous = root.dataset.selectedKey;
   root.replaceChildren();
@@ -221,6 +233,10 @@ function renderDecisionTree(items) {
   selectorLabel.append(selector);
   const graph = createNode("div", "spend-graph");
   root.append(selectorLabel, graph);
+  if (!active.length) {
+    root.replaceChildren(emptyState("Decision tree unavailable", "There are no active routing rules to display."));
+    return;
+  }
   if (active.some((item) => key(item) === previous)) selector.value = previous;
 
   const show = () => {
@@ -266,6 +282,10 @@ function renderDecisionTree(items) {
       createNode("strong", "", `${typeLabel(item)} routing order`),
       createNode("small", "", "Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics."),
     );
+    if (!candidates.length) {
+      graph.replaceChildren(header, emptyState("No eligible card route", "This spend type currently has no card that satisfies the configured rules."));
+      return;
+    }
     const list = createNode("ol");
     list.append(...candidates);
     graph.replaceChildren(header, list);
@@ -394,6 +414,10 @@ async function setupPushNotifications() {
 
 function renderCards(cards) {
   const root = document.querySelector("#cards");
+  if (!Array.isArray(cards) || !cards.length) {
+    root.replaceChildren(emptyState("No card positions yet", "No card balances are available yet."));
+    return;
+  }
   root.replaceChildren(
     ...cards.map((card) => {
       if (card.position_mode === "UNLIMITED") {
@@ -586,13 +610,18 @@ function renderAttention(payload) {
       actions.append(toggle);
       node.append(copy, actions);
       input.addEventListener("change", async (event) => {
-        event.currentTarget.disabled = true;
+        const control = event.currentTarget;
+        control.disabled = true;
+        let saved = false;
         try {
-          await setAlertAcknowledgement(alert.key, event.currentTarget.checked);
-          await loadDashboard();
+          await setAlertAcknowledgement(alert.key, control.checked);
+          saved = true;
+          await refreshDashboard();
         } catch (error) {
-          event.currentTarget.checked = !event.currentTarget.checked;
-          event.currentTarget.disabled = false;
+          if (!saved) control.checked = !control.checked;
+          control.title = error instanceof Error ? error.message : "Could not update alert.";
+        } finally {
+          control.disabled = false;
         }
       });
       return node;
@@ -630,7 +659,33 @@ function renderStatus(status) {
   root.title = `Last successful ingest: ${new Date(lastIngest).toLocaleString()}`;
 }
 
+function renderRewardDisclosure(estimate) {
+  const root = document.querySelector("#reward-disclosure");
+  const label = estimate?.label || "Estimated rewards based on configured terms";
+  const authority = estimate?.authority || "NON_AUTHORITATIVE";
+  const evidenceLabel = authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified";
+  root.textContent = `${label} · ${evidenceLabel}`;
+}
+
+let dashboardLoadSequence = 0;
+
+function renderDashboardError(error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const status = document.querySelector("#as-of");
+  status.className = "as-of stale";
+  status.textContent = "Unavailable";
+  status.title = detail;
+  document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+  document.querySelector("#decision-tree").replaceChildren(emptyState("Decision tree unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+  document.querySelector("#cards").replaceChildren(emptyState("Card positions unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+  document.querySelector("#attention-section").hidden = true;
+  document.querySelector("#history-section").hidden = false;
+  document.querySelector("#period-selector").hidden = true;
+  document.querySelector("#period-history").replaceChildren(emptyState("History unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+}
+
 async function loadDashboard() {
+  const sequence = ++dashboardLoadSequence;
   const [response, periodsResponse] = await Promise.all([
     fetch("/api/dashboard", { cache: "no-store" }),
     fetch("/api/periods", { cache: "no-store" }),
@@ -639,7 +694,9 @@ async function loadDashboard() {
   const periodsPayload = await periodsResponse.json();
   if (!response.ok) throw new Error(payload.error || "Dashboard is unavailable.");
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
+  if (sequence !== dashboardLoadSequence) return;
   configureDisplay(payload);
+  renderRewardDisclosure(payload.reward_estimate);
   renderStatus(payload.data_status);
   const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
   renderRecommendations(routing);
@@ -649,14 +706,20 @@ async function loadDashboard() {
   renderPeriodHistory(periodsPayload.periods || []);
 }
 
+async function refreshDashboard() {
+  const load = loadDashboard();
+  const sequence = dashboardLoadSequence;
+  try {
+    return await load;
+  } catch (error) {
+    if (sequence === dashboardLoadSequence) renderDashboardError(error);
+    throw error;
+  }
+}
+
 setupRoutingViews();
 setupScreenViews();
 setupPushNotifications();
-loadDashboard().catch((error) => {
-  const status = document.querySelector("#as-of");
-  status.className = "as-of stale";
-  status.textContent = "Unavailable";
-  document.querySelector("#recommendations").replaceChildren(createNode("p", "error", error.message));
-});
+refreshDashboard().catch(() => {});
 
-setInterval(loadDashboard, 60_000);
+setInterval(() => refreshDashboard().catch(() => {}), 60_000);

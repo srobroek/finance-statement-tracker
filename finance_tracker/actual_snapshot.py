@@ -395,6 +395,8 @@ def _build_card_state(
             "position_mode": program.position_mode,
             "position_headline": program.position_headline,
             "position_detail": program.position_detail,
+            "provenance_authority": program.provenance_authority,
+            "provenance_reason": program.provenance_reason,
             "programme_version": program.programme_version,
             "effective_start": None if program.effective_start is None else program.effective_start.isoformat(),
             "effective_end": None if program.effective_end is None else program.effective_end.isoformat(),
@@ -683,6 +685,14 @@ def cashback_dashboard(
         "schema_version": 1,
         "as_of": as_of.isoformat(),
         "currency": base_currency,
+        "reward_estimate": {
+            "label": "Estimated rewards based on configured terms",
+            "authority": (
+                "AUTHORITATIVE"
+                if program_rows and all(card["provenance_authority"] == "AUTHORITATIVE" for card in program_rows)
+                else "NON_AUTHORITATIVE"
+            ),
+        },
         "cards": program_rows,
         "recommendations": recommendations,
         "routing_graphs": routing_graphs,

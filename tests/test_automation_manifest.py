@@ -36,6 +36,7 @@ class AutomationManifestTests(unittest.TestCase):
         )
 
         self.assertEqual(len(manifest["automations"]), 3)
+        self.assertEqual({row["status"] for row in manifest["automations"]}, {"PAUSED"})
         self.assertEqual(
             next(row for row in manifest["automations"] if row["id"] == "rakbank-morning-cashback-scan")["rrule"],
             "FREQ=DAILY;BYHOUR=8;BYMINUTE=5",
@@ -67,6 +68,7 @@ class AutomationManifestTests(unittest.TestCase):
                     installed["rrule"] = "FREQ=DAILY;BYHOUR=20;BYMINUTE=5"
                     installed["model"] = "gpt-5.6-sol"
                     installed["prompt"] = "stale prompt"
+                    installed["status"] = "ACTIVE"
                 directory = automation_root / str(row["id"])
                 directory.mkdir()
                 (directory / "automation.toml").write_text(_toml(installed), encoding="utf-8")
@@ -87,7 +89,7 @@ class AutomationManifestTests(unittest.TestCase):
             self.assertEqual(result.extra, ("unexpected",))
             self.assertEqual(
                 {item["field"] for item in result.drift},
-                {"rrule", "model", "prompt"},
+                {"rrule", "model", "prompt", "status"},
             )
 
     def test_missing_runbook_is_rejected(self) -> None:

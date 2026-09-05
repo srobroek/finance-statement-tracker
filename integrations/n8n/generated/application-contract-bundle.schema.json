@@ -71,7 +71,7 @@
               "const": "config/statement-sources.json"
             },
             "sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             }
           },
           "additionalProperties": false
@@ -217,7 +217,7 @@
               "const": [
                 {
                   "path": "config/statement-sources.json",
-                  "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+                  "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
                 }
               ]
             },
@@ -288,7 +288,7 @@
                     "email_status": "PLACEHOLDER",
                     "email_senders": [],
                     "email_subjects": [],
-                    "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                    "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block RAK live notification cashback or any ACTIVE source ingestion/history, including ADCB."
                   }
                 },
                 {
@@ -301,7 +301,7 @@
                     "email_status": "PLACEHOLDER",
                     "email_senders": [],
                     "email_subjects": [],
-                    "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                    "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block any ACTIVE source ingestion/history, including ADCB; Standard Chartered statement close remains paused."
                   }
                 }
               ]
@@ -332,7 +332,7 @@
               "const": [
                 {
                   "path": "config/statement-sources.json",
-                  "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+                  "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
                 }
               ]
             },
@@ -403,7 +403,7 @@
                     "email_status": "PLACEHOLDER",
                     "email_senders": [],
                     "email_subjects": [],
-                    "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                    "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block RAK live notification cashback or any ACTIVE source ingestion/history, including ADCB."
                   }
                 },
                 {
@@ -416,7 +416,7 @@
                     "email_status": "PLACEHOLDER",
                     "email_senders": [],
                     "email_subjects": [],
-                    "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                    "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block any ACTIVE source ingestion/history, including ADCB; Standard Chartered statement close remains paused."
                   }
                 }
               ]
@@ -799,7 +799,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "contract": {
               "const": {
@@ -841,7 +841,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "contract": {
               "const": {
@@ -883,7 +883,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "contract": {
               "const": {
@@ -926,7 +926,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "contract": {
               "const": {
@@ -937,7 +937,7 @@
                 "email_status": "PLACEHOLDER",
                 "email_senders": [],
                 "email_subjects": [],
-                "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block RAK live notification cashback or any ACTIVE source ingestion/history, including ADCB."
               }
             }
           },
@@ -963,7 +963,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "contract": {
               "const": {
@@ -974,7 +974,7 @@
                 "email_status": "PLACEHOLDER",
                 "email_senders": [],
                 "email_subjects": [],
-                "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+                "notes": "Interim placeholder pending the first real statement fixture. No statement parser, mailbox contract, statement import, reconciliation, or period close is enabled until a real PDF is captured and passes the adapter gates. This card-scoped gap must not block any ACTIVE source ingestion/history, including ADCB; Standard Chartered statement close remains paused."
               }
             }
           },
@@ -1092,7 +1092,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
             },
             "state": {
               "const": "ACTIVE"

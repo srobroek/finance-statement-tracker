@@ -84,7 +84,7 @@ def apply_history_match(
         if unresolved and field not in locked:
             transaction.set_value(field, value)
             applied.append(field)
-    if decision.tags:
+    if decision.tags and "tags" not in locked:
         transaction.tags.update(decision.tags)
         applied.append("tags")
     transaction.metadata["history_count"] = decision.sample_count

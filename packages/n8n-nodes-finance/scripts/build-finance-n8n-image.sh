@@ -62,16 +62,30 @@ provenance_reference="$(node -p "require(process.argv[1]).reference" "${base_pro
 provenance_digest="$(node -p "require(process.argv[1]).digest" "${base_provenance_file}")"
 base_source_repository="$(node -p "require(process.argv[1]).source_repository" "${base_provenance_file}")"
 base_source_commit="$(node -p "require(process.argv[1]).source_commit" "${base_provenance_file}")"
+nodemailer_package="$(node -p "require(process.argv[1]).nodemailer_overlay.package" "${base_provenance_file}")"
+nodemailer_tarball_sha256="$(node -p "require(process.argv[1]).nodemailer_overlay.tarball_sha256" "${base_provenance_file}")"
+nodemailer_recipe_commit="$(node -p "require(process.argv[1]).nodemailer_overlay.source_commit" "${base_provenance_file}")"
+nodemailer_dockerfile_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.dockerfile_blob" "${base_provenance_file}")"
+nodemailer_smoke_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.smoke_blob" "${base_provenance_file}")"
 [[ "${provenance_reference}" = "${base_image}" && "${provenance_digest}" = "${base_image##*@}" ]] || {
   echo "FINANCE_BASE_IMAGE_PROVENANCE_MISMATCH" >&2
   exit 1
 }
-[[ "${base_source_repository}" = "https://github.com/srobroek/n8n" ]] || {
+[[ "${base_source_repository}" = "https://github.com/n8n-io/n8n" ]] || {
   echo "FINANCE_BASE_IMAGE_SOURCE_REPOSITORY_INVALID" >&2
   exit 1
 }
-[[ "${base_source_commit}" =~ ^[0-9a-f]{40}$ ]] || {
+[[ "${base_source_commit}" = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e" ]] || {
   echo "FINANCE_BASE_IMAGE_SOURCE_COMMIT_INVALID" >&2
+  exit 1
+}
+[[ "${nodemailer_package}" = "nodemailer@9.0.1" \
+   && "${nodemailer_tarball_sha256}" = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3" \
+   && "${nodemailer_recipe_commit}" = "9bd6b55e88deade27591080e14f1a7c4bdc9808b" \
+   && "${nodemailer_dockerfile_blob}" = "02cfd924119874c03aa1b94367bf8eefdf166d90" \
+   && "${nodemailer_smoke_blob}" = "cdb2c9c08500e798ab7881818707fdf710709213" \
+   && "$(git hash-object "${package_dir}/scripts/nodemailer-smoke.cjs")" = "${nodemailer_smoke_blob}" ]] || {
+  echo "FINANCE_NODEMAILER_OVERLAY_PROVENANCE_INVALID" >&2
   exit 1
 }
 
@@ -108,6 +122,9 @@ FINANCE_SOURCE_COMMIT="${source_commit}" \
 FINANCE_BASE_IMAGE="${base_image}" \
 FINANCE_BASE_SOURCE_REPOSITORY="${base_source_repository}" \
 FINANCE_BASE_SOURCE_COMMIT="${base_source_commit}" \
+FINANCE_NODEMAILER_PACKAGE="${nodemailer_package}" \
+FINANCE_NODEMAILER_TARBALL_SHA256="${nodemailer_tarball_sha256}" \
+FINANCE_NODEMAILER_RECIPE_COMMIT="${nodemailer_recipe_commit}" \
 FINANCE_BASE_PROVENANCE_PATH="packages/n8n-nodes-finance/base-image-provenance.json" \
 node <<'NODE'
 'use strict';
@@ -135,6 +152,11 @@ const receipt = {
     source_repository: process.env.FINANCE_BASE_SOURCE_REPOSITORY,
     source_commit: process.env.FINANCE_BASE_SOURCE_COMMIT,
     provenance_path: process.env.FINANCE_BASE_PROVENANCE_PATH,
+    nodemailer_overlay: {
+      package: process.env.FINANCE_NODEMAILER_PACKAGE,
+      tarball_sha256: process.env.FINANCE_NODEMAILER_TARBALL_SHA256,
+      recipe_commit: process.env.FINANCE_NODEMAILER_RECIPE_COMMIT,
+    },
   },
   source_commit: sourceCommit,
   sbom_sha256: null,

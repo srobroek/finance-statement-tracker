@@ -155,17 +155,68 @@ try {{
         node = shutil.which("node")
         self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
         environment = os.environ.copy()
-        ajv_modules = Path("/home/sjors/.cache/typescript/5.9/node_modules")
-        if ajv_modules.is_dir():
-            environment["NODE_PATH"] = str(ajv_modules)
-        result = subprocess.run(
-            [node, "-e", script],
-            cwd=ROOT,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        # W11 executes the same Ajv-backed validator as the exported n8n code.
+        # Prefer the reviewed package dependency installed by CI, retaining
+        # the workstation cache as a compatibility fallback.
+        ajv_module_roots = [
+            ROOT / "packages/n8n-nodes-finance/node_modules",
+            Path("/home/sjors/.cache/typescript/5.9/node_modules"),
+        ]
+        available_roots = [str(path) for path in ajv_module_roots if (path / "ajv").is_dir()]
+        if available_roots:
+            environment["NODE_PATH"] = os.pathsep.join(available_roots)
+        with tempfile.TemporaryDirectory() as temporary:
+            script_path = Path(temporary) / "exported-node.cjs"
+            script_path.write_text(script, encoding="utf-8")
+            result = subprocess.run(
+                [node, str(script_path)],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
+
+    def run_exported_node_without_dynamic_code(
+        self,
+        node_name: str,
+        json_input: dict,
+        binary: dict,
+        references: dict[str, dict],
+    ) -> dict:
+        """Run exported Code-node source under the production JS runner flags."""
+        code = self.nodes("11-interactive-artifact-handoff.json")[node_name]["parameters"]["jsCode"]
+        script = f"""
+function executeNode($json, $binary, $) {{
+{code}
+}}
+const jsonInput = {json.dumps(json_input)};
+const binary = {json.dumps(binary)};
+const references = {json.dumps(references)};
+const lookup = name => ({{ first: () => references[name] }});
+try {{
+  const output = executeNode(jsonInput, binary, lookup);
+  process.stdout.write(JSON.stringify({{ ok: true, output }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
+        with tempfile.TemporaryDirectory() as temporary:
+            script_path = Path(temporary) / "restricted-exported-node.cjs"
+            script_path.write_text(script, encoding="utf-8")
+            result = subprocess.run(
+                [node, "--disallow-code-generation-from-strings", "--disable-proto=delete", str(script_path)],
+                cwd=ROOT,
+                env=os.environ.copy(),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout, result.stderr)
         return json.loads(result.stdout)
@@ -371,7 +422,7 @@ try {{
 
     def test_registry_is_postgres_spec_only_without_execution_claims(self) -> None:
         self.assertEqual(self.registry["schema_version"], 2)
-        self.assertEqual(self.registry["n8n_version"], "2.36.2")
+        self.assertEqual(self.registry["n8n_version"], "2.37.10")
         self.assertEqual(
             self.registry["deployment_mode"], "regular-postgres-external-runners"
         )
@@ -1084,8 +1135,10 @@ try {{
             "Read Back Released Recovery Writer Fence",
             "Route Recovery State", "Read Back COMMITTED Recovery Replay",
             "Read Back Exact Actual Verification Receipt Replay",
-            "Read Back Released Recovery Writer Fence Replay",
             "Return Verified Commit Receipt Replay",
+            "Assert Recovery Fence After Import",
+            "Validate Stored Verification Receipt for Commit",
+            "Assert Recovery Fence Before Commit",
         ):
             self.assertIn(name, writer)
         code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"]["parameters"]["jsCode"]
@@ -1121,9 +1174,6 @@ try {{
         replay_code = writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"]
         self.assertIn("Verify Recovery Contract", replay_code)
         self.assertNotIn("Build Recovery Fence Release", replay_code)
-        replay_release_query = writer_nodes["Read Back Released Recovery Writer Fence Replay"]["parameters"]["options"]["queryReplacement"]
-        self.assertIn("Read Back COMMITTED Recovery Replay", replay_release_query)
-        self.assertIn("json.lease_fence", replay_release_query)
         committed_values = writer_nodes["Upsert COMMITTED Recovery"]["parameters"]["columns"]["value"]
         self.assertEqual(
             {"lease_owner", "lease_fence"},
@@ -1139,8 +1189,27 @@ try {{
         )
         self.assertEqual(
             self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Exact Actual Verification Receipt Replay"]["main"][0][0]["node"],
-            "Read Back Released Recovery Writer Fence Replay",
+            "Return Verified Commit Receipt Replay",
         )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Recovery Import PREPARED"]["main"][0][0]["node"],
+            "Build Post-Import Fence Assert",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back VERIFIED Recovery"]["main"][0][0]["node"],
+            "Read Verification Receipt for Commit",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Assert Recovery Fence Before Commit"]["main"][0][0]["node"],
+            "Build Recovery Fence Release",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Released Recovery Writer Fence"]["main"][0][0]["node"],
+            "Upsert COMMITTED Recovery",
+        )
+        observed_values = writer_nodes["Upsert ACTUAL OBSERVED Recovery"]["parameters"]["columns"]["value"]
+        self.assertIn("actual.actual_result.added", observed_values["actual_transaction_id"])
+        self.assertIn("outbox_row.actual_transaction_id", observed_values["actual_transaction_id"])
 
     def test_shared_pipeline_reuses_existing_outbox_before_prepared_upsert(self) -> None:
         workflow = self.workflow("03-shared-statement-pipeline.json")
@@ -1223,6 +1292,10 @@ try {{
             "period_end": "2026-08-31",
             "expected_payload_sha256": digest,
             "observed_payload_sha256": digest,
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": -100,
+            "observed_amount_sum_minor": -100,
             "expected_account_balance": -100,
             "observed_account_balance": -100,
             "invariants_passed": True,
@@ -1255,6 +1328,101 @@ try {{
         )
         self.assertTrue(replay["ok"], replay)
         self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
+
+    def test_actual_writer_uses_import_delta_evidence_and_branch_safe_receipts(self) -> None:
+        digest = "a" * 64
+        root = {
+            "outbox_row": {"idempotency_key": "statement:one", "batch_id": "statement:one"},
+            "manifest": {
+                "actual_file_id": "actual-file", "account_id": "account-1",
+                "card_code": "ADCB_CASHBACK", "period_start": "2024-02-01",
+                "period_end": "2024-02-29", "expected_statement_balance_minor": 999999,
+                "historical_import": True,
+            },
+            "verification": {
+                "account_id": "account-1", "card_code": "ADCB_CASHBACK",
+                "expected_transactions": [{"imported_id": "statement:one"}],
+                "expected_account_balance": 999999,
+            },
+        }
+        observed_state = {"expected_account_balance": 12500, "observed_account_balance": 12500}
+        contract = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json", "Build Recovery Verification Contract",
+            observed_state,
+            {
+                "Verify Recovery Contract": {"json": root},
+                "Read Back ACTUAL OBSERVED Recovery": {"json": observed_state},
+            },
+        )
+        self.assertTrue(contract["ok"], contract)
+        projected = contract["output"][0]["json"]
+        self.assertNotIn("expected_account_balance", projected["verification"])
+        self.assertEqual(projected["balance_evidence"], {"expected": 12500, "observed": 12500})
+        missing_delta = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json", "Build Recovery Verification Contract",
+            {"expected_account_balance": None, "observed_account_balance": None},
+            {
+                "Verify Recovery Contract": {"json": root},
+                "Read Back ACTUAL OBSERVED Recovery": {"json": {
+                    "expected_account_balance": None, "observed_account_balance": None,
+                }},
+            },
+        )
+        self.assertFalse(missing_delta["ok"])
+
+        receipt = {
+            "idempotency_key": "statement:one", "batch_id": "statement:one",
+            "actual_file_id": "actual-file", "account_id": "account-1",
+            "card_code": "ADCB_CASHBACK", "period_start": "2024-02-01",
+            "period_end": "2024-02-29", "expected_payload_sha256": digest,
+            "observed_payload_sha256": digest, "expected_count": 1, "observed_count": 1,
+            "expected_amount_sum_minor": -100, "observed_amount_sum_minor": -100,
+            "expected_account_balance": 12500, "observed_account_balance": 12500,
+            "invariants_passed": True,
+        }
+        validated = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
+            receipt, {"Verify Recovery Contract": {"json": root}},
+        )
+        self.assertTrue(validated["ok"], validated)
+        bad_balance = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
+            {**receipt, "observed_account_balance": 12499},
+            {"Verify Recovery Contract": {"json": root}},
+        )
+        self.assertFalse(bad_balance["ok"])
+        for invalid in (
+            {**receipt, "expected_account_balance": None, "observed_account_balance": None},
+            {**receipt, "expected_count": None, "observed_count": None},
+            {**receipt, "expected_amount_sum_minor": None, "observed_amount_sum_minor": None},
+        ):
+            rejected = self.run_exported_workflow_node(
+                "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
+                invalid, {"Verify Recovery Contract": {"json": root}},
+            )
+            self.assertFalse(rejected["ok"])
+
+        committed = {
+            "batch_id": "statement:one", "state": "COMMITTED",
+            "lease_owner": "n8n:recovery:statement:one", "lease_fence": 4,
+        }
+        final = self.run_exported_workflow_node(
+            "20-actual-outbox-apply.json", "Return Verified Commit Receipt",
+            {},
+            {
+                "Read Back COMMITTED Recovery": {"json": committed},
+                "Validate Stored Verification Receipt for Commit": {"json": receipt},
+                "Read Back Released Recovery Writer Fence": {"json": {
+                    "resource_key": "actual:actual-file", "lease_id": "11111111-1111-4111-8111-111111111111",
+                    "lease_owner": committed["lease_owner"], "fencing_token": 4, "released": True,
+                }},
+                "Build Recovery Fence Release": {"json": {
+                    "resource_key": "actual:actual-file", "lease_id": "11111111-1111-4111-8111-111111111111",
+                    "lease_owner": committed["lease_owner"], "fencing_token": 4,
+                }},
+            },
+        )
+        self.assertTrue(final["ok"], final)
 
     def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
         recovery = set(self.nodes("17-actual-outbox-recovery.json"))
@@ -1361,12 +1529,6 @@ try {{
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
-            "Read Back Released Recovery Writer Fence Replay": {"json": {
-                "resource_key": "actual:actual-file:replay-1",
-                "lease_owner": "n8n:recovery:outbox:replay-1",
-                "fencing_token": 7,
-                "released": True,
-            }},
         }
         connections = self.workflow("20-actual-outbox-apply.json")["connections"]
         replay_route = ["Verify Recovery Contract", "Route Recovery State"]
@@ -1385,7 +1547,6 @@ try {{
                 "Route Recovery State",
                 "Read Back COMMITTED Recovery Replay",
                 "Read Back Exact Actual Verification Receipt Replay",
-                "Read Back Released Recovery Writer Fence Replay",
                 "Return Verified Commit Receipt Replay",
             ],
         )
@@ -1415,6 +1576,8 @@ try {{
                 "Recovery Verify Actual": {"json": {"actual": {
                     "expected_sha256": digest,
                     "observed_sha256": digest,
+                    "transaction_count": 1,
+                    "amount_sum": 100,
                     "account_balance": -100,
                 }}},
             },
@@ -1432,6 +1595,8 @@ try {{
                 "Recovery Verify Actual": {"json": {"actual": {
                     "expected_sha256": digest,
                     "observed_sha256": digest,
+                    "transaction_count": 1,
+                    "amount_sum": 100,
                     "account_balance": -100,
                 }}},
             },
@@ -1443,8 +1608,7 @@ try {{
             receipt,
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
-                "Recovery Verify Actual": {"json": {"actual": {"status": "VERIFIED"}}},
-                "Compare Exact Actual Verification Receipt": {"json": receipt},
+                "Validate Stored Verification Receipt for Commit": {"json": receipt},
                 "Build Recovery Fence Release": {"json": {
                     "resource_key": "actual:actual-file:replay",
                     "lease_id": "00000000-0000-4000-8000-000000000007",
@@ -1468,8 +1632,7 @@ try {{
             receipt,
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
-                "Recovery Verify Actual": {"json": {"actual": {"status": "VERIFIED"}}},
-                "Compare Exact Actual Verification Receipt": {"json": receipt},
+                "Validate Stored Verification Receipt for Commit": {"json": receipt},
                 "Build Recovery Fence Release": {"json": {
                     "resource_key": "actual:actual-file:replay",
                     "lease_id": "00000000-0000-4000-8000-000000000007",
@@ -1498,7 +1661,7 @@ try {{
                 },
             )
             self.assertFalse(rejected["ok"])
-        unreleased = self.run_exported_workflow_node(
+        later_lease_state_is_irrelevant = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
             "Return Verified Commit Receipt Replay",
             receipt,
@@ -1512,7 +1675,7 @@ try {{
                 }},
             },
         )
-        self.assertFalse(unreleased["ok"])
+        self.assertTrue(later_lease_state_is_irrelevant["ok"], later_lease_state_is_irrelevant)
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
@@ -1537,6 +1700,9 @@ try {{
         self.assertIn("DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);", migration)
         for term in ("ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
             self.assertIn(term, migration)
+        release_body = migration[migration.index("CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease"):]
+        self.assertIn("IF changed = 1 THEN", release_body)
+        self.assertIn("AND released_at IS NOT NULL", release_body)
 
     def test_error_workflow_redacts_then_upserts_reads_compares_and_marks(self) -> None:
         workflow = self.workflow("16-operations-error-handler.json")
@@ -1698,6 +1864,61 @@ try {{
             self.workflow("21-subscription-agent-adapter.json")["id"],
         )
 
+    def test_ai_submitted_readback_matches_the_canonical_table_schema(self) -> None:
+        workflow = self.workflow("09-ai-proposal.json")
+        digest = "a" * 64
+        expected = {
+            "job_id": f"finance-ai:{digest}",
+            "idempotency_key": digest,
+            "policy_id": "classify-unresolved",
+            "policy_sha256": "b" * 64,
+            "config_sha256": "c" * 64,
+            "output_schema_sha256": "d" * 64,
+            "request_sha256": digest,
+        }
+        # finance_ai_reviews intentionally has no job_id column. The transport
+        # job id is deterministically derived from the persisted idempotency key.
+        observed = {key: value for key, value in expected.items() if key != "job_id"}
+        result = self.run_exported_workflow_node(
+            "09-ai-proposal.json",
+            "Compare SUBMITTED Agent Job Readback",
+            observed,
+            {"Build Idempotent Agent Handoff": {"json": expected}},
+        )
+        self.assertTrue(result["ok"], result)
+
+    def test_ai_redacted_context_is_small_useful_and_excludes_identifiers(self) -> None:
+        workflow = self.workflow("09-ai-proposal.json")
+        result = self.run_exported_workflow_node(
+            "09-ai-proposal.json",
+            "Validate Untrusted Proposal Request",
+            {
+                "policy_id": "classify-unresolved",
+                "unresolved": [{
+                    "transaction_id": "actual:fixture:1",
+                    "allowed_fields": ["category"],
+                    "redacted_context": {
+                        "merchant": "  Grocery Store  ",
+                        "currency": "AED",
+                        "source_message_id": "mailbox-secret",
+                        "email": "person@example.test",
+                        "description": "card 4111 1111 1111 1111",
+                    },
+                }],
+            },
+            {},
+        )
+        self.assertTrue(result["ok"], result)
+        context = result["output"][0]["json"]["unresolved"][0]["redacted_context"]
+        self.assertEqual(context, {"merchant": "Grocery Store", "currency": "AED"})
+
+        adapter = self.nodes("21-subscription-agent-adapter.json")[
+            "Validate and Build Fixed Provider Invocation"
+        ]["parameters"]["jsCode"]
+        request_source = adapter[adapter.index("const request = {"):adapter.index("const prompt = [")]
+        for private_field in ("archive_sha256", "evidence_replay_keys", "archive_identity_keys", "archive_item_ids"):
+            self.assertNotIn(f"{private_field}:", request_source)
+
     def test_ai_policy_targets_are_complete_and_profile_owned(self) -> None:
         policies = load_json(ROOT / "config" / "ai-policies.json")["policies"]
         target_contract = load_json(N8N / "ai-policy-targets.json")
@@ -1736,11 +1957,24 @@ try {{
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
         self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
-        self.assertEqual(manifest["n8n_version"], "2.36.2")
-        self.assertEqual(set(manifest["execution_evidence"].values()), {False})
+        self.assertEqual(manifest["n8n_version"], "2.37.10")
+        evidence = manifest["execution_evidence"]
+        self.assertTrue(evidence["exact_image_import_tested"])
+        self.assertTrue(evidence["disposable_create_reuse_tested"])
+        self.assertTrue(evidence["table_list_readback_tested"])
+        self.assertTrue(evidence["seed_write_result_tested"])
+        self.assertFalse(evidence["source_workflow_unmodified_import_tested"])
+        self.assertFalse(evidence["seed_independent_readback_tested"])
+        self.assertFalse(evidence["production_validated"])
+        self.assertRegex(evidence["github_actions_run"], r"^https://github\.com/.+/actions/runs/\d+/job/\d+$")
         self.assertIn("SOURCE_MIGRATION_GATE_REQUIRED", manifest["activation_blockers"])
+        self.assertIn("LEGACY_SOURCE_ROWS_RESTORE_REQUIRED", manifest["activation_blockers"])
         self.assertIn(
             "SOURCE_MIGRATION_GATE_REQUIRED",
+            self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
+        )
+        self.assertIn(
+            "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED",
             self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
         )
         self.assertEqual(
@@ -1979,6 +2213,19 @@ try {{
             ]
             for target, schema in matrix["target_schemas"].items()
         }
+        referenced_legacy = {
+            table["source_table"]
+            for table in matrix["tables"]
+            if table.get("node_references")
+        }
+        expected.update({
+            table["name"]: [
+                {"name": field, "type": column_type}
+                for field, column_type in table["columns"].items()
+            ]
+            for table in self.tables["tables"]
+            if table["name"] in referenced_legacy
+        })
         creates = [
             node for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.dataTable"
@@ -1994,29 +2241,48 @@ try {{
             self.assertEqual(parameters["columns"]["column"], expected[name])
         self.assertEqual(
             [node["parameters"]["tableName"] for node in creates],
-            matrix["targets"],
+            [
+                table["name"]
+                for table in load_bootstrap_generator().compatibility_table_rows(self.tables, matrix)
+            ] + matrix["targets"],
         )
-        self.assertFalse(
-            any(
-                node["type"] == "n8n-nodes-base.dataTable"
-                and node["parameters"].get("resource") == "row"
-                for node in workflow["nodes"]
-            )
-        )
+        row_nodes = [
+            node for node in workflow["nodes"]
+            if node["type"] == "n8n-nodes-base.dataTable"
+            and node["parameters"].get("resource") == "row"
+        ]
+        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
         self.assertEqual(workflow["meta"]["targetTables"], matrix["targets"])
-        self.assertTrue(workflow["meta"]["legacyTableCreationForbidden"])
-        self.assertTrue(workflow["meta"]["seedWritesForbidden"])
+        self.assertFalse(workflow["meta"]["legacyTableCreationForbidden"])
+        self.assertEqual(
+            set(workflow["meta"]["legacyCompatibilityTables"]),
+            referenced_legacy,
+        )
+        self.assertEqual(
+            set(workflow["meta"]["legacyTablesNotProvisioned"]),
+            {table["name"] for table in self.tables["tables"]} - referenced_legacy,
+        )
+        self.assertTrue(workflow["meta"]["existingTableDeletionForbidden"])
+        self.assertFalse(workflow["meta"]["seedWritesForbidden"])
+        self.assertTrue(workflow["meta"]["sourceContractTemplatesSeededDisabled"])
 
-    def test_platform_bootstrap_has_no_legacy_row_seeds(self) -> None:
+    def test_platform_bootstrap_seeds_only_disabled_legacy_templates(self) -> None:
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         data_nodes = [
             node for node in nodes.values()
             if node["type"] == "n8n-nodes-base.dataTable"
         ]
         self.assertTrue(data_nodes)
-        self.assertTrue(all(node["parameters"].get("resource") == "table" for node in data_nodes))
-        self.assertFalse(any("finance_ai_policy_contracts" in json.dumps(node) for node in data_nodes))
-        self.assertFalse(any("finance_config_versions" in json.dumps(node) for node in data_nodes))
+        row_nodes = [node for node in data_nodes if node["parameters"].get("resource") == "row"]
+        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
+        self.assertEqual(row_nodes[0]["parameters"]["dataTableId"]["value"], "finance_source_contracts")
+        # Declared-but-unreferenced legacy schemas are preserved when already
+        # present, but a fresh compatibility bootstrap does not create them.
+        self.assertFalse(any(node["parameters"].get("tableName") == "finance_ai_policy_contracts" for node in data_nodes))
+        self.assertFalse(any(node["parameters"].get("tableName") == "finance_config_versions" for node in data_nodes))
+        template_code = nodes["Emit Disabled Source Contract Templates"]["parameters"]["jsCode"]
+        self.assertIn("enabled: false", template_code)
+        self.assertIn("template:", template_code)
         self.assertEqual(
             nodes["Verify Application Contract Bundle Digest and Maps"]["type"],
             "n8n-nodes-base.code",
@@ -2510,7 +2776,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
 
     def test_workflow_folder_manifest_is_complete_and_post_import_guarded(self) -> None:
         contract = load_json(N8N / "workflow-folders.json")
-        self.assertEqual(contract["n8n_version"], "2.36.2")
+        self.assertEqual(contract["n8n_version"], "2.37.10")
         self.assertEqual(len(contract["folders"]), 6)
         workflow_rows = contract["workflows"]
         self.assertEqual(len(workflow_rows), len({row["code"] for row in workflow_rows}))
@@ -2806,6 +3072,13 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
         result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, references)
         self.assertTrue(result["ok"], result)
+        validator_code = self.nodes("11-interactive-artifact-handoff.json")["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        for forbidden_runtime_primitive in ("require(", "eval(", "new Function", "WebAssembly.compile"):
+            self.assertNotIn(forbidden_runtime_primitive, validator_code)
+        restricted_result = self.run_exported_node_without_dynamic_code(
+            "Validate Browser Capture Schema", valid, binary, references,
+        )
+        self.assertTrue(restricted_result["ok"], restricted_result)
 
         invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
         invalid_bytes = json.dumps(
@@ -2827,6 +3100,13 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
         result = self.run_exported_node("Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs)
         self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_FORBIDDEN_FIELD:capture.password"})
+        restricted_invalid = self.run_exported_node_without_dynamic_code(
+            "Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs,
+        )
+        self.assertEqual(
+            restricted_invalid,
+            {"ok": False, "error": "BROWSER_CAPTURE_FORBIDDEN_FIELD:capture.password"},
+        )
         durable_storage: list[dict] = []
         if result["ok"]:
             durable_storage.append(invalid)

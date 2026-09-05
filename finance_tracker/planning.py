@@ -55,16 +55,17 @@ def recommend_category_budgets(
     """Recommend conservative monthly envelope amounts from completed months only."""
     if lookback_months < 1 or minimum_months < 1:
         raise ValueError("lookback_months and minimum_months must be positive")
+    rows = list(transactions)
     current_month = as_of.isoformat()[:7]
     months = sorted(
         {
             _month(str(row.get("date") or ""))
-            for row in transactions
+            for row in rows
             if _eligible_expense(row) and _month(str(row.get("date") or "")) < current_month
         }
     )[-lookback_months:]
     by_category_month: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for row in transactions:
+    for row in rows:
         if not _eligible_expense(row):
             continue
         month = _month(str(row.get("date") or ""))
@@ -178,4 +179,3 @@ def recommend_schedules(
                 }
             )
     return sorted(results, key=lambda item: item["name"])
-

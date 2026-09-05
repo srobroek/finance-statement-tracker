@@ -16,7 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 statements = [
     "pdfplumber==0.11.9",
-    "pypdf==6.10.0",
+    "pypdf==6.16.1",
 ]
 test = [
     "reportlab==4.4.9",

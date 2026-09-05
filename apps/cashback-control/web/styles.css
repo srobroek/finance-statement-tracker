@@ -54,6 +54,12 @@ h3 { margin-top: 4px; font-size: 1.05rem; }
 }
 .as-of.live { color: var(--green); border-color: #315d3e; background: #10251a; }
 .as-of.stale { color: var(--amber); border-color: #685333; background: #251e13; }
+.reward-disclosure {
+  margin: 0 0 10px;
+  color: var(--amber);
+  font-size: .68rem;
+  line-height: 1.35;
+}
 .push-toggle {
   min-height: 30px;
   border: 1px solid #6f5c37;

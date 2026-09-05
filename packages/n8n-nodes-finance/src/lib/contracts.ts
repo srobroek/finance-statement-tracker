@@ -17,6 +17,16 @@ export interface PreparedActualOutbox {
   outbox_id: string;
   state: 'PREPARED';
   account_id: string;
+  /** Source/card identity is supplied by the trusted statement workflow. */
+  card_code?: string;
+  /**
+   * Historical imports are an explicit, source-bound exception.  The
+   * account id is repeated so the writer can reject an envelope whose
+   * claimed historical target differs from its Actual target.
+   */
+  historical_import?: boolean;
+  historical_source?: string;
+  historical_account_id?: string;
   execution_context: {
     trigger: 'SCHEDULE' | 'SUBWORKFLOW' | 'RECOVERY';
     manual: false;
@@ -50,6 +60,7 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
     ids.add(importedId);
     const amount = row.amount;
     if (!Number.isSafeInteger(amount)) throw new Error(`${label}[${index}].amount must be integer minor units`);
+    if (row.cleared !== undefined && typeof row.cleared !== 'boolean') throw new Error(`${label}[${index}].cleared must be boolean`);
     return {
       imported_id: importedId,
       date: assertIsoDate(row.date, `${label}[${index}].date`),
@@ -77,7 +88,8 @@ export function requiredString(value: unknown, label: string, max = 512): string
 
 export function assertIsoDate(value: unknown, label: string): string {
   const result = requiredString(value, label, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || Number.isNaN(Date.parse(`${result}T00:00:00Z`))) {
+  const timestamp = Date.parse(`${result}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || !Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== result) {
     throw new Error(`${label} must be YYYY-MM-DD`);
   }
   return result;
@@ -94,6 +106,15 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   if (value.schema_version !== 1 || value.state !== 'PREPARED') throw new Error('outbox must be schema v1 in PREPARED state');
   const outboxId = requiredString(value.outbox_id, 'outbox.outbox_id', 128);
   const accountId = requiredString(value.account_id, 'outbox.account_id', 128);
+  const cardCode = value.card_code === undefined ? undefined : requiredString(value.card_code, 'outbox.card_code', 128);
+  if (value.historical_import !== undefined && typeof value.historical_import !== 'boolean') throw new Error('outbox.historical_import must be boolean');
+  const historicalImport = value.historical_import === undefined ? undefined : value.historical_import;
+  const historicalSource = value.historical_source === undefined ? undefined : requiredString(value.historical_source, 'outbox.historical_source', 128);
+  const historicalAccountId = value.historical_account_id === undefined ? undefined : requiredString(value.historical_account_id, 'outbox.historical_account_id', 128);
+  if (historicalSource !== undefined && historicalImport !== true) throw new Error('outbox.historical_source requires historical_import');
+  if (historicalAccountId !== undefined && historicalImport !== true) throw new Error('outbox.historical_account_id requires historical_import');
+  if (historicalImport === true && (!historicalSource || !historicalAccountId)) throw new Error('historical_import requires source and account binding');
+  if (historicalAccountId !== undefined && historicalAccountId !== accountId) throw new Error('outbox historical account binding does not match account_id');
   assertObject(value.execution_context, 'outbox.execution_context');
   const context = value.execution_context;
   if (!['SCHEDULE', 'SUBWORKFLOW', 'RECOVERY'].includes(String(context.trigger)) || context.manual !== false || context.mcp !== false) {
@@ -112,6 +133,10 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
     outbox_id: outboxId,
     state: 'PREPARED',
     account_id: accountId,
+    ...(cardCode === undefined ? {} : { card_code: cardCode }),
+    ...(historicalImport === undefined ? {} : { historical_import: historicalImport }),
+    ...(historicalSource === undefined ? {} : { historical_source: historicalSource }),
+    ...(historicalAccountId === undefined ? {} : { historical_account_id: historicalAccountId }),
     execution_context: context as PreparedActualOutbox['execution_context'],
     writer_lease: { lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
     transactions,

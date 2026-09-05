@@ -29,6 +29,15 @@ def trusted_binaries(prefix: str = "finance-mcp-test-"):
 
 
 class FinanceMcpLauncherTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        # The tests deliberately place trusted shims under the same mise
+        # installs root that the launcher validates.  A fresh CI/home image may
+        # not have created that directory yet.
+        TRUSTED_INSTALLS.mkdir(parents=True, exist_ok=True)
+        TRUSTED_INSTALLS.chmod(0o700)
+
     def test_fake_op_cli_state_machine_receives_reference_template(self):
         with tempfile.TemporaryDirectory(dir="/dev/shm") as directory, trusted_binaries() as trusted:
             root = Path(directory)

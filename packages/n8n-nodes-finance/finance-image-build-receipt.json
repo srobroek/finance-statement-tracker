@@ -3,36 +3,42 @@
   "status": "SPEC_ONLY",
   "package": "n8n-nodes-finance@0.1.0",
   "image": {
-    "requested_reference": "finance-n8n:orc-n2q-234-2-5296b802",
+    "requested_reference": "finance-n8n:spec-0.1.0",
     "image_digest": null,
-    "local_image_id": "sha256:4b44e25305c0ee39aada1993ca57dc24e4f3198245ef1347fb8d3e23ad084bb6"
+    "local_image_id": null
   },
   "base_image": {
-    "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-    "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-    "source_repository": "https://github.com/srobroek/n8n",
-    "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
-    "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json"
+    "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "source_repository": "https://github.com/n8n-io/n8n",
+    "source_commit": "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
+    "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json",
+    "nodemailer_overlay": {
+      "package": "nodemailer@9.0.1",
+      "tarball_sha256": "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3",
+      "recipe_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+    }
   },
-  "source_commit": "5296b80206d4cf8eead1804b88d9dcfe6448e123",
-  "sbom_sha256": "f6324a9136d54a8d6219239eb422a0c966e518d163c7d44100f63e7336e40bf2",
-  "scan_sha256": "a814cc00b0cc4c095c2646e4e76edf92fa34f7f1d2b008c994581ed465b41e85",
+  "source_commit": null,
+  "sbom_sha256": null,
+  "scan_sha256": null,
   "scan": {
-    "tool": "trivy",
-    "result": "PASS",
-    "high": 0,
-    "critical": 0
+    "tool": null,
+    "result": "NOT_RUN",
+    "high": null,
+    "critical": null
   },
   "attestation": {
-    "type": "local-build-provenance",
-    "predicate_type": "https://slsa.dev/provenance/v1",
+    "type": null,
+    "predicate_type": null,
     "subject_digest": null,
-    "source_commit": "5296b80206d4cf8eead1804b88d9dcfe6448e123",
-    "sha256": "6ebbc82bc3fd260f52ed6a0e76a0145eb0160690981c3a9d069511d03df59ee2",
-    "status": "VERIFIED"
+    "source_commit": null,
+    "sha256": null,
+    "status": "NOT_AVAILABLE"
   },
   "blockers": [
     "LIVE_REGISTRY_DIGEST_REQUIRED",
+    "SBOM_SCAN_ATTESTATION_REQUIRED",
     "DISPOSABLE_IMAGE_IMPORT_REQUIRED"
   ]
 }

@@ -1,3 +1,4 @@
+import errno
 import os
 import subprocess
 import tempfile
@@ -74,7 +75,12 @@ class ActualBackupModeTests(unittest.TestCase):
             if os.geteuid() == 0:
                 foreign = root / "foreign"
                 foreign.write_text("private\n", encoding="utf-8")
-                os.chown(foreign, 65534, 65534)
+                try:
+                    os.chown(foreign, 65534, 65534)
+                except OSError as exc:
+                    if exc.errno in {errno.EINVAL, errno.EPERM, errno.ENOSYS}:
+                        self.skipTest(f"foreign-owner fixture unavailable: {exc}")
+                    raise
                 result = self._run_helper(
                     "set -euo pipefail\n"
                     "PRIVATE_DIR_MODE=700 PRIVATE_FILE_MODE=600 PRIVATE_OWNER_UID=$(id -u)\n"

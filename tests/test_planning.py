@@ -65,6 +65,16 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(result[0]["amount_max_minor"], 70000)
         self.assertEqual(result[0]["date"]["frequency"], "monthly")
 
+    def test_budget_recommendations_accept_one_shot_iterables(self) -> None:
+        rows = (
+            {"date": f"2026-0{month}-05", "amount": -10000, "category_name": "Groceries"}
+            for month in (1, 2, 3)
+        )
+
+        result = recommend_category_budgets(rows, as_of=date(2026, 4, 1))
+
+        self.assertEqual([row["category"] for row in result], ["Groceries"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-import { JsonObject, assertObject, requiredString } from './contracts';
+import { JsonObject, assertIsoDate, assertObject, requiredString } from './contracts';
 import { RE2JS } from 're2js';
 
 const PROTECTED_FIELDS = new Set([
@@ -54,11 +54,32 @@ export interface NonRepresentableRule {
 export function normalizeTransaction(input: unknown): JsonObject {
   assertObject(input, 'transaction');
   const result: JsonObject = { ...input };
-  if (typeof result.merchant_raw === 'string') result.merchant_raw = result.merchant_raw.replace(/\s+/g, ' ').trim();
-  if (typeof result.vendor === 'string') result.vendor = result.vendor.replace(/\s+/g, ' ').trim();
-  if (typeof result.currency === 'string') result.currency = result.currency.trim().toUpperCase();
-  if (Array.isArray(result.tags)) result.tags = [...new Set(result.tags.filter(value => typeof value === 'string').map(value => value.trim()).filter(Boolean))].sort();
+  const locked = lockedFields(result);
+  if (!locked.has('merchant_raw') && typeof result.merchant_raw === 'string') result.merchant_raw = result.merchant_raw.replace(/\s+/g, ' ').trim();
+  if (!locked.has('vendor') && typeof result.vendor === 'string') result.vendor = result.vendor.replace(/\s+/g, ' ').trim();
+  if (!locked.has('currency') && typeof result.currency === 'string') result.currency = result.currency.trim().toUpperCase();
+  if (!locked.has('tags') && Array.isArray(result.tags)) result.tags = [...new Set(result.tags.filter(value => typeof value === 'string').map(value => value.trim()).filter(Boolean))].sort();
   return result;
+}
+
+function lockedFields(row: JsonObject): Set<string> {
+  const value = row.locked_fields;
+  if (value !== undefined && (!Array.isArray(value) || value.some(field => typeof field !== 'string'))) throw new Error('locked_fields must be an array of field names');
+  const locked = new Set<string>((value ?? []) as string[]);
+  if (row.transaction_type_locked === true) locked.add('transaction_type');
+  return locked;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  if (typeof value === 'string' && value.trim() === '') return undefined;
+  const result = Number(value);
+  return Number.isFinite(result) ? result : undefined;
+}
+
+function calendarDate(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|[Tt])/.test(value)) return undefined;
+  try { return assertIsoDate(value.slice(0, 10), 'rule date'); } catch { return undefined; }
 }
 
 function comparable(value: unknown, caseSensitive: boolean): unknown {
@@ -75,6 +96,18 @@ function conditionMatches(row: JsonObject, condition: NonRepresentableRule['matc
   const actual = comparable(row[condition.field], Boolean(condition.case_sensitive));
   const expected = comparable(condition.value, Boolean(condition.case_sensitive));
   let matched: boolean;
+  if (NUMERIC_OPERATORS.has(condition.operator) && finiteNumber(actual) === undefined) return Boolean(condition.negate);
+  if (DATE_OPERATORS.has(condition.operator)) {
+    const day = calendarDate(actual);
+    const target = calendarDate(expected);
+    const end = calendarDate(condition.second_value);
+    matched = day !== undefined && target !== undefined && (
+      condition.operator === 'date_on' ? day === target :
+      condition.operator === 'date_before' ? day < target :
+      condition.operator === 'date_after' ? day > target : end !== undefined && day >= target && day <= end
+    );
+    return condition.negate ? !matched : matched;
+  }
   switch (condition.operator) {
     case 'equals': matched = actual === expected; break;
     case 'not_equals': matched = actual !== expected; break;
@@ -112,7 +145,7 @@ function conditionMatches(row: JsonObject, condition: NonRepresentableRule['matc
     case 'is_false': matched = actual === false; break;
     case 'has_tag': {
       const tags = row[condition.field];
-      matched = Array.isArray(tags) && tags.map(String).includes(String(condition.value));
+      matched = Array.isArray(tags) && tags.map(tag => comparable(tag, Boolean(condition.case_sensitive))).includes(expected);
       break;
     }
     default: throw new Error(`unsupported N8N_ONLY operator: ${condition.operator}`);
@@ -126,6 +159,8 @@ export function validateNonRepresentableRule(value: unknown): NonRepresentableRu
     throw new Error('rule must explicitly be owned by N8N_ONLY and non-representable in Actual');
   }
   const stage = requiredString(value.stage, 'rule.stage', 64);
+  requiredString(value.rule_id, 'rule.rule_id', 128);
+  if (typeof value.stop_on_match !== 'boolean') throw new Error('rule.stop_on_match must be boolean');
   if (!STAGES.has(stage)) throw new Error(`stage is not eligible for n8n execution: ${stage}`);
   if (!Number.isInteger(value.priority)) throw new Error('rule.priority must be an integer');
   assertObject(value.match, 'rule.match');
@@ -145,6 +180,16 @@ export function validateNonRepresentableRule(value: unknown): NonRepresentableRu
       if (TEXT_OPERATORS.has(operator) && (NUMERIC_FIELDS.has(field) || BOOLEAN_FIELDS.has(field))) throw new Error(`text operator is invalid for ${field}`);
       if (operator === 'has_tag' && field !== 'tags') throw new Error('has_tag is valid only for tags');
       if (operator === 'polarity' && !['positive', 'negative', 'zero'].includes(String(condition.value))) throw new Error('polarity requires positive, negative, or zero');
+      if (NUMERIC_OPERATORS.has(operator) && operator !== 'polarity') {
+        const start = finiteNumber(condition.value);
+        const end = finiteNumber(condition.second_value);
+        if (start === undefined || (operator === 'between' && (end === undefined || start > end))) throw new Error('numeric condition requires finite values in ascending order');
+      }
+      if (DATE_OPERATORS.has(operator)) {
+        const start = calendarDate(condition.value);
+        const end = calendarDate(condition.second_value);
+        if (start === undefined || (operator === 'date_between' && (end === undefined || start > end))) throw new Error('date condition requires valid dates in ascending order');
+      }
       if (operator === 'regex') safeRegexSource(condition.value);
       if (['contains_any', 'in', 'not_in'].includes(operator) && !Array.isArray(condition.value)) throw new Error(`${operator} requires an array value`);
       if (['between', 'date_between'].includes(operator) && condition.second_value === undefined) throw new Error(`${operator} requires second_value`);
@@ -167,6 +212,7 @@ export function validateNonRepresentableRule(value: unknown): NonRepresentableRu
 
 export function applyNonRepresentableRules(input: unknown, values: unknown[]): JsonObject {
   let result = normalizeTransaction(input);
+  const locked = lockedFields(result);
   const rules = values.map(validateNonRepresentableRule).sort((left, right) => STAGE_ORDER.indexOf(left.stage as never) - STAGE_ORDER.indexOf(right.stage as never) || left.priority - right.priority || left.rule_id.localeCompare(right.rule_id));
   let stage = '';
   let stopped = false;
@@ -181,6 +227,8 @@ export function applyNonRepresentableRules(input: unknown, values: unknown[]): J
     const matched = rule.match.any.some(group => group.all.every(condition => conditionMatches(result, condition)));
     if (!matched) continue;
     for (const action of rule.actions) {
+      const field = action.action === 'require_review' ? 'review_required' : action.action === 'request_evidence' ? 'evidence_status' : action.field!;
+      if (locked.has(field)) continue;
       if (action.action === 'require_review') result.review_required = true;
       else if (action.action === 'request_evidence') result.evidence_status = 'REQUESTED';
       else if (action.action === 'set') result[action.field!] = action.value;
@@ -193,7 +241,7 @@ export function applyNonRepresentableRules(input: unknown, values: unknown[]): J
 }
 
 export function finalizeTransactionType(input: JsonObject): JsonObject {
-  if (input.transaction_type_locked === true) return input;
+  if (lockedFields(input).has('transaction_type')) return input;
   const value = { ...input };
   const description = String(value.description ?? value.merchant_raw ?? '').toUpperCase();
   const direction = String(value.source_direction ?? value.direction ?? '').toUpperCase();

@@ -1,9 +1,59 @@
 {
   "schema_version": 1,
-  "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-  "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-  "source_repository": "https://github.com/srobroek/n8n",
-  "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
-  "runtime_receipt": "final-images-platform-187-2/platform-image-receipt.json",
-  "runtime_receipt_sha256": "9e9bc4dadd079323638fffa473af7e88605661fabd53505ae24bc9ae1f93b02f"
+  "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+  "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+  "version": "2.37.10",
+  "release_channel": "stable",
+  "bundled_n8n_workflow": "2.37.4",
+  "release_evidence": {
+    "tag": "n8n@2.37.10",
+    "url": "https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.10",
+    "prerelease": false,
+    "published_at": "2026-09-04T09:13:04Z"
+  },
+  "source_repository": "https://github.com/n8n-io/n8n",
+  "source_commit": "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
+  "os_security_overlay": {
+    "distribution": "Alpine Linux 3.24",
+    "builder_image": "public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36",
+    "installer": "apk-tools-static=3.0.8-r0",
+    "repository": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main",
+    "verification": "Alpine repository signature via apk.static",
+    "packages": {
+      "libcrypto3": "3.5.8-r0",
+      "libssl3": "3.5.8-r0",
+      "libexpat": "2.8.4-r0",
+      "openssh": "10.3_p1-r1",
+      "openssh-client-common": "10.3_p1-r1",
+      "openssh-client-default": "10.3_p1-r1",
+      "openssh-keygen": "10.3_p1-r1",
+      "openssh-server": "10.3_p1-r1",
+      "openssh-server-common": "10.3_p1-r1",
+      "openssh-sftp-server": "10.3_p1-r1"
+    }
+  },
+  "nodemailer_overlay": {
+    "package": "nodemailer@9.0.1",
+    "tarball_sha256": "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3",
+    "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer",
+    "source_repository": "https://github.com/srobroek/n8n-orchestrator",
+    "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
+    "dockerfile_blob": "02cfd924119874c03aa1b94367bf8eefdf166d90",
+    "smoke_blob": "cdb2c9c08500e798ab7881818707fdf710709213"
+  },
+  "javascript_security_overlay": {
+    "packages": {
+      "fast-uri": {
+        "version": "3.1.6",
+        "integrity": "sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/fast-uri@3.1.5/node_modules/fast-uri"
+      },
+      "toml": {
+        "version": "4.2.0",
+        "integrity": "sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml"
+      }
+    },
+    "runtime_proof": "package identity, URI parse/normalize, AJV compile, Snowflake connection-profile TOML parse, prototype isolation, and nesting limit"
+  }
 }

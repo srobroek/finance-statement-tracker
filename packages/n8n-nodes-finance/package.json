@@ -23,11 +23,12 @@
   },
   "devDependencies": {
     "@types/node": "22.15.3",
-    "n8n-workflow": "2.36.1",
+    "ajv": "8.20.0",
+    "n8n-workflow": "2.37.4",
     "typescript": "5.8.3"
   },
   "peerDependencies": {
-    "n8n-workflow": "2.36.1"
+    "n8n-workflow": "2.37.4"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,

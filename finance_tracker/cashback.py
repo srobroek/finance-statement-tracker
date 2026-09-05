@@ -152,6 +152,8 @@ class CardProgram:
     position_mode: str = "SPEND"
     position_headline: str | None = None
     position_detail: str | None = None
+    provenance_authority: str = "NON_AUTHORITATIVE"
+    provenance_reason: str | None = None
     pace_policy: PacePolicy = PacePolicy()
     alert_policy: AlertPolicy = AlertPolicy()
     base_currency: str = "AED"
@@ -183,6 +185,24 @@ class PaymentIntent:
     currency: str = "AED"
     channel: str = "UNKNOWN"
     conditional: bool = False
+
+    def __post_init__(self) -> None:
+        amount = money(self.amount_aed)
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError("Payment intent amount must be a finite positive value")
+        category = str(self.category or "").strip().upper()
+        currency = str(self.currency or "").strip().upper()
+        channel = str(self.channel or "").strip().upper()
+        if not category:
+            raise ValueError("Payment intent category is required")
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("Payment intent currency must be a three-letter code")
+        if not channel:
+            raise ValueError("Payment intent channel is required")
+        object.__setattr__(self, "amount_aed", amount)
+        object.__setattr__(self, "category", category)
+        object.__setattr__(self, "currency", currency)
+        object.__setattr__(self, "channel", channel)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1148,6 +1168,7 @@ def programs_from_config(
         pace = _merged_policy(source, item, "pace")
         alerts = _merged_policy(source, item, "alerts")
         tracking = item.get("tracking") or {}
+        provenance = item.get("provenance") or {}
         if not isinstance(tracking, dict):
             raise ValueError(f"Cashback program {item.get('card')} tracking must be an object")
         tracking_mode = str(tracking.get("mode") or "LIVE").upper()
@@ -1188,6 +1209,8 @@ def programs_from_config(
                 position_mode=position_mode,
                 position_headline=str(tracking.get("headline") or "") or None,
                 position_detail=str(tracking.get("detail") or "") or None,
+                provenance_authority=str(provenance.get("authority") or "NON_AUTHORITATIVE"),
+                provenance_reason=str(provenance.get("reason") or "") or None,
                 pace_policy=PacePolicy(
                     basis=str(pace.get("basis") or "WEEKLY").upper(),
                     routing_basis=str(pace.get("routing_basis") or "CYCLE").upper(),

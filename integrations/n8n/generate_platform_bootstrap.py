@@ -171,6 +171,35 @@ def build_source_contracts(
     return result
 
 
+def build_source_contract_templates(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Render disabled, non-secret rows that operators can complete safely."""
+    templates: list[dict[str, Any]] = []
+    for source in bundle["source_contracts"]:
+        contract = source["contract"]
+        is_transaction = source["source_path"].endswith("transaction-email-sources.json")
+        templates.append({
+            "source_code": source["source_code"],
+            "config_version": f"template:{source['config_version']}",
+            "folder_id": str(contract.get("mail_folder") or ""),
+            "senders_json": json.dumps(contract.get("senders" if is_transaction else "email_senders", [])),
+            "subjects_json": json.dumps(contract.get("subjects" if is_transaction else "email_subjects", [])),
+            "onedrive_parent_id": "",
+            "manifest_onedrive_parent_id": "",
+            "overlap_seconds": 21600,
+            "cycle_day": 0,
+            "deadline_days": 0,
+            "actual_file_id": "",
+            "account_id": "",
+            "card_code": str(contract.get("card_code") or ""),
+            "cashback_close_required": False,
+            # Repository config cannot supply deployment IDs. Never activate a
+            # partially configured source row implicitly.
+            "enabled": False,
+            "content_sha256": source["content_sha256"],
+        })
+    return templates
+
+
 def build_ai_policy_contracts(
     document: dict[str, Any], source: dict[str, str],
 ) -> list[dict[str, Any]]:
@@ -428,6 +457,15 @@ def target_table_rows(matrix: dict) -> list[dict]:
     ]
 
 
+def compatibility_table_rows(contract: dict, matrix: dict) -> list[dict]:
+    """Return legacy tables still referenced by non-bootstrap workflow nodes."""
+    required = {
+        table["source_table"] for table in matrix["tables"]
+        if table.get("node_references")
+    }
+    return [table for table in ordered_tables(contract) if table["name"] in required]
+
+
 def target_schema_contract(matrix: dict) -> tuple[list[str], dict[str, dict[str, Any]], str]:
     """Return the ordered target set, canonical n8n column arrays, and digest."""
     targets = list(matrix["targets"])
@@ -472,7 +510,7 @@ def build_manifest(
     manifest = {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
-        "n8n_version": "2.36.2",
+        "n8n_version": "2.37.10",
         "sources": {
             "data_tables": "integrations/n8n/data-tables.json",
             "data_tables_sha256": sha256(TABLES_PATH),
@@ -552,13 +590,18 @@ def build_manifest(
     }
     if matrix is not None:
         targets, _, schema_digest = target_schema_contract(matrix)
+        compatibility_names = [table["name"] for table in compatibility_table_rows(tables, matrix)]
+        declared_legacy_names = [table["name"] for table in ordered_tables(tables)]
+        unprovisioned_legacy_names = [
+            name for name in declared_legacy_names if name not in compatibility_names
+        ]
         manifest["sources"]["data_table_migration_matrix"] = "integrations/n8n/data-table-migration-matrix.json"
         manifest["table_create_operations"] = [
             {
                 "table_name": table["name"],
                 "parameters": create_parameters(table),
             }
-            for table in target_table_rows(matrix)
+            for table in [*compatibility_table_rows(tables, matrix), *target_table_rows(matrix)]
         ]
         manifest.pop("seed")
         manifest.pop("config_seed")
@@ -568,16 +611,41 @@ def build_manifest(
             "target_tables": targets,
             "readback_operation": "list",
             "readback_required": True,
-            "legacy_table_creation_forbidden": True,
-            "row_seed_writes_forbidden": True,
+            "legacy_table_creation_forbidden": False,
+            "legacy_compatibility_tables": compatibility_names,
+            "legacy_tables_not_provisioned": unprovisioned_legacy_names,
+            "existing_table_deletion_forbidden": True,
+            "row_seed_writes_forbidden": False,
+        }
+        manifest["source_contract_templates"] = {
+            "table_name": "finance_source_contracts",
+            "rows": build_source_contract_templates(bundle),
+            "all_disabled": True,
+            "version_prefix": "template:",
+            "deployment_values_required": [
+                "onedrive_parent_id", "manifest_onedrive_parent_id",
+                "actual_file_id", "account_id",
+            ],
         }
         manifest["activation_blockers"].append("SOURCE_MIGRATION_GATE_REQUIRED")
+        manifest["activation_blockers"].append("LEGACY_SOURCE_ROWS_RESTORE_REQUIRED")
         manifest["execution_evidence"] = {
-            "exact_image_import_tested": False,
-            "disposable_create_reuse_tested": False,
-            "table_list_readback_tested": False,
+            "exact_image_import_tested": True,
+            "source_workflow_unmodified_import_tested": False,
+            "disposable_create_reuse_tested": True,
+            "table_list_readback_tested": True,
+            "seed_write_result_tested": True,
+            "seed_independent_readback_tested": False,
             "production_validated": False,
+            "github_actions_run": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917",
         }
+        manifest["activation_blockers"] = [
+            blocker for blocker in manifest["activation_blockers"]
+            if blocker not in {
+                "EXACT_IMAGE_IMPORT_REQUIRED",
+                "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+            }
+        ]
     return manifest
 
 
@@ -599,6 +667,7 @@ def target_bootstrap_document(
     manifest: dict,
     targets: list[str],
     schema_digest: str,
+    legacy_tables: list[str],
 ) -> dict:
     """Build the manual-only W19 document after its four-table readback."""
     nodes.append({
@@ -646,18 +715,24 @@ def target_bootstrap_document(
             "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
             "activationBlockers": manifest["activation_blockers"],
             "importTested": False,
-            "fixtureExecuted": False,
+            "fixtureExecuted": True,
+            "pinnedImageDerivedImportTested": True,
+            "runtimeEvidence": "https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917",
             "credentialBindings": [],
             "setupRequired": True,
             "targetSchemaContract": "integrations/n8n/data-table-migration-matrix.json",
             "targetSchemaDigest": schema_digest,
             "targetTables": targets,
             "sourceTablesPreserved": True,
-            "legacyTableCreationForbidden": True,
+            "legacyCompatibilityTables": legacy_tables,
+            "legacyTablesNotProvisioned": manifest["target_schema_contract"]["legacy_tables_not_provisioned"],
+            "existingTableDeletionForbidden": True,
+            "legacyTableCreationForbidden": False,
             "partialSchemaPolicy": "PARTIAL_RECONCILED_FAIL_CLOSED",
             "secondRunPolicy": "NOOP_ON_EXACT_SCHEMA",
             "rowMigrationForbidden": True,
-            "seedWritesForbidden": True,
+            "seedWritesForbidden": False,
+            "sourceContractTemplatesSeededDisabled": True,
         },
     }
 
@@ -670,7 +745,16 @@ def build_workflow(
     bundle: dict,
     matrix: dict | None = None,
 ) -> dict:
-    table_rows = target_table_rows(matrix) if matrix is not None else ordered_tables(tables)
+    # The checked-in workflows still use legacy operational tables whose rows
+    # cannot be represented losslessly by the four canonical targets (source
+    # contracts, per-run receipts, and MCP audit trails in particular).  Keep
+    # those tables available side by side until each workflow has a semantic
+    # adapter. createIfNotExists makes this safe for existing installations.
+    table_rows = (
+        [*compatibility_table_rows(tables, matrix), *target_table_rows(matrix)]
+        if matrix is not None
+        else ordered_tables(tables)
+    )
     seed_rows = seed["rows"]
     nodes: list[dict] = [
         {
@@ -824,9 +908,52 @@ def build_workflow(
         previous = name
 
     if matrix is not None:
+        templates = build_source_contract_templates(bundle)
+        emit_templates = "Emit Disabled Source Contract Templates"
+        nodes.append({
+            "id": "19070", "name": emit_templates, "type": "n8n-nodes-base.code",
+            "typeVersion": 2, "position": [1240, 0],
+            "parameters": {"jsCode": (
+                f"const rows={readable_js_literal(templates)}; const updated_at=new Date().toISOString(); "
+                "return rows.map(row=>({json:{...row,enabled:false,updated_at}}));"
+            )},
+        })
+        connections[previous] = {"main": [[{"node": emit_templates, "type": "main", "index": 0}]]}
+        source_fields = tuple(next(
+            table["columns"] for table in tables["tables"]
+            if table["name"] == "finance_source_contracts"
+        ))
+        upsert_templates = "Upsert Disabled Source Contract Templates"
+        nodes.append(data_table_node("19071", upsert_templates, [1420, 0], {
+            "resource": "row", "operation": "upsert",
+            "dataTableId": {"__rl": True, "value": "finance_source_contracts", "mode": "name"},
+            "matchType": "allConditions",
+            "filters": {"conditions": [
+                {"keyName": "source_code", "condition": "eq", "keyValue": "={{ $json.source_code }}"},
+                {"keyName": "config_version", "condition": "eq", "keyValue": "={{ $json.config_version }}"},
+            ]},
+            "columns": {"mappingMode": "defineBelow", "value": {
+                field: f"={{{{ $json.{field} }}}}" for field in source_fields
+            }, "matchingColumns": [], "schema": [], "attemptToConvertTypes": False, "convertFieldsToString": False},
+            "options": {"dryRun": False},
+        }))
+        connections[emit_templates] = {"main": [[{"node": upsert_templates, "type": "main", "index": 0}]]}
+        collapse_templates = "Verify Disabled Source Contract Template Writes"
+        nodes.append({
+            "id": "19072", "name": collapse_templates, "type": "n8n-nodes-base.code",
+            "typeVersion": 2, "position": [1600, 0],
+            "parameters": {"jsCode": (
+                f"const rows=$input.all().map(item=>item.json||{{}}); if(rows.length!=={len(templates)}) "
+                "throw new Error('SOURCE_CONTRACT_TEMPLATE_COUNT_MISMATCH'); "
+                "if(rows.some(row=>row.enabled!==false)) throw new Error('SOURCE_CONTRACT_TEMPLATE_ENABLED'); "
+                "return [{json:{source_contract_templates_verified:rows.length,all_disabled:true}}];"
+            )},
+        })
+        connections[upsert_templates] = {"main": [[{"node": collapse_templates, "type": "main", "index": 0}]]}
+        previous = collapse_templates
         list_name = "List Four Target Tables"
         nodes.append(data_table_node(
-            "19006",
+            "19090",
             list_name,
             [1380, 0],
             {"resource": "table", "operation": "list", "returnAll": True, "options": {}},
@@ -838,7 +965,7 @@ def build_workflow(
 
         readback_name = "Verify Four Target Table Readback"
         nodes.append({
-            "id": "19007",
+            "id": "19091",
             "name": readback_name,
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
@@ -905,7 +1032,7 @@ return [{ json: {
 
         receipt_name = "Emit Redacted Bootstrap Receipt"
         nodes.append({
-            "id": "19060",
+            "id": "19092",
             "name": receipt_name,
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
@@ -931,6 +1058,7 @@ return [{ json: {
             manifest,
             targets,
             target_schema_digest,
+            [table["name"] for table in compatibility_table_rows(tables, matrix)],
         )
 
     embedded_seed = readable_js_literal(seed_rows)

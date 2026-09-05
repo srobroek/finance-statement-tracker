@@ -1,5 +1,5 @@
-ARG PYTHON_BUILD_IMAGE=cgr.dev/chainguard/python@sha256:57dc165efe7e6ad75386ffc28c4e929c2121f8f3737f24499974c17fec90e8e9
-ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python@sha256:2c316251a8502a7cb50b0ecf81a894587c743027bba8ace38c3082ce1f4c72c0
+ARG PYTHON_BUILD_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:afdbadf8d697739ab8e10a4d355d0850daa439cba3e6f0e39a73f7f2d3d839b7
+ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python:latest@sha256:eca30c0ac647bf28beaec7442388609d14fd100984fa63397e6015eaffe22aa1
 
 FROM ${PYTHON_BUILD_IMAGE} AS build
 USER root

@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nconst sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();\nconst attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();\nif (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {\n    throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');\n}\nfor (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'manifest_onedrive_parent_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key']) {\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\n}\nif (!attachmentId)\n    throw new Error('Missing trusted immutable field attachment_id');\nif (typeof r.cashback_close_required !== 'boolean') {\n    throw new Error('Missing trusted immutable field cashback_close_required');\n}\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {\n    throw new Error('Manual and MCP mutation are forbidden');\n}\nreturn [{\n        json: {\n            run_id: r.run_id,\n            source_code: r.source_code,\n            message_id: r.message_id,\n            document_sha256: r.document_sha256,\n            onedrive_item_id: r.onedrive_item_id,\n            manifest_onedrive_parent_id: r.manifest_onedrive_parent_id,\n            config_version: r.config_version,\n            actual_file_id: r.actual_file_id,\n            account_id: r.account_id,\n            card_code: r.card_code,\n            cashback_close_required: r.cashback_close_required,\n            period_key: r.period_key,\n            trigger_kind: r.trigger_kind,\n            attachment_id: attachmentId,\n            source_attachment_id: sourceAttachmentId,\n            pipeline_contract: r.pipeline_contract,\n            actual_writer_workflow: r.actual_writer_workflow,\n            source_mutation_forbidden: r.source_mutation_forbidden,\n        },\n        binary: $binary,\n    }];\n"
+        "jsCode": "// Purpose: Verify Archive and Execution Context. Keep this deterministic and fail closed.\nconst r = $json;\nconst historicalImport = r.historical_import;\nif (historicalImport !== undefined && typeof historicalImport !== 'boolean') {\n    throw new Error('historical_import must be boolean');\n}\nif (historicalImport === true && (r.source_code !== 'ADCB_CASHBACK'\n    || !r.historical_account_id\n    || !r.account_id\n    || String(r.historical_account_id) !== String(r.account_id))) {\n    throw new Error('ADCB historical import requires the configured account binding');\n}\nconst sourceAttachmentId = String(r.source_attachment_id || r.attachment_id || '').trim();\nconst attachmentId = String(r.attachment_id || r.source_attachment_id || '').trim();\nif (r.source_attachment_id && r.attachment_id && sourceAttachmentId !== attachmentId) {\n    throw new Error('ATTACHMENT_ID_ALIAS_MISMATCH');\n}\nfor (const k of ['run_id', 'source_code', 'message_id', 'document_sha256', 'onedrive_item_id', 'manifest_onedrive_parent_id', 'config_version', 'actual_file_id', 'account_id', 'card_code', 'period_key']) {\n    if (!r[k])\n        throw new Error(`Missing trusted immutable field ${k}`);\n}\nif (!attachmentId)\n    throw new Error('Missing trusted immutable field attachment_id');\nif (typeof r.cashback_close_required !== 'boolean') {\n    throw new Error('Missing trusted immutable field cashback_close_required');\n}\nif (!['SCHEDULE', 'SUBWORKFLOW', 'REPLAY'].includes(r.trigger_kind)) {\n    throw new Error('Manual and MCP mutation are forbidden');\n}\nreturn [{\n        json: {\n            run_id: r.run_id,\n            source_code: r.source_code,\n            message_id: r.message_id,\n            document_sha256: r.document_sha256,\n            onedrive_item_id: r.onedrive_item_id,\n            manifest_onedrive_parent_id: r.manifest_onedrive_parent_id,\n            config_version: r.config_version,\n            actual_file_id: r.actual_file_id,\n            account_id: r.account_id,\n            card_code: r.card_code,\n            cashback_close_required: r.cashback_close_required,\n            period_key: r.period_key,\n            trigger_kind: r.trigger_kind,\n            attachment_id: attachmentId,\n            source_attachment_id: sourceAttachmentId,\n            pipeline_contract: r.pipeline_contract,\n            actual_writer_workflow: r.actual_writer_workflow,\n            source_mutation_forbidden: r.source_mutation_forbidden,\n            historical_import: historicalImport === true,\n            historical_source: historicalImport === true ? 'ADCB_CASHBACK' : undefined,\n            historical_account_id: historicalImport === true ? String(r.historical_account_id) : undefined,\n        },\n        binary: $binary,\n    }];\n"
       }
     },
     {
@@ -180,7 +180,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = { schema_version: 'actual-delta-v1', source_code: s.source_code, document_sha256: s.document_sha256, config_version: s.config_version, parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0', actual_file_id: s.actual_file_id, account_id: s.account_id, card_code: s.card_code, period_start: r.period_start, period_end: r.period_end, expected_statement_balance_minor: r.reconciliation?.ending_balance_minor, transactions: r.actual_transactions };\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
+        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst manifest = {\n    schema_version: 'actual-delta-v1',\n    source_code: s.source_code,\n    document_sha256: s.document_sha256,\n    config_version: s.config_version,\n    parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0',\n    actual_file_id: s.actual_file_id,\n    account_id: s.account_id,\n    card_code: s.card_code,\n    historical_import: s.historical_import === true,\n    ...(s.historical_import === true\n        ? { historical_source: s.historical_source, historical_account_id: s.historical_account_id }\n        : {}),\n    period_start: r.period_start,\n    period_end: r.period_end,\n    expected_statement_balance_minor: r.reconciliation?.ending_balance_minor,\n    transactions: r.actual_transactions,\n};\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
       }
     },
     {
@@ -303,7 +303,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nconst idempotency_key = `statement:${source.document_sha256}`;\nreturn [{ json: { batch_id: idempotency_key, run_id: source.run_id, idempotency_key, actual_file_id: source.actual_file_id, delta_sha256: a.artifact_sha256, delta_artifact_item_id: a.delta_artifact_item_id, delta_artifact_etag: a.delta_artifact_etag, delta_schema_version: a.delta_schema_version, config_version: source.config_version, parser_version: m.parser_version, state: 'PREPARED', account_id: source.account_id, card_code: source.card_code, imported_ids, start_date: m.period_start, end_date: m.period_end } }];\n"
+        "jsCode": "// Purpose: Prepare Outbox Intent. Keep this deterministic and fail closed.\nconst m = $('Build Canonical Delta Artifact').first().json.manifest, source = $('Verify Archive and Execution Context').first().json, a = $json;\nconst imported_ids = m.transactions.map(t => t.imported_id);\nconst idempotency_key = `statement:${source.document_sha256}`;\nreturn [{ json: {\n            schema_version: 1,\n            outbox_id: idempotency_key,\n            batch_id: idempotency_key,\n            run_id: source.run_id,\n            idempotency_key,\n            actual_file_id: source.actual_file_id,\n            delta_sha256: a.artifact_sha256,\n            delta_artifact_item_id: a.delta_artifact_item_id,\n            delta_artifact_etag: a.delta_artifact_etag,\n            delta_schema_version: a.delta_schema_version,\n            config_version: source.config_version,\n            parser_version: m.parser_version,\n            state: 'PREPARED',\n            account_id: source.account_id,\n            card_code: source.card_code,\n            historical_import: m.historical_import === true,\n            ...(m.historical_import === true\n                ? { historical_source: m.historical_source, historical_account_id: m.historical_account_id }\n                : {}),\n            imported_ids,\n            start_date: m.period_start,\n            end_date: m.period_end,\n        } }];\n"
       }
     },
     {
@@ -1154,18 +1154,30 @@
             },
             {
               "id": "config-16",
+              "name": "historical_import",
+              "type": "boolean",
+              "value": "={{ $json.historical_import }}"
+            },
+            {
+              "id": "config-17",
+              "name": "historical_account_id",
+              "type": "string",
+              "value": "={{ $json.historical_account_id }}"
+            },
+            {
+              "id": "config-18",
               "name": "pipeline_contract",
               "type": "string",
               "value": "STATEMENT_PIPELINE_V1"
             },
             {
-              "id": "config-17",
+              "id": "config-19",
               "name": "actual_writer_workflow",
               "type": "string",
               "value": "ACTUAL_OUTBOX_APPLY"
             },
             {
-              "id": "config-18",
+              "id": "config-20",
               "name": "source_mutation_forbidden",
               "type": "boolean",
               "value": true

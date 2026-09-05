@@ -5,18 +5,23 @@
   "generated_at_utc": null,
   "source_commit": null,
   "base_image": {
-    "reference": "ghcr.io/srobroek/n8n-platform-nodemailer@sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
-    "digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+    "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "source_path": "packages/n8n-nodes-finance/base-image.txt"
   },
   "extension_image": {
     "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
     "image_digest": null,
     "source_commit": null,
-    "base_image_digest": "sha256:5b29937c5cfdb906e583706c7da5b72e4137532065a10bbf91dc7e74f03a40a6",
+    "base_image_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "sbom_sha256": null,
     "scan_sha256": null,
-    "scan": {"tool": null, "result": "NOT_RUN", "high": null, "critical": null},
+    "scan": {
+      "tool": null,
+      "result": "NOT_RUN",
+      "high": null,
+      "critical": null
+    },
     "attestation": {
       "type": null,
       "predicate_type": null,
@@ -27,7 +32,7 @@
     },
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "603b38cc25145ffd33d845e1c5e04ad1f52dc14e709fcfa9e606b9376291f7d2"
+      "sha256": "0ec49cb161ab3037bc8e8fbaae1835ed675f353495b4ed4dd0363c033a4268f7"
     }
   },
   "support_images": {
@@ -38,7 +43,12 @@
       "promoted_with_finance_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
       "sbom_sha256": "98709bcb05c4951338571725b94cbd63222c0068189df04189e03346e92c7b27",
       "scan_sha256": "5f32f2500e2d07fae748819a88e528a0237ad86648239bf54bdf823233abb7cc",
-      "scan": {"tool": "trivy", "result": "PASS", "high": 0, "critical": 0},
+      "scan": {
+        "tool": "trivy",
+        "result": "PASS",
+        "high": 0,
+        "critical": 0
+      },
       "attestation": {
         "type": "local-build-provenance",
         "predicate_type": "https://slsa.dev/provenance/v1",
@@ -59,7 +69,12 @@
       "promoted_with_finance_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
       "sbom_sha256": "6f742ad0604310189b3d1f38c8c90f9cd132b393b969bc1fc0f18ecc3f2a0a9d",
       "scan_sha256": "26692833eca0df3fef2a2a2dc6704d7a281040868fa7d29ac460792c9de9e951",
-      "scan": {"tool": "trivy", "result": "PASS", "high": 0, "critical": 0},
+      "scan": {
+        "tool": "trivy",
+        "result": "PASS",
+        "high": 0,
+        "critical": 0
+      },
       "attestation": {
         "type": "local-build-provenance",
         "predicate_type": "https://slsa.dev/provenance/v1",
@@ -79,7 +94,12 @@
       "source_commit": "170328b7f6aefa068da9c9a864cd03ca91635c70",
       "sbom_sha256": "e50bf83c54fc3be26392f5c8b2270af747828e85c070c3d8aecc96b3a6800b70",
       "scan_sha256": "76c6a8fff3a265558e940cb9982b5d8e7ea304f5770061bf2e2c694008e89cf1",
-      "scan": {"tool": "trivy", "result": "PASS", "high": 0, "critical": 0},
+      "scan": {
+        "tool": "trivy",
+        "result": "PASS",
+        "high": 0,
+        "critical": 0
+      },
       "attestation": {
         "type": "local-build-provenance",
         "predicate_type": "https://slsa.dev/provenance/v1",
@@ -98,10 +118,10 @@
     "name": "n8n-nodes-finance",
     "version": "0.1.0",
     "lockfile": "packages/n8n-nodes-finance/package-lock.json",
-    "lockfile_sha256": "9ad70e4f2892da6fd13f8f4a19df812c25cd42d16a559de1ed17073a1d147f21"
+    "lockfile_sha256": "b2b2c9b6947bc15b8c8c4afc04d6aaeb9ab806e3d833004f3d3194321cae20bc"
   },
   "community_node_lock": {
     "path": "integrations/n8n/community-node-lock.json",
-    "sha256": "1c549c3ed9c4343d4db1a40ca54ed7845da184fba26546b6a7719542723ec512"
+    "sha256": "61d39bb74952e19472b6e3857ed5f961f7304a5fc34213b1edb44e3b955db2e2"
   }
 }

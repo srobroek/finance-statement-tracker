@@ -232,7 +232,7 @@ def _type(description: str, direction: str) -> str:
         return "PAYMENT"
     if "CASHBACK" in normalized and direction == "CREDIT":
         return "REWARD_CREDIT"
-    if "FEE" in normalized or normalized.startswith("VAT ON"):
+    if re.search(r"\bFEES?\b", normalized) or normalized.startswith("VAT ON"):
         return "FEE"
     if direction == "CREDIT":
         return "REFUND"

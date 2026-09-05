@@ -79,7 +79,7 @@ function transactionType(description: string, direction: 'DEBIT' | 'CREDIT'): St
   const value = description.toUpperCase();
   if (['PAYMENT RECEIVED', 'CREDIT REPAYMENT', 'CARD REPAYMENT'].some(token => value.includes(token))) return 'PAYMENT';
   if (value.includes('CASHBACK') && direction === 'CREDIT') return 'REWARD_CREDIT';
-  if (value.includes('FEE') || value.startsWith('VAT ON')) return 'FEE';
+  if (/\bFEES?\b/.test(value) || value.startsWith('VAT ON')) return 'FEE';
   return direction === 'CREDIT' ? 'REFUND' : 'PURCHASE';
 }
 

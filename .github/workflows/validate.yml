@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - "codex/**"
   workflow_dispatch:
 
 permissions:
@@ -17,8 +16,9 @@ concurrency:
 
 jobs:
   test:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/'))
     runs-on: ubuntu-latest
+    env:
+      FINANCE_ACTUAL_RESTORE_REQUIRE_NAMESPACE: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -43,82 +43,5 @@ jobs:
           version: "0.12.5"
           enable-cache: true
 
-      - name: Install Python package
-        run: uv sync --frozen --extra statements --extra test
-
-      - name: Install workflow contract formatter
-        working-directory: packages/n8n-nodes-finance
-        run: npm ci --ignore-scripts
-
-      - name: Run targeted Python contract tests
-        run: >-
-          uv run --frozen python -m unittest -v
-          tests.test_project_acceptance
-          tests.test_automation_manifest
-          tests.test_n8n_workflows
-          tests.test_deployment_scripts
-
-      - name: Validate tracked contract JSON
-        run: >-
-          git ls-files --
-          'config/**/*.json'
-          'integrations/n8n/**/*.json'
-          'browser_adapters/**/*.json'
-          | xargs -r -n1 python -m json.tool >/dev/null
-
-      - name: Install Actual integration
-        working-directory: integrations/actual
-        run: npm ci
-
-      - name: Run Actual integration tests
-        working-directory: integrations/actual
-        run: npm test
-
-  full:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: |
-            integrations/actual/package-lock.json
-            packages/n8n-nodes-finance/package-lock.json
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.12.5"
-          enable-cache: true
-
-      - name: Install Python package
-        run: uv sync --frozen --extra statements --extra test
-
-      - name: Install workflow contract formatter
-        working-directory: packages/n8n-nodes-finance
-        run: npm ci --ignore-scripts
-
-      - name: Run full Python regression suite
-        run: uv run --frozen python -m unittest discover -s tests -v
-
-      - name: Install Actual integration
-        working-directory: integrations/actual
-        run: npm ci
-
-      - name: Run Actual integration tests
-        working-directory: integrations/actual
-        run: npm test
-
-      - name: Run offline Actual integration
-        working-directory: integrations/actual
-        run: npm run integration
+      - name: Run comprehensive validation
+        run: ./scripts/run-validation.sh

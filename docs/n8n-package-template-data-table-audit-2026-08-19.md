@@ -95,27 +95,31 @@ No official template was found that safely implements the complete combination o
 - n8n Data Tables: redacted operational state, hashes, pointers, receipts, policy/config fingerprints, review state.
 - Fixed Postgres functions: process-independent Actual writer lease and fencing token. A Data Table upsert is not a substitute for atomic fencing.
 
-### 15-table v4 contract
+### Side-by-side Data Table contract
+
+Workflow 19 now provisions the seven compatibility tables below that still
+have connected runtime references, together with the four canonical targets.
+It does not create or delete the other eight declared legacy tables, so an
+existing installation preserves them. The active compatibility tables remain
+necessary because current workflows preserve data that the four targets cannot
+yet represent losslessly. Seven source-contract templates are seeded as disabled
+`template:*` rows; deployment-specific IDs must be supplied and reviewed before
+enabling them. No selector-only live cutover is authorized.
 
 | Table | Durable purpose | Owner/use after audit |
 |---|---|---|
 | `finance_source_contracts` | Trusted mailbox/archive/source config | Read by acquisition, monthly, browser, and AI artifact workflows. No secrets. |
 | `finance_source_cursors` | Authoritative cursor for non-cashback acquisition | Workflow 12 `COMMIT` uses `source_code + cursor_version` update and exact readback. Cashback cursors remain in cashback SQLite. |
-| `finance_acquisition_receipts` | Frozen enumerated window, valid-empty heartbeat, downstream proof | Workflow 12 writes `ENUMERATED`; cursor commit requires a SHA-256 downstream receipt and writes `DOWNSTREAM_VERIFIED`. |
 | `finance_archive_receipts` | Immutable OneDrive message/attachment identity | Workflow 01 content-addresses, archives, and reads back the receipt. |
 | `finance_document_operations` | Redacted document state | Workflows 13/14 retain only pointers/hashes/state; decrypted data and extracted text are ephemeral. |
 | `finance_pipeline_runs` | Workflow terminal receipt | Monthly/shared/browser flows use verified terminal markers. |
-| `finance_actual_outbox` | Recoverable Actual write intent | Only pointers/hashes/config/parser/state; exact normalized delta is in OneDrive. |
-| `finance_actual_verifications` | Independent economic readback | Expected/observed hashes, counts, sums, fields, and optional balance. |
 | `finance_reconciliations` | Statement/Actual/cashback-close state | Statement evidence is required before close. |
-| `finance_config_versions` | Active configuration fingerprints | Workflow 19 seeds and exact-readback verifies eight Git-canonical config hashes. |
-| `finance_provider_circuits` | Provider backoff without source payloads | Provider-facing Outlook/OneDrive/subscription paths gate `OPEN`, allow one `HALF_OPEN` probe, close on success; error workflow opens on retryable failure. |
-| `finance_execution_failures` | Redacted workflow failure | Error workflow writes, reads, compares, marks verified; provider code is non-secret. |
 | `finance_mcp_requests` | Bounded MCP audit | Workflow 10 writes request hash `ACCEPTED`, dispatches a fixed operation, writes redacted terminal result/error hash, then exact-readback verifies. |
-| `finance_agent_jobs` | Agent job/proposal/review state | Workflow 09 archives exact proposal JSON to OneDrive, downloads/hash-verifies it, stores pointer/eTag/schema/hash, and leaves review `PENDING`. |
-| `finance_ai_policy_contracts` | Server-owned active AI policy domains/hashes | Workflow 19 seeds and exact-readback verifies; subscription adapters validate the same contract. |
 
-Every declared table is now referenced by at least one connected executable node. The test suite enforces this bijection.
+The generator derives this seven-table compatibility set from connected Data
+Table nodes in the non-bootstrap workflows. The migration matrix and test suite
+enforce that relationship. The eight omitted schemas remain documented for
+existing deployments and later semantic migration work.
 
 ### Retention, idempotency, and indexes
 
@@ -131,7 +135,7 @@ The `idempotency_key` and `index_semantics` entries are logical contracts. n8n D
 
 ### Remaining promotion blockers
 
-- Re-run workflow 19 in the exact disposable n8n 2.36.2 image and prove both policy and config fingerprint seed readbacks. The earlier baseline proved all 15 table creates, then exposed a single-brace expression serialization defect before any seed row persisted; the generator now emits exact `={{ $json.field }}` expressions and has a regression test.
+- Run workflow 19 in the exact disposable n8n 2.36.2 image and prove all 19 idempotent table creates, the four-target schema readback, and seven disabled source-template writes.
 - Seed/activate trusted `finance_source_contracts` rows outside caller control, including `AI_PROPOSAL_ARCHIVE`; no workflow may accept a OneDrive parent ID from a caller.
 - Seed initial non-cashback cursor rows before using workflow 12 `COMMIT`, then run concurrent stale-version fixtures. No production cursor is changed by this audit.
 - Publish the MCP facade only after bearer/service auth is proven in the disposable environment and negative operation/field tests pass. Instance MCP remains disabled.
@@ -140,7 +144,7 @@ The `idempotency_key` and `index_semantics` entries are logical contracts. n8n D
 
 ## Recommended adoption order
 
-1. Prove the checked-in built-in-node workflows and 15-table bootstrap in the disposable stack.
+1. Prove the checked-in built-in-node workflows and 19-table side-by-side bootstrap in the disposable stack.
 2. Prove Outlook/OneDrive acquisition, provider circuit transitions, zero-message heartbeat, 101+ pagination, downstream-proof cursor commit, and stale-version rejection.
 3. Prove bounded MCP accepted/completed/failed receipts without publishing production MCP.
 4. Prove Luna and gated Sol proposal artifact upload/download/hash plus `PENDING` review state.

@@ -90,7 +90,19 @@ BEGIN
        AND fencing_token = p_fencing_token
        AND released_at IS NULL;
     GET DIAGNOSTICS changed = ROW_COUNT;
-    RETURN changed = 1;
+    IF changed = 1 THEN
+        RETURN true;
+    END IF;
+    -- Release is retry-safe for the exact historical lease. This allows a
+    -- COMMITTED recovery to repair a crash between state persistence and the
+    -- original release readback without releasing a newer fencing token.
+    RETURN EXISTS (
+        SELECT 1 FROM finance_ops.writer_leases
+         WHERE resource_key = p_resource_key
+           AND lease_id = p_lease_id
+           AND fencing_token = p_fencing_token
+           AND released_at IS NOT NULL
+    );
 END;
 $$;
 

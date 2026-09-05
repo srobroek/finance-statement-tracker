@@ -181,9 +181,14 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             and node.get("parameters", {}).get("resource") == "table"
             and node.get("parameters", {}).get("operation") == "create"
         ]
+        referenced_legacy = {
+            table["source_table"]
+            for table in self.matrix["tables"]
+            if table.get("node_references")
+        }
         self.assertEqual(
-            [node["parameters"]["tableName"] for node in creates],
-            self.matrix["targets"],
+            {node["parameters"]["tableName"] for node in creates},
+            referenced_legacy | set(self.matrix["targets"]),
         )
         self.assertFalse(
             any(
@@ -192,7 +197,11 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
                 for reference in table["node_references"]
             )
         )
-        for node, target in zip(creates, self.matrix["targets"], strict=True):
+        target_creates = [
+            node for node in creates
+            if node["parameters"]["tableName"] in self.matrix["targets"]
+        ]
+        for node, target in zip(target_creates, self.matrix["targets"], strict=True):
             expected = [
                 {"name": field, "type": spec["type"]}
                 for field, spec in self.matrix["target_schemas"][target]["columns"].items()

@@ -95,6 +95,10 @@ class CashbackDashboardPhaseTests(TestCase):
             "schema_version": 1,
             "as_of": as_of.isoformat(),
             "currency": "AED",
+            "reward_estimate": {
+                "label": "Estimated rewards based on configured terms",
+                "authority": "NON_AUTHORITATIVE",
+            },
             "cards": cards,
             "recommendations": recommendations,
             "routing_graphs": routing_graphs,
@@ -110,13 +114,28 @@ class CashbackDashboardPhaseTests(TestCase):
         )
 
         self.assertEqual(composed, public)
+        self.assertEqual(public["reward_estimate"]["authority"], "NON_AUTHORITATIVE")
+        ei = next(card for card in public["cards"] if card["card"] == "EI_AMAZON")
+        self.assertIn("qualifying Prime membership", ei["position_detail"])
+        self.assertIn("Amazon Reward Points", ei["position_detail"])
+        self.assertEqual(ei["provenance_authority"], "NON_AUTHORITATIVE")
         digest = hashlib.sha256(
             json.dumps(public, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
         self.assertEqual(
             digest,
-            "b387f00bc78f538088435a9a41422296a3e8e25fa311b81b35ab1d25ea702cd3",
+            "adf91ffce49b2bb9e413785502d4136982209eb146fdd69446fa6c0387cb0e25",
         )
+
+    def test_web_discloses_estimate_and_evidence_status(self) -> None:
+        root = Path("apps/cashback-control/web")
+        shell = (root / "index.html").read_text(encoding="utf-8")
+        app = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="reward-disclosure"', shell)
+        self.assertIn("Estimates based on configured rewards · Card terms not fully verified", shell)
+        self.assertIn('authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified"', app)
+        self.assertNotIn("Evidence: ${authority}", app)
+        self.assertIn("renderRewardDisclosure(payload.reward_estimate)", app)
 
     def test_routing_graph_phase_keeps_policy_errors(self) -> None:
         rows = self.rows()

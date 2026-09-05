@@ -1,6 +1,31 @@
 name: Cashback container
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cashback-image.yml"
+      - ".dockerignore"
+      - "apps/cashback-control/**"
+      - "deploy/cashback/**"
+      - "deploy/actual-poc/backup.sh"
+      - "deploy/actual-poc/sanitize-cashback-backup.py"
+      - "deploy/actual-poc/verify-backup.py"
+      - "deploy/finance-runtime/**"
+      - "config/actual-bootstrap.json"
+      - "config/actual-note-contract.json"
+      - "config/cashback-programs.json"
+      - "config/cashback-profile-schema-v1.json"
+      - "config/cashback-profile-schema-v2.json"
+      - "config/static-rules.seed.json"
+      - "config/transaction-email-sources.json"
+      - "examples/cashback-profiles/**"
+      - "finance_tracker/**"
+      - "tests/test_cashback_workflow_release.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "README.md"
   push:
     branches:
       - main
@@ -24,14 +49,21 @@ on:
       - "config/transaction-email-sources.json"
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
+      - "tests/test_cashback_workflow_release.py"
       - "pyproject.toml"
       - "uv.lock"
       - "README.md"
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the tested immutable image to the production cashback host"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 concurrency:
   group: cashback-container-${{ github.ref }}
@@ -43,6 +75,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      FINANCE_ACTUAL_RESTORE_REQUIRE_NAMESPACE: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -58,11 +92,15 @@ jobs:
           version: "0.12.5"
           enable-cache: true
 
-      - name: Install package
-        run: uv sync --frozen --extra statements --extra test
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/n8n-nodes-finance/package-lock.json
 
-      - name: Run regression suite
-        run: uv run --frozen python -m unittest discover -s tests -v
+      - name: Run comprehensive validation
+        run: ./scripts/run-validation.sh
 
       - name: Deploy fictional profile matrix
         shell: bash
@@ -97,7 +135,11 @@ jobs:
           done
 
   publish:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: test
+    permissions:
+      contents: read
+      packages: write
     outputs:
       image_digest: ${{ steps.publish.outputs.digest }}
     runs-on: ubuntu-latest
@@ -141,8 +183,11 @@ jobs:
           sbom: true
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy == true
     needs: publish
+    permissions:
+      contents: read
+      packages: read
     env:
       PUBLISHED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
     runs-on:
@@ -197,23 +242,16 @@ jobs:
           fi
           if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
             running_image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
-            running_image_digest="$(sudo docker image inspect "$running_image_id" --format '{{.Digest}}')"
-            if [[ ! "$running_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "Running Cashback image digest is missing or malformed" >&2
-              exit 1
-            fi
-            rollback_image_ref="${IMAGE_NAME}@${running_image_digest}"
             running_repo_digests="$(sudo docker image inspect "$running_image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
-            if ! rollback_image_ref="$(
+            mapfile -t rollback_candidates < <(
               printf '%s\n' "$running_repo_digests" |
-                awk -v expected="$rollback_image_ref" '
-                  $0 == expected { found += 1 }
-                  END { if (found != 1) exit 1; print expected }
-                '
-            )"; then
-              echo "Running Cashback image digest is not a unique RepoDigest for ${IMAGE_NAME}" >&2
+                awk -v prefix="${IMAGE_NAME}@sha256:" 'index($0, prefix) == 1 { print }'
+            )
+            if (( ${#rollback_candidates[@]} != 1 )) || [[ ! "${rollback_candidates[0]}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+              echo "Running Cashback image does not have one valid RepoDigest for ${IMAGE_NAME}" >&2
               exit 1
             fi
+            rollback_image_ref="${rollback_candidates[0]}"
             printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
               "$rollback_image_ref" | sudo tee "$stack/.env.rollback-${stamp}" >/dev/null
             sudo chmod 0600 "$stack/.env.rollback-${stamp}"
@@ -250,22 +288,27 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_SOURCE"
-          auth_file=/root/.config/containers/finance-ghcr-auth.json
-          sudo mkdir -p "$(dirname "$auth_file")"
-          printf '%s' "$GHCR_TOKEN" | sudo podman login \
-            --authfile "$auth_file" \
+          auth_dir="$RUNNER_TEMP/finance-docker-config-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -rf -- "$auth_dir"
+          install -d -m 0700 "$auth_dir"
+          cleanup_auth() {
+            sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+              docker logout ghcr.io >/dev/null 2>&1 || true
+            rm -rf -- "$auth_dir"
+          }
+          trap cleanup_auth EXIT
+          printf '%s' "$GHCR_TOKEN" | sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+            docker login \
             ghcr.io \
             --username "${{ github.actor }}" \
             --password-stdin
-          sudo podman pull --authfile "$auth_file" "$IMAGE_REF"
+          sudo env DOCKER_CONFIG="$auth_dir" REGISTRY_AUTH_FILE="$auth_dir/auth.json" \
+            docker pull "$IMAGE_REF"
           sudo install -m 0644 deploy/cashback/compose.yaml /opt/stacks/finance-cashback/compose.yaml
           cd /opt/stacks/finance-cashback
           # This project owns only cashback; it cannot touch Actual or its
           # ingestion worker.
-          sudo podman rm -f finance-cashback-control 2>/dev/null || true
-          sudo docker compose -p finance-cashback up -d --pull never cashback-control
-          sudo podman logout --authfile "$auth_file" ghcr.io
-          sudo rm -f "$auth_file"
+          sudo docker compose -p finance-cashback up -d --pull never --force-recreate cashback-control
 
       - name: Verify live deployment
         shell: bash

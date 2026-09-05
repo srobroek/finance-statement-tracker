@@ -17,7 +17,10 @@ def _review_reasons(transaction: Transaction) -> set[str]:
         reasons.add("UNCATEGORIZED")
     elif category.casefold() == "needs review":
         reasons.add("CATEGORY_NEEDS_REVIEW")
-    if transaction.metadata.get("category_recommendation") and not category:
+    if (
+        transaction.metadata.get("category_recommendation")
+        or transaction.metadata.get("category_recommendations")
+    ) and not category:
         reasons.add("CATEGORY_RECOMMENDATION_PENDING")
     return reasons
 
@@ -25,27 +28,30 @@ def _review_reasons(transaction: Transaction) -> set[str]:
 def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
     """Normalize semantic tags and guarantee a complete review queue."""
 
-    transaction.tags = {
+    locked = set(transaction.metadata.get("locked_fields", []))
+    normalized_tags = {
         str(tag).strip().casefold()
         for tag in transaction.tags
         if str(tag).strip()
     }
-    if "review" in transaction.tags:
-        transaction.tags.discard("review")
-        transaction.tags.add("needs-review")
+    if "review" in normalized_tags:
+        normalized_tags.discard("review")
+        normalized_tags.add("needs-review")
+    if "tags" not in locked:
+        transaction.tags = normalized_tags
 
     rental_units = sorted(
-        tag for tag in transaction.tags if tag.startswith("rental:")
+        tag for tag in normalized_tags if tag.startswith("rental:")
     )
-    has_rental = "rental" in transaction.tags or bool(rental_units)
-    if has_rental:
+    has_rental = "rental" in normalized_tags or bool(rental_units)
+    if has_rental and "tags" not in locked:
         transaction.tags.add("rental")
         transaction.tags.discard("home")
 
     reasons = _review_reasons(transaction)
     if has_rental and len(rental_units) != 1:
         reasons.add("RENTAL_UNIT_TAG_COUNT")
-    if transaction.review_required or "needs-review" in transaction.tags:
+    if transaction.review_required or "needs-review" in normalized_tags:
         reasons.add("REVIEW_REQUIRED")
     if transaction.metadata.get("property_review_reasons"):
         reasons.update(
@@ -55,11 +61,13 @@ def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
         )
 
     if reasons:
-        transaction.review_required = True
-        transaction.tags.add("needs-review")
+        transaction.set_value("review_required", True)
+        if "tags" not in locked:
+            transaction.tags.add("needs-review")
     else:
-        transaction.review_required = False
-        transaction.tags.discard("needs-review")
+        transaction.set_value("review_required", False)
+        if "tags" not in locked:
+            transaction.tags.discard("needs-review")
     transaction.metadata["classification_review_reasons"] = sorted(reasons)
     return tuple(sorted(reasons))
 

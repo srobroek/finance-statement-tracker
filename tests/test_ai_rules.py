@@ -293,6 +293,90 @@ class AIRuleTests(TestCase):
         self.assertEqual(self.transaction.category, "Groceries")
         self.assertIn("category", self.transaction.metadata["locked_fields"])
 
+    def test_ai_does_not_modify_manually_locked_tags_or_review_flag(self) -> None:
+        policy = AIPolicy(
+            policy_id="tag",
+            name="Tag",
+            priority=1,
+            instruction="Tag",
+            target_fields=("tags",),
+            allowed_tags=("online",),
+        )
+        self.transaction.tags = {"manual"}
+        self.transaction.metadata["locked_fields"] = ["tags", "review_required"]
+        requests = []
+
+        traces = AIEnrichmentEngine([policy]).enrich(
+            self.transaction,
+            lambda request: requests.append(request) or {"proposals": []},
+        )
+
+        self.assertEqual(requests, [])
+        self.assertEqual(traces, [])
+        self.assertEqual(self.transaction.tags, {"manual"})
+        self.assertFalse(self.transaction.review_required)
+
+    def test_duplicate_ai_proposal_cannot_overwrite_first_accepted_value(self) -> None:
+        policy = AIPolicy(
+            policy_id="category",
+            name="Category",
+            priority=1,
+            instruction="Classify",
+            target_fields=("category",),
+            allowed_values={"category": ("Groceries", "Dining")},
+        )
+
+        traces = AIEnrichmentEngine([policy]).enrich(
+            self.transaction,
+            lambda _request: {"proposals": [
+                {"field": "category", "value": "Groceries", "confidence": 0.9},
+                {"field": "category", "value": "Dining", "confidence": 0.99},
+            ]},
+        )
+
+        self.assertEqual(self.transaction.category, "Groceries")
+        self.assertTrue(traces[0].accepted)
+        self.assertFalse(traces[1].accepted)
+
+    def test_ai_rejects_string_boolean_for_subscription_flag(self) -> None:
+        policy = AIPolicy(
+            policy_id="subscription",
+            name="Subscription",
+            priority=1,
+            instruction="Detect",
+            target_fields=("is_subscription",),
+        )
+
+        trace = AIEnrichmentEngine([policy]).enrich(
+            self.transaction,
+            lambda _request: {"proposals": [{
+                "field": "is_subscription", "value": "false", "confidence": 0.99,
+            }]},
+        )[0]
+
+        self.assertFalse(trace.accepted)
+        self.assertEqual(trace.reason, "boolean_value_required")
+        self.assertIs(self.transaction.is_subscription, False)
+
+    def test_ai_rejects_empty_scalar_value(self) -> None:
+        policy = AIPolicy(
+            policy_id="vendor",
+            name="Vendor",
+            priority=1,
+            instruction="Normalize",
+            target_fields=("vendor",),
+        )
+
+        trace = AIEnrichmentEngine([policy]).enrich(
+            self.transaction,
+            lambda _request: {"proposals": [{
+                "field": "vendor", "value": None, "confidence": 0.99,
+            }]},
+        )[0]
+
+        self.assertFalse(trace.accepted)
+        self.assertEqual(trace.reason, "empty_value")
+
     def test_openai_compatible_resolver_uses_runtime_secret_and_validates_json(self) -> None:
         import os
         response = b'{"choices":[{"message":{"content":"{\\"proposals\\":[]}"}}]}'

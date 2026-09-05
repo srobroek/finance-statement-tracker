@@ -1,4 +1,4 @@
--- n8n 2.36.2.  This is a bounded organization cutover for inactive workflows.
+-- n8n 2.37.10.  This is a bounded organization cutover for inactive workflows.
 -- Required: psql -v finance_project_id='<exact project id>'.
 -- Optional: psql -v finance_commit=true.  The default is a rehearsal and ROLLBACK.
 -- The known disposable orphan 115 is backed up and retired only after the
