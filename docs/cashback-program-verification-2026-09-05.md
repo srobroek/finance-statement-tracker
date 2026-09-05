@@ -5,6 +5,15 @@ is the application's correction boundary, **not a claimed issuer commencement
 date**. The cardholder-confirmed August version remains available through
 2026-09-04 for historical replay. All programmes remain NON_AUTHORITATIVE.
 
+Current open-cycle estimates are deliberately recalculated under the observed
+September 5 rules, including earlier transactions within that open cycle. This
+corrects provisional calculations; it does not freeze earlier estimates. Event
+records, the posted ledger and finalized statement evidence are not rewritten.
+Explicit queries dated before September 5 still use the historical version.
+`test_current_reestimate_does_not_change_finalized_statement_evidence` proves
+that current and historical dashboard reads preserve a finalized statement's
+stored evidence and verification state.
+
 The evidence receipt in `config/evidence/cashback-issuer-observations-2026-09-05.json`
 records source URLs, observed claim paths and precisely labeled digest formats.
 RAK/EI raw downloads returned HTTP 403; their recorded digests identify the
