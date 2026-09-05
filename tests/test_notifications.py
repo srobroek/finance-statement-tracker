@@ -147,6 +147,49 @@ class NotificationTests(unittest.TestCase):
         self.assertTrue(result.skipped[1]["reason"].startswith("PARSE_ERROR:"))
         self.assertEqual(result.skipped[1]["message_id"], "reversal")
 
+    def test_archived_html_purchase_without_preview_decodes_markup_and_entities(self):
+        # Synthetic values preserve the observed issuer HTML structure only.
+        message = {
+            "id": "synthetic-html-purchase",
+            "sender": {"emailAddress": {"address": "alerts@rakbank.ae"}},
+            "subject": "An update on your Card transaction",
+            "receivedDateTime": "2026-08-27T01:00:00Z",
+            "body": {"contentType": "HTML", "content": (
+                '<html><head><style>.banner { display: block; }</style></head><body>'
+                '<p>You spent <strong>AED&nbsp;12.34</strong> at '
+                '<span>SYNTHETIC &amp; SHOP</span> on your Credit Card '
+                '<b>000000******0000</b> on <span>26/08</span>.</p></body></html>'
+            )},
+        }
+        result = parse_outlook_notifications([message], {"0000": "RAK_WORLD"}, self.rules)
+        self.assertEqual(result.accepted_count, 1)
+        event = result.events[0]
+        self.assertEqual(event["source_event_id"], "synthetic-html-purchase:0")
+        self.assertEqual(event["amount_aed"], "12.34")
+        self.assertEqual(event["merchant"], "SYNTHETIC & SHOP")
+        self.assertEqual(event["occurred_at"], "2026-08-26T00:00:00+00:00")
+        self.assertEqual(event["event_type"], "PURCHASE")
+        self.assertEqual(parse_outlook_notifications([message], {"0000": "RAK_WORLD"}, self.rules).events, result.events)
+
+    def test_html_foreign_reversal_and_script_only_purchase_remain_unaccepted(self):
+        base = {
+            "sender": {"emailAddress": {"address": "alerts@rakbank.ae"}},
+            "subject": "An update on your Card transaction",
+            "receivedDateTime": "2026-08-27T01:00:00Z",
+        }
+        charge = 'EUR&nbsp;12.34 is charged on your Credit Card <b>000000******0000</b> from SYNTHETIC SHOP on 26/08.'
+        bodies = [
+            charge + ' Combined Available Balance: AED 1000.00.',
+            charge.replace('EUR&nbsp;', 'AED&nbsp;').replace('charged', 'reversed'),
+            '<script>' + charge.replace('EUR&nbsp;', 'AED&nbsp;') + '</script><p>No purchase facts.</p>',
+        ]
+        messages = [{**base, "id": f"synthetic-html-{i}", "body": {"contentType": "html", "content": body}}
+                    for i, body in enumerate(bodies)]
+        result = parse_outlook_notifications(messages, {"0000": "RAK_WORLD"}, self.rules)
+        self.assertEqual(result.accepted_count, 0)
+        self.assertEqual(result.skipped[0]["reason"], "MISSING_AED_EQUIVALENT")
+        self.assertTrue(all(row["reason"].startswith("PARSE_ERROR:") for row in result.skipped[1:]))
+
     def test_cli_batch_shape_is_json_serializable(self):
         result = parse_outlook_notifications(
             [self.message], {"8833": "ADCB_CASHBACK"}, self.rules

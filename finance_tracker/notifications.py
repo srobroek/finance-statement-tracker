@@ -4,6 +4,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
+from html.parser import HTMLParser
 from typing import Any, Callable, Iterable, Protocol
 
 from .ai_rules import AIEnrichmentEngine
@@ -90,11 +91,40 @@ def _sender_address(message: dict[str, Any]) -> str:
     return ""
 
 
+class _NotificationHTMLText(HTMLParser):
+    """Decode issuer HTML locally; never interpret scripts or load resources."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self.hidden_depth += 1
+        self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self.hidden_depth:
+            self.hidden_depth -= 1
+        self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+
 def _message_text(message: dict[str, Any]) -> str:
     parts = [str(message.get("bodyPreview") or "")]
     body = message.get("body")
     if isinstance(body, dict):
-        parts.append(str(body.get("content") or ""))
+        content = str(body.get("content") or "")
+        if str(body.get("contentType") or "").casefold() == "html":
+            parser = _NotificationHTMLText()
+            parser.feed(content)
+            parser.close()
+            content = "".join(parser.parts)
+        parts.append(content)
     elif body:
         parts.append(str(body))
     return "\n".join(parts)
