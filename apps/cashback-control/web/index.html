@@ -11,7 +11,7 @@
     <title>Cashback Control</title>
     <link rel="manifest" href="/manifest.webmanifest?v=20260817-1" />
     <link rel="apple-touch-icon" href="/app-icon.svg?v=20260817-1" />
-    <link rel="stylesheet" href="/styles.css?v=20260904-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260905-1" />
   </head>
   <body data-screen-active="routing">
     <main class="shell">
@@ -43,6 +43,12 @@
             <button type="button" data-routing-view="tree" aria-selected="false">Decision tree</button>
           </div>
         </div>
+        <form id="routing-amount-form" class="routing-amount">
+          <label for="routing-amount">Purchase amount (<span id="routing-currency">base currency</span> equivalent)</label>
+          <input id="routing-amount" type="number" inputmode="decimal" min="0.01" max="1000000" step="0.01" value="100" required />
+          <button type="submit">Check cards</button>
+          <p id="routing-amount-status" role="status">Checking routes for the amount shown.</p>
+        </form>
         <div id="recommendations-view" class="route-table" role="table" aria-label="Card routing recommendations">
           <div class="route-table-head" role="row"><span role="columnheader">Spend</span><span role="columnheader">Use</span></div>
           <div id="recommendations"></div>
@@ -77,6 +83,6 @@
         <div id="period-history"></div>
       </section>
     </main>
-    <script src="/app.js?v=20260905-1" defer></script>
+    <script src="/app.js?v=20260905-2" defer></script>
   </body>
 </html>

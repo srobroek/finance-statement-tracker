@@ -97,6 +97,19 @@ class CashbackServerTests(unittest.TestCase):
                 ) as response:
                     self.assertEqual(response.headers.get("Cache-Control"), "no-cache")
 
+                snapshot_path = Path(temporary) / "dashboard.json"
+                snapshot_before = snapshot_path.read_bytes()
+                for query in ("purchase_amount=", "purchase_amount=0", "purchase_amount=NaN", "purchase_amount=1&purchase_amount=2"):
+                    with self.subTest(query=query), self.assertRaises(urllib.error.HTTPError) as invalid:
+                        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard?{query}", timeout=2)
+                    self.assertEqual(invalid.exception.code, 400)
+                    invalid.exception.close()
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard?purchase_amount=25", timeout=2) as response:
+                    quoted = json.load(response)
+                    self.assertEqual(quoted["recommendations"][0]["decision_amount_aed"], "25")
+                    self.assertEqual(quoted["routing_purchase_amount"], "25")
+                self.assertEqual(snapshot_path.read_bytes(), snapshot_before)
+
                 payload = json.dumps({
                     "source_event_id": "api-test:1",
                     "occurred_at": "2026-08-16T12:00:00+04:00",

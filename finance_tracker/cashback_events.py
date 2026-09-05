@@ -2021,6 +2021,16 @@ def events_to_transactions(
     return transactions
 
 
+def routing_purchase_amount(value: str) -> Decimal:
+    """Validate a real routing purchase amount, denominated in profile currency."""
+    if not re.fullmatch(r"[0-9]{1,7}(?:\.[0-9]{1,2})?", str(value)):
+        raise ValueError("Purchase amount must be a positive number with at most two decimals")
+    amount = Decimal(value)
+    if not Decimal("0.01") <= amount <= Decimal("1000000"):
+        raise ValueError("Purchase amount must be between 0.01 and 1000000")
+    return amount
+
+
 def build_live_dashboard(
     store: CashbackEventStore,
     as_of: date,
@@ -2028,10 +2038,26 @@ def build_live_dashboard(
     stale_after_minutes: int = 90,
     program_config_path: Path | None = None,
     ingest_source: str | None = None,
+    purchase_amount: str | None = None,
 ) -> dict[str, Any]:
     if stale_after_minutes <= 0:
         raise ValueError("stale_after_minutes must be positive")
     configuration = load_program_configuration(program_config_path, as_of=as_of)
+    if purchase_amount is not None:
+        amount = str(routing_purchase_amount(purchase_amount))
+        # Request-local copies only: quoting a purchase never changes the
+        # configured scan/notification snapshot or recorded transactions.
+        configuration = {
+            **configuration,
+            "routing_profiles": [
+                {**profile, "decision_amount": amount, "decision_amount_aed": amount}
+                for profile in configuration.get("routing_profiles") or ()
+            ],
+            "payment_intents": [
+                {**intent, "decision_amount": amount, "decision_amount_aed": amount}
+                for intent in configuration.get("payment_intents") or ()
+            ],
+        }
     programs = programs_from_config(configuration, as_of, as_of=as_of)
     periods = {
         program.card: statement_period(as_of, program.statement_close_day)
@@ -2055,6 +2081,8 @@ def build_live_dashboard(
         route_policies=configuration.get("route_policies") or None,
         base_currency=str(configuration.get("currency") or "AED"),
     )
+    if purchase_amount is not None:
+        result["routing_purchase_amount"] = amount
     result["profile"] = configuration.get("profile") or {}
     stats = store.stats(ingest_source)
     last_ingest = stats.get("last_successful_ingest_at")

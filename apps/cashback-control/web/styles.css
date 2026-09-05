@@ -405,3 +405,9 @@ section { margin-top: 14px; }
   .card-choice.avoid::after { color: var(--red); }
   .avoid-list { gap: 8px; }
 }
+
+.routing-amount { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.routing-amount label { color: var(--muted); font-size: .8rem; }
+.routing-amount input { width: 110px; padding: 8px; color: inherit; background: transparent; border: 1px solid var(--muted); border-radius: 6px; }
+.routing-amount button { padding: 8px 12px; cursor: pointer; }
+.routing-amount p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .75rem; }

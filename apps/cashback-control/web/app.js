@@ -273,7 +273,7 @@ function renderDecisionTree(items) {
     header.append(
       createNode("span", "", methods ? `${methods} · ${item.currency}` : `${item.currency}`),
       createNode("strong", "", `${typeLabel(item)} routing order`),
-      createNode("small", "", "Start with the first card. Check remaining bucket capacity before a larger purchase; routing updates as you spend."),
+      createNode("small", "", "Start with the first card for the checked amount. Change the purchase amount to recheck remaining bucket capacity."),
     );
     if (!candidates.length) {
       graph.replaceChildren(header, emptyState("No eligible card route", "This spend type currently has no card that satisfies the configured rules."));
@@ -665,6 +665,19 @@ function renderRewardDisclosure(estimate) {
   root.textContent = `${label} · ${evidenceLabel}`;
 }
 
+let routingPurchaseAmount = "100";
+
+function setupRoutingAmount() {
+  const form = document.querySelector("#routing-amount-form");
+  const input = document.querySelector("#routing-amount");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    routingPurchaseAmount = input.value;
+    await refreshDashboard().catch(() => {});
+  });
+}
+
 let dashboardLoadSequence = 0;
 
 function renderDashboardError(error) {
@@ -688,7 +701,7 @@ function renderDashboardError(error) {
 async function loadDashboard() {
   const sequence = ++dashboardLoadSequence;
   const [response, periodsResponse] = await Promise.all([
-    fetch("/api/dashboard", { cache: "no-store" }),
+    fetch(`/api/dashboard?purchase_amount=${encodeURIComponent(routingPurchaseAmount)}`, { cache: "no-store" }),
     fetch("/api/periods", { cache: "no-store" }),
   ]);
   const payload = await response.json();
@@ -697,6 +710,8 @@ async function loadDashboard() {
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
   if (sequence !== dashboardLoadSequence) return;
   configureDisplay(payload);
+  document.querySelector("#routing-currency").textContent = baseCurrency;
+  document.querySelector("#routing-amount-status").textContent = `Routes checked for ${new Intl.NumberFormat(undefined, { style: "currency", currency: baseCurrency, maximumFractionDigits: 2 }).format(Number(payload.routing_purchase_amount))}. Change the amount before a different purchase.`;
   renderRewardDisclosure(payload.reward_estimate);
   renderStatus(payload.data_status);
   const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
@@ -719,6 +734,7 @@ async function refreshDashboard() {
 }
 
 setupRoutingViews();
+setupRoutingAmount();
 setupScreenViews();
 setupPushNotifications();
 refreshDashboard().catch(() => {});
