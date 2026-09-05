@@ -15,7 +15,7 @@ from jsonschema import Draft202012Validator
 from finance_tracker.web_push import WebPushStore
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "deploy/actual-poc/restore-cashback-disposable.sh"
+SCRIPT = ROOT / "deploy/actual/restore-cashback-disposable.sh"
 SCHEMA = ROOT / "config/cashback-restore-receipt.schema.json"
 
 

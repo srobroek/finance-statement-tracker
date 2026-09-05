@@ -1278,8 +1278,8 @@ def load_program_configuration(
     return source
 
 
-def poc_programs(period_date: date | None = None) -> tuple[CardProgram, ...]:
-    """Load the versioned POC programme assumptions; verify before production use."""
+def configured_programs(period_date: date | None = None) -> tuple[CardProgram, ...]:
+    """Load the versioned card-programme configuration; verify seed assumptions before production use."""
     return programs_from_config(
         load_program_configuration(as_of=period_date),
         period_date,

@@ -1,9 +1,11 @@
 # Backup and restore
 
 Finance data has three independent persistence domains and must never be
-presented as one database:
+presented as one database. The canonical Actual stack is
+`/opt/stacks/finance-actual` and its backups are stored under
+`/opt/backups/finance-actual`.
 
-- Actual ledger files under `/opt/stacks/finance-actual-poc/data`;
+- Actual ledger files under `/opt/stacks/finance-actual/data`;
 - cashback operational SQLite under the configured cashback data directory;
 - n8n Postgres plus the n8n persistent volume for workflows, credentials,
   cursors, receipts, and transient binary references.
@@ -13,7 +15,7 @@ container backups.
 
 ## Actual and cashback
 
-`deploy/actual-poc/backup.sh` briefly pauses only Actual, its proxy when needed,
+`deploy/actual/backup.sh` briefly pauses only Actual, its proxy when needed,
 and cashback, copies the two data stores plus secret-free configuration, writes
 checksums, and runs `verify-backup.py` in a disposable extraction directory. It
 does not know about or pause n8n.
@@ -30,7 +32,7 @@ period state, and configuration remain restorable.
 The verifier recognizes legacy version 3 manifests but rejects one without the
 push-state classification. Create a new version 4 backup before restore.
 
-Backups live at `/opt/backups/finance-actual-poc/<UTC timestamp>/`. Restore only
+Backups live at `/opt/backups/finance-actual/<UTC timestamp>/`. Restore only
 after checksum verification, with Actual and cashback stopped, and retain the
 pre-restore copies until UI/API balances and cashback event counts agree.
 

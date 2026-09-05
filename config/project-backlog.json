@@ -4019,7 +4019,7 @@
       "evidence_paths": [
         ".github/workflows/cashback-image.yml",
         ".github/workflows/phase1-finance-artifacts.yml",
-        "deploy/actual-poc/compose.yaml",
+        "deploy/actual/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json",
         "runtime/n8n-orchestrator-repo/docs/receipts/disposable-n8n-fa8fd58-20260819/local-image-receipt.json",
@@ -4071,7 +4071,7 @@
       "evidence_paths": [
         ".github/workflows/cashback-image.yml",
         ".github/workflows/phase1-finance-artifacts.yml",
-        "deploy/actual-poc/compose.yaml",
+        "deploy/actual/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json",
         "integrations/n8n/Dockerfile",
@@ -4169,7 +4169,7 @@
       "evidence_paths": [
         ".github/workflows/cashback-image.yml",
         ".github/workflows/phase1-finance-artifacts.yml",
-        "deploy/actual-poc/compose.yaml",
+        "deploy/actual/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json"
       ],
@@ -4215,7 +4215,7 @@
       "evidence_paths": [
         ".github/workflows/cashback-image.yml",
         ".github/workflows/phase1-finance-artifacts.yml",
-        "deploy/actual-poc/compose.yaml",
+        "deploy/actual/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json"
       ],
@@ -4262,7 +4262,7 @@
       "evidence_paths": [
         ".github/workflows/cashback-image.yml",
         ".github/workflows/phase1-finance-artifacts.yml",
-        "deploy/actual-poc/compose.yaml",
+        "deploy/actual/compose.yaml",
         "deploy/cashback/compose.yaml",
         "config/deployment.json",
         "config/project-acceptance.json",

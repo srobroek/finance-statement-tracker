@@ -107,4 +107,4 @@ runtime evidence, or readback.
 - Browser status: `runtime/browser-adapters-status.json`
 - n8n registry/workflows: `integrations/n8n/pipeline-registry.json` and `integrations/n8n/workflows/`
 - Legacy automation audit: `docs/automation-lifecycle-audit-2026-08-19.md`
-- CI/deployment: `.github/workflows/cashback-image.yml`, `.github/workflows/phase1-finance-artifacts.yml`, `deploy/actual-poc/compose.yaml`, and `deploy/cashback/compose.yaml`
+- CI/deployment: `.github/workflows/cashback-image.yml`, `.github/workflows/phase1-finance-artifacts.yml`, `deploy/actual/compose.yaml`, and `deploy/cashback/compose.yaml`

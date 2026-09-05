@@ -17,7 +17,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "deploy/actual-poc/restore-actual-disposable.py"
+SCRIPT = ROOT / "deploy/actual/restore-actual-disposable.py"
 SCHEMA = ROOT / "config/actual-restore-receipt.schema.json"
 READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
 

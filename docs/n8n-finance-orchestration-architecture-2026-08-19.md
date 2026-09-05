@@ -223,7 +223,7 @@ session.
 
 There is no ingestion bridge, finance-worker service, SSH submission wrapper,
 or host-local ingestion API. The n8n custom Actual node imports directly with
-`@actual-app/api` over the private `finance-actual-poc_default` network and uses
+`@actual-app/api` over the private `finance-actual_default` network and uses
 the persistent n8n volume for its local Actual cache.
 
 ## Cutover gates

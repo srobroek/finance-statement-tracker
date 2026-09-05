@@ -10,9 +10,9 @@ class ActualExportCliTests(TestCase):
     def test_actual_export_writes_bridge_envelopes(self) -> None:
         rows = [
             {
-                "transaction_id": "poc:one",
+                "transaction_id": "fixture:one",
                 "transaction_at": "2026-08-16T10:00:00",
-                "account": "POC Current",
+                "account": "Test Current",
                 "merchant_raw": "CARREFOUR 123",
                 "vendor": "Carrefour",
                 "amount_aed": "25.50",
@@ -32,9 +32,9 @@ class ActualExportCliTests(TestCase):
 
             self.assertEqual(result, 0)
             payload = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(payload[0]["account"], "POC Current")
+            self.assertEqual(payload[0]["account"], "Test Current")
             self.assertEqual(payload[0]["records"][0]["amount"], -2550)
-            self.assertEqual(payload[0]["records"][0]["imported_id"], "poc:one")
+            self.assertEqual(payload[0]["records"][0]["imported_id"], "fixture:one")
 
     def test_statement_evidence_archive_updates_catalogue_idempotently(self) -> None:
         with TemporaryDirectory() as directory:

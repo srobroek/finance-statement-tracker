@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-PROBE_ROOT = ROOT / "deploy/actual-poc/probe"
+PROBE_ROOT = ROOT / "deploy/actual/probe"
 PROBE = PROBE_ROOT / "actual-ui-sync-probe.mjs"
 DOCKERFILE = PROBE_ROOT / "Dockerfile"
 ENVELOPE = PROBE_ROOT / "expected-envelope.json"

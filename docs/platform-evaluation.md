@@ -10,8 +10,8 @@ Use **Actual Budget as the primary ledger, budgeting, rules, and reporting appli
 
 | Platform | Best fit | Important strengths | Main gaps for this project | Decision |
 | --- | --- | --- | --- | --- |
-| Actual Budget | Daily ledger, envelope budgeting, deterministic rules, reports | Modern UI, unlimited reports dashboards, schedules, tags, official Node API/CLI/ActualQL, reconciliation-aware imports | No native PDF statement ingestion, evidence vault, or MCP | **Primary POC** |
-| Sure | Wealth, AI, document ingestion, agent access | Statement Vault, OpenAI-compatible models, OpenRouter/local models, OAuth MCP, investments and net worth | Younger project; budgeting/rule automation is less mature than Actual | **Second pilot** if PDF/MCP outweigh budgeting maturity |
+| Actual Budget | Daily ledger, envelope budgeting, deterministic rules, reports | Modern UI, unlimited reports dashboards, schedules, tags, official Node API/CLI/ActualQL, reconciliation-aware imports | No native PDF statement ingestion, evidence vault, or MCP | **Primary platform** |
+| Sure | Wealth, AI, document ingestion, agent access | Statement Vault, OpenAI-compatible models, OpenRouter/local models, OAuth MCP, investments and net worth | Younger project; budgeting/rule automation is less mature than Actual | **Secondary option** if PDF/MCP outweigh budgeting maturity |
 | Firefly III | Traditional finance database and integrations | Very mature, double entry, budgets, tags, rules, piggy banks, broad REST API | More traditional interface; weaker match to the desired dashboard experience | Fallback for API-first reliability |
 | MoneyMatter | Polished all-in-one UI | Strong visual design, budgets, net worth, pivot/cash-flow reports, tags, BYO AI, OAuth MCP | Explicitly early access and a much smaller project; integration contracts need hardening | Watch and test with sample data only |
 

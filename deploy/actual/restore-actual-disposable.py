@@ -706,7 +706,7 @@ def probe_http(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backup-root", default=os.environ.get("FINANCE_BACKUP_ROOT", "/opt/backups/finance-actual-poc"))
+    parser.add_argument("--backup-root", default=os.environ.get("FINANCE_BACKUP_ROOT", "/opt/backups/finance-actual"))
     parser.add_argument("--backup-path")
     parser.add_argument("--receipt", default=os.environ.get("FINANCE_ACTUAL_RESTORE_RECEIPT"))
     parser.add_argument("--image", default=os.environ.get("FINANCE_ACTUAL_RESTORE_IMAGE", DEFAULT_IMAGE))

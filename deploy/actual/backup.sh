@@ -9,9 +9,9 @@ PRIVATE_DIR_MODE=700
 PRIVATE_FILE_MODE=600
 PRIVATE_OWNER_UID="${EUID}"
 
-ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
+ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
-BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
+BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual}"
 RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
 
 ACTUAL_DATA_DIR="${FINANCE_ACTUAL_DATA_DIR:-${ACTUAL_STACK_DIR}/data}"
@@ -62,10 +62,10 @@ resolved() {
 }
 
 if [[ "${EUID}" -ne 0 ]]; then fail "root_required"; fi
-[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual-poc" ]] || fail "unexpected_actual_stack_path"
+[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual" ]] || fail "unexpected_actual_stack_path"
 [[ "$(resolved "${CASHBACK_STACK_DIR}")" == "/opt/stacks/finance-cashback" ]] || fail "unexpected_cashback_stack_path"
 backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
-[[ "${backup_root_resolved}" == "/opt/backups/finance-actual-poc" || "${backup_root_resolved}" == /opt/backups/finance-actual-poc/* ]] || fail "unexpected_backup_root"
+[[ "${backup_root_resolved}" == "/opt/backups/finance-actual" || "${backup_root_resolved}" == /opt/backups/finance-actual/* ]] || fail "unexpected_backup_root"
 [[ "$(resolved "${ACTUAL_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/data" ]] || fail "unexpected_actual_data_path"
 [[ "$(resolved "${CASHBACK_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/cashback-data" ]] || fail "unexpected_cashback_data_path"
 [[ "$(resolved "${VERIFY_SCRIPT}")" == "${ACTUAL_STACK_DIR}/verify-backup.py" ]] || fail "unexpected_verify_script_path"

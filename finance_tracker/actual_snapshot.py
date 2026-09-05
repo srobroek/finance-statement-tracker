@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import calendar
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Iterable
@@ -304,22 +304,17 @@ def _pace_state(
         )
         for key, value in pace.items()
     }
-    projected = spend / Decimal(max(elapsed_days, 1)) * Decimal(cycle_days)
     risk_after_days = (
         program.pace_policy.week_length_days
         * program.alert_policy.minimum_risk_after_week
     )
     alerts = []
-    if (
-        elapsed_days < risk_after_days
-        or pace["routing_status"] != "UNDER"
-        or projected >= program.safety_target
-    ):
-        routing_mode = "TARGET_TIER"
-        routing_program = program
-    else:
-        routing_mode = "CURRENT_TIER"
-        routing_program = replace(program, safety_target=None)
+    # An under-target card remains a valid destination for unavoidable eligible
+    # spend through cycle close.  The warning below communicates that the target
+    # is at risk; routing must not erase the target and collapse every candidate
+    # to a zero-rate current tier merely because projected spend is low.
+    routing_mode = "TARGET_TIER"
+    routing_program = program
     if elapsed_days >= risk_after_days and spend < program.safety_target:
         alerts.append({
             "key": f"minimum:{program.card}:{period_start}:{period_end}",
@@ -327,7 +322,8 @@ def _pace_state(
             "title": f"{program.name} minimum is at risk",
             "detail": (
                 f"{base_currency} {_plain(program.safety_target - spend)} remains after week "
-                f"{program.alert_policy.minimum_risk_after_week} of the cycle."
+                f"{program.alert_policy.minimum_risk_after_week} of the cycle. Route existing "
+                "eligible spend here when appropriate; do not spend extra to chase the threshold."
             ),
         })
     days_remaining = (period_end - as_of).days
@@ -444,6 +440,7 @@ def _build_recommendations(
     rows: list[Transaction],
     intents: Iterable[PaymentIntent],
 ) -> list[dict[str, object]]:
+    programs_by_card = {program.card: program for program in routing_programs}
     threshold_actionable = any(
         program.safety_target is not None
         and total_spend(rows, program.card) < program.safety_target
@@ -454,6 +451,13 @@ def _build_recommendations(
         item = recommend(routing_programs, rows, intent)
         ranked_cards = []
         for index, candidate in enumerate(item.ranked):
+            program = programs_by_card[candidate.card]
+            current_tier = next(
+                tier for tier in program.tiers if tier.code == candidate.tier_before
+            )
+            current_tier_rate = current_tier.rates.get(
+                candidate.bucket, Decimal("0")
+            )
             ranked_cards.append({
                 "order": index + 1,
                 "status": (
@@ -468,6 +472,30 @@ def _build_recommendations(
                 "target_tier": candidate.target_tier,
                 "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
                 "estimated_net_value_aed": _plain(candidate.net_value_aed),
+                "current_state_marginal_reward_aed": _plain(
+                    candidate.marginal_reward_aed
+                ),
+                "current_state_marginal_return_percent": _plain(
+                    candidate.marginal_reward_aed
+                    / intent.amount_aed
+                    * Decimal("100")
+                    if intent.amount_aed
+                    else Decimal("0")
+                ),
+                "current_tier_rate_percent": _plain(
+                    current_tier_rate * Decimal("100")
+                ),
+                "conditional_target_reward_aed": _plain(
+                    candidate.strategic_reward_aed
+                ),
+                "conditional_target_rate_percent": _plain(
+                    candidate.target_rate * Decimal("100")
+                ),
+                "estimate_basis": (
+                    "CONDITIONAL_TARGET_TIER"
+                    if candidate.strategic_reward_aed > candidate.marginal_reward_aed
+                    else "CURRENT_TIER"
+                ),
                 "estimated_net_return_percent": _plain(
                     candidate.net_value_aed / intent.amount_aed * Decimal("100")
                     if intent.amount_aed
@@ -561,6 +589,12 @@ def _build_routing_graphs(
                 else max(program.safety_target - candidate.card_spend_before_aed, Decimal("0"))
             )
             card_state = routing_state_by_card.get(card) or {}
+            current_tier = next(
+                tier for tier in program.tiers if tier.code == candidate.tier_before
+            )
+            current_tier_rate = current_tier.rates.get(
+                candidate.bucket, Decimal("0")
+            )
             pace = card_state.get("pace") or {}
             pace_status_value = str(pace.get("routing_status") or pace.get("status") or "OPEN")
             checks = {
@@ -606,6 +640,28 @@ def _build_routing_graphs(
                 "target_tier": candidate.target_tier,
                 "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
                 "estimated_net_value_aed": _plain(candidate.net_value_aed),
+                "current_state_marginal_reward_aed": _plain(
+                    candidate.marginal_reward_aed
+                ),
+                "current_state_marginal_return_percent": _plain(
+                    candidate.marginal_reward_aed / amount * Decimal("100")
+                    if amount
+                    else Decimal("0")
+                ),
+                "current_tier_rate_percent": _plain(
+                    current_tier_rate * Decimal("100")
+                ),
+                "conditional_target_reward_aed": _plain(
+                    candidate.strategic_reward_aed
+                ),
+                "conditional_target_rate_percent": _plain(
+                    candidate.target_rate * Decimal("100")
+                ),
+                "estimate_basis": (
+                    "CONDITIONAL_TARGET_TIER"
+                    if candidate.strategic_reward_aed > candidate.marginal_reward_aed
+                    else "CURRENT_TIER"
+                ),
                 "estimated_net_return_percent": _plain(
                     candidate.net_value_aed / amount * Decimal("100") if amount else Decimal("0")
                 ),

@@ -9,9 +9,9 @@ on:
       - ".dockerignore"
       - "apps/cashback-control/**"
       - "deploy/cashback/**"
-      - "deploy/actual-poc/backup.sh"
-      - "deploy/actual-poc/sanitize-cashback-backup.py"
-      - "deploy/actual-poc/verify-backup.py"
+      - "deploy/actual/backup.sh"
+      - "deploy/actual/sanitize-cashback-backup.py"
+      - "deploy/actual/verify-backup.py"
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/actual-note-contract.json"
@@ -36,9 +36,9 @@ on:
       - ".dockerignore"
       - "apps/cashback-control/**"
       - "deploy/cashback/**"
-      - "deploy/actual-poc/backup.sh"
-      - "deploy/actual-poc/sanitize-cashback-backup.py"
-      - "deploy/actual-poc/verify-backup.py"
+      - "deploy/actual/backup.sh"
+      - "deploy/actual/sanitize-cashback-backup.py"
+      - "deploy/actual/verify-backup.py"
       - "deploy/finance-runtime/**"
       - "config/actual-bootstrap.json"
       - "config/actual-note-contract.json"
@@ -233,7 +233,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-cashback
-          sanitizer=/opt/stacks/finance-actual-poc/sanitize-cashback-backup.py
+          sanitizer=/opt/stacks/finance-actual/sanitize-cashback-backup.py
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           sudo install -d "$stack"
           if sudo test -f "$stack/compose.yaml"; then
@@ -252,11 +252,11 @@ jobs:
               exit 1
             fi
             rollback_image_ref="${rollback_candidates[0]}"
-            printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
+            printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual/cashback-data\nCASHBACK_IMAGE=%s\n' \
               "$rollback_image_ref" | sudo tee "$stack/.env.rollback-${stamp}" >/dev/null
             sudo chmod 0600 "$stack/.env.rollback-${stamp}"
           fi
-          sudo install -m 0750 deploy/actual-poc/sanitize-cashback-backup.py "$sanitizer"
+          sudo install -m 0750 deploy/actual/sanitize-cashback-backup.py "$sanitizer"
           sudo test -x "$sanitizer"
           sudo install -d -m 0700 /opt/stacks/finance-runtime
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
@@ -266,19 +266,19 @@ jobs:
           sudo install -m 0644 config/actual-bootstrap.json "$stack/actual-bootstrap.json"
           sudo install -m 0644 config/static-rules.seed.json "$stack/static-rules.json"
           sudo install -m 0644 config/transaction-email-sources.json "$stack/transaction-email-sources.json"
-          printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual-poc/cashback-data\nCASHBACK_IMAGE=%s\n' \
+          printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual/cashback-data\nCASHBACK_IMAGE=%s\n' \
             "$IMAGE_REF" | sudo tee "$stack/.env" >/dev/null
           if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
             sudo docker exec finance-cashback-control python -c \
               "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
-          elif sudo test -f /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3; then
+          elif sudo test -f /opt/stacks/finance-actual/cashback-data/cashback-events.sqlite3; then
             sudo cp --preserve=mode,timestamps \
-              /opt/stacks/finance-actual-poc/cashback-data/cashback-events.sqlite3 \
-              "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
+              /opt/stacks/finance-actual/cashback-data/cashback-events.sqlite3 \
+              "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"
           fi
-          if sudo test -f "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"; then
+          if sudo test -f "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"; then
             sudo "$sanitizer" \
-              "/opt/stacks/finance-actual-poc/cashback-data/pre-deploy-${stamp}.sqlite3"
+              "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"
           fi
 
       - name: Authenticate and pull tested image

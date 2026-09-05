@@ -1,17 +1,22 @@
 # Finance production stack
 
-Deploy `compose.yaml` as the Dockge-compatible stack `finance-actual-poc`.
-Despite the historical stack name, this is the production topology:
+Deploy `compose.yaml` as the Finance Actual production stack under the
+`finance-actual` Compose project.
 
-- `finance-actual-poc`: the digest-pinned Actual 26.8.1 ledger service,
+- `finance-actual`: the digest-pinned Actual 26.8.1 ledger service,
   private to the Compose network;
 - `finance-actual-proxy`: the digest-pinned non-root Nginx edge on host port
   `5006`, providing the browser isolation headers Actual requires.
 
-Actual data is bind-mounted at `./data`. Cashback operational state remains in
-`/opt/stacks/finance-actual-poc/cashback-data` for backward-compatible storage,
-but its service is owned by the independent `/opt/stacks/finance-cashback`
-project.
+Actual data is bind-mounted at `./data`. Cashback operational state is kept at
+`/opt/stacks/finance-actual/cashback-data`; its service is owned by the
+independent `/opt/stacks/finance-cashback` project.
+
+An existing host needs an explicit cutover to these paths. Stop the old services,
+retain a verified backup, then migrate the data directories or reimport into the
+new ledger before enabling ingestion. A reimported ledger may require new budget
+and account bindings. Updating this repository does not move host data or reset
+ingestion receipts; reconcile those bindings and receipts before replaying writes.
 
 Actual and its Nginx proxy are the only services in this Compose project.
 Cashback is an independent project under `deploy/cashback`. n8n owns ingestion
@@ -24,9 +29,9 @@ the container host in to `ghcr.io` once with a token that has `read:packages`.
 Deploy and verify:
 
 ```bash
-cd /opt/stacks/finance-actual-poc
-sudo docker compose up -d actual actual-proxy
-sudo docker compose ps
+cd /opt/stacks/finance-actual
+sudo docker compose -p finance-actual up -d actual actual-proxy
+sudo docker compose -p finance-actual ps
 curl -fsSI http://127.0.0.1:5006/ | grep -E 'Cross-Origin-(Embedder|Opener)-Policy'
 ```
 

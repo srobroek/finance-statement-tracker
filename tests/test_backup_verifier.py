@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-verifier_path = Path(__file__).parents[1] / "deploy" / "actual-poc" / "verify-backup.py"
+verifier_path = Path(__file__).parents[1] / "deploy" / "actual" / "verify-backup.py"
 verifier_spec = importlib.util.spec_from_file_location("finance_backup_verifier", verifier_path)
 if verifier_spec is None or verifier_spec.loader is None:
     raise RuntimeError("cannot load backup verifier")
@@ -99,7 +99,7 @@ class BackupVerifierTests(unittest.TestCase):
             subprocess.run(
                 [
                     sys.executable,
-                    str(Path("deploy/actual-poc/sanitize-cashback-backup.py")),
+                    str(Path("deploy/actual/sanitize-cashback-backup.py")),
                     str(cashback_database),
                 ],
                 check=True,

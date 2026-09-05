@@ -15,7 +15,7 @@
   },
   "containers_before_retirement": [
     {
-      "name": "finance-actual-poc",
+      "name": "finance-actual",
       "container_id": "0f71a931aa98e978ccf137022c9fce4035db71ed3781e2ccc28c9145a2fc70d0",
       "image_id": "28ee4cee30857837b55e33c776dcc96f013053ff61eed823cd80d37ba1b43f99",
       "status": "healthy"

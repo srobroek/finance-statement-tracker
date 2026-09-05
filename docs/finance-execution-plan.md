@@ -77,7 +77,7 @@ If two or more workflows need the same parameter or logic, move it to a generate
 - Remove stage-label sticky notes after equivalent group names/descriptions exist.
 - Retain sticky notes only for design rationale, warnings, non-obvious invariants, or manual review instructions that a group description cannot express.
 - Keep at most one short overview note when it materially improves navigation.
-- Perform visual grouping and Tidy only after functional MVP and recovery acceptance are complete.
+- Perform visual grouping and Tidy only after functional acceptance and recovery acceptance are complete.
 
 Before creating a group, search the corpus for equivalent node sequences. Extract real duplication into a list-mode subworkflow and prove that its callers preserve input/output contracts.
 
@@ -118,7 +118,7 @@ Acceptance:
 - Read back exactly one matching root folder and prove no nested duplicate.
 - Persist only a redacted setup receipt, then remove the transient workflow and its history.
 
-### P2 — Prove one statement-ingestion MVP end to end
+### P2 — Validate one statement-ingestion path end to end
 
 Use one approved real statement or an approved immutable fixture. The run must:
 
@@ -136,9 +136,9 @@ Use one approved real statement or an approved immutable fixture. The run must:
 12. advance the acquisition cursor only after that receipt is verified;
 13. replay the identical input and prove no duplicate archive, document, batch, or cursor movement.
 
-MVP evidence must identify the immutable source, archive receipt, normalized result, reconciliation result, prepared batch, cursor before/after, and replay no-op without storing document contents in Git.
+Production acceptance evidence must identify the immutable source, archive receipt, normalized result, reconciliation result, prepared batch, cursor before/after, and replay no-op without storing document contents in Git.
 
-### P3 — Prove one cashback-ingestion MVP end to end
+### P3 — Validate one cashback-ingestion path end to end
 
 Use one approved RAKBANK transaction-notification example and prove:
 
@@ -237,7 +237,7 @@ On an isolated platform stack:
 
 ### P9 — Visual organization and maintainability
 
-Only after functional MVP and recovery acceptance:
+Only after functional acceptance and recovery acceptance:
 
 - implement the `Finance` and `Global` hierarchy;
 - convert stage-label sticky notes into Canvas Groups with role names/descriptions;
@@ -264,9 +264,9 @@ Also run every checked-in workflow/config/table generator in check mode and vali
 
 Runtime acceptance must use authoritative readback. Logs or process exit zero alone are not sufficient.
 
-## 8. MVP definition of done
+## 8. Production acceptance definition of done
 
-The MVP is complete only when all of the following are evidenced:
+Production acceptance is complete only when all of the following are evidenced:
 
 - one statement is acquired, archived, parsed, normalized, reconciled, and prepared for Actual;
 - one valid cashback notification is ingested into the companion and updates the live calculation;
@@ -279,4 +279,3 @@ The MVP is complete only when all of the following are evidenced:
 - the runtime receipt, source-of-truth readbacks, and repository commits agree.
 
 Do not mark a task complete from source code, tests, imports, or screenshots alone when the acceptance criterion requires a live or disposable result.
-

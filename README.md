@@ -43,7 +43,7 @@ Rules use the versioned AutoCat-style JSON contract in `config/static-rule-schem
 
 `finance_tracker.statements.BankStatementAdapter` is the extension boundary for banks. An adapter only detects and parses its own statement layout; it must emit `NormalizedStatement` and `NormalizedStatementTransaction`. Reconciliation, rules, cashback calculations, and the n8n Actual node consume only those normalized objects.
 
-The POC includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered are explicit interim, non-importing placeholders pending their first real statement fixtures. Their statement close and finalization paths stay paused until parser and arithmetic tests pass; this card-scoped gap does not block RAK live notification cashback, ADCB history, or other ACTIVE source ingestion. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
+The current product includes `emirates_islamic_v1`, `adcb_v1`, and `wio_credit_v1`. New banks register one adapter with `StatementAdapterRegistry`; downstream code does not change. RAKBANK and Standard Chartered are explicit interim, non-importing placeholders pending their first real statement fixtures. Their statement close and finalization paths stay paused until parser and arithmetic tests pass; this card-scoped gap does not block RAK live notification cashback, ADCB history, or other ACTIVE source ingestion. Statement passwords are supplied through runtime secrets or an approved credential store. They must never be committed to Git, emitted to logs, or copied into decision traces.
 
 `finance_tracker.ingestion.stage_statement` converts the canonical statement into a reviewable staging batch using versioned account/card configuration. A statement can be `balance_tied` while `ledger_reconciled` remains false; only the later matching workflow may change the latter.
 
@@ -171,7 +171,7 @@ uses reviewed fixed-purpose n8n nodes.
 ```powershell
 python -m unittest discover -s tests -v
 python -m finance_tracker.cli demo
-python -m finance_tracker.cli actual-export --input data\poc-transactions.json --output data\actual-import.json
+python -m finance_tracker.cli actual-export --input data\transactions.json --output data\actual-import.json
 python -m finance_tracker.cli month-close --input data\sample_transactions.json --month 2026-08 --statement-status data\2026-08-statement-status.json --output data\reports\2026-08.md
 python -m finance_tracker.cli browser-adapters-status --sources config\browser-sources.json --adapters-root browser_adapters
 ```

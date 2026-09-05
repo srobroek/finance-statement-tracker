@@ -9,14 +9,14 @@ exists.
 
 | Service | Responsibility | Exposure |
 |---|---|---|
-| `finance-actual-poc` | Actual server and ledger files | private Docker network |
+| `finance-actual` | Actual server and ledger files | private Docker network |
 | `finance-actual-proxy` | SharedArrayBuffer headers | host `127.0.0.1:5006`, Cloudflare Tunnel |
 | `finance-cashback-control` | live cashback routing and push | independent stack |
 | `finance-n8n` | schedules, ETL, review, and operations | host `172.20.10.20:5678`, Cloudflare Tunnel |
 | `finance-n8n-postgres` | n8n workflow and operational state | private to n8n network |
 
-The n8n Actual custom node uses `@actual-app/api` directly over
-`finance-actual-poc_default`. Its local Actual cache is inside the persistent
+The n8n Actual custom node uses `@actual-app/api` directly over the shared
+`finance-runtime` network. Its local Actual cache is inside the persistent
 n8n volume. The node accepts typed finance operations only, serializes ledger
 writes, verifies imported IDs, and cannot execute arbitrary commands.
 
