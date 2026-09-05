@@ -5117,6 +5117,19 @@ def ensure_statement_projection_contract(workflows: list[dict]) -> None:
     node_by_name(statement, "Build Cashback Reconciliation Request")["parameters"] = {'jsCode': "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nif (!rows.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY_STATEMENT');\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.event_type || row.transaction_type || '').trim().toUpperCase();\n    const purchaseType = row.purchase_type ? String(row.purchase_type).trim().toUpperCase() : undefined;\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: 'AED',\n        post_date: row.post_date || null,\n        ledger_category: String(row.subcategory || row.category || ''),\n        bucket_code: row.reward_bucket || null,\n        channel: row.channel || 'UNKNOWN',\n        tags: row.tags || [],\n        decision_trace: [...(Array.isArray(row.decision_trace) ? row.decision_trace : []), {\n            stage: 'STATEMENT_SETTLEMENT', amount_aed: String(row.amount_aed ?? row.amount), settlement_currency: 'AED',\n            original_currency: String(row.currency_original || 'AED'), original_amount: row.amount_original ?? null,\n            exchange_rate: row.exchange_rate ?? null, transaction_date: row.transaction_date, post_date: row.post_date ?? null,\n        }],\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: purchaseType,\n        event_type: eventType,\n    };\n});\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"}
 
 
+def ensure_operations_execution_filters(workflows: list[dict]) -> None:
+    """An omitted status fetches all statuses; the API rejects literal 'all'."""
+    for workflow in workflows:
+        for node in workflow.get("nodes", []):
+            parameters = node.get("parameters", {})
+            if (node.get("type") == "n8n-nodes-base.n8n"
+                    and parameters.get("resource") == "execution"
+                    and parameters.get("operation") == "getAll"):
+                filters = parameters.get("filters", {})
+                if filters.get("status") == "all":
+                    del filters["status"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if exports are not current")
@@ -5126,6 +5139,7 @@ def main() -> int:
     workflows = [repair_mojibake(workflow) for workflow in workflows]
     ensure_shared_monthly_cycle(workflows)
     harden_exact_node_contracts(workflows)
+    ensure_operations_execution_filters(workflows)
     apply_blocker_metadata(workflows)
     ensure_single_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
