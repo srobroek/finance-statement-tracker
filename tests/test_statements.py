@@ -39,6 +39,51 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertEqual(statement.balance_difference_aed, Decimal("0.00"))
         self.assertEqual(statement.payment_due_date.isoformat(), "2026-08-25")
 
+    def test_emirates_islamic_cross_year_rows_use_statement_period(self) -> None:
+        text = """Statement of Card Account
+From: 1st Jan 2026
+31st Jan 2026
+To:
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 31 DEC YEAR END PURCHASE 10.00
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,990.00 10.00 25/02/26 10.00 0.00 10.00
+"""
+
+        statement = parse_statement_text(text, "ei-cross-year.pdf")
+
+        self.assertEqual(statement.transactions[0].transaction_date.isoformat(), "2025-12-31")
+        self.assertEqual(statement.transactions[0].post_date.isoformat(), "2026-01-02")
+        self.assertTrue(statement.balance_tied)
+
+    def test_emirates_islamic_transaction_date_skips_invalid_nonleap_year(self) -> None:
+        text = """Statement of Card Account
+From: 1st Jan 2025
+31st Jan 2025
+To:
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 29 FEB LEAP DAY PURCHASE 10.00
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,990.00 10.00 25/02/25 10.00 0.00 10.00
+"""
+
+        statement = parse_statement_text(text, "ei-leap-year.pdf")
+
+        self.assertEqual(statement.transactions[0].transaction_date.isoformat(), "2024-02-29")
+        self.assertEqual(statement.transactions[0].post_date.isoformat(), "2025-01-02")
+
+    def test_emirates_islamic_yearless_rows_require_statement_period(self) -> None:
+        text = """Statement of Card Account
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 31 DEC YEAR END PURCHASE 10.00
+"""
+
+        with self.assertRaisesRegex(ValueError, "Statement period is required"):
+            parse_statement_text(text, "ei-missing-period.pdf", "emirates_islamic_v1")
+
     def test_adcb_statement_parses_card_sections_and_foreign_currency(self) -> None:
         text = """15/07/26
 09/08/26

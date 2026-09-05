@@ -134,6 +134,18 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertIn("#owner-owner-a", run.envelopes[0]["records"][0]["notes"])
         self.assertEqual(run.cashback_reconciliation, ())
 
+    def test_historical_v2_statement_exports_ledger_without_cashback_programme(self) -> None:
+        # The bundled schema-v2 cashback programmes begin in August.  A July
+        # statement must still produce its Actual envelope while omitting
+        # cashback reconciliation rather than applying the future programme.
+        run = build_actual_statement_run(self.statement(), self.config())
+
+        self.assertEqual(run.cashback_reconciliation, ())
+        self.assertEqual(
+            [record["amount"] for record in run.envelopes[0]["records"]],
+            [10000, -2500],
+        )
+
     def test_ei_positive_amazon_statement_row_is_refund_without_cashback_tag(self) -> None:
         statement = parse_statement_text(
             """Statement of Card Account

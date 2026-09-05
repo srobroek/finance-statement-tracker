@@ -437,6 +437,8 @@ class BrowserMutationServerTests(unittest.TestCase):
                 body = {"alert_key": "alert-1", "acknowledged": True}
                 valid = self._token()
                 denied = (
+                    ({"Content-Type": "application/json", "Origin": "https://cashback.examp\u00e9", "Cf-Access-Jwt-Assertion": valid}, "non-ascii-origin"),
+                    ({"Host": "cashback.examp\u00e9", "Content-Type": "application/json", "Origin": origin, "Cf-Access-Jwt-Assertion": valid}, "non-ascii-host"),
                     ({"Content-Type": "application/json", "Origin": origin}, "missing"),
                     ({"Content-Type": "application/json", "Origin": origin, "Authorization": "Bearer machine-token"}, "bearer"),
                     ({"Content-Type": "application/json", "Origin": "http://127.0.0.1:5010", "Cf-Access-Jwt-Assertion": valid}, "direct-origin"),
@@ -552,6 +554,14 @@ class BrowserMutationServerTests(unittest.TestCase):
                         self.assertEqual(body, {"error": "Operational read authorization required"})
 
                 token = self._token()
+                for path, headers in (
+                    ("/api/health", {"Authorization": "Bearer invalid-\u00e9"}),
+                    ("/api/dashboard", {"Host": "cashback.examp\u00e9", "Cf-Access-Jwt-Assertion": token}),
+                ):
+                    with self.subTest(path=path, malformed_header=True):
+                        status, body = self._get(port, path, headers=headers)
+                        self.assertEqual(status, 403)
+                        self.assertEqual(body, {"error": "Operational read authorization required"})
                 for path in paths:
                     with self.subTest(path=path, authorized=True):
                         status, body = self._get(

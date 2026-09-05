@@ -303,6 +303,97 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(rak["total_spend_aed"], "150")
             self.assertEqual(dining["spend_aed"], "150")
 
+    def test_reversals_for_distinct_targets_are_not_deduplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            base = {
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "50",
+                "purchase_type": "DINING",
+                "channel": "PHYSICAL_POS",
+                "merchant": "Example Restaurant",
+                "event_type": "REVERSAL",
+            }
+
+            result = store.upsert([
+                {**base, "source_event_id": "reversal-a", "reversal_of": "purchase-a"},
+                {**base, "source_event_id": "reversal-b", "reversal_of": "purchase-b"},
+            ])
+
+            self.assertEqual(result["inserted"], 2)
+            self.assertEqual(result["duplicates"], 0)
+            self.assertEqual(
+                {row["source_event_id"] for row in store.rows(date(2026, 8, 1), date(2026, 8, 31))},
+                {"reversal-a", "reversal-b"},
+            )
+
+    def test_same_target_reversal_replay_is_deduplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = CashbackEventStore(Path(temporary) / "events.sqlite3")
+            base = {
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "50",
+                "purchase_type": "DINING",
+                "channel": "PHYSICAL_POS",
+                "merchant": "Example Restaurant",
+                "event_type": "REVERSAL",
+                "reversal_of": "purchase-a",
+            }
+            store.upsert([{**base, "source_event_id": "reversal-a"}])
+
+            replay = store.upsert([{**base, "source_event_id": "reversal-replay"}])
+
+            self.assertEqual(replay["inserted"], 0)
+            self.assertEqual(replay["duplicates"], 1)
+            self.assertEqual(store.stats()["event_count"], 1)
+
+    def test_legacy_targeted_reversal_replay_is_deduplicated_after_upgrade(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "events.sqlite3"
+            base = {
+                "occurred_at": "2026-08-16T12:30:00+04:00",
+                "card_code": "RAK_WORLD",
+                "amount_aed": "50",
+                "purchase_type": "DINING",
+                "channel": "PHYSICAL_POS",
+                "merchant": "Example Restaurant",
+                "event_type": "REVERSAL",
+                "reversal_of": "purchase-a",
+            }
+            store = CashbackEventStore(database)
+            store.upsert([{**base, "source_event_id": "legacy-reversal"}])
+
+            # Simulate the identity written before reversal_of became part of
+            # the normalized key, while retaining the rest of the live schema.
+            old_identity = hashlib.sha256(
+                "|".join(
+                    (
+                        base["occurred_at"],
+                        base["card_code"],
+                        "5000",
+                        "AED",
+                        "REVERSAL",
+                        "EXAMPLE RESTAURANT",
+                    )
+                ).encode("utf-8")
+            ).hexdigest()
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    "UPDATE cashback_events SET identity_key = ? WHERE source_event_id = ?",
+                    (old_identity, "legacy-reversal"),
+                )
+
+            reopened = CashbackEventStore(database)
+            replay = reopened.upsert([
+                {**base, "source_event_id": "post-upgrade-replay"}
+            ])
+
+            self.assertEqual(replay["inserted"], 0)
+            self.assertEqual(replay["duplicates"], 1)
+            self.assertEqual(reopened.stats()["event_count"], 1)
+
     def test_ingest_heartbeat_controls_feed_freshness_even_when_scan_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")

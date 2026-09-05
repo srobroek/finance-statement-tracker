@@ -72,7 +72,44 @@ const MONTHS: Record<string, number> = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5,
 function isoWord(day: string, month: string, year: string | number): string {
   const monthNumber = MONTHS[month.toUpperCase()];
   if (!monthNumber) throw new Error(`Invalid month: ${month}`);
-  return `${String(year).padStart(4, '0')}-${String(monthNumber).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+  const yearNumber = Number(year);
+  const dayNumber = Number(day);
+  const value = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber));
+  if (value.getUTCFullYear() !== yearNumber || value.getUTCMonth() + 1 !== monthNumber || value.getUTCDate() !== dayNumber) {
+    throw new Error(`Invalid date: ${day} ${month} ${year}`);
+  }
+  return value.toISOString().slice(0, 10);
+}
+
+function isoPeriodWord(day: string, month: string, periodStart: string | null, periodEnd: string | null): string {
+  if (periodStart === null || periodEnd === null) throw new Error('Statement period is required to resolve yearless transaction dates');
+  if (periodStart > periodEnd) throw new Error('Statement period start must not follow period end');
+  const candidates: string[] = [];
+  const startYear = Number(periodStart.slice(0, 4));
+  const endYear = Number(periodEnd.slice(0, 4));
+  for (let year = startYear; year <= endYear; year += 1) {
+    let candidate: string;
+    try { candidate = isoWord(day, month, year); } catch { continue; }
+    if (candidate >= periodStart && candidate <= periodEnd) candidates.push(candidate);
+  }
+  if (candidates.length !== 1) {
+    throw new Error(`Statement row date ${day} ${month} does not resolve uniquely within ${periodStart}..${periodEnd}`);
+  }
+  return candidates[0];
+}
+
+function isoTransactionWord(day: string, month: string, postDate: string): string {
+  const postYear = Number(postDate.slice(0, 4));
+  const candidates: string[] = [];
+  for (const year of [postYear, postYear - 1]) {
+    let candidate: string;
+    try { candidate = isoWord(day, month, year); } catch { continue; }
+    if (candidate <= postDate) candidates.push(candidate);
+  }
+  if (candidates.length === 0) {
+    throw new Error(`Statement transaction date ${day} ${month} cannot be resolved from posting date ${postDate}`);
+  }
+  return candidates.sort().at(-1)!;
 }
 
 function transactionType(description: string, direction: 'DEBIT' | 'CREDIT'): StatementTransaction['transaction_type'] {
@@ -126,7 +163,6 @@ function parseEmiratesIslamic(text: string, sourceFile: string): NormalizedState
   const end = /(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3})\s+(\d{4})\s*\nTo:/i.exec(text) ?? /To:\s*(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3})\s+(\d{4})/i.exec(text);
   const periodStart = start ? isoWord(start[1], start[2], start[3]) : null;
   const periodEnd = end ? isoWord(end[1], end[2], end[3]) : null;
-  const year = Number((periodEnd ?? new Date().toISOString()).slice(0, 4));
   const opening = new RegExp(`OPENING BALANCE\\s+(${MONEY})`, 'i').exec(text)?.[1];
   const last4 = /PRIMARY CARD NO:\s*\d{4}X+(\d{4})/i.exec(text)?.[1] ?? null;
   const metadata = new RegExp(`Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges \\(AED\\) Current Balance \\(AED\\)\\s+${MONEY}\\s+${MONEY}\\s+(${MONEY})\\s+(\\d{2}/\\d{2}/\\d{2})\\s+(${MONEY})\\s+${MONEY}\\s+(${MONEY})`, 'i').exec(text);
@@ -135,9 +171,10 @@ function parseEmiratesIslamic(text: string, sourceFile: string): NormalizedState
   text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
     const match = row.exec(line);
     if (!match) return;
+    const postDate = isoPeriodWord(match[1], match[2], periodStart, periodEnd);
     drafts.push({
-      transaction_date: isoWord(match[3], match[4], year),
-      post_date: isoWord(match[1], match[2], year),
+      transaction_date: isoTransactionWord(match[3], match[4], postDate),
+      post_date: postDate,
       card_last4: last4,
       description: match[5].trim(),
       amount_aed: moneyValue(match[6])!,
