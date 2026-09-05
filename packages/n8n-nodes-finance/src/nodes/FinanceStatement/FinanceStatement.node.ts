@@ -17,7 +17,8 @@ export class FinanceStatement implements INodeType {
       const text = items[index].json.extracted_text;
       if (typeof text !== 'string') throw new Error('Finance Statement requires json.extracted_text');
       const sourceFile = typeof items[index].json.source_file === 'string' ? String(items[index].json.source_file) : '';
-      output.push({ json: detectAndParseStatement(text, sourceFile) as unknown as INodeExecutionData['json'], pairedItem: index });
+      const { extracted_text: _text, ...context } = items[index].json;
+      output.push({ json: { ...context, ...detectAndParseStatement(text, sourceFile) } as unknown as INodeExecutionData['json'], pairedItem: index });
     }
     return [output];
   }

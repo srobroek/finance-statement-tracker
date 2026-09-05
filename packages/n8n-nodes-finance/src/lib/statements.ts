@@ -19,6 +19,10 @@ export interface StatementTransaction {
   exchange_rate: string | null;
   source_line: number;
   review_required: boolean;
+  category?: string | null;
+  subcategory?: string | null;
+  vendor?: string | null;
+  tags?: string[];
 }
 
 export interface NormalizedStatement {
@@ -303,20 +307,55 @@ export function detectAndParseStatement(text: string, sourceFile = ''): Normaliz
   return parseStatement(text, detectIssuerProfile(text), sourceFile);
 }
 
-export function projectStatementToActual(statement: NormalizedStatement): ActualImportTransaction[] {
+export interface ActualClassificationReadback {
+  shape: 'categories';
+  actual_file_id: string;
+  rows: Array<{ id: string; name: string; hidden?: boolean; tombstone?: boolean }>;
+  payees: Array<{ id: string; name: string; tombstone?: boolean }>;
+}
+
+export function projectStatementToActual(statement: NormalizedStatement, readback?: ActualClassificationReadback, actualFileId?: string): ActualImportTransaction[] {
   if (statement.schema_version !== 1 || !ISSUER_PROFILES.includes(statement.adapter)) throw new Error('statement is not a verified canonical statement');
   if (!Array.isArray(statement.transactions) || statement.transactions.length === 0) throw new Error('statement contains no projectable transactions');
+  const resolveId = (name: string, kind: 'category' | 'vendor'): string => {
+    if (!readback || readback.shape !== 'categories' || !actualFileId || readback.actual_file_id !== actualFileId)
+      throw new Error('ACTUAL_CLASSIFICATION_READBACK_BINDING_REQUIRED');
+    const rows = kind === 'category' ? readback.rows : readback.payees;
+    if (!Array.isArray(rows)) throw new Error('ACTUAL_CLASSIFICATION_READBACK_ROWS_REQUIRED');
+    const matches = rows.filter(row => row.name === name && row.tombstone !== true);
+    if (matches.length !== 1 || !matches[0].id) throw new Error(`ACTUAL_CLASSIFICATION_NAME_NOT_UNIQUE:${kind}:${name}`);
+    return matches[0].id;
+  };
   return statement.transactions.map((row, index) => {
     if (!/^[a-f0-9]{24}$/.test(row.transaction_id)) throw new Error(`transaction ${index} has an invalid deterministic ID`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(row.transaction_date)) throw new Error(`transaction ${index} has an invalid date`);
+    if (!/^\d+\.\d{2}$/.test(row.amount_aed) || !['DEBIT', 'CREDIT'].includes(row.direction)) throw new Error(`transaction ${index} has invalid source money semantics`);
+    const ledgerDate = row.post_date || row.transaction_date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ledgerDate)) throw new Error(`transaction ${index} has an invalid posting date`);
+    if (ledgerDate < row.transaction_date) throw new Error(`transaction ${index} posting date precedes transaction date`);
+    // Wio's issuer PDF lists a single Date column and can include prior-period
+    // purchases/FX charges in the current statement totals. Do not invent an
+    // unprinted posting date: preserve its printed date and verified membership.
+    const wioPriorDate = statement.adapter === 'wio_credit_v1' && row.post_date === null
+      && statement.balance_tied === true && !!statement.period_start && ledgerDate < statement.period_start;
+    if ((!wioPriorDate && statement.period_start && ledgerDate < statement.period_start) || (statement.period_end && ledgerDate > statement.period_end))
+      throw new Error(`transaction ${index} posting date falls outside the statement period`);
     const magnitude = Math.round(Number(row.amount_aed) * 100);
     if (!Number.isSafeInteger(magnitude) || magnitude < 0) throw new Error(`transaction ${index} has an invalid AED magnitude`);
     const amount = row.direction === 'DEBIT' ? -magnitude : magnitude;
+    if (row.tags !== undefined && (!Array.isArray(row.tags) || row.tags.some(tag => typeof tag !== 'string' || !/^[a-z0-9][a-z0-9_:-]*$/i.test(tag))))
+      throw new Error('ACTUAL_SEMANTIC_TAG_INVALID');
+    const tags = [...new Set((row.tags || []).map(tag => tag.toLowerCase()))].sort();
+    const category = row.subcategory || row.category;
+    const notes = [tags.map(tag => '#' + tag).join(' '), ...(ledgerDate !== row.transaction_date ? [`Memo: Transaction date ${row.transaction_date}; posted ${ledgerDate}`] : []), ...(wioPriorDate ? [`Memo: Statement ${statement.period_start} to ${statement.period_end}; posting date not provided`] : [])].filter(Boolean).join(' | ');
     return {
       imported_id: `statement:${statement.adapter}:${row.transaction_id}`,
-      date: row.transaction_date,
+      date: ledgerDate,
       amount,
       imported_payee: row.description,
+      ...(row.vendor ? { payee: resolveId(row.vendor, 'vendor') } : {}),
+      ...(category ? { category: resolveId(category, 'category') } : {}),
+      ...(notes ? { notes } : {}),
       cleared: true,
     };
   });

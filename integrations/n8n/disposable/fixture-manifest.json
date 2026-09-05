@@ -5,7 +5,7 @@
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
     "09-ai-proposal.json": "899a2115c96195f911c06c3269348e67aec10768bbb2d5aec9de0efe09777df8",
-    "12-outlook-message-sweep.json": "c63883400bab06b66bbfe25c5a215014e60e522aa470b90b7cc3ce2eab6386bb",
+    "12-outlook-message-sweep.json": "66aea4386efe2876daf049cf84a393f6ed51a88ab6d803d19c23663a2cbb4b4e",
     "16-operations-error-handler.json": "41a0b48c97d7cc658c59714f73da5916a28863389aef48ca732023e79c507672",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
     "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
@@ -14,27 +14,27 @@
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "736e43d5126afddf8ff8f3bcf6c3489d8ce825a5164b5ca9d9eab66f0cd487c1"
+      "sha256": "7e8f404f12a9f50b1571478a897ed9dd49a729298ec1ba3eee4094a6f37a0628"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "9cab123ec39fdfb6b6430885639ba7742ba88e84bccc62e75f9e0737f9e1d310"
+      "sha256": "71d35428375d301fdf1d7683687687d2a1ccae78d32603881951bad76ba4d8ea"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "d42d964350e0265343f16173553151d58a58f2397277e3a5b73cbdb146ca93c0"
+      "sha256": "f44152f1ab1838d7de3c5152d3852bf58e561f6c774d748144ed32a07d5816a5"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "8dd8df4cfe0cc14d8f1cf5147eced16a1cc154405fc27bce04ab137fde6fae60"
+      "sha256": "4d13652762680095dcd10944fa922c0f30ee5af1e2f9b4df8af30b9598a7bc7e"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "f89a64182dd4e354c069f923dac25839579e2fbdec35860343030080fe6f492a"
+      "sha256": "1d4166aa7524e3059ebc9d560cbd6cafa025013cac7c91879e3be8d21f289be8"
     },
     {
       "file": "95-lease-acquire-a.json",
@@ -89,22 +89,22 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "459a4b0d44352b0174f6495d311983092702410001a88b1b7952805dc647b8f3"
+      "sha256": "2342328ddaac2fbf08f343a6ef9f4f8a0964a4b11d66c61deb749a7933bc0d92"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "7228b0d5e5528be05a2f0e328d5536dadbb7ba3c403f20ea3b8f5eaa54d3687d"
+      "sha256": "15fbb5e1ac092bac8b3c5657659f2310a233156b0c7522440696d1d7df55816e"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "04b9393e126faef710bf43f06184f656e91132f29525343764ff7fda33d5be32"
+      "sha256": "f64d496e5ec1f9ecbc227a0b19882f1074aff13769aa04799610f2a9d22884d0"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "1ccdb98d12e86ee1f9a7a9de712381939c51359ce9812605dde738333ff722ce"
+      "sha256": "d92a901238e59978bc8eb832467363dc36f8af3faa8cde64053a1d4aaa696377"
     }
   ],
   "scenario_contract": {

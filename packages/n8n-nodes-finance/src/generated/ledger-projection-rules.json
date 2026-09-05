@@ -1,0 +1,6150 @@
+{
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "authoring_source": "config/static-rules.seed.json",
+  "authoring_source_sha256": "0b03f0a1846cb51273fd114f165607bfe56de59e0967431c550b3728d75bdd4c",
+  "capability_version": "actual-rule-capability-v1",
+  "artifact_role": "FULL_LEDGER_PROJECTION",
+  "rules": [
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-ei-amazon",
+      "name": "EI Amazon bucket",
+      "stage": "CASHBACK",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "EI_AMAZON"
+              },
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Amazon"
+              },
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PURCHASE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "EI_AMAZON"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-rak-dining",
+      "name": "RAK dining bucket",
+      "stage": "CASHBACK",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "RAK_WORLD"
+              },
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Dining Out",
+                  "Food Delivery",
+                  "Coffee & Snacks"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "RAK_DINING"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-rak-grocery",
+      "name": "RAK grocery bucket",
+      "stage": "CASHBACK",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "RAK_WORLD"
+              },
+              {
+                "field": "category",
+                "operator": "equals",
+                "value": "Groceries"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "RAK_GROCERY"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-rak-travel",
+      "name": "RAK travel bucket",
+      "stage": "CASHBACK",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "RAK_WORLD"
+              },
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Flights",
+                  "Accommodation",
+                  "Travel Transport",
+                  "Travel Activities"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "RAK_TRAVEL"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-sc-filler",
+      "name": "SC tier filler bucket",
+      "stage": "CASHBACK",
+      "priority": 40,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "SC_PLATINUM_X"
+              },
+              {
+                "field": "channel",
+                "operator": "equals",
+                "value": "PHYSICAL_POS"
+              },
+              {
+                "field": "currency",
+                "operator": "equals",
+                "value": "AED"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "SC_FILLER"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-sc-foreign",
+      "name": "SC foreign bucket",
+      "stage": "CASHBACK",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "SC_PLATINUM_X"
+              },
+              {
+                "field": "is_foreign",
+                "operator": "is_true"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "SC_FOREIGN"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-sc-online",
+      "name": "SC online bucket",
+      "stage": "CASHBACK",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "SC_PLATINUM_X"
+              },
+              {
+                "field": "channel",
+                "operator": "equals",
+                "value": "ONLINE"
+              },
+              {
+                "field": "currency",
+                "operator": "equals",
+                "value": "AED"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "SC_ONLINE"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "cashback-sc-wallet",
+      "name": "SC Apple Pay bucket",
+      "stage": "CASHBACK",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "SC_PLATINUM_X"
+              },
+              {
+                "field": "channel",
+                "operator": "equals",
+                "value": "APPLE_PAY_POS"
+              },
+              {
+                "field": "currency",
+                "operator": "equals",
+                "value": "AED"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "reward_bucket",
+          "value": "SC_WALLET"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-ace-maintenance",
+      "name": "ACE home maintenance",
+      "stage": "CLASSIFICATION",
+      "priority": 1,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "ACE Hardware"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Maintenance & Repairs"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "home",
+            "maintenance"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-al-futtaim-ecommerce",
+      "name": "Al-Futtaim online retail",
+      "stage": "CLASSIFICATION",
+      "priority": 2,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Al-Futtaim eCommerce"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "General Retail"
+        },
+        {
+          "action": "add_tag",
+          "value": "online",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-aliexpress-online",
+      "name": "AliExpress online shopping",
+      "stage": "CLASSIFICATION",
+      "priority": 7,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "AliExpress"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Online Shopping"
+        },
+        {
+          "action": "add_tag",
+          "value": "online",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-amazon",
+      "name": "Amazon online shopping",
+      "stage": "CLASSIFICATION",
+      "priority": 40,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Amazon"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Online Shopping"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "online",
+            "amazon"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-amazon-grocery",
+      "name": "Amazon grocery orders",
+      "stage": "CLASSIFICATION",
+      "priority": 35,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Amazon"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "AMAZON FRESH",
+                  "AMAZON NOW",
+                  "AMAZON GROCERY"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Groceries"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "grocery",
+            "online",
+            "amazon",
+            "shared"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-apple-subscription",
+      "name": "Apple subscription billing",
+      "stage": "CLASSIFICATION",
+      "priority": 100,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Apple"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Software & App Subscriptions"
+        },
+        {
+          "action": "set",
+          "field": "is_subscription",
+          "value": true,
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "subscription",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-aws-cloud-services",
+      "name": "AWS cloud services",
+      "stage": "CLASSIFICATION",
+      "priority": 25,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "AWS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Cloud Services"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "business",
+            "online"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-bank-fees",
+      "name": "Bank fees",
+      "stage": "CLASSIFICATION",
+      "priority": 150,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "ANNUAL FEE",
+                  "LATE PAYMENT FEE",
+                  "FINANCE CHARGE",
+                  "FOREIGN TRANSACTION FEE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Bank Fees"
+        },
+        {
+          "action": "add_tag",
+          "value": "fee",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-blue-box-vending",
+      "name": "Office vending and catering",
+      "stage": "CLASSIFICATION",
+      "priority": 3,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "The Blue Box Vending",
+                  "Best of Vends",
+                  "ADNH Catering"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Coffee & Snacks"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "dining",
+            "business"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-cabincamp-accommodation",
+      "name": "Cabincamp accommodation",
+      "stage": "CLASSIFICATION",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Cabincamp"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Accommodation"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-electronics-descriptors",
+      "name": "Known electronics retailers",
+      "stage": "CLASSIFICATION",
+      "priority": 5,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "B&H PHOTO",
+                  "MICROLESS GENERAL TRADING",
+                  "SP MECHANICAL KEYBOARD",
+                  "SP TECHIOZO"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Electronics"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-events-descriptors",
+      "name": "Known events and attractions",
+      "stage": "CLASSIFICATION",
+      "priority": 127,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "DUBAI WORLD TRD CTR",
+                  "DUBAI WORLD TRADE CENTRE",
+                  "VOX CINEMAS"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Events & Attractions"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-fab-mortgage",
+      "name": "FAB mortgage payment",
+      "stage": "CLASSIFICATION",
+      "priority": 12,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "LOAN TRANSACTION-MORTGAGE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Rent & Mortgage"
+        },
+        {
+          "action": "add_tag",
+          "value": "home",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-fab-transfer-fees",
+      "name": "FAB transfer and card VAT fees",
+      "stage": "CLASSIFICATION",
+      "priority": 11,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "DEBIT CARD PURCHASE-VAT",
+                  "FUND TRANSFER CHARGES",
+                  "IPP CHARGES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Bank Fees"
+        },
+        {
+          "action": "add_tag",
+          "value": "fee",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-flights",
+      "name": "Airline purchases",
+      "stage": "CLASSIFICATION",
+      "priority": 70,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Airline"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Flights"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-food-delivery",
+      "name": "Food delivery",
+      "stage": "CLASSIFICATION",
+      "priority": 50,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Food Delivery"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Food Delivery"
+        },
+        {
+          "action": "add_tag",
+          "value": "dining",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-foreign-fees",
+      "name": "Foreign transaction fees",
+      "stage": "CLASSIFICATION",
+      "priority": 145,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "FOREIGN TRANSACTION FEE",
+                  "FOREIGN CURRENCY FEE",
+                  "FOREIGN EXCHANGE FEE",
+                  "INTERNATIONAL TRANSACTION FEE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "FEE"
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Foreign Fees",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "fee",
+            "foreign"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-fuel",
+      "name": "Fuel stations",
+      "stage": "CLASSIFICATION",
+      "priority": 130,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "^(?:ENOC|EPPCO|ADNOC|EMARAT)(?:\\s|$)|^SHELL SERVICE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Fuel"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-furniture",
+      "name": "Furniture and appliances",
+      "stage": "CLASSIFICATION",
+      "priority": 170,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "IKEA",
+                  "HOME CENTRE",
+                  "HOME CENTER",
+                  "PAN EMIRATES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Furniture & Appliances"
+        },
+        {
+          "action": "add_tag",
+          "value": "home",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-general-subscriptions",
+      "name": "Common software and media subscriptions",
+      "stage": "CLASSIFICATION",
+      "priority": 190,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "NETFLIX",
+                  "SPOTIFY",
+                  "MICROSOFT 365",
+                  "ADOBE",
+                  "DROPBOX",
+                  "OPENAI",
+                  "ANTHROPIC",
+                  "CLAUDE.AI",
+                  "CLOUDFLARE",
+                  "DEEPSEEK",
+                  "PORKBUN",
+                  "REAL-DEBRID",
+                  "REAL DEBRID",
+                  "TILLER MONEY",
+                  "TRANSIP",
+                  "3DS.COM",
+                  "1PASSWORD",
+                  "ASTROBIN",
+                  "PDFAID.COM",
+                  "SHARPCAP"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Software & App Subscriptions"
+        },
+        {
+          "action": "set",
+          "field": "is_subscription",
+          "value": true,
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "subscription",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-government-fee-descriptors",
+      "name": "Known UAE government fees",
+      "stage": "CLASSIFICATION",
+      "priority": 134,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SHARJAH FINANCE DEPARTMEN",
+                  "TASJEEL FEES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Taxes & Government"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-groceries",
+      "name": "Known supermarkets",
+      "stage": "CLASSIFICATION",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Carrefour",
+                  "Farzana Trading",
+                  "GMG Consumer",
+                  "Instashop",
+                  "Kibsons",
+                  "LuLu Hypermarket",
+                  "Spinneys",
+                  "Urban Foods",
+                  "Waitrose"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Groceries"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "grocery",
+            "shared"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-grocery-descriptor-fallback",
+      "name": "Known supermarket and foodstuff descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 29,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "BLUE BIRD FOODSTUFF",
+                  "BUBBLE-BRO",
+                  "FIRST EXIT SUPER MARKE",
+                  "FRESH BASKET SUPER",
+                  "FRESHMART",
+                  "HARISINGHANI",
+                  "NOUR FRESH MART",
+                  "PASTURE TRADING",
+                  "PLUS POINT MINI MART",
+                  "SHARJAH CO OPERATIVE",
+                  "SHJ CO OPERATIVE",
+                  "SOL FOODS SUPERMARK",
+                  "ZAD 1 GENREAL TRADING"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Groceries"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "grocery",
+            "shared"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-hobby-vendors",
+      "name": "Games, astronomy and 3D-printing hobbies",
+      "stage": "CLASSIFICATION",
+      "priority": 122,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Cults3D",
+                  "Darkmoon 3D",
+                  "Move Shoot Move",
+                  "Steam"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Hobbies & Entertainment"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-home-maintenance",
+      "name": "Home maintenance and repairs",
+      "stage": "CLASSIFICATION",
+      "priority": 180,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "MAINTENANCE SERVICES",
+                  "PLUMBING",
+                  "ELECTRICAL REPAIR",
+                  "HANDYMAN"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Maintenance & Repairs"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "home",
+            "maintenance"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-hotels",
+      "name": "Accommodation purchases",
+      "stage": "CLASSIFICATION",
+      "priority": 80,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Hotel or Booking Platform"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Accommodation"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-istyle-electronics",
+      "name": "iSTYLE electronics",
+      "stage": "CLASSIFICATION",
+      "priority": 6,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "iSTYLE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Electronics"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-known-cafes",
+      "name": "Known cafes and snack venues",
+      "stage": "CLASSIFICATION",
+      "priority": 126,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "CARIBOU COFFEE",
+                  "ELIXIR SPECIALTY COFFEE",
+                  "MENCHIE'S"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Coffee & Snacks"
+        },
+        {
+          "action": "add_tag",
+          "value": "dining",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-known-dining",
+      "name": "Known restaurants and dining venues",
+      "stage": "CLASSIFICATION",
+      "priority": 125,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "AL YASAT CAT N REST",
+                  "BLA BLA BEACH CLUB",
+                  "BRASS MONKEY",
+                  "EAT GREEK",
+                  "EMIRATES LEISURE",
+                  "FAT*MITTS",
+                  "GENATSVale",
+                  "HAKO SUSHI",
+                  "J K R INTERNATIONAL",
+                  "JKR INTERNATIONAL",
+                  "JTG ETIHAD",
+                  "KFC ",
+                  "MCDONALDS",
+                  "MITTS N TRAY",
+                  "NINE SQUAR",
+                  "NOLA EATERY",
+                  "QAZAQ RESTAURANT",
+                  "SEVEN CUBES REST",
+                  "TEXAS MEADOWS",
+                  "THE STRAND RESTAURANT",
+                  "ZOU ZOU"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Dining Out"
+        },
+        {
+          "action": "add_tag",
+          "value": "dining",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-known-medical-providers",
+      "name": "Known medical and wellness providers",
+      "stage": "CLASSIFICATION",
+      "priority": 117,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "ART Fertility Clinics",
+                  "Franklin Chiropractic",
+                  "German Neuroscience Centre",
+                  "Glucare",
+                  "Keyani Health Services"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Medical"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-known-pharmacies",
+      "name": "Known pharmacies",
+      "stage": "CLASSIFICATION",
+      "priority": 116,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Life Pharmacy",
+                  "JBR Shams Pharmacy"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Pharmacy"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-known-subscription-vendors",
+      "name": "Known software, AI, hosting and media subscriptions",
+      "stage": "CLASSIFICATION",
+      "priority": 99,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Anthropic",
+                  "Cloudflare",
+                  "OpenAI",
+                  "Porkbun",
+                  "Real-Debrid"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Software & App Subscriptions"
+        },
+        {
+          "action": "set",
+          "field": "is_subscription",
+          "value": true,
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "subscription",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-medical",
+      "name": "Medical and pharmacy",
+      "stage": "CLASSIFICATION",
+      "priority": 120,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:HOSPITAL|CLINIC|MEDICAL CENT(?:RE|ER))\\b"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "PHARMACY",
+                  "ASTER PHARMACY",
+                  "LIFE PHARMACY"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Medical"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-medical-descriptor-fallback",
+      "name": "Known healthcare and wellness descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 117,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "HCARE WELLNESS PROJECT",
+                  "KCH HEALTHCARE",
+                  "NADZ HEALTH CARE",
+                  "NATURES LIFE PHY",
+                  "THE LAKE CLINIC"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Medical"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-mobile",
+      "name": "Mobile and internet",
+      "stage": "CLASSIFICATION",
+      "priority": 90,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Mobile Provider"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Mobile & Internet"
+        },
+        {
+          "action": "add_tag",
+          "value": "telecom",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-office-catering",
+      "name": "Office catering and group meals",
+      "stage": "CLASSIFICATION",
+      "priority": 115,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "OFFICE CATERING",
+                  "CORPORATE CATERING",
+                  "CATERING SERVICES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Dining Out"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "dining",
+            "business"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-parking-tolls",
+      "name": "Parking and tolls",
+      "stage": "CLASSIFICATION",
+      "priority": 140,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SALIK",
+                  "PARKING",
+                  "RTA PARKING"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Parking & Tolls"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-personal-care-vendors",
+      "name": "Known grooming and personal care providers",
+      "stage": "CLASSIFICATION",
+      "priority": 119,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Fresha",
+                  "James Pro Barbers",
+                  "Urban Company"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Personal Care"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-airlines",
+      "name": "Airline descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 69,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:AIRLINES?|AIRWAYS|FLYDUBAI|EMIRATES AIR|ETIHAD AIR)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Flights"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-cafes",
+      "name": "Cafe and snack descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 124,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:CAFE|COFFEE|BAKERY|CAFETERIA)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Coffee & Snacks"
+        },
+        {
+          "action": "add_tag",
+          "value": "dining",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-entertainment-venues",
+      "name": "Cinema and theatre descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 127,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:CINEMA|THEATRE|THEATER)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Events & Attractions"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-fuel-stations",
+      "name": "Fuel station descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 129,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(?:^|\\b)(?:ENOC|EPPCO|ADNOC|EMARAT|SHELL SERVICE|PETROL STATION|FUEL STATION)(?:\\b|$)"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Fuel"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-hotels",
+      "name": "Hotel and booking descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 79,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:HOTELS?|RESORTS?|BOOKING\\.COM|AIRBNB)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Accommodation"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-insurance-providers",
+      "name": "Insurance provider descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 122,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:INSURANCE|TAKAFUL)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Insurance"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-medical-providers",
+      "name": "Medical provider descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 116,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:HOSPITAL|CLINIC|MEDICAL CENT(?:RE|ER)|HEALTH ?CARE|DENTAL|OPTICAL)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Medical"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-parking-tolls",
+      "name": "Parking and toll descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 139,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:PARKING|SALIK|DARB TOLL|RTA PARK)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Parking & Tolls"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-pharmacies",
+      "name": "Pharmacy descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 115,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:PHARMAC(?:Y|IES)|APOTHECARY|DRUGSTORE)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Pharmacy"
+        },
+        {
+          "action": "add_tag",
+          "value": "health",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-restaurants",
+      "name": "Restaurant descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 125,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:RESTAURANT|GRILL|BISTRO|EATERY)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Dining Out"
+        },
+        {
+          "action": "add_tag",
+          "value": "dining",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-shipping-carriers",
+      "name": "Shipping carrier descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 109,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:ARAMEX|DHL|EMIRATES POST|NAQEL|FEDEX|UPS)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Shipping & Delivery"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-supermarkets",
+      "name": "Supermarket and grocery descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 28,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:SUPER ?MARKET|HYPER ?MARKET|GROCER(?:Y|IES)|FOODSTUFF|MINI ?MART|FRESH ?MART|CO[ -]?OPERATIVE(?: SOCIETY)?)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Groceries"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "grocery",
+            "shared"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-regex-vehicle-services",
+      "name": "Vehicle service descriptors",
+      "stage": "CLASSIFICATION",
+      "priority": 123,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(?:AUTO CARE|AUTO SERVICE|CAR WASH|TYRE|TIRE)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Vehicle Maintenance"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-rental-income",
+      "name": "Rental management income",
+      "stage": "CLASSIFICATION",
+      "priority": 160,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "RENT DISTRIBUTION",
+                  "RENTAL INCOME",
+                  "TENANT PAYMENT"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Rental Income"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "rental",
+            "income"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-ride-hailing",
+      "name": "Ride hailing",
+      "stage": "CLASSIFICATION",
+      "priority": 60,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Ride Hailing"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Ride Hailing"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-ritz-auto-care",
+      "name": "Ritz Auto Care vehicle maintenance",
+      "stage": "CLASSIFICATION",
+      "priority": 124,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Ritz Auto Care"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Vehicle Maintenance"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-service-charges",
+      "name": "Property service charges and Mollak",
+      "stage": "CLASSIFICATION",
+      "priority": 110,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SERVICE CHARGE",
+                  "OWNERS ASSOCIATION",
+                  "HOMEOWNERS ASSOCIATION",
+                  "MOLLAK",
+                  "BLUE WATERS COMMUNITY"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Service Charges"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "property",
+            "service-charge"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-service-market",
+      "name": "ServiceMarket home services",
+      "stage": "CLASSIFICATION",
+      "priority": 118,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "ServiceMarket"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Maintenance & Repairs"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "home",
+            "maintenance"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-shipping-vendors",
+      "name": "Known shipping and delivery providers",
+      "stage": "CLASSIFICATION",
+      "priority": 121,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "in",
+                "value": [
+                  "Aramex",
+                  "DHL Express",
+                  "Emirates Delivers",
+                  "Emirates Post",
+                  "Naqel"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Shipping & Delivery"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-skyhound-travel",
+      "name": "Skyhound travel activity",
+      "stage": "CLASSIFICATION",
+      "priority": 8,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Skyhound"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Travel Activities"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-smart-dubai-government",
+      "name": "Other Smart Dubai government payments",
+      "stage": "CLASSIFICATION",
+      "priority": 137,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SMART DUBAI GOVERNMENT",
+                  "DUBAI SMART GOVERNMENT ES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Taxes & Government"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-smart-dubai-parking",
+      "name": "Smart Dubai low-value parking",
+      "stage": "CLASSIFICATION",
+      "priority": 135,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "SMART DUBAI GOVERNMENT"
+              },
+              {
+                "field": "spend_aed",
+                "operator": "between",
+                "value": 0.01,
+                "second_value": 30
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Parking & Tolls"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-smart-dubai-tolls",
+      "name": "Smart Dubai Salik top-ups",
+      "stage": "CLASSIFICATION",
+      "priority": 136,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "DUBAI SMART GOVERNMENT ES"
+              },
+              {
+                "field": "spend_aed",
+                "operator": "between",
+                "value": 190,
+                "second_value": 210
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Parking & Tolls"
+        },
+        {
+          "action": "add_tag",
+          "value": "transport",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-stake-investment",
+      "name": "Stake property investment",
+      "stage": "CLASSIFICATION",
+      "priority": 9,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Stake"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Investments"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-sukoon-insurance",
+      "name": "Sukoon insurance",
+      "stage": "CLASSIFICATION",
+      "priority": 123,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Sukoon Insurance"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Insurance"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-travel-activities-descriptors",
+      "name": "Known travel attractions and activities",
+      "stage": "CLASSIFICATION",
+      "priority": 67,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "AQUARIUM SHARJAH",
+                  "SHARJAH AQUARIUM",
+                  "SHARJAH MUSEUMS AUTHORITY",
+                  "ZION NATIONAL PARK"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Travel Activities"
+        },
+        {
+          "action": "add_tag",
+          "value": "travel",
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-unrwa-charity",
+      "name": "UNRWA charitable donations",
+      "stage": "CLASSIFICATION",
+      "priority": 4,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "UNRWA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Charity"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "ACTUAL",
+      "actual_representable": true,
+      "ownership_reason": "ACTUAL_CAPABILITY_MATRIX_MATCH",
+      "actual_semantics_version": "actual-rule-capability-v1"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-utilities-dewa",
+      "name": "DEWA electricity and water",
+      "stage": "CLASSIFICATION",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "DEWA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Electricity & Water"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "utility",
+            "home"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-utilities-empower",
+      "name": "Empower district cooling",
+      "stage": "CLASSIFICATION",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "vendor",
+                "operator": "equals",
+                "value": "Empower"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "District Cooling"
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "utility",
+            "home"
+          ],
+          "sequence": 20
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "ACTION_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "class-vat-fees",
+      "name": "VAT applied to bank fees",
+      "stage": "CLASSIFICATION",
+      "priority": 146,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\bVAT\\b.*\\b(FEE|CHARGE)\\b|\\b(FEE|CHARGE)\\b.*\\bVAT\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "FEE"
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Bank Fees",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "fee",
+            "vat"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "CONDITION_FIELD_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "evidence-purchases",
+      "name": "Find purchase receipt and warranty",
+      "stage": "EVIDENCE",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Online Shopping",
+                  "Electronics",
+                  "Furniture & Appliances"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "request_evidence",
+          "value": "SEARCH_RECEIPT_BILL_WARRANTY"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "evidence-utilities",
+      "name": "Find utility bill PDF",
+      "stage": "EVIDENCE",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "category",
+                "operator": "in",
+                "value": [
+                  "Electricity & Water",
+                  "District Cooling",
+                  "Service Charges"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "request_evidence",
+          "value": "MATCH_AMOUNT_AND_PERIOD"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-ambiguous-incoming-transfer",
+      "name": "Ambiguous incoming bank transfer",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 14,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "equals",
+                "value": "Transfer within UAE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "INCOME",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Needs Review",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "income",
+            "review"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-card-payment",
+      "name": "Card payment transfer",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "PAYMENT"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "PAYMENT RECEIVED",
+                  "CARD PAYMENT",
+                  "CARD PMT",
+                  "AUTOPAY PAYMENT",
+                  "FAB BLUE PAYMENT"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "TRANSFER",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Card Payments",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "transfer",
+            "card-payment"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-cashback-credit",
+      "name": "Cashback and reward credit",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "source_direction",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "CASHBACK",
+                  "CASH BACK",
+                  "REWARD CREDIT",
+                  "RDMPTION"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "REWARD_CREDIT"
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Cashback & Rewards",
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "reward",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-explicit-account-transfer",
+      "name": "Explicit account-to-account transfer",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 12,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "TRANSFER BETWEEN OWN ACCOUNTS",
+                  "TRANSFER FROM OTHER FAB ACCOUNT"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "TRANSFER",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Needs Review",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "transfer",
+            "review"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-fab-installment-adjustment",
+      "name": "FAB installment credit adjustment",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 32,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "institution",
+                "operator": "equals",
+                "value": "FAB"
+              },
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "^INST[A-Z0-9]+$"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "REFUND",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Needs Review",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "adjustment",
+            "review"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-fab-merchant-credit",
+      "name": "FAB merchant refund credit",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 31,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "card",
+                "operator": "equals",
+                "value": "FAB_6031"
+              },
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "AMAZON.AE",
+                  "PAYPAL *SKYHOUND"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "REFUND",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Refunds & Reimbursements",
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "refund",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-inward-bill-reimbursement",
+      "name": "Incoming bill reimbursement",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 13,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "INWARD IPP PAYMENT"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "REFUND",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Refunds & Reimbursements",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "refund",
+            "reimbursement"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-outgoing-bank-transfer",
+      "name": "Outgoing bank transfer",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 16,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "IPP TRANSFER-MOB-LOCAL FT",
+                  "STANDING ORDER - TRANSFER WITHIN UAE",
+                  "TRANSFER TO OTHER FAB ACCOUNT"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "TRANSFER",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Needs Review",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "transfer",
+            "review"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-outgoing-card-payment",
+      "name": "Outgoing payment to another credit card",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 15,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "TRANSFER TO OTHER BANK CREDIT CARD"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "TRANSFER",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Card Payments",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "transfer",
+            "card-payment"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-refund",
+      "name": "Explicit refund or reversal",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "\\b(REFUND|REVERSAL|REVERSED)\\b"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "REFUND"
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Refunds & Reimbursements",
+          "sequence": 20
+        },
+        {
+          "action": "add_tag",
+          "value": "refund",
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "normalize-salary-credit",
+      "name": "Salary income credit",
+      "stage": "TRANSACTION_NORMALIZATION",
+      "priority": 11,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "transaction_type",
+                "operator": "equals",
+                "value": "CREDIT"
+              },
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "SALARY TRANSFER"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "transaction_type",
+          "value": "INCOME",
+          "sequence": 10
+        },
+        {
+          "action": "set_if_empty",
+          "field": "category",
+          "value": "Salary",
+          "sequence": 20
+        },
+        {
+          "action": "add_tags",
+          "value": [
+            "income",
+            "salary"
+          ],
+          "sequence": 30
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "tag-foreign",
+      "name": "Tag foreign currency",
+      "stage": "TAGGING",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "is_foreign",
+                "operator": "is_true"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "add_tag",
+          "value": "foreign"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "tag-property-unit",
+      "name": "Tag known property",
+      "stage": "TAGGING",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "property_code",
+                "operator": "not_empty"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "add_tag",
+          "value": "property"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "tag-shared-expense",
+      "name": "Tag explicitly shared expenses",
+      "stage": "TAGGING",
+      "priority": 40,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SPLITWISE",
+                  "SHARED EXPENSE",
+                  "COST SHARE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "add_tag",
+          "value": "shared"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "tag-subscription",
+      "name": "Tag known subscriptions",
+      "stage": "TAGGING",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "is_subscription",
+                "operator": "is_true"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "add_tag",
+          "value": "recurring"
+        }
+      ],
+      "stop_on_match": false,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-ace",
+      "name": "Normalize ACE Hardware",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 1,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(?:^|[^A-Z0-9])ACE (?:DUBAI|FESTIVAL)"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "ACE Hardware"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-adnh-catering",
+      "name": "Normalize ADNH Catering descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 127,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "ADNH CATERING"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "ADNH Catering"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-airlines",
+      "name": "Normalize UAE airlines",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 100,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "EMIRATES AIR",
+                  "FLYDUBAI",
+                  "ETIHAD AIR"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Airline"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-al-futtaim-ecommerce",
+      "name": "Normalize Al-Futtaim eCommerce",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 3,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "AL FUTTAIM TRD CO ECOM"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Al-Futtaim eCommerce"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-aliexpress",
+      "name": "Normalize AliExpress",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 8,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "ALIEXPRESS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "AliExpress"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-amazon",
+      "name": "Normalize Amazon",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 30,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?:[^A-Z0-9.]|$|\\.(?:[^A-Z]|$))"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Amazon"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-anthropic",
+      "name": "Normalize Anthropic and Claude descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 143,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "ANTHROPIC",
+                  "CLAUDE.AI"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Anthropic"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-apple",
+      "name": "Normalize Apple billing",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 120,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "APPLE.COM/BILL",
+                  "ITUNES.COM"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Apple"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-aramex",
+      "name": "Normalize Aramex descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 147,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "ARAMEX"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Aramex"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-art-fertility",
+      "name": "Normalize ART Fertility descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 132,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "ART FERTILITY"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "ART Fertility Clinics"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-aws",
+      "name": "Normalize Amazon Web Services",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 25,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(?:^|[^A-Z0-9])AWS(?:[^A-Z0-9]|$)|AMAZON WEB SERVICES"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "AWS"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-best-vends",
+      "name": "Normalize Best of Vends descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 126,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "BEST OF VENDS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Best of Vends"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-blue-box",
+      "name": "Normalize Blue Box vending",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 4,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "BLUE BOX VENDING"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "The Blue Box Vending"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-cabincamp",
+      "name": "Normalize Cabincamp",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 11,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "CABINCAMP"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Cabincamp"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-carrefour",
+      "name": "Normalize Carrefour",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 40,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "CARREFOUR"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Carrefour"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-cloudflare",
+      "name": "Normalize Cloudflare descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 139,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "CLOUDFLARE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Cloudflare"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-cults3d",
+      "name": "Normalize Cults3D descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 150,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "CULTS3D"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Cults3D"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-darkmoon-3d",
+      "name": "Normalize Darkmoon 3D descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 151,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "DARKMOON 3D"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Darkmoon 3D"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-dewa",
+      "name": "Normalize DEWA",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "DEWA",
+                  "DUBAI ELECTRICITY"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "DEWA"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-dhl",
+      "name": "Normalize DHL descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 149,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "DHL EXPRESS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "DHL Express"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-emirates-delivers",
+      "name": "Normalize Emirates Delivers descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 137,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "EMIRATESDEL",
+                  "EMIRATES DELIVERY"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Emirates Delivers"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-emirates-post",
+      "name": "Normalize Emirates Post descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 138,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "EMIRATES POST"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Emirates Post"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-empower",
+      "name": "Normalize Empower",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 20,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "EMPOWER",
+                  "EMIRATES CENTRAL COOLING"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Empower"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-fab-services",
+      "name": "Normalize FAB banking services",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 13,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "VAT ON SERVICE CHARGES",
+                  "DEBIT CARD PURCHASE-VAT",
+                  "FUND TRANSFER CHARGES",
+                  "IPP CHARGES",
+                  "LOAN TRANSACTION-MORTGAGE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "FAB"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-farzana",
+      "name": "Normalize Farzana Trading descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 123,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "FARZANA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Farzana Trading"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-food-delivery",
+      "name": "Normalize food delivery",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 80,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "TALABAT"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "DELIVEROO"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Food Delivery"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-franklin-chiropractic",
+      "name": "Normalize Franklin Chiropractic descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 130,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "FRANKLIN CHIROPRACTIC"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Franklin Chiropractic"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-fresha",
+      "name": "Normalize Fresha descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 146,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "FRESHA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Fresha"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-german-neuroscience",
+      "name": "Normalize German Neuroscience Centre descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 133,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "GERMAN NEUROSCIENCE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "German Neuroscience Centre"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-glucare",
+      "name": "Normalize Glucare descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 131,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "GLUCARE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Glucare"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-gmg-consumer",
+      "name": "Normalize GMG Consumer grocery descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 121,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "GMG CONSUMER"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "GMG Consumer"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-hotels",
+      "name": "Normalize hotels and booking platforms",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 110,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "BOOKING.COM",
+                  "ANANTARA",
+                  "ATLANTIS",
+                  "HATTA FORT HOTEL",
+                  "JA RESORT",
+                  "MARRIOTT",
+                  "MADINAT JUMEIRAH",
+                  "MEDIA ONE HOTEL",
+                  "HILTON",
+                  "HYATT",
+                  "ACCOR",
+                  "OCCIDENTAL SHARJAH",
+                  "RADISON BLU",
+                  "RADISSON BLU",
+                  "SOFITEL",
+                  "TOWERS ROTANA",
+                  "VIDA BEACH RESORT",
+                  "BKG*HOTEL AT BOOKING.C"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Hotel or Booking Platform"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-ikea",
+      "name": "Normalize IKEA",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 2,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "IKEA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "IKEA"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-instashop",
+      "name": "Normalize Instashop descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 124,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "INSTASHOP"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Instashop"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-istyle",
+      "name": "Normalize iSTYLE",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 7,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "I STYLE COMPUTERS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "iSTYLE"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-james-pro-barbers",
+      "name": "Normalize James Pro Barbers descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 136,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "JAMES PRO BARBERS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "James Pro Barbers"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-jbr-shams-pharmacy",
+      "name": "Normalize JBR Shams Pharmacy descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 129,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "JBR SHAMS PH"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "JBR Shams Pharmacy"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-keyani-health",
+      "name": "Normalize Keyani Health descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 134,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "KEYANI"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Keyani Health Services"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-kibsons",
+      "name": "Normalize Kibsons descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 122,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "KIBSONS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Kibsons"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-life-pharmacy",
+      "name": "Normalize Life Pharmacy descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 128,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "LIFE PHARMACY"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Life Pharmacy"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-lulu",
+      "name": "Normalize LuLu Hypermarket",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 6,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "LULU HYPERMARKET"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "LuLu Hypermarket"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-mobile",
+      "name": "Normalize mobile providers",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 70,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "VIRGIN MOBILE"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(^|[^A-Z])ETISALAT|(^|[^A-Z])E&([^A-Z]|$)"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Mobile Provider"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-move-shoot-move",
+      "name": "Normalize Move Shoot Move descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 152,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "MOVE SHOOT MOVE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Move Shoot Move"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-naqel",
+      "name": "Normalize Naqel descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 148,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "NAQEL"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Naqel"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-one-central-parking",
+      "name": "Normalize One Central Parking",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 12,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "ONE CENTRAL PARKING"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "One Central Parking"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-openai",
+      "name": "Normalize OpenAI descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 142,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "OPENAI"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "OpenAI"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-porkbun",
+      "name": "Normalize Porkbun descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 140,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "PORKBUN"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Porkbun"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-real-debrid",
+      "name": "Normalize Real-Debrid descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 141,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "REAL-DEBRID",
+                  "REAL DEBRID"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Real-Debrid"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-ride-hailing",
+      "name": "Normalize ride hailing",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 90,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "regex",
+                "value": "(?:CAREEM|\\bUBER\\b|DUBAI TAXI|NATIONAL TAXI|CARS TAXI|TAKSI YONETIM)"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Ride Hailing"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-ritz-auto-care",
+      "name": "Normalize Ritz Auto Care descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 154,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "RITZ AUTO CARE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Ritz Auto Care"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-service-market",
+      "name": "Normalize ServiceMarket descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 135,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "SERVICE MARKET",
+                  "SERVICE SOUK"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "ServiceMarket"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-skyhound",
+      "name": "Normalize Skyhound",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 9,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "SKYHOUND"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Skyhound"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-spinneys",
+      "name": "Normalize Spinneys",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 50,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "SPINNEYS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Spinneys"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-stake",
+      "name": "Normalize Stake",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 10,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "GETSTAKE.COM"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Stake"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-steam",
+      "name": "Normalize Steam descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 144,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains_any",
+                "value": [
+                  "STEAMGAMES.COM",
+                  "STEAM PURCHASE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Steam"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-sukoon-insurance",
+      "name": "Normalize Sukoon Insurance descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 153,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "SUKOON INSURANCE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Sukoon Insurance"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-unrwa",
+      "name": "Normalize UNRWA",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 5,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "UNRWA"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "UNRWA"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-urban-company",
+      "name": "Normalize Urban Company descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 145,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "URBAN COMPANY"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Urban Company"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-urban-foods",
+      "name": "Normalize Urban Foods descriptors",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 125,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "URBAN FOODS"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Urban Foods"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "schema_version": 1,
+      "rule_id": "vendor-waitrose",
+      "name": "Normalize Waitrose",
+      "stage": "VENDOR_NORMALIZATION",
+      "priority": 60,
+      "match": {
+        "any": [
+          {
+            "all": [
+              {
+                "field": "merchant_raw",
+                "operator": "contains",
+                "value": "WAITROSE"
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "action": "set",
+          "field": "vendor",
+          "value": "Waitrose"
+        }
+      ],
+      "stop_on_match": true,
+      "rule_sets": [
+        "FULL_LEDGER"
+      ],
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "ownership_reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    }
+  ]
+}

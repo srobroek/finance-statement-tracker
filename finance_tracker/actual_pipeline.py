@@ -285,6 +285,7 @@ def build_actual_statement_run(
             {
                 "statement_transaction_id": transaction.transaction_id,
                 "occurred_at": transaction.transaction_at.isoformat(),
+                "post_date": transaction.metadata.get("statement_post_date"),
                 "amount_aed": str(abs(transaction.amount_aed)),
                 "currency": transaction.currency,
                 "purchase_type": purchase_type,

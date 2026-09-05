@@ -24,6 +24,7 @@ function fakeApi(overrides: Partial<ActualApi> = {}, initialTransactions: Array<
     async getServerVersion() { return { version: 'test' }; },
     async getAccounts() { return [{ id: 'account-1', name: 'Card', closed: false }]; },
     async getAccountBalance() { return balance; }, async getCategories() { return [{ id: 'cat-1', name: 'Shopping' }]; },
+    async getPayees() { return [{ id: 'payee-amazon', name: 'Amazon' }]; },
     async getTransactions() { return transactions; },
     async importTransactions(_account, rows, options) {
       calls.push(`import:${String(options.reimportDeleted)}`);

@@ -34,6 +34,7 @@ from finance_tracker.actual_pipeline import (
     load_compiled_rules,
 )
 from finance_tracker.cashback import load_program_configuration
+from finance_tracker.cashback_events import prepare_statement_reconciliation
 from finance_tracker.cashback_events import (
     CashbackEventStore,
     IngestCursorConflict,
@@ -511,7 +512,9 @@ class CashbackHandler(SimpleHTTPRequestHandler):
     def _post_reconcile(self, source: object) -> dict[str, object]:
         if not isinstance(source, dict):
             raise ValueError("Payload must be a statement reconciliation object")
-        result = STORE.reconcile_statement(source)
+        result = STORE.reconcile_statement(prepare_statement_reconciliation(
+            source, load_program_configuration(PROGRAM_CONFIG_PATH, as_of=date.fromisoformat(str(source.get("period_end"))))
+        ))
         dashboard = rebuild_dashboard()
         return {"reconciliation": result, "event_store": dashboard["data_status"]}
 

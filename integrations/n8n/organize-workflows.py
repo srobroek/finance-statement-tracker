@@ -41,12 +41,12 @@ CANONICAL_EXPORT_RELATIVE_PATH = (
     "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json"
 )
 CANONICAL_EXPORT_SHA256 = (
-    "0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1"
+    "5110e10b03750b9ad530f44d8b28c10fa056db31120f18ba379e5d76c2ca8437"
 )
 # These are the workflow_entity fields that make up the imported workflow body.
 # Keep mutable name, runtime/version, and folder columns out of this digest;
 # those are normalized or guarded independently by the cutover contract.
-CANONICAL_PERSISTED_BODY_MD5 = "4f413c5986362dee47db7e1fd39e128d"
+CANONICAL_PERSISTED_BODY_MD5 = "ec3e7cc48ce0bd2d080749060d1bfa59"
 PERSISTED_BODY_FIELDS = (
     "id",
     "nodes",
@@ -117,7 +117,7 @@ def canonical_workflow_export() -> dict[str, Any]:
     if export.get("name") != "Finance · Shared Monthly Statement Cycle":
         _fail("CANONICAL_EXPORT_NAME_MISMATCH")
     nodes = export.get("nodes")
-    if not isinstance(nodes, list) or len(nodes) != 16:
+    if not isinstance(nodes, list) or len(nodes) != 18:
         _fail("CANONICAL_EXPORT_NODE_COUNT_MISMATCH")
     meta = export.get("meta")
     if not isinstance(meta, dict) or meta.get("financeWorkflowCode") != "SHARED_MONTHLY_STATEMENT_CYCLE":

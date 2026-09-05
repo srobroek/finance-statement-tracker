@@ -8,11 +8,11 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "c74a8eb30ed016fff3c6619cf608fdae6e0c468c2ac3405b9101ac3eccf2922a",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "80f657d25e4fd1585267603f9fd48c3a79cfccc544af4ed881a4c32b890a9abb",
+    "config_version_seed_sha256": "e24795e0dca850c8865cf4a2cc9a8e3943987d93166caea8f694155d9712b878",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
-    "application_contract_bundle_sha256": "622fe8b25ea9f1465e755445462d940817465d0fc8c039626d7f78541ef2b92b",
+    "application_contract_bundle_sha256": "0ae3101a08b8be5adca8018d5aef831b0c01120577da70e1e19a499ea5918ea9",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
-    "application_contract_bundle_schema_sha256": "0830e631e6ac2d4b12fc07b73a8e87d0a8e296394d7c6df97227e20ca80c0eb1",
+    "application_contract_bundle_schema_sha256": "58d9425039ea71a4a95a89c71e278355d69b806316e7e2ea290ad2b9cad6abec",
     "data_table_migration_matrix": "integrations/n8n/data-table-migration-matrix.json"
   },
   "native_data_table_create_contract": {
@@ -1110,7 +1110,7 @@
     "path": "integrations/n8n/generated/application-contract-bundle.json",
     "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
     "schema_version": 1,
-    "bundle_content_sha256": "b403bcda8b77b4d5022e4cf0b68bc9caf90dce1dce85a8dcb4e178ab602fdcb5",
+    "bundle_content_sha256": "84e80d1c0f8f329b647b2807b056df44363771b364bab329b71eda1e252cc1bc",
     "resolver_order": [
       "W02",
       "W04",
@@ -1192,7 +1192,7 @@
         "card_code": "ADCB_CASHBACK",
         "cashback_close_required": false,
         "enabled": false,
-        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+        "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
       },
       {
         "source_code": "EI_AMAZON",
@@ -1210,7 +1210,7 @@
         "card_code": "EI_AMAZON",
         "cashback_close_required": false,
         "enabled": false,
-        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+        "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
       },
       {
         "source_code": "WIO_CREDIT",
@@ -1228,7 +1228,7 @@
         "card_code": "WIO_CREDIT",
         "cashback_close_required": false,
         "enabled": false,
-        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+        "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
       },
       {
         "source_code": "RAK_WORLD",
@@ -1246,7 +1246,7 @@
         "card_code": "RAK_WORLD",
         "cashback_close_required": false,
         "enabled": false,
-        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+        "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
       },
       {
         "source_code": "SC_PLATINUM_X",
@@ -1264,7 +1264,7 @@
         "card_code": "SC_PLATINUM_X",
         "cashback_close_required": false,
         "enabled": false,
-        "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+        "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
       },
       {
         "source_code": "RAKBANK_CARD_TRANSACTION",

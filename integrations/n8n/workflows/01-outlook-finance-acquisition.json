@@ -1,229 +1,873 @@
 {
-  "id": "10000000-0000-4000-8000-000000000001",
-  "name": "Finance · Acquire Outlook Documents",
   "active": false,
+  "connections": {
+    "Acquisition Parameters": {
+      "main": [
+        [
+          {
+            "node": "Validate Bounded Source Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Email Evidence in OneDrive": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Download Email Evidence Readback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Archive Enumerated Attachment in OneDrive": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Back Enumerated Attachment Archive",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Archive Inventory Present": {
+      "main": [
+        [
+          {
+            "node": "Expand Enumerated Attachment Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Original Email Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Empty Archive Verification",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Archive One Attachment at a Time": {
+      "main": [
+        [
+          {
+            "node": "Merge Archive Verification Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enumerated Attachment Present",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attachment Verification Barrier": {
+      "main": []
+    },
+    "Build Original Email Evidence": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Convert Email Evidence to File",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Called by Trusted Workflow": {
+      "main": [
+        [
+          {
+            "node": "Acquisition Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Email Evidence to File": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SHA-256 Email Evidence",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Download Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SHA-256 Email Evidence Readback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Download Enumerated Attachment": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SHA-256 Enumerated Attachment",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Empty Archive Verification": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Attachment Verification Barrier",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Empty Enumerated Attachment Verification": {
+      "main": [
+        [
+          {
+            "node": "Archive One Attachment at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enumerated Attachment Present": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Existing Enumerated Archive Receipt",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Empty Enumerated Attachment Verification",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Existing Email Evidence Receipt Present": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Existing Email Evidence Receipt",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Archive Email Evidence in OneDrive",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Existing Enumerated Archive Receipt Present": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Existing Enumerated Archive Receipt",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Download Enumerated Attachment",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Expand Enumerated Attachment Items": {
+      "main": [
+        [
+          {
+            "node": "Archive One Attachment at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Immutable Enumeration": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Shape Immutable Archive Input",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Reject Missing Immutable Enumeration",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Merge Archive Verification Inputs": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Attachment Verification Barrier",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Back Durable Email Evidence Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Durable Email Evidence Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Back Enumerated Archive Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Enumerated Archive Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Back Enumerated Attachment Archive": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SHA-256 Enumerated Archive Readback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Existing Email Evidence Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Rehydrate Email Evidence Archive Pre-Read",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Existing Enumerated Archive Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Rehydrate Enumerated Attachment Archive Pre-Read",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Record Email PDF Render Requirement": {
+      "main": [
+        [
+          {
+            "node": "Merge Archive Verification Inputs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Record Enumerated Attachment Disposition": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Attachment to Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rehydrate Email Evidence Archive Pre-Read": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Existing Email Evidence Receipt Present",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Rehydrate Enumerated Attachment Archive Pre-Read": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Existing Enumerated Archive Receipt Present",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Return Verified Attachment to Loop": {
+      "main": [
+        [
+          {
+            "node": "Archive One Attachment at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SHA-256 Email Evidence": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Existing Email Evidence Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SHA-256 Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Email Evidence Readback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SHA-256 Enumerated Archive Readback": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Verify Enumerated Attachment Archive",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SHA-256 Enumerated Attachment": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Archive Enumerated Attachment in OneDrive",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Shape Immutable Archive Input": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Archive Inventory Present",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Upsert Durable Email Evidence Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Back Durable Email Evidence Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Upsert Enumerated Archive Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Back Enumerated Archive Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Validate Bounded Source Request": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Has Immutable Enumeration",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Durable Email Evidence Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Record Email PDF Render Requirement",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Email Evidence Readback": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Upsert Durable Email Evidence Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Enumerated Archive Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Record Enumerated Attachment Disposition",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Enumerated Attachment Archive": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Upsert Enumerated Archive Receipt",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Existing Email Evidence Receipt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Record Email PDF Render Requirement",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Verify Existing Enumerated Archive Receipt": {
+      "main": [
+        [
+          {
+            "node": "Archive One Attachment at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "id": "10000000-0000-4000-8000-000000000001",
+  "meta": {
+    "archiveReceiptPreRead": true,
+    "archivedOnlyDisposition": [
+      "INLINE",
+      "NON_PDF"
+    ],
+    "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID_AND_HASH",
+    "attachmentVerificationBarrier": "REQUIRED",
+    "compositeAttachmentIdentity": [
+      "source_message_id",
+      "source_attachment_id"
+    ],
+    "credentialBindings": [
+      {
+        "action_required": true,
+        "configured": false,
+        "placeholder": "BIND_ONEDRIVE"
+      },
+      {
+        "action_required": true,
+        "configured": false,
+        "placeholder": "BIND_OUTLOOK"
+      }
+    ],
+    "emailEvidenceReceiptBarrier": "REQUIRED",
+    "financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION",
+    "immutableEnumerationFailClosed": true,
+    "immutableEnumerationInputRequired": true,
+    "manualMutationForbidden": true,
+    "mcpSafe": false,
+    "migrationStatus": "SPEC_ONLY",
+    "providerCircuitTable": "finance_provider_circuits",
+    "secondGraphEnumeration": false,
+    "setupRequired": true,
+    "terminalReceiptReadback": true,
+    "terminalReceiptTable": "finance_archive_receipts",
+    "workflowFolder": {
+      "id": "f1000000-0000-4000-8000-000000000101",
+      "name": "Account Reconciliation",
+      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "name": "Finance · Acquire Outlook Documents",
+  "nodeGroups": [
+    {
+      "name": "Stage 1: Acquisition Parameters to Convert Email Evidence to File",
+      "nodeIds": [
+        "10000000-0000-4000-8000-000000000001-config",
+        "10000000-0000-4000-8000-000000000103",
+        "10100",
+        "10101",
+        "10102",
+        "10121",
+        "10122"
+      ],
+      "description": "Finance stage 1. Input starts at Acquisition Parameters; verified output leaves through Convert Email Evidence to File."
+    },
+    {
+      "name": "Stage 2: SHA-256 Email Evidence to Archive Email Evidence in OneDrive",
+      "nodeIds": [
+        "10123",
+        "10137",
+        "10138",
+        "10139",
+        "10124"
+      ],
+      "description": "Finance stage 2. Input starts at SHA-256 Email Evidence; verified output leaves through Archive Email Evidence in OneDrive."
+    },
+    {
+      "name": "Stage 3: Download Email Evidence Readback to Record Email PDF Render Requirement",
+      "nodeIds": [
+        "10125",
+        "10126",
+        "10127",
+        "10140",
+        "10141",
+        "10142",
+        "10143",
+        "10128"
+      ],
+      "description": "Finance stage 3. Input starts at Download Email Evidence Readback; verified output leaves through Record Email PDF Render Requirement."
+    },
+    {
+      "name": "Stage 4: Download Enumerated Attachment to Upsert Enumerated Archive Receipt",
+      "nodeIds": [
+        "10104",
+        "10105",
+        "10106",
+        "10107",
+        "10108",
+        "10109",
+        "10114"
+      ],
+      "description": "Finance stage 4. Input starts at Download Enumerated Attachment; verified output leaves through Upsert Enumerated Archive Receipt."
+    },
+    {
+      "name": "Stage 5: Read Back Enumerated Archive Receipt to Verify Enumerated Archive Receipt",
+      "nodeIds": [
+        "10115",
+        "10116"
+      ],
+      "description": "Finance stage 5. Input starts at Read Back Enumerated Archive Receipt; verified output leaves through Verify Enumerated Archive Receipt."
+    },
+    {
+      "name": "Stage 5: Merge Archive Verification Inputs to Attachment Verification Barrier",
+      "nodeIds": [
+        "10112",
+        "10113"
+      ],
+      "description": "Finance stage 5. Input starts at Merge Archive Verification Inputs; verified output leaves through Attachment Verification Barrier."
+    },
+    {
+      "name": "Stage 5: Enumerated Attachment Present to Existing Enumerated Archive Receipt Present",
+      "nodeIds": [
+        "10131",
+        "10132",
+        "10133",
+        "10135"
+      ],
+      "description": "Finance stage 5. Input starts at Enumerated Attachment Present; verified output leaves through Existing Enumerated Archive Receipt Present."
+    },
+    {
+      "name": "Stage 6: Verify Existing Enumerated Archive Receipt to Return Verified Attachment to Loop",
+      "nodeIds": [
+        "10136",
+        "10134",
+        "w01-loop-enumerated-attachments",
+        "w01-return-verified-attachment"
+      ],
+      "description": "Finance stage 6. Input starts at Verify Existing Enumerated Archive Receipt; verified output leaves through Return Verified Attachment to Loop."
+    }
+  ],
   "nodes": [
     {
       "id": "10000000-0000-4000-8000-000000000102",
       "name": "Called by Trusted Workflow",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
       "position": [
         -1120,
         0
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1
     },
     {
       "id": "10000000-0000-4000-8000-000000000103",
       "name": "Validate Bounded Source Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Validate Bounded Source Request. Keep this deterministic and fail closed.\nconst request = $json;\nconst historicalImport = request.historical_import;\nif (historicalImport !== undefined && typeof historicalImport !== 'boolean') {\n    throw new Error('historical_import must be boolean');\n}\nif (historicalImport === true && (request.source_code !== 'ADCB_CASHBACK'\n    || !request.historical_account_id\n    || !request.account_id\n    || String(request.historical_account_id) !== String(request.account_id))) {\n    throw new Error('ADCB historical import requires the configured account binding');\n}\nconst required = [\n    'run_id',\n    'source_code',\n    'folder_id',\n    'senders',\n    'subjects',\n    'window_start',\n    'run_upper_bound',\n    'onedrive_parent_id',\n];\nfor (const field of required) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing trusted contract field ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst windowStart = new Date(request.window_start);\nconst runUpperBound = new Date(request.run_upper_bound);\nif (!(windowStart < runUpperBound) || runUpperBound > new Date()) {\n    throw new Error('Acquisition window must be positive and frozen no later than now');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders\n    .map(sender => `from/emailAddress/address eq ${quoteOData(sender)}`)\n    .join(' or ');\nconst subjectFilter = subjects\n    .map(subject => `contains(subject,${quoteOData(subject)})`)\n    .join(' or ');\nreturn [{\n        json: {\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            window_start: request.window_start,\n            run_upper_bound: runUpperBound.toISOString(),\n            window_end: runUpperBound.toISOString(),\n            onedrive_parent_id: request.onedrive_parent_id,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            subject_match: request.subject_match,\n            archive_readback_required: request.archive_readback_required,\n            messages: request.messages,\n            immutable_inventory: request.immutable_inventory,\n            attachment_ids_verified: request.attachment_ids_verified,\n            attachment_identity_keys: request.attachment_identity_keys,\n            empty_inventory: request.empty_inventory,\n            historical_import: historicalImport === true,\n            historical_source: historicalImport === true ? 'ADCB_CASHBACK' : undefined,\n            historical_account_id: historicalImport === true ? String(request.historical_account_id) : undefined,\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
+      },
       "position": [
         -520,
         0
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Validate Bounded Source Request. Keep this deterministic and fail closed.\nconst request = $json;\nconst historicalImport = request.historical_import;\nif (historicalImport !== undefined && typeof historicalImport !== 'boolean') {\n    throw new Error('historical_import must be boolean');\n}\nif (historicalImport === true && (request.source_code !== 'ADCB_CASHBACK'\n    || !request.historical_account_id\n    || !request.account_id\n    || String(request.historical_account_id) !== String(request.account_id))) {\n    throw new Error('ADCB historical import requires the configured account binding');\n}\nconst required = [\n    'run_id',\n    'source_code',\n    'folder_id',\n    'senders',\n    'subjects',\n    'window_start',\n    'run_upper_bound',\n    'onedrive_parent_id',\n];\nfor (const field of required) {\n    if (request[field] === undefined || request[field] === null || request[field] === '') {\n        throw new Error(`Missing trusted contract field ${field}`);\n    }\n}\nif (!Array.isArray(request.senders) || !request.senders.length) {\n    throw new Error('Trusted sender allowlist is required');\n}\nif (!Array.isArray(request.subjects) || !request.subjects.length) {\n    throw new Error('Trusted subject-fragment allowlist is required');\n}\nconst windowStart = new Date(request.window_start);\nconst runUpperBound = new Date(request.run_upper_bound);\nif (!(windowStart < runUpperBound) || runUpperBound > new Date()) {\n    throw new Error('Acquisition window must be positive and frozen no later than now');\n}\nconst senders = request.senders.map(value => String(value).trim().toLowerCase());\nconst subjects = request.subjects.map(value => String(value).trim()).filter(Boolean);\nconst maxMessages = Number(request.max_messages ?? 500);\nif (!Number.isInteger(maxMessages) || maxMessages < 1 || maxMessages > 5000) {\n    throw new Error('max_messages must be an integer from 1 through 5000');\n}\nconst quoteOData = value => `'${String(value).replaceAll(\"'\", \"''\")}'`;\nconst senderFilter = senders\n    .map(sender => `from/emailAddress/address eq ${quoteOData(sender)}`)\n    .join(' or ');\nconst subjectFilter = subjects\n    .map(subject => `contains(subject,${quoteOData(subject)})`)\n    .join(' or ');\nreturn [{\n        json: {\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            window_start: request.window_start,\n            run_upper_bound: runUpperBound.toISOString(),\n            window_end: runUpperBound.toISOString(),\n            onedrive_parent_id: request.onedrive_parent_id,\n            senders,\n            subjects,\n            max_messages: maxMessages,\n            subject_match: request.subject_match,\n            archive_readback_required: request.archive_readback_required,\n            messages: request.messages,\n            immutable_inventory: request.immutable_inventory,\n            attachment_ids_verified: request.attachment_ids_verified,\n            attachment_identity_keys: request.attachment_identity_keys,\n            empty_inventory: request.empty_inventory,\n            historical_import: historicalImport === true,\n            historical_source: historicalImport === true ? 'ADCB_CASHBACK' : undefined,\n            historical_account_id: historicalImport === true ? String(request.historical_account_id) : undefined,\n            server_filter: `(${senderFilter}) and (${subjectFilter})`,\n        },\n    }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10121",
       "name": "Build Original Email Evidence",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Build Original Email Evidence. Keep this deterministic and fail closed.\nconst message = $json, messageId = String(message.message_id || message.id || '').trim();\nif (!messageId || !message.source_code || !message.onedrive_parent_id)\n    throw new Error('EMAIL_EVIDENCE_TRUSTED_CONTEXT_MISSING');\nconst archivePayload = { schema_version: 1, message_id: messageId, internet_message_id: message.internetMessageId || null, received_at: message.receivedDateTime, sender: message.from?.emailAddress?.address || message.sender?.emailAddress?.address || null, subject: message.subject || '', body_type: message.body?.contentType || null, body: message.body?.content || '' };\nreturn [{ json: { archive_payload: archivePayload, source_message_id: messageId, source_code: message.source_code, onedrive_parent_id: message.onedrive_parent_id, folder_id: message.folder_id, senders: message.senders, subjects: message.subjects } }];\n"
+      },
       "position": [
         680,
         0
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Build Original Email Evidence. Keep this deterministic and fail closed.\nconst message = $json, messageId = String(message.message_id || message.id || '').trim();\nif (!messageId || !message.source_code || !message.onedrive_parent_id)\n    throw new Error('EMAIL_EVIDENCE_TRUSTED_CONTEXT_MISSING');\nconst archivePayload = { schema_version: 1, message_id: messageId, internet_message_id: message.internetMessageId || null, received_at: message.receivedDateTime, sender: message.from?.emailAddress?.address || message.sender?.emailAddress?.address || null, subject: message.subject || '', body_type: message.body?.contentType || null, body: message.body?.content || '' };\nreturn [{ json: { archive_payload: archivePayload, source_message_id: messageId, source_code: message.source_code, onedrive_parent_id: message.onedrive_parent_id, folder_id: message.folder_id, senders: message.senders, subjects: message.subjects } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10122",
       "name": "Convert Email Evidence to File",
-      "type": "n8n-nodes-base.convertToFile",
-      "typeVersion": 1.1,
+      "parameters": {
+        "operation": "toJson",
+        "options": {
+          "fileName": "email-evidence.json"
+        },
+        "sourceProperty": "archive_payload"
+      },
       "position": [
         980,
         0
       ],
-      "parameters": {
-        "operation": "toJson",
-        "sourceProperty": "archive_payload",
-        "options": {
-          "fileName": "email-evidence.json"
-        }
-      }
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1
     },
     {
       "id": "10123",
       "name": "SHA-256 Email Evidence",
-      "type": "n8n-nodes-base.crypto",
-      "typeVersion": 1,
+      "parameters": {
+        "action": "hash",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "email_evidence_sha256",
+        "type": "SHA256"
+      },
       "position": [
         -1120,
         380
       ],
-      "parameters": {
-        "action": "hash",
-        "type": "SHA256",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "dataPropertyName": "email_evidence_sha256"
-      }
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1
     },
     {
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      },
       "id": "10124",
       "name": "Archive Email Evidence in OneDrive",
-      "type": "n8n-nodes-base.microsoftOneDrive",
-      "typeVersion": 1.1,
+      "parameters": {
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "fileName": "={{ $json.email_evidence_sha256 + '.email-evidence-v1.json' }}",
+        "operation": "upload",
+        "parentId": "={{ $('Build Original Email Evidence').item.json.onedrive_parent_id }}",
+        "resource": "file"
+      },
       "position": [
         980,
         380
       ],
-      "parameters": {
-        "resource": "file",
-        "operation": "upload",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "fileName": "={{ $json.email_evidence_sha256 + '.email-evidence-v1.json' }}",
-        "parentId": "={{ $('Build Original Email Evidence').item.json.onedrive_parent_id }}"
-      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1
+    },
+    {
       "credentials": {
         "microsoftOneDriveOAuth2Api": {
           "id": "BIND_ONEDRIVE",
           "name": "Finance OneDrive"
         }
-      }
-    },
-    {
+      },
       "id": "10125",
       "name": "Download Email Evidence Readback",
-      "type": "n8n-nodes-base.microsoftOneDrive",
-      "typeVersion": 1.1,
+      "parameters": {
+        "binaryPropertyName": "data",
+        "fileId": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
+        "operation": "download",
+        "resource": "file"
+      },
       "position": [
         -1120,
         760
       ],
-      "parameters": {
-        "resource": "file",
-        "operation": "download",
-        "fileId": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
-        "binaryPropertyName": "data"
-      },
-      "credentials": {
-        "microsoftOneDriveOAuth2Api": {
-          "id": "BIND_ONEDRIVE",
-          "name": "Finance OneDrive"
-        }
-      }
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1
     },
     {
       "id": "10126",
       "name": "SHA-256 Email Evidence Readback",
-      "type": "n8n-nodes-base.crypto",
-      "typeVersion": 1,
+      "parameters": {
+        "action": "hash",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "email_readback_sha256",
+        "type": "SHA256"
+      },
       "position": [
         -820,
         760
       ],
-      "parameters": {
-        "action": "hash",
-        "type": "SHA256",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "dataPropertyName": "email_readback_sha256"
-      }
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1
     },
     {
       "id": "10127",
       "name": "Verify Email Evidence Readback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Email Evidence Readback. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, archived = $('Archive Email Evidence in OneDrive').item.json, message = $('Build Original Email Evidence').item.json, observed = String($json.email_readback_sha256 || '').toLowerCase();\nif (!expected.email_evidence_sha256 || observed !== String(expected.email_evidence_sha256).toLowerCase())\n    throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...message, ...expected, email_evidence_sha256: observed, source_message_id: message.source_message_id, source_attachment_id: 'INLINE_BODY', onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_readback_verified: true } }];\n"
+      },
       "position": [
         -520,
         760
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Email Evidence Readback. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, archived = $('Archive Email Evidence in OneDrive').item.json, message = $('Build Original Email Evidence').item.json, observed = String($json.email_readback_sha256 || '').toLowerCase();\nif (!expected.email_evidence_sha256 || observed !== String(expected.email_evidence_sha256).toLowerCase())\n    throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...message, ...expected, email_evidence_sha256: observed, source_message_id: message.source_message_id, source_attachment_id: 'INLINE_BODY', onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_readback_verified: true } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10128",
       "name": "Record Email PDF Render Requirement",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        980,
-        760
-      ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "attempt_count": 0,
+            "document_id": "={{ 'inline-email:' + $json.email_evidence_sha256 }}",
+            "document_profile": "EMAIL_BODY_JSON_TO_PDF_V1",
+            "error_class": "EMAIL_TO_PDF_RENDERER_REQUIRED",
+            "error_detail_redacted": "Original email archived and hash-verified; fixed renderer is not yet available.",
+            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
+            "requested_schema_version": "1",
+            "source_attachment_id": "INLINE_BODY",
+            "source_message_id": "={{ $('Build Original Email Evidence').item.json.source_message_id }}",
+            "source_sha256": "={{ $json.email_evidence_sha256 }}",
+            "state": "UNSUPPORTED",
+            "updated_at": "={{ $now.toISO() }}"
+          }
+        },
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_document_operations"
         },
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_sha256",
               "condition": "eq",
+              "keyName": "source_sha256",
               "keyValue": "={{ $json.email_evidence_sha256 }}"
             },
             {
-              "keyName": "document_profile",
               "condition": "eq",
+              "keyName": "document_profile",
               "keyValue": "EMAIL_BODY_JSON_TO_PDF_V1"
             },
             {
-              "keyName": "requested_schema_version",
               "condition": "eq",
+              "keyName": "requested_schema_version",
               "keyValue": "1"
             }
           ]
         },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "document_id": "={{ 'inline-email:' + $json.email_evidence_sha256 }}",
-            "source_sha256": "={{ $json.email_evidence_sha256 }}",
-            "document_profile": "EMAIL_BODY_JSON_TO_PDF_V1",
-            "requested_schema_version": "1",
-            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
-            "source_message_id": "={{ $('Build Original Email Evidence').item.json.source_message_id }}",
-            "source_attachment_id": "INLINE_BODY",
-            "state": "UNSUPPORTED",
-            "attempt_count": 0,
-            "error_class": "EMAIL_TO_PDF_RENDERER_REQUIRED",
-            "error_detail_redacted": "Original email archived and hash-verified; fixed renderer is not yet available.",
-            "updated_at": "={{ $now.toISO() }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "matchType": "allConditions",
+        "operation": "upsert",
         "options": {
           "dryRun": false
-        }
-      }
+        },
+        "resource": "row"
+      },
+      "position": [
+        980,
+        760
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10000000-0000-4000-8000-000000000001-config",
       "name": "Acquisition Parameters",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -820,
-        0
-      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -345,1505 +989,861 @@
         },
         "includeOtherFields": false,
         "options": {}
-      }
+      },
+      "position": [
+        -820,
+        0
+      ],
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4
     },
     {
       "id": "10100",
       "name": "Has Immutable Enumeration",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -220,
-        0
-      ],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
           "combinator": "and",
           "conditions": [
             {
               "leftValue": "={{ Array.isArray($json.messages) }}",
-              "rightValue": true,
               "operator": {
-                "type": "boolean",
                 "operation": "true",
-                "singleValue": true
-              }
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
             }
-          ]
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
         }
-      }
+      },
+      "position": [
+        -220,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
     },
     {
       "id": "10101",
       "name": "Shape Immutable Archive Input",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Shape Immutable Archive Input. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nif (request.immutable_inventory !== true || !Array.isArray(request.messages))\n    throw new Error('IMMUTABLE_ENUMERATION_REQUIRED');\nconst rows = request.messages;\nif (!rows.length)\n    return [{ json: { ...request, messages: [], empty_inventory: true, attachment_inventory: [] } }];\nconst seen = new Set();\nreturn rows.map(row => {\n    const message = row?.message && typeof row.message === 'object' ? row.message : row, messageId = String(row?.message_id || message?.id || '').trim();\n    if (!messageId || seen.has(messageId))\n        throw new Error('IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE');\n    seen.add(messageId);\n    return { json: { ...message, id: messageId, message_id: messageId, source_code: request.source_code, folder_id: request.folder_id, senders: request.senders, subjects: request.subjects, window_start: request.window_start, window_end: request.window_end, run_upper_bound: request.run_upper_bound, onedrive_parent_id: request.onedrive_parent_id, attachment_inventory: Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [] } };\n});\n"
+      },
       "position": [
         80,
         0
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Shape Immutable Archive Input. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nif (request.immutable_inventory !== true || !Array.isArray(request.messages))\n    throw new Error('IMMUTABLE_ENUMERATION_REQUIRED');\nconst rows = request.messages;\nif (!rows.length)\n    return [{ json: { ...request, messages: [], empty_inventory: true, attachment_inventory: [] } }];\nconst seen = new Set();\nreturn rows.map(row => {\n    const message = row?.message && typeof row.message === 'object' ? row.message : row, messageId = String(row?.message_id || message?.id || '').trim();\n    if (!messageId || seen.has(messageId))\n        throw new Error('IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE');\n    seen.add(messageId);\n    return { json: { ...message, id: messageId, message_id: messageId, source_code: request.source_code, folder_id: request.folder_id, senders: request.senders, subjects: request.subjects, window_start: request.window_start, window_end: request.window_end, run_upper_bound: request.run_upper_bound, onedrive_parent_id: request.onedrive_parent_id, attachment_inventory: Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [] } };\n});\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10102",
       "name": "Archive Inventory Present",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        380,
-        0
-      ],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
           "combinator": "and",
           "conditions": [
             {
               "leftValue": "={{ !$json.empty_inventory }}",
-              "rightValue": true,
               "operator": {
-                "type": "boolean",
                 "operation": "true",
-                "singleValue": true
-              }
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
             }
-          ]
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
         }
-      }
+      },
+      "position": [
+        380,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
     },
     {
       "id": "10103",
       "name": "Expand Enumerated Attachment Items",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Expand Enumerated Attachment Items. Keep this deterministic and fail closed.\nconst message = $json, messageId = String(message.message_id || message.id || '').trim(), attachments = Array.isArray(message.attachment_inventory) ? message.attachment_inventory : [], base = { ...message, message_id: messageId, source_message_id: messageId, attachment_identity: null };\nif (!attachments.length)\n    return [{ json: { ...base, attachment_empty: true, attachment_id: null, source_attachment_id: null, archive_state: 'NO_ATTACHMENTS', attachment_verified: true } }];\nreturn attachments.map(attachment => {\n    const id = String(attachment?.id || '').trim();\n    if (!id)\n        throw new Error('IMMUTABLE_ATTACHMENT_ID_MISSING');\n    const identity = messageId + ':' + id, name = String(attachment.name || 'attachment.bin'), extension = name.includes('.') ? name.split('.').pop().toLowerCase() : 'bin';\n    return { json: { ...attachment, ...base, id, attachment_id: id, source_attachment_id: id, attachment_identity: identity, source_message_id: messageId, source_code: message.source_code, onedrive_parent_id: message.onedrive_parent_id, extension, is_pdf: extension === 'pdf', is_inline: Boolean(attachment.isInline ?? attachment.is_inline) } };\n});\n"
+      },
       "position": [
         -820,
         380
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Expand Enumerated Attachment Items. Keep this deterministic and fail closed.\nconst message = $json, messageId = String(message.message_id || message.id || '').trim(), attachments = Array.isArray(message.attachment_inventory) ? message.attachment_inventory : [], base = { ...message, message_id: messageId, source_message_id: messageId, attachment_identity: null };\nif (!attachments.length)\n    return [{ json: { ...base, attachment_empty: true, attachment_id: null, source_attachment_id: null, archive_state: 'NO_ATTACHMENTS', attachment_verified: true } }];\nreturn attachments.map(attachment => {\n    const id = String(attachment?.id || '').trim();\n    if (!id)\n        throw new Error('IMMUTABLE_ATTACHMENT_ID_MISSING');\n    const identity = messageId + ':' + id, name = String(attachment.name || 'attachment.bin'), extension = name.includes('.') ? name.split('.').pop().toLowerCase() : 'bin';\n    return { json: { ...attachment, ...base, id, attachment_id: id, source_attachment_id: id, attachment_identity: identity, source_message_id: messageId, source_code: message.source_code, onedrive_parent_id: message.onedrive_parent_id, extension, is_pdf: extension === 'pdf', is_inline: Boolean(attachment.isInline ?? attachment.is_inline) } };\n});\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
-      "id": "10104",
-      "name": "Download Enumerated Attachment",
-      "type": "n8n-nodes-base.microsoftOutlook",
-      "typeVersion": 2,
-      "position": [
-        -1120,
-        1140
-      ],
-      "parameters": {
-        "resource": "messageAttachment",
-        "operation": "download",
-        "messageId": "={{ $json.message_id }}",
-        "attachmentId": "={{ $json.attachment_id }}",
-        "binaryPropertyName": "data"
-      },
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "id": "BIND_OUTLOOK",
           "name": "Finance Outlook"
         }
-      }
+      },
+      "id": "10104",
+      "name": "Download Enumerated Attachment",
+      "parameters": {
+        "attachmentId": "={{ $json.attachment_id }}",
+        "binaryPropertyName": "data",
+        "messageId": "={{ $json.message_id }}",
+        "operation": "download",
+        "resource": "messageAttachment"
+      },
+      "position": [
+        -1120,
+        1140
+      ],
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2
     },
     {
       "id": "10105",
       "name": "SHA-256 Enumerated Attachment",
-      "type": "n8n-nodes-base.crypto",
-      "typeVersion": 1,
+      "parameters": {
+        "action": "hash",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "document_sha256",
+        "type": "SHA256"
+      },
       "position": [
         -820,
         1140
       ],
-      "parameters": {
-        "action": "hash",
-        "type": "SHA256",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "dataPropertyName": "document_sha256"
-      }
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1
     },
     {
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      },
       "id": "10106",
       "name": "Archive Enumerated Attachment in OneDrive",
-      "type": "n8n-nodes-base.microsoftOneDrive",
-      "typeVersion": 1.1,
+      "parameters": {
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "fileName": "={{ $json.document_sha256 + '.' + $json.extension }}",
+        "operation": "upload",
+        "parentId": "={{ $json.onedrive_parent_id }}",
+        "resource": "file"
+      },
       "position": [
         -520,
         1140
       ],
-      "parameters": {
-        "resource": "file",
-        "operation": "upload",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "fileName": "={{ $json.document_sha256 + '.' + $json.extension }}",
-        "parentId": "={{ $json.onedrive_parent_id }}"
-      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1
+    },
+    {
       "credentials": {
         "microsoftOneDriveOAuth2Api": {
           "id": "BIND_ONEDRIVE",
           "name": "Finance OneDrive"
         }
-      }
-    },
-    {
+      },
       "id": "10107",
       "name": "Read Back Enumerated Attachment Archive",
-      "type": "n8n-nodes-base.microsoftOneDrive",
-      "typeVersion": 1.1,
+      "parameters": {
+        "binaryPropertyName": "data",
+        "fileId": "={{ $('Archive Enumerated Attachment in OneDrive').item.json.id }}",
+        "operation": "download",
+        "resource": "file"
+      },
       "position": [
         -220,
         1140
       ],
-      "parameters": {
-        "resource": "file",
-        "operation": "download",
-        "fileId": "={{ $('Archive Enumerated Attachment in OneDrive').item.json.id }}",
-        "binaryPropertyName": "data"
-      },
-      "credentials": {
-        "microsoftOneDriveOAuth2Api": {
-          "id": "BIND_ONEDRIVE",
-          "name": "Finance OneDrive"
-        }
-      }
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1
     },
     {
       "id": "10108",
       "name": "SHA-256 Enumerated Archive Readback",
-      "type": "n8n-nodes-base.crypto",
-      "typeVersion": 1,
+      "parameters": {
+        "action": "hash",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "archive_readback_sha256",
+        "type": "SHA256"
+      },
       "position": [
         80,
         1140
       ],
-      "parameters": {
-        "action": "hash",
-        "type": "SHA256",
-        "binaryData": true,
-        "binaryPropertyName": "data",
-        "dataPropertyName": "archive_readback_sha256"
-      }
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1
     },
     {
       "id": "10109",
       "name": "Verify Enumerated Attachment Archive",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Enumerated Attachment Archive. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Enumerated Attachment').item.json, archived = $('Archive Enumerated Attachment in OneDrive').item.json, observed = String($json.archive_readback_sha256 || '').toLowerCase(), sourceMessageId = expected.source_message_id || expected.message_id, sourceAttachmentId = expected.source_attachment_id || expected.attachment_id || expected.id, identity = sourceMessageId + ':' + sourceAttachmentId;\nif (!expected.document_sha256 || observed !== String(expected.document_sha256).toLowerCase())\n    throw new Error('ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...expected, source_attachment_id: sourceAttachmentId, source_message_id: sourceMessageId, attachment_identity: identity, onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_state: 'HASH_VERIFIED', archive_readback_verified: true, attachment_verified: true, archive_readback_sha256: observed } }];\n"
+      },
       "position": [
         380,
         1140
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Enumerated Attachment Archive. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Enumerated Attachment').item.json, archived = $('Archive Enumerated Attachment in OneDrive').item.json, observed = String($json.archive_readback_sha256 || '').toLowerCase(), sourceMessageId = expected.source_message_id || expected.message_id, sourceAttachmentId = expected.source_attachment_id || expected.attachment_id || expected.id, identity = sourceMessageId + ':' + sourceAttachmentId;\nif (!expected.document_sha256 || observed !== String(expected.document_sha256).toLowerCase())\n    throw new Error('ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...expected, source_attachment_id: sourceAttachmentId, source_message_id: sourceMessageId, attachment_identity: identity, onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_state: 'HASH_VERIFIED', archive_readback_verified: true, attachment_verified: true, archive_readback_sha256: observed } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10110",
       "name": "Record Enumerated Attachment Disposition",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        680,
-        1140
-      ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "attempt_count": 0,
+            "document_id": "={{ 'attachment:' + $json.document_sha256 }}",
+            "document_profile": "={{ $json.is_inline ? 'INLINE_ATTACHMENT_ARCHIVED_ONLY' : ($json.is_pdf ? 'STATEMENT_PDF_V1' : 'NON_PDF_ARCHIVED_ONLY') }}",
+            "error_class": "={{ $json.is_inline || !$json.is_pdf ? 'ARCHIVED_ONLY' : '' }}",
+            "error_detail_redacted": "={{ $json.is_inline || !$json.is_pdf ? 'Attachment is archived for evidence only.' : '' }}",
+            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
+            "requested_schema_version": "1",
+            "source_attachment_id": "={{ $json.source_attachment_id }}",
+            "source_code": "={{ $json.source_code }}",
+            "source_message_id": "={{ $json.source_message_id }}",
+            "source_sha256": "={{ $json.document_sha256 }}",
+            "state": "={{ $json.is_inline || !$json.is_pdf ? 'UNSUPPORTED' : 'READY_FOR_PARSE' }}",
+            "updated_at": "={{ $now.toISO() }}"
+          }
+        },
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_document_operations"
         },
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_sha256",
               "condition": "eq",
+              "keyName": "source_sha256",
               "keyValue": "={{ $json.document_sha256 }}"
             },
             {
-              "keyName": "document_profile",
               "condition": "eq",
+              "keyName": "document_profile",
               "keyValue": "={{ $json.is_inline ? 'INLINE_ATTACHMENT_ARCHIVED_ONLY' : ($json.is_pdf ? 'STATEMENT_PDF_V1' : 'NON_PDF_ARCHIVED_ONLY') }}"
             },
             {
-              "keyName": "requested_schema_version",
               "condition": "eq",
+              "keyName": "requested_schema_version",
               "keyValue": "1"
             }
           ]
         },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "document_id": "={{ 'attachment:' + $json.document_sha256 }}",
-            "source_sha256": "={{ $json.document_sha256 }}",
-            "document_profile": "={{ $json.is_inline ? 'INLINE_ATTACHMENT_ARCHIVED_ONLY' : ($json.is_pdf ? 'STATEMENT_PDF_V1' : 'NON_PDF_ARCHIVED_ONLY') }}",
-            "requested_schema_version": "1",
-            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
-            "source_message_id": "={{ $json.source_message_id }}",
-            "source_attachment_id": "={{ $json.source_attachment_id }}",
-            "source_code": "={{ $json.source_code }}",
-            "state": "={{ $json.is_inline || !$json.is_pdf ? 'UNSUPPORTED' : 'READY_FOR_PARSE' }}",
-            "attempt_count": 0,
-            "error_class": "={{ $json.is_inline || !$json.is_pdf ? 'ARCHIVED_ONLY' : '' }}",
-            "error_detail_redacted": "={{ $json.is_inline || !$json.is_pdf ? 'Attachment is archived for evidence only.' : '' }}",
-            "updated_at": "={{ $now.toISO() }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "matchType": "allConditions",
+        "operation": "upsert",
         "options": {
           "dryRun": false
-        }
-      }
+        },
+        "resource": "row"
+      },
+      "position": [
+        680,
+        1140
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10114",
       "name": "Upsert Enumerated Archive Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        980,
-        1140
-      ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}",
+            "archive_state": "HASH_VERIFIED",
+            "onedrive_etag": "={{ $json.onedrive_etag }}",
+            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
+            "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
+            "source_attachment_id": "={{ $json.source_attachment_id }}",
+            "source_code": "={{ $json.source_code }}",
+            "source_message_id": "={{ $json.source_message_id }}",
+            "source_sha256": "={{ $json.document_sha256 }}",
+            "updated_at": "={{ $now.toISO() }}",
+            "verified_at": "={{ $now.toISO() }}"
+          }
+        },
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_code",
               "condition": "eq",
+              "keyName": "source_code",
               "keyValue": "={{ $json.source_code }}"
             },
             {
-              "keyName": "source_message_id",
               "condition": "eq",
+              "keyName": "source_message_id",
               "keyValue": "={{ $json.source_message_id }}"
             },
             {
-              "keyName": "source_attachment_id",
               "condition": "eq",
+              "keyName": "source_attachment_id",
               "keyValue": "={{ $json.source_attachment_id }}"
             },
             {
-              "keyName": "source_sha256",
               "condition": "eq",
+              "keyName": "source_sha256",
               "keyValue": "={{ $json.document_sha256 }}"
             }
           ]
         },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}",
-            "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
-            "source_code": "={{ $json.source_code }}",
-            "source_message_id": "={{ $json.source_message_id }}",
-            "source_attachment_id": "={{ $json.source_attachment_id }}",
-            "source_sha256": "={{ $json.document_sha256 }}",
-            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
-            "onedrive_etag": "={{ $json.onedrive_etag }}",
-            "archive_state": "HASH_VERIFIED",
-            "verified_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "matchType": "allConditions",
+        "operation": "upsert",
         "options": {
           "dryRun": false
-        }
-      }
+        },
+        "resource": "row"
+      },
+      "position": [
+        980,
+        1140
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
+      "alwaysOutputData": true,
       "id": "10115",
       "name": "Read Back Enumerated Archive Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -1120,
-        1520
-      ],
-      "alwaysOutputData": true,
       "parameters": {
-        "resource": "row",
-        "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "archive_receipt_id",
               "condition": "eq",
+              "keyName": "archive_receipt_id",
               "keyValue": "={{ $json.archive_receipt_id }}"
             },
             {
-              "keyName": "archive_state",
               "condition": "eq",
+              "keyName": "archive_state",
               "keyValue": "HASH_VERIFIED"
             }
           ]
         },
-        "options": {}
-      }
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        -1120,
+        1520
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10116",
       "name": "Verify Enumerated Archive Receipt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Enumerated Attachment Archive').item.json, receipt = $json, identity = expected.source_message_id + ':' + expected.source_attachment_id;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== expected.source_attachment_id || receipt.source_sha256 !== expected.document_sha256)\n    throw new Error('ARCHIVE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, attachment_identity: identity, attachment_verified: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
+      },
       "position": [
         -820,
         1520
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Enumerated Attachment Archive').item.json, receipt = $json, identity = expected.source_message_id + ':' + expected.source_attachment_id;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== expected.source_attachment_id || receipt.source_sha256 !== expected.document_sha256)\n    throw new Error('ARCHIVE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, attachment_identity: identity, attachment_verified: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10111",
       "name": "Empty Archive Verification",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Empty Archive Verification. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, attachment_verification_barrier: 'VERIFIED', attachment_ids_verified: true, attachment_identity_keys: [], attachments_verified: 0, email_evidence_receipt_barrier: 'VERIFIED', email_evidence_receipts_verified: 0, email_evidence_identity_keys: [], archive_ready: true, cursor_commit_eligible: false } }];\n"
+      },
       "position": [
         -520,
         380
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Empty Archive Verification. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, attachment_verification_barrier: 'VERIFIED', attachment_ids_verified: true, attachment_identity_keys: [], attachments_verified: 0, email_evidence_receipt_barrier: 'VERIFIED', email_evidence_receipts_verified: 0, email_evidence_identity_keys: [], archive_ready: true, cursor_commit_eligible: false } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10112",
       "name": "Merge Archive Verification Inputs",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
       "position": [
         -520,
         1520
       ],
-      "parameters": {
-        "mode": "append",
-        "numberInputs": 2
-      }
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2
     },
     {
       "id": "10113",
       "name": "Attachment Verification Barrier",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Attachment Verification Barrier. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nconst expected = Array.isArray(request.messages)\n    ? request.messages.flatMap(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        const messageId = String(row?.message_id || message?.id || '').trim();\n        return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n            .map(attachment => messageId + ':' + attachment.id);\n    })\n    : [];\nconst safeRows = name => {\n    try {\n        return $(name).all().map(item => item.json);\n    }\n    catch {\n        return [];\n    }\n};\n// Use all completed loop iterations, not a named node's first execution.\nconst attachmentRows = $input.all().map(item => item.json)\n    .filter(row => row.attachment_verified === true && !row.attachment_empty);\nconst observed = attachmentRows.map(row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id);\nif (new Set(observed).size !== expected.length) {\n    throw new Error('ATTACHMENT_ARCHIVE_COUNT_MISMATCH');\n}\nfor (const identity of expected) {\n    if (!observed.includes(identity)) {\n        throw new Error('ATTACHMENT_ARCHIVE_MISSING:' + identity);\n    }\n}\nconst emailRows = [\n    ...safeRows('Verify Durable Email Evidence Receipt'),\n    ...safeRows('Verify Existing Email Evidence Receipt'),\n].filter(row => row.email_evidence_receipt_verified === true);\nconst expectedEmail = Array.isArray(request.messages)\n    ? request.messages.map(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        return String(row?.message_id || message?.id) + ':INLINE_BODY';\n    })\n    : [];\nconst observedEmail = emailRows.map(row => row.email_evidence_identity || row.source_message_id + ':INLINE_BODY');\nif (new Set(observedEmail).size !== expectedEmail.length\n    || expectedEmail.some(identity => !observedEmail.includes(identity))) {\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');\n}\nconst emailArchiveProof = emailRows\n    .map(row => ({\n    source_message_id: String(row.source_message_id || ''),\n    email_evidence_sha256: String(row.email_evidence_sha256 || ''),\n    onedrive_item_id: String(row.onedrive_item_id || ''),\n    email_evidence_identity: String(row.email_evidence_identity || row.source_message_id + ':INLINE_BODY'),\n}))\n    .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));\nconst archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();\nconst archiveItemIds = [...new Set([...emailArchiveProof, ...attachmentRows]\n        .map(row => row.onedrive_item_id).filter(Boolean))].sort();\nconst first = attachmentRows[0] || emailRows[0] || {};\nreturn [{\n        json: {\n            status: 'ARCHIVED',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            onedrive_parent_id: request.onedrive_parent_id,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            matched_count: request.messages.length,\n            onedrive_item_id: first.onedrive_item_id || null,\n            source_message_id: first.source_message_id || null,\n            source_attachment_id: first.source_attachment_id || null,\n            attachment_verification_barrier: 'VERIFIED',\n            attachment_ids_verified: true,\n            attachment_identity_keys: observed,\n            attachments_verified: attachmentRows.length,\n            email_evidence_receipt_barrier: 'VERIFIED',\n            email_evidence_receipts_verified: emailRows.length,\n            email_evidence_identity_keys: observedEmail,\n            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n            attachment_archive_proof: attachmentRows.map(row => ({\n                source_message_id: row.source_message_id,\n                source_attachment_id: row.source_attachment_id,\n                attachment_identity: row.attachment_identity,\n                document_sha256: row.document_sha256 || row.source_sha256,\n                onedrive_item_id: row.onedrive_item_id,\n                is_pdf: row.is_pdf === true,\n                is_inline: row.is_inline === true,\n            })),\n            email_evidence_archive_proof: emailArchiveProof,\n            archive_ready: true,\n            cursor_commit_eligible: false,\n            historical_import: request.historical_import === true,\n            historical_source: request.historical_import === true ? 'ADCB_CASHBACK' : undefined,\n            historical_account_id: request.historical_import === true ? String(request.historical_account_id) : undefined,\n        },\n    }];\n"
+      },
       "position": [
         -220,
         1520
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Attachment Verification Barrier. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nconst expected = Array.isArray(request.messages)\n    ? request.messages.flatMap(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        const messageId = String(row?.message_id || message?.id || '').trim();\n        return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n            .map(attachment => messageId + ':' + attachment.id);\n    })\n    : [];\nconst safeRows = name => {\n    try {\n        return $(name).all().map(item => item.json);\n    }\n    catch {\n        return [];\n    }\n};\n// Use all completed loop iterations, not a named node's first execution.\nconst attachmentRows = $input.all().map(item => item.json)\n    .filter(row => row.attachment_verified === true && !row.attachment_empty);\nconst observed = attachmentRows.map(row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id);\nif (new Set(observed).size !== expected.length) {\n    throw new Error('ATTACHMENT_ARCHIVE_COUNT_MISMATCH');\n}\nfor (const identity of expected) {\n    if (!observed.includes(identity)) {\n        throw new Error('ATTACHMENT_ARCHIVE_MISSING:' + identity);\n    }\n}\nconst emailRows = [\n    ...safeRows('Verify Durable Email Evidence Receipt'),\n    ...safeRows('Verify Existing Email Evidence Receipt'),\n].filter(row => row.email_evidence_receipt_verified === true);\nconst expectedEmail = Array.isArray(request.messages)\n    ? request.messages.map(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        return String(row?.message_id || message?.id) + ':INLINE_BODY';\n    })\n    : [];\nconst observedEmail = emailRows.map(row => row.email_evidence_identity || row.source_message_id + ':INLINE_BODY');\nif (new Set(observedEmail).size !== expectedEmail.length\n    || expectedEmail.some(identity => !observedEmail.includes(identity))) {\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');\n}\nconst emailArchiveProof = emailRows\n    .map(row => ({\n    source_message_id: String(row.source_message_id || ''),\n    email_evidence_sha256: String(row.email_evidence_sha256 || ''),\n    onedrive_item_id: String(row.onedrive_item_id || ''),\n    email_evidence_identity: String(row.email_evidence_identity || row.source_message_id + ':INLINE_BODY'),\n}))\n    .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));\nconst archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();\nconst archiveItemIds = [...new Set([...emailArchiveProof, ...attachmentRows]\n        .map(row => row.onedrive_item_id).filter(Boolean))].sort();\nconst first = attachmentRows[0] || emailRows[0] || {};\nreturn [{\n        json: {\n            status: 'ARCHIVED',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            onedrive_parent_id: request.onedrive_parent_id,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            matched_count: request.messages.length,\n            onedrive_item_id: first.onedrive_item_id || null,\n            source_message_id: first.source_message_id || null,\n            source_attachment_id: first.source_attachment_id || null,\n            attachment_verification_barrier: 'VERIFIED',\n            attachment_ids_verified: true,\n            attachment_identity_keys: observed,\n            attachments_verified: attachmentRows.length,\n            email_evidence_receipt_barrier: 'VERIFIED',\n            email_evidence_receipts_verified: emailRows.length,\n            email_evidence_identity_keys: observedEmail,\n            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n            email_evidence_archive_proof: emailArchiveProof,\n            archive_ready: true,\n            cursor_commit_eligible: false,\n            historical_import: request.historical_import === true,\n            historical_source: request.historical_import === true ? 'ADCB_CASHBACK' : undefined,\n            historical_account_id: request.historical_import === true ? String(request.historical_account_id) : undefined,\n        },\n    }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10130",
       "name": "Reject Missing Immutable Enumeration",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Reject Missing Immutable Enumeration. Keep this deterministic and fail closed.\nthrow new Error('IMMUTABLE_ENUMERATION_REQUIRED');\n"
+      },
       "position": [
         -220,
         380
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Reject Missing Immutable Enumeration. Keep this deterministic and fail closed.\nthrow new Error('IMMUTABLE_ENUMERATION_REQUIRED');\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10131",
       "name": "Enumerated Attachment Present",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        80,
-        1520
-      ],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
           "combinator": "and",
           "conditions": [
             {
               "leftValue": "={{ $json.attachment_empty !== true && Boolean($json.attachment_id) }}",
-              "rightValue": true,
               "operator": {
-                "type": "boolean",
                 "operation": "true",
-                "singleValue": true
-              }
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
             }
-          ]
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
         }
-      }
-    },
-    {
-      "id": "10132",
-      "name": "Read Existing Enumerated Archive Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      },
       "position": [
-        380,
+        80,
         1520
       ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
       "alwaysOutputData": true,
+      "id": "10132",
+      "name": "Read Existing Enumerated Archive Receipt",
       "parameters": {
-        "resource": "row",
-        "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_code",
               "condition": "eq",
+              "keyName": "source_code",
               "keyValue": "={{ $json.source_code }}"
             },
             {
-              "keyName": "source_message_id",
               "condition": "eq",
+              "keyName": "source_message_id",
               "keyValue": "={{ $json.source_message_id }}"
             },
             {
-              "keyName": "source_attachment_id",
               "condition": "eq",
+              "keyName": "source_attachment_id",
               "keyValue": "={{ $json.source_attachment_id }}"
             },
             {
-              "keyName": "archive_state",
               "condition": "eq",
+              "keyName": "archive_state",
               "keyValue": "HASH_VERIFIED"
             }
           ]
         },
-        "options": {}
-      }
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        380,
+        1520
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10133",
       "name": "Rehydrate Enumerated Attachment Archive Pre-Read",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Rehydrate Enumerated Attachment Archive Pre-Read. Keep this deterministic and fail closed.\nconst attachment = $('Expand Enumerated Attachment Items').item.json, receipt = $json || {}, found = receipt.archive_state === 'HASH_VERIFIED' && receipt.source_message_id === attachment.source_message_id && receipt.source_attachment_id === attachment.source_attachment_id && /^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || ''));\nreturn [{ json: { ...attachment, existing_archive_receipt: found ? receipt : null, existing_archive_receipt_found: found } }];\n"
+      },
       "position": [
         680,
         1520
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Rehydrate Enumerated Attachment Archive Pre-Read. Keep this deterministic and fail closed.\nconst attachment = $('Expand Enumerated Attachment Items').item.json, receipt = $json || {}, found = receipt.archive_state === 'HASH_VERIFIED' && receipt.source_message_id === attachment.source_message_id && receipt.source_attachment_id === attachment.source_attachment_id && /^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || ''));\nreturn [{ json: { ...attachment, existing_archive_receipt: found ? receipt : null, existing_archive_receipt_found: found } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10135",
       "name": "Existing Enumerated Archive Receipt Present",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        980,
-        1520
-      ],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
           "combinator": "and",
           "conditions": [
             {
               "leftValue": "={{ $json.existing_archive_receipt_found === true }}",
-              "rightValue": true,
               "operator": {
-                "type": "boolean",
                 "operation": "true",
-                "singleValue": true
-              }
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
             }
-          ]
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
         }
-      }
+      },
+      "position": [
+        980,
+        1520
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
     },
     {
       "id": "10136",
       "name": "Verify Existing Enumerated Archive Receipt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Existing Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_archive_receipt, identity = row.source_message_id + ':' + row.source_attachment_id;\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== row.source_attachment_id || !/^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || '')))\n    throw new Error('ARCHIVE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, attachment_identity: identity, attachment_verified: true, archive_readback_verified: true, replay_noop: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
+      },
       "position": [
         -1120,
         1900
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Existing Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_archive_receipt, identity = row.source_message_id + ':' + row.source_attachment_id;\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== row.source_attachment_id || !/^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || '')))\n    throw new Error('ARCHIVE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, attachment_identity: identity, attachment_verified: true, archive_readback_verified: true, replay_noop: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10134",
       "name": "Empty Enumerated Attachment Verification",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Empty Enumerated Attachment Verification. Keep this deterministic and fail closed.\nconst message = $('Expand Enumerated Attachment Items').item.json;\nreturn [{ json: { ...message, attachment_empty: true, attachment_verified: true, archive_readback_verified: true, archive_state: 'NO_ATTACHMENTS', attachment_identity: null } }];\n"
+      },
       "position": [
         -820,
         1900
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Empty Enumerated Attachment Verification. Keep this deterministic and fail closed.\nconst message = $('Expand Enumerated Attachment Items').item.json;\nreturn [{ json: { ...message, attachment_empty: true, attachment_verified: true, archive_readback_verified: true, archive_state: 'NO_ATTACHMENTS', attachment_identity: null } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
+      "alwaysOutputData": true,
       "id": "10137",
       "name": "Read Existing Email Evidence Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        80,
-        380
-      ],
-      "alwaysOutputData": true,
       "parameters": {
-        "resource": "row",
-        "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_code",
               "condition": "eq",
+              "keyName": "source_code",
               "keyValue": "={{ $json.source_code }}"
             },
             {
-              "keyName": "source_message_id",
               "condition": "eq",
+              "keyName": "source_message_id",
               "keyValue": "={{ $json.source_message_id }}"
             },
             {
-              "keyName": "source_attachment_id",
               "condition": "eq",
+              "keyName": "source_attachment_id",
               "keyValue": "INLINE_BODY"
             },
             {
-              "keyName": "source_sha256",
               "condition": "eq",
+              "keyName": "source_sha256",
               "keyValue": "={{ $json.email_evidence_sha256 }}"
             },
             {
-              "keyName": "archive_state",
               "condition": "eq",
+              "keyName": "archive_state",
               "keyValue": "HASH_VERIFIED"
             }
           ]
         },
-        "options": {}
-      }
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        80,
+        380
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10138",
       "name": "Rehydrate Email Evidence Archive Pre-Read",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Rehydrate Email Evidence Archive Pre-Read. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, message = $('Build Original Email Evidence').item.json, receipt = $json || {}, found = receipt.archive_state === 'HASH_VERIFIED' && receipt.source_message_id === message.source_message_id && receipt.source_attachment_id === 'INLINE_BODY' && receipt.source_sha256 === expected.email_evidence_sha256;\nreturn [{ json: { ...message, ...expected, existing_email_receipt: found ? receipt : null, existing_email_receipt_found: found }, binary: $('Convert Email Evidence to File').item.binary }];\n"
+      },
       "position": [
         380,
         380
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Rehydrate Email Evidence Archive Pre-Read. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, message = $('Build Original Email Evidence').item.json, receipt = $json || {}, found = receipt.archive_state === 'HASH_VERIFIED' && receipt.source_message_id === message.source_message_id && receipt.source_attachment_id === 'INLINE_BODY' && receipt.source_sha256 === expected.email_evidence_sha256;\nreturn [{ json: { ...message, ...expected, existing_email_receipt: found ? receipt : null, existing_email_receipt_found: found }, binary: $('Convert Email Evidence to File').item.binary }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10139",
       "name": "Existing Email Evidence Receipt Present",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        680,
-        380
-      ],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
           "combinator": "and",
           "conditions": [
             {
               "leftValue": "={{ $json.existing_email_receipt_found === true }}",
-              "rightValue": true,
               "operator": {
-                "type": "boolean",
                 "operation": "true",
-                "singleValue": true
-              }
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
             }
-          ]
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
         }
-      }
+      },
+      "position": [
+        680,
+        380
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
     },
     {
       "id": "10140",
       "name": "Verify Existing Email Evidence Receipt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Existing Email Evidence Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_email_receipt, identity = row.source_message_id + ':INLINE_BODY';\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== row.email_evidence_sha256)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, email_evidence_identity: identity, email_evidence_receipt_verified: true, email_evidence_sha256: receipt.source_sha256, replay_noop: true } }];\n"
+      },
       "position": [
         -220,
         760
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Existing Email Evidence Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_email_receipt, identity = row.source_message_id + ':INLINE_BODY';\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== row.email_evidence_sha256)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, email_evidence_identity: identity, email_evidence_receipt_verified: true, email_evidence_sha256: receipt.source_sha256, replay_noop: true } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
       "id": "10141",
       "name": "Upsert Durable Email Evidence Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        80,
-        760
-      ],
       "parameters": {
-        "resource": "row",
-        "operation": "upsert",
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "archive_receipt_id": "={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $json.source_message_id + ':INLINE_BODY:' + $json.email_evidence_sha256 }}",
+            "archive_state": "HASH_VERIFIED",
+            "onedrive_etag": "={{ $json.onedrive_etag }}",
+            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
+            "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
+            "source_attachment_id": "INLINE_BODY",
+            "source_code": "={{ $json.source_code }}",
+            "source_message_id": "={{ $json.source_message_id }}",
+            "source_sha256": "={{ $json.email_evidence_sha256 }}",
+            "updated_at": "={{ $now.toISO() }}",
+            "verified_at": "={{ $now.toISO() }}"
+          }
+        },
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "source_code",
               "condition": "eq",
+              "keyName": "source_code",
               "keyValue": "={{ $json.source_code }}"
             },
             {
-              "keyName": "source_message_id",
               "condition": "eq",
+              "keyName": "source_message_id",
               "keyValue": "={{ $json.source_message_id }}"
             },
             {
-              "keyName": "source_attachment_id",
               "condition": "eq",
+              "keyName": "source_attachment_id",
               "keyValue": "INLINE_BODY"
             },
             {
-              "keyName": "source_sha256",
               "condition": "eq",
+              "keyName": "source_sha256",
               "keyValue": "={{ $json.email_evidence_sha256 }}"
             }
           ]
         },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "archive_receipt_id": "={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $json.source_message_id + ':INLINE_BODY:' + $json.email_evidence_sha256 }}",
-            "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
-            "source_code": "={{ $json.source_code }}",
-            "source_message_id": "={{ $json.source_message_id }}",
-            "source_attachment_id": "INLINE_BODY",
-            "source_sha256": "={{ $json.email_evidence_sha256 }}",
-            "onedrive_item_id": "={{ $json.onedrive_item_id }}",
-            "onedrive_etag": "={{ $json.onedrive_etag }}",
-            "archive_state": "HASH_VERIFIED",
-            "verified_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
+        "matchType": "allConditions",
+        "operation": "upsert",
         "options": {
           "dryRun": false
-        }
-      }
-    },
-    {
-      "id": "10142",
-      "name": "Read Back Durable Email Evidence Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+        },
+        "resource": "row"
+      },
       "position": [
-        380,
+        80,
         760
       ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    },
+    {
+      "alwaysOutputData": true,
+      "id": "10142",
+      "name": "Read Back Durable Email Evidence Receipt",
       "parameters": {
-        "resource": "row",
-        "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
-          "mode": "name"
+          "mode": "name",
+          "value": "finance_archive_receipts"
         },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "archive_receipt_id",
               "condition": "eq",
+              "keyName": "archive_receipt_id",
               "keyValue": "={{ $('Upsert Durable Email Evidence Receipt').item.json.archive_receipt_id }}"
             },
             {
-              "keyName": "archive_state",
               "condition": "eq",
+              "keyName": "archive_state",
               "keyValue": "HASH_VERIFIED"
             }
           ]
         },
-        "options": {}
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
       },
-      "alwaysOutputData": true
+      "position": [
+        380,
+        760
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
     },
     {
       "id": "10143",
       "name": "Verify Durable Email Evidence Receipt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Purpose: Verify Durable Email Evidence Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Email Evidence Readback').item.json, receipt = $json;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== expected.email_evidence_sha256 || !receipt.onedrive_item_id)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, email_evidence_identity: receipt.source_message_id + ':INLINE_BODY', email_evidence_receipt_verified: true, email_evidence_receipt_id: receipt.archive_receipt_id } }];\n"
+      },
       "position": [
         680,
         760
       ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify Durable Email Evidence Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Email Evidence Readback').item.json, receipt = $json;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== expected.email_evidence_sha256 || !receipt.onedrive_item_id)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, email_evidence_identity: receipt.source_message_id + ':INLINE_BODY', email_evidence_receipt_verified: true, email_evidence_receipt_id: receipt.archive_receipt_id } }];\n"
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     },
     {
+      "id": "w01-loop-enumerated-attachments",
+      "name": "Archive One Attachment at a Time",
       "parameters": {
         "batchSize": 1,
         "options": {}
       },
-      "id": "w01-loop-enumerated-attachments",
-      "name": "Archive One Attachment at a Time",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
       "position": [
         -520,
         1900
-      ]
+      ],
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3
     },
     {
+      "id": "w01-return-verified-attachment",
+      "name": "Return Verified Attachment to Loop",
       "parameters": {
         "jsCode": "// Purpose: Return Verified Attachment to Loop. Keep this deterministic and fail closed.\n// Preserve the hash-verified receipt through the document-operation write.\nconst verified = $('Verify Enumerated Archive Receipt').item.json;\nif (verified.attachment_verified !== true || !verified.attachment_identity || !verified.onedrive_item_id)\n    throw new Error('ATTACHMENT_VERIFIED_RESULT_REQUIRED');\nreturn [{ json: verified }];\n"
       },
-      "id": "w01-return-verified-attachment",
-      "name": "Return Verified Attachment to Loop",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
       "position": [
         -220,
         1900
-      ]
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
     }
   ],
-  "connections": {
-    "Called by Trusted Workflow": {
-      "main": [
-        [
-          {
-            "node": "Acquisition Parameters",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Bounded Source Request": {
-      "main": [
-        [
-          {
-            "node": "Has Immutable Enumeration",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Has Immutable Enumeration": {
-      "main": [
-        [
-          {
-            "node": "Shape Immutable Archive Input",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Reject Missing Immutable Enumeration",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Shape Immutable Archive Input": {
-      "main": [
-        [
-          {
-            "node": "Archive Inventory Present",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Archive Inventory Present": {
-      "main": [
-        [
-          {
-            "node": "Expand Enumerated Attachment Items",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Build Original Email Evidence",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Empty Archive Verification",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Expand Enumerated Attachment Items": {
-      "main": [
-        [
-          {
-            "node": "Archive One Attachment at a Time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Download Enumerated Attachment": {
-      "main": [
-        [
-          {
-            "node": "SHA-256 Enumerated Attachment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "SHA-256 Enumerated Attachment": {
-      "main": [
-        [
-          {
-            "node": "Archive Enumerated Attachment in OneDrive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Archive Enumerated Attachment in OneDrive": {
-      "main": [
-        [
-          {
-            "node": "Read Back Enumerated Attachment Archive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Back Enumerated Attachment Archive": {
-      "main": [
-        [
-          {
-            "node": "SHA-256 Enumerated Archive Readback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "SHA-256 Enumerated Archive Readback": {
-      "main": [
-        [
-          {
-            "node": "Verify Enumerated Attachment Archive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Enumerated Attachment Archive": {
-      "main": [
-        [
-          {
-            "node": "Upsert Enumerated Archive Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upsert Enumerated Archive Receipt": {
-      "main": [
-        [
-          {
-            "node": "Read Back Enumerated Archive Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Back Enumerated Archive Receipt": {
-      "main": [
-        [
-          {
-            "node": "Verify Enumerated Archive Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Enumerated Archive Receipt": {
-      "main": [
-        [
-          {
-            "node": "Record Enumerated Attachment Disposition",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Record Enumerated Attachment Disposition": {
-      "main": [
-        [
-          {
-            "node": "Return Verified Attachment to Loop",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Empty Archive Verification": {
-      "main": [
-        [
-          {
-            "node": "Attachment Verification Barrier",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Archive Verification Inputs": {
-      "main": [
-        [
-          {
-            "node": "Attachment Verification Barrier",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Attachment Verification Barrier": {
-      "main": []
-    },
-    "Build Original Email Evidence": {
-      "main": [
-        [
-          {
-            "node": "Convert Email Evidence to File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Convert Email Evidence to File": {
-      "main": [
-        [
-          {
-            "node": "SHA-256 Email Evidence",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "SHA-256 Email Evidence": {
-      "main": [
-        [
-          {
-            "node": "Read Existing Email Evidence Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Archive Email Evidence in OneDrive": {
-      "main": [
-        [
-          {
-            "node": "Download Email Evidence Readback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Download Email Evidence Readback": {
-      "main": [
-        [
-          {
-            "node": "SHA-256 Email Evidence Readback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "SHA-256 Email Evidence Readback": {
-      "main": [
-        [
-          {
-            "node": "Verify Email Evidence Readback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Email Evidence Readback": {
-      "main": [
-        [
-          {
-            "node": "Upsert Durable Email Evidence Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Record Email PDF Render Requirement": {
-      "main": [
-        [
-          {
-            "node": "Merge Archive Verification Inputs",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Acquisition Parameters": {
-      "main": [
-        [
-          {
-            "node": "Validate Bounded Source Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Enumerated Attachment Present": {
-      "main": [
-        [
-          {
-            "node": "Read Existing Enumerated Archive Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Empty Enumerated Attachment Verification",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Existing Enumerated Archive Receipt": {
-      "main": [
-        [
-          {
-            "node": "Rehydrate Enumerated Attachment Archive Pre-Read",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rehydrate Enumerated Attachment Archive Pre-Read": {
-      "main": [
-        [
-          {
-            "node": "Existing Enumerated Archive Receipt Present",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Existing Enumerated Archive Receipt Present": {
-      "main": [
-        [
-          {
-            "node": "Verify Existing Enumerated Archive Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Download Enumerated Attachment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Existing Enumerated Archive Receipt": {
-      "main": [
-        [
-          {
-            "node": "Archive One Attachment at a Time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Empty Enumerated Attachment Verification": {
-      "main": [
-        [
-          {
-            "node": "Archive One Attachment at a Time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Existing Email Evidence Receipt": {
-      "main": [
-        [
-          {
-            "node": "Rehydrate Email Evidence Archive Pre-Read",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rehydrate Email Evidence Archive Pre-Read": {
-      "main": [
-        [
-          {
-            "node": "Existing Email Evidence Receipt Present",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Existing Email Evidence Receipt Present": {
-      "main": [
-        [
-          {
-            "node": "Verify Existing Email Evidence Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Archive Email Evidence in OneDrive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Existing Email Evidence Receipt": {
-      "main": [
-        [
-          {
-            "node": "Record Email PDF Render Requirement",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upsert Durable Email Evidence Receipt": {
-      "main": [
-        [
-          {
-            "node": "Read Back Durable Email Evidence Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Back Durable Email Evidence Receipt": {
-      "main": [
-        [
-          {
-            "node": "Verify Durable Email Evidence Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verify Durable Email Evidence Receipt": {
-      "main": [
-        [
-          {
-            "node": "Record Email PDF Render Requirement",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Archive One Attachment at a Time": {
-      "main": [
-        [
-          {
-            "node": "Merge Archive Verification Inputs",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Enumerated Attachment Present",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Return Verified Attachment to Loop": {
-      "main": [
-        [
-          {
-            "node": "Archive One Attachment at a Time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
+  "pinData": {},
   "settings": {
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016",
     "executionOrder": "v1",
-    "timezone": "Asia/Dubai",
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
-    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
+    "timezone": "Asia/Dubai"
   },
-  "pinData": {},
-  "meta": {
-    "financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION",
-    "mcpSafe": false,
-    "migrationStatus": "SPEC_ONLY",
-    "terminalReceiptTable": "finance_archive_receipts",
-    "terminalReceiptReadback": true,
-    "immutableEnumerationInputRequired": true,
-    "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID_AND_HASH",
-    "attachmentVerificationBarrier": "REQUIRED",
-    "archivedOnlyDisposition": [
-      "INLINE",
-      "NON_PDF"
-    ],
-    "providerCircuitTable": "finance_provider_circuits",
-    "manualMutationForbidden": true,
-    "credentialBindings": [
-      {
-        "placeholder": "BIND_ONEDRIVE",
-        "configured": false,
-        "action_required": true
-      },
-      {
-        "placeholder": "BIND_OUTLOOK",
-        "configured": false,
-        "action_required": true
-      }
-    ],
-    "setupRequired": true,
-    "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000101",
-      "name": "Account Reconciliation",
-      "placement": "POST_IMPORT_REVIEWED_MIGRATION"
-    },
-    "workflowTags": [
-      "finance",
-      "setup-required",
-      "inactive"
-    ],
-    "archiveReceiptPreRead": true,
-    "emailEvidenceReceiptBarrier": "REQUIRED",
-    "compositeAttachmentIdentity": [
-      "source_message_id",
-      "source_attachment_id"
-    ],
-    "immutableEnumerationFailClosed": true,
-    "secondGraphEnumeration": false
-  },
-  "nodeGroups": [
-    {
-      "name": "Stage 1: Acquisition Parameters to Convert Email Evidence to File",
-      "nodeIds": [
-        "10000000-0000-4000-8000-000000000001-config",
-        "10000000-0000-4000-8000-000000000103",
-        "10100",
-        "10101",
-        "10102",
-        "10121",
-        "10122"
-      ],
-      "description": "Finance stage 1. Input starts at Acquisition Parameters; verified output leaves through Convert Email Evidence to File."
-    },
-    {
-      "name": "Stage 2: SHA-256 Email Evidence to Archive Email Evidence in OneDrive",
-      "nodeIds": [
-        "10123",
-        "10137",
-        "10138",
-        "10139",
-        "10124"
-      ],
-      "description": "Finance stage 2. Input starts at SHA-256 Email Evidence; verified output leaves through Archive Email Evidence in OneDrive."
-    },
-    {
-      "name": "Stage 3: Download Email Evidence Readback to Record Email PDF Render Requirement",
-      "nodeIds": [
-        "10125",
-        "10126",
-        "10127",
-        "10140",
-        "10141",
-        "10142",
-        "10143",
-        "10128"
-      ],
-      "description": "Finance stage 3. Input starts at Download Email Evidence Readback; verified output leaves through Record Email PDF Render Requirement."
-    },
-    {
-      "name": "Stage 4: Download Enumerated Attachment to Upsert Enumerated Archive Receipt",
-      "nodeIds": [
-        "10104",
-        "10105",
-        "10106",
-        "10107",
-        "10108",
-        "10109",
-        "10114"
-      ],
-      "description": "Finance stage 4. Input starts at Download Enumerated Attachment; verified output leaves through Upsert Enumerated Archive Receipt."
-    },
-    {
-      "name": "Stage 5: Read Back Enumerated Archive Receipt to Verify Enumerated Archive Receipt",
-      "nodeIds": [
-        "10115",
-        "10116"
-      ],
-      "description": "Finance stage 5. Input starts at Read Back Enumerated Archive Receipt; verified output leaves through Verify Enumerated Archive Receipt."
-    },
-    {
-      "name": "Stage 5: Merge Archive Verification Inputs to Attachment Verification Barrier",
-      "nodeIds": [
-        "10112",
-        "10113"
-      ],
-      "description": "Finance stage 5. Input starts at Merge Archive Verification Inputs; verified output leaves through Attachment Verification Barrier."
-    },
-    {
-      "name": "Stage 5: Enumerated Attachment Present to Existing Enumerated Archive Receipt Present",
-      "nodeIds": [
-        "10131",
-        "10132",
-        "10133",
-        "10135"
-      ],
-      "description": "Finance stage 5. Input starts at Enumerated Attachment Present; verified output leaves through Existing Enumerated Archive Receipt Present."
-    },
-    {
-      "name": "Stage 6: Verify Existing Enumerated Archive Receipt to Return Verified Attachment to Loop",
-      "nodeIds": [
-        "10136",
-        "10134",
-        "w01-loop-enumerated-attachments",
-        "w01-return-verified-attachment"
-      ],
-      "description": "Finance stage 6. Input starts at Verify Existing Enumerated Archive Receipt; verified output leaves through Return Verified Attachment to Loop."
-    }
-  ],
   "tags": [
     {
       "id": "fin0000000000001",

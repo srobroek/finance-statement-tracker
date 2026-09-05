@@ -1269,7 +1269,7 @@ try {{
         )
         self.assertTrue(contract["ok"], contract)
         projected = contract["output"][0]["json"]
-        self.assertNotIn("expected_account_balance", projected["verification"])
+        self.assertEqual(projected["verification"]["expected_account_balance"], 999999)
         self.assertEqual(projected["balance_evidence"], {"expected": 12500, "observed": 12500})
         missing_delta = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json", "Build Recovery Verification Contract",
@@ -1290,7 +1290,7 @@ try {{
             "period_end": "2024-02-29", "expected_payload_sha256": digest,
             "observed_payload_sha256": digest, "expected_count": 1, "observed_count": 1,
             "expected_amount_sum_minor": -100, "observed_amount_sum_minor": -100,
-            "expected_account_balance": 12500, "observed_account_balance": 12500,
+            "expected_account_balance": 999999, "observed_account_balance": 999999,
             "invariants_passed": True,
         }
         validated = self.run_exported_workflow_node(
@@ -3051,7 +3051,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             connections["Browser Capture Write?"]["main"][0][0]["node"],
             "Complete Browser Capture Headless Receipt",
         )
-        self.assertFalse(any(node["type"] == "n8n-nodes-finance.actualBudget" for node in workflow["nodes"]))
+        self.assertFalse(any(node["type"] == "n8n-nodes-finance.actualBudget" and node["parameters"].get("operation") in {"import", "preflight"} for node in workflow["nodes"]))
         terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"]["jsCode"]
         self.assertIn("direct_actual_writer", terminal)
         self.assertIn("direct_cashback_writer", terminal)
@@ -3077,7 +3077,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         )
         self.assertEqual(
             workflow["connections"]["Finalize Trusted Cashback Payload"]["main"][0][0]["node"],
-            "Build Cashback Reconciliation Request",
+            "Statement Cashback Required",
         )
         self.assertEqual(
             workflow["connections"]["Build Cashback Reconciliation Request"]["main"][0][0]["node"],
@@ -3333,6 +3333,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "source_code": "EI_AMAZON",
             "period_key": "2026-08",
             "cashback_close_required": True,
+            "document_sha256": "a" * 64,
         }
         request = {"statement_sha256": "a" * 64}
         actual = {"observed_payload_sha256": "b" * 64}

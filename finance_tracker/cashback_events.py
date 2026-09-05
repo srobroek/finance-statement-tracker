@@ -17,6 +17,7 @@ from .cashback import (
     configured_reward_bucket,
     load_program_configuration,
     payment_intents_from_config,
+    purchase_type_from_config,
     programs_from_config,
     statement_period,
 )
@@ -402,8 +403,20 @@ def _canonical_statement_events(
         if transaction_id in transaction_ids:
             raise ValueError(f"Duplicate statement_transaction_id: {transaction_id}")
         transaction_ids.add(transaction_id)
+        occurrence = _iso_datetime(row.get("occurred_at"))
+        posting = row.get("post_date")
+        canonical_row = dict(row)
+        if posting is not None:
+            posting_date = date.fromisoformat(str(posting))
+            if posting_date < date.fromisoformat(occurrence[:10]):
+                raise ValueError("statement posting date precedes transaction date")
+            canonical_row["occurred_at"] = posting_date.isoformat() + "T00:00:00+04:00"
+            canonical_row["decision_trace"] = [*(row.get("decision_trace") or []), {
+                "stage": "STATEMENT_POSTING_DATE", "transaction_occurred_at": occurrence,
+                "post_date": posting_date.isoformat(),
+            }]
         event = _normalize_event({
-            **row,
+            **canonical_row,
             "source_event_id": f"statement:{statement_reference}:{transaction_id}",
             "card_code": card_code,
             "source": "statement",
@@ -421,11 +434,20 @@ def _canonical_statement_events(
     return statement_events, statement_transaction_ids
 
 
+def _statement_transaction_date(event: dict[str, Any]) -> date:
+    """Match original notification dates; posted statement events use ledger dates."""
+    trace = json.loads(str(event.get("decision_trace_json") or "[]"))
+    for entry in reversed(trace):
+        if entry.get("stage") == "STATEMENT_POSTING_DATE":
+            return date.fromisoformat(str(entry["transaction_occurred_at"])[:10])
+    return date.fromisoformat(str(event["occurred_at"])[:10])
+
+
 def _rank_statement_candidates(
     event: dict[str, Any],
     candidates: Iterable[dict[str, Any]],
 ) -> list[tuple[int, int, str]]:
-    event_date = date.fromisoformat(event["occurred_at"][:10])
+    event_date = _statement_transaction_date(event)
     ranked = []
     for candidate in candidates:
         if candidate["amount_aed_minor"] != event["amount_aed_minor"]:
@@ -651,6 +673,25 @@ def _statement_collision_identity(event: dict[str, Any]) -> str:
 
 def _event_polarity(value: object) -> str:
     return "CREDIT" if str(value).upper() in {"REFUND", "REVERSAL"} else "DEBIT"
+
+
+def prepare_statement_reconciliation(payload: dict[str, Any], configuration: dict[str, object]) -> dict[str, Any]:
+    """Resolve ledger labels through the versioned Cashback mapping, never as bucket enums."""
+    rows = payload.get("transactions")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("transactions must be a list of statement transaction objects")
+    return {
+        **payload,
+        "transactions": [
+            {
+                **row,
+                "purchase_type": str(row.get("purchase_type") or purchase_type_from_config(
+                    configuration, str(row.get("ledger_category") or ""), str(row.get("merchant") or "")
+                )).upper(),
+            }
+            for row in rows
+        ],
+    }
 
 
 class CashbackEventStore:
@@ -1487,6 +1528,8 @@ class CashbackEventStore:
                 raise ValueError("statement content digest does not match canonical content")
 
         range_start, range_end = _date_range_bounds(period_start, period_end)
+        match_start = min([period_start, *(_statement_transaction_date(event) for event in statement_events)])
+        candidate_start, _ = _date_range_bounds(match_start, period_end)
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -1578,11 +1621,13 @@ class CashbackEventStore:
                     for row in connection.execute(
                         """
                         SELECT * FROM cashback_events
-                        WHERE card_code = ? AND status = 'ACTIVE' AND source != 'statement'
+                        WHERE card_code = ? AND source != 'statement'
+                          AND (status = 'ACTIVE' OR (status = 'IGNORED' AND reconciliation_status = 'VARIANCE'))
+                          AND reconciliation_status != 'RECONCILED'
                           AND occurred_at >= ? AND occurred_at < ?
                         ORDER BY occurred_at, source_event_id
                         """,
-                        (card_code, range_start, range_end),
+                        (card_code, candidate_start, range_end),
                     ).fetchall()
                 ]
                 remaining = {row["source_event_id"]: row for row in candidates}
@@ -1605,7 +1650,18 @@ class CashbackEventStore:
                             """,
                             (statement_reference, source_event_id),
                         )
-                        remaining.pop(source_event_id)
+                        # Keep immutable notification economics replayable. When the
+                        # issuer posts on another date, its canonical statement event
+                        # replaces the notification in active period totals.
+                        candidate = remaining.pop(source_event_id)
+                        if str(candidate["occurred_at"])[:10] != str(event["occurred_at"])[:10]:
+                            connection.execute("UPDATE cashback_events SET status='IGNORED' WHERE source_event_id=?", (source_event_id,))
+                            posted_event = {**event, "identity_key": _statement_collision_identity(event)}
+                            columns = tuple(posted_event)
+                            connection.execute(
+                                f"INSERT INTO cashback_events ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
+                                tuple(posted_event[column] for column in columns),
+                            )
                         matched += 1
                     else:
                         existing = connection.execute(
@@ -1636,6 +1692,7 @@ class CashbackEventStore:
                         )
                         statement_only += 1
 
+                remaining = {key: row for key, row in remaining.items() if range_start <= str(row["occurred_at"]) < range_end}
                 for source_event_id in remaining:
                     connection.execute(
                         """

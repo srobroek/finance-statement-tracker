@@ -10,7 +10,7 @@
       "email_status": "ACTIVE",
       "email_senders": ["estatement@adcb.com"],
       "email_subjects": ["ADCB Credit card e-Statement"],
-      "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+      "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
     },
     {
       "card_code": "EI_AMAZON",

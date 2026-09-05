@@ -92,7 +92,7 @@ class WorkflowOrganizationTests(unittest.TestCase):
         self.assertEqual(
             source["meta"]["financeWorkflowCode"], "SHARED_MONTHLY_STATEMENT_CYCLE"
         )
-        self.assertEqual(len(source["nodes"]), 16)
+        self.assertEqual(len(source["nodes"]), 18)
         self.assertEqual(
             hashlib.sha256(o.CANONICAL_EXPORT_PATH.read_bytes()).hexdigest(),
             o.CANONICAL_EXPORT_SHA256,
