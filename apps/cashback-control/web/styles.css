@@ -134,6 +134,7 @@ details[open]>.card-header>strong:after {
   margin-top:3px
 }
 .track {
+  display:block;
   height:4px;
   background:#314137;
   border-radius:4px;

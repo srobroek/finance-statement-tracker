@@ -447,9 +447,10 @@ function renderAttention(payload) {
     if (code === "EI_AMAZON") return;
     const card = (payload.cards || []).find(candidate => candidate.card === code);
     if (["minimum", "close"].includes(kind) && card?.safety_target_aed) {
+      const closeDate = card.period_end ? new Intl.DateTimeFormat(undefined, {month:"short", day:"numeric", timeZone:"UTC"}).format(new Date(`${card.period_end}T00:00:00Z`)) : "";
       alerts.push({...alert,
         title: `${card.short_name || card.name} · ${kind === "close" ? "Target not reached" : "Below target pace"}`,
-        detail: `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0)))} to ${exactMoney(card.safety_target_aed)} target${card.period_end ? ` · closes ${card.period_end}` : ""}`,
+        detail: `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0)))} to ${exactMoney(card.safety_target_aed)} target${closeDate ? ` · closes ${closeDate}` : ""}`,
       });
     } else alerts.push(alert);
   });

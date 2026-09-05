@@ -99,6 +99,8 @@ try {
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /Groceries/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /RAK/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /1,245.25/);
+    const fill = await evaluate(`(() => {const bar = document.querySelector('.route-usage .track'), fill = bar.querySelector('i'); return {height:bar.getBoundingClientRect().height, ratio:fill.getBoundingClientRect().width / bar.getBoundingClientRect().width};})()`);
+    assert.ok(fill.height >= 4 && Math.abs(fill.ratio - 1245.25 / 1500) < 0.01, 'actual visible bucket fill matches spend / cap');
     const columns = await evaluate(`(() => { const rows = [...document.querySelectorAll('#recommendations .route-row')]; return rows.slice(0,2).map(node => {const r=node.getBoundingClientRect(); return {x:r.x,y:r.y};}); })()`);
     assert.ok(Math.abs(columns[0].y - columns[1].y) < 2 && columns[1].x > columns[0].x, 'mobile categories must form two columns');
     await layout('overview ' + width); await screenshot(`fictional-${width}-overview`);
