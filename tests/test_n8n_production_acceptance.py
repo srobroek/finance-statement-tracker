@@ -50,12 +50,15 @@ class ProductionAcceptanceTests(unittest.TestCase):
         self.assertEqual(call['parameters']['workflowId']['value'], M.MAINTENANCE_ID)
         self.assertTrue(call['parameters']['options']['waitForSubWorkflow'])
         self.assertEqual(call['parameters']['workflowInputs']['value'], {})
+        clear = next(n for n in workflow['nodes'] if n['name']=='Clear Maintenance Caller Input')
+        self.assertFalse(clear['parameters']['includeOtherFields'])
+        self.assertEqual(clear['parameters']['assignments']['assignments'], [])
         code = next(n['parameters']['jsCode'] for n in workflow['nodes'] if n['name']=='Bound Maintenance Iterations')
         self.assertEqual(self.execute(code, row={'complete': True}, index=2)['out'], [{'json': {'complete': True}}])
         self.assertEqual(self.execute(code, row={'complete': False}, index=2)['error'], 'ACCEPTANCE_MAINTENANCE_CALL_BOUND')
         self.assertIn('error', self.execute(code, row={'complete': 'true'}))
         self.assertEqual(workflow['connections']['Maintenance Complete']['main'][0], [])
-        self.assertEqual(workflow['connections']['Maintenance Complete']['main'][1][0]['node'], call['name'])
+        self.assertEqual(workflow['connections']['Maintenance Complete']['main'][1][0]['node'], 'Clear Maintenance Caller Input')
 
     def test_cycle_and_schedule_constraints_fail_before_rendering(self):
         for kind in ['ei', 'wio']:

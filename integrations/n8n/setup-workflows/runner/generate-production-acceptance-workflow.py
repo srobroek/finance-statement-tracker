@@ -7,6 +7,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -50,9 +51,12 @@ def build(root: Path, kind: str, at: datetime, source_commit: str, max_calls: in
                    'type': 'n8n-nodes-base.scheduleTrigger', 'typeVersion': 1.2,
                    'position': [0, 0], 'parameters': {}}
         workflow['nodes'].append(trigger)
-        successors = {'main': [[{'node': 'Run Reviewed Maintenance', 'type': 'main', 'index': 0}]]}
+        successors = {'main': [[{'node': 'Clear Maintenance Caller Input', 'type': 'main', 'index': 0}]]}
         source_sha256 = None
         workflow['nodes'].extend([
+            {'id': 'acceptance-empty-input', 'name': 'Clear Maintenance Caller Input',
+             'type': 'n8n-nodes-base.set', 'typeVersion': 3.4, 'position': [360, 0],
+             'parameters': {'assignments': {'assignments': []}, 'includeOtherFields': False, 'options': {}}},
             {'id': 'acceptance-maintenance', 'name': 'Run Reviewed Maintenance',
              'type': 'n8n-nodes-base.executeWorkflow', 'typeVersion': 1.2, 'position': [480, 0],
              'parameters': {'workflowId': {'__rl': True, 'value': MAINTENANCE_ID, 'mode': 'list'},
@@ -68,9 +72,10 @@ def build(root: Path, kind: str, at: datetime, source_commit: str, max_calls: in
                                  'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}]}}},
         ])
         workflow['connections'].update({
+            'Clear Maintenance Caller Input': {'main': [[{'node': 'Run Reviewed Maintenance', 'type': 'main', 'index': 0}]]},
             'Run Reviewed Maintenance': {'main': [[{'node': 'Bound Maintenance Iterations', 'type': 'main', 'index': 0}]]},
             'Bound Maintenance Iterations': {'main': [[{'node': 'Maintenance Complete', 'type': 'main', 'index': 0}]]},
-            'Maintenance Complete': {'main': [[], [{'node': 'Run Reviewed Maintenance', 'type': 'main', 'index': 0}]]},
+            'Maintenance Complete': {'main': [[], [{'node': 'Clear Maintenance Caller Input', 'type': 'main', 'index': 0}]]},
         })
     trigger['parameters'] = {'rule': {'interval': [{'field': 'cronExpression',
         'expression': f'{local.minute} {local.hour} {local.day} {local.month} *'}]}}
@@ -109,9 +114,8 @@ def main() -> None:
         raise ValueError('Acceptance schedule must be in the future')
     workflow = build(args.source_root, args.kind, at, args.source_commit, args.max_maintenance_calls)
     args.output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with args.output.open('x', encoding='utf-8') as target:
+    with os.fdopen(os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w', encoding='utf-8') as target:
         target.write(json.dumps(workflow, indent=2) + '\n')
-    args.output.chmod(0o600)
     print(json.dumps({'workflow_id': workflow['id'], 'active': False, 'sha256': hashlib.sha256(args.output.read_bytes()).hexdigest()}))
 
 

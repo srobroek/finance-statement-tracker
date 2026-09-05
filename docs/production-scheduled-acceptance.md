@@ -7,7 +7,9 @@ hashes in the existing private deployment evidence directory outside the image.
 
 For `rak`, `ei`, or `wio`, it preserves the corresponding canonical workflow's
 entire acquisition and persistence graph. Only its schedule changes, and an
-absolute time guard is inserted before the original first operation. RAK still
+absolute 15-minute start window is inserted before the original first operation.
+This bounds when a run may start; it does not terminate an in-progress run or its
+maintenance iterations. Maintenance has a separate maximum call count. RAK still
 reads its durable Cashback cursor, sweeps the complete window, archives every
 source, normalizes, persists exact receipts and commits/readbacks the cursor.
 No source payload, scan boundary, cursor, receipt or execution mode is injected.
