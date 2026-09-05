@@ -72,6 +72,8 @@ context.renderRecommendations([{label:'Groceries',active:true,ranked_cards:[{car
 const routes=roots.get('#recommendations');assert.match(routes.textContent,/Apple Pay/);assert.match(routes.textContent,/49[.,]50/);assert.equal(routes.children[0].tag,'details');
 assert.match(routes.children[0].children[0].textContent,/wallet bucket/);assert.match(routes.children[0].children[0].textContent,/1,950\.50/);assert.doesNotMatch(routes.textContent,/EI Amazon|EI_AMAZON/);
 assert.doesNotMatch(routes.textContent,/est\.|cycle value|Purchase amount/i);
+context.renderRecommendations([{code:'PHYSICAL'},{code:'FILLER'},{code:'ONLINE',label:'Online',ranked_cards:[{card:'SC',payment_channel:'ONLINE'}]},{code:'APPLE_PAY',label:'Apple Pay',ranked_cards:[{card:'SC',payment_channel:'APPLE_PAY_POS'}]}]);
+assert.equal(routes.children.length,2);assert.equal(routes.children[0].children[0].textContent.match(/Online/g).length,1);assert.equal(routes.children[1].children[0].textContent.match(/Apple Pay/g).length,1);assert.match(routes.children[0].children[1].textContent,/Online/);
 context.renderStatus({is_stale:false,last_successful_check_at:'2026-09-05T08:05:00Z',last_event_at:'2026-01-01T00:00:00Z'});assert.match(roots.get('#as-of').textContent,/Checked/);
 context.renderStatus({is_stale:true,last_successful_check_at:'2026-09-04T08:05:00Z'});assert.match(roots.get('#as-of').textContent,/Overdue/);
 const html=fs.readFileSync('apps/cashback-control/web/index.html','utf8');assert.doesNotMatch(html,/routing-amount|reward-disclosure|feed-warning|eyebrow/);

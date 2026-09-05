@@ -131,12 +131,15 @@ function tierName(code) {
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
-  root.replaceChildren(...(items || []).map(item => {
+  root.replaceChildren(...(items || []).filter(item => !["PHYSICAL", "PHYSICAL_POS", "FILLER"].includes(String(item.code || item.purchase_type || "").toUpperCase())).map(item => {
     const routes = item.active === false ? [] : (item.ranked_cards || []).filter(candidate => candidate.card !== "EI_AMAZON");
     const node = createNode("details", "route-row");
     const summary = createNode("summary", "route-main");
     const heading = createNode("span", "route-heading");
-    heading.append(categoryIcon(item), createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", routes.length ? routeHeading(item, routes[0], true) : "No route"));
+    const selected = routes[0];
+    const showWallet = selected?.payment_channel === "APPLE_PAY_POS" && item.code !== "APPLE_PAY";
+    const choice = selected ? `${compactCardLabel(selected.card)}${showWallet ? " · Apple Pay" : ""}` : "No route";
+    heading.append(categoryIcon(item), createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", choice));
     summary.append(heading);
     const preferred = routes[0];
     if (preferred && preferred.bucket_spend_aed != null) {
