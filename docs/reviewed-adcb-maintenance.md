@@ -49,3 +49,13 @@ readback, zero-mutation replay, interrupted partial recovery, lease contention,
 stale fence rejection, changed plan/account/backup rejection, and archive failure
 recovery on a disposable Actual ledger. No production execution is authorized by
 merely generating or importing this export.
+
+Run native receipt-node checks against the reviewed installed n8n modules:
+
+```sh
+N8N_NODE_MODULES=/path/to/reviewed/n8n/node_modules python -m unittest discover -s tests -p test_adcb_maintenance_workflow.py -v
+```
+
+The harness exercises actual extraction, JSON serialization and OneDrive upload
+implementations with synthetic bytes and a mocked network boundary. It does not
+claim a live OneDrive write or Actual replay; those remain disposable/live gates.

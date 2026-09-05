@@ -112,7 +112,7 @@
               "properties": {
                 "caller_fields": {
                   "type": "object",
-                  "minProperties": 1,
+                  "minProperties": 0,
                   "additionalProperties": {"enum": ["string", "number", "boolean", "array", "object"]}
                 },
                 "fields": {

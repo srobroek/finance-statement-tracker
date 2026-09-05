@@ -1,6 +1,7 @@
 """Execute the exported maintenance gates with synthetic identities only."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import unittest
@@ -9,6 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FILE = ROOT / 'integrations/n8n/setup-workflows/25-reviewed-adcb-maintenance.json'
 
 class MaintenanceWorkflowTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('N8N_NODE_MODULES'), 'installed pinned n8n nodes require N8N_NODE_MODULES')
+    def test_native_receipt_nodes(self):
+        result=subprocess.run(['node',str(ROOT/'tests/maintenance-native-nodes.cjs'),os.environ['N8N_NODE_MODULES'],str(FILE)],capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_export_is_deterministic_inactive_and_uses_global_fence(self):
         spec=importlib.util.spec_from_file_location('maintenance_generator',ROOT/'integrations/n8n/generate_adcb_maintenance_workflow.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

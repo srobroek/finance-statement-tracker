@@ -401,6 +401,51 @@
           }
         }
       }
+    },
+    "25-reviewed-adcb-maintenance.json": {
+      "nodes": {
+        "Fixed Reviewed Maintenance Bindings": {
+          "caller_fields": {},
+          "fields": {
+            "approved_plan_sha256": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "plan_file_sha256": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "backup_receipt_sha256": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "plan_item_id": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "receipt_parent_id": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "actual_file_id": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "account_id": {
+              "category": "workflow_local_constant",
+              "type": "string"
+            },
+            "expected_after_count": {
+              "category": "workflow_local_constant",
+              "type": "number"
+            },
+            "expected_after_balance_minor": {
+              "category": "workflow_local_constant",
+              "type": "number"
+            }
+          }
+        }
+      }
     }
   }
 }

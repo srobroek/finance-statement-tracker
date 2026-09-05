@@ -397,7 +397,7 @@ def scan(
                         "duplicate_literal_allowed": bool(field_spec.get("duplicate_literal_allowed", False)),
                     })
             if spec is not None:
-                if not caller_fields:
+                if "caller_fields" not in spec:
                     findings.append(_finding("CALLER_FIELDS_UNDECLARED", workflow=workflow, node=node_name, detail="parameter node must declare the caller fields preserved by its validated merge"))
                 for missing_field in sorted(set(caller_fields) - assignment_names):
                     findings.append(_finding("CALLER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="caller field is not projected by the parameter node"))

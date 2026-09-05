@@ -49,7 +49,7 @@ class N8nWorkflowParameterTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
         report = scan(contract=contract)
-        self.assertEqual(report["counts"]["parameter_nodes"], 8)
+        self.assertEqual(report["counts"]["parameter_nodes"], 9)
         self.assertEqual(
             {(row["workflow"], row["node"]) for row in report["parameter_nodes"]},
             {
@@ -61,6 +61,7 @@ class N8nWorkflowParameterTests(unittest.TestCase):
                 ("20-actual-outbox-apply.json", "Actual Writer Parameters"),
                 ("21-subscription-agent-adapter.json", "Subscription Provider Parameters"),
                 ("22-onedrive-finance-evidence-root-setup.json", "Setup Parameters"),
+                ("25-reviewed-adcb-maintenance.json", "Fixed Reviewed Maintenance Bindings"),
             },
         )
         self.assertEqual(report["status"], "PASS")
@@ -78,8 +79,9 @@ class N8nWorkflowParameterTests(unittest.TestCase):
             **{
                 name: ROOT / "integrations" / "n8n" / "workflows" / name
                 for name in contract["workflows"]
-                if not name.startswith("22-")
+                if not name.startswith(("22-", "25-"))
             },
+            "25-reviewed-adcb-maintenance.json": ROOT / "integrations/n8n/setup-workflows/25-reviewed-adcb-maintenance.json",
             "22-onedrive-finance-evidence-root-setup.json": ROOT
             / "integrations"
             / "n8n"
