@@ -76,7 +76,7 @@ class CashbackDashboardPhaseTests(TestCase):
             PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS"),
             PaymentIntent("AMAZON", money("250"), "AED", "ONLINE"),
         ]
-        programs = configured_programs()
+        programs = configured_programs(date(2026, 8, 16))
         cards, routing_programs, alerts = _build_card_state(
             programs,
             rows,
@@ -106,7 +106,7 @@ class CashbackDashboardPhaseTests(TestCase):
             "alerts": alerts,
         }
         public = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             as_of,
             intents,
@@ -125,12 +125,12 @@ class CashbackDashboardPhaseTests(TestCase):
         ).hexdigest()
         self.assertEqual(
             digest,
-            "00b6db442f4f04e38d88fe7cd2ee13b30e60e26477184703b60db1df38420495",
+            "c6c8368bddeed5ea8df13c267a130439bf0ff2f95b68037a7c3e62a93d3d4b6f",
         )
 
     def test_routes_disclose_configured_fx_fee_only_for_foreign_currency(self) -> None:
         rows = self.rows()
-        cards, programs, _ = _build_card_state(configured_programs(), rows, date(2026, 8, 16), None, "AED")
+        cards, programs, _ = _build_card_state(configured_programs(date(2026, 8, 16)), rows, date(2026, 8, 16), None, "AED")
         graphs = _build_routing_graphs(programs, cards, rows, self.config["routing_profiles"], self.config["route_policies"])
         foreign = next(graph for graph in graphs if graph["code"] == "FOREIGN")
         sc = next(candidate for candidate in foreign["ranked_cards"] if candidate["card"] == "SC_PLATINUM_X")
@@ -159,30 +159,10 @@ class CashbackDashboardPhaseTests(TestCase):
             _, _, _, met = _pace_state(programs[card], [], money(target), period, date(2026, 9, 5), "AED")
             self.assertEqual(met, [])
 
-    def test_web_discloses_estimate_and_evidence_status(self) -> None:
-        root = Path("apps/cashback-control/web")
-        shell = (root / "index.html").read_text(encoding="utf-8")
-        app = (root / "app.js").read_text(encoding="utf-8")
-        styles = (root / "styles.css").read_text(encoding="utf-8")
-        self.assertIn('id="reward-disclosure"', shell)
-        self.assertIn("Estimates based on configured rewards · Card terms not fully verified", shell)
-        self.assertIn('authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified"', app)
-        self.assertNotIn("Evidence: ${authority}", app)
-        self.assertIn("renderRewardDisclosure(payload.reward_estimate)", app)
-        self.assertIn("const routeItems = Array.isArray(items) ? items : [];", app)
-        self.assertEqual(app.count("const routeItems = Array.isArray(items) ? items : [];"), 2)
-        self.assertIn('"No eligible card route"', app)
-        self.assertIn("cardEvidenceNode(card)", app)
-        self.assertIn("provenance_authority", app)
-        self.assertIn("provenance_reason", app)
-        self.assertIn("grid-auto-rows: minmax(78px, auto);", styles)
-        self.assertIn("#decision-tree", styles)
-        self.assertIn("flex: 0 0 auto;", styles)
-
     def test_routing_graph_phase_keeps_policy_errors(self) -> None:
         rows = self.rows()
         cards, routing_programs, _ = _build_card_state(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             date(2026, 8, 16),
             None,

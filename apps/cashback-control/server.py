@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from access_auth import (
@@ -40,7 +40,6 @@ from finance_tracker.cashback_events import (
     _iso_datetime,
     _json_digest,
     build_live_dashboard,
-    routing_purchase_amount,
     write_dashboard,
 )
 from finance_tracker.notification_sources import (
@@ -369,27 +368,6 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             return
 
         if path == "/api/dashboard":
-            query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
-            if "purchase_amount" in query:
-                try:
-                    values = query["purchase_amount"]
-                    if len(values) != 1:
-                        raise ValueError("Supply one purchase amount")
-                    amount = str(routing_purchase_amount(values[0]))
-                except ValueError as error:
-                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
-                    return
-                with WRITE_LOCK:
-                    payload = build_live_dashboard(
-                        STORE,
-                        datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date(),
-                        stale_after_minutes=STALE_AFTER_MINUTES,
-                        program_config_path=PROGRAM_CONFIG_PATH,
-                        ingest_source=INGEST_SOURCE,
-                        purchase_amount=amount,
-                    )
-                self._json(HTTPStatus.OK, payload)
-                return
             if not DASHBOARD_PATH.is_file():
                 self._json(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -415,6 +393,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/events": self._post_events,
             "/api/events/validate": self._post_events_validate,
             "/api/ingest-runs": self._post_ingest_runs,
+            "/api/ingest/transaction": self._post_ingest_transaction,
+            "/api/ingest/receipt": self._post_ingest_receipt,
             "/api/ingest-state": self._post_ingest_state,
             "/api/reconcile": self._post_reconcile,
             "/api/corrections": self._post_corrections,
@@ -493,6 +473,20 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         )
         dashboard = rebuild_dashboard()
         return {"alert": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_transaction(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a transaction object")
+        with WRITE_LOCK:
+            result = STORE.ingest_transaction(source)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_receipt(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a scan receipt object")
+        with WRITE_LOCK:
+            return STORE.combine_transaction_receipts(source)
 
     def _post_ingest_runs(self, source: object) -> dict[str, object]:
         if not isinstance(source, dict):

@@ -173,12 +173,20 @@ def authoritative_fixture_reference() -> dict[str, Any]:
 class CashbackProgrammeProvenanceTests(TestCase):
     def setUp(self) -> None:
         self.config = load_json(CONFIG_PATH)
+        # Independent synthetic open-ended seed for provenance boundary tests.
+        self.config["programs"] = self.config["programs"][:3]
+        for program in self.config["programs"]:
+            program["effective_end"] = None
 
     def test_seed_config_is_schema_valid_and_explicitly_non_authoritative(self) -> None:
-        validate_provenance(self.config)
-        for program in self.config["programs"]:
+        source = load_json(CONFIG_PATH)
+        validate_provenance(source)
+        for program in source["programs"]:
             self.assertEqual(program["provenance"]["authority"], "NON_AUTHORITATIVE")
-            self.assertEqual(program["provenance"]["claims"], [])
+            if program["programme_version"] == "confirmed-2026-08-v1":
+                self.assertEqual(program["provenance"]["claims"], [])
+            else:
+                self.assertTrue(program["provenance"]["claims"])
             self.assertTrue(program["provenance"]["reason"])
             self.assertTrue(
                 all(reference["authority"] == "NON_AUTHORITATIVE" for reference in program.get("source_references", []))

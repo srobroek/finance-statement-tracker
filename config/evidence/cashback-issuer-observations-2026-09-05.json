@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-09-05",
+  "application_start": "2026-09-05",
+  "issuer_effective_start": null,
+  "authority": "NON_AUTHORITATIVE",
+  "notes": [
+    "Application date is the software correction boundary, not evidence of issuer commencement.",
+    "Rate and cap claim paths are in cashback-programs.json. Unknown issuer effective intervals prevent promotion to authoritative.",
+    "RAK and EI raw downloads returned HTTP403; their hashes identify retrieved web extraction responses, not raw issuer PDF/HTML bytes. SC raw HTML was downloaded and hashed.",
+    "Full issuer documents are not redistributed."
+  ],
+  "sources": [
+    {
+      "reference_id": "rak-world-observed-20260905",
+      "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---campaign/a-j00120-rak-cashback-leaflet---world_12062024-copy.pdf",
+      "digest_kind": "retrieval_tool_json_utf8",
+      "sha256": "d1defc09623710624e1017b849c1cfb1dfdfbd9943f1cd785994f4fc5b8cd984",
+      "claims": [
+        "buckets.RAK_STANDARD.excluded_categories",
+        "buckets.RAK_EWALLET.excluded_categories"
+      ],
+      "observation": "Special-category overflow earns no further reward and is excluded from standard retail rewards. Headline rates and caps match the configured model."
+    },
+    {
+      "reference_id": "sc-platinum-x-observed-20260905",
+      "url": "https://www.sc.com/ae/credit-cards/platinum-x-cashback/",
+      "digest_kind": "raw_html_bytes",
+      "sha256": "81958a9b56b8fc8449be8d2a55d4501e5bdea010dd705fb04c6dbe165f0b4b6c",
+      "claims": [
+        "rounding_behavior"
+      ],
+      "observation": "Billing-month aggregate cashback rounds down to whole AED. Current headline tier rates and bucket caps match."
+    },
+    {
+      "reference_id": "ei-amazon-observed-20260905",
+      "url": "https://www.emiratesislamic.ae/en/Personal-Banking/Cards/credit-cards/amazon-reward-points",
+      "digest_kind": "retrieval_tool_json_utf8",
+      "sha256": "dd4ccb88780b4c55c5150d549f5bf09624745f799b071e18251f4cd674aff224",
+      "claims": [
+        "tracking",
+        "reward_eligibility_verified"
+      ],
+      "observation": "Reward points depend on daily Prime membership, purchase subtype and monthly spend within assigned credit limit. No account-specific membership or credit-limit setting was found in versioned config."
+    }
+  ]
+}

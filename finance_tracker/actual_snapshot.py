@@ -410,7 +410,8 @@ def _build_card_state(
             "total_spend_aed": _plain(spend),
             "safety_target_aed": None if program.safety_target is None else _plain(program.safety_target),
             "tier": program.tier_for(spend, buckets).code,
-            "expected_cashback_aed": _plain(reward_total(program, spend, buckets)),
+            "reward_eligibility_verified": program.reward_eligibility_verified,
+            "expected_cashback_aed": (_plain(reward_total(program, spend, buckets)) if program.reward_eligibility_verified else None),
             "tiers": [
                 {
                     "code": tier.code,
@@ -558,9 +559,7 @@ def _build_routing_graphs(
     active_route_policies = route_policies or {}
     routing_graphs = []
     for profile in routing_profiles or ():
-        amount = Decimal(
-            str(profile.get("decision_amount", profile.get("decision_amount_aed")) or "100")
-        )
+        amount = Decimal("1")  # rate coefficient; not a purchase amount
         category = str(profile["category"])
         currency = str(profile.get("currency") or "AED")
         route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
@@ -576,6 +575,7 @@ def _build_routing_graphs(
                 rows,
                 intent,
                 bucket_code=str(route["bucket"]),
+                amount_agnostic=True,
             )
             if candidate is None:
                 continue
@@ -590,10 +590,7 @@ def _build_routing_graphs(
             if not isinstance(when, dict) or not isinstance(ranking, dict) or not isinstance(reasons, dict):
                 raise ValueError(f"Routing policy {policy_code} must define object policies")
             bucket_open = candidate.bucket_remaining_aed is None or candidate.bucket_remaining_aed > 0
-            bucket_fits_purchase = (
-                candidate.bucket_remaining_aed is None
-                or candidate.bucket_remaining_aed >= amount
-            )
+            bucket_fits_purchase = bucket_open  # no purchase amount supplied
             target_remaining = (
                 None if program.safety_target is None
                 else max(program.safety_target - candidate.card_spend_before_aed, Decimal("0"))
@@ -673,7 +670,7 @@ def _build_routing_graphs(
                 ),
                 "estimate_basis": (
                     "CONDITIONAL_TARGET_TIER"
-                    if candidate.strategic_reward_aed > candidate.marginal_reward_aed
+                    if candidate.target_tier != candidate.tier_before
                     else "CURRENT_TIER"
                 ),
                 "estimated_net_return_percent": _plain(
@@ -705,6 +702,7 @@ def _build_routing_graphs(
             candidate["order"] = index + 1
             candidate["status"] = "PREFERRED" if index == 0 else "NEXT"
         routing_graphs.append({
+            "routing_basis": "AVAILABLE_CAPACITY",
             "code": str(profile.get("code") or category),
             "label": str(profile.get("label") or category.replace("_", " ").title()),
             "purchase_type": category,
