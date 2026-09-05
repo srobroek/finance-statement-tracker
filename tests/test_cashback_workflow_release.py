@@ -68,7 +68,17 @@ class CashbackWorkflowReleaseTests(unittest.TestCase):
         self.assertNotRegex(self.deploy, r"(?:docker|podman)\s+rm\s+-f")
         self.assertNotIn("docker compose down", self.deploy)
         self.assertIn("finance-cashback-control", self.deploy)
-        self.assertIn("cashback-data/pre-deploy-", self.deploy)
+        self.assertIn("deploy/cashback/predeploy-backup.py", self.deploy)
+
+    def test_verified_backup_precedes_all_configuration_mutations(self) -> None:
+        backup, install = self.deploy.split("      - name: Install matching deployment configuration after verified backup", 1)
+        self.assertIn("sudo docker stop finance-cashback-control", backup)
+        self.assertIn("sudo python3 deploy/cashback/predeploy-backup.py", backup)
+        self.assertNotIn("sudo install -m", backup)
+        self.assertNotIn("sudo tee", backup)
+        self.assertIn("CASHBACK_ROLLBACK_BACKUP/verification.json", install)
+        self.assertNotIn("sanitize-cashback-backup.py", self.deploy)
+        self.assertNotIn("sqlite3.connect", self.deploy)
 
     def test_image_ref_is_digest_pinned_before_pull_and_readback(self) -> None:
         self.assertIn(

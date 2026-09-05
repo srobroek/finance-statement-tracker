@@ -346,3 +346,45 @@ test('manual, MCP-like, chat, agent, and evaluation modes cannot mutate', () => 
   }
   for (const mode of ['trigger', 'integrated', 'retry']) assert.doesNotThrow(() => assertActualMutationMode(mode));
 });
+
+
+test('initial download retries transport failures in the same session before operation', async () => {
+  let downloads = 0, operations = 0;
+  const api = fakeApi({ async downloadBudget() {
+    downloads++;
+    if (downloads === 1) throw Object.assign(new Error('transport failed'), { code: 'network-failure' });
+  }});
+  await session(api).run(credential, async () => { operations++; });
+  assert.equal(downloads, 2);
+  assert.equal(operations, 1);
+  assert.equal(api.calls.filter(call => call === 'init').length, 1);
+  assert.equal(api.calls.at(-1), 'shutdown');
+});
+
+test('initial sync retries EPIPE but retry exhaustion never runs operation', async () => {
+  let syncs = 0, operations = 0;
+  const api = fakeApi({ async sync() {
+    if (++syncs === 1) throw Object.assign(new Error('socket closed'), { cause: { code: 'EPIPE' } });
+  }});
+  await session(api).run(credential, async () => { operations++; });
+  assert.equal(operations, 1);
+  assert.equal(api.calls.filter(call => call === 'download').length, 2);
+  let downloads = 0;
+  const broken = fakeApi({ async downloadBudget() { downloads++; throw Object.assign(new Error('offline'), { code: 'network-failure' }); }});
+  await assert.rejects(session(broken).run(credential, async () => { operations++; }), /offline/);
+  assert.equal(downloads, 3);
+  assert.equal(operations, 1);
+  assert.equal(broken.calls.at(-1), 'shutdown');
+});
+
+test('authentication errors and operation transport errors are not retried', async () => {
+  let downloads = 0, operations = 0;
+  const api = fakeApi({ async downloadBudget() { downloads++; throw Object.assign(new Error('credentials'), { code: 'invalid-password' }); }});
+  await assert.rejects(session(api).run(credential, async () => { operations++; }), /credentials/);
+  assert.equal(downloads, 1);
+  assert.equal(operations, 0);
+  const ready = fakeApi();
+  await assert.rejects(session(ready).run(credential, async () => { operations++; throw Object.assign(new Error('write unavailable'), { code: 'network-failure' }); }), /write unavailable/);
+  assert.equal(operations, 1);
+  assert.equal(ready.calls.filter(call => call === 'download').length, 1);
+});

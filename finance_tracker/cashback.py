@@ -1080,12 +1080,17 @@ def configured_reward_bucket(
         for bucket in program.buckets
         if not bucket.assignment_fallback
         and bucket.matches_assignment(category, channel, currency)
+        and bucket.eligible(category, channel, currency)
     ]
     if specific:
         return specific[0].code
     if channel.upper() == "UNKNOWN":
         return None
-    fallback = next((bucket for bucket in program.buckets if bucket.assignment_fallback), None)
+    fallback = next(
+        (bucket for bucket in program.buckets
+         if bucket.assignment_fallback and bucket.eligible(category, channel, currency)),
+        None,
+    )
     return None if fallback is None else fallback.code
 
 

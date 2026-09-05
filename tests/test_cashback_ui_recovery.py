@@ -55,8 +55,8 @@ class Element {
  set textContent(v){this.text=String(v)} get textContent(){return this.text+this.children.map(c=>c.textContent??String(c)).join(' ')}
  append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} setAttribute(k,v){this.attributes[k]=v} addEventListener(){}
 }
-const roots=new Map(['#cards','#recommendations','#as-of'].map(k=>[k,new Element('div')]));
-const context=vm.createContext({document:{querySelector:k=>roots.get(k),createElement:t=>new Element(t),createTextNode:t=>t},Intl});
+const roots=new Map(['#cards','#recommendations','#as-of','#card-summary','#attention-section','#attention','#history-section','#period-selector','#period-history'].map(k=>[k,new Element('div')]));
+const context=vm.createContext({document:{querySelector:k=>roots.get(k),createElement:t=>new Element(t),createElementNS:(ns,t)=>new Element(t),createTextNode:t=>t},Intl});
 vm.runInContext(source.slice(0, source.lastIndexOf('\nsetupScreenViews();')),context);
 context.configureDisplay({currency:'AED',cards:[{card:'SC',short_name:'SC Platinum'}]});
 context.renderCards([{name:'RAK World',total_spend_aed:'2450.50',safety_target_aed:'10300',tier:'BASE',pace:{status:'UNDER'},buckets:[{code:'RAK_GROCERY',spend_aed:'2450.50',spend_cap_aed:'3000'}]},{name:'EI Amazon',reward_eligibility_verified:false,position_mode:'SPEND',buckets:[{code:'EI_AMAZON',spend_aed:'0',spend_cap_aed:null}]}]);
@@ -67,12 +67,25 @@ assert.match(cards.textContent,/549[.,]50/);assert.match(cards.textContent,/groc
 assert.match(cards.textContent,/7,849\.50 to AED\s10,300\.00 target/);assert.doesNotMatch(cards.textContent,/under/i);
 assert.equal(context.bucketLabel('SC_FILLER'),'Other spend');assert.equal(context.typeLabel({label:'Ewallet'}),'E-wallet');
 assert.match(cards.textContent,/Reward eligibility unknown/);assert.match(cards.textContent,/Limit unknown/);assert.doesNotMatch(cards.textContent,/No cap/);
-context.renderRecommendations([{label:'Groceries',active:true,ranked_cards:[{card:'SC',payment_channel:'APPLE_PAY_POS',target_rate_percent:'10',current_tier_rate_percent:'3',target_tier:'TOP',tier_before:'LOW',tier_remaining_aed:'1000.50',bucket_remaining_aed:'49.50'}]}]);
+const ei={card:'EI_AMAZON',name:'EI Amazon',short_name:'EI Amazon',total_spend_aed:'123.45',tier:'STANDARD',buckets:[]};
+context.renderCardSummary([ei]);assert.match(roots.get('#card-summary').textContent,/EI Amazon/);
+context.renderAttention({cards:[ei],alerts:[{key:'bucket:EI_AMAZON:TEST',title:'EI cap reached',detail:'Use another eligible card'}]});assert.match(roots.get('#attention').textContent,/EI cap reached/);
+context.renderPeriodHistory([{card:'EI_AMAZON',period_start:'2026-08-01',period_end:'2026-08-31',status:'CLOSED',reconciliation_status:'RECONCILED',summary:ei}]);assert.equal(roots.get('#history-section').hidden,false);assert.match(roots.get('#period-history').textContent,/EI Amazon/);
+context.renderCards([ei]);assert.equal(cards.children.length,1);assert.match(cards.textContent,/EI Amazon/);
+context.renderRecommendations([{label:'Groceries',active:true,ranked_cards:[{card:'SC',bucket:'SC_WALLET',bucket_spend_aed:'1950.50',bucket_cap_aed:'2000',payment_channel:'APPLE_PAY_POS',target_rate_percent:'10',current_tier_rate_percent:'3',target_tier:'TOP',tier_before:'LOW',tier_remaining_aed:'1000.50',bucket_remaining_aed:'49.50'}]}]);
 const routes=roots.get('#recommendations');assert.match(routes.textContent,/Apple Pay/);assert.match(routes.textContent,/49[.,]50/);assert.equal(routes.children[0].tag,'details');
+assert.match(routes.children[0].children[0].textContent,/wallet bucket/);assert.match(routes.children[0].children[0].textContent,/1,950\.50/);
 assert.doesNotMatch(routes.textContent,/est\.|cycle value|Purchase amount/i);
+context.renderRecommendations([{code:'PHYSICAL'},{code:'FILLER'},{code:'ONLINE',label:'Online',ranked_cards:[{card:'SC',payment_channel:'ONLINE'}]},{code:'APPLE_PAY',label:'Apple Pay',ranked_cards:[{card:'SC',payment_channel:'APPLE_PAY_POS'}]}]);
+assert.equal(routes.children.length,2);assert.equal(routes.children[0].children[0].textContent.match(/Online/g).length,1);assert.equal(routes.children[1].children[0].textContent.match(/Apple Pay/g).length,1);assert.match(routes.children[0].children[1].textContent,/Online/);
+context.renderRecommendations([{code:'AMAZON',ranked_cards:[{card:'SC'},{card:'RAK'},{card:'EI_AMAZON'}]}]);
+const amazon=routes.textContent;assert.ok(amazon.indexOf('Use SC')<amazon.indexOf('Use RAK'));assert.ok(amazon.indexOf('Use RAK')<amazon.indexOf('Use EI AMAZON'));
+context.renderRecommendations([{code:'AMAZON',active:false,ranked_cards:[{card:'EI_AMAZON'}]}]);assert.match(routes.textContent,/No eligible route/);assert.doesNotMatch(routes.textContent,/Use EI/);
+context.renderRecommendations([{code:'AMAZON',active:true,ranked_cards:[]}]);assert.match(routes.textContent,/No eligible route/);
 context.renderStatus({is_stale:false,last_successful_check_at:'2026-09-05T08:05:00Z',last_event_at:'2026-01-01T00:00:00Z'});assert.match(roots.get('#as-of').textContent,/Checked/);
 context.renderStatus({is_stale:true,last_successful_check_at:'2026-09-04T08:05:00Z'});assert.match(roots.get('#as-of').textContent,/Overdue/);
 const html=fs.readFileSync('apps/cashback-control/web/index.html','utf8');assert.doesNotMatch(html,/routing-amount|reward-disclosure|feed-warning|eyebrow/);
 '''
         result = subprocess.run([shutil.which("node"), "-e", script], cwd=ROOT, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
+

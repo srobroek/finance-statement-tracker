@@ -131,33 +131,140 @@ function tierName(code) {
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
-  root.replaceChildren(...(items || []).map(item => {
-    const routes = item.active === false ? [] : item.ranked_cards || [];
+  root.replaceChildren(...(items || []).filter(item => !["PHYSICAL", "PHYSICAL_POS", "FILLER"].includes(String(item.code || item.purchase_type || "").toUpperCase())).map(item => {
+    const routes = item.active === false ? [] : (item.ranked_cards || []);
     const node = createNode("details", "route-row");
     const summary = createNode("summary", "route-main");
-    summary.append(createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", routes.length ? routeHeading(item, routes[0], true) : "No route"));
+    const heading = createNode("span", "route-heading");
+    const selected = routes[0];
+    const showWallet = selected?.payment_channel === "APPLE_PAY_POS" && item.code !== "APPLE_PAY";
+    const choice = selected ? `${compactCardLabel(selected.card)}${showWallet ? " · Apple Pay" : ""}` : "No route";
+    heading.append(categoryIcon(item), createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", choice));
+    summary.append(heading);
+    const preferred = routes[0];
+    if (preferred && preferred.bucket_spend_aed != null) {
+      const usage = createNode("span", "route-usage");
+      const spent = Number(preferred.bucket_spend_aed);
+      const cap = preferred.bucket_cap_aed == null ? null : Number(preferred.bucket_cap_aed);
+      usage.append(createNode("small", "bucket-caption", `${bucketLabel(preferred.bucket || "Shared")} bucket`));
+      usage.append(createNode("span", "", `${exactMoney(spent)} / ${cap == null ? "No cap" : exactMoney(cap)}`));
+      if (cap != null && cap > 0) {
+        const track = createNode("span", "track");
+        const fill = createNode("i");
+        setWidth(fill, Math.min(100, Math.max(0, spent / cap * 100)));
+        track.append(fill); usage.append(track);
+      }
+      summary.append(usage);
+    }
     node.append(summary);
-    const list = createNode("ol", "route-options");
-    routes.forEach(candidate => {
-      const row = createNode("li");
-      row.append(createNode("strong", "", routeHeading(item, candidate, true)), createNode("span", "", candidateValueLabel(candidate)));
-      if (candidate.bucket_remaining_aed != null) row.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} left`));
-      if (Number(candidate.tier_remaining_aed) > 0) row.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
-      list.append(row);
+    const detail = createNode("div", "bucket-detail");
+    const facts = createNode("section", "bucket-facts");
+    if (preferred) {
+      facts.append(createNode("h3", "", `${compactCardLabel(preferred.card)} · ${bucketLabel(preferred.bucket || "Shared")} bucket`));
+      const metrics = createNode("div", "bucket-metrics");
+      [["Spent", preferred.bucket_spend_aed], ["Limit", preferred.bucket_cap_aed], ["Remaining", preferred.bucket_remaining_aed]].forEach(([label, value]) => {
+        const metric = createNode("div");
+        metric.append(createNode("span", "", label), createNode("strong", "", value == null ? (label === "Spent" ? "Unknown" : "No cap") : exactMoney(value)));
+        metrics.append(metric);
+      });
+      facts.append(metrics, createNode("p", "bucket-rate", candidateValueLabel(preferred)));
+      if (Number(preferred.tier_threshold_aed) > 0) facts.append(createNode("p", "tier-progress", `Card tier spend ${exactMoney(preferred.card_spend_aed || 0)} / ${exactMoney(preferred.tier_threshold_aed)}`));
+    }
+    const tree = renderRoutingTree(item, routes);
+    const tabs = createNode("nav", "detail-tabs");
+    tabs.setAttribute("aria-label", `${typeLabel(item)} details`);
+    ["Bucket", "Routing"].forEach(label => {
+      const button = createNode("button", "", label);
+      button.dataset.detailView = label.toLowerCase();
+      button.setAttribute("aria-pressed", String(label === "Bucket"));
+      button.addEventListener("click", () => {
+        facts.hidden = label !== "Bucket";
+        tree.hidden = label !== "Routing";
+        [...tabs.children].forEach(tab => tab.setAttribute("aria-pressed", String(tab === button)));
+      });
+      tabs.append(button);
     });
-    node.append(list);
+    tree.hidden = true;
+    detail.append(tabs, facts, tree);
+    node.append(detail);
     return node;
   }));
 }
 
+function renderRoutingTree(item, routes) {
+  const tree = createNode("section", "routing-tree");
+  tree.append(createNode("h3", "", "Routing"));
+  const list = createNode("ol", "route-options");
+  routes.forEach((candidate, index) => {
+    const row = createNode("li", "routing-step");
+    const method = shortPaymentMethod(candidate.payment_channel);
+    const condition = createNode("div", "routing-condition");
+    condition.append(createNode("strong", "", `${method && candidate.payment_channel !== "UNKNOWN" ? method : "Eligible payment"} accepted & bucket has room?`));
+    if (candidate.bucket_remaining_aed != null) condition.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} available · ${bucketLabel(candidate.bucket || "Shared")} bucket`));
+    row.append(condition);
+    const result = createNode("div", `route-result${index === 0 ? " preferred" : ""}`);
+    result.append(createNode("span", "route-order", index === 0 ? "Yes · Preferred" : "Yes"), createNode("strong", "", `Use ${compactCardLabel(candidate.card)}`), createNode("span", "", candidateValueLabel(candidate)));
+    if (Number(candidate.tier_remaining_aed) > 0) result.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
+    row.append(result, createNode("div", "route-next", index < routes.length - 1 ? "No · Full or payment ineligible ↓" : "No · No eligible alternative"));
+    list.append(row);
+  });
+  tree.append(list);
+  if (!routes.length) tree.append(createNode("span", "", "No eligible route"));
+  return tree;
+}
+
+function selectScreen(value) {
+  document.body.dataset.screenActive = value;
+  document.querySelectorAll("[data-screen-view]").forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
+}
+
+function renderCardSummary(cards) {
+  const root = document.querySelector("#card-summary");
+  root.replaceChildren(...(cards || []).map(card => {
+    const node = createNode("button", "card-total");
+    const next = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
+    node.append(createNode("strong", "", card.short_name || card.name), createNode("span", "", exactMoney(card.total_spend_aed || 0)));
+    node.append(createNode("small", "", next ? `of ${exactMoney(next.minimum_spend_aed)} · ${tierName(next.code)}` : tierName(card.tier || "STANDARD")));
+    if (card.safety_target_aed != null && Number(card.safety_target_aed) > 0) {
+      const gap = Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0));
+      const status = createNode("small", "card-target", gap > 0 ? `${exactMoney(gap)} to target` : "Target reached");
+      status.title = `Configured ${exactMoney(card.safety_target_aed)} target`;
+      node.append(status);
+    }
+    node.addEventListener("click", () => {
+      selectScreen("cards");
+      const detail = [...document.querySelectorAll(".position-card")].find(item => item.dataset.card === card.card)?.querySelector("details");
+      if (detail) { detail.open = true; detail.scrollIntoView({block: "nearest"}); }
+    });
+    return node;
+  }));
+}
+
+function categoryIcon(item) {
+  const category = String(item.code || item.purchase_type || item.label || "").toUpperCase();
+  const paths = [
+    [/GROCER|SUPERMARKET/, "M3 4h2l2 11h11l3-8H6 M9 20h.01 M18 20h.01"],
+    [/DINING|RESTAURANT/, "M5 3v7m3-7v7M5 7h3m-1.5 3v11M17 3v18m0-18c-5 3-5 9 0 9"],
+    [/TRAVEL|FLIGHT/, "M3 11l7 2 5 8 2-1-2-8 6-6c2-2 0-4-2-2l-6 6-8-2z"],
+    [/FUEL|PETROL/, "M4 21V5h10v16M4 10h10M2 21h14m-2-14 4 3v7c0 3 3 3 3 0V8l-3-3"],
+    [/WALLET|APPLE_PAY/, "M3 6h17v14H3zM3 6V4h14m3 7h-6v5h6m-3-2h.01"],
+    [/FOREIGN|INTERNATIONAL/, "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18"],
+    [/ONLINE|AMAZON/, "M3 4h18v13H3zM8 21h8m-4-4v4"],
+  ];
+  const pathData = paths.find(([match]) => match.test(category))?.[1] || "M3 5h18v14H3zM3 9h18M7 15h4";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "category-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", pathData); svg.append(path);
+  return svg;
+}
+
 function setupScreenViews() {
   const buttons = [...document.querySelectorAll("[data-screen-view]")];
-  const select = value => {
-    document.body.dataset.screenActive = value;
-    buttons.forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
-  };
-  buttons.forEach(button => button.addEventListener("click", () => select(button.dataset.screenView)));
-  select("cards");
+  buttons.forEach(button => button.addEventListener("click", () => selectScreen(button.dataset.screenView)));
+  selectScreen("routing");
 }
 
 function applicationServerKey(value) {
@@ -243,6 +350,7 @@ function renderCards(cards) {
   const root = document.querySelector("#cards");
   root.replaceChildren(...(cards || []).map(card => {
     const node = createNode("article", "position-card");
+    node.dataset.card = card.card;
     const details = createNode("details", "card-details");
     const header = createNode("summary", "card-header");
     const nextTier = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
@@ -345,7 +453,17 @@ function renderAttention(payload) {
   const section = document.querySelector("#attention-section");
   const root = document.querySelector("#attention");
   const alerts = [];
-  (payload.alerts || []).forEach((alert) => alerts.push(alert));
+  (payload.alerts || []).forEach((alert) => {
+    const [kind, code] = String(alert.key || "").split(":");
+    const card = (payload.cards || []).find(candidate => candidate.card === code);
+    if (["minimum", "close"].includes(kind) && card?.safety_target_aed) {
+      const closeDate = card.period_end ? new Intl.DateTimeFormat(undefined, {month:"short", day:"numeric", timeZone:"UTC"}).format(new Date(`${card.period_end}T00:00:00Z`)) : "";
+      alerts.push({...alert,
+        title: `${card.short_name || card.name} · ${kind === "close" ? "Target not reached" : "Below target pace"}`,
+        detail: `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0)))} to ${exactMoney(card.safety_target_aed)} target${closeDate ? ` · closes ${closeDate}` : ""}`,
+      });
+    } else alerts.push(alert);
+  });
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
     alerts.push({ key: "reconciliation:variance", title: `${count} statement variance${count === 1 ? "" : "s"}`, detail: "Notification events did not match the authoritative statement and were excluded from cashback totals." });
@@ -425,6 +543,7 @@ function renderDashboardError(error) {
   status.className = "as-of stale";
   status.textContent = "Unavailable";
   status.title = detail;
+  document.querySelector("#card-summary").replaceChildren();
 
   document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
 
@@ -453,6 +572,7 @@ async function loadDashboard() {
 
   renderAttention(payload);
   renderCards(payload.cards);
+  renderCardSummary(payload.cards);
   renderPeriodHistory(periodsPayload.periods || []);
 }
 
@@ -472,3 +592,4 @@ setupPushNotifications();
 refreshDashboard().catch(() => {});
 
 setInterval(() => refreshDashboard().catch(() => {}), 60_000);
+

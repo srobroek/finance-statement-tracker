@@ -23,6 +23,8 @@ on:
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "tests/test_cashback_workflow_release.py"
+      - "tests/test_cashback_mobile_browser.py"
+      - "tests/browser/cashback-mobile.mjs"
       - "pyproject.toml"
       - "uv.lock"
       - "README.md"
@@ -50,6 +52,8 @@ on:
       - "examples/cashback-profiles/**"
       - "finance_tracker/**"
       - "tests/test_cashback_workflow_release.py"
+      - "tests/test_cashback_mobile_browser.py"
+      - "tests/browser/cashback-mobile.mjs"
       - "pyproject.toml"
       - "uv.lock"
       - "README.md"
@@ -101,6 +105,15 @@ jobs:
 
       - name: Run comprehensive validation
         run: ./scripts/run-validation.sh
+
+      - name: Upload fictional mobile browser screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cashback-mobile-${{ github.sha }}
+          path: artifacts/cashback-mobile/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Deploy fictional profile matrix
         shell: bash
@@ -227,37 +240,40 @@ jobs:
           image_ref="${IMAGE_NAME}@${PUBLISHED_IMAGE_DIGEST}"
           printf 'IMAGE_REF=%s\n' "$image_ref" >> "$GITHUB_ENV"
 
-      - name: Back up cashback state and Dockge configuration
+      - name: Verify private rollback snapshot before deployment changes
         shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_SOURCE"
           stack=/opt/stacks/finance-cashback
-          sanitizer=/opt/stacks/finance-actual/sanitize-cashback-backup.py
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          sudo install -d "$stack"
-          if sudo test -f "$stack/compose.yaml"; then
-            sudo cp --preserve=mode,timestamps "$stack/compose.yaml" \
-              "$stack/compose.yaml.pre-${stamp}"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          backup="/opt/backups/finance-cashback/${stamp}"
+          running_image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
+          running_repo_digests="$(sudo docker image inspect "$running_image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
+          mapfile -t rollback_candidates < <(
+            printf '%s\n' "$running_repo_digests" |
+              awk -v prefix="${IMAGE_NAME}@sha256:" 'index($0, prefix) == 1 { print }'
+          )
+          if (( ${#rollback_candidates[@]} != 1 )) || [[ ! "${rollback_candidates[0]}" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "Running Cashback image lacks one verified rollback digest" >&2
+            exit 1
           fi
-          if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
-            running_image_id="$(sudo docker inspect finance-cashback-control --format '{{.Image}}')"
-            running_repo_digests="$(sudo docker image inspect "$running_image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}')"
-            mapfile -t rollback_candidates < <(
-              printf '%s\n' "$running_repo_digests" |
-                awk -v prefix="${IMAGE_NAME}@sha256:" 'index($0, prefix) == 1 { print }'
-            )
-            if (( ${#rollback_candidates[@]} != 1 )) || [[ ! "${rollback_candidates[0]}" =~ @sha256:[0-9a-f]{64}$ ]]; then
-              echo "Running Cashback image does not have one valid RepoDigest for ${IMAGE_NAME}" >&2
-              exit 1
-            fi
-            rollback_image_ref="${rollback_candidates[0]}"
-            printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual/cashback-data\nCASHBACK_IMAGE=%s\n' \
-              "$rollback_image_ref" | sudo tee "$stack/.env.rollback-${stamp}" >/dev/null
-            sudo chmod 0600 "$stack/.env.rollback-${stamp}"
-          fi
-          sudo install -m 0750 deploy/actual/sanitize-cashback-backup.py "$sanitizer"
-          sudo test -x "$sanitizer"
+          rollback_image_ref="${rollback_candidates[0]}"
+          sudo install -d -m 0700 /opt/backups/finance-cashback
+          # A failed snapshot deliberately leaves the writer stopped.
+          sudo docker stop finance-cashback-control >/dev/null
+          sudo python3 deploy/cashback/predeploy-backup.py \
+            --destination "$backup" --image-reference "$rollback_image_ref"
+          printf 'CASHBACK_ROLLBACK_BACKUP=%s\n' "$backup" >> "$GITHUB_ENV"
+
+      - name: Install matching deployment configuration after verified backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_SOURCE"
+          stack=/opt/stacks/finance-cashback
+          test -n "$CASHBACK_ROLLBACK_BACKUP"
+          sudo test -f "$CASHBACK_ROLLBACK_BACKUP/verification.json"
           sudo install -d -m 0700 /opt/stacks/finance-runtime
           sudo install -m 0600 deploy/finance-runtime/finance.env.tpl /opt/stacks/finance-runtime/.env.tpl
           sudo install -m 0750 deploy/finance-runtime/render-env.sh /opt/stacks/finance-runtime/render-env.sh
@@ -268,18 +284,6 @@ jobs:
           sudo install -m 0644 config/transaction-email-sources.json "$stack/transaction-email-sources.json"
           printf 'CASHBACK_DATA_DIR=/opt/stacks/finance-actual/cashback-data\nCASHBACK_IMAGE=%s\n' \
             "$IMAGE_REF" | sudo tee "$stack/.env" >/dev/null
-          if sudo docker ps --format '{{.Names}}' | grep -Fxq finance-cashback-control; then
-            sudo docker exec finance-cashback-control python -c \
-              "import sqlite3; source=sqlite3.connect('/var/lib/cashback-control/cashback-events.sqlite3'); target=sqlite3.connect('/var/lib/cashback-control/pre-deploy-${stamp}.sqlite3'); source.backup(target); target.close(); source.close()"
-          elif sudo test -f /opt/stacks/finance-actual/cashback-data/cashback-events.sqlite3; then
-            sudo cp --preserve=mode,timestamps \
-              /opt/stacks/finance-actual/cashback-data/cashback-events.sqlite3 \
-              "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"
-          fi
-          if sudo test -f "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"; then
-            sudo "$sanitizer" \
-              "/opt/stacks/finance-actual/cashback-data/pre-deploy-${stamp}.sqlite3"
-          fi
 
       - name: Authenticate and pull tested image
         shell: bash

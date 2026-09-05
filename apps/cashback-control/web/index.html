@@ -11,17 +11,19 @@
     <title>Cashback Control</title>
     <link rel="manifest" href="/manifest.webmanifest?v=20260817-1" />
     <link rel="apple-touch-icon" href="/app-icon.svg?v=20260817-1" />
-    <link rel="stylesheet" href="/styles.css?v=20260905-2" />
+    <link rel="stylesheet" href="/styles.css?v=20260905-5" />
   </head>
-  <body data-screen-active="cards">
+  <body data-screen-active="routing">
     <main class="shell">
       <header class="topbar"><h1>Cashback</h1><div class="top-actions"><button id="push-toggle" hidden>Alerts</button><span id="as-of">Syncing…</span></div></header>
-      <nav class="screen-tabs" aria-label="View"><button data-screen-view="cards" aria-selected="true">Buckets</button><button data-screen-view="routing" aria-selected="false">Routing</button></nav>
+      <nav class="screen-tabs" aria-label="View"><button data-screen-view="routing" aria-selected="true">Spend</button><button data-screen-view="cards" aria-selected="false">Cards</button></nav>
+      <section id="attention-section" aria-label="Alerts"><div id="attention"></div></section>
+      <section data-app-screen="routing"><div id="card-summary" aria-label="Card totals"></div></section>
       <section data-app-screen="cards"><div id="cards"></div>
-        <details id="attention-section"><summary>Alerts</summary><div id="attention"></div></details>
         <details id="history-section"><summary>History</summary><select id="period-selector" aria-label="Previous cycle"></select><div id="period-history"></div></details>
       </section>
       <section data-app-screen="routing"><div id="recommendations"></div></section>
-    </main><script src="/app.js?v=20260905-4" defer></script>
+    </main><script src="/app.js?v=20260905-6" defer></script>
   </body>
 </html>
+

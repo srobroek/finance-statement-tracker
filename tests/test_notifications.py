@@ -109,6 +109,44 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(result.accepted_count, 0)
         self.assertIn("PARSE_ERROR:RAKBANK transaction email", result.skipped[0]["reason"])
 
+
+    def test_observed_rakbank_charged_template_preserves_identity_and_aed(self):
+        # Redacted structural fixture from the real issuer template: no private
+        # message ID, merchant, card number, balance, or original body retained.
+        message = {
+            "id": "redacted-rak-charged",
+            "sender": {"emailAddress": {"address": "alerts@rakbank.ae"}},
+            "subject": "An update on your Card transaction",
+            "receivedDateTime": "2026-08-27T01:36:29Z",
+            "bodyPreview": "AED 12.34 is charged on your Credit Card 000000******0000 from REDACTED MERCHANT on 26/08.",
+        }
+        result = parse_outlook_notifications([message], {"0000": "RAK_WORLD"}, self.rules)
+        self.assertEqual(result.accepted_count, 1)
+        event = result.events[0]
+        self.assertEqual(event["source_event_id"], message["id"] + ":0")
+        self.assertEqual(event["amount_aed"], "12.34")
+        self.assertEqual(event["merchant"], "REDACTED MERCHANT")
+        self.assertEqual(event["occurred_at"], "2026-08-26T00:00:00+00:00")
+        self.assertEqual(event["event_type"], "PURCHASE")
+        self.assertEqual(parse_outlook_notifications([message], {"0000": "RAK_WORLD"}, self.rules).events, result.events)
+
+    def test_charged_foreign_and_reversal_skip_without_blocking_aed_batch(self):
+        base = {
+            "sender": {"emailAddress": {"address": "alerts@rakbank.ae"}},
+            "subject": "An update on your Card transaction",
+            "receivedDateTime": "2026-08-27T01:36:29Z",
+        }
+        foreign = {**base, "id": "foreign-charge", "bodyPreview": "EUR 12.34 is charged on your Credit Card 000000******0000 from REDACTED MERCHANT on 26/08. Your combined available balance is AED 50000.00."}
+        reversal = {**base, "id": "reversal", "bodyPreview": "AED 1.00 is reversed on your Credit Card 000000******0000 from REDACTED MERCHANT on 26/08."}
+        valid = {**base, "id": "valid-charge", "bodyPreview": "AED 12.34 is charged on your Credit Card 000000******0000 from REDACTED MERCHANT on 26/08."}
+        result = parse_outlook_notifications([foreign, reversal, valid], {"0000": "RAK_WORLD"}, self.rules)
+        self.assertEqual(result.scanned_count, 3)
+        self.assertEqual(result.accepted_count, 1)
+        self.assertEqual(result.events[0]["source_event_id"], "valid-charge:0")
+        self.assertEqual(result.skipped[0], {"message_id": "foreign-charge", "reason": "MISSING_AED_EQUIVALENT"})
+        self.assertTrue(result.skipped[1]["reason"].startswith("PARSE_ERROR:"))
+        self.assertEqual(result.skipped[1]["message_id"], "reversal")
+
     def test_cli_batch_shape_is_json_serializable(self):
         result = parse_outlook_notifications(
             [self.message], {"8833": "ADCB_CASHBACK"}, self.rules
