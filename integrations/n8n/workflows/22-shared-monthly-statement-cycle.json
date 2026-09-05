@@ -1,533 +1,13 @@
 {
-  "id": "10000000-0000-4000-8000-000000000024",
-  "name": "Finance · Shared Monthly Statement Cycle",
   "active": false,
-  "nodes": [
-    {
-      "id": "22001",
-      "name": "Monthly Cycle Context",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
-      "position": [
-        -1120,
-        0
-      ],
-      "parameters": {
-        "workflowInputs": {
-          "values": [
-            {
-              "name": "cycle_context",
-              "type": "object"
-            },
-            {
-              "name": "deadline_policy",
-              "type": "object"
-            },
-            {
-              "name": "execution_id",
-              "type": "string"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "22002",
-      "name": "Load Trusted Source Contract",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -520,
-        0
-      ],
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_source_contracts",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "source_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
-            },
-            {
-              "keyName": "enabled",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "22003",
-      "name": "Assemble Trusted Acquisition Contract",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -220,
-        0
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst sourceContract = $json;\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
-      }
-    },
-    {
-      "id": "22004",
-      "name": "Acquire Archive and Read Back",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        680,
-        0
-      ],
-      "alwaysOutputData": true,
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000012",
-          "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      }
-    },
-    {
-      "id": "22005",
-      "name": "Initialize Source Cursor via W12",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        80,
-        0
-      ],
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000012",
-          "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "matchingColumns": [],
-          "schema": [],
-          "value": {
-            "operation": "INITIALIZE",
-            "run_id": "={{ $('Assemble Trusted Acquisition Contract').item.json.run_id }}",
-            "source_code": "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}",
-            "config_version": "={{ $('Assemble Trusted Acquisition Contract').item.json.config_version }}",
-            "initial_cursor_value": "={{ $('Assemble Trusted Acquisition Contract').item.json.window_start }}",
-            "initial_cursor_source": "statement-sources",
-            "overlap_seconds": "={{ $('Assemble Trusted Acquisition Contract').item.json.overlap_seconds }}"
-          }
-        }
-      }
-    },
-    {
-      "id": "22006",
-      "name": "Restore Enumeration Request After Cursor Init",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        380,
-        0
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Restore Enumeration Request After Cursor Init. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, initialization = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(initialization.status) || initialization.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { ...source, operation: 'ENUMERATE', cursor_initialization_status: initialization.status, cursor_initialization_version: Number(initialization.cursor_version) } }];\n"
-      }
-    },
-    {
-      "id": "22007",
-      "name": "Statement Found",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        980,
-        0
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "leftValue": "={{ !!$json.onedrive_item_id }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "22008",
-      "name": "Download Archived Source",
-      "type": "n8n-nodes-base.microsoftOneDrive",
-      "typeVersion": 1,
-      "position": [
-        -1120,
-        380
-      ],
-      "parameters": {
-        "resource": "file",
-        "operation": "download",
-        "fileId": "={{ $json.onedrive_item_id }}",
-        "binaryPropertyName": "data"
-      },
-      "credentials": {
-        "microsoftOneDriveOAuth2Api": {
-          "id": "BIND_ONEDRIVE",
-          "name": "Finance OneDrive"
-        }
-      }
-    },
-    {
-      "id": "22009",
-      "name": "Assemble Immutable Pipeline Input",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -820,
-        380
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Assemble Immutable Pipeline Input. Keep this deterministic and fail closed.\nconst c = $('Assemble Trusted Acquisition Contract').first().json, r = $('Acquire Archive and Read Back').first().json;\nreturn [{ json: { ...c, ...r }, binary: $binary }];\n"
-      }
-    },
-    {
-      "id": "22010",
-      "name": "Run Shared Statement Pipeline",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        -520,
-        380
-      ],
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000003",
-          "mode": "list",
-          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        }
-      }
-    },
-    {
-      "id": "22011",
-      "name": "Read Source Cursor Before Commit",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -220,
-        380
-      ],
-      "alwaysOutputData": true,
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_source_cursors",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "source_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}"
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "22012",
-      "name": "Build W12 COMMIT Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        80,
-        380
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Build W12 COMMIT Request. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;\nconst receiptHash = String(pipeline.receipt_sha256 || '');\nif (pipeline.state !== 'SUCCEEDED' || pipeline.terminal_readback_verified !== true || !/^[a-f0-9]{64}$/.test(receiptHash))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED');\nif (archive.archive_ready !== true || archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.receipt_readback_verified !== true || archive.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT');\nconst observedVersion = Number(cursor.cursor_version), sameRun = cursor.committed_run_id === source.run_id, sameWindow = cursor.cursor_value === source.run_upper_bound && cursor.run_upper_bound === source.run_upper_bound;\nif (cursor.source_code !== source.source_code || !Number.isInteger(observedVersion) || observedVersion < 0)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && observedVersion < 1)\n    throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');\nconst expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;\nreturn [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: archive.receipt_readback_verified, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];\n"
-      }
-    },
-    {
-      "id": "22013",
-      "name": "Commit Source Cursor via W12",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        380,
-        380
-      ],
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "10000000-0000-4000-8000-000000000012",
-          "mode": "list",
-          "cachedResultName": "Finance · Sweep Outlook Messages"
-        },
-        "options": {
-          "waitForSubWorkflow": true
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "matchingColumns": [],
-          "schema": [],
-          "value": {
-            "operation": "COMMIT",
-            "run_id": "={{ $('Build W12 COMMIT Request').item.json.run_id }}",
-            "source_code": "={{ $('Build W12 COMMIT Request').item.json.source_code }}",
-            "folder_id": "={{ $('Build W12 COMMIT Request').item.json.folder_id }}",
-            "senders": "={{ $('Build W12 COMMIT Request').item.json.senders }}",
-            "subjects": "={{ $('Build W12 COMMIT Request').item.json.subjects }}",
-            "window_start": "={{ $('Build W12 COMMIT Request').item.json.window_start }}",
-            "run_upper_bound": "={{ $('Build W12 COMMIT Request').item.json.run_upper_bound }}",
-            "expected_cursor_version": "={{ $('Build W12 COMMIT Request').item.json.expected_cursor_version }}",
-            "downstream_receipt_sha256": "={{ $('Build W12 COMMIT Request').item.json.downstream_receipt_sha256 }}",
-            "pagination_exhausted": "={{ $('Build W12 COMMIT Request').item.json.pagination_exhausted }}",
-            "cursor_commit_eligible": "={{ $('Build W12 COMMIT Request').item.json.cursor_commit_eligible }}",
-            "attachment_verification_barrier": "={{ $('Build W12 COMMIT Request').item.json.attachment_verification_barrier }}",
-            "email_evidence_receipt_barrier": "={{ $('Build W12 COMMIT Request').item.json.email_evidence_receipt_barrier }}",
-            "email_evidence_receipts_verified": "={{ $('Build W12 COMMIT Request').item.json.email_evidence_receipts_verified }}",
-            "archive_ready": "={{ $('Build W12 COMMIT Request').item.json.archive_ready }}",
-            "receipt_readback_verified": "={{ $('Build W12 COMMIT Request').item.json.receipt_readback_verified }}",
-            "matched_count": "={{ $('Build W12 COMMIT Request').item.json.matched_count }}",
-            "scanned_count": "={{ $('Build W12 COMMIT Request').item.json.scanned_count }}",
-            "heartbeat": "={{ $('Build W12 COMMIT Request').item.json.heartbeat }}"
-          }
-        }
-      }
-    },
-    {
-      "id": "22014",
-      "name": "Verify W12 COMMIT Terminal Readback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        680,
-        380
-      ],
-      "parameters": {
-        "jsCode": "// Purpose: Verify W12 COMMIT Terminal Readback. Keep this deterministic and fail closed.\nconst request = $('Build W12 COMMIT Request').first().json, result = $json;\nif (result.status !== 'CURSOR_COMMITTED' || result.run_id !== request.run_id || result.source_code !== request.source_code || result.cursor !== request.run_upper_bound || Number(result.cursor_version) !== Number(request.expected_cursor_version) + 1 || result.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...request, ...result, terminal_readback_verified: true, status: 'COMMITTED' } }];\n"
-      }
-    },
-    {
-      "id": "22015",
-      "name": "Upsert Waiting or Deadline Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        980,
-        380
-      ],
-      "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_pipeline_runs",
-          "mode": "name"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
-            },
-            {
-              "keyName": "workflow_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
-            }
-          ]
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
-            "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
-            "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
-            "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
-            "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
-            "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
-            "terminal_readback_verified": false,
-            "updated_at": "={{ $now.toISO() }}"
-          },
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {
-          "dryRun": false
-        }
-      }
-    },
-    {
-      "id": "22016",
-      "name": "Read Back Waiting or Deadline Receipt",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -1120,
-        760
-      ],
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_pipeline_runs",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
-            },
-            {
-              "keyName": "workflow_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
-            }
-          ]
-        },
-        "options": {}
-      }
-    }
-  ],
   "connections": {
-    "Monthly Cycle Context": {
-      "main": [
-        [
-          {
-            "node": "Load Trusted Source Contract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Load Trusted Source Contract": {
-      "main": [
-        [
-          {
-            "node": "Assemble Trusted Acquisition Contract",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Assemble Trusted Acquisition Contract": {
-      "main": [
-        [
-          {
-            "node": "Initialize Source Cursor via W12",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Initialize Source Cursor via W12": {
-      "main": [
-        [
-          {
-            "node": "Restore Enumeration Request After Cursor Init",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Restore Enumeration Request After Cursor Init": {
-      "main": [
-        [
-          {
-            "node": "Acquire Archive and Read Back",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Acquire Archive and Read Back": {
       "main": [
         [
           {
-            "node": "Statement Found",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Statement Found": {
-      "main": [
-        [
-          {
-            "node": "Download Archived Source",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Upsert Waiting or Deadline Receipt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Download Archived Source": {
-      "main": [
-        [
-          {
-            "node": "Assemble Immutable Pipeline Input",
-            "type": "main",
-            "index": 0
+            "index": 0,
+            "node": "Select Verified Monthly Statement",
+            "type": "main"
           }
         ]
       ]
@@ -536,31 +16,20 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Run Shared Statement Pipeline",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
     },
-    "Run Shared Statement Pipeline": {
+    "Assemble Trusted Acquisition Contract": {
       "main": [
         [
           {
-            "node": "Read Source Cursor Before Commit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Source Cursor Before Commit": {
-      "main": [
-        [
-          {
-            "node": "Build W12 COMMIT Request",
-            "type": "main",
-            "index": 0
+            "index": 0,
+            "node": "Initialize Source Cursor via W12",
+            "type": "main"
           }
         ]
       ]
@@ -569,9 +38,9 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Commit Source Cursor via W12",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -580,9 +49,126 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Verify W12 COMMIT Terminal Readback",
-            "type": "main",
-            "index": 0
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Download Archived Source": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SHA-256 Monthly Statement Readback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Initialize Source Cursor via W12": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Restore Enumeration Request After Cursor Init",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Load Trusted Source Contract": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Assemble Trusted Acquisition Contract",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Monthly Cycle Context": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Load Trusted Source Contract",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Read Source Cursor Before Commit": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Build W12 COMMIT Request",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Restore Enumeration Request After Cursor Init": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Acquire Archive and Read Back",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Run Shared Statement Pipeline": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Source Cursor Before Commit",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SHA-256 Monthly Statement Readback": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Assemble Immutable Pipeline Input",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Select Verified Monthly Statement": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Statement Found",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Statement Found": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Download Archived Source",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Upsert Waiting or Deadline Receipt",
+            "type": "main"
           }
         ]
       ]
@@ -591,55 +177,43 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Read Back Waiting or Deadline Receipt",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
     }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "timezone": "Asia/Dubai",
-    "saveDataErrorExecution": "none",
-    "saveDataSuccessExecution": "none",
-    "errorWorkflow": "10000000-0000-4000-8000-000000000016"
-  },
-  "pinData": {},
+  "id": "10000000-0000-4000-8000-000000000024",
   "meta": {
-    "financeWorkflowCode": "SHARED_MONTHLY_STATEMENT_CYCLE",
-    "migrationStatus": "SPEC_ONLY",
-    "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
-    "sourceIdentityOwnedBy": "trusted source contract",
     "callerInputAllowlist": [
       "cycle_context",
       "deadline_policy",
       "execution_id"
     ],
+    "credentialBindings": [
+      {
+        "action_required": true,
+        "configured": false,
+        "placeholder": "BIND_ONEDRIVE"
+      }
+    ],
+    "financeWorkflowCode": "SHARED_MONTHLY_STATEMENT_CYCLE",
+    "importTested": false,
+    "migrationStatus": "SPEC_ONLY",
+    "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
+    "setupRequired": true,
     "sourceCodes": [
       "EI_AMAZON",
       "WIO_CREDIT"
     ],
-    "credentialBindings": [
-      {
-        "placeholder": "BIND_ONEDRIVE",
-        "configured": false,
-        "action_required": true
-      }
-    ],
-    "setupRequired": true,
-    "importTested": false,
+    "sourceIdentityOwnedBy": "trusted source contract",
     "workflowFolder": {
       "id": "f1000000-0000-4000-8000-000000000103",
       "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
-    "workflowTags": [
-      "finance",
-      "setup-required",
-      "inactive"
-    ],
     "workflowInputContract": {
       "schema_version": 1,
       "mapping_mode": "defineBelow",
@@ -718,7 +292,485 @@
           "minLength": 1
         }
       }
+    },
+    "workflowTags": [
+      "finance",
+      "setup-required",
+      "inactive"
+    ]
+  },
+  "name": "Finance · Shared Monthly Statement Cycle",
+  "nodes": [
+    {
+      "id": "22001",
+      "name": "Monthly Cycle Context",
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cycle_context",
+              "type": "object"
+            },
+            {
+              "name": "deadline_policy",
+              "type": "object"
+            },
+            {
+              "name": "execution_id",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "position": [
+        -1120,
+        0
+      ],
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "22002",
+      "name": "Load Trusted Source Contract",
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "finance_source_contracts"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "source_code",
+              "keyValue": "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
+            },
+            {
+              "condition": "eq",
+              "keyName": "enabled",
+              "keyValue": true
+            }
+          ]
+        },
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        -520,
+        0
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "22003",
+      "name": "Assemble Trusted Acquisition Contract",
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst sourceContract = $json;\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
+      },
+      "position": [
+        -220,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "alwaysOutputData": true,
+      "id": "22004",
+      "name": "Acquire Archive and Read Back",
+      "parameters": {
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000012",
+          "mode": "list",
+          "cachedResultName": "Finance · Sweep Outlook Messages"
+        }
+      },
+      "position": [
+        680,
+        0
+      ],
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2
+    },
+    {
+      "id": "22005",
+      "name": "Initialize Source Cursor via W12",
+      "parameters": {
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000012",
+          "mode": "list",
+          "cachedResultName": "Finance · Sweep Outlook Messages"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "config_version": "={{ $('Assemble Trusted Acquisition Contract').item.json.config_version }}",
+            "initial_cursor_source": "statement-sources",
+            "initial_cursor_value": "={{ $('Assemble Trusted Acquisition Contract').item.json.window_start }}",
+            "operation": "INITIALIZE",
+            "overlap_seconds": "={{ $('Assemble Trusted Acquisition Contract').item.json.overlap_seconds }}",
+            "run_id": "={{ $('Assemble Trusted Acquisition Contract').item.json.run_id }}",
+            "source_code": "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}"
+          }
+        }
+      },
+      "position": [
+        80,
+        0
+      ],
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2
+    },
+    {
+      "id": "22006",
+      "name": "Restore Enumeration Request After Cursor Init",
+      "parameters": {
+        "jsCode": "// Purpose: Restore Enumeration Request After Cursor Init. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, initialization = $json;\nif (!['CURSOR_INITIALIZED', 'CURSOR_ALREADY_INITIALIZED'].includes(initialization.status) || initialization.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_TERMINAL_READBACK_REQUIRED');\nreturn [{ json: { ...source, operation: 'ENUMERATE', cursor_initialization_status: initialization.status, cursor_initialization_version: Number(initialization.cursor_version) } }];\n"
+      },
+      "position": [
+        380,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "22007",
+      "name": "Statement Found",
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.onedrive_item_id }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        }
+      },
+      "position": [
+        980,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "BIND_ONEDRIVE",
+          "name": "Finance OneDrive"
+        }
+      },
+      "id": "22008",
+      "name": "Download Archived Source",
+      "parameters": {
+        "binaryPropertyName": "data",
+        "fileId": "={{ $json.onedrive_item_id }}",
+        "operation": "download",
+        "resource": "file"
+      },
+      "position": [
+        -1120,
+        380
+      ],
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1
+    },
+    {
+      "id": "22009",
+      "name": "Assemble Immutable Pipeline Input",
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Immutable Pipeline Input. Keep this deterministic and fail closed.\n// Purpose: Assemble Immutable Pipeline Input. Bind the selected archived PDF to this cycle.\nconst c = $('Assemble Trusted Acquisition Contract').first().json;\nconst r = $('Select Verified Monthly Statement').first().json;\nconst proof = r.monthly_statement;\nif (!proof || $json.monthly_download_sha256 !== proof.document_sha256)\n    throw new Error('MONTHLY_DOWNLOADED_STATEMENT_HASH_MISMATCH');\nreturn [{ json: { ...c, ...r, document_sha256: proof.document_sha256,\n            onedrive_item_id: proof.onedrive_item_id, message_id: proof.source_message_id,\n            source_message_id: proof.source_message_id, attachment_id: proof.source_attachment_id,\n            source_attachment_id: proof.source_attachment_id }, binary: $binary }];\n"
+      },
+      "position": [
+        -820,
+        380
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "22010",
+      "name": "Run Shared Statement Pipeline",
+      "parameters": {
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000003",
+          "mode": "list",
+          "cachedResultName": "Finance · Shared Deterministic Statement Pipeline"
+        }
+      },
+      "position": [
+        -520,
+        380
+      ],
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2
+    },
+    {
+      "alwaysOutputData": true,
+      "id": "22011",
+      "name": "Read Source Cursor Before Commit",
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "finance_source_cursors"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "source_code",
+              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').item.json.source_code }}"
+            }
+          ]
+        },
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        -220,
+        380
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "22012",
+      "name": "Build W12 COMMIT Request",
+      "parameters": {
+        "jsCode": "// Purpose: Build W12 COMMIT Request. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;\nconst receiptHash = String(pipeline.receipt_sha256 || '');\nif (pipeline.state !== 'SUCCEEDED' || pipeline.terminal_readback_verified !== true || pipeline.run_id !== source.run_id || pipeline.source_code !== source.source_code || !/^[a-f0-9]{64}$/.test(receiptHash))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED');\nif (archive.archive_ready !== true || archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.receipt_readback_verified !== true || archive.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT');\nconst archiveHash = String(archive.downstream_receipt_sha256 || '');\nif (!/^[a-f0-9]{64}$/.test(archiveHash))\n    throw new Error('ARCHIVE_COMMIT_RECEIPT_HASH_REQUIRED');\nconst observedVersion = Number(cursor.cursor_version), sameRun = cursor.committed_run_id === source.run_id, sameWindow = cursor.cursor_value === source.run_upper_bound && cursor.run_upper_bound === source.run_upper_bound;\nif (cursor.source_code !== source.source_code || !Number.isInteger(observedVersion) || observedVersion < 0)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && observedVersion < 1)\n    throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');\nconst expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;\nreturn [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: archiveHash, pipeline_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: archive.receipt_readback_verified, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];\n"
+      },
+      "position": [
+        80,
+        380
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "22013",
+      "name": "Commit Source Cursor via W12",
+      "parameters": {
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000012",
+          "mode": "list",
+          "cachedResultName": "Finance · Sweep Outlook Messages"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "archive_ready": "={{ $('Build W12 COMMIT Request').item.json.archive_ready }}",
+            "attachment_verification_barrier": "={{ $('Build W12 COMMIT Request').item.json.attachment_verification_barrier }}",
+            "cursor_commit_eligible": "={{ $('Build W12 COMMIT Request').item.json.cursor_commit_eligible }}",
+            "downstream_receipt_sha256": "={{ $('Build W12 COMMIT Request').item.json.downstream_receipt_sha256 }}",
+            "email_evidence_receipt_barrier": "={{ $('Build W12 COMMIT Request').item.json.email_evidence_receipt_barrier }}",
+            "email_evidence_receipts_verified": "={{ $('Build W12 COMMIT Request').item.json.email_evidence_receipts_verified }}",
+            "expected_cursor_version": "={{ $('Build W12 COMMIT Request').item.json.expected_cursor_version }}",
+            "folder_id": "={{ $('Build W12 COMMIT Request').item.json.folder_id }}",
+            "heartbeat": "={{ $('Build W12 COMMIT Request').item.json.heartbeat }}",
+            "matched_count": "={{ $('Build W12 COMMIT Request').item.json.matched_count }}",
+            "operation": "COMMIT",
+            "pagination_exhausted": "={{ $('Build W12 COMMIT Request').item.json.pagination_exhausted }}",
+            "receipt_readback_verified": "={{ $('Build W12 COMMIT Request').item.json.receipt_readback_verified }}",
+            "run_id": "={{ $('Build W12 COMMIT Request').item.json.run_id }}",
+            "run_upper_bound": "={{ $('Build W12 COMMIT Request').item.json.run_upper_bound }}",
+            "scanned_count": "={{ $('Build W12 COMMIT Request').item.json.scanned_count }}",
+            "senders": "={{ $('Build W12 COMMIT Request').item.json.senders }}",
+            "source_code": "={{ $('Build W12 COMMIT Request').item.json.source_code }}",
+            "subjects": "={{ $('Build W12 COMMIT Request').item.json.subjects }}",
+            "window_start": "={{ $('Build W12 COMMIT Request').item.json.window_start }}"
+          }
+        }
+      },
+      "position": [
+        380,
+        380
+      ],
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2
+    },
+    {
+      "id": "22014",
+      "name": "Verify W12 COMMIT Terminal Readback",
+      "parameters": {
+        "jsCode": "// Purpose: Verify W12 COMMIT Terminal Readback. Keep this deterministic and fail closed.\nconst request = $('Build W12 COMMIT Request').first().json, result = $json;\nif (result.status !== 'CURSOR_COMMITTED' || result.run_id !== request.run_id || result.source_code !== request.source_code || result.cursor !== request.run_upper_bound || Number(result.cursor_version) !== Number(request.expected_cursor_version) + 1 || result.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...request, ...result, terminal_readback_verified: true, status: 'COMMITTED' } }];\n"
+      },
+      "position": [
+        680,
+        380
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "22015",
+      "name": "Upsert Waiting or Deadline Receipt",
+      "parameters": {
+        "columns": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
+            "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
+            "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
+            "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
+            "terminal_readback_verified": false,
+            "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
+            "updated_at": "={{ $now.toISO() }}",
+            "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+          }
+        },
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "finance_pipeline_runs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "run_id",
+              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+            },
+            {
+              "condition": "eq",
+              "keyName": "workflow_code",
+              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+            }
+          ]
+        },
+        "matchType": "allConditions",
+        "operation": "upsert",
+        "options": {
+          "dryRun": false
+        },
+        "resource": "row"
+      },
+      "position": [
+        980,
+        380
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "22016",
+      "name": "Read Back Waiting or Deadline Receipt",
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "finance_pipeline_runs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "run_id",
+              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+            },
+            {
+              "condition": "eq",
+              "keyName": "workflow_code",
+              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+            }
+          ]
+        },
+        "limit": 1,
+        "matchType": "allConditions",
+        "operation": "get",
+        "options": {},
+        "resource": "row",
+        "returnAll": false
+      },
+      "position": [
+        -1120,
+        760
+      ],
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "monthly-select-verified-pdf",
+      "name": "Select Verified Monthly Statement",
+      "parameters": {
+        "jsCode": "// Purpose: Select Verified Monthly Statement. Keep this deterministic and fail closed.\n// Purpose: Select Verified Monthly Statement. Fail before any financial write on ambiguous PDFs.\nconst archive = $json;\nif (archive.archive_ready !== true || archive.receipt_readback_verified !== true\n    || archive.attachment_verification_barrier !== 'VERIFIED' || archive.pagination_exhausted !== true)\n    throw new Error('MONTHLY_ARCHIVE_READBACK_REQUIRED');\nconst proofs = archive.attachment_archive_proof;\nif (!Array.isArray(proofs) || !Array.isArray(archive.attachment_identity_keys))\n    throw new Error('MONTHLY_ATTACHMENT_PROOFS_REQUIRED');\nconst identities = proofs.map(row => row.attachment_identity).sort();\nif (new Set(identities).size !== identities.length\n    || JSON.stringify(identities) !== JSON.stringify(archive.attachment_identity_keys.slice().sort()))\n    throw new Error('MONTHLY_ATTACHMENT_PROOF_COVERAGE_MISMATCH');\nfor (const row of proofs) {\n    if (!row.source_message_id || !row.source_attachment_id\n        || row.attachment_identity !== row.source_message_id + ':' + row.source_attachment_id\n        || !/^[a-f0-9]{64}$/.test(String(row.document_sha256 || '')) || !row.onedrive_item_id\n        || typeof row.is_pdf !== 'boolean' || typeof row.is_inline !== 'boolean')\n        throw new Error('MONTHLY_ATTACHMENT_PROOF_INVALID');\n}\nconst candidates = proofs.filter(row => row.is_pdf && !row.is_inline);\nconst hashes = new Set(candidates.map(row => row.document_sha256));\nif (hashes.size > 1)\n    throw new Error('MONTHLY_STATEMENT_AMBIGUOUS_DISTINCT_PDFS_REVIEW_REQUIRED');\nconst selected = candidates.slice().sort((a, b) => a.attachment_identity.localeCompare(b.attachment_identity))[0];\nreturn [{ json: { ...archive, monthly_statement: selected || null,\n            monthly_statement_source_identities: candidates.map(row => row.attachment_identity).sort(),\n            onedrive_item_id: selected?.onedrive_item_id || null } }];\n"
+      },
+      "position": [
+        830,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "monthly-hash-downloaded-pdf",
+      "name": "SHA-256 Monthly Statement Readback",
+      "parameters": {
+        "action": "hash",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "dataPropertyName": "monthly_download_sha256",
+        "type": "SHA256"
+      },
+      "position": [
+        -970,
+        380
+      ],
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1
     }
+  ],
+  "pinData": {},
+  "settings": {
+    "errorWorkflow": "10000000-0000-4000-8000-000000000016",
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "timezone": "Asia/Dubai"
   },
   "tags": [
     {

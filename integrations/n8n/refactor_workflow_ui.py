@@ -5131,6 +5131,8 @@ def main() -> int:
     ensure_subscription_agent_adapter(workflows)
     ensure_email_enrichment_contract(workflows)
     ensure_statement_projection_contract(workflows)
+    from monthly_archive_contract import ensure_monthly_archive_contract
+    ensure_monthly_archive_contract(workflows)
     assert_monthly_cycle_commit_graph(workflows)
     assert_archive_readback_contract(workflows)
     assert_four_table_bootstrap(workflows)
