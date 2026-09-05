@@ -118,7 +118,7 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 44,
                                    'groups': 19,
                                    'node_ids_sha256': '224f06b5d75af8f5f310ec6af38c7d0b32ae5f59bc39cc24e50e6fab9bb5aff5',
                                    'connections_sha256': '5c676ffec2dd0e3fd3c164560e8a8d0322fa4f705fb55c47bd65a78e988d4048',
-                                   'parameters_sha256': 'eb60135145924a0355945a30212260e8ca48603c16caadad4e7b096f00e502b0',
+                                   'parameters_sha256': 'e113fc8c52f716ff357ea07ec9682c4d45fc5c723be69d4b09fbf49092d2b53c',
                                    'groups_sha256': '946bb8968c5df4f9f4666aa89b25831cc0856d078d40e85e6ca16e407f4113a0'},
  '13-document-extraction-request.json': {'nodes': 8,
                                          'edges': 7,
@@ -198,7 +198,7 @@ CORPUS_SNAPSHOT = {'01-outlook-finance-acquisition.json': {'nodes': 44,
                                             'groups': 0,
                                             'node_ids_sha256': '4139edce4122b5b6476c67496a372bdfa30fe81851e5e11b5e31a0f8437bd188',
                                             'connections_sha256': '25797a678ede54cb5d0406e81df8b547a228dffce175a30dc608025334d6792e',
-                                            'parameters_sha256': '0e24fe02324ec02c233166e4dc387519666f9d10096263d0408e9140da15f989',
+                                            'parameters_sha256': 'be9f3c93c9c148e72ccaab04490ce5a6149a45bef9acbff99f2350e7022e392b',
                                             'groups_sha256': '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'}}
 
 

@@ -71,12 +71,12 @@ CREATE TEMP TABLE finance_canonical_source_contract (
 INSERT INTO finance_canonical_source_contract VALUES (
   '10000000-0000-4000-8000-000000000024',
   'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
-  '0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1',
-  '4f413c5986362dee47db7e1fd39e128d',
+  '5110e10b03750b9ad530f44d8b28c10fa056db31120f18ba379e5d76c2ca8437',
+  'ec3e7cc48ce0bd2d080749060d1bfa59',
   'Finance · Shared Monthly Statement Cycle',
   'Shared Monthly Statement Cycle',
   'SHARED_MONTHLY_STATEMENT_CYCLE',
-  16
+  18
 );
 
 -- Capture the disposable duplicate as a redacted retirement receipt.  The

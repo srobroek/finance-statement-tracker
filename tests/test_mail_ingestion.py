@@ -1232,6 +1232,7 @@ try {
                             pagination_exhausted=True,
                             scanned_count=len(messages),
                             heartbeat=not messages,
+                            downstream_receipt_sha256="b" * 64,
                             archive_ready=True,
                             receipt_readback_verified=True,
                         )
@@ -1402,6 +1403,7 @@ try {
                 replay_downstream.update(
                     pagination_exhausted=True,
                     scanned_count=101,
+                    downstream_receipt_sha256="b" * 64,
                     heartbeat=False,
                     archive_ready=True,
                     receipt_readback_verified=True,
@@ -1685,6 +1687,8 @@ try {
             "email_evidence_receipts_verified": 0,
         }
         pipeline = {
+            "run_id": source["run_id"],
+            "source_code": source["source_code"],
             "state": "SUCCEEDED",
             "terminal_readback_verified": True,
             "receipt_sha256": "a" * 64,
@@ -2632,7 +2636,10 @@ try {
                     "receipt_readback_verified": True,
                     "cursor_commit_eligible": False,
                 }
+                archive["downstream_receipt_sha256"] = "b" * 64
                 pipeline = {
+                    "run_id": source["run_id"],
+                    "source_code": source["source_code"],
                     "state": "SUCCEEDED",
                     "receipt_sha256": "a" * 64,
                     "terminal_readback_verified": True,
