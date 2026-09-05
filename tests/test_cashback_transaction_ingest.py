@@ -155,10 +155,21 @@ class TransactionIngestTests(unittest.TestCase):
                 post(path, {}, token='wrong')
             self.assertEqual(error.exception.code, 401)
             error.exception.close()
-        with self.assertRaises(urllib.error.HTTPError) as error:
-            post('/api/ingest/transaction', {'padding':'x' * 1_000_001})
-        self.assertEqual(error.exception.code, 400)
-        error.exception.close()
+        # Reject excessive Content-Length before sending a body. Sending the
+        # entire payload races the server's intentional early connection close.
+        import http.client
+        oversized = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+        try:
+            oversized.putrequest('POST', '/api/ingest/transaction')
+            oversized.putheader('Authorization', 'Bearer test-token')
+            oversized.putheader('Content-Type', 'application/json')
+            oversized.putheader('Content-Length', '1000001')
+            oversized.endheaders()
+            response = oversized.getresponse()
+            self.assertEqual(response.status, 400)
+            response.read()
+        finally:
+            oversized.close()
         child = post('/api/ingest/transaction', {**self.fields, 'event': self.event})
         self.assertEqual(child['persistence']['inserted'], 1)
         self.assertFalse(child['cursor_committed'])
