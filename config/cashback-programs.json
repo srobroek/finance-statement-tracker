@@ -777,7 +777,7 @@
         "mode": "STATEMENT_ONLY",
         "position_mode": "SPEND",
         "headline": "Reward eligibility unverified",
-        "detail": "Up to 6% Amazon Reward Points requires qualifying Prime membership and eligible Amazon.ae spend. Monthly qualifying spend is limited to the assigned credit limit; membership and limit are not verified."
+        "detail": "Reward eligibility unknown"
       },
       "programme_version": "observed-2026-09-05-v1",
       "effective_start": "2026-09-05",

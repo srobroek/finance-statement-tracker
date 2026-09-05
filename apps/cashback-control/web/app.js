@@ -58,9 +58,6 @@ function cardEvidenceLabel(card) {
 function cardEvidenceNode(card) {
   const node = createNode("div", "source-state");
   node.append(createNode("span", "", cardEvidenceLabel(card)));
-  if (card?.position_mode !== "UNLIMITED" && card?.position_detail) {
-    node.append(createNode("span", "", card.position_detail));
-  }
   if (card?.provenance_reason) node.title = String(card.provenance_reason);
   return node;
 }
@@ -463,7 +460,7 @@ function renderCards(cards) {
           const values = createNode("div");
           values.append(
             createNode("span", "", bucket.code.replaceAll("_", " ")),
-            createNode("b", "", `${money.format(bucket.spend_aed)} · ${card.reward_eligibility_verified === false ? "eligible limit unverified" : "uncapped"}`),
+            createNode("b", "", `${money.format(bucket.spend_aed)} · uncapped`),
           );
           row.append(values);
           bucketList.append(row);
@@ -493,7 +490,7 @@ function renderCards(cards) {
       name.title = card.name;
       summary.append(
         name,
-        createNode("span", "", card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
+        createNode("span", "", `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
       );
       const total = createNode("div", "position-total");
       total.append(createNode("strong", "", money.format(actual)), createNode("span", "", tierPosition.next));
@@ -501,7 +498,7 @@ function renderCards(cards) {
       node.append(header);
       if (tierPosition.ladder) {
         node.append(tierPosition.ladder);
-      } else if (Number(card.safety_target_aed) > 0) {
+      } else {
         const track = createNode("div", "track primary");
         const progress = createNode("i");
         setWidth(progress, percentage);

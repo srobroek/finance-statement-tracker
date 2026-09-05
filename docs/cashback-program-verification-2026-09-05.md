@@ -24,7 +24,7 @@ claim dates describe when these observations were applied to configuration.
 - EI retains its conditional configured 6% rate. Without verified Prime status,
   purchase subtype and assigned credit limit, it exposes reward value as null,
   excludes unsupported routing, and still ingests/displays statement spend.
-  The UI no longer describes current eligible spend as unlimited. Numeric
+  The UI uses a compact unknown-eligibility status and no longer describes current eligible spend as unlimited. Numeric
   reward calculation explicitly rejects unverified eligibility, rather than
   silently returning zero.
 - Undated programme loading now selects today's applicable version. Explicit
