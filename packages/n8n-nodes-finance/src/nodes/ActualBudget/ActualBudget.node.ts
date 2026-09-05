@@ -20,7 +20,9 @@ export class ActualBudget implements INodeType {
       { displayName: 'Operation', name: 'operation', type: 'options', noDataExpression: true, default: 'doctor', options: [
         { name: 'Doctor', value: 'doctor' }, { name: 'Read', value: 'read' }, { name: 'Preflight', value: 'preflight' },
         { name: 'Import', value: 'import' }, { name: 'Verify', value: 'verify' },
+        { name: 'Maintenance Preflight', value: 'maintenancePreflight' }, { name: 'Maintenance Apply', value: 'maintenanceApply' },
       ] },
+      { displayName: 'Approved Plan SHA256', name: 'approvedPlanSha256', type: 'string', noDataExpression: true, default: '', displayOptions: { show: { operation: ['maintenanceApply'] } } },
       { displayName: 'Read Shape', name: 'readShape', type: 'options', noDataExpression: true, default: 'accounts', displayOptions: { show: { operation: ['read'] } }, options: [
         { name: 'Accounts', value: 'accounts' }, { name: 'Categories', value: 'categories' }, { name: 'Transactions by Imported IDs', value: 'transactionsByImportedIds' },
       ] },
@@ -46,6 +48,11 @@ export class ActualBudget implements INodeType {
         assertActualMutationMode(this.getMode());
         result = await session.import(auth, items[index].json.outbox);
       }
+      else if (operation === 'maintenancePreflight') result = await session.maintenancePreflight(auth, items[index].json.maintenance_request);
+      else if (operation === 'maintenanceApply') {
+        assertActualMutationMode(this.getMode());
+        result = await session.maintenanceApply(auth, items[index].json.maintenance_plan, this.getNodeParameter('approvedPlanSha256', index), items[index].json.writer_lease as never);
+      }
       else if (operation === 'verify') result = await session.verify(auth, items[index].json.verification);
       else throw new Error(`Unsupported Actual operation: ${operation}`);
       output.push({ json: { ...items[index].json, actual: result }, pairedItem: index });
@@ -53,3 +60,4 @@ export class ActualBudget implements INodeType {
     return [output];
   }
 }
+
