@@ -115,6 +115,7 @@ const candidate = (card, overrides = {}) => ({
   tier_after: 'TIER_1',
   target_tier: 'TIER_1',
   target_rate_percent: '10',
+  current_tier_rate_percent: '0',
   estimated_net_value_aed: '10',
   estimated_net_return_percent: '10',
   card_spend_aed: '0',
@@ -156,8 +157,27 @@ assert.match(inactiveGraphText, /No eligible card route/);
 assert.doesNotMatch(inactiveGraphText, /Stale Card/);
 
 context.renderDecisionTree([active]);
-assert.match(roots.get('#decision-tree').children[1].textContent, /Conditional target 10%/);
-assert.match(roots.get('#decision-tree').children[1].textContent, /if tier reached/);
+const conditionalText = roots.get('#decision-tree').children[1].textContent;
+assert.match(conditionalText, /10% if tier requirements are met/);
+assert.match(conditionalText, /current tier 0%/);
+assert.doesNotMatch(conditionalText, /est\.|cycle value|unlocks/i);
+assert.match(context.compactReason(active), /100.*more qualifying spend needed/);
+// A hypothetical purchase crossing a tier must not masquerade as earned return.
+const crossing = candidate('ACTIVE_CARD', {
+  estimate_basis: 'CURRENT_TIER', estimated_net_value_aed: '500',
+  estimated_net_return_percent: '500', tier_before: 'TIER_0', tier_after: 'TIER_1',
+});
+assert.match(context.candidateValueLabel(crossing), /if tier requirements are met/);
+assert.doesNotMatch(context.candidateValueLabel(crossing), /500/);
+assert.equal(context.candidateValueLabel(candidate('ACTIVE_CARD', {
+  tier_before: 'TIER_1', current_tier_rate_percent: '3', target_rate_percent: '3',
+  estimated_net_return_percent: '500',
+})), '3% cashback');
+assert.equal(context.candidateValueLabel({}), 'Rate unavailable');
+assert.equal(context.candidateValueLabel({ target_rate_percent: null }), 'Rate unavailable');
+assert.match(context.candidateValueLabel(candidate('ACTIVE_CARD', {
+  purpose: 'THRESHOLD_FILLER', target_rate_percent: '0',
+})), /No direct cashback/);
 ''';
         result = subprocess.run([shutil.which("node"), "-e", script], cwd=ROOT, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)

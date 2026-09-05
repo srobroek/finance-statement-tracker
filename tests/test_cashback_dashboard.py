@@ -147,12 +147,6 @@ class CashbackDashboardPhaseTests(TestCase):
         self.assertIn("#decision-tree", styles)
         self.assertIn("flex: 0 0 auto;", styles)
 
-    def test_web_labels_conditional_target_estimates(self) -> None:
-        app = Path("apps/cashback-control/web/app.js").read_text(encoding="utf-8")
-        self.assertIn('candidate.estimate_basis === "CONDITIONAL_TARGET_TIER"', app)
-        self.assertIn("Conditional target ${rate.toLocaleString", app)
-        self.assertIn("if tier reached", app)
-
     def test_routing_graph_phase_keeps_policy_errors(self) -> None:
         rows = self.rows()
         cards, routing_programs, _ = _build_card_state(
