@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def fixture_dashboard() -> dict:
     cards = []
-    for code, name, spent in (("RAK", "RAK", 4250.25), ("SC", "SimplyCash", 2320.50)):
+    for code, name, spent in (("RAK", "RAK", 4250.25), ("SC", "SimplyCash", 2320.50), ("EI_AMAZON", "EI Amazon", 123.45)):
         cards.append({
             "card": code, "name": name, "short_name": name, "total_spend_aed": spent,
             "tier": "BASE", "safety_target_aed": 5500, "period_end": "2026-09-30",
@@ -28,7 +28,9 @@ def fixture_dashboard() -> dict:
     routes = []
     for code, label in (("GROCERY", "Groceries"), ("DINING", "Dining"),
                         ("TRAVEL", "Travel"), ("FUEL", "Fuel"),
-                        ("APPLE_PAY", "Apple Pay"), ("ONLINE", "Online")):
+                        ("APPLE_PAY", "Apple Pay"), ("ONLINE", "Online"),
+                        ("AMAZON", "Amazon"), ("FOREIGN", "Foreign spend"),
+                        ("UTILITIES", "Utilities")):
         candidates = []
         for order, card in enumerate(cards):
             candidates.append({
@@ -42,6 +44,8 @@ def fixture_dashboard() -> dict:
                 "card_spend_aed": card["total_spend_aed"], "tier_threshold_aed": 5000,
                 "configured_fx_fee_percent": 0,
             })
+        if code == "AMAZON":
+            candidates = [candidates[1], candidates[0], candidates[2]]
         routes.append({"code": code, "label": label, "purchase_type": code, "active": True,
                        "use_card": "RAK", "ranked_cards": candidates})
     return {"currency": "AED", "profile": {"name": "Fictional mobile QA"}, "cards": cards,
@@ -96,3 +100,4 @@ class CashbackMobileBrowserTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+

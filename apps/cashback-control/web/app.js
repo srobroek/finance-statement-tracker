@@ -132,7 +132,7 @@ function tierName(code) {
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
   root.replaceChildren(...(items || []).filter(item => !["PHYSICAL", "PHYSICAL_POS", "FILLER"].includes(String(item.code || item.purchase_type || "").toUpperCase())).map(item => {
-    const routes = item.active === false ? [] : (item.ranked_cards || []).filter(candidate => candidate.card !== "EI_AMAZON");
+    const routes = item.active === false ? [] : (item.ranked_cards || []);
     const node = createNode("details", "route-row");
     const summary = createNode("summary", "route-main");
     const heading = createNode("span", "route-heading");
@@ -220,7 +220,7 @@ function selectScreen(value) {
 
 function renderCardSummary(cards) {
   const root = document.querySelector("#card-summary");
-  root.replaceChildren(...(cards || []).filter(card => card.card !== "EI_AMAZON").map(card => {
+  root.replaceChildren(...(cards || []).map(card => {
     const node = createNode("button", "card-total");
     const next = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
     node.append(createNode("strong", "", card.short_name || card.name), createNode("span", "", exactMoney(card.total_spend_aed || 0)));
@@ -348,7 +348,7 @@ async function setupPushNotifications() {
 
 function renderCards(cards) {
   const root = document.querySelector("#cards");
-  root.replaceChildren(...(cards || []).filter(card => card.card !== "EI_AMAZON").map(card => {
+  root.replaceChildren(...(cards || []).map(card => {
     const node = createNode("article", "position-card");
     node.dataset.card = card.card;
     const details = createNode("details", "card-details");
@@ -387,7 +387,6 @@ function renderCards(cards) {
 }
 
 function renderPeriodHistory(periods) {
-  periods = periods.filter(period => period.card !== "EI_AMAZON");
   const section = document.querySelector("#history-section");
   const selector = document.querySelector("#period-selector");
   const root = document.querySelector("#period-history");
@@ -456,7 +455,6 @@ function renderAttention(payload) {
   const alerts = [];
   (payload.alerts || []).forEach((alert) => {
     const [kind, code] = String(alert.key || "").split(":");
-    if (code === "EI_AMAZON") return;
     const card = (payload.cards || []).find(candidate => candidate.card === code);
     if (["minimum", "close"].includes(kind) && card?.safety_target_aed) {
       const closeDate = card.period_end ? new Intl.DateTimeFormat(undefined, {month:"short", day:"numeric", timeZone:"UTC"}).format(new Date(`${card.period_end}T00:00:00Z`)) : "";
@@ -594,3 +592,4 @@ setupPushNotifications();
 refreshDashboard().catch(() => {});
 
 setInterval(() => refreshDashboard().catch(() => {}), 60_000);
+
