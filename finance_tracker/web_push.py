@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 
 _KEY = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
@@ -17,6 +18,18 @@ _KEY = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _check_time_label(value: object, zone: ZoneInfo) -> str:
+    if not value:
+        return "never"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(zone).strftime("%d %b, %H:%M")
+    except ValueError:
+        return "unavailable"
 
 
 def _subscription(source: dict[str, Any]) -> dict[str, str]:
@@ -278,17 +291,23 @@ def notification_candidates(
     data_status = dashboard.get("data_status") or {}
     if data_status.get("is_stale") and "feed:stale" not in acknowledged:
         last_success = str(data_status.get("last_successful_check_at") or data_status.get("last_successful_ingest_at") or "never")
-        stale_after = int(data_status.get("stale_after_minutes") or 90)
+        check_status = data_status.get("check_status")
+        if check_status in {"OVERDUE", "NEVER_CHECKED"}:
+            zone = ZoneInfo(str(data_status.get("check_timezone") or "UTC"))
+            expected = _check_time_label(data_status.get("expected_due_at"), zone)
+            checked = _check_time_label(last_success if last_success != "never" else None, zone)
+            title = "Cashback check overdue"
+            body = f"Due {expected}; last checked {checked} ({str(zone).split('/')[-1].replace('_', ' ')})."
+        else:
+            title = "Cashback sync needs attention"
+            body = {
+                "SCHEDULE_UNCONFIGURED": "No active check schedule is configured.",
+                "INVALID_CHECK_TIMESTAMP": "The last check time is invalid.",
+            }.get(check_status, "A successful check could not be verified.")
         candidates.append(PushCandidate(
             key=f"feed:stale:{last_success}",
-            title="Cashback feed is stale",
-            body=(
-                (f"The scheduled transaction check is overdue after its {stale_after}-minute grace period. "
-                 if data_status.get("freshness_basis") == "SCHEDULE"
-                 else f"No successful transaction scan was recorded within {stale_after} minutes. ")
-                +
-                "Live card routing may be incomplete."
-            ),
+            title=title,
+            body=body,
             screen="routing",
         ))
 

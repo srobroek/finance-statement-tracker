@@ -85,8 +85,8 @@ class ScheduledSyncHealthTests(TestCase):
                 pushes = [p for p in candidates if p.key.startswith("feed:stale:")]
                 self.assertEqual(bool(pushes), stale)
                 if stale:
-                    self.assertIn("scheduled transaction check", pushes[0].body)
-                    self.assertIn("90-minute grace", pushes[0].body)
+                    self.assertEqual(pushes[0].title, "Cashback check overdue")
+                    self.assertEqual(pushes[0].body, "Due 05 Sep, 08:05; last checked 04 Sep, 08:06 (Dubai).")
                     self.assertNotIn("within 90 minutes", pushes[0].body)
             recovery = {**payload, "completed_at": "2026-09-05T10:00:00+04:00", "cursor": "quiet-day-recovered"}
             receipt = store.create_ingest_receipt(recovery)
