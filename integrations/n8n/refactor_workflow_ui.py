@@ -703,7 +703,7 @@ return [{ json: {
         open_window = node_by_name(caller, "Open Configured Cycle Window")
         cycle_day = int(caller["meta"]["cycleDay"])
         deadline_days = int(caller["meta"].get("deadlineDays", 5))
-        open_window["parameters"]["jsCode"] = f"""// Purpose: Open Configured Cycle Window. Poll the delivery month in Asia/Dubai.
+        open_window["parameters"]["jsCode"] = f"""// Poll the delivery month in Asia/Dubai.
 const now = new Date();
 const cycleDay = {cycle_day}, deadlineDays = {deadline_days};
 const dubai = new Date(now.getTime() + 4 * 60 * 60 * 1000);
