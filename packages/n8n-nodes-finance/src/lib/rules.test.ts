@@ -163,3 +163,29 @@ test('derived conditions use normalized topic and currency instead of stale supp
   for (const flags of [{ transaction_type: 'REFUND' }, { transaction_type: 'REVERSAL' }, { transaction_type: 'PURCHASE', is_refund: true }])
     assert.equal(applyNonRepresentableRules({ ...flags, amount_aed: 100, spend_aed: 100 }, [refund]).reward_bucket, 'eligible');
 });
+
+
+
+test('ledger projection includes Actual-owned classification without changing runtime ownership', () => {
+  const { loadPackagedLedgerRules } = require('./runtime-rules');
+  const { applyLedgerProjectionRules, validateLedgerProjectionRule } = require('./rules');
+  const rules = loadPackagedLedgerRules();
+  const owned = rules.filter((row: {execution_owner: string}) => row.execution_owner === 'ACTUAL');
+  assert.equal(owned.length, 7);
+  for (const rule of owned) {
+    assert.equal(rule.actual_representable, true);
+    assert.throws(() => validateNonRepresentableRule(rule), /N8N_ONLY/);
+    assert.doesNotThrow(() => validateLedgerProjectionRule(rule));
+  }
+  for (const [vendor, category] of [['UNRWA', 'Charity'], ['iSTYLE', 'Electronics']]) {
+    const input = {merchant_raw: vendor, vendor, amount_aed: '10.00', source_direction: 'DEBIT'};
+    assert.equal(applyLedgerProjectionRules(input, rules).category, category);
+    assert.equal(applyLedgerProjectionRules({...input, category: 'Manual', locked_fields: ['category']}, rules).category, 'Manual');
+  }
+  // Actual-owned stages must participate in stage ordering and stop_on_match,
+  // not run as a late patch after tagging/reward rules already consumed category.
+  const charity = owned.find((row: {rule_id: string}) => row.rule_id === 'class-unrwa-charity');
+  const tagging = {...rule, stage: 'TAGGING', match: {any: [{all: [{field: 'category', operator: 'equals', value: 'Charity'}]}]}, actions: [{action: 'add_tag', value: 'charity'}]};
+  assert.deepEqual(applyLedgerProjectionRules({vendor:'UNRWA'}, [tagging, charity]).tags, ['charity']);
+  assert.throws(() => validateLedgerProjectionRule({...charity, actions:[{action:'set',field:'category',value:'Overwrite'}]}), /non-overwriting/);
+});

@@ -163,9 +163,24 @@ function conditionMatches(row: JsonObject, condition: NonRepresentableRule['matc
   return condition.negate ? !matched : matched;
 }
 
+export type LedgerProjectionRule = Omit<NonRepresentableRule, 'execution_owner' | 'actual_representable'> & {
+  execution_owner: 'N8N_ONLY' | 'ACTUAL'; actual_representable: boolean;
+};
+
 export function validateNonRepresentableRule(value: unknown): NonRepresentableRule {
+  return validateRule(value, false) as NonRepresentableRule;
+}
+
+/** Projection preserves ownership metadata; it never installs or changes Actual rules. */
+export function validateLedgerProjectionRule(value: unknown): LedgerProjectionRule {
+  return validateRule(value, true);
+}
+
+function validateRule(value: unknown, projection: boolean): LedgerProjectionRule {
   assertObject(value, 'rule');
-  if (value.schema_version !== 1 || value.execution_owner !== 'N8N_ONLY' || value.actual_representable !== false) {
+  const ownedByN8n = value.execution_owner === 'N8N_ONLY' && value.actual_representable === false;
+  const ownedByActual = projection && value.execution_owner === 'ACTUAL' && value.actual_representable === true;
+  if (value.schema_version !== 1 || (!ownedByN8n && !ownedByActual)) {
     throw new Error('rule must explicitly be owned by N8N_ONLY and non-representable in Actual');
   }
   const stage = requiredString(value.stage, 'rule.stage', 64);
@@ -220,13 +235,25 @@ export function validateNonRepresentableRule(value: unknown): NonRepresentableRu
       if (topicDuringNormalization && !['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'REFUND', 'REVERSAL', 'FEE', 'PURCHASE', 'INCOME', 'INTEREST', 'INVESTMENT'].includes(String(action.value))) throw new Error('transaction_type action has an invalid canonical topic');
     }
   }
-  return value as unknown as NonRepresentableRule;
+  if (ownedByActual && (stage !== 'CLASSIFICATION' || value.actions.some(action => {
+    const row = action as JsonObject;
+    return row.action !== 'set_if_empty' || !['category', 'subcategory'].includes(String(row.field));
+  }))) throw new Error('Actual-owned projection must remain non-overwriting classification');
+  return value as unknown as LedgerProjectionRule;
 }
 
 export function applyNonRepresentableRules(input: unknown, values: unknown[]): JsonObject {
+  return applyRules(input, values, validateNonRepresentableRule);
+}
+
+export function applyLedgerProjectionRules(input: unknown, values: unknown[]): JsonObject {
+  return applyRules(input, values, validateLedgerProjectionRule);
+}
+
+function applyRules(input: unknown, values: unknown[], validate: (value: unknown) => LedgerProjectionRule): JsonObject {
   let result = normalizeTransaction(input);
   const locked = lockedFields(result);
-  const rules = values.map(validateNonRepresentableRule).sort((left, right) => STAGE_ORDER.indexOf(left.stage as never) - STAGE_ORDER.indexOf(right.stage as never) || left.priority - right.priority || left.rule_id.localeCompare(right.rule_id));
+  const rules = values.map(validate).sort((left, right) => STAGE_ORDER.indexOf(left.stage as never) - STAGE_ORDER.indexOf(right.stage as never) || left.priority - right.priority || left.rule_id.localeCompare(right.rule_id));
   let stage = '';
   let stopped = false;
   let topicFinalized = result.transaction_type_locked === true;
@@ -287,3 +314,4 @@ export function assertProtectedFieldsUnchanged(before: unknown, after: unknown):
     if (JSON.stringify(before[field]) !== JSON.stringify(after[field])) throw new Error(`protected field was changed: ${field}`);
   }
 }
+

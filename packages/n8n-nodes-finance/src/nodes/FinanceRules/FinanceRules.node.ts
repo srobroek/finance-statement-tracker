@@ -1,5 +1,5 @@
 import type { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
-import { applyNonRepresentableRules, normalizeTransaction } from '../../lib/rules';
+import { applyLedgerProjectionRules, normalizeTransaction } from '../../lib/rules';
 import { projectStatementToActual } from '../../lib/statements';
 import { loadPackagedLedgerRules, PACKAGED_RULE_SOURCE_SHA256 } from '../../lib/runtime-rules';
 import { assertObject } from '../../lib/contracts';
@@ -44,7 +44,7 @@ export class FinanceRules implements INodeType {
           source_type: row.source_type ?? 'statement',
           channel: row.channel ?? 'UNKNOWN',
         });
-        return operation === 'normalize' ? normalized : applyNonRepresentableRules(normalized, rules);
+        return operation === 'normalize' ? normalized : applyLedgerProjectionRules(normalized, rules);
       });
       result.push({ json: { ...items[index].json, transactions: transformed,
         ...(operation === 'applyNonRepresentableRules' ? { rules_source_sha256: PACKAGED_RULE_SOURCE_SHA256 } : {}) }, pairedItem: index });
@@ -52,3 +52,4 @@ export class FinanceRules implements INodeType {
     return [result];
   }
 }
+

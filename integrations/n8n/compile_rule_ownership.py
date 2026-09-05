@@ -21,6 +21,7 @@ OUT_DIR = ROOT / "integrations" / "n8n" / "generated"
 MANIFEST = OUT_DIR / "rule-ownership-manifest.json"
 N8N_RULES = OUT_DIR / "n8n-runtime-rules.json"
 ACTUAL_RULES = OUT_DIR / "actual-rules.json"
+PACKAGED_PROJECTION_RULES = ROOT / "packages" / "n8n-nodes-finance" / "src" / "generated" / "ledger-projection-rules.json"
 PACKAGED_N8N_RULES = ROOT / "packages" / "n8n-nodes-finance" / "src" / "generated" / "n8n-runtime-rules.json"
 
 CAPABILITY_VERSION = "actual-rule-capability-v1"
@@ -120,6 +121,17 @@ def main() -> int:
     rules = json.loads(SOURCE.read_text(encoding="utf-8"))
     outputs = dict(zip((MANIFEST, N8N_RULES, ACTUAL_RULES), compile_outputs(rules), strict=True))
     outputs[PACKAGED_N8N_RULES] = outputs[N8N_RULES]
+    # Projection predicts every canonical stage before exact Actual readback.
+    # Keep the disjoint mutation/export ownership unchanged on each rule.
+    outputs[PACKAGED_PROJECTION_RULES] = {
+        **{key: value for key, value in outputs[N8N_RULES].items() if key not in {"execution_owner", "rules"}},
+        "artifact_role": "FULL_LEDGER_PROJECTION",
+        "rules": sorted(
+            [rule for output in (outputs[N8N_RULES], outputs[ACTUAL_RULES])
+             for rule in output["rules"] if rule["rule_sets"] == ["FULL_LEDGER"]],
+            key=lambda rule: rule["rule_id"],
+        ),
+    }
     if args.write:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         for path, value in outputs.items():
@@ -134,3 +146,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

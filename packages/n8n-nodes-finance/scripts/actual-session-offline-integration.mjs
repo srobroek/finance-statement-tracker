@@ -21,6 +21,9 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const actual = require('@actual-app/api');
 const { ActualSession } = require('../dist/lib/actual-session.js');
+const { loadPackagedLedgerRules } = require('../dist/lib/runtime-rules.js');
+const { applyLedgerProjectionRules } = require('../dist/lib/rules.js');
+const { projectStatementToActual } = require('../dist/lib/statements.js');
 
 const HISTORY_START = '1900-01-01';
 const HISTORY_END = '2100-12-31';
@@ -318,6 +321,49 @@ async function main() {
     assert.ok(classificationReadback.payees.some(row => row.id === knownPayeeId));
 
 
+
+    // Exercise a real installed Actual-owned set-if-empty classification rule.
+    // Full-ledger projection predicts it before import, so exact verification
+    // never confuses a legitimate native classification with a receipt mismatch.
+    const charityId = await actual.createCategory({name: 'Charity', group_id: groupId});
+    const unrwaId = await actual.createPayee({name: 'UNRWA'});
+    await actual.createRule({stage: null, conditionsOp: 'and',
+      conditions: [{field:'payee', op:'is', value:unrwaId}, {field:'category', op:'is', value:null}],
+      actions: [{field:'category', op:'set', value:charityId}]});
+    await settleActual();
+    const projectionAccount = await createAccount('Offline full ledger projection');
+    const original = {transaction_id:'a'.repeat(24),transaction_date:'2026-07-10',post_date:'2026-07-10',
+      description:'UNRWA',merchant_raw:'UNRWA',vendor:'UNRWA',direction:'DEBIT',source_direction:'DEBIT',
+      amount_aed:'10.00',currency:'AED',transaction_type:'PURCHASE',tags:[]};
+    const classified = applyLedgerProjectionRules(original, loadPackagedLedgerRules());
+    assert.equal(classified.category, 'Charity');
+    const projected = projectStatementToActual({schema_version:1,adapter:'emirates_islamic_v1',
+      period_start:'2026-07-01',period_end:'2026-07-31',transactions:[classified]},
+      await session.read(credential,{shape:'categories'}),credential.syncId);
+    assert.equal(projected[0].category,charityId);
+    assert.equal(projected[0].payee,unrwaId);
+    // A control row without projected category proves the native rule is active.
+    const controlAccount = await createAccount('Offline native classification control');
+    const {category: omittedCategory, ...controlRow} = projected[0];
+    await actual.importTransactions(controlAccount,[{...controlRow,imported_id:'control:unrwa'}]);
+    await settleActual();
+    assert.equal((await rowFor(controlAccount,'control:unrwa')).category,charityId);
+    const projectionOutbox = outbox(projectionAccount,projected);
+    await session.import(credential,projectionOutbox);
+    const projectionVerification = {account_id:projectionAccount,expected_transactions:projected,
+      start_date:'2026-07-01',end_date:'2026-07-31',expected_account_balance:-1000};
+    assert.equal((await session.verify(credential,projectionVerification)).status,'VERIFIED');
+    const importedProjection = await rowFor(projectionAccount,projected[0].imported_id);
+    await actual.updateTransaction(importedProjection.id,{category:categoryId,payee:knownPayeeId,notes:'Manual classification',cleared:false});
+    await settleActual();
+    const manualProjection = await rowFor(projectionAccount,projected[0].imported_id);
+    const replayProjection = await session.import(credential,projectionOutbox);
+    assert.equal(replayProjection.applied_delta,0);
+    assert.equal((await rowsFor(projectionAccount)).length,1);
+    assert.deepEqual(await rowFor(projectionAccount,projected[0].imported_id),manualProjection);
+    assert.equal((await session.verify(credential,{...projectionVerification,
+      preserve_manual_fields_for_ids:[projected[0].imported_id]})).status,'VERIFIED');
+
     // Actual intentionally refuses to re-add a deleted imported ID when
     // reimportDeleted=false. ActualSession therefore fails closed after its
     // authoritative readback; this assertion proves the deleted row is not
@@ -353,6 +399,7 @@ async function main() {
         'new import ID matched manual split without changing parent or child fields',
         'historical ADCB row imported alongside later existing row',
         'statement end-date balance excludes later rows and trusted classification IDs read back',
+        'full ledger projection verifies with active native Actual classification and preserves manual replay',
         'deleted row was not resurrected (session failed closed)',
       ],
     }, null, 2));
@@ -371,3 +418,4 @@ main().catch(error => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
 });
+
