@@ -307,7 +307,29 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
         self.assertTrue(workflow["meta"]["manualOnly"])
         self.assertTrue(workflow["meta"]["setupOnly"])
         self.assertTrue(workflow["meta"]["activationForbidden"])
-        self.assertEqual(set(setup_manifest), {"schema_version", "n8n_version", "contract_status", "import_policy", "activation_forbidden", "workflows"})
+        self.assertEqual(set(setup_manifest), {"schema_version", "n8n_version", "contract_status", "import_policy", "publication_policy", "workflows"})
+        self.assertEqual(setup_manifest["import_policy"], "EXPLICIT_SINGLE_FILE_ONLY")
+        self.assertEqual(setup_manifest["publication_policy"], "PER_WORKFLOW_REVIEWED_DEPENDENCY_ONLY")
+        setup_rows = {row["code"]: row for row in setup_manifest["workflows"]}
+        self.assertEqual(set(setup_rows), {
+            "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP", "MICROSOFT_OAUTH_REFRESH_PROOF", "ADCB_REVIEWED_MAINTENANCE",
+        })
+        self.assertTrue(set(setup_rows).isdisjoint(regular_codes))
+        for setup_code, row in setup_rows.items():
+            exported = load_json(setup_root / row["file"])
+            self.assertIs(exported["active"], False)
+            self.assertTrue(exported["meta"]["setupOnly"])
+            if setup_code != "ADCB_REVIEWED_MAINTENANCE":
+                self.assertIs(row["activation_forbidden"], True)
+                self.assertIs(exported["meta"]["activationForbidden"], True)
+            else:
+                self.assertIs(row["publication_requires_review"], True)
+                self.assertIs(row["schedule_forbidden"], True)
+                self.assertIs(exported["meta"]["publicationRequiresReview"], True)
+                self.assertIs(exported["meta"]["scheduleForbidden"], True)
+                self.assertIs(exported["meta"]["reviewedIntegratedInvocationRequired"], True)
+                triggers = [node["type"] for node in exported["nodes"] if node["type"].endswith("Trigger") or node["type"].endswith("webhook")]
+                self.assertEqual(triggers, ["n8n-nodes-base.executeWorkflowTrigger"])
         assignments = {
             row["name"]: row["value"]
             for row in next(node for node in workflow["nodes"] if node["name"] == "Setup Parameters")["parameters"]["assignments"]["assignments"]
