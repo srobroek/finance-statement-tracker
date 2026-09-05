@@ -34,8 +34,8 @@
       "Food Delivery": "DINING",
       "Flights": "AIRLINE",
       "Accommodation": "HOTEL",
-      "Travel Transport": "TRAVEL",
-      "Travel Activities": "TRAVEL",
+      "Travel Transport": "TRANSPORT",
+      "Travel Activities": "TRAVEL_ACTIVITY",
       "Online Shopping": "GENERAL"
     },
     "merchant_purchase_types": [
@@ -464,7 +464,9 @@
             "DINING",
             "TRAVEL",
             "HOTEL",
-            "AIRLINE"
+            "AIRLINE",
+            "TRANSPORT",
+            "TRAVEL_ACTIVITY"
           ]
         },
         {
@@ -478,7 +480,9 @@
             "DINING",
             "TRAVEL",
             "HOTEL",
-            "AIRLINE"
+            "AIRLINE",
+            "TRANSPORT",
+            "TRAVEL_ACTIVITY"
           ]
         }
       ]
