@@ -46,6 +46,33 @@ async function scenario(writeFails) {
         result = subprocess.run([shutil.which("node"), "-e", script], cwd=ROOT, text=True, capture_output=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_feed_warning_is_shared_and_clears_after_successful_ingest(self):
+        shell = (ROOT / "apps/cashback-control/web/index.html").read_text()
+        warning = next(line for line in shell.splitlines() if 'id="feed-warning"' in line)
+        self.assertNotIn("data-app-screen", warning)
+        script = r'''
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const source = fs.readFileSync('apps/cashback-control/web/app.js', 'utf8');
+const roots = new Map([['#as-of', {}], ['#feed-warning', {}]]);
+const context = vm.createContext({document: {querySelector: key => roots.get(key)}});
+vm.runInContext(source.slice(source.indexOf('function renderStatus('), source.indexOf('function renderRewardDisclosure(')), context);
+const warning = roots.get('#feed-warning');
+context.renderStatus({is_stale: true, last_successful_ingest_at: '2026-08-20T12:00:00Z'});
+assert.equal(warning.hidden, false);
+assert.match(warning.textContent, /Routing and bucket balances may be incomplete/);
+context.renderStatus({is_stale: false, last_successful_ingest_at: '2026-09-05T12:00:00Z'});
+assert.equal(warning.hidden, true);
+assert.equal(warning.textContent, '');
+context.renderStatus({});
+assert.equal(warning.hidden, false);
+assert.match(warning.textContent, /Feed not checked/);
+assert.doesNotMatch(source.slice(source.indexOf('function renderAttention('), source.indexOf('async function setAlertAcknowledgement(')), /feed:stale/);
+'''
+        result = subprocess.run([shutil.which("node"), "-e", script], cwd=ROOT, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_routing_views_keep_inactive_profiles_and_disclose_conditional_targets(self):
         script = r'''
 const fs = require('node:fs');

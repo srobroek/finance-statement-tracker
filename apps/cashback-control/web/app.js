@@ -575,9 +575,6 @@ function renderAttention(payload) {
   const root = document.querySelector("#attention");
   const alerts = [];
   (payload.alerts || []).forEach((alert) => alerts.push(alert));
-  if (payload.data_status?.is_stale) {
-    alerts.push({ key: "feed:stale", title: "Live feed is stale", detail: `No successful ingest recorded within ${payload.data_status.stale_after_minutes} minutes. Recommendations may be incomplete.` });
-  }
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
     alerts.push({ key: "reconciliation:variance", title: `${count} statement variance${count === 1 ? "" : "s"}`, detail: "Notification events did not match the authoritative statement and were excluded from cashback totals." });
@@ -643,6 +640,13 @@ async function setAlertAcknowledgement(alertKey, acknowledged) {
 function renderStatus(status) {
   const root = document.querySelector("#as-of");
   const lastIngest = status?.last_successful_ingest_at;
+  const warning = document.querySelector("#feed-warning");
+  warning.hidden = Boolean(lastIngest) && !status?.is_stale;
+  warning.textContent = !lastIngest
+    ? "Feed not checked. Routing and bucket balances may be incomplete."
+    : status.is_stale
+      ? `Feed is stale. Last checked ${new Date(lastIngest).toLocaleString()}. Routing and bucket balances may be incomplete.`
+      : "";
   root.className = `as-of ${status?.is_stale ? "stale" : "live"}`;
   if (!lastIngest) {
     root.textContent = "Feed not checked";
@@ -669,6 +673,9 @@ function renderDashboardError(error) {
   status.className = "as-of stale";
   status.textContent = "Unavailable";
   status.title = detail;
+  const warning = document.querySelector("#feed-warning");
+  warning.hidden = false;
+  warning.textContent = "Dashboard refresh failed. Routing and bucket balances are unavailable.";
   document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
   document.querySelector("#decision-tree").replaceChildren(emptyState("Decision tree unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
   document.querySelector("#cards").replaceChildren(emptyState("Card positions unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
