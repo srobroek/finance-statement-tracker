@@ -1,4 +1,4 @@
--- n8n 2.37.10.  Idempotent application workflow-folder placement.
+-- n8n 2.36.2.  Idempotent application workflow-folder placement.
 -- Required: psql -v application_project_id='<exact project id>'.
 
 \if :{?application_project_id}

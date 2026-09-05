@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: finance-statement-tracker
+Version: 0.1.0
+Summary: Platform-neutral finance parsing, rules, evidence, and cashback library
+Requires-Python: >=3.11
+Requires-Dist: jsonschema==4.26.0
+Requires-Dist: pyjwt[crypto]>=2.13.0
+Requires-Dist: pywebpush==2.3.0
+Provides-Extra: statements
+Requires-Dist: pdfplumber==0.11.9; extra == "statements"
+Requires-Dist: pypdf==6.16.1; extra == "statements"
+Provides-Extra: test
+Requires-Dist: reportlab==4.4.9; extra == "test"

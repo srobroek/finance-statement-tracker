@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  N8N_IMAGE: ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec
+  N8N_IMAGE: n8nio/n8n:2.36.2@sha256:d4855f107e3cfe552f180ac4128c6c96dd1be75d725ceeea4518bb172eeb1401
 
 concurrency:
   group: n8n-disposable-${{ github.ref }}
@@ -41,10 +41,10 @@ jobs:
           git diff --exit-code -- integrations/n8n/disposable
           python scripts/run-n8n-disposable-runtime.py --validate-only
 
-      - name: Pull pinned stable n8n 2.37.10 runtime
+      - name: Pull pinned n8n 2.36.2 runtime
         run: |
           docker pull "$N8N_IMAGE"
-          test "$(docker run --rm --entrypoint n8n "$N8N_IMAGE" --version)" = "2.37.10"
+          test "$(docker run --rm --entrypoint n8n "$N8N_IMAGE" --version)" = "2.36.2"
 
       - name: Execute replay and failure routes in disposable n8n
         env:

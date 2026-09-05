@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "n8n_version": "2.37.10",
+  "n8n_version": "2.36.2",
   "timezone": "Asia/Dubai",
   "deployment_mode": "regular-postgres-external-runners",
   "contract_status": "SPEC_ONLY",

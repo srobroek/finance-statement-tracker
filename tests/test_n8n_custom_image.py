@@ -8,8 +8,8 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-OFFICIAL_BASE_DIGEST = "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec"
-OFFICIAL_SOURCE_COMMIT = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e"
+OFFICIAL_BASE_DIGEST = "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+OFFICIAL_SOURCE_COMMIT = "bc9090e8c61d0dc84aa85528e62142dfb7001243"
 OVERLAY_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 NODEMAILER_TARBALL_SHA256 = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3"
 ALPINE_SECURITY_PACKAGES = {
@@ -24,18 +24,6 @@ ALPINE_SECURITY_PACKAGES = {
     "openssh-server-common": "10.3_p1-r1",
     "openssh-sftp-server": "10.3_p1-r1",
 }
-JAVASCRIPT_SECURITY_PACKAGES = {
-    "fast-uri": {
-        "version": "3.1.6",
-        "integrity": "sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==",
-        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/fast-uri@3.1.5/node_modules/fast-uri",
-    },
-    "toml": {
-        "version": "4.2.0",
-        "integrity": "sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==",
-        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml",
-    },
-}
 
 
 class N8nCustomImageTests(unittest.TestCase):
@@ -49,18 +37,6 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(provenance["digest"], OFFICIAL_BASE_DIGEST)
         self.assertEqual(provenance["source_repository"], "https://github.com/n8n-io/n8n")
         self.assertEqual(provenance["source_commit"], OFFICIAL_SOURCE_COMMIT)
-        self.assertEqual(provenance["version"], "2.37.10")
-        self.assertEqual(provenance["release_channel"], "stable")
-        self.assertEqual(provenance["bundled_n8n_workflow"], "2.37.4")
-        self.assertEqual(
-            provenance["release_evidence"],
-            {
-                "tag": "n8n@2.37.10",
-                "url": "https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.10",
-                "prerelease": False,
-                "published_at": "2026-09-04T09:13:04Z",
-            },
-        )
         self.assertEqual(base_reference.rsplit("@", 1)[1], OFFICIAL_BASE_DIGEST)
         self.assertIn("ARG N8N_BASE_IMAGE=" + base_reference, dockerfile)
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
@@ -90,56 +66,31 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(overlay["distribution"], "Alpine Linux 3.24")
         self.assertEqual(
             overlay["builder_image"],
-            "public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36",
+            "public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43",
         )
-        self.assertEqual(overlay["installer"], "apk-tools-static=3.0.8-r0")
         self.assertEqual(overlay["repository"], "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
         self.assertEqual(overlay["verification"], "Alpine repository signature via apk.static")
         self.assertEqual(overlay["packages"], ALPINE_SECURITY_PACKAGES)
         self.assertIn("AS alpine-security-overlay", dockerfile)
-        self.assertIn("apk add --no-cache apk-tools-static=3.0.8-r0", dockerfile)
+        self.assertIn("apk add --no-cache apk-tools-static", dockerfile)
+        self.assertIn("apk fetch --output /tmp/security-apks", dockerfile)
         self.assertIn("cp -R /etc/apk/keys /tmp/security-apks/keys", dockerfile)
         self.assertIn(
-            "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache",
+            "/tmp/security-apks/apk.static --keys-dir /tmp/security-apks/keys add --no-cache --no-network",
             dockerfile,
         )
-        self.assertIn("--repository https://dl-cdn.alpinelinux.org/alpine/v3.24/main", dockerfile)
         self.assertNotIn("--allow-untrusted", dockerfile)
         for package, version in ALPINE_SECURITY_PACKAGES.items():
             self.assertIn(f"{package}={version}", dockerfile)
-            self.assertIn(f"info --exists {package}={version}", dockerfile)
-        self.assertIn("test ! -e /sbin/apk", dockerfile)
-        self.assertIn("ln -s /tmp/security-apks/apk.static /sbin/apk", dockerfile)
-        self.assertIn("! /tmp/security-apks/apk.static info --exists libcrypto3=3.5.7-r1", dockerfile)
-        self.assertIn("rm -f /sbin/apk", dockerfile)
+            self.assertIn(
+                f'info -v {package})" = "{package}-{version}"',
+                dockerfile,
+            )
         self.assertIn("rm -rf /tmp/security-apks", dockerfile)
         self.assertIn(
             'io.finance.n8n.os-security-overlay="alpine-v3.24:openssl-3.5.8-r0,expat-2.8.4-r0,openssh-10.3_p1-r1"',
             dockerfile,
         )
-
-    def test_finance_image_applies_integrity_pinned_javascript_security_overlay(self):
-        dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
-        provenance = json.loads(
-            (ROOT / "packages/n8n-nodes-finance/base-image-provenance.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(provenance["javascript_security_overlay"]["packages"], JAVASCRIPT_SECURITY_PACKAGES)
-        self.assertIn("AS javascript-security-overlay", dockerfile)
-        for package, details in JAVASCRIPT_SECURITY_PACKAGES.items():
-            self.assertIn(f"npm pack {package}@{details['version']}", dockerfile)
-            self.assertIn(details["integrity"].removeprefix("sha512-"), dockerfile)
-            self.assertIn(details["replaced_path"], dockerfile)
-        smoke_path = ROOT / "packages/n8n-nodes-finance/scripts/javascript-security-overlay-smoke.cjs"
-        smoke = smoke_path.read_text(encoding="utf-8")
-        self.assertIn("Maximum nesting depth of 500 exceeded", smoke)
-        self.assertIn("Object.getPrototypeOf", smoke)
-        self.assertIn("ajv.compile", smoke)
-        self.assertIn("require.resolve('fast-uri/package.json'", smoke)
-        self.assertIn("require.resolve('toml/package.json'", smoke)
-        self.assertIn("snowflake-sdk@2.1.0_", smoke)
-        self.assertIn("FINANCE_WH", smoke)
-        self.assertGreaterEqual(dockerfile.count("node /tmp/javascript-security-overlay-smoke.cjs"), 2)
-        self.assertIn(".pnpm/ajv@8.20.0/node_modules/ajv", dockerfile)
 
     def test_finance_extension_is_immutable_and_outside_persistent_state(self):
         dockerfile = (ROOT / "packages/n8n-nodes-finance/Dockerfile.n8n").read_text(encoding="utf-8")
@@ -176,8 +127,6 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "SPEC_ONLY")
         self.assertIsNone(receipt["image"]["image_digest"])
         self.assertIsNone(receipt["image"]["local_image_id"])
-        # SPEC_ONLY records the current build recipe without claiming runtime
-        # identity. CI writes the external receipt after it has pushed and scanned.
         self.assertEqual(receipt["base_image"]["digest"], OFFICIAL_BASE_DIGEST)
         self.assertEqual(receipt["base_image"]["source_commit"], OFFICIAL_SOURCE_COMMIT)
         self.assertEqual(

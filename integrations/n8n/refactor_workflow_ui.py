@@ -4739,7 +4739,7 @@ def layout(workflow: dict) -> None:
     remove_generated_stage_notes(workflow)
     row_count = max(1, (len(ordered) + columns - 1) // columns)
 
-    # Canvas Groups are native n8n 2.37.10 metadata. Keep groups limited to
+    # Canvas Groups are native n8n 2.36.2 metadata. Keep groups limited to
     # connected, non-trigger components inside each documented stage so the
     # UI can collapse or describe them without changing executable topology.
     trigger_types = {

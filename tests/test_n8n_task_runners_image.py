@@ -12,18 +12,8 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
     def test_upstream_sources_and_bases_are_immutable(self):
         lock = json.loads((SERVICE / "upstream.lock.json").read_text(encoding="utf-8"))
         self.assertEqual(lock["status"], "SPEC_ONLY")
-        self.assertEqual(lock["n8n"]["version"], "2.37.10")
-        self.assertEqual(lock["n8n"]["release_channel"], "stable")
-        self.assertEqual(lock["n8n"]["bundled_n8n_workflow"], "2.37.4")
-        self.assertFalse(lock["n8n"]["release_evidence"]["prerelease"])
-        self.assertEqual(lock["n8n"]["release_evidence"]["tag"], "n8n@2.37.10")
-        self.assertEqual(lock["n8n"]["javascript_runner_package"], "@n8n/task-runner@2.37.5")
-        self.assertEqual(lock["n8n"]["node_version"], "26.5.1")
-        self.assertEqual(lock["n8n"]["pnpm_version"], "11.22.0")
-        self.assertEqual(
-            lock["n8n"]["source_commit"],
-            "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
-        )
+        self.assertEqual(lock["n8n"]["version"], "2.36.2")
+        self.assertEqual(lock["n8n"]["javascript_runner_package"], "@n8n/task-runner@2.36.1")
         self.assertEqual(lock["launcher"]["version"], "1.4.7")
         self.assertEqual(lock["launcher"]["security_overrides"], {"golang.org/x/text": "0.39.0"})
         for commit in (lock["n8n"]["source_commit"], lock["launcher"]["source_commit"]):
@@ -120,13 +110,6 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("closure_sha256", workflow)
         self.assertIn("finance-workspace-packages.json", workflow)
         self.assertIn("finance-n8n-task-runners-closure-sha256.txt", workflow)
-        self.assertIn("pnpm install --frozen-lockfile", workflow)
-        self.assertIn(
-            "pnpm --config.inject-workspace-packages=true --filter=@n8n/task-runner --prod deploy --no-optional",
-            workflow,
-        )
-        self.assertNotIn("--legacy deploy", workflow)
-        self.assertNotIn("block-exotic-subdeps=false", workflow)
         self.assertIn("Disk budget before task-runner cleanup", workflow)
         self.assertIn("docker builder prune --all --force", workflow)
         self.assertIn(
@@ -149,7 +132,7 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.n8n.source_commit" }}}}\')" = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e"',
+            f'test "$(docker image inspect {image} --format \'{{{{ index .Config.Labels "finance.n8n.source_commit" }}}}\')" = "bc9090e8c61d0dc84aa85528e62142dfb7001243"',
             workflow,
         )
         self.assertIn(

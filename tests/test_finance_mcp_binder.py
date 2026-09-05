@@ -95,7 +95,7 @@ class FinanceMcpBinderTests(unittest.TestCase):
                 state_path = pathlib.Path(os.environ['STATE'])
                 state = json.loads(state_path.read_text()) if state_path.exists() else {'credential': False, 'workflow': False, 'owner': False, 'binding': False}
                 if sys.argv[1:] == ['--version']:
-                    print('2.37.10')
+                    print('2.36.2')
                     raise SystemExit(0)
                 if sys.argv[1] not in ('import:credentials', 'import:workflow'):
                     raise SystemExit(2)
@@ -211,7 +211,7 @@ class FinanceMcpBinderTests(unittest.TestCase):
                 state_path = pathlib.Path(os.environ['STATE'])
                 state = json.loads(state_path.read_text()) if state_path.exists() else {'credential': False, 'workflow': False, 'owner': False, 'binding': False}
                 if sys.argv[1:] == ['--version']:
-                    print('2.37.10'); raise SystemExit(0)
+                    print('2.36.2'); raise SystemExit(0)
                 with pathlib.Path(os.environ['IMPORTS']).open('a') as stream:
                     stream.write(' '.join(sys.argv[1:]) + '\\n')
                 if sys.argv[1] == 'import:credentials': state['credential'] = True
@@ -319,7 +319,7 @@ class FinanceMcpBinderTests(unittest.TestCase):
             executable(root / "n8n", """
                 import json, os, pathlib, sys
                 if sys.argv[1:] == ['--version']:
-                    print('2.37.10'); raise SystemExit(0)
+                    print('2.36.2'); raise SystemExit(0)
                 state_path = pathlib.Path(os.environ['STATE'])
                 state = json.loads(state_path.read_text()) if state_path.exists() else {'credential': False, 'workflow': False, 'owner': False, 'binding': False}
                 with pathlib.Path(os.environ['IMPORTS']).open('a') as stream:

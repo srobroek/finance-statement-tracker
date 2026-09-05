@@ -49,7 +49,7 @@ checks before a workflow leaves `SPEC_ONLY`:
 1. Bind Outlook and OneDrive credentials.
 2. Seed Data Tables from versioned configuration.
 3. Install the reviewed finance custom nodes.
-4. Import every export into n8n image 2.37.10 with no unknown nodes.
+4. Import every export into n8n image 2.36.2 with no unknown nodes.
 5. Run the resilience and security fixture tests.
 6. Read each terminal receipt from Postgres or Data Tables.
 7. Keep schedules and mutation workflows inactive until promotion gates pass.
@@ -196,10 +196,8 @@ The source-derived disposable W19 graph passed two executions in the pinned
 n8n 2.36.2 image, including all 11 creates, seven disabled template writes,
 four-target schema/ID readback, and second-run no-op behavior ([run
 33915709749](https://github.com/srobroek/finance-statement-tracker/actions/runs/33915709749/job/101162262917)).
-That run remains historical evidence for 2.36.2. A fresh disposable replay in
-the pinned stable n8n 2.37.10 image is required before treating the stable
-candidate as runtime-validated. The fixture replaced the manual trigger with
-an isolated webhook and removed the external error-workflow binding, so this
-is not an unmodified production import or production-host validation. It
-checked returned upsert rows but did not independently read the seeded rows
-back. This manifest and export are specifications, not runtime evidence.
+The fixture replaced the manual trigger with an isolated webhook and removed
+the external error-workflow binding, so this is not an unmodified production
+import or production-host validation. It checked returned upsert rows but did
+not independently read the seeded rows back. This manifest and export are
+specifications, not runtime evidence.

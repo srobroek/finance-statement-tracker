@@ -8,10 +8,10 @@
     "local_image_id": null
   },
   "base_image": {
-    "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
-    "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
     "source_repository": "https://github.com/n8n-io/n8n",
-    "source_commit": "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
+    "source_commit": "bc9090e8c61d0dc84aa85528e62142dfb7001243",
     "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json",
     "nodemailer_overlay": {
       "package": "nodemailer@9.0.1",

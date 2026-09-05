@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "n8n_version": "2.37.10",
+  "n8n_version": "2.36.2",
   "contract_status": "SETUP_ONLY",
   "import_policy": "EXPLICIT_SINGLE_FILE_ONLY",
   "activation_forbidden": true,

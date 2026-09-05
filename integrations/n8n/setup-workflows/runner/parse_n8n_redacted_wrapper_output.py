@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract one exact redacted receipt from allowlisted n8n 2.37.10 startup output."""
+"""Extract one exact redacted receipt from allowlisted n8n 2.36.2 startup output."""
 
 from __future__ import annotations
 

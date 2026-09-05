@@ -1,0 +1,2 @@
+[console_scripts]
+finance-toolkit = finance_tracker.cli:main

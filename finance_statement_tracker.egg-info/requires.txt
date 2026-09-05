@@ -1,0 +1,10 @@
+jsonschema==4.26.0
+pyjwt[crypto]>=2.13.0
+pywebpush==2.3.0
+
+[statements]
+pdfplumber==0.11.9
+pypdf==6.16.1
+
+[test]
+reportlab==4.4.9
