@@ -446,7 +446,7 @@ Closing balance (Total to pay) -25.00
             {(candidate["card"], candidate["bucket"], candidate["purpose"]) for candidate in grocery["ranked_cards"]},
         )
 
-    def test_grocery_graph_prioritizes_under_pace_sc_over_rak_tier_unlock(self) -> None:
+    def test_grocery_graph_prioritizes_under_pace_sc_without_simulated_tier_unlock(self) -> None:
         dashboard = cashback_dashboard(
             configured_programs(date(2026, 8, 16)),
             [
@@ -469,21 +469,21 @@ Closing balance (Total to pay) -25.00
             for candidate in grocery["ranked_cards"]
             if (candidate["card"], candidate["bucket"]) == ("RAK_WORLD", "RAK_EWALLET")
         )
-        self.assertEqual((rak_unlock["tier_before"], rak_unlock["tier_after"]), ("BASE", "ENHANCED"))
+        self.assertEqual((rak_unlock["tier_before"], rak_unlock["tier_after"]), ("BASE", "BASE"))
         self.assertEqual(rak_unlock["pace_status"], "OVER")
-        self.assertGreater(
+        self.assertLess(
             Decimal(rak_unlock["estimated_net_value_aed"]),
             Decimal(preferred["estimated_net_value_aed"]),
         )
         self.assertEqual(grocery["avoid_cards"], ["RAK_WORLD"])
         travel = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "TRAVEL")
-        self.assertEqual(travel["ranked_cards"][0]["card"], "SC_PLATINUM_X")
-        self.assertNotIn("RAK_TRAVEL", {candidate["bucket"] for candidate in travel["ranked_cards"]})
+        self.assertEqual(travel["ranked_cards"][0]["card"], "RAK_WORLD")
+        self.assertIn("RAK_TRAVEL", {candidate["bucket"] for candidate in travel["ranked_cards"]})
         self.assertIn(
             ("RAK_WORLD", "RAK_STANDARD", "THRESHOLD_FILLER"),
             {(candidate["card"], candidate["bucket"], candidate["purpose"]) for candidate in travel["ranked_cards"]},
         )
-        self.assertEqual(travel["avoid_cards"], ["RAK_WORLD"])
+        self.assertEqual(travel["avoid_cards"], ["SC_PLATINUM_X"])
 
     def test_grocery_graph_uses_sc_filler_when_reward_buckets_are_full(self) -> None:
         dashboard = cashback_dashboard(

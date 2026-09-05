@@ -49,19 +49,6 @@ function compactCardLabel(code) {
   return shortCardNames.get(code) || cardLabel(code);
 }
 
-function cardEvidenceLabel(card) {
-  return String(card?.provenance_authority || "").toUpperCase() === "AUTHORITATIVE"
-    ? "Issuer terms verified"
-    : "Card terms not fully verified";
-}
-
-function cardEvidenceNode(card) {
-  const node = createNode("div", "source-state");
-  node.append(createNode("span", "", cardEvidenceLabel(card)));
-  if (card?.provenance_reason) node.title = String(card.provenance_reason);
-  return node;
-}
-
 function compactMoney(value) {
   const amount = Number(value);
   if (amount >= 1000) return `${baseCurrency} ${(amount / 1000).toFixed(amount % 1000 ? 1 : 0)}k`;
@@ -74,53 +61,12 @@ function exactMoney(value) {
   }).format(Number(value));
 }
 
-function tierLabel(tier) {
-  const percentage = tier.code.match(/^TIER_(\d+)$/)?.[1];
-  return percentage ? `${percentage}%` : tier.code.replaceAll("_", " ");
-}
-
-function renderTierPosition(card, actual) {
-  const tiers = (card.tiers || []).filter((tier) => Number(tier.minimum_spend_aed) > 0);
-  if (tiers.length < 2) return { next: card.safety_target_aed ? `/ ${compactMoney(card.safety_target_aed)}` : "this cycle", ladder: null };
-  const lastThreshold = Number(tiers.at(-1).minimum_spend_aed);
-  const nextTier = tiers.find((tier) => !tier.met);
-  const ladder = createNode("div", "tier-ladder");
-  const track = createNode("div", "track");
-  const progress = createNode("i");
-  setWidth(progress, Math.min(100, actual / lastThreshold * 100));
-  track.append(progress);
-  ladder.append(track);
-  tiers.forEach((tier) => {
-    const position = Math.min(100, Number(tier.minimum_spend_aed) / lastThreshold * 100);
-    const marker = createNode("span", `tier-marker${tier.met ? " met" : ""}`);
-    marker.style.left = `${position}%`;
-    marker.append(
-      createNode("i"),
-      createNode("b", "", tierLabel(tier)),
-      createNode("small", "", compactMoney(tier.minimum_spend_aed)),
-    );
-    ladder.append(marker);
-  });
-  return {
-    next: nextTier ? `Next ${tierLabel(nextTier)} at ${compactMoney(nextTier.minimum_spend_aed)}` : `${tierLabel(tiers.at(-1))} spend target reached`,
-    ladder,
-  };
-}
-
 function typeLabel(item) {
   if (item.label) return item.label;
   return (item.purchase_type || item.channel || "Spend")
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function compactReason(item) {
-  const preferred = item.ranked_cards?.[0];
-  if (!preferred) return item.reason || "No eligible card route";
-  const remaining = Number(preferred.tier_remaining_aed);
-  const gap = remaining > 0 ? ` · ${exactMoney(remaining)} more qualifying spend needed` : "";
-  return candidateValueLabel(preferred) + gap;
 }
 
 function routeHeading(item, candidate, compact = false) {
@@ -156,7 +102,7 @@ function candidateRewardRateLabel(candidate) {
     return Number.isFinite(target) ? `${formatRate(target)} cashback` : "Rate unavailable";
   }
   if (candidate.purpose === "THRESHOLD_FILLER" && target === 0) {
-    return "No direct cashback · counts toward tier spend";
+    return "Tier spend only";
   }
   // Routing values simulate a configured purchase amount and can include
   // rewards unlocked on earlier spend. Show rates, never those amounts as
@@ -164,8 +110,8 @@ function candidateRewardRateLabel(candidate) {
   const targetUnmet = candidate.estimate_basis === "CONDITIONAL_TARGET_TIER"
     || (candidate.target_tier && candidate.tier_before !== candidate.target_tier);
   if (targetUnmet && Number.isFinite(target)) {
-    const currentText = Number.isFinite(current) && current !== target ? ` · current tier ${formatRate(current)}` : "";
-    return `${formatRate(target)} if tier requirements are met${currentText}`;
+    const currentText = Number.isFinite(current) && current !== target ? ` · now ${formatRate(current)}` : "";
+    return `${formatRate(target)} at target tier${currentText}`;
   }
   const rate = Number.isFinite(current) ? current : target;
   return Number.isFinite(rate) ? `${formatRate(rate)} cashback` : "Rate unavailable";
@@ -176,164 +122,38 @@ function bucketLabel(code) {
 }
 
 function tierName(code) {
-  return code.replaceAll("_", " ").replace(/^TIER (\d+)$/, "$1% tier").toLowerCase();
+  return ({BASE: "Standard tier", BELOW_MIN: "Minimum not met", ENHANCED: "Higher tier", STANDARD: "Standard tier"})[code] || code.replaceAll("_", " ").replace(/^TIER (\d+)$/, "$1% tier");
 }
 
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
-  const routeItems = Array.isArray(items) ? items : [];
-  if (!routeItems.length) {
-    root.replaceChildren(emptyState("No routing recommendations yet", "No configured card routes are available."));
-    return;
-  }
-  root.replaceChildren(
-    ...routeItems.map((item) => {
-      const node = document.createElement("details");
-      node.className = "route-row";
-      const preferred = item.ranked_cards?.[0];
-      const hasRoute = item.active !== false && Boolean(preferred);
-      node.classList.toggle("unavailable", !hasRoute);
-      const useLabel = hasRoute ? routeHeading(item, preferred, true) : "No eligible route";
-      const fullUseLabel = hasRoute ? routeHeading(item, preferred) : "No eligible card route";
-      const summary = createNode("summary", "route-main");
-      summary.setAttribute(
-        "aria-label",
-        `${typeLabel(item)}: ${fullUseLabel}. Tap for routing details.`,
-      );
-      summary.append(createNode("span", "route-type", typeLabel(item)));
-
-      const cards = createNode("span", "route-cards");
-      const use = createNode("strong", `card-choice ${hasRoute ? "use" : "unavailable"}`, useLabel);
-      use.dataset.short = useLabel;
-      use.title = fullUseLabel;
-      cards.append(use);
-
-      summary.append(cards);
-
-      const reason = createNode("div", "route-reason");
-      reason.append(createNode("span", "", "Why"));
-      const reasonText = createNode("p");
-      if (hasRoute) {
-        reasonText.append(document.createTextNode(compactReason(item)));
-      } else {
-        reasonText.append(createNode("b", "", "No eligible card route"));
-        reasonText.append(document.createTextNode(". This spend type currently has no card that satisfies the configured rules."));
-      }
-      reason.append(reasonText);
-      node.append(summary, reason);
-      return node;
-    }),
-  );
-}
-
-function renderDecisionTree(items) {
-  const root = document.querySelector("#decision-tree");
-  const routeItems = Array.isArray(items) ? items : [];
-  const key = (item) => item.code || `${item.purchase_type}:${item.channel}:${item.currency}`;
-  const previous = root.dataset.selectedKey;
-  root.replaceChildren();
-  const selectorLabel = createNode("label", "graph-selector");
-  selectorLabel.append(createNode("span", "", "Spend type"));
-  const selector = createNode("select");
-  selector.setAttribute("aria-label", "Decision-tree spend type");
-  routeItems.forEach((item) => {
-    const option = createNode("option", "", typeLabel(item));
-    option.value = key(item);
-    selector.append(option);
-  });
-  selectorLabel.append(selector);
-  const graph = createNode("div", "spend-graph");
-  root.append(selectorLabel, graph);
-  if (!routeItems.length) {
-    root.replaceChildren(emptyState("Decision tree unavailable", "There are no configured routing rules to display."));
-    return;
-  }
-  if (routeItems.some((item) => key(item) === previous)) selector.value = previous;
-
-  const show = () => {
-    const item = routeItems.find((candidate) => key(candidate) === selector.value) || routeItems[0];
-    if (!item) return;
-    root.dataset.selectedKey = key(item);
-    const candidates = item.active === false ? [] : (item.ranked_cards || []).map((candidate) => {
-      const cap = candidate.bucket_cap_aed == null ? null : Number(candidate.bucket_cap_aed);
-      const remaining = candidate.bucket_remaining_aed == null ? null : Number(candidate.bucket_remaining_aed);
-      const threshold = Number(candidate.tier_threshold_aed);
-      const method = shortPaymentMethod(candidate.payment_channel);
-      const bucketText = candidate.position_mode === "UNLIMITED"
-        ? `${method} · no cashback cap`
-        : cap == null
-        ? `${method} · ${bucketLabel(candidate.bucket)} · ${exactMoney(candidate.bucket_spend_aed)} · uncapped`
-        : `${method} · ${bucketLabel(candidate.bucket)} ${exactMoney(candidate.bucket_spend_aed)}/${exactMoney(cap)} · ${exactMoney(remaining)} left`;
-      const tierText = candidate.position_mode === "UNLIMITED"
-        ? "No minimum spend · statement-only totals"
-        : threshold > 0
-        ? `${exactMoney(candidate.card_spend_aed)} / ${exactMoney(threshold)} qualifying spend toward target tier · ${exactMoney(candidate.tier_remaining_aed)} to go`
-        : `${tierName(candidate.target_tier)} has no minimum spend`;
-      const candidateNode = createNode("li", `candidate-node ${candidate.status.toLowerCase()}`);
-      const rank = createNode("div", "candidate-rank");
-      rank.append(createNode("b", "", candidate.order));
-      const candidateCard = createNode("div", "candidate-card");
-      const candidateName = createNode("strong", "", compactCardLabel(candidate.card));
-      candidateName.title = cardLabel(candidate.card);
-      candidateCard.append(candidateName, createNode("span", "", bucketText));
-      const logic = createNode("div", "candidate-logic");
-      logic.append(
-        createNode("b", "", candidateValueLabel(candidate)),
-        createNode("span", "", tierText),
-      );
-      candidateNode.append(rank, candidateCard, logic);
-      return candidateNode;
+  root.replaceChildren(...(items || []).map(item => {
+    const routes = item.active === false ? [] : item.ranked_cards || [];
+    const node = createNode("details", "route-row");
+    const summary = createNode("summary", "route-main");
+    summary.append(createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", routes.length ? routeHeading(item, routes[0], true) : "No route"));
+    node.append(summary);
+    const list = createNode("ol", "route-options");
+    routes.forEach(candidate => {
+      const row = createNode("li");
+      row.append(createNode("strong", "", routeHeading(item, candidate, true)), createNode("span", "", candidateValueLabel(candidate)));
+      if (candidate.bucket_remaining_aed != null) row.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} left`));
+      if (Number(candidate.tier_remaining_aed) > 0) row.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
+      list.append(row);
     });
-    const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
-    const header = createNode("header");
-    header.append(
-      createNode("span", "", methods ? `${methods} · ${item.currency}` : `${item.currency}`),
-      createNode("strong", "", `${typeLabel(item)} routing order`),
-      createNode("small", "", "Start with the first card for the checked amount. Change the purchase amount to recheck remaining bucket capacity."),
-    );
-    if (!candidates.length) {
-      graph.replaceChildren(header, emptyState("No eligible card route", "This spend type currently has no card that satisfies the configured rules."));
-      return;
-    }
-    const list = createNode("ol");
-    list.append(...candidates);
-    graph.replaceChildren(header, list);
-  };
-  selector.addEventListener("change", show);
-  show();
-}
-
-function setupRoutingViews() {
-  document.querySelectorAll("[data-routing-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const view = button.dataset.routingView;
-      document.querySelector("#recommendations-view").hidden = view !== "list";
-      document.querySelector("#decision-tree").hidden = view !== "tree";
-      document.querySelectorAll("[data-routing-view]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
-    });
-  });
+    node.append(list);
+    return node;
+  }));
 }
 
 function setupScreenViews() {
-  const mobile = window.matchMedia("(max-width: 599px)");
   const buttons = [...document.querySelectorAll("[data-screen-view]")];
-  const title = document.querySelector("#screen-title");
-  const select = (screen) => {
-    if (!mobile.matches) {
-      document.body.removeAttribute("data-screen-active");
-      title.textContent = "Which card?";
-      return;
-    }
-    const selected = buttons.find((button) => button.dataset.screenView === screen) || buttons[0];
-    document.body.dataset.screenActive = selected.dataset.screenView;
-    title.textContent = selected.dataset.screenTitle;
-    buttons.forEach((button) => button.setAttribute("aria-selected", String(button === selected)));
-    window.scrollTo(0, 0);
+  const select = value => {
+    document.body.dataset.screenActive = value;
+    buttons.forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
   };
-  buttons.forEach((button) => button.addEventListener("click", () => select(button.dataset.screenView)));
-  mobile.addEventListener("change", () => select(document.body.dataset.screenActive || "routing"));
-  const requested = new URLSearchParams(window.location.search).get("screen");
-  select(requested || document.body.dataset.screenActive || "routing");
+  buttons.forEach(button => button.addEventListener("click", () => select(button.dataset.screenView)));
+  select("cards");
 }
 
 function applicationServerKey(value) {
@@ -369,13 +189,7 @@ async function setupPushNotifications() {
     const response = await fetch("/api/push/config", { cache: "no-store" });
     const config = await response.json();
     if (!response.ok || !config.enabled || !("Notification" in window)) return;
-    if (!isInstalledApp()) {
-      button.hidden = false;
-      button.disabled = true;
-      button.textContent = "Install app for alerts";
-      button.title = "Add Cashback to the Home Screen, then enable alerts from the installed app.";
-      return;
-    }
+    if (!isInstalledApp()) return;
     const manager = await browserPushManager();
     if (!manager) return;
     await updatePushButton(button, config, manager);
@@ -423,98 +237,42 @@ async function setupPushNotifications() {
 
 function renderCards(cards) {
   const root = document.querySelector("#cards");
-  if (!Array.isArray(cards) || !cards.length) {
-    root.replaceChildren(emptyState("No card positions yet", "No card balances are available yet."));
-    return;
-  }
-  root.replaceChildren(
-    ...cards.map((card) => {
-      if (card.position_mode === "UNLIMITED") {
-        const node = document.createElement("article");
-        node.className = "position-card unlimited-position-card";
-        const header = createNode("div", "position-card-header");
-        const summary = createNode("div", "position-summary-copy");
-        const name = createNode("strong", "", card.short_name || card.name);
-        name.title = card.name;
-        summary.append(
-          name,
-          createNode("span", "", card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : "Open"),
-        );
-        const total = createNode("div", "position-total unlimited-position");
-        total.append(
-          createNode("strong", "", card.position_headline || "Unlimited"),
-          createNode("span", "", card.position_detail || "No minimum or cap"),
-        );
-        header.append(summary, total);
-        node.append(header, cardEvidenceNode(card));
-        return node;
-      }
-      const target = Number(card.safety_target_aed || card.total_spend_aed || 1);
-      const actual = Number(card.total_spend_aed);
-      const percentage = Math.max(0, Math.min(100, (actual / target) * 100));
-      const tierPosition = renderTierPosition(card, actual);
-      const bucketList = createNode("div", "bucket-list");
-      card.buckets.forEach((bucket) => {
-        if (!bucket.spend_cap_aed) {
-          const row = createNode("div", "bucket-row uncapped");
-          const values = createNode("div");
-          values.append(
-            createNode("span", "", bucket.code.replaceAll("_", " ")),
-            createNode("b", "", `${money.format(bucket.spend_aed)} · uncapped`),
-          );
-          row.append(values);
-          bucketList.append(row);
-          return;
-        }
-        const fill = Math.min(100, (Number(bucket.spend_aed) / Number(bucket.spend_cap_aed)) * 100);
-        const full = bucket.status === "FULL" ? " full" : "";
-        const row = createNode("div", "bucket-row");
-        const values = createNode("div");
-        values.append(
-          createNode("span", "", bucket.code.replaceAll("_", " ")),
-          createNode("b", "", `${money.format(bucket.spend_aed)} / ${money.format(bucket.spend_cap_aed)}`),
-        );
-        const track = createNode("div", `track${full}`);
-        const progress = createNode("i");
-        setWidth(progress, fill);
-        track.append(progress);
-        row.append(values, track);
-        bucketList.append(row);
-      });
-
-      const node = document.createElement("article");
-      node.className = "position-card";
-      const header = createNode("div", "position-card-header");
-      const summary = createNode("div", "position-summary-copy");
-      const name = createNode("strong", "", card.short_name || card.name);
-      name.title = card.name;
-      summary.append(
-        name,
-        createNode("span", "", `${tierName(card.tier)} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
-      );
-      const total = createNode("div", "position-total");
-      total.append(createNode("strong", "", money.format(actual)), createNode("span", "", tierPosition.next));
-      header.append(summary, total);
-      node.append(header);
-      if (tierPosition.ladder) {
-        node.append(tierPosition.ladder);
-      } else {
-        const track = createNode("div", "track primary");
-        const progress = createNode("i");
-        setWidth(progress, percentage);
-        track.append(progress);
-        node.append(track);
-      }
-      node.append(bucketList);
-      node.append(cardEvidenceNode(card));
-      if (Number(card.refund_effect_aed || 0)) {
-        const sourceState = createNode("div", "source-state");
-        sourceState.append(createNode("span", "", `${money.format(card.refund_effect_aed)} refunded this cycle`));
-        node.append(sourceState);
-      }
-      return node;
-    }),
-  );
+  root.replaceChildren(...(cards || []).map(card => {
+    const node = createNode("article", "position-card");
+    const details = createNode("details", "card-details");
+    const header = createNode("summary", "card-header");
+    const nextTier = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
+    const position = nextTier
+      ? `${exactMoney(card.total_spend_aed || 0)} / ${exactMoney(nextTier.minimum_spend_aed)}`
+      : exactMoney(card.total_spend_aed || 0);
+    const spend = createNode("span", "", position);
+    spend.title = nextTier ? `Spend / ${tierName(nextTier.code)}` : "Cycle spend";
+    header.append(createNode("strong", "", card.short_name || card.name), spend);
+    details.append(header);
+    const facts = createNode("div", "card-facts");
+    if (card.safety_target_aed) facts.append(createNode("span", "", `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed)))} to target`));
+    if (card.tier) facts.append(createNode("span", "", tierName(card.tier)));
+    if (card.pace?.status) facts.append(createNode("span", "", String(card.pace.status).replaceAll("_", " ").toLowerCase()));
+    if (Number(card.refund_effect_aed)) facts.append(createNode("span", "", `${exactMoney(card.refund_effect_aed)} refunded`));
+    details.append(facts); node.append(details);
+    if (card.reward_eligibility_verified === false || (card.position_headline && /unverified|unknown/i.test(card.position_headline))) node.append(createNode("span", "eligibility", "Reward eligibility unknown"));
+    const buckets = createNode("div", "bucket-list");
+    (card.buckets || []).forEach(bucket => {
+      const spent = Number(bucket.spend_aed || 0);
+      const cap = bucket.spend_cap_aed == null ? null : Number(bucket.spend_cap_aed);
+      const row = createNode("div", "bucket-row");
+      const label = createNode("div", "bucket-label");
+      label.append(createNode("span", "", bucketLabel(bucket.code)), createNode("strong", "", cap == null ? exactMoney(spent) : `${exactMoney(Math.max(0, cap - spent))} left`));
+      row.append(label);
+      if (cap != null && cap > 0) {
+        const track = createNode("div", `track${spent >= cap ? " full" : ""}`);
+        const fill = createNode("i"); setWidth(fill, Math.max(0, Math.min(100, spent / cap * 100))); track.append(fill); row.append(track);
+        row.append(createNode("small", "", `${exactMoney(spent)} / ${exactMoney(cap)}`));
+      } else row.append(createNode("small", "", card.reward_eligibility_verified === false ? "Limit unknown" : "No cap"));
+      buckets.append(row);
+    });
+    node.append(buckets); return node;
+  }));
 }
 
 function renderPeriodHistory(periods) {
@@ -522,14 +280,8 @@ function renderPeriodHistory(periods) {
   const selector = document.querySelector("#period-selector");
   const root = document.querySelector("#period-history");
   if (!periods.length) {
-    section.hidden = false;
-    selector.hidden = true;
-    const empty = createNode("article", "empty-state");
-    empty.append(
-      createNode("strong", "", "No finalized cycles yet"),
-      createNode("span", "", "History appears after a statement is imported, reconciled, and finalized."),
-    );
-    root.replaceChildren(empty);
+    section.hidden = true;
+    root.replaceChildren();
     return;
   }
   section.hidden = false;
@@ -567,7 +319,7 @@ function renderPeriodHistory(periods) {
     const metrics = createNode("div", "history-metrics");
     [
       ["Spend", money.format(card.total_spend_aed)],
-      ["Expected cashback", money.format(card.expected_cashback_aed)],
+      ["Cashback", card.expected_cashback_aed == null ? "Unknown" : exactMoney(card.expected_cashback_aed)],
       ["Tier", tierName(card.tier)],
     ].forEach(([label, value]) => {
       const metric = createNode("div");
@@ -654,44 +406,12 @@ async function setAlertAcknowledgement(alertKey, acknowledged) {
 }
 
 function renderStatus(status) {
-  const root = document.querySelector("#as-of");
-  const lastIngest = status?.last_successful_ingest_at;
-  const warning = document.querySelector("#feed-warning");
-  warning.hidden = Boolean(lastIngest) && !status?.is_stale;
-  warning.textContent = !lastIngest
-    ? "Feed not checked. Routing and bucket balances may be incomplete."
-    : status.is_stale
-      ? `Feed is stale. Last checked ${new Date(lastIngest).toLocaleString()}. Routing and bucket balances may be incomplete.`
-      : "";
-  root.className = `as-of ${status?.is_stale ? "stale" : "live"}`;
-  if (!lastIngest) {
-    root.textContent = "Feed not checked";
-    return;
-  }
-  const time = new Date(lastIngest).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  root.textContent = status.is_stale ? `Stale · ${time}` : `Live · ${time}`;
-  root.title = `Last successful ingest: ${new Date(lastIngest).toLocaleString()}`;
-}
-
-function renderRewardDisclosure(estimate) {
-  const root = document.querySelector("#reward-disclosure");
-  const label = estimate?.label || "Estimated rewards based on configured terms";
-  const authority = estimate?.authority || "NON_AUTHORITATIVE";
-  const evidenceLabel = authority === "AUTHORITATIVE" ? "Issuer terms verified" : "Card terms not fully verified";
-  root.textContent = `${label} · ${evidenceLabel}`;
-}
-
-let routingPurchaseAmount = "100";
-
-function setupRoutingAmount() {
-  const form = document.querySelector("#routing-amount-form");
-  const input = document.querySelector("#routing-amount");
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-    if (!form.reportValidity()) return;
-    routingPurchaseAmount = input.value;
-    await refreshDashboard().catch(() => {});
-  });
+  const node = document.querySelector("#as-of");
+  const last = status?.last_successful_check_at || status?.last_successful_ingest_at;
+  node.className = status?.is_stale || !last ? "stale" : "live";
+  const stamp = last ? new Date(last).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Not synced";
+  node.textContent = `${last ? (status?.is_stale ? "Overdue · " : "Checked · ") : ""}${stamp}`;
+  node.title = last ? new Date(last).toLocaleString() : "Not synced";
 }
 
 let dashboardLoadSequence = 0;
@@ -702,11 +422,9 @@ function renderDashboardError(error) {
   status.className = "as-of stale";
   status.textContent = "Unavailable";
   status.title = detail;
-  const warning = document.querySelector("#feed-warning");
-  warning.hidden = false;
-  warning.textContent = "Dashboard refresh failed. Routing and bucket balances are unavailable.";
+
   document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
-  document.querySelector("#decision-tree").replaceChildren(emptyState("Decision tree unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+
   document.querySelector("#cards").replaceChildren(emptyState("Card positions unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
   document.querySelector("#attention-section").hidden = true;
   document.querySelector("#history-section").hidden = false;
@@ -717,7 +435,7 @@ function renderDashboardError(error) {
 async function loadDashboard() {
   const sequence = ++dashboardLoadSequence;
   const [response, periodsResponse] = await Promise.all([
-    fetch(`/api/dashboard?purchase_amount=${encodeURIComponent(routingPurchaseAmount)}`, { cache: "no-store" }),
+    fetch("/api/dashboard", { cache: "no-store" }),
     fetch("/api/periods", { cache: "no-store" }),
   ]);
   const payload = await response.json();
@@ -726,13 +444,10 @@ async function loadDashboard() {
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
   if (sequence !== dashboardLoadSequence) return;
   configureDisplay(payload);
-  document.querySelector("#routing-currency").textContent = baseCurrency;
-  document.querySelector("#routing-amount-status").textContent = `Routes checked for ${new Intl.NumberFormat(undefined, { style: "currency", currency: baseCurrency, maximumFractionDigits: 2 }).format(Number(payload.routing_purchase_amount))}. Change the amount before a different purchase.`;
-  renderRewardDisclosure(payload.reward_estimate);
   renderStatus(payload.data_status);
-  const routing = payload.routing_graphs?.length ? payload.routing_graphs : payload.recommendations;
+  const routing = payload.routing_graphs || [];
   renderRecommendations(routing);
-  renderDecisionTree(routing);
+
   renderAttention(payload);
   renderCards(payload.cards);
   renderPeriodHistory(periodsPayload.periods || []);
@@ -749,8 +464,6 @@ async function refreshDashboard() {
   }
 }
 
-setupRoutingViews();
-setupRoutingAmount();
 setupScreenViews();
 setupPushNotifications();
 refreshDashboard().catch(() => {});
