@@ -24,6 +24,8 @@ or submit an ingestion job independently.
    only after discrepancies are resolved; then open the next period.
 9. Use the statement's due date when present. Configured offsets are forecasts.
 
-Failed, partial, quarantined, or review-required executions remain visible in
-n8n. Successful execution retention is controlled by n8n; this runbook does not
-create or archive a Codex scheduled task.
+Failed, partial, quarantined, or review-required runs require durable redacted
+receipts in n8n Postgres. The deployed retention policy can discard execution
+history on both success and failure; do not rely on the execution-history UI
+as the only record. This runbook does not create or archive a Codex scheduled
+task.

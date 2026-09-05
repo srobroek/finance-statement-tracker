@@ -31,25 +31,53 @@ function caseInsensitiveRegex(pattern) {
   let output = "";
   let escaped = false;
   let inCharacterClass = false;
+  let characterClass = "";
   for (const character of String(pattern)) {
     if (escaped) {
-      output += character;
+      if (inCharacterClass) characterClass += character;
+      else output += character;
       escaped = false;
       continue;
     }
     if (character === "\\") {
-      output += character;
+      if (inCharacterClass) characterClass += character;
+      else output += character;
       escaped = true;
       continue;
     }
-    if (character === "[") {
-      output += character;
+    if (character === "[" && !inCharacterClass) {
+      characterClass = "[";
       inCharacterClass = true;
       continue;
     }
-    if (character === "]") {
-      output += character;
+    if (character === "]" && inCharacterClass) {
+      // Fold the positive membership even for a negated class. Otherwise
+      // [^A-Z] treats lowercase letters as boundaries and matches vendors
+      // inside unrelated words. Let RegExp interpret ranges and escapes.
+      const positive = new RegExp(`${characterClass.replace(/^\[\^/, "[")}]`);
+      let additions = "";
+      for (let code = 65; code <= 90; code += 1) {
+        const upper = String.fromCharCode(code);
+        const lower = upper.toLowerCase();
+        if (positive.test(upper) !== positive.test(lower)) {
+          additions += positive.test(upper) ? lower : upper;
+        }
+      }
+      // A hyphen at the original class end is literal. Appending folded
+      // letters would turn it into a range (for example [a-] -> [a-A]).
+      // Count escapes so an already escaped hyphen stays untouched.
+      if (additions && characterClass.endsWith("-")) {
+        const backslashes = characterClass.slice(0, -1).match(/\\*$/)[0].length;
+        if (backslashes % 2 === 0) {
+          characterClass = `${characterClass.slice(0, -1)}\\x2d`;
+        }
+      }
+      output += `${characterClass}${additions}]`;
       inCharacterClass = false;
+      continue;
+    }
+    if (inCharacterClass) {
+      characterClass += character;
       continue;
     }
     if (!inCharacterClass && /[A-Za-z]/.test(character)) {
@@ -58,7 +86,7 @@ function caseInsensitiveRegex(pattern) {
       output += character;
     }
   }
-  return output;
+  return inCharacterClass ? output + characterClass : output;
 }
 
 function referencedValue(field, operator, value) {

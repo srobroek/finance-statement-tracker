@@ -16,7 +16,7 @@ exists.
 | `finance-n8n-postgres` | n8n workflow and operational state | private to n8n network |
 
 The n8n Actual custom node uses `@actual-app/api` directly over the shared
-`finance-runtime` network. Its local Actual cache is inside the persistent
+`application-runtime` network. Its local Actual cache is inside the persistent
 n8n volume. The node accepts typed finance operations only, serializes ledger
 writes, verifies imported IDs, and cannot execute arbitrary commands.
 
@@ -57,8 +57,12 @@ quarantined run never advances a cursor and never creates a balancing entry.
 
 ## Schedules
 
-n8n owns the twice-daily/live notification scans and issuer-specific monthly
-statement workflows. An overlap cursor catches missed runs. Statement periods
+n8n owns the RAK notification scan at 08:05 daily and issuer-specific monthly
+statement workflows. SC notification acquisition remains a paused placeholder.
+RAK/SC reconciliation is scheduled for day 6 after day-5 close, but each
+statement adapter stays paused until a real issuer fixture passes its gates.
+EI statements run on day 1 and Wio on day 3. ADCB is historical-only and has
+no recurring acquisition schedule. An overlap cursor catches missed runs. Statement periods
 close per card only after the expected statement arrives and reconciles.
 Interactive FAB and Sarwa acquisition remains user-assisted. Amazon and other
 merchant order evidence uses generic Outlook email enrichment.
@@ -75,6 +79,39 @@ passes. The pinned platform sets `EXECUTIONS_DATA_SAVE_ON_ERROR=none` and
 failed or successful runs. Durable redacted receipts provide the observability
 surface.
 
-Current production remains blocked until the fixed-purpose PDF/parser/Actual
-custom nodes are implemented, fixture-tested, shadow-run, and promoted through
-the acceptance gates in `config/project-acceptance.json`.
+The fixed-purpose PDF/parser/Actual custom nodes are implemented. Local and CI
+fixtures do not prove the deployed host: promote each source only after fresh
+archive, shadow-run, double-replay, and exact readback evidence satisfies its
+acceptance gates in `config/project-acceptance.json`.
+
+
+## Declarative Actual setup
+
+Use the reviewed checkout and inject `ACTUAL_SERVER_URL`, `ACTUAL_PASSWORD`,
+`ACTUAL_SYNC_ID`, and any required `ACTUAL_ENCRYPTION_PASSWORD` privately.
+Run these commands from `integrations/actual` after a verified backup:
+
+```bash
+node actualctl.mjs doctor
+node actualctl.mjs bootstrap --config ../../config/actual-bootstrap.json
+node actualctl.mjs bootstrap --config ../../config/actual-bootstrap.json --apply
+node actualctl.mjs bootstrap --config ../../config/actual-bootstrap.json
+```
+
+Inspect the first plan before applying. Require the final plan to contain no
+changes, then independently read back the account/category identities and native
+rules. Bootstrap keeps unrelated manual rules; it retires only exact configured
+obsolete rule signatures. Native compilation deliberately defers canonical tag
+actions to the deterministic ingestion stage, so validate categories and tags on
+an imported monthly statement as well. Empty schedules and budget-month seeds
+are not evidence that budgeting automation has been configured.
+
+ADCB is not part of the active-account bootstrap list. Preserve its historical
+account UUID and bind that account explicitly to the bounded historical n8n
+handoff. Never synthesize a balancing transaction to close the account.
+
+W19 creates or reuses the required tables and disabled source-contract templates.
+Run it twice and verify durable readback. Fill reviewed deployment rows with the
+real Outlook folder, OneDrive source and manifest parent IDs, Actual file/account
+IDs, credential and subworkflow bindings, and writer lease configuration. Template
+rows must not be mistaken for enabled production source contracts.

@@ -590,6 +590,53 @@
     {
       "stage": "pre",
       "conditionsOp": "and",
+      "conditions": [
+        {
+          "field": "imported_payee",
+          "op": "matches",
+          "value": "(?:^|[^A-Z0-9])[Aa][Mm][Aa][Zz][Oo][Nn](?:\\.[Aa][Ee]|\\.[Cc][Oo][Mm]| [Mm][Kk][Tt][Pp][Ll][Aa][Cc][Ee]| [Pp][Rr][Ii][Mm][Ee])?(?!\\.[A-Z])(?:[^A-Z0-9]|$)"
+        }
+      ],
+      "actions": [
+        {
+          "field": "payee",
+          "op": "set",
+          "value": {
+            "ref": "payee",
+            "name": "Amazon"
+          }
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "or",
+      "conditions": [
+        {
+          "field": "imported_payee",
+          "op": "contains",
+          "value": "VIRGIN MOBILE"
+        },
+        {
+          "field": "imported_payee",
+          "op": "matches",
+          "value": "(^|[^A-Z])[Ee][Tt][Ii][Ss][Aa][Ll][Aa][Tt]|(^|[^A-Z])[Ee]&([^A-Z]|$)"
+        }
+      ],
+      "actions": [
+        {
+          "field": "payee",
+          "op": "set",
+          "value": {
+            "ref": "payee",
+            "name": "Mobile Provider"
+          }
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "conditionsOp": "and",
       "conditions": [{"field": "imported_payee", "op": "matches", "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?!\\.[A-Z])(?:[^A-Z0-9]|$)"}],
       "actions": [{"field": "payee", "op": "set", "value": {"ref": "payee", "name": "Amazon"}}]
     },
