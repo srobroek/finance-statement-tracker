@@ -1,5 +1,5 @@
-ARG N8N_BASE_IMAGE=ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386
-FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS node-builder
+ARG N8N_BASE_IMAGE=ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec
+FROM public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS node-builder
 
 USER root
 RUN apk add --no-cache \
@@ -25,7 +25,7 @@ COPY packages/n8n-nodes-finance/scripts/harden-community-ai.cjs /tmp/harden-comm
 RUN node /tmp/harden-community-ai.cjs /tmp/community-ai/node_modules \
     && npm cache clean --force
 
-FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS nodemailer-builder
+FROM public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS nodemailer-builder
 
 RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt \
     && test "$(cat /tmp/nodemailer-pack.txt)" = "nodemailer-9.0.1.tgz" \
@@ -36,7 +36,7 @@ RUN npm pack nodemailer@9.0.1 --pack-destination /tmp >/tmp/nodemailer-pack.txt 
 COPY packages/n8n-nodes-finance/scripts/nodemailer-smoke.cjs /tmp/nodemailer-smoke.cjs
 RUN node /tmp/nodemailer-smoke.cjs /tmp/nodemailer-9.0.1
 
-FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS javascript-security-overlay
+FROM public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS javascript-security-overlay
 
 RUN mkdir -p /tmp/javascript-security-overlay/fast-uri /tmp/javascript-security-overlay/toml \
     && npm pack fast-uri@3.1.6 --pack-destination /tmp/javascript-security-overlay >/tmp/fast-uri-pack.txt \
@@ -57,7 +57,7 @@ RUN node /tmp/javascript-security-overlay-smoke.cjs \
 # The official n8n runtime deliberately omits apk-tools. Carry the static
 # installer and trust keys from the immutable matching Alpine 3.24 builder;
 # the runtime stage installs only exact-version, repository-signed fixes.
-FROM public.ecr.aws/docker/library/node:24-alpine@sha256:2a49bdf71e9fd965a58c1703fd9ddd205b34e5782b692a72dd1d248abb0beb43 AS alpine-security-overlay
+FROM public.ecr.aws/docker/library/node:26.5.1-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS alpine-security-overlay
 
 USER root
 RUN apk add --no-cache apk-tools-static=3.0.8-r0 \
@@ -72,7 +72,7 @@ ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker" \
       org.opencontainers.image.revision="${FINANCE_SOURCE_COMMIT}" \
       io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
-      io.finance.n8n.base-source="https://github.com/n8n-io/n8n@bc9090e8c61d0dc84aa85528e62142dfb7001243" \
+      io.finance.n8n.base-source="https://github.com/n8n-io/n8n@5542b8b6419cb6925cca8f11b270c9bfbe09d85e" \
       io.finance.n8n.os-security-overlay="alpine-v3.24:openssl-3.5.8-r0,expat-2.8.4-r0,openssh-10.3_p1-r1" \
       io.finance.n8n.nodemailer-recipe="https://github.com/srobroek/n8n-orchestrator@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
 
@@ -127,7 +127,7 @@ RUN test -d /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10
 COPY --from=nodemailer-builder /tmp/nodemailer-9.0.1/ /usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer/
 COPY --from=nodemailer-builder /tmp/nodemailer-smoke.cjs /tmp/nodemailer-smoke.cjs
 RUN node -e "const p=require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer/package.json'); if(p.name!=='nodemailer'||p.version!=='9.0.1'||typeof require('/usr/local/lib/node_modules/n8n/node_modules/nodemailer').createTransport!=='function') process.exit(1)" \
-    && test "$(n8n --version)" = "2.36.2" \
+    && test "$(n8n --version)" = "2.37.10" \
     && node /tmp/nodemailer-smoke.cjs /usr/local/lib/node_modules/n8n/node_modules/nodemailer \
     && rm -f /tmp/nodemailer-smoke.cjs
 RUN mkdir -p /opt/finance-n8n/custom-extensions/n8n-nodes-finance

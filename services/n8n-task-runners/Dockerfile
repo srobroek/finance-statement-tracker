@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
-ARG NODE_IMAGE=docker.io/library/node@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3
+ARG NODE_IMAGE=docker.io/library/node:26.5.1-alpine3.24@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36
 ARG PYTHON_IMAGE=docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1
 ARG GO_IMAGE=docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69
 
 FROM ${NODE_IMAGE} AS javascript-runner
 COPY .upstream/n8n/dist/task-runner-javascript /opt/runners/task-runner-javascript
 WORKDIR /opt/runners/task-runner-javascript
-RUN test "$(node -p "require('./package.json').version")" = "2.36.1" \
+RUN test "$(node -p "require('./package.json').version")" = "2.37.5" \
     && test -f dist/start.js \
     && test -f finance-closure-manifest.json \
     && test -f finance-closure-relinks.json \
@@ -40,8 +40,8 @@ RUN test "$(go list -m -f '{{.Version}}' golang.org/x/text)" = "v0.39.0" \
     && go version -m /out/task-runner-launcher | grep -F 'golang.org/x/text' | grep -F 'v0.39.0'
 
 FROM ${PYTHON_IMAGE} AS runtime
-ARG N8N_VERSION=2.36.2
-ARG N8N_SOURCE_COMMIT=bc9090e8c61d0dc84aa85528e62142dfb7001243
+ARG N8N_VERSION=2.37.10
+ARG N8N_SOURCE_COMMIT=5542b8b6419cb6925cca8f11b270c9bfbe09d85e
 ARG LAUNCHER_SOURCE_COMMIT=fad71fc0dab52a6b6558765d1431c7846cfd816f
 ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 
@@ -73,7 +73,7 @@ COPY --from=launcher /out/task-runner-launcher /usr/local/bin/task-runner-launch
 COPY --chown=root:root .upstream/n8n/docker/images/runners/n8n-task-runners.json /etc/n8n-task-runners.json
 COPY --chown=root:root services/n8n-task-runners/upstream.lock.json /opt/runners/upstream.lock.json
 
-RUN node --version | grep -Fx 'v24.18.1' \
+RUN node --version | grep -Fx 'v26.5.1' \
     && /opt/runners/task-runner-python/.venv/bin/python --version | grep -E '^Python 3\.13\.' \
     && /opt/runners/task-runner-python/.venv/bin/python -I -B -X disable_remote_debug -c "import src.main, urllib3, websockets" \
     && test "$(stat -c '%u:%g' /usr/local/bin/task-runner-launcher)" = '0:0'

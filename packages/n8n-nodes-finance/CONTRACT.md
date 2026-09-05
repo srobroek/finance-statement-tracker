@@ -5,12 +5,12 @@ a disposable n8n instance.
 
 Package: `n8n-nodes-finance@0.1.0`
 
-Build target: `n8n@2.36.2` (RC) with its bundled
-`n8n-workflow@2.36.1`. This candidate replaces vulnerable stable 2.35.x only
-for disposable validation; promotion remains `NO-GO` until the RC is accepted
-or an equally patched stable release is available.
+Build target: `n8n@2.37.10` (stable) with its bundled
+`n8n-workflow@2.37.4`. This stable release replaces the previous 2.36.2
+pin for disposable validation; promotion remains `NO-GO` until the required
+image, runtime, and destination gates are accepted.
 
-The image build starts from the official immutable n8n 2.36.2 digest. In the
+The image build starts from the official immutable n8n 2.37.10 digest. In the
 same Dockerfile it replaces only n8n's existing pnpm Nodemailer 8.0.10 payload
 with the reviewed Nodemailer 9.0.1 tarball, whose SHA-256 is pinned in the build
 and provenance record. The build fails if the upstream pnpm path changes, then

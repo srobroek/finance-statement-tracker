@@ -510,7 +510,7 @@ def build_manifest(
     manifest = {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
-        "n8n_version": "2.36.2",
+        "n8n_version": "2.37.10",
         "sources": {
             "data_tables": "integrations/n8n/data-tables.json",
             "data_tables_sha256": sha256(TABLES_PATH),

@@ -137,7 +137,7 @@ secret values in this repository. This reconciliation remains pending.
 
 ## Promotion readback
 
-- [ ] Import all 19 workflows inactive into the exact n8n 2.36.2 disposable
+- [ ] Import all 19 workflows inactive into the exact n8n 2.37.10 disposable
   project.
 - [ ] Create/reconcile the six folders from `workflow-folders.json`; verify
   membership through package response or direct read-only Postgres join because

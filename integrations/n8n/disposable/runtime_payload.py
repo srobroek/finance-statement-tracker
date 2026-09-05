@@ -1,4 +1,4 @@
-"""Build source-backed n8n 2.36.2 disposable workflow request bodies.
+"""Build source-backed n8n 2.37.10 disposable workflow request bodies.
 
 The REST create body is deliberately flat.  Passing an exported workflow under
 ``workflow`` (or deriving ``name`` from an absent wrapper) makes n8n report the
@@ -24,7 +24,7 @@ def build_create_payload(workflow: Mapping[str, Any]) -> dict[str, Any]:
 
     Export-only identity and presentation fields (``id``, ``active``,
     ``meta``, and canvas groups) do not belong in the create request.  The
-    source workflow name is required at the top level so n8n 2.36.2 cannot
+    source workflow name is required at the top level so n8n 2.37.10 cannot
     receive an undefined name through a nested wrapper.
     """
 

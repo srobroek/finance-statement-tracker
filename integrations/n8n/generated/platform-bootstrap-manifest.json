@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
-  "n8n_version": "2.36.2",
+  "n8n_version": "2.37.10",
   "sources": {
     "data_tables": "integrations/n8n/data-tables.json",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",

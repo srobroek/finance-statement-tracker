@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "n8n_version": "2.36.2",
+  "n8n_version": "2.37.10",
   "contract_status": "SETUP_REQUIRED",
   "project_id_binding": "N8N_FINANCE_PROJECT_ID",
   "folders": [

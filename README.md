@@ -130,7 +130,7 @@ Checked-in n8n exports remain inactive and `SPEC_ONLY`. These results remain pen
 
 The finance checkout does not own the n8n platform scripts. Use [`srobroek/n8n-orchestrator`](https://github.com/srobroek/n8n-orchestrator) for platform procedures. The deployed Dockge stack is `/opt/stacks/finance-n8n`; finance workflows execute in its `n8n` service.
 
-The finance n8n image builds directly from the official immutable n8n 2.36.2
+The finance n8n image builds directly from the official immutable n8n 2.37.10
 digest. Its Dockerfile applies exact Alpine 3.24 security package updates,
 integrity-pinned fast-uri 3.1.6 and TOML 4.2.0 replacements, the reviewed
 Nodemailer 9.0.1 replacement, and finance/community extensions in the

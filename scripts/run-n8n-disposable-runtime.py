@@ -162,7 +162,7 @@ def main() -> int:
         if "FIXTURE_PAGE_2_FAILURE" not in failure:
             raise RuntimeError("pagination failure did not reach the source-derived failure branch")
 
-    print("n8n 2.36.2 disposable runtime: replay and failure routes verified")
+    print("n8n 2.37.10 disposable runtime: replay and failure routes verified")
     return 0
 
 

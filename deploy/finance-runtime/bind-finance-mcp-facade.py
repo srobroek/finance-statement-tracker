@@ -26,7 +26,7 @@ OWNER_ROLE = "credential:owner"
 PLACEHOLDER = "BIND_FINANCE_MCP_FACADE"
 OP_REFERENCE = f"op://{ITEM_PATH}/{FIELD_LABEL}"
 BINDER_ROOT = Path("/run/finance-mcp-binder")
-PINNED_N8N_VERSION = "2.36.2"
+PINNED_N8N_VERSION = "2.37.10"
 # The caller must use `op run --env-file=<mode-0600-template>`; this
 # binder accepts only the resulting child environment and never reads the item.
 # This namespace is an internal identity boundary; it is not emitted in receipts.

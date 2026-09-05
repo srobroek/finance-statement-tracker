@@ -75,7 +75,7 @@ nodemailer_smoke_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.sm
   echo "FINANCE_BASE_IMAGE_SOURCE_REPOSITORY_INVALID" >&2
   exit 1
 }
-[[ "${base_source_commit}" = "bc9090e8c61d0dc84aa85528e62142dfb7001243" ]] || {
+[[ "${base_source_commit}" = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e" ]] || {
   echo "FINANCE_BASE_IMAGE_SOURCE_COMMIT_INVALID" >&2
   exit 1
 }

@@ -5,15 +5,15 @@
   "generated_at_utc": null,
   "source_commit": null,
   "base_image": {
-    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
-    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "source_path": "packages/n8n-nodes-finance/base-image.txt"
   },
   "extension_image": {
     "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
     "image_digest": null,
     "source_commit": null,
-    "base_image_digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "base_image_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "sbom_sha256": null,
     "scan_sha256": null,
     "scan": {
@@ -32,7 +32,7 @@
     },
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "603b38cc25145ffd33d845e1c5e04ad1f52dc14e709fcfa9e606b9376291f7d2"
+      "sha256": "0ec49cb161ab3037bc8e8fbaae1835ed675f353495b4ed4dd0363c033a4268f7"
     }
   },
   "support_images": {
@@ -118,10 +118,10 @@
     "name": "n8n-nodes-finance",
     "version": "0.1.0",
     "lockfile": "packages/n8n-nodes-finance/package-lock.json",
-    "lockfile_sha256": "dd96a4cae14ab4d0e24dc557fe9544717a88f948d94e77b9a66cf41afafac730"
+    "lockfile_sha256": "b2b2c9b6947bc15b8c8c4afc04d6aaeb9ab806e3d833004f3d3194321cae20bc"
   },
   "community_node_lock": {
     "path": "integrations/n8n/community-node-lock.json",
-    "sha256": "1c549c3ed9c4343d4db1a40ca54ed7845da184fba26546b6a7719542723ec512"
+    "sha256": "61d39bb74952e19472b6e3857ed5f961f7304a5fc34213b1edb44e3b955db2e2"
   }
 }

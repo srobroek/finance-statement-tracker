@@ -8,25 +8,25 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "5f14feadd9beac38714f2a62a3e762500943da25ca145a271d937ea346001cf9"
+    "sha256": "f548fbecb10393ceb647bd98de20f31924bb796b7f005620f43ed028fb1cdce8"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
-    "reference": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
-    "digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386"
+    "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
+    "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec"
   },
   "extension_image": {
     "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
     "digest": null,
-    "base_digest": "sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+    "base_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "95fe48d9176039ea1ebefbb6a107d7753404bea6f5c5d975b6355e432a0688ff"
+      "sha256": "0ec49cb161ab3037bc8e8fbaae1835ed675f353495b4ed4dd0363c033a4268f7"
     }
   },
   "workflow_manifest": {
     "path": "integrations/n8n/pipeline-registry.json",
-    "sha256": "3e5576cbb265174fc0b1e95b186b8cf9f56baa43a5094c4d4292f92f847d4221"
+    "sha256": "4c3ed1022841ae75505b44ae0e6e354aa02fa79f5dd8af18f27592fcc2ac3b5f"
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",

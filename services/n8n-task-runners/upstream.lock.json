@@ -2,12 +2,20 @@
   "schema_version": 1,
   "status": "SPEC_ONLY",
   "n8n": {
-    "version": "2.36.2",
+    "version": "2.37.10",
+    "release_channel": "stable",
+    "bundled_n8n_workflow": "2.37.4",
+    "release_evidence": {
+      "tag": "n8n@2.37.10",
+      "url": "https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.10",
+      "prerelease": false,
+      "published_at": "2026-09-04T09:13:04Z"
+    },
     "source_repository": "https://github.com/n8n-io/n8n.git",
-    "source_commit": "bc9090e8c61d0dc84aa85528e62142dfb7001243",
-    "javascript_runner_package": "@n8n/task-runner@2.36.1",
-    "node_version": "24.18.1",
-    "pnpm_version": "10.32.1",
+    "source_commit": "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
+    "javascript_runner_package": "@n8n/task-runner@2.37.5",
+    "node_version": "26.5.1",
+    "pnpm_version": "11.22.0",
     "python_version": "3.13",
     "uv_version": "0.8.14"
   },
@@ -21,7 +29,7 @@
     }
   },
   "base_images": {
-    "node": "docker.io/library/node@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3",
+    "node": "docker.io/library/node:26.5.1-alpine3.24@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36",
     "python": "docker.io/library/python@sha256:7ea3f82de8ea6d4fb7e5d2bbe3fe3c9d931700b7a529f1fe5769e42abe514ca1",
     "golang": "docker.io/library/golang@sha256:42fc3368d1c50170a452f2bf4a1dfd292a065870c3f258d799aad4316671cb69"
   },
@@ -36,7 +44,7 @@
       "CVE-2026-11824"
     ]
   },
-  "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.36.2@sha256:be13ef936c03ce0f2d58426afa06e7f1ba2a1d50e4f19ebf3e8488435bf5e386",
+  "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
   "official_runner_comparison": {
     "reference": "docker.io/n8nio/runners:2.36.2@sha256:db070aa0a7a294335680dbc33a66acfa076ce1dd3fca5e51414c5bdfce8b2119",
     "source_repository": "https://hub.docker.com/r/n8nio/runners",

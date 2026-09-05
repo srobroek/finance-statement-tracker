@@ -422,7 +422,7 @@ try {{
 
     def test_registry_is_postgres_spec_only_without_execution_claims(self) -> None:
         self.assertEqual(self.registry["schema_version"], 2)
-        self.assertEqual(self.registry["n8n_version"], "2.36.2")
+        self.assertEqual(self.registry["n8n_version"], "2.37.10")
         self.assertEqual(
             self.registry["deployment_mode"], "regular-postgres-external-runners"
         )
@@ -1957,7 +1957,7 @@ try {{
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
         self.assertEqual(manifest["contract_status"], "SPEC_ONLY")
-        self.assertEqual(manifest["n8n_version"], "2.36.2")
+        self.assertEqual(manifest["n8n_version"], "2.37.10")
         evidence = manifest["execution_evidence"]
         self.assertTrue(evidence["exact_image_import_tested"])
         self.assertTrue(evidence["disposable_create_reuse_tested"])
@@ -2776,7 +2776,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
 
     def test_workflow_folder_manifest_is_complete_and_post_import_guarded(self) -> None:
         contract = load_json(N8N / "workflow-folders.json")
-        self.assertEqual(contract["n8n_version"], "2.36.2")
+        self.assertEqual(contract["n8n_version"], "2.37.10")
         self.assertEqual(len(contract["folders"]), 6)
         workflow_rows = contract["workflows"]
         self.assertEqual(len(workflow_rows), len({row["code"] for row in workflow_rows}))
