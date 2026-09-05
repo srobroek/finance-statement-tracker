@@ -225,6 +225,12 @@ function renderCardSummary(cards) {
     const next = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
     node.append(createNode("strong", "", card.short_name || card.name), createNode("span", "", exactMoney(card.total_spend_aed || 0)));
     node.append(createNode("small", "", next ? `of ${exactMoney(next.minimum_spend_aed)} · ${tierName(next.code)}` : tierName(card.tier || "STANDARD")));
+    if (card.safety_target_aed != null && Number(card.safety_target_aed) > 0) {
+      const gap = Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0));
+      const status = createNode("small", "card-target", gap > 0 ? `${exactMoney(gap)} to target` : "Target reached");
+      status.title = `Configured ${exactMoney(card.safety_target_aed)} target`;
+      node.append(status);
+    }
     node.addEventListener("click", () => {
       selectScreen("cards");
       const detail = [...document.querySelectorAll(".position-card")].find(item => item.dataset.card === card.card)?.querySelector("details");

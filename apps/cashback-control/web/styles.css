@@ -267,6 +267,10 @@ details[open]>.card-header>strong:after {
   font-size:12px;
   color:var(--muted)
 }
+.card-total .card-target {
+  color:var(--green);
+  margin-top:5px
+}
 .route-row {
   margin:0
 }

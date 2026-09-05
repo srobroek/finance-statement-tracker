@@ -96,6 +96,8 @@ try {
     assert.match(await evaluate('document.querySelector("#attention").innerText'), /1,249.75/);
     assert.match(await evaluate('document.querySelector("#as-of").innerText'), /Checked/);
     assert.match(await evaluate('document.querySelector("#card-summary").textContent'), /4,250.25/);
+    assert.match(await evaluate('document.querySelector("#card-summary .card-target").textContent'), /1,249.75 to target/);
+    assert.match(await evaluate('document.querySelector("#card-summary .card-target").title'), /5,500/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /Groceries/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /RAK/);
     assert.match(await evaluate('document.querySelector("#recommendations .route-row summary").textContent'), /1,245.25/);
