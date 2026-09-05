@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { applyMaintenancePlan, buildMaintenancePlan, MaintenanceApi, MaintenanceLease, Row, validateMaintenancePlan } from './actual-maintenance';
+import { applyLedgerProjectionRules, normalizeTransaction } from './rules';
+import { loadPackagedLedgerRules } from './runtime-rules';
+import { NormalizedStatement, projectStatementToActual } from './statements';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import * as actualApi from '@actual-app/api';
@@ -207,6 +211,49 @@ export class ActualSession {
     private readonly api: ActualApi = actualApi as unknown as ActualApi,
     private readonly dataRoot: string = ACTUAL_DATA_DIR,
   ) {}
+
+  async maintenancePreflight(credentialValue: ActualCredential, input: unknown): Promise<Row> {
+    assertObject(input, 'maintenance_request');
+    return this.run(credentialValue, async (api, credential) => {
+      const server = await api.getServerVersion() as { version?: string };
+      if (server?.version !== '26.8.1') throw new Error('MAINTENANCE_SERVER_VERSION_DRIFT');
+      if (!Array.isArray(input.source_documents)) throw new Error('MAINTENANCE_SOURCE_DOCUMENTS_REQUIRED');
+      const account = (await api.getAccounts()).find(row => row.id === input.account_id);
+      if (!account) throw new Error('MAINTENANCE_ACCOUNT_MISSING');
+      const readback = { shape: 'categories' as const, actual_file_id: credential.syncId,
+        rows: await api.getCategories() as never, payees: await api.getPayees() as never };
+      const rules = loadPackagedLedgerRules();
+      const source_documents = input.source_documents.map(raw => {
+        assertObject(raw, 'source_document'); assertObject(raw.statement, 'statement');
+        const statement = raw.statement as unknown as NormalizedStatement;
+        if (statement.adapter !== 'adcb_v1' || statement.balance_tied !== true || statement.balance_difference_aed !== '0.00') throw new Error('MAINTENANCE_UNVERIFIED_STATEMENT');
+        const transactions = statement.transactions.map(row => applyLedgerProjectionRules(normalizeTransaction({ ...row,
+          merchant_raw: row.description, transaction_at: row.transaction_date, source_direction: row.direction,
+          currency: row.currency_original || 'AED', card: 'ADCB_CASHBACK', account: input.account_id,
+          account_last4: row.card_last4, source_type: 'statement', channel: 'UNKNOWN',
+        }), rules));
+        const projected = projectStatementToActual({ ...statement, transactions } as unknown as NormalizedStatement, readback, credential.syncId);
+        return { sha256: raw.sha256, archive_receipt_sha256: raw.archive_receipt_sha256, statement_date: statement.statement_date,
+          opening_minor: Math.round(Number(statement.opening_balance_aed) * 100), closing_minor: Math.round(Number(statement.closing_balance_aed) * 100), transactions: projected };
+      });
+      const rows = await api.getTransactions(String(input.account_id), ACCOUNT_HISTORY_START, ACCOUNT_HISTORY_END);
+      const plan = buildMaintenancePlan({ ...input, source_documents }, account, rows as unknown as Row[], credential.syncId);
+      if (await api.getAccountBalance(plan.account_id) !== plan.before.balance) throw new Error('MAINTENANCE_BALANCE_READBACK_DRIFT');
+      return { status: 'ACTUAL_MAINTENANCE_DRY_RUN', plan, plan_sha256: plan.plan_sha256,
+        preserved: plan.preserved.length, aliases: plan.aliases.length, deletions: plan.deletions.length,
+        additions: plan.additions.length, before: plan.before, after: plan.after };
+    });
+  }
+
+  async maintenanceApply(credentialValue: ActualCredential, input: unknown, approvedPlanSha256: unknown, lease: MaintenanceLease): Promise<Row> {
+    const plan = validateMaintenancePlan(input, approvedPlanSha256);
+    return this.run(credentialValue, async (api, credential) => {
+      if (!credential.mutationEnabled) throw new Error('Actual mutations are disabled by credential');
+      const server = await api.getServerVersion() as { version?: string };
+      if (server?.version !== plan.expected_server_version) throw new Error('MAINTENANCE_SERVER_VERSION_DRIFT');
+      return applyMaintenancePlan(api as unknown as MaintenanceApi, plan, lease, credential.syncId);
+    });
+  }
 
   async run<T>(credentialValue: ActualCredential, operation: (api: ActualApi, credential: ActualCredential) => Promise<T>): Promise<T> {
     const credential = validateCredential(credentialValue);
@@ -482,3 +529,4 @@ function canonicalHash(rows: EconomicRow[]): string {
 export function preflightOutbox(input: unknown): PreparedActualOutbox {
   return assertPreparedOutbox(input);
 }
+
