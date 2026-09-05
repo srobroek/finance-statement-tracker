@@ -143,6 +143,22 @@ class CashbackDashboardPhaseTests(TestCase):
         sc_quote = next(candidate for candidate in recommendations[0]["ranked_cards"] if candidate["card"] == "SC_PLATINUM_X")
         self.assertEqual(Decimal(sc_quote["configured_fx_fee_percent"]), Decimal("2.99"))
 
+    def test_spend_target_warning_is_not_an_issuer_minimum_or_duplicate(self) -> None:
+        from finance_tracker.actual_snapshot import _pace_state
+        programs = {program.card: program for program in configured_programs()}
+        period = (date(2026, 8, 6), date(2026, 9, 5))
+        for card, target in (("RAK_WORLD", "10300"), ("SC_PLATINUM_X", "15300")):
+            for day, key in ((date(2026, 8, 26), "minimum:"), (date(2026, 9, 5), "close:")):
+                with self.subTest(card=card, day=day):
+                    _, _, _, alerts = _pace_state(programs[card], [], money("0"), period, day, "AED")
+                    self.assertEqual(len(alerts), 1)
+                    self.assertTrue(alerts[0]["key"].startswith(key))
+                    self.assertIn("configured spend target", alerts[0]["title"])
+                    self.assertIn(f"AED {target} spend target", alerts[0]["detail"])
+                    self.assertNotIn("minimum", alerts[0]["title"] + alerts[0]["detail"])
+            _, _, _, met = _pace_state(programs[card], [], money(target), period, date(2026, 9, 5), "AED")
+            self.assertEqual(met, [])
+
     def test_web_discloses_estimate_and_evidence_status(self) -> None:
         root = Path("apps/cashback-control/web")
         shell = (root / "index.html").read_text(encoding="utf-8")
