@@ -120,6 +120,13 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         self.assertIn("closure_sha256", workflow)
         self.assertIn("finance-workspace-packages.json", workflow)
         self.assertIn("finance-n8n-task-runners-closure-sha256.txt", workflow)
+        self.assertIn("pnpm install --frozen-lockfile", workflow)
+        self.assertIn(
+            "pnpm --config.inject-workspace-packages=true --filter=@n8n/task-runner --prod deploy --no-optional",
+            workflow,
+        )
+        self.assertNotIn("--legacy deploy", workflow)
+        self.assertNotIn("block-exotic-subdeps=false", workflow)
         self.assertIn("Disk budget before task-runner cleanup", workflow)
         self.assertIn("docker builder prune --all --force", workflow)
         self.assertIn(
