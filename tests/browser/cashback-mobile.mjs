@@ -90,7 +90,7 @@ try {
     await cdp('Emulation.setDeviceMetricsOverride', {width, height:932, deviceScaleFactor:1, mobile:true});
     await cdp('Emulation.setTouchEmulationEnabled', {enabled:true});
     await cdp('Page.navigate', {url});
-    await until(() => evaluate('document.querySelectorAll("#recommendations .route-row").length === 6'), 'Dashboard did not render six fixture categories');
+    await until(() => evaluate('document.querySelectorAll("#recommendations .route-row").length === 9'), 'Dashboard did not render nine fixture categories');
     assert.equal(await evaluate('document.body.dataset.screenActive'), 'routing');
     assert.equal(await evaluate('document.querySelector("#attention .alert-card").checkVisibility()'), true);
     assert.match(await evaluate('document.querySelector("#attention").innerText'), /1,249.75/);
@@ -105,6 +105,11 @@ try {
     assert.ok(fill.height >= 4 && Math.abs(fill.ratio - 1245.25 / 1500) < 0.01, 'actual visible bucket fill matches spend / cap');
     const columns = await evaluate(`(() => { const rows = [...document.querySelectorAll('#recommendations .route-row')]; return rows.slice(0,2).map(node => {const r=node.getBoundingClientRect(); return {x:r.x,y:r.y};}); })()`);
     assert.ok(Math.abs(columns[0].y - columns[1].y) < 2 && columns[1].x > columns[0].x, 'mobile categories must form two columns');
+    assert.equal(await evaluate('document.querySelectorAll("#card-summary .card-total").length'), 3);
+    assert.match(await evaluate('document.querySelector("#card-summary").textContent'), /EI Amazon/);
+    const amazonRoute = await evaluate(`document.querySelectorAll('#recommendations .routing-tree')[6].textContent`);
+    assert.ok(amazonRoute.indexOf('Use SimplyCash') < amazonRoute.indexOf('Use RAK'));
+    assert.ok(amazonRoute.indexOf('Use RAK') < amazonRoute.indexOf('Use EI Amazon'));
     await layout('overview ' + width); await screenshot(`fictional-${width}-overview`);
     await tap('#recommendations .route-row summary');
     assert.equal(await evaluate('document.querySelector("#recommendations .route-row").open'), true);
@@ -147,3 +152,4 @@ try {
   if (browser.exitCode === null) browser.kill('SIGKILL');
   await rm(profile, {recursive:true, force:true, maxRetries:3, retryDelay:100});
 }
+
