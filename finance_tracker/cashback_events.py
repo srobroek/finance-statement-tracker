@@ -785,6 +785,8 @@ class CashbackEventStore:
                     )
                     """
                 )
+                if "receipt_kind" not in {row["name"] for row in connection.execute("PRAGMA table_info(ingest_receipts)")}:
+                    connection.execute("ALTER TABLE ingest_receipts ADD COLUMN receipt_kind TEXT NOT NULL DEFAULT 'BATCH'")
                 self._migrate_event_columns(connection)
                 self._migrate_ingest_state_columns(connection)
                 self._migrate_period_columns(connection)
@@ -1071,6 +1073,8 @@ class CashbackEventStore:
         *,
         event_ids: Iterable[str] = (),
         event_digests: Iterable[str] = (),
+        receipt_kind: str = "BATCH",
+        receipt_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Persist the exact service result that is eligible for one cursor commit."""
         source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
@@ -1096,6 +1100,12 @@ class CashbackEventStore:
             "event_ids": ids,
             "event_digests": digests,
         }
+        if receipt_context is not None:
+            payload["scan_dispositions"] = receipt_context
+        if receipt_kind not in {"BATCH", "TRANSACTION"}:
+            raise ValueError("Invalid receipt kind")
+        if receipt_kind == "TRANSACTION":
+            payload["receipt_kind"] = receipt_kind
         receipt_sha256 = _json_digest(payload)
         receipt_id = f"cashback-ingest:{receipt_sha256}"
         with closing(self._connect()) as connection:
@@ -1110,8 +1120,8 @@ class CashbackEventStore:
                         """
                         INSERT INTO ingest_receipts (
                             receipt_id, receipt_sha256, source, completed_at, cursor,
-                            scanned_count, accepted_count, event_ids_json, event_digests_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            scanned_count, accepted_count, event_ids_json, event_digests_json, receipt_kind
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             receipt_id,
@@ -1123,6 +1133,7 @@ class CashbackEventStore:
                             accepted_count,
                             json.dumps(ids, separators=(",", ":")),
                             json.dumps(digests, separators=(",", ":")),
+                            receipt_kind,
                         ),
                     )
                     state = "READY"
@@ -1140,6 +1151,109 @@ class CashbackEventStore:
             **payload,
             "state": state,
         }
+
+    def ingest_transaction(self, source: dict[str, Any]) -> dict[str, Any]:
+        """Persist one normalized transaction; never advance an acquisition cursor."""
+        if set(source) != {"source", "completed_at", "cursor", "event"}:
+            raise ValueError("Transaction payload requires only source, completed_at, cursor and event")
+        self._validate_transaction_window(source)
+        event = source["event"]
+        if not isinstance(event, dict):
+            raise ValueError("event must be exactly one transaction object")
+        fields = {key: source[key] for key in ("source", "completed_at", "cursor")}
+        fields.update(scanned_count=1, accepted_count=1)
+        self._ingest_fields(fields)
+        normalized = self.validate([event])[0]
+        persistence = self.upsert([event])
+        if persistence["duplicates"]:
+            raise IngestCursorConflict("transaction identity belongs to another source event")
+        with closing(self._connect()) as connection:
+            stored = connection.execute("SELECT * FROM cashback_events WHERE source_event_id = ?", (normalized["source_event_id"],)).fetchone()
+            digest = self._stored_transaction_digest(stored)
+        receipt = self.create_ingest_receipt(
+            fields, event_ids=[normalized["source_event_id"]],
+            event_digests=[digest], receipt_kind="TRANSACTION",
+        )
+        return {"persistence": persistence, "service_receipt": receipt,
+                "cursor_candidate": fields["cursor"], "cursor_committed": False}
+
+    @staticmethod
+    def _validate_transaction_window(source: dict[str, Any]) -> None:
+        if not isinstance(source.get("source"), str) or not source["source"].strip():
+            raise ValueError("source must be a non-empty string")
+        if datetime.fromisoformat(_iso_datetime(source.get("cursor"))) != datetime.fromisoformat(_iso_datetime(source.get("completed_at"))):
+            raise ValueError("cursor must equal completed_at for a frozen scan")
+
+    @staticmethod
+    def _stored_transaction_digest(row: sqlite3.Row) -> str:
+        return _json_digest({key: row[key] for key in row.keys() if key not in {"created_at", "updated_at"}})
+
+    def combine_transaction_receipts(self, source: dict[str, Any]) -> dict[str, Any]:
+        """Seal a scan only from exact, persisted child transaction acknowledgements."""
+        if set(source) != {"source", "completed_at", "cursor", "scanned_count", "accepted_count", "ignored_count", "review_count", "receipts", "message_dispositions"}:
+            raise ValueError("Scan receipt payload has missing or unsupported fields")
+        self._validate_transaction_window(source)
+        name, completed, scanned, accepted, cursor = self._ingest_fields(source)
+        ignored, review = source["ignored_count"], source["review_count"]
+        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in (ignored, review)) or scanned != accepted + ignored + review:
+            raise IngestCursorConflict("scan disposition counts do not reconcile")
+        dispositions = source["message_dispositions"]
+        if not isinstance(dispositions, list) or len(dispositions) != scanned:
+            raise IngestCursorConflict("every scanned message requires a disposition")
+        message_ids, accepted_ids, counts = set(), set(), {"ACCEPTED": 0, "IGNORED": 0, "REVIEW": 0}
+        for disposition in dispositions:
+            if not isinstance(disposition, dict) or set(disposition) - {"message_id", "status", "source_event_id", "reason"}:
+                raise IngestCursorConflict("invalid message disposition")
+            message_id, status = disposition.get("message_id"), disposition.get("status")
+            if not isinstance(message_id, str) or not message_id.strip() or message_id in message_ids or not isinstance(status, str) or status not in counts:
+                raise IngestCursorConflict("duplicate or invalid message disposition")
+            message_ids.add(message_id)
+            counts[status] += 1
+            if status == "ACCEPTED":
+                event_id = disposition.get("source_event_id")
+                if event_id != message_id + ":0":
+                    raise IngestCursorConflict("accepted event identity must match its message")
+                accepted_ids.add(event_id)
+            elif disposition.get("source_event_id") is not None or not isinstance(disposition.get("reason"), str) or not disposition["reason"].strip():
+                raise IngestCursorConflict("unaccepted messages require a reason and no event identity")
+        if counts != {"ACCEPTED": accepted, "IGNORED": ignored, "REVIEW": review}:
+            raise IngestCursorConflict("message dispositions do not match scan counts")
+        children = source["receipts"]
+        if not isinstance(children, list) or len(children) != accepted:
+            raise IngestCursorConflict("one child receipt is required per accepted transaction")
+        ids, digests, seen = [], [], set()
+        with closing(self._connect()) as connection:
+            for child in children:
+                if not isinstance(child, dict) or set(child) != {"receipt_id", "receipt_sha256"}:
+                    raise IngestCursorConflict("exact child receipt identity and digest are required")
+                receipt_id = child["receipt_id"]
+                if not isinstance(receipt_id, str) or receipt_id in seen:
+                    raise IngestCursorConflict("duplicate or invalid child receipt")
+                seen.add(receipt_id)
+                row = connection.execute("SELECT * FROM ingest_receipts WHERE receipt_id = ?", (receipt_id,)).fetchone()
+                if row is None or row["receipt_sha256"] != child["receipt_sha256"]:
+                    raise IngestCursorConflict("child receipt is unknown or mismatched")
+                if (row["receipt_kind"], row["source"], row["completed_at"], row["cursor"], row["accepted_count"], row["scanned_count"]) != ("TRANSACTION", name, completed, cursor, 1, 1):
+                    raise IngestCursorConflict("child receipt is not bound to this scan")
+                event_ids = json.loads(row["event_ids_json"])
+                event_digests = json.loads(row["event_digests_json"])
+                if len(event_ids) != 1 or len(event_digests) != 1:
+                    raise IngestCursorConflict("invalid transaction receipt cardinality")
+                event = connection.execute("SELECT * FROM cashback_events WHERE source_event_id = ?", (event_ids[0],)).fetchone()
+                if event is None or self._stored_transaction_digest(event) != event_digests[0]:
+                    raise IngestCursorConflict("child transaction is missing or changed")
+                ids.extend(event_ids)
+                digests.extend(event_digests)
+        if len(set(ids)) != len(ids):
+            raise IngestCursorConflict("duplicate transaction identity in scan")
+        if set(ids) != accepted_ids:
+            raise IngestCursorConflict("accepted message identities do not match child receipts")
+        receipt = self.create_ingest_receipt(
+            source, event_ids=ids, event_digests=digests,
+            receipt_context={"ignored_count": ignored, "review_count": review,
+                             "message_dispositions": sorted(dispositions, key=lambda item: item["message_id"])},
+        )
+        return {"service_receipt": receipt, "cursor_candidate": cursor, "cursor_committed": False}
 
     def record_ingest_success(self, source: dict[str, Any]) -> dict[str, Any]:
         """Commit one registered service receipt and its cursor atomically."""
@@ -1167,6 +1281,8 @@ class CashbackEventStore:
                 ).fetchone()
                 if receipt is None or receipt["receipt_sha256"] != receipt_sha256:
                     raise IngestCursorConflict("service receipt is unknown or mismatched")
+                if receipt["receipt_kind"] != "BATCH":
+                    raise IngestCursorConflict("transaction receipts cannot commit a scan cursor")
                 expected = {
                     "source": receipt["source"],
                     "completed_at": receipt["completed_at"],

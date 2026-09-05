@@ -98,7 +98,7 @@
       "short_name": "RAK World",
       "programme_version": "confirmed-2026-08-v1",
       "effective_start": "2026-08-01",
-      "effective_end": null,
+      "effective_end": "2026-09-04",
       "statement_cycle": {"close_day": 5, "ingest_delay_days": 1},
       "reward_cycle": {"basis": "STATEMENT_CYCLE"},
       "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
@@ -137,7 +137,7 @@
       "short_name": "SC Platinum X",
       "programme_version": "confirmed-2026-08-v1",
       "effective_start": "2026-08-01",
-      "effective_end": null,
+      "effective_end": "2026-09-04",
       "statement_cycle": {"close_day": 5, "ingest_delay_days": 1},
       "reward_cycle": {"basis": "STATEMENT_CYCLE"},
       "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
@@ -178,7 +178,7 @@
       },
       "programme_version": "confirmed-2026-08-v1",
       "effective_start": "2026-08-01",
-      "effective_end": null,
+      "effective_end": "2026-09-04",
       "statement_cycle": {"close_day": "LAST_DAY", "ingest_delay_days": 1},
       "reward_cycle": {"basis": "STATEMENT_CYCLE"},
       "payment_due": {"source": "STATEMENT", "forecast_offset_days": 30},
@@ -200,6 +200,660 @@
       "buckets": [
         {"code": "EI_AMAZON", "cashback_cap_aed": null, "categories": ["AMAZON"], "channels": ["ONLINE"], "assignment": {"categories": ["AMAZON"], "channels": ["ONLINE"]}}
       ]
+    },
+    {
+      "card": "RAK_WORLD",
+      "name": "RAKBANK World",
+      "short_name": "RAK World",
+      "programme_version": "observed-2026-09-05-v1",
+      "effective_start": "2026-09-05",
+      "effective_end": null,
+      "statement_cycle": {
+        "close_day": 5,
+        "ingest_delay_days": 1
+      },
+      "reward_cycle": {
+        "basis": "STATEMENT_CYCLE"
+      },
+      "payment_due": {
+        "source": "STATEMENT",
+        "forecast_offset_days": 30
+      },
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "CURRENCY_MINOR_UNIT",
+      "routing_priority": 20,
+      "exclusions": [
+        "Money transfers",
+        "Cash advances",
+        "Credit-card cheques",
+        "Bank fees and charges",
+        "Interest",
+        "Cancelled or reversed transactions",
+        "Other issuer-designated ineligible transactions"
+      ],
+      "source_references": [
+        {
+          "id": "rak-key-fact-statement",
+          "label": "Key Fact Statement",
+          "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-key-fact-statement/1483-key-fact-statement.pdf",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        },
+        {
+          "id": "rak-service-price-guide",
+          "label": "Service and Price Guide",
+          "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-service-and-price-guide/1483-service-and-price-guide.pdf",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        },
+        {
+          "id": "rak-terms-conditions",
+          "label": "Terms and Conditions",
+          "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---archive/1483-terms--conditions/1483-terms--conditions.pdf",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        },
+        {
+          "id": "rak-world-card-terms",
+          "label": "World Credit Card Terms",
+          "url": "https://www.rakbank.ae/en/help-centre/product-terms-kfs/terms-and-conditions/world-cc",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        },
+        {
+          "id": "rak-world-observed-20260905",
+          "label": "Issuer programme observed 2026-09-05",
+          "url": "https://www.rakbank.ae/globalassets/rakbank/all-pdfs/001---campaign/a-j00120-rak-cashback-leaflet---world_12062024-copy.pdf",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        }
+      ],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Issuer terms observed 2026-09-05; this version applies corrections from that observation date, not an asserted issuer commencement date. Historical versions are retained. Full eligibility, issuer effective dates and account-specific facts remain unverified.",
+        "claims": [
+          {
+            "kind": "TIER",
+            "path": "tiers.BASE",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "TIER",
+            "path": "tiers.ENHANCED",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.ENHANCED.rates.RAK_GROCERY",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.ENHANCED.rates.RAK_DINING",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.ENHANCED.rates.RAK_TRAVEL",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.ENHANCED.rates.RAK_STANDARD",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.ENHANCED.rates.RAK_EWALLET",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.RAK_GROCERY.cashback_cap_aed",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.RAK_DINING.cashback_cap_aed",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.RAK_TRAVEL.cashback_cap_aed",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.RAK_EWALLET.cashback_cap_aed",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.RAK_STANDARD.cashback_cap_aed",
+            "reference_ids": [
+              "rak-world-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          }
+        ]
+      },
+      "safety_target_aed": "10300",
+      "fx_cost_rate": "0",
+      "tiers": [
+        {
+          "code": "BASE",
+          "minimum_spend_aed": "0",
+          "rates": {}
+        },
+        {
+          "code": "ENHANCED",
+          "minimum_spend_aed": "10000",
+          "rates": {
+            "RAK_GROCERY": "0.10",
+            "RAK_DINING": "0.10",
+            "RAK_TRAVEL": "0.10",
+            "RAK_STANDARD": "0.01",
+            "RAK_EWALLET": "0.03"
+          }
+        }
+      ],
+      "buckets": [
+        {
+          "code": "RAK_GROCERY",
+          "cashback_cap_aed": "300",
+          "categories": [
+            "GROCERY"
+          ],
+          "assignment": {
+            "categories": [
+              "GROCERY"
+            ]
+          }
+        },
+        {
+          "code": "RAK_DINING",
+          "cashback_cap_aed": "300",
+          "categories": [
+            "DINING"
+          ],
+          "assignment": {
+            "categories": [
+              "DINING"
+            ]
+          }
+        },
+        {
+          "code": "RAK_TRAVEL",
+          "cashback_cap_aed": "400",
+          "categories": [
+            "TRAVEL",
+            "HOTEL",
+            "AIRLINE"
+          ],
+          "assignment": {
+            "categories": [
+              "TRAVEL",
+              "HOTEL",
+              "AIRLINE"
+            ]
+          }
+        },
+        {
+          "code": "RAK_EWALLET",
+          "cashback_cap_aed": "150",
+          "channels": [
+            "APPLE_PAY_POS"
+          ],
+          "assignment": {
+            "channels": [
+              "APPLE_PAY_POS"
+            ]
+          },
+          "excluded_categories": [
+            "GROCERY",
+            "DINING",
+            "TRAVEL",
+            "HOTEL",
+            "AIRLINE"
+          ]
+        },
+        {
+          "code": "RAK_STANDARD",
+          "cashback_cap_aed": "100",
+          "assignment": {
+            "fallback": true
+          },
+          "excluded_categories": [
+            "GROCERY",
+            "DINING",
+            "TRAVEL",
+            "HOTEL",
+            "AIRLINE"
+          ]
+        }
+      ]
+    },
+    {
+      "card": "SC_PLATINUM_X",
+      "name": "Standard Chartered Platinum X",
+      "short_name": "SC Platinum X",
+      "programme_version": "observed-2026-09-05-v1",
+      "effective_start": "2026-09-05",
+      "effective_end": null,
+      "statement_cycle": {
+        "close_day": 5,
+        "ingest_delay_days": 1
+      },
+      "reward_cycle": {
+        "basis": "STATEMENT_CYCLE"
+      },
+      "payment_due": {
+        "source": "STATEMENT",
+        "forecast_offset_days": 30
+      },
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "WHOLE_CURRENCY_UNIT_FLOOR",
+      "routing_priority": 10,
+      "exclusions": [
+        "Issuer-designated ineligible transactions"
+      ],
+      "source_references": [
+        {
+          "id": "sc-platinum-x-observed-20260905",
+          "label": "Issuer programme observed 2026-09-05",
+          "url": "https://www.sc.com/ae/credit-cards/platinum-x-cashback/",
+            "sha256": "81958a9b56b8fc8449be8d2a55d4501e5bdea010dd705fb04c6dbe165f0b4b6c",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        }
+      ],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Issuer terms observed 2026-09-05; this version applies corrections from that observation date, not an asserted issuer commencement date. Historical versions are retained. Full eligibility, issuer effective dates and account-specific facts remain unverified.",
+        "claims": [
+          {
+            "kind": "TIER",
+            "path": "tiers.BELOW_MIN",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "TIER",
+            "path": "tiers.TIER_3",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_3.rates.SC_ONLINE",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_3.rates.SC_WALLET",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_3.rates.SC_FOREIGN",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "TIER",
+            "path": "tiers.TIER_5",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_5.rates.SC_ONLINE",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_5.rates.SC_WALLET",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_5.rates.SC_FOREIGN",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "TIER",
+            "path": "tiers.TIER_10",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_10.rates.SC_ONLINE",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_10.rates.SC_WALLET",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "RATE",
+            "path": "tiers.TIER_10.rates.SC_FOREIGN",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.SC_ONLINE.cashback_cap_aed",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.SC_WALLET.cashback_cap_aed",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          },
+          {
+            "kind": "CAP",
+            "path": "buckets.SC_FOREIGN.cashback_cap_aed",
+            "reference_ids": [
+              "sc-platinum-x-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          }
+        ]
+      },
+      "safety_target_aed": "15300",
+      "fx_cost_rate": "0.0299",
+      "tiers": [
+        {
+          "code": "BELOW_MIN",
+          "minimum_spend_aed": "0",
+          "rates": {}
+        },
+        {
+          "code": "TIER_3",
+          "minimum_spend_aed": "2500",
+          "rates": {
+            "SC_ONLINE": "0.03",
+            "SC_WALLET": "0.03",
+            "SC_FOREIGN": "0.03"
+          },
+          "cashback_caps_aed": {
+            "SC_ONLINE": "100",
+            "SC_WALLET": "100",
+            "SC_FOREIGN": "100"
+          }
+        },
+        {
+          "code": "TIER_5",
+          "minimum_spend_aed": "7500",
+          "rates": {
+            "SC_ONLINE": "0.05",
+            "SC_WALLET": "0.05",
+            "SC_FOREIGN": "0.05"
+          },
+          "cashback_caps_aed": {
+            "SC_ONLINE": "200",
+            "SC_WALLET": "200",
+            "SC_FOREIGN": "200"
+          }
+        },
+        {
+          "code": "TIER_10",
+          "minimum_spend_aed": "15000",
+          "rates": {
+            "SC_ONLINE": "0.10",
+            "SC_WALLET": "0.10",
+            "SC_FOREIGN": "0.10"
+          },
+          "cashback_caps_aed": {
+            "SC_ONLINE": "400",
+            "SC_WALLET": "200",
+            "SC_FOREIGN": "400"
+          }
+        }
+      ],
+      "buckets": [
+        {
+          "code": "SC_ONLINE",
+          "cashback_cap_aed": "400",
+          "channels": [
+            "ONLINE"
+          ],
+          "base_currency_only": true,
+          "assignment": {
+            "channels": [
+              "ONLINE"
+            ],
+            "base_currency_only": true
+          }
+        },
+        {
+          "code": "SC_WALLET",
+          "cashback_cap_aed": "200",
+          "channels": [
+            "APPLE_PAY_POS"
+          ],
+          "base_currency_only": true,
+          "assignment": {
+            "channels": [
+              "APPLE_PAY_POS"
+            ],
+            "base_currency_only": true
+          }
+        },
+        {
+          "code": "SC_FOREIGN",
+          "cashback_cap_aed": "400",
+          "foreign_only": true,
+          "assignment": {
+            "foreign_only": true
+          }
+        },
+        {
+          "code": "SC_FILLER",
+          "cashback_cap_aed": null,
+          "base_currency_only": true,
+          "assignment": {
+            "channels": [
+              "PHYSICAL_POS"
+            ],
+            "base_currency_only": true
+          }
+        }
+      ]
+    },
+    {
+      "card": "EI_AMAZON",
+      "name": "Emirates Islamic Amazon",
+      "short_name": "EI Amazon",
+      "tracking": {
+        "mode": "STATEMENT_ONLY",
+        "position_mode": "SPEND",
+        "headline": "Reward eligibility unverified",
+        "detail": "Reward eligibility unknown"
+      },
+      "programme_version": "observed-2026-09-05-v1",
+      "effective_start": "2026-09-05",
+      "effective_end": null,
+      "statement_cycle": {
+        "close_day": "LAST_DAY",
+        "ingest_delay_days": 1
+      },
+      "reward_cycle": {
+        "basis": "STATEMENT_CYCLE"
+      },
+      "payment_due": {
+        "source": "STATEMENT",
+        "forecast_offset_days": 30
+      },
+      "refund_behavior": "REDUCE_CURRENT_CYCLE",
+      "rounding_behavior": "CURRENCY_MINOR_UNIT",
+      "routing_priority": 5,
+      "exclusions": [],
+      "source_references": [
+        {
+          "id": "ei-amazon-observed-20260905",
+          "label": "Issuer programme observed 2026-09-05",
+          "url": "https://www.emiratesislamic.ae/en/Personal-Banking/Cards/credit-cards/amazon-reward-points",
+          "effective_start": null,
+          "effective_end": null,
+          "authority": "NON_AUTHORITATIVE"
+        }
+      ],
+      "provenance": {
+        "authority": "NON_AUTHORITATIVE",
+        "reason": "Issuer terms observed 2026-09-05; this version applies corrections from that observation date, not an asserted issuer commencement date. Historical versions are retained. Full eligibility, issuer effective dates and account-specific facts remain unverified. Daily Prime status, Amazon purchase subtype and assigned credit limit are unknown; reward totals and routing are withheld, while statement spend remains visible.",
+        "claims": [
+          {
+            "kind": "RATE",
+            "path": "tiers.STANDARD.rates.EI_AMAZON",
+            "reference_ids": [
+              "ei-amazon-observed-20260905"
+            ],
+            "effective_start": "2026-09-05",
+            "effective_end": null
+          }
+        ]
+      },
+      "safety_target_aed": null,
+      "fx_cost_rate": "0",
+      "tiers": [
+        {
+          "code": "STANDARD",
+          "minimum_spend_aed": "0",
+          "rates": {
+            "EI_AMAZON": "0.06"
+          }
+        }
+      ],
+      "buckets": [
+        {
+          "code": "EI_AMAZON",
+          "cashback_cap_aed": null,
+          "categories": [
+            "AMAZON"
+          ],
+          "channels": [
+            "ONLINE"
+          ],
+          "assignment": {
+            "categories": [
+              "AMAZON"
+            ],
+            "channels": [
+              "ONLINE"
+            ]
+          }
+        }
+      ],
+      "reward_eligibility_verified": false
     }
   ],
   "payment_intents": [

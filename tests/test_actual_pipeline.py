@@ -270,7 +270,7 @@ Closing balance (Total to pay) -25.00
         }
         rows = transactions_from_actual_snapshot(snapshot, self.config())
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             date(2026, 7, 31),
             [PaymentIntent("AMAZON", money("100"), "AED", "ONLINE")],
@@ -401,7 +401,7 @@ Closing balance (Total to pay) -25.00
         ]
 
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             rows,
             date(2026, 8, 16),
             [PaymentIntent("FILLER", money("100"), "AED", "PHYSICAL_POS", conditional=True)],
@@ -416,7 +416,7 @@ Closing balance (Total to pay) -25.00
     def test_grocery_graph_considers_channels_and_reorders_after_rak_cap(self) -> None:
         profiles = self.cashback_config()["routing_profiles"]
         empty = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [],
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
@@ -431,7 +431,7 @@ Closing balance (Total to pay) -25.00
         )
 
         capped = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY")],
             date(2026, 8, 16),
             [PaymentIntent("GROCERY", money("100"), "AED", "PHYSICAL_POS")],
@@ -448,7 +448,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_prioritizes_under_pace_sc_over_rak_tier_unlock(self) -> None:
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -487,7 +487,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_uses_sc_filler_when_reward_buckets_are_full(self) -> None:
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -508,7 +508,7 @@ Closing balance (Total to pay) -25.00
 
     def test_grocery_graph_returns_to_rak_after_sc_target_is_secured(self) -> None:
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -532,7 +532,7 @@ Closing balance (Total to pay) -25.00
 
     def test_sc_online_cap_routes_wallet_amazon_and_filler_to_open_buckets(self) -> None:
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [
                 Transaction("rak-grocery-cap", datetime(2026, 8, 10), "RAK_WORLD", "Groceries", "3000", category="GROCERY", channel="PHYSICAL_POS", reward_bucket="RAK_GROCERY"),
                 Transaction("rak-dining-cap", datetime(2026, 8, 11), "RAK_WORLD", "Dining", "3000", category="DINING", channel="PHYSICAL_POS", reward_bucket="RAK_DINING"),
@@ -608,7 +608,7 @@ Closing balance (Total to pay) -25.00
 
     def test_late_cycle_keeps_target_for_routing_unavoidable_spend(self) -> None:
         dashboard = cashback_dashboard(
-            configured_programs(),
+            configured_programs(date(2026, 8, 16)),
             [],
             date(2026, 8, 28),
             [PaymentIntent("GENERAL", money("100"), "AED", "ONLINE")],

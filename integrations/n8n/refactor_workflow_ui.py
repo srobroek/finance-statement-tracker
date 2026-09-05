@@ -1076,6 +1076,18 @@ return [{ json: { ...trusted, resume_enumeration: true, replay_noop: false, curs
     acquisition["connections"]["Record Email PDF Render Requirement"] = {
         "main": [[{"node": "Merge Archive Verification Inputs", "type": "main", "index": 1}]]}
     node_by_name(acquisition, "Record Email PDF Render Requirement")["parameters"]["columns"]["value"]["onedrive_item_id"] = "={{ $json.onedrive_item_id }}"
+    # Isolate each attachment before optional native DataTable reads.
+    if not any(node["name"] == 'Archive One Attachment at a Time' for node in acquisition["nodes"]):
+        acquisition["nodes"].append({'parameters': {'batchSize': 1, 'options': {}}, 'id': 'w01-loop-enumerated-attachments', 'name': 'Archive One Attachment at a Time', 'type': 'n8n-nodes-base.splitInBatches', 'typeVersion': 3, 'position': [1460, 120]})
+    if not any(node["name"] == 'Return Verified Attachment to Loop' for node in acquisition["nodes"]):
+        acquisition["nodes"].append({'parameters': {'jsCode': "// Preserve the hash-verified receipt through the document-operation write.\nconst verified = $('Verify Enumerated Archive Receipt').item.json;\nif (verified.attachment_verified !== true || !verified.attachment_identity || !verified.onedrive_item_id)\n    throw new Error('ATTACHMENT_VERIFIED_RESULT_REQUIRED');\nreturn [{ json: verified }];\n"}, 'id': 'w01-return-verified-attachment', 'name': 'Return Verified Attachment to Loop', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [3900, 120]})
+    acquisition["connections"]['Expand Enumerated Attachment Items'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
+    acquisition["connections"]['Archive One Attachment at a Time'] = {'main': [[{'node': 'Merge Archive Verification Inputs', 'type': 'main', 'index': 0}], [{'node': 'Enumerated Attachment Present', 'type': 'main', 'index': 0}]]}
+    acquisition["connections"]['Record Enumerated Attachment Disposition'] = {'main': [[{'node': 'Return Verified Attachment to Loop', 'type': 'main', 'index': 0}]]}
+    acquisition["connections"]['Return Verified Attachment to Loop'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
+    acquisition["connections"]['Verify Existing Enumerated Archive Receipt'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
+    acquisition["connections"]['Empty Enumerated Attachment Verification'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
+    node_by_name(acquisition, "Upsert Enumerated Archive Receipt")["parameters"]["columns"]["value"]["archive_receipt_id"] = "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}"
     for workflow in (by_code["OUTLOOK_FINANCE_ACQUISITION"], sweep):
         for node in workflow["nodes"]:
             if (node["type"] == "n8n-nodes-base.dataTable"
@@ -3991,10 +4003,9 @@ const safeRows = name => {
     return [];
   }
 };
-const attachmentRows = [
-  ...safeRows('Verify Enumerated Attachment Archive'),
-  ...safeRows('Verify Existing Enumerated Archive Receipt'),
-].filter(row => row.attachment_verified === true && !row.attachment_empty);
+// Use all completed loop iterations, not a named node's first execution.
+const attachmentRows = $input.all().map(item => item.json)
+  .filter(row => row.attachment_verified === true && !row.attachment_empty);
 const observed = attachmentRows.map(
   row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id,
 );
@@ -4036,7 +4047,8 @@ const emailArchiveProof = emailRows
   }))
   .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));
 const archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();
-const archiveItemIds = [...new Set(emailArchiveProof.map(row => row.onedrive_item_id).filter(Boolean))].sort();
+const archiveItemIds = [...new Set([...emailArchiveProof, ...attachmentRows]
+  .map(row => row.onedrive_item_id).filter(Boolean))].sort();
 const first = attachmentRows[0] || emailRows[0] || {};
 return [{
   json: {

@@ -415,6 +415,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/events": self._post_events,
             "/api/events/validate": self._post_events_validate,
             "/api/ingest-runs": self._post_ingest_runs,
+            "/api/ingest/transaction": self._post_ingest_transaction,
+            "/api/ingest/receipt": self._post_ingest_receipt,
             "/api/ingest-state": self._post_ingest_state,
             "/api/reconcile": self._post_reconcile,
             "/api/corrections": self._post_corrections,
@@ -493,6 +495,20 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         )
         dashboard = rebuild_dashboard()
         return {"alert": result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_transaction(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a transaction object")
+        with WRITE_LOCK:
+            result = STORE.ingest_transaction(source)
+        dashboard = rebuild_dashboard()
+        return {**result, "event_store": dashboard["data_status"]}
+
+    def _post_ingest_receipt(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a scan receipt object")
+        with WRITE_LOCK:
+            return STORE.combine_transaction_receipts(source)
 
     def _post_ingest_runs(self, source: object) -> dict[str, object]:
         if not isinstance(source, dict):
