@@ -10,8 +10,9 @@ not initiate a separate mailbox scan or submit an independent ingestion batch.
 2. Review only the unresolved fields allowed by the handoff policy. Preserve
    amounts, dates, card identity, source IDs, deduplication keys, manual locks,
    reward arithmetic, and reconciliation state.
-3. Return an empty proposal when the supplied evidence is insufficient. Keep
-   failed, partial, ambiguous, or review-required executions visible in n8n.
+3. Return an empty proposal when the supplied evidence is insufficient. Require
+   durable redacted receipts for failed, partial, ambiguous, or review-required
+   runs; the deployed retention policy may discard execution history.
 4. Return bounded proposals to the exact n8n execution. The workflow and
    companion validate and persist them; this review never advances a cursor.
 5. Live notifications may update cashback buckets immediately, but statement

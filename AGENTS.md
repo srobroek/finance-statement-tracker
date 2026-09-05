@@ -37,6 +37,11 @@ Valid notification transactions count in live cashback buckets immediately and r
 
 Statement and cashback close are scheduled independently per card. RAKBANK World and Standard Chartered Platinum X close on day 5 and reconcile on day 6; Emirates Islamic Amazon closes at month-end and reconciles on day 1. Wio statement ingestion runs on day 3 because its statement normally arrives on day 1 or 2, and Wio is outside the live cashback programme. A card closes only after statement evidence has been ingested and reconciliation has succeeded. The final reconciled ledger becomes the authoritative cashback source, then the next card period opens. Aggregate finance close is event-driven when the last required card period closes; the legacy daily gate remains paused. Payment due dates must come from the statement when available, while the configured 30-day offset is forecast-only.
 
+Statement ingestion uses issuer monthly statements, including historical ADCB
+backfills. Multi-month activity exports are not substitutes for monthly statement
+evidence. ADCB has no recurring acquisition schedule. This restriction does not
+disable supported live notification ingestion or its immediate cashback updates.
+
 Manual overrides always win. Never let an AI stage modify locked fields, transaction amounts, reward arithmetic, source IDs, reconciliation state, or deduplication keys.
 
 ## Rule semantics

@@ -258,3 +258,33 @@ test("managed schedule retirement fails closed when Actual rejects deletion", as
     /refused to retire schedule retired/,
   );
 });
+
+test("bootstrap replaces obsolete native vendor boundaries and preserves manual rules", async () => {
+  const fs = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const { reconcileRules, resolveBootstrapReferences } = await import("./bootstrap-resources.mjs");
+  const configPath = fileURLToPath(new URL("../../config/actual-bootstrap.json", import.meta.url));
+  const readJson = async filename => JSON.parse(await fs.readFile(filename, "utf8"));
+  const config = await readJson(configPath);
+  const refMap = {
+    payee: new Map(config.payees.map(row => [row.name.toLowerCase(), { id: row.name }])),
+    category: new Map(config.category_groups.flatMap(group => group.categories.map(name => [name.toLowerCase(), { id: name }]))),
+  };
+  const obsolete = config.retired_rules.filter(rule => rule.conditions.some(condition =>
+    condition.op === "matches" && /\[Aa\]|\[Ee\]/.test(condition.value) && condition.value.includes("[^A-Z")));
+  assert.equal(obsolete.length, 2);
+  const manual = { id: "manual", stage: "pre", conditions: [{ field: "imported_payee", op: "is", value: "Personal merchant" }], actions: [{ field: "payee", op: "set", value: "Personal payee" }] };
+  let rules = [manual, ...obsolete.map((rule, index) => ({ ...resolveBootstrapReferences(rule, refMap), id: `obsolete-${index}` }))];
+  const api = {
+    getRules: async () => rules,
+    deleteRule: async id => { rules = rules.filter(rule => rule.id !== id); return true; },
+    createRule: async rule => { rules.push({ ...rule, id: `created-${rules.length}` }); },
+  };
+  const changes = [];
+  await reconcileRules({ api, config, apply: true, configPath, refs: refMap, changes, readJson });
+  assert.deepEqual(changes.filter(row => row.action === "delete").map(row => row.id).sort(), ["obsolete-0", "obsolete-1"]);
+  assert.ok(rules.includes(manual));
+  const secondChanges = [];
+  await reconcileRules({ api, config, apply: false, configPath, refs: refMap, changes: secondChanges, readJson });
+  assert.deepEqual(secondChanges, []);
+});

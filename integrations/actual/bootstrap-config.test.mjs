@@ -217,3 +217,29 @@ test("maps canonical stages to Actual pre, default, and post stages", () => {
   assert.deepEqual(result.rules.map(rule => rule.stage), ["pre", null]);
   assert.equal(result.skipped.at(-1).reason, "WORKER_ONLY_NOTE_ACTIONS");
 });
+
+
+test("native regex classes preserve canonical case-insensitive vendor boundaries", () => {
+  const patterns = [
+    "(?:^|[^A-Z0-9])AWS(?:[^A-Z0-9]|$)",
+    "^[A-C]+$",
+    "^[^a-c]+$",
+    String.raw`^[\x41-\x43]+$`,
+    String.raw`^[A-Z\]0-9]+$`,
+  ];
+  const samples = ["AWS", "aws", " AWS ", "claws", "clAWS", "AWSome", "aBc", "ABC", "abc", "XYZ", "xyz", "]", "0"];
+  for (const pattern of patterns) {
+    const compiled = compileCanonicalRules([{
+      rule_id: "case-classes",
+      native_actual: true,
+      stage: "VENDOR_NORMALIZATION",
+      match: { any: [{ all: [{ field: "merchant_raw", operator: "regex", value: pattern }] }] },
+      actions: [{ action: "set", field: "vendor", value: "Test vendor" }],
+    }]);
+    const native = new RegExp(compiled.rules[0].conditions[0].value);
+    const canonical = new RegExp(pattern, "i");
+    for (const sample of samples) {
+      assert.equal(native.test(sample), canonical.test(sample), `${pattern}: ${sample}`);
+    }
+  }
+});
