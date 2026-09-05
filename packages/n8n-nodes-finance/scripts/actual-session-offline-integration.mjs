@@ -96,8 +96,9 @@ function actualSessionApi() {
     async shutdown() {},
     getServerVersion: () => actual.getServerVersion(),
     getAccounts: () => actual.getAccounts(),
-    getAccountBalance: accountId => actual.getAccountBalance(accountId),
+    getAccountBalance: (...args) => actual.getAccountBalance(...args),
     getCategories: () => actual.getCategories(),
+    getPayees: () => actual.getPayees(),
     getTransactions: (...args) => actual.getTransactions(...args),
     async importTransactions(...args) {
       const result = await actual.importTransactions(...args);
@@ -132,6 +133,8 @@ async function main() {
     const session = new ActualSession(actualSessionApi(), tempRoot);
     const groupId = await actual.createCategoryGroup({ name: 'Offline integration' });
     const categoryId = await actual.createCategory({ name: 'Manual category', group_id: groupId });
+    const knownPayeeId = await actual.createPayee({name: 'Known statement merchant'});
+    await settleActual();
 
     // New posted rows must be materialized and change the account balance by
     // exactly the amount that Actual reports as added.
@@ -300,6 +303,20 @@ async function main() {
     assert.equal(historicalRows.length, 2);
     assert.ok(historicalRows.some(row => row.imported_id === laterRow.imported_id && row.date === laterRow.date));
     assert.ok(historicalRows.some(row => row.imported_id === historicalRow.imported_id && row.date === historicalRow.date));
+    const monthReceipt = await session.verify(credential, {
+      account_id: historicalAccount, expected_transactions: [historicalRow],
+      start_date: '2026-07-01', end_date: '2026-07-31', expected_account_balance: -222,
+    });
+    assert.equal(monthReceipt.account_balance, -222);
+    await assert.rejects(session.verify(credential, {
+      account_id: historicalAccount, expected_transactions: [historicalRow],
+      start_date: '2026-07-01', end_date: '2026-07-31', expected_account_balance: -999,
+    }), /account balance mismatch/);
+    const classificationReadback = await session.read(credential, {shape: 'categories'});
+    assert.equal(classificationReadback.actual_file_id, credential.syncId);
+    assert.ok(classificationReadback.rows.some(row => row.id === categoryId));
+    assert.ok(classificationReadback.payees.some(row => row.id === knownPayeeId));
+
 
     // Actual intentionally refuses to re-add a deleted imported ID when
     // reimportDeleted=false. ActualSession therefore fails closed after its
@@ -335,6 +352,7 @@ async function main() {
         'new import ID matched manual row with zero balance delta',
         'new import ID matched manual split without changing parent or child fields',
         'historical ADCB row imported alongside later existing row',
+        'statement end-date balance excludes later rows and trusted classification IDs read back',
         'deleted row was not resurrected (session failed closed)',
       ],
     }, null, 2));

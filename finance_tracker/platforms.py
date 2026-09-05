@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 from typing import Iterable, Protocol
 
@@ -132,8 +133,13 @@ class ActualBudgetAdapter:
                 raise ValueError(
                     f"transaction {transaction.transaction_id!r} has no destination account"
                 )
+            transaction_date = transaction.transaction_at.date().isoformat()
+            post_date = transaction.metadata.get("statement_post_date") if transaction.source_type in {"statement", "statement_pdf"} else None
+            ledger_date = date.fromisoformat(str(post_date)).isoformat() if post_date else transaction_date
+            if ledger_date < transaction_date:
+                raise ValueError("statement posting date precedes transaction date")
             record: dict[str, object] = {
-                "date": transaction.transaction_at.date().isoformat(),
+                "date": ledger_date,
                 "amount": _actual_amount(transaction),
                 "payee_name": transaction.vendor or transaction.merchant_raw,
                 "imported_payee": transaction.merchant_raw,
@@ -163,7 +169,7 @@ class ActualBudgetAdapter:
                 semantic_tags.append(f"owner-{_actual_tag(transaction.owner)}")
             if transaction.review_required:
                 semantic_tags.append("needs-review")
-            record["notes"] = format_actual_notes(tags=semantic_tags)
+            record["notes"] = format_actual_notes(tags=semantic_tags, memos=[f"Transaction date {transaction_date}; posted {ledger_date}"] if ledger_date != transaction_date else [])
             grouped.setdefault(transaction.account, []).append(record)
 
         return [

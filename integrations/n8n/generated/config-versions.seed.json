@@ -22,9 +22,9 @@
     },
     {
       "config_name": "static-rules.seed",
-      "version": "sha256-92680d5c55464a77",
+      "version": "sha256-477f1f2114e4f5bc",
       "source_path": "config/static-rules.seed.json",
-      "content_sha256": "92680d5c55464a77bf5f4ed5be76265386d7f7a29c0815fba0d6752357cfa690",
+      "content_sha256": "477f1f2114e4f5bcc4c7fbfb58e603eb9506edc7b922e30a8c3cbb3897486fd1",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -42,7 +42,7 @@
       "config_name": "statement-sources",
       "version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

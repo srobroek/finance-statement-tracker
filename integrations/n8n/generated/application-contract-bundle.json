@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
-  "schema_sha256": "0830e631e6ac2d4b12fc07b73a8e87d0a8e296394d7c6df97227e20ca80c0eb1",
+  "schema_sha256": "58d9425039ea71a4a95a89c71e278355d69b806316e7e2ea290ad2b9cad6abec",
   "content_digest": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
@@ -10,11 +10,11 @@
       "bundle_content_sha256"
     ]
   },
-  "bundle_content_sha256": "b403bcda8b77b4d5022e4cf0b68bc9caf90dce1dce85a8dcb4e178ab602fdcb5",
+  "bundle_content_sha256": "84e80d1c0f8f329b647b2807b056df44363771b364bab329b71eda1e252cc1bc",
   "source_documents": [
     {
       "path": "config/statement-sources.json",
-      "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+      "sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
     },
     {
       "path": "config/transaction-email-sources.json",
@@ -88,7 +88,7 @@
       "sources": [
         {
           "path": "config/statement-sources.json",
-          "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+          "sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
         }
       ],
       "entries": [
@@ -107,7 +107,7 @@
             "email_subjects": [
               "ADCB Credit card e-Statement"
             ],
-            "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+            "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
           }
         },
         {
@@ -182,7 +182,7 @@
       "sources": [
         {
           "path": "config/statement-sources.json",
-          "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+          "sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
         }
       ],
       "entries": [
@@ -201,7 +201,7 @@
             "email_subjects": [
               "ADCB Credit card e-Statement"
             ],
-            "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+            "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
           }
         },
         {
@@ -601,7 +601,7 @@
       "source_code": "ADCB_CASHBACK",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "contract": {
         "card_code": "ADCB_CASHBACK",
         "institution": "ADCB",
@@ -615,14 +615,14 @@
         "email_subjects": [
           "ADCB Credit card e-Statement"
         ],
-        "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+        "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
       }
     },
     {
       "source_code": "EI_AMAZON",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "contract": {
         "card_code": "EI_AMAZON",
         "institution": "Emirates Islamic",
@@ -643,7 +643,7 @@
       "source_code": "WIO_CREDIT",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "contract": {
         "card_code": "WIO_CREDIT",
         "institution": "Wio",
@@ -665,7 +665,7 @@
       "source_code": "RAK_WORLD",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "contract": {
         "card_code": "RAK_WORLD",
         "institution": "RAKBANK",
@@ -681,7 +681,7 @@
       "source_code": "SC_PLATINUM_X",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "contract": {
         "card_code": "SC_PLATINUM_X",
         "institution": "Standard Chartered",
@@ -741,7 +741,7 @@
       "config_name": "statement-sources",
       "version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35",
+      "content_sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6",
       "state": "ACTIVE"
     },
     {

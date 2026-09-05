@@ -46,6 +46,7 @@ export interface ActualImportTransaction {
   amount: number;
   imported_payee: string;
   notes?: string;
+  payee?: string;
   category?: string;
   cleared?: boolean;
 }
@@ -67,6 +68,7 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
       amount: Number(amount),
       imported_payee: requiredString(row.imported_payee, `${label}[${index}].imported_payee`, 512),
       ...(row.notes === undefined ? {} : { notes: requiredString(row.notes, `${label}[${index}].notes`, 4000) }),
+      ...(row.payee === undefined ? {} : { payee: requiredString(row.payee, `${label}[${index}].payee`, 128) }),
       ...(row.category === undefined ? {} : { category: requiredString(row.category, `${label}[${index}].category`, 128) }),
       ...(row.cleared === undefined ? {} : { cleared: Boolean(row.cleared) }),
     };

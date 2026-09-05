@@ -47,6 +47,16 @@ class ActualBudgetAdapterTests(TestCase):
         self.assertFalse(envelopes[0].default_cleared)
         self.assertEqual(refund["amount"], 450)
 
+    def test_statement_posting_date_controls_actual_ledger_date_and_keeps_purchase_date(self) -> None:
+        row = Transaction(transaction_id="statement:cross-month", transaction_at=datetime(2026, 6, 30),
+                          card="EI_AMAZON", account="Card", merchant_raw="AMAZON", amount_aed=Decimal("93.42"),
+                          source_type="statement_pdf", metadata={"statement_post_date": "2026-07-01"})
+        record = ActualBudgetAdapter().serialize_import([row])[0].records[0]
+        self.assertEqual(record["date"], "2026-07-01")
+        self.assertEqual(record["imported_id"], row.transaction_id)
+        self.assertIn("Memo: Transaction date 2026-06-30; posted 2026-07-01", record["notes"])
+        self.assertEqual(row.transaction_at, datetime(2026, 6, 30))
+
     def test_statement_rows_are_cleared_and_tags_are_actual_safe(self) -> None:
         row = Transaction(
             transaction_id="statement:one",

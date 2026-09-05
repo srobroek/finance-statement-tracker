@@ -89,22 +89,22 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "459a4b0d44352b0174f6495d311983092702410001a88b1b7952805dc647b8f3"
+      "sha256": "2342328ddaac2fbf08f343a6ef9f4f8a0964a4b11d66c61deb749a7933bc0d92"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "7228b0d5e5528be05a2f0e328d5536dadbb7ba3c403f20ea3b8f5eaa54d3687d"
+      "sha256": "15fbb5e1ac092bac8b3c5657659f2310a233156b0c7522440696d1d7df55816e"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "04b9393e126faef710bf43f06184f656e91132f29525343764ff7fda33d5be32"
+      "sha256": "f64d496e5ec1f9ecbc227a0b19882f1074aff13769aa04799610f2a9d22884d0"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "1ccdb98d12e86ee1f9a7a9de712381939c51359ce9812605dde738333ff722ce"
+      "sha256": "d92a901238e59978bc8eb832467363dc36f8af3faa8cde64053a1d4aaa696377"
     }
   ],
   "scenario_contract": {

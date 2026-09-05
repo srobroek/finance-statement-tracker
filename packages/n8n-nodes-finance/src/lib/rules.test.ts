@@ -65,7 +65,7 @@ test('transaction topic is set only during normalization then locked', () => {
 
 test('compatibility matrix rejects unsupported and Actual-owned constructs loudly', () => {
   assert.throws(() => validateNonRepresentableRule({ ...rule, match: { any: [{ all: [{ field: 'merchant_raw', operator: 'script', value: 'x' }] }] } }), /unsupported/);
-  assert.throws(() => validateNonRepresentableRule({ ...rule, actions: [{ action: 'add_tag', value: '#shared' }] }), /unsupported n8n action/);
+  assert.doesNotThrow(() => validateNonRepresentableRule({ ...rule, actions: [{ action: 'add_tag', value: '#shared' }] }));
 });
 
 test('unsafe regular expressions are rejected', () => {
@@ -111,4 +111,55 @@ test('date rules use the source calendar date and tags obey case sensitivity', (
   const tagRule = { ...rule, match: { any: [{ all: [{ field: 'tags', operator: 'has_tag', value: '#SHARED' }] }] } };
   assert.equal(applyNonRepresentableRules({ tags: ['#shared'] }, [tagRule]).vendor, 'Amazon');
   assert.equal(applyNonRepresentableRules({ tags: ['#shared'] }, [{ ...tagRule, match: { any: [{ all: [{ ...tagRule.match.any[0].all[0], case_sensitive: true }] }] } }]).vendor, undefined);
+});
+
+
+test('compiled FULL_LEDGER rules all validate and classify real merchant fixtures', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const compiled = JSON.parse(readFileSync(resolve(process.cwd(), '../../integrations/n8n/generated/n8n-runtime-rules.json'), 'utf8'));
+  const rules = compiled.rules.filter((item: { rule_sets: string[] }) => item.rule_sets.includes('FULL_LEDGER'));
+  assert.ok(rules.length > 100);
+  for (const item of rules) assert.doesNotThrow(() => validateNonRepresentableRule(item), item.rule_id);
+  const after = applyNonRepresentableRules({ merchant_raw: 'CARREFOUR', card: 'ADCB_365', currency: 'AED', amount_aed: 100, spend_aed: 100, source_direction: 'DEBIT', is_foreign: false }, rules);
+  assert.equal(after.vendor, 'Carrefour');
+  assert.ok(after.category);
+  assert.ok(Array.isArray(after.tags));
+});
+
+test('classification tagging evidence and cashback respect sequence and stage locks', () => {
+  const matched = { ...rule, match: { any: [{ all: [{ field: 'merchant_raw', operator: 'contains', value: 'AMZN' }] }] } };
+  const rules = [
+    { ...matched, stage: 'CLASSIFICATION', actions: [{ action: 'set_if_empty', field: 'category', value: 'Shopping' }, { action: 'set', field: 'transaction_type', value: 'FEE' }] },
+    { ...matched, stage: 'TAGGING', actions: [{ action: 'remove_tag', value: 'old', sequence: 30 }, { action: 'add_tags', value: ['old', 'online'], sequence: 10 }, { action: 'add_tag', value: 'purchase', sequence: 20 }] },
+    { ...matched, stage: 'EVIDENCE', actions: [{ action: 'request_evidence', value: 'RECEIPT' }] },
+    { ...matched, stage: 'CASHBACK', actions: [{ action: 'set', field: 'reward_bucket', value: 'online' }] },
+  ];
+  const result = applyNonRepresentableRules({ merchant_raw: 'AMZN UAE', category: 'Manual', locked_fields: ['category'] }, rules);
+  assert.equal(result.category, 'Manual');
+  assert.equal(result.transaction_type, 'PURCHASE');
+  assert.deepEqual(result.tags, ['online', 'purchase']);
+  assert.equal(result.evidence_policy, 'RECEIPT');
+  assert.equal(result.evidence_status, 'REQUESTED');
+  assert.equal(result.reward_bucket, 'online');
+  for (const field of ['evidence_policy', 'evidence_status']) {
+    const locked = applyNonRepresentableRules({ merchant_raw: 'AMZN', evidence_policy: 'NONE', evidence_status: 'VERIFIED', locked_fields: [field, 'tags', 'reward_bucket'] }, rules);
+    assert.equal(locked.evidence_policy, 'NONE');
+    assert.equal(locked.evidence_status, 'VERIFIED');
+    assert.equal(locked.tags, undefined);
+    assert.equal(locked.reward_bucket, undefined);
+  }
+});
+
+
+test('derived conditions use normalized topic and currency instead of stale supplied flags', () => {
+  const transfer = { ...rule, stage: 'TRANSACTION_NORMALIZATION', actions: [{ action: 'set', field: 'transaction_type', value: 'TRANSFER' }] };
+  const spend = { ...rule, stage: 'CASHBACK', match: { any: [{ all: [{ field: 'spend_aed', operator: 'gt', value: 0 }] }] }, actions: [{ action: 'set', field: 'reward_bucket', value: 'eligible' }] };
+  assert.equal(applyNonRepresentableRules({ merchant_raw: 'AMZN', amount_aed: 100, spend_aed: 100 }, [transfer, spend]).reward_bucket, undefined);
+  const foreign = { ...spend, match: { any: [{ all: [{ field: 'is_foreign', operator: 'is_true' }] }] } };
+  assert.equal(applyNonRepresentableRules({ currency: 'USD', is_foreign: false }, [foreign]).reward_bucket, 'eligible');
+  assert.equal(applyNonRepresentableRules({ currency: 'AED', is_foreign: true }, [foreign]).reward_bucket, undefined);
+  const refund = { ...spend, match: { any: [{ all: [{ field: 'spend_aed', operator: 'numeric_equals', value: -100 }] }] } };
+  for (const flags of [{ transaction_type: 'REFUND' }, { transaction_type: 'REVERSAL' }, { transaction_type: 'PURCHASE', is_refund: true }])
+    assert.equal(applyNonRepresentableRules({ ...flags, amount_aed: 100, spend_aed: 100 }, [refund]).reward_bucket, 'eligible');
 });

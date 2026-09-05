@@ -21,6 +21,7 @@ OUT_DIR = ROOT / "integrations" / "n8n" / "generated"
 MANIFEST = OUT_DIR / "rule-ownership-manifest.json"
 N8N_RULES = OUT_DIR / "n8n-runtime-rules.json"
 ACTUAL_RULES = OUT_DIR / "actual-rules.json"
+PACKAGED_N8N_RULES = ROOT / "packages" / "n8n-nodes-finance" / "src" / "generated" / "n8n-runtime-rules.json"
 
 CAPABILITY_VERSION = "actual-rule-capability-v1"
 ACTUAL_STAGES = {"CLASSIFICATION"}
@@ -118,9 +119,11 @@ def main() -> int:
     args = parser.parse_args()
     rules = json.loads(SOURCE.read_text(encoding="utf-8"))
     outputs = dict(zip((MANIFEST, N8N_RULES, ACTUAL_RULES), compile_outputs(rules), strict=True))
+    outputs[PACKAGED_N8N_RULES] = outputs[N8N_RULES]
     if args.write:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         for path, value in outputs.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(_render(value), encoding="utf-8", newline="\n")
         return 0
     drift = [str(path.relative_to(ROOT)) for path, value in outputs.items() if not path.exists() or path.read_text(encoding="utf-8") != _render(value)]

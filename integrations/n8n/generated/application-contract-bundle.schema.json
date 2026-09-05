@@ -71,7 +71,7 @@
               "const": "config/statement-sources.json"
             },
             "sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             }
           },
           "additionalProperties": false
@@ -217,7 +217,7 @@
               "const": [
                 {
                   "path": "config/statement-sources.json",
-                  "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+                  "sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
                 }
               ]
             },
@@ -238,7 +238,7 @@
                     "email_subjects": [
                       "ADCB Credit card e-Statement"
                     ],
-                    "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+                    "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
                   }
                 },
                 {
@@ -332,7 +332,7 @@
               "const": [
                 {
                   "path": "config/statement-sources.json",
-                  "sha256": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+                  "sha256": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
                 }
               ]
             },
@@ -353,7 +353,7 @@
                     "email_subjects": [
                       "ADCB Credit card e-Statement"
                     ],
-                    "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+                    "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
                   }
                 },
                 {
@@ -799,7 +799,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "contract": {
               "const": {
@@ -815,7 +815,7 @@
                 "email_subjects": [
                   "ADCB Credit card e-Statement"
                 ],
-                "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
+                "notes": "Monthly PDF parser and exact mailbox contract support historical ADCB backfills only; no recurring acquisition schedule is enabled."
               }
             }
           },
@@ -841,7 +841,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "contract": {
               "const": {
@@ -883,7 +883,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "contract": {
               "const": {
@@ -926,7 +926,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "contract": {
               "const": {
@@ -963,7 +963,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "contract": {
               "const": {
@@ -1092,7 +1092,7 @@
               "const": "config/statement-sources.json"
             },
             "content_sha256": {
-              "const": "b6e79ecff06398103247600dbcbff329dd3d8fded998270ec369024ba2407c35"
+              "const": "3f2c98d7fbcc1f06349bd7520bcc1acd94385862a2f20b0d39ee63b943c138d6"
             },
             "state": {
               "const": "ACTIVE"

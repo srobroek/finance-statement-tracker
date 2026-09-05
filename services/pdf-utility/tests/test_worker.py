@@ -69,6 +69,9 @@ class WorkerTests(unittest.TestCase):
             payload = json.loads(result.read_text(encoding="utf-8"))
             self.assertTrue(payload["encrypted"])
             self.assertIsNone(payload["pages"])
+            self.assertEqual(payload["status"], "locked")
+            self.assertIsNone(payload["active_content"])
+            self.assertFalse(payload["structure_verified"])
 
     def test_rejects_invalid_header_corrupt_polyglot_active_content_and_page_bomb(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -86,6 +89,113 @@ class WorkerTests(unittest.TestCase):
                     completed = self.invoke("validate", source, result)
                     self.assertNotEqual(completed.returncode, 0)
                     self.assertFalse(result.exists())
+
+    def test_encrypted_fit_destination_is_checked_after_unlock_and_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, output, result, password = (root / name for name in ("view.pdf", "unlocked.pdf", "result.json", "password"))
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page()
+            pdf.Root.OpenAction = pikepdf.Array([page.obj, pikepdf.Name.Fit])
+            pdf.save(source, encryption=pikepdf.Encryption(user="secret", owner="secret", R=6))
+            password.write_text("secret")
+            completed = self.invoke("validate", source, result)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(json.loads(result.read_text())["status"], "locked")
+            self.assertIsNone(json.loads(result.read_text())["active_content"])
+            completed = self.invoke("unlock", source, result, output=output, password_file=password)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertTrue(json.loads(result.read_text())["structure_verified"])
+            with pikepdf.open(output) as unlocked:
+                self.assertEqual(str(unlocked.Root.OpenAction[1]), "/Fit")
+                self.assertEqual(unlocked.Root.OpenAction[0].objgen, unlocked.pages[0].obj.objgen)
+            completed = self.invoke("profile", output, result)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertFalse(json.loads(result.read_text())["active_content"])
+
+    def test_finite_local_xyz_and_fit_rectangle_destinations_are_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for index, tail in enumerate(((pikepdf.Name.XYZ, None, 100, 1), (pikepdf.Name.FitR, 0, 0, 100, 100))):
+                pdf = pikepdf.Pdf.new()
+                page = pdf.add_blank_page()
+                pdf.Root.OpenAction = pikepdf.Array([page.obj, *tail])
+                source, result = root / f"view{index}.pdf", root / f"result{index}.json"
+                pdf.save(source)
+                completed = self.invoke("validate", source, result)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertTrue(json.loads(result.read_text())["structure_verified"])
+
+    def test_rejects_open_action_dictionaries_malformed_arrays_and_nonpage_destinations(self) -> None:
+        cases = ("javascript", "launch", "goto_dictionary", "short", "long", "string_mode", "bad_mode", "bad_page", "bad_coordinate", "named")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for case in cases:
+                with self.subTest(case=case):
+                    pdf = pikepdf.Pdf.new()
+                    page = pdf.add_blank_page()
+                    value = {
+                        "javascript": pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String("app.alert(1)")),
+                        "launch": pikepdf.Dictionary(S=pikepdf.Name.Launch, F=pikepdf.String("file")),
+                        "goto_dictionary": pikepdf.Dictionary(S=pikepdf.Name.GoTo, D=pikepdf.Array([page.obj, pikepdf.Name.Fit])),
+                        "short": pikepdf.Array([page.obj]),
+                        "long": pikepdf.Array([page.obj, pikepdf.Name.Fit, 0]),
+                        "string_mode": pikepdf.Array([page.obj, pikepdf.String("/Fit")]),
+                        "bad_mode": pikepdf.Array([page.obj, pikepdf.Name.JavaScript]),
+                        "bad_page": pikepdf.Array([pdf.Root, pikepdf.Name.Fit]),
+                        "bad_coordinate": pikepdf.Array([page.obj, pikepdf.Name.XYZ, None, pikepdf.Dictionary(), 1]),
+                        "named": pikepdf.String("chapter1"),
+                    }[case]
+                    pdf.Root.OpenAction = value
+                    source, result = root / (case + ".pdf"), root / (case + ".json")
+                    pdf.save(source, object_stream_mode=pikepdf.ObjectStreamMode.generate)
+                    completed = self.invoke("validate", source, result)
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertFalse(result.exists())
+
+    def test_compressed_encrypted_active_content_is_unknown_until_unlock_then_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, output, result, password = (root / name for name in ("active.pdf", "output.pdf", "result.json", "password"))
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page()
+            # The catalog's view is safe; a separate compressed action is not.
+            pdf.Root.OpenAction = pikepdf.Array([page.obj, pikepdf.Name.Fit])
+            page.obj.AA = pikepdf.Dictionary(O=pikepdf.Dictionary(S=pikepdf.Name.JavaScript, JS=pikepdf.String("app.alert(1)")))
+            pdf.save(source, encryption=pikepdf.Encryption(user="secret", owner="secret", R=6), object_stream_mode=pikepdf.ObjectStreamMode.generate)
+            self.assertNotIn(b"/JavaScript", source.read_bytes())
+            self.assertNotIn(b"/AA", source.read_bytes())
+            password.write_text("secret")
+            completed = self.invoke("validate", source, result)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertFalse(json.loads(result.read_text())["structure_verified"])
+            self.assertIsNone(json.loads(result.read_text())["active_content"])
+            result.unlink()
+            completed = self.invoke("unlock", source, result, output=output, password_file=password)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertFalse(output.exists())
+            self.assertFalse(result.exists())
+
+    def test_profile_uses_geometry_to_rejoin_issuer_period_labels_and_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, result = root / "reading-order.pdf", root / "result.json"
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page(page_size=(600, 800))
+            font = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))
+            page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+            # The dates occur later in the content stream but alongside their
+            # labels on the page, as in the real encrypted EI statement.
+            page.obj.Contents = pdf.make_stream(b"BT /F1 12 Tf 20 700 Td (From:) Tj ET\nBT /F1 12 Tf 20 680 Td (To:) Tj ET\nBT /F1 12 Tf 56 700 Td (1st Aug 2026) Tj ET\nBT /F1 12 Tf 40 680 Td (31st Aug 2026) Tj ET")
+            pdf.save(source)
+            completed = self.invoke("profile", source, result)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(result.read_text())
+            self.assertIn("From: 1st Aug 2026", payload["extracted_text"])
+            self.assertIn("To: 31st Aug 2026", payload["extracted_text"])
+            self.assertEqual(payload["extraction_engine"], "pdfplumber")
+            self.assertEqual(payload["extraction_x_tolerance"], 2)
+            self.assertEqual(payload["extraction_y_tolerance"], 3)
 
     def test_cli_rejects_unknown_operation_and_extra_argument(self) -> None:
         completed = subprocess.run([sys.executable, str(WORKER), "--operation", "shell", "--input", "x", "--result", "y"], capture_output=True, check=False)

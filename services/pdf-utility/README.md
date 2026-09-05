@@ -13,6 +13,19 @@ non-logged `X-Statement-Password` header. Profile is fixed to
 `X-Pdf-Profile: statement-v1`. The service exposes no filesystem path, URL,
 command, parser name, output destination, or finance credential.
 
+Validation checks both bounded PDF bytes and decoded objects. A catalog
+`OpenAction` may contain only a valid explicit destination to an existing local
+page (such as `/Fit`); action dictionaries, scripts, embedded files and
+additional actions remain rejected, including objects hidden in compressed
+streams. An encrypted PDF without its password returns `status: locked`,
+`structure_verified: false` and `active_content: null`; only successful unlock
+and structural inspection can establish that it is safe to profile.
+
+The `statement-v1` profile uses pinned `pdfplumber` with `x_tolerance=2` and
+`y_tolerance=3`, matching the canonical statement extractor. Geometry joins
+issuer labels with their dates even when PDF stream order separates them.
+The fixed page, text-size, memory and CPU limits still apply.
+
 Run with `network_mode: none`, a read-only root filesystem, a tmpfs `/tmp`, a
 shared socket volume, and the resource/security limits in `compose.example.yml`.
 The n8n container mounts only the socket volume. The utility must never mount

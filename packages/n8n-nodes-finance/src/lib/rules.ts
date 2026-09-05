@@ -12,7 +12,7 @@ const CONDITION_FIELDS = new Set([
   'source_direction', 'channel', 'source_type', 'vendor', 'transaction_type',
   'evidence_policy', 'evidence_status', 'review_required', 'is_refund',
   'is_foreign', 'is_subscription', 'property_code', 'rental_unit', 'reference',
-  'mcc', 'history_count', 'tags',
+  'mcc', 'history_count', 'tags', 'category', 'subcategory', 'reward_bucket',
 ]);
 const NUMERIC_FIELDS = new Set(['amount', 'amount_aed', 'spend_aed', 'amount_original', 'history_count']);
 const BOOLEAN_FIELDS = new Set(['review_required', 'is_refund', 'is_foreign', 'is_subscription']);
@@ -22,11 +22,11 @@ const BOOLEAN_OPERATORS = new Set(['is_true', 'is_false']);
 const TEXT_OPERATORS = new Set(['contains', 'contains_any', 'starts_with', 'ends_with', 'regex']);
 const DATE_OPERATORS = new Set(['date_on', 'date_before', 'date_after', 'date_between']);
 const N8N_ACTION_FIELDS = new Set([
-  'vendor', 'evidence_policy', 'evidence_status',
+  'vendor', 'category', 'subcategory', 'reward_bucket', 'evidence_policy', 'evidence_status',
   'review_required', 'is_subscription', 'owner', 'property_code', 'rental_unit',
 ]);
-const STAGES = new Set(['TRANSACTION_NORMALIZATION', 'VENDOR_NORMALIZATION', 'EVIDENCE']);
-const STAGE_ORDER = ['TRANSACTION_NORMALIZATION', 'VENDOR_NORMALIZATION', 'EVIDENCE'] as const;
+const STAGE_ORDER = ['TRANSACTION_NORMALIZATION', 'VENDOR_NORMALIZATION', 'CLASSIFICATION', 'TAGGING', 'EVIDENCE', 'CASHBACK'] as const;
+const STAGES = new Set<string>(STAGE_ORDER);
 
 export const N8N_RULE_COMPATIBILITY = Object.freeze({
   condition_operators: [
@@ -35,8 +35,7 @@ export const N8N_RULE_COMPATIBILITY = Object.freeze({
     'date_on', 'date_before', 'date_after', 'date_between', 'polarity', 'is_empty',
     'not_empty', 'is_true', 'is_false', 'has_tag',
   ],
-  actions: ['set', 'set_if_empty', 'require_review', 'request_evidence'],
-  rejected_actual_owned_actions: ['add_tag', 'add_tags', 'remove_tag'],
+  actions: ['set', 'set_if_empty', 'require_review', 'request_evidence', 'add_tag', 'add_tags', 'remove_tag'],
 });
 
 export interface NonRepresentableRule {
@@ -47,7 +46,7 @@ export interface NonRepresentableRule {
   stage: string;
   priority: number;
   match: { any: Array<{ all: Array<{ field: string; operator: string; value?: unknown; second_value?: unknown; case_sensitive?: boolean; negate?: boolean }> }> };
-  actions: Array<{ action: 'set' | 'set_if_empty' | 'require_review' | 'request_evidence'; field?: string; value?: unknown }>;
+  actions: Array<{ action: 'set' | 'set_if_empty' | 'require_review' | 'request_evidence' | 'add_tag' | 'add_tags' | 'remove_tag'; field?: string; value?: unknown; sequence?: number }>;
   stop_on_match: boolean;
 }
 
@@ -92,8 +91,19 @@ function safeRegexSource(value: unknown): string {
   return source;
 }
 
+function ruleFieldValue(row: JsonObject, field: string): unknown {
+  if (field === 'is_foreign') return String(row.currency ?? 'AED').toUpperCase() !== 'AED';
+  if (field !== 'spend_aed') return row[field];
+  const amount = finiteNumber(row.amount_aed);
+  if (amount === undefined) return undefined;
+  const topic = row.is_refund === true ? 'REFUND' : String(row.transaction_type || 'PURCHASE').toUpperCase();
+  const factor = ['REFUND', 'REVERSAL'].includes(topic) ? -1 : ['PURCHASE', 'FEE', 'INTEREST'].includes(topic) ? 1 : ['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'INCOME', 'INVESTMENT', 'CREDIT', 'UNRESOLVED_CREDIT'].includes(topic) ? 0 : undefined;
+  if (factor === undefined) throw new Error(`unsupported transaction topic: ${topic}`);
+  return Math.abs(amount) * factor;
+}
+
 function conditionMatches(row: JsonObject, condition: NonRepresentableRule['match']['any'][number]['all'][number]): boolean {
-  const actual = comparable(row[condition.field], Boolean(condition.case_sensitive));
+  const actual = comparable(ruleFieldValue(row, condition.field), Boolean(condition.case_sensitive));
   const expected = comparable(condition.value, Boolean(condition.case_sensitive));
   let matched: boolean;
   if (NUMERIC_OPERATORS.has(condition.operator) && finiteNumber(actual) === undefined) return Boolean(condition.negate);
@@ -199,12 +209,15 @@ export function validateNonRepresentableRule(value: unknown): NonRepresentableRu
   for (const action of value.actions) {
     assertObject(action, 'action');
     const kind = requiredString(action.action, 'action.action', 32);
-    if (!['set', 'set_if_empty', 'require_review', 'request_evidence'].includes(kind)) throw new Error(`unsupported n8n action: ${kind}`);
+    if (!N8N_RULE_COMPATIBILITY.actions.includes(kind)) throw new Error(`unsupported n8n action: ${kind}`);
+    if (action.sequence !== undefined && !Number.isInteger(action.sequence)) throw new Error('action.sequence must be an integer');
+    if (['add_tag', 'remove_tag'].includes(kind)) requiredString(action.value, 'action tag', 256);
+    if (kind === 'add_tags' && (!Array.isArray(action.value) || action.value.length === 0 || action.value.some(tag => typeof tag !== 'string' || tag.trim() === ''))) throw new Error('add_tags requires non-empty string tags');
     if (kind === 'set' || kind === 'set_if_empty') {
       const field = requiredString(action.field, 'action.field', 64);
-      const topicDuringNormalization = field === 'transaction_type' && stage === 'TRANSACTION_NORMALIZATION';
+      const topicDuringNormalization = field === 'transaction_type' && ['TRANSACTION_NORMALIZATION', 'CLASSIFICATION'].includes(stage);
       if ((!topicDuringNormalization && PROTECTED_FIELDS.has(field)) || (!topicDuringNormalization && !N8N_ACTION_FIELDS.has(field))) throw new Error(`field is not mutable in n8n: ${field}`);
-      if (topicDuringNormalization && !['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'REFUND', 'FEE', 'PURCHASE'].includes(String(action.value))) throw new Error('transaction_type action has an invalid canonical topic');
+      if (topicDuringNormalization && !['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'REFUND', 'REVERSAL', 'FEE', 'PURCHASE', 'INCOME', 'INTEREST', 'INVESTMENT'].includes(String(action.value))) throw new Error('transaction_type action has an invalid canonical topic');
     }
   }
   return value as unknown as NonRepresentableRule;
@@ -226,11 +239,18 @@ export function applyNonRepresentableRules(input: unknown, values: unknown[]): J
     if (stopped) continue;
     const matched = rule.match.any.some(group => group.all.every(condition => conditionMatches(result, condition)));
     if (!matched) continue;
-    for (const action of rule.actions) {
-      const field = action.action === 'require_review' ? 'review_required' : action.action === 'request_evidence' ? 'evidence_status' : action.field!;
-      if (locked.has(field)) continue;
+    for (const action of [...rule.actions].sort((a, b) => (a.sequence ?? 10) - (b.sequence ?? 10))) {
+      const field = action.action === 'require_review' ? 'review_required' : action.action === 'request_evidence' ? 'evidence_status' : ['add_tag', 'add_tags', 'remove_tag'].includes(action.action) ? 'tags' : action.field!;
+      if (locked.has(field) || (field === 'transaction_type' && topicFinalized)) continue;
+      if (action.action === 'request_evidence' && locked.has('evidence_policy')) continue;
       if (action.action === 'require_review') result.review_required = true;
-      else if (action.action === 'request_evidence') result.evidence_status = 'REQUESTED';
+      else if (action.action === 'request_evidence') { result.evidence_policy = action.value || 'ON_DEMAND'; result.evidence_status = 'REQUESTED'; }
+      else if (['add_tag', 'add_tags', 'remove_tag'].includes(action.action)) {
+        const tags = new Set(Array.isArray(result.tags) ? result.tags as string[] : []);
+        if (action.action === 'remove_tag') tags.delete(action.value as string);
+        else for (const tag of action.action === 'add_tags' ? action.value as string[] : [action.value as string]) tags.add(tag);
+        result.tags = [...tags].sort();
+      }
       else if (action.action === 'set') result[action.field!] = action.value;
       else if (result[action.field!] === undefined || result[action.field!] === null || result[action.field!] === '') result[action.field!] = action.value;
     }
@@ -255,7 +275,7 @@ export function finalizeTransactionType(input: JsonObject): JsonObject {
     else if (/\bFEE\b|^VAT ON/.test(description)) topic = 'FEE';
     else topic = 'PURCHASE';
   }
-  if (!['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'REFUND', 'FEE', 'PURCHASE'].includes(topic)) throw new Error(`cannot finalize unknown transaction topic: ${topic}`);
+  if (!['PAYMENT', 'TRANSFER', 'REWARD_CREDIT', 'REFUND', 'REVERSAL', 'FEE', 'PURCHASE', 'INCOME', 'INTEREST', 'INVESTMENT'].includes(topic)) throw new Error(`cannot finalize unknown transaction topic: ${topic}`);
   value.transaction_type = topic;
   value.transaction_type_locked = true;
   return value;

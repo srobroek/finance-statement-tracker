@@ -22,8 +22,9 @@ export interface ActualApi {
   shutdown(): Promise<void>;
   getServerVersion(): Promise<unknown>;
   getAccounts(): Promise<Array<Record<string, unknown>>>;
-  getAccountBalance(id: string): Promise<number>;
+  getAccountBalance(id: string, cutoff?: Date): Promise<number>;
   getCategories(): Promise<Array<Record<string, unknown>>>;
+  getPayees(): Promise<Array<Record<string, unknown>>>;
   getTransactions(accountId: string, start: string, end: string): Promise<ActualReturnedTransaction[]>;
   importTransactions(accountId: string, rows: Array<Record<string, unknown>>, options: { defaultCleared: boolean; reimportDeleted: false }): Promise<Record<string, unknown> & { errors?: Array<{ message: string }> }>;
 }
@@ -242,7 +243,7 @@ export class ActualSession {
 
   async read(credential: ActualCredential, request: ActualReadRequest): Promise<JsonObject> {
     if (request.shape === 'accounts') return this.doctor(credential);
-    if (request.shape === 'categories') return this.run(credential, async api => ({ shape: 'categories', rows: await api.getCategories() }));
+    if (request.shape === 'categories') return this.run(credential, async (api, auth) => ({ shape: 'categories', actual_file_id: auth.syncId, rows: await api.getCategories(), payees: await api.getPayees() }));
     const verified = importedIdReadRequest(request);
     return this.run(credential, async api => ({ shape: 'transactionsByImportedIds', ...(await readTransactionsByImportedIds(api, verified)) }));
   }
@@ -257,6 +258,9 @@ export class ActualSession {
       const categoryIds = new Set((await api.getCategories()).map(row => String(row.id)));
       const unknownCategories = [...new Set(outbox.transactions.map(row => row.category).filter((id): id is string => Boolean(id) && !categoryIds.has(id!)))];
       if (unknownCategories.length) throw new Error(`outbox contains unknown category IDs: ${unknownCategories.join(', ')}`);
+      const payeeIds = new Set((await api.getPayees()).map(row => String(row.id)));
+      const unknownPayees = outbox.transactions.filter(row => row.payee && !payeeIds.has(row.payee));
+      if (unknownPayees.length) throw new Error('outbox contains unknown payee IDs');
       const existing = await existingTransactionsForOutbox(api, outbox);
       if (existing.duplicate_ids.length) throw new Error(`Actual contains duplicate imported IDs: ${existing.duplicate_ids.join(', ')}`);
       assertExistingImmutableFacts(outbox, existing.rows);
@@ -275,6 +279,9 @@ export class ActualSession {
       const categoryIds = new Set((await api.getCategories()).map(row => String(row.id)));
       const unknownCategories = [...new Set(outbox.transactions.map(row => row.category).filter((id): id is string => Boolean(id) && !categoryIds.has(id!)))];
       if (unknownCategories.length) throw new Error(`outbox contains unknown category IDs: ${unknownCategories.join(', ')}`);
+      const payeeIds = new Set((await api.getPayees()).map(row => String(row.id)));
+      const unknownPayees = outbox.transactions.filter(row => row.payee && !payeeIds.has(row.payee));
+      if (unknownPayees.length) throw new Error('outbox contains unknown payee IDs');
       const existing = await existingTransactionsForOutbox(api, outbox);
       if (existing.duplicate_ids.length) throw new Error(`Actual contains duplicate imported IDs: ${existing.duplicate_ids.join(', ')}`);
       assertExistingImmutableFacts(outbox, existing.rows);
@@ -375,14 +382,24 @@ export class ActualSession {
     const request = verifyRequest(input);
     return this.run(credential, async api => {
       const ids = request.expected_transactions.map(row => row.imported_id);
-      const result = await readTransactionsByImportedIds(api, { ...request, imported_ids: ids });
+      // Receipt period and closing-balance cutoff remain issuer facts. The ID
+      // lookup must also cover explicitly projected source dates (for example
+      // Wio's prior-period printed dates with no separate posting-date column).
+      const projectedDates = request.expected_transactions.map(row => row.date);
+      const readStart = [request.start_date, ...projectedDates].sort()[0];
+      const readEnd = [request.end_date, ...projectedDates].sort().at(-1)!;
+      const result = await readTransactionsByImportedIds(api, { ...request, start_date: readStart, end_date: readEnd, imported_ids: ids });
       if (result.missing_ids.length || result.duplicate_ids.length) throw new Error(`Actual verification failed; missing=${result.missing_ids.join(',')} duplicate=${result.duplicate_ids.join(',')}`);
       const preserveManualFieldsForIds = new Set(request.preserve_manual_fields_for_ids ?? []);
       const expected = request.expected_transactions.map(row => canonicalExpectedRow(request.account_id, row, preserveManualFieldsForIds.has(row.imported_id))).sort(byImportedId);
-      const observed = result.rows.map(row => canonicalObservedRow(row, preserveManualFieldsForIds.has(String(row.imported_id ?? '')))).sort(byImportedId);
+      const expectedById = new Map(request.expected_transactions.map(row => [row.imported_id, row]));
+      const observed = result.rows.map(row => canonicalObservedRow(row, preserveManualFieldsForIds.has(String(row.imported_id ?? '')), expectedById.get(String(row.imported_id))?.payee !== undefined)).sort(byImportedId);
       const mismatches = expected.flatMap((row, index) => JSON.stringify(row) === JSON.stringify(observed[index]) ? [] : [{ imported_id: row.imported_id, expected: row, observed: observed[index] ?? null }]);
       if (mismatches.length) throw new Error(`Actual verification field mismatch: ${mismatches.map(row => row.imported_id).join(',')}`);
-      const accountBalance = await api.getAccountBalance(request.account_id);
+      // Statement reconciliation is against the inclusive statement date, even
+      // when newer transactions already exist in the account.
+      const cutoff = request.expected_account_balance === undefined ? undefined : new Date(request.end_date + 'T12:00:00');
+      const accountBalance = await api.getAccountBalance(request.account_id, cutoff);
       if (request.expected_account_balance !== undefined && accountBalance !== request.expected_account_balance) throw new Error(`Actual account balance mismatch: expected=${request.expected_account_balance} observed=${accountBalance}`);
       return {
         status: 'VERIFIED', ...result, mismatches: [], account_balance: accountBalance,
@@ -410,7 +427,7 @@ async function readTransactionsByImportedIds(api: ActualApi, request: ImportedId
   };
 }
 
-type EconomicRow = { account_id: string; imported_id: string; date: string; amount: number; imported_payee: string; category?: string | null; notes?: string | null; cleared?: boolean };
+type EconomicRow = { account_id: string; imported_id: string; date: string; amount: number; imported_payee: string; category?: string | null; notes?: string | null; cleared?: boolean; payee?: string | null };
 function canonicalExpectedRow(accountId: string, row: ActualImportTransaction, preserveManualFields = false): EconomicRow {
   const result: EconomicRow = {
     account_id: accountId,
@@ -423,10 +440,11 @@ function canonicalExpectedRow(accountId: string, row: ActualImportTransaction, p
     result.category = row.category === undefined || row.category === null || row.category === '' ? null : String(row.category);
     result.notes = row.notes === undefined || row.notes === null || row.notes === '' ? null : String(row.notes);
     result.cleared = row.cleared === true;
+    if (row.payee !== undefined) result.payee = row.payee;
   }
   return result;
 }
-function canonicalObservedRow(row: ActualReturnedTransaction, preserveManualFields = false): EconomicRow {
+function canonicalObservedRow(row: ActualReturnedTransaction, preserveManualFields = false, verifyPayee = false): EconomicRow {
   if (!Number.isSafeInteger(row.amount)) throw new Error('Actual returned transaction amount must be integer minor units');
   const result: EconomicRow = {
     account_id: requiredString(row.account, 'Actual returned transaction account', 128),
@@ -439,6 +457,7 @@ function canonicalObservedRow(row: ActualReturnedTransaction, preserveManualFiel
     result.category = row.category === undefined || row.category === null || row.category === '' ? null : String(row.category);
     result.notes = row.notes === undefined || row.notes === null || row.notes === '' ? null : String(row.notes);
     result.cleared = row.cleared === true;
+    if (verifyPayee) result.payee = row.payee == null ? null : String(row.payee);
   }
   return result;
 }
