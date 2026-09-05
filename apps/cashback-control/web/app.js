@@ -156,7 +156,7 @@ function candidateRewardRateLabel(candidate) {
     return Number.isFinite(target) ? `${formatRate(target)} cashback` : "Rate unavailable";
   }
   if (candidate.purpose === "THRESHOLD_FILLER" && target === 0) {
-    return "No direct cashback · counts toward minimum spend";
+    return "No direct cashback · counts toward tier spend";
   }
   // Routing values simulate a configured purchase amount and can include
   // rewards unlocked on earlier spend. Show rates, never those amounts as
@@ -267,7 +267,7 @@ function renderDecisionTree(items) {
       const tierText = candidate.position_mode === "UNLIMITED"
         ? "No minimum spend · statement-only totals"
         : threshold > 0
-        ? `${exactMoney(candidate.card_spend_aed)} / ${exactMoney(threshold)} qualifying spend · ${exactMoney(candidate.tier_remaining_aed)} to go`
+        ? `${exactMoney(candidate.card_spend_aed)} / ${exactMoney(threshold)} qualifying spend toward target tier · ${exactMoney(candidate.tier_remaining_aed)} to go`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
       const candidateNode = createNode("li", `candidate-node ${candidate.status.toLowerCase()}`);
       const rank = createNode("div", "candidate-rank");

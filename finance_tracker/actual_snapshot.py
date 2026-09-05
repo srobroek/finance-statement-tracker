@@ -315,20 +315,25 @@ def _pace_state(
     # to a zero-rate current tier merely because projected spend is low.
     routing_mode = "TARGET_TIER"
     routing_program = program
-    if elapsed_days >= risk_after_days and spend < program.safety_target:
+    days_remaining = (period_end - as_of).days
+    near_close = 0 <= days_remaining <= program.alert_policy.close_warning_days
+    # safety_target includes configured buffers and may target a higher tier;
+    # it is not the issuer's minimum spend. Close warnings supersede early
+    # pace warnings so the same target gap appears once per card.
+    if elapsed_days >= risk_after_days and spend < program.safety_target and not near_close:
         alerts.append({
             "key": f"minimum:{program.card}:{period_start}:{period_end}",
             "severity": "warning",
-            "title": f"{program.name} minimum is at risk",
+            "title": f"{program.name} configured spend target is at risk",
             "detail": (
-                f"{base_currency} {_plain(program.safety_target - spend)} remains after week "
+                f"{base_currency} {_plain(program.safety_target - spend)} remains to the configured "
+                f"{base_currency} {_plain(program.safety_target)} spend target after week "
                 f"{program.alert_policy.minimum_risk_after_week} of the cycle. Route existing "
                 "eligible spend here when appropriate; do not spend extra to chase the threshold."
             ),
         })
-    days_remaining = (period_end - as_of).days
     if (
-        0 <= days_remaining <= program.alert_policy.close_warning_days
+        near_close
         and spend < program.safety_target
     ):
         alerts.append({
@@ -338,9 +343,10 @@ def _pace_state(
                 if days_remaining <= program.alert_policy.close_critical_days
                 else "warning"
             ),
-            "title": f"{program.name} target is not secured",
+            "title": f"{program.name} configured spend target is not reached",
             "detail": (
-                f"{base_currency} {_plain(program.safety_target - spend)} remains with "
+                f"{base_currency} {_plain(program.safety_target - spend)} remains to the configured "
+                f"{base_currency} {_plain(program.safety_target)} spend target, with "
                 f"{days_remaining} day{'s' if days_remaining != 1 else ''} until cycle close."
             ),
         })
