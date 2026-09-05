@@ -148,7 +148,7 @@ function candidateValueLabel(candidate) {
   const targetUnmet = candidate.estimate_basis === "CONDITIONAL_TARGET_TIER"
     || (candidate.target_tier && candidate.tier_before !== candidate.target_tier);
   if (targetUnmet && Number.isFinite(target)) {
-    const currentText = Number.isFinite(current) ? ` · current tier ${formatRate(current)}` : "";
+    const currentText = Number.isFinite(current) && current !== target ? ` · current tier ${formatRate(current)}` : "";
     return `${formatRate(target)} if tier requirements are met${currentText}`;
   }
   const rate = Number.isFinite(current) ? current : target;

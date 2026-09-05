@@ -173,6 +173,9 @@ assert.equal(context.candidateValueLabel(candidate('ACTIVE_CARD', {
   tier_before: 'TIER_1', current_tier_rate_percent: '3', target_rate_percent: '3',
   estimated_net_return_percent: '500',
 })), '3% cashback');
+assert.doesNotMatch(context.candidateValueLabel(candidate('ACTIVE_CARD', {
+  current_tier_rate_percent: '10',
+})), /current tier/);
 assert.equal(context.candidateValueLabel({}), 'Rate unavailable');
 assert.equal(context.candidateValueLabel({ target_rate_percent: null }), 'Rate unavailable');
 assert.match(context.candidateValueLabel(candidate('ACTIVE_CARD', {
