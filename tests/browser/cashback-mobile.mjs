@@ -11,22 +11,31 @@ await mkdir(artifactDir, {recursive:true});
 const browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--disable-gpu',
   '--disable-dev-shm-usage', '--disable-background-networking', '--disable-component-update',
   '--no-first-run', '--no-default-browser-check', '--remote-debugging-address=127.0.0.1',
-  '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], {stdio:'ignore'});
+  '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], {stdio:['ignore', 'ignore', 'pipe']});
+let startupError;
+let startupExit;
+let startupStderr = '';
+browser.stderr.setEncoding('utf8');
+browser.stderr.on('data', chunk => {startupStderr = (startupStderr + chunk).slice(-8192);});
+browser.on('error', error => {startupError = error;});
+browser.on('exit', (code, signal) => {startupExit = `exit=${code}, signal=${signal}`;});
+const startupFailure = () => `Chrome did not start: ${startupError?.message || startupExit || '30s readiness timeout'}\n${startupStderr}`;
 let socket;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function until(check, message) {
-  for (let i = 0; i < 100; i++) {
+async function until(check, message, attempts=100) {
+  for (let i = 0; i < attempts; i++) {
     const value = await check();
     if (value) return value;
     await pause(100);
   }
-  throw new Error(message);
+  throw new Error(typeof message === 'function' ? message() : message);
 }
 try {
   const port = await until(async () => {
+    if (startupError || startupExit) throw new Error(startupFailure());
     try { return (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; }
     catch { return null; }
-  }, 'Chrome did not start');
+  }, startupFailure, 300);
   const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
   socket = new WebSocket(pages.find(page => page.type === 'page').webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {socket.onopen = resolve; socket.onerror = reject;});
